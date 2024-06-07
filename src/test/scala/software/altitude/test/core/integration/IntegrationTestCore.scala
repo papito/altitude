@@ -1,21 +1,28 @@
 package software.altitude.test.core.integration
 
-import java.io.File
-import com.google.inject.{AbstractModule, Guice}
+import com.google.inject.AbstractModule
+import com.google.inject.Guice
+import com.google.inject.Injector
 import net.codingwell.scalaguice.InjectorExtensions._
 import net.codingwell.scalaguice.ScalaModule
 import org.apache.commons.io.FileUtils
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest._
-import org.slf4j.{LoggerFactory, MDC}
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
+import software.altitude.core.Const
 import software.altitude.core.models._
 import software.altitude.core.transactions.TransactionId
 import software.altitude.core.{Const => C, _}
 import software.altitude.test.core.TestFocus
-import software.altitude.test.core.integration.util.dao.{UtilitiesDao, jdbc}
-import software.altitude.test.core.suites.{PostgresSuite, SqliteSuite}
+import software.altitude.test.core.integration.util.dao.UtilitiesDao
+import software.altitude.test.core.integration.util.dao.jdbc
+import software.altitude.test.core.suites.PostgresSuite
+import software.altitude.test.core.suites.SqliteSuite
 
+import java.io.File
 import scala.language.implicitConversions
 
 
@@ -59,7 +66,7 @@ abstract class IntegrationTestCore
     with OptionValues
     with AnswerSugar
     with TestFocus {
-  protected final val log = LoggerFactory.getLogger(getClass)
+  protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
   // Stores test app config overrides, since we run same tests with a different app setup.
   def config: Map[String, Any]
@@ -67,7 +74,7 @@ abstract class IntegrationTestCore
   // Force environment to always be TEST
   Environment.ENV = Environment.TEST
 
-  final val datasource = config("datasource").asInstanceOf[C.DatasourceType.Value]
+  final val datasource: Const.DatasourceType.Value = config("datasource").asInstanceOf[C.DatasourceType.Value]
 
   protected def altitude: Altitude = datasource match {
     case C.DatasourceType.POSTGRES => PostgresSuite.app
@@ -78,8 +85,8 @@ abstract class IntegrationTestCore
   /**
    * Inject DB utilities, based on current data source
    */
-  final val injector = Guice.createInjector(new InjectionModule)
-  final protected val dbUtilities = injector.instance[UtilitiesDao]
+  final val injector: Injector = Guice.createInjector(new InjectionModule)
+  final protected val dbUtilities: UtilitiesDao = injector.instance[UtilitiesDao]
 
   /**
    * Extremely important! This is the one and only transaction id for tests.
@@ -137,7 +144,7 @@ abstract class IntegrationTestCore
   /**
    * A helper method to quickly cook a test asset
    */
-  protected def makeAsset(folder: Folder, metadata: Metadata = Metadata()) = Asset(
+  protected def makeAsset(folder: Folder, metadata: Metadata = Metadata()): Asset = Asset(
     userId = currentUser.id.get,
     folderId = folder.id.get,
     assetType = new AssetType(
@@ -183,7 +190,7 @@ abstract class IntegrationTestCore
     altitude.txManager.savepoint()
   }
 
-  override def afterEach() {
+  override def afterEach(): Unit = {
     dbUtilities.cleanupTest()
 
     if (datasource == C.DatasourceType.SQLITE || datasource == C.DatasourceType.POSTGRES) {

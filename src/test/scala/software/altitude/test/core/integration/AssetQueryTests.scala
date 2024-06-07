@@ -2,9 +2,9 @@ package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import software.altitude.core.models.MetadataField
-import software.altitude.core.models.{Asset, AssetType, FieldType}
-import software.altitude.core.util.{Query, SearchSort, SortDirection}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.AssetType
+import software.altitude.core.util.Query
 import software.altitude.core.{Const => C}
 
 @DoNotDiscover class AssetQueryTests(val config: Map[String, Any]) extends IntegrationTestCore {

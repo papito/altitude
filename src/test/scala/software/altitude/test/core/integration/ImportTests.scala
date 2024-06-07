@@ -1,18 +1,21 @@
 package software.altitude.test.core.integration
 
-import java.io.File
-
-import org.scalatest.matchers.must.Matchers.{equal, not, empty}
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.must.Matchers.equal
+import org.scalatest.matchers.must.Matchers.not
+import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.DuplicateException
-import software.altitude.core.models.{Asset, Preview}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Preview
+
+import java.io.File
 
 @DoNotDiscover class ImportTests(val config: Map[String, Any]) extends IntegrationTestCore {
 
   test("import duplicate") {
     importFile("images/1.jpg")
-    val path = getClass.getResource(s"/import/images/1.jpg").getPath
+    val path = getClass.getResource("/import/images/1.jpg").getPath
     val importAsset = fileToImportAsset(new File(path))
 
     intercept[DuplicateException] {

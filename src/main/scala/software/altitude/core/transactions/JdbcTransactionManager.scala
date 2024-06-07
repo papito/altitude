@@ -1,10 +1,12 @@
 package software.altitude.core.transactions
 
-import java.sql.{Connection, DriverManager}
-import java.util.Properties
-
 import org.slf4j.LoggerFactory
-import software.altitude.core.{AltitudeCoreApp, Const => C}
+import software.altitude.core.AltitudeCoreApp
+import software.altitude.core.{Const => C}
+
+import java.sql.Connection
+import java.sql.DriverManager
+import java.util.Properties
 
 class JdbcTransactionManager(val app: AltitudeCoreApp) extends AbstractTransactionManager {
   private final val log = LoggerFactory.getLogger(getClass)

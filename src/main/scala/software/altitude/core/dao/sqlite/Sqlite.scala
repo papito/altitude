@@ -1,14 +1,16 @@
 package software.altitude.core.dao.sqlite
 
-import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
-import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.DateTime
+import org.joda.time.DateTimeZone
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.format.DateTimeFormatter
 import software.altitude.core.dao.jdbc.BaseJdbcDao
 import software.altitude.core.models.BaseModel
 import software.altitude.core.{Const => C}
 
 trait Sqlite { this: BaseJdbcDao =>
 
-  override protected def defaultSqlColsForSelect = List(
+  override protected def defaultSqlColsForSelect: List[String] = List(
     C.Base.ID,
     "*",
     "CAST(STRFTIME('%s', created_at) AS INT) AS created_at",

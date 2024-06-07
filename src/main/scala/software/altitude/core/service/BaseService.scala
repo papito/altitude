@@ -3,13 +3,17 @@ package software.altitude.core.service
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+import software.altitude.core.Altitude
+import software.altitude.core.Context
+import software.altitude.core.DuplicateException
+import software.altitude.core.NotFoundException
 import software.altitude.core.dao.BaseDao
 import software.altitude.core.models.BaseModel
-import software.altitude.core.transactions.{AbstractTransactionManager, TransactionId}
-import software.altitude.core.util.{Query, QueryResult}
-import software.altitude.core.{Altitude, Context, DuplicateException, NotFoundException, Const => C}
-
-import scala.language.implicitConversions
+import software.altitude.core.transactions.AbstractTransactionManager
+import software.altitude.core.transactions.TransactionId
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
+import software.altitude.core.{Const => C}
 
 abstract class BaseService[Model <: BaseModel] extends ModelValidation {
   protected val app: Altitude

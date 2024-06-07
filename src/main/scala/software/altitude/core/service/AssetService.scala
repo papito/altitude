@@ -2,11 +2,14 @@ package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
+import software.altitude.core.Altitude
+import software.altitude.core.Context
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.models.Asset
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.util.{Query, QueryResult}
-import software.altitude.core.{Altitude, Context, Const => C}
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
+import software.altitude.core.{Const => C}
 
 /**
  * This is a "dumb" service - meaning it delegates everything to to the base service implementation

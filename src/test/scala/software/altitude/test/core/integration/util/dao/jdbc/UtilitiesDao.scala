@@ -2,12 +2,13 @@ package software.altitude.test.core.integration.util.dao.jdbc
 
 import net.codingwell.scalaguice.InjectorExtensions._
 import software.altitude.core.AltitudeCoreApp
-import software.altitude.core.transactions.{JdbcTransactionManager, TransactionId}
+import software.altitude.core.transactions.JdbcTransactionManager
+import software.altitude.core.transactions.TransactionId
 import software.altitude.test.core.integration.util.dao
 
 class UtilitiesDao(app: AltitudeCoreApp) extends dao.UtilitiesDao {
 
-  protected final def txManager = app.injector.instance[JdbcTransactionManager]
+  protected final def txManager: JdbcTransactionManager = app.injector.instance[JdbcTransactionManager]
 
   override def rollback(): Unit = {
 

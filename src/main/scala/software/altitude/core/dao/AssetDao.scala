@@ -5,7 +5,8 @@ import play.api.libs.json.JsObject
 import software.altitude.core.Context
 import software.altitude.core.models.Metadata
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.util.{Query, QueryResult}
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
 
 trait AssetDao extends BaseDao {
   private final val log = LoggerFactory.getLogger(getClass)

@@ -1,10 +1,13 @@
 package software.altitude.core.dao.jdbc
 
 import org.slf4j.LoggerFactory
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
+import software.altitude.core.AltitudeCoreApp
+import software.altitude.core.Context
 import software.altitude.core.models.Repository
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.{AltitudeCoreApp, Context, Const => C}
+import software.altitude.core.{Const => C}
 
 abstract class RepositoryDao(val app: AltitudeCoreApp)
   extends BaseJdbcDao
@@ -14,7 +17,7 @@ abstract class RepositoryDao(val app: AltitudeCoreApp)
   override final val tableName = "repository"
 
   // this is the same as the base one - minus the repository ID, which this model does not have
-  override protected val oneRecSelectSql = s"""
+  override protected val oneRecSelectSql: String = s"""
       SELECT ${defaultSqlColsForSelect.mkString(", ")}
         FROM $tableName
        WHERE ${C.Base.ID} = ?"""

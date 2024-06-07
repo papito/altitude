@@ -2,16 +2,18 @@ package software.altitude.core.dao.jdbc
 
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+import software.altitude.core.AltitudeCoreApp
+import software.altitude.core.Context
 import software.altitude.core.models.User
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.{AltitudeCoreApp, Context, Const => C}
+import software.altitude.core.{Const => C}
 
 abstract class UserDao(val app: AltitudeCoreApp) extends BaseJdbcDao with software.altitude.core.dao.UserDao {
   private final val log = LoggerFactory.getLogger(getClass)
 
   override final val tableName = "repository_user"
 
-  override protected val oneRecSelectSql = s"""
+  override protected val oneRecSelectSql: String = s"""
       SELECT ${defaultSqlColsForSelect.mkString(", ")}
         FROM $tableName
        WHERE ${C.Base.ID} = ?"""

@@ -1,10 +1,15 @@
 package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.{contain, not, empty}
+import org.scalatest.matchers.must.Matchers.contain
+import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import software.altitude.core.DuplicateException
+import software.altitude.core.NotFoundException
+import software.altitude.core.Util
+import software.altitude.core.ValidationException
 import software.altitude.core.models._
-import software.altitude.core.{DuplicateException, NotFoundException, Util, ValidationException}
 
 
 @DoNotDiscover class MetadataServiceTests(val config: Map[String, Any]) extends IntegrationTestCore {

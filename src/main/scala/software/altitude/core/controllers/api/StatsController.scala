@@ -1,12 +1,14 @@
 package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
-import play.api.libs.json.{JsNumber, JsObject, Json}
+import play.api.libs.json.JsNumber
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 import software.altitude.core.{Const => C}
 
 class StatsController extends BaseApiController {
 
-  get(s"/") {
+  get("/") {
     Ok(Json.obj(
       C.Api.Stats.STATS -> JsObject(
         app.service.stats.getStats.stats.map(stat =>

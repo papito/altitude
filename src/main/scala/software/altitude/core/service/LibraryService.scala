@@ -1,18 +1,26 @@
 package software.altitude.core.service
 
-import java.awt.image.BufferedImage
-import java.awt.{AlphaComposite, Graphics2D}
-import java.io._
-
-import javax.imageio.ImageIO
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.imgscalr.Scalr
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
-import software.altitude.core.models.{Folder, _}
-import software.altitude.core.transactions.{AbstractTransactionManager, TransactionId}
-import software.altitude.core.util.{Query, QueryResult, SearchQuery, SearchResult}
-import software.altitude.core.{Altitude, Context, Const => C, _}
+import software.altitude.core.Altitude
+import software.altitude.core.Context
+import software.altitude.core.models.Folder
+import software.altitude.core.models._
+import software.altitude.core.transactions.AbstractTransactionManager
+import software.altitude.core.transactions.TransactionId
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
+import software.altitude.core.util.SearchQuery
+import software.altitude.core.util.SearchResult
+import software.altitude.core.{Const => C, _}
+
+import java.awt.AlphaComposite
+import java.awt.Graphics2D
+import java.awt.image.BufferedImage
+import java.io._
+import javax.imageio.ImageIO
 
 /**
   * The class that stitches it all together

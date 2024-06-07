@@ -1,12 +1,12 @@
 package software.altitude.test.core.unit
 
+import org.scalatest.funsuite
+import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import play.api.libs.json._
 import software.altitude.core.models.BaseModel
 import software.altitude.test.core.TestFocus
 
 import scala.language.implicitConversions
-import org.scalatest.funsuite
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 
 
 

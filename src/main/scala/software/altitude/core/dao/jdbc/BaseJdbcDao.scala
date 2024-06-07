@@ -1,19 +1,26 @@
 package software.altitude.core.dao.jdbc
 
-import java.sql.Connection
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.apache.commons.dbutils.QueryRunner
-import org.apache.commons.dbutils.handlers.{MapListHandler, ScalarHandler}
+import org.apache.commons.dbutils.handlers.MapListHandler
+import org.apache.commons.dbutils.handlers.ScalarHandler
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
+import software.altitude.core.ConstraintException
+import software.altitude.core.Context
+import software.altitude.core.Util
 import software.altitude.core.dao.BaseDao
-import software.altitude.core.dao.jdbc.querybuilder.{SqlQuery, SqlQueryBuilder}
+import software.altitude.core.dao.jdbc.querybuilder.SqlQuery
+import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.BaseModel
-import software.altitude.core.transactions.{JdbcTransactionManager, TransactionId}
-import software.altitude.core.util.{Query, QueryResult}
-import software.altitude.core.{ConstraintException, Context, Util, Const => C}
+import software.altitude.core.transactions.JdbcTransactionManager
+import software.altitude.core.transactions.TransactionId
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
+import software.altitude.core.{Const => C}
 
+import java.sql.Connection
 import scala.jdk.CollectionConverters._
 
 abstract class BaseJdbcDao extends BaseDao {
@@ -50,10 +57,10 @@ abstract class BaseJdbcDao extends BaseDao {
   protected def utcNow: DateTime = Util.utcNow
 
   // datetime as a JSON value
-  protected def dtAsJsString(dt: DateTime) = JsString(Util.isoDateTime(Some(dt)))
+  protected def dtAsJsString(dt: DateTime): JsString = JsString(Util.isoDateTime(Some(dt)))
 
   // SQL to select the whole record, in very simple cases
-  protected val oneRecSelectSql = s"""
+  protected val oneRecSelectSql: String = s"""
       SELECT ${defaultSqlColsForSelect.mkString(", ")}
         FROM $tableName
        WHERE ${C.Base.ID} = ? AND ${C.Base.REPO_ID} = ?"""
@@ -91,7 +98,7 @@ abstract class BaseJdbcDao extends BaseDao {
   }
 
   override def deleteBySql(sql: String, bindValues: List[Object])(implicit ctx: Context, txId: TransactionId): Int = {
-    log.debug(s"Deleting records by SQL")
+    log.debug("Deleting records by SQL")
     log.debug(s"Delete SQL: $sql, with values: $bindValues")
     val runner: QueryRunner = new QueryRunner()
     val numDeleted = runner.update(conn, sql, bindValues: _*)

@@ -18,6 +18,26 @@ $ sbt
 FIXME: does not seem to work anymore with newer sbt
 `watch` starts Jetty server while watching files for changes. 
 
+## Logging
+
+See `logback.xml` for configuration.
+
+## Style and formatting
+
+For formatting, using `scalafmt`: `.scalafmt.conf`
+
+For style, using `scalafix`: `.scalafix.conf`
+
+`scalafixAll` will run with the pre-commit hook configured in `.git/hooks/pre-commit`
+
+To configure the pre-commit hook:
+
+```sh
+#!/bin/sh
+
+sbt scalafixAll
+```
+
 ## Running a tagged test(s):
 Update your test as such:
 

@@ -1,6 +1,7 @@
 package software.altitude.core.models
 
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 import software.altitude.core.{Const => C}
 
 class ImportAsset(val path: String,

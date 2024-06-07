@@ -4,10 +4,13 @@ import org.scalatra.Ok
 import org.slf4j.LoggerFactory
 import play.api.libs.json.Json
 import software.altitude.core.Const.Api
+import software.altitude.core.NotFoundException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.Util
-import software.altitude.core.models.{Asset, Data, Preview}
-import software.altitude.core.{NotFoundException, Const => C}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Data
+import software.altitude.core.models.Preview
+import software.altitude.core.{Const => C}
 
 class AssetController extends BaseApiController {
   private final val log = LoggerFactory.getLogger(getClass)
@@ -121,8 +124,8 @@ class AssetController extends BaseApiController {
   }
 
   // FIXME: PUT
-  post(s"/move/to/triage") {
-    log.info(s"Clearing category")
+  post("/move/to/triage") {
+    log.info("Clearing category")
 
     val validator = ApiRequestValidator(List(C.Api.Folder.ASSET_IDS))
     validator.validate(requestJson.get)

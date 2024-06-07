@@ -2,9 +2,10 @@ package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import software.altitude.core.NotFoundException
 import software.altitude.core.models.Asset
 import software.altitude.core.util.Query
-import software.altitude.core.{NotFoundException, Const => C}
+import software.altitude.core.{Const => C}
 
 
 @DoNotDiscover class AssetServiceTests (val config: Map[String, Any]) extends IntegrationTestCore {

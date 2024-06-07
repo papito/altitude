@@ -1,12 +1,15 @@
 package software.altitude.core.controllers
 
-import java.io.{PrintWriter, StringWriter}
-
 import org.scalatra.InternalServerError
-import org.slf4j.{LoggerFactory, MDC}
-import software.altitude.core.models.{Repository, User}
-import software.altitude.core.{Context, SingleApplication}
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
+import software.altitude.core.Context
+import software.altitude.core.SingleApplication
+import software.altitude.core.models.Repository
+import software.altitude.core.models.User
 
+import java.io.PrintWriter
+import java.io.StringWriter
 import scala.compat.Platform
 
 abstract class BaseController extends AltitudeStack with SingleApplication {

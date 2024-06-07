@@ -2,7 +2,8 @@ package software.altitude.core.controllers.api.admin
 
 import org.slf4j.LoggerFactory
 import software.altitude.core.controllers.api.BaseApiController
-import software.altitude.core.models.{FieldType, MetadataField}
+import software.altitude.core.models.FieldType
+import software.altitude.core.models.MetadataField
 import software.altitude.core.{Const => C}
 
 class MetadataController extends BaseApiController {

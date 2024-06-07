@@ -3,8 +3,9 @@ package software.altitude.core.dao.jdbc
 import org.apache.commons.dbutils.QueryRunner
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+import software.altitude.core.AltitudeCoreApp
+import software.altitude.core.Context
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.{AltitudeCoreApp, Context}
 
 abstract class MigrationDao(val app: AltitudeCoreApp)
   extends BaseJdbcDao with software.altitude.core.dao.MigrationDao {

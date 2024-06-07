@@ -4,9 +4,11 @@ import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.Validators.ModelDataValidator
-import software.altitude.core.dao.{AssetDao, MetadataFieldDao}
+import software.altitude.core.dao.AssetDao
+import software.altitude.core.dao.MetadataFieldDao
 import software.altitude.core.models._
-import software.altitude.core.transactions.{AbstractTransactionManager, TransactionId}
+import software.altitude.core.transactions.AbstractTransactionManager
+import software.altitude.core.transactions.TransactionId
 import software.altitude.core.util.Query
 import software.altitude.core.{Const => C, _}
 
@@ -20,10 +22,10 @@ object MetadataService {
 
   final val METADATA_FIELD_VALIDATOR = new MetadataService.MetadataFieldValidator
 
-  final val METADATA_FIELD_CLEANER = Cleaners.Cleaner(
+  final val METADATA_FIELD_CLEANER: Cleaners.Cleaner = Cleaners.Cleaner(
     trim = Some(List(C.MetadataField.NAME, C.MetadataField.FIELD_TYPE)))
 
-  final val VALID_BOOLEAN_VALUES = Set("0", "1", "true", "false")
+  final val VALID_BOOLEAN_VALUES: Set[String] = Set("0", "1", "true", "false")
 }
 
 class MetadataService(val app: Altitude) extends ModelValidation {

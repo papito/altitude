@@ -1,12 +1,16 @@
 package software.altitude.core.controllers.api.navigate
 
-import java.io.{File, PrintWriter, StringWriter}
-import java.nio.file.Paths
-
-import org.scalatra.{CorsSupport, InternalServerError, ScalatraServlet}
+import org.scalatra.CorsSupport
+import org.scalatra.InternalServerError
+import org.scalatra.ScalatraServlet
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.{Const => C}
+
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.nio.file.Paths
 
 class FileSystemBrowserController extends ScalatraServlet with CorsSupport {
   private final val log = LoggerFactory.getLogger(getClass)

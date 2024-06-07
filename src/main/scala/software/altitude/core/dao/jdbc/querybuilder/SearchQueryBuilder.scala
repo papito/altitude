@@ -1,10 +1,12 @@
 package software.altitude.core.dao.jdbc.querybuilder
 
 import org.slf4j.LoggerFactory
+import software.altitude.core.Context
 import software.altitude.core.models.FieldType
+import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
-import software.altitude.core.util.{Query, SearchQuery, SearchSort}
-import software.altitude.core.{Context, Const => C}
+import software.altitude.core.util.SearchQuery
+import software.altitude.core.{Const => C}
 
 
 object SearchQueryBuilder {
@@ -22,7 +24,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   protected val searchParamTable = "search_parameter"
   protected val searchDocumentTable = "search_document"
 
-  protected val notRecycledFilter = ClauseComponents(
+  protected val notRecycledFilter: ClauseComponents = ClauseComponents(
     elements = List(s"${C.Asset.IS_RECYCLED} = ?"),
     bindVals = List(0))
 

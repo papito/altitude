@@ -1,13 +1,13 @@
 package software.altitude.core.models
 
-import java.util.UUID
-
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import play.api.libs.json.Json.JsValueWrapper
 import play.api.libs.json._
-import software.altitude.core.{Util, Const => C}
+import software.altitude.core.Util
+import software.altitude.core.{Const => C}
 
+import java.util.UUID
 import scala.language.implicitConversions
 
 object BaseModel {
@@ -96,7 +96,7 @@ abstract class BaseModel {
   /**
     * Returns core JSON attributes that most models should have
     */
-  protected def coreJsonAttrs = JsObject(Map(
+  protected def coreJsonAttrs: JsObject = JsObject(Map(
     C.Base.ID -> {id match {
       case None => JsNull
       case _ => JsString(id.get)

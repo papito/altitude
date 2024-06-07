@@ -1,18 +1,19 @@
 package software.altitude.core.service
 
-import java.io.{File, InputStream}
-import org.apache.tika.detect.{DefaultDetector, Detector}
+import org.apache.tika.detect.DefaultDetector
+import org.apache.tika.detect.Detector
 import org.apache.tika.io.TikaInputStream
 import org.apache.tika.metadata.{Metadata => TikaMetadata}
 import org.apache.tika.mime.{MediaType => TikaMediaType}
-
 import org.apache.tika.parser.AutoDetectParser
 import org.apache.tika.sax.BodyContentHandler
 import org.slf4j.LoggerFactory
-import software.altitude.core.models.{AssetType, ImportAsset, Metadata, MetadataValue}
+import software.altitude.core.models.AssetType
+import software.altitude.core.models.ImportAsset
+import software.altitude.core.models.Metadata
+import software.altitude.core.models.MetadataValue
 
-
-
+import java.io.InputStream
 import java.nio.file.Paths
 
 class TikaMetadataExtractionService extends MetadataExtractionService {

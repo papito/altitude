@@ -1,12 +1,16 @@
 package software.altitude.core.service.migration
 
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import software.altitude.core.models.{Repository, User}
+import software.altitude.core.Altitude
+import software.altitude.core.Context
+import software.altitude.core.models.Repository
+import software.altitude.core.models.User
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.{Altitude, Context, Const => C}
+import software.altitude.core.{Const => C}
 
 abstract class MigrationService(val app: Altitude) extends CoreMigrationService {
-  protected final val log = LoggerFactory.getLogger(getClass)
+  protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
   def migrateVersion(ctx: Context, version: Int)(implicit txId: TransactionId = new TransactionId): Unit = {
       version match {

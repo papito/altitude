@@ -3,7 +3,7 @@ package software.altitude.core.util
 import play.api.libs.json.JsObject
 
 object QueryResult {
-  val EMPTY = QueryResult(List[JsObject](), total = 1, rpp = 0, sort = List())
+  val EMPTY: QueryResult = QueryResult(List[JsObject](), total = 1, rpp = 0, sort = List())
 }
 
 case class QueryResult(records: List[JsObject], total: Int, rpp: Int, sort: List[Sort]) {

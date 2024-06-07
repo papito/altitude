@@ -3,7 +3,8 @@ package software.altitude.test.core.unit
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Util
-import software.altitude.core.models.{BaseModel, Folder}
+import software.altitude.core.models.BaseModel
+import software.altitude.core.models.Folder
 
 class FolderModelTests extends funsuite.AnyFunSuite {
 

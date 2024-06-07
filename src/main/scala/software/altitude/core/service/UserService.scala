@@ -5,7 +5,8 @@ import play.api.libs.json.JsObject
 import software.altitude.core._
 import software.altitude.core.dao.UserDao
 import software.altitude.core.models.User
-import software.altitude.core.transactions.{AbstractTransactionManager, TransactionId}
+import software.altitude.core.transactions.AbstractTransactionManager
+import software.altitude.core.transactions.TransactionId
 
 class UserService(val app: Altitude) extends BaseService[User] {
   protected val dao: UserDao = app.injector.instance[UserDao]

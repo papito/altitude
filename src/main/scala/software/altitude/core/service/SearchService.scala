@@ -2,11 +2,15 @@ package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
+import software.altitude.core.Altitude
+import software.altitude.core.Context
 import software.altitude.core.dao.SearchDao
-import software.altitude.core.models.{Asset, FieldType, MetadataField}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.FieldType
+import software.altitude.core.models.MetadataField
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.util.{SearchQuery, SearchResult}
-import software.altitude.core.{Altitude, Context}
+import software.altitude.core.util.SearchQuery
+import software.altitude.core.util.SearchResult
 
 object SearchService {
   // TODO: sound weird. Non-indexable? It's indexable, but can't be a facet

@@ -1,10 +1,12 @@
 package software.altitude.core
 
-import java.io.{PrintWriter, StringWriter}
-
+import org.joda.time.DateTime
+import org.joda.time.DateTimeZone
 import org.joda.time.format.ISODateTimeFormat
-import org.joda.time.{DateTime, DateTimeZone}
 import org.slf4j.LoggerFactory
+
+import java.io.PrintWriter
+import java.io.StringWriter
 
 /**
  * This grab-bag if miscellany will be up for some spring cleaning at some point.

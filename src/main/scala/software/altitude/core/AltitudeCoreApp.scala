@@ -22,10 +22,10 @@ trait AltitudeCoreApp {
   val txManager: AbstractTransactionManager
 
   // ID for this application - which we may have multiple of in the same environment
-  final val id = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
+  final val id: Int = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
 
   // this is the environment we are running in
-  final val environment = Environment.ENV match {
+  final val environment: String = Environment.ENV match {
     case Environment.DEV => "development"
     case Environment.PROD => "production"
     case Environment.TEST => "test"

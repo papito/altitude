@@ -1,18 +1,22 @@
 package software.altitude.core.service
 
-import java.io.InputStream
-
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.tika.io.TikaInputStream
 import org.apache.tika.metadata.{Metadata => TikaMetadata}
 import org.slf4j.LoggerFactory
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.JsValue
+import play.api.libs.json.Json
+import software.altitude.core.Altitude
+import software.altitude.core.Context
+import software.altitude.core.FormatException
+import software.altitude.core.MetadataExtractorException
 import software.altitude.core.models._
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.{Altitude, Context, FormatException, MetadataExtractorException}
+
+import java.io.InputStream
 
 object AssetImportService {
-  protected val SUPPORTED_MEDIA_TYPES = Set("audio", "image")
+  protected val SUPPORTED_MEDIA_TYPES: Set[String] = Set("audio", "image")
 }
 
 class AssetImportService(app: Altitude) {

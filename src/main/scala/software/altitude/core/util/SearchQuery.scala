@@ -1,6 +1,7 @@
 package software.altitude.core.util
 
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 import software.altitude.core.models.MetadataField
 import software.altitude.core.{Const => C}
 

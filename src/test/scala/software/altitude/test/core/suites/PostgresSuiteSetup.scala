@@ -1,12 +1,15 @@
 package software.altitude.test.core.suites
 
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.Suite
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import software.altitude.core.Configuration
+import software.altitude.core.Environment
+import software.altitude.test.core.integration.IntegrationTestCore
+
 import java.sql.DriverManager
 import java.util.Properties
-
-import org.scalatest.{BeforeAndAfterAll, Suite}
-import org.slf4j.{Logger, LoggerFactory}
-import software.altitude.core.{Configuration, Environment}
-import software.altitude.test.core.integration.IntegrationTestCore
 
 trait PostgresSuiteSetup extends Suite with BeforeAndAfterAll {
   Environment.ENV = Environment.TEST

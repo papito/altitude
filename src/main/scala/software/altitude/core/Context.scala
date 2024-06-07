@@ -1,6 +1,7 @@
 package software.altitude.core
 
-import software.altitude.core.models.{Repository, User}
+import software.altitude.core.models.Repository
+import software.altitude.core.models.User
 
 
 object Context {

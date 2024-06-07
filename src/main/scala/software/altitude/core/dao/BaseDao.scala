@@ -1,12 +1,15 @@
 package software.altitude.core.dao
 
-import java.util.regex.Pattern
-
 import play.api.libs.json.JsObject
+import software.altitude.core.AltitudeCoreApp
+import software.altitude.core.Context
 import software.altitude.core.models.BaseModel
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.util.{Query, QueryResult}
-import software.altitude.core.{AltitudeCoreApp, Context, Const => C}
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
+import software.altitude.core.{Const => C}
+
+import java.util.regex.Pattern
 
 object BaseDao {
   // this is the valid ID pattern
@@ -126,7 +129,7 @@ trait BaseDao {
    * @param field field to increment
    * @param count the X
    */
-  def increment(id: String, field: String, count: Int = 1)(implicit ctx: Context, txId: TransactionId)
+  def increment(id: String, field: String, count: Int = 1)(implicit ctx: Context, txId: TransactionId): Unit
 
   /**
    * Decrement an integer field in a table by X
@@ -135,5 +138,5 @@ trait BaseDao {
    * @param field field to decrement
    * @param count the X
    */
-  def decrement(id: String, field: String, count: Int = 1)(implicit ctx: Context, txId: TransactionId)
+  def decrement(id: String, field: String, count: Int = 1)(implicit ctx: Context, txId: TransactionId): Unit
 }

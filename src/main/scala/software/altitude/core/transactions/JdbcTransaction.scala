@@ -1,10 +1,11 @@
 package software.altitude.core.transactions
 
-import java.sql.{Connection, SQLException, Savepoint}
-
 import org.slf4j.LoggerFactory
 import software.altitude.core.{Const => C}
 
+import java.sql.Connection
+import java.sql.SQLException
+import java.sql.Savepoint
 import scala.collection.mutable
 
 /**
@@ -69,7 +70,7 @@ class JdbcTransaction(private val conn: Connection, val isReadOnly: Boolean)
     }
   }
 
-  override def commit() {
+  override def commit(): Unit = {
     if (!hasParents) {
       try {
         log.info(s"!COMMIT! $id", C.LogTag.DB)
@@ -82,7 +83,7 @@ class JdbcTransaction(private val conn: Connection, val isReadOnly: Boolean)
       }
     }
   }
-  override def rollback() {
+  override def rollback(): Unit = {
     try {
       if (!hasParents && !conn.isReadOnly) {
         log.warn(s"!ROLLBACK! $id", C.LogTag.DB)

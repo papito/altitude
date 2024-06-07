@@ -1,11 +1,14 @@
 package software.altitude.core.controllers.api
 
-import org.scalatra.{ActionResult, Ok}
+import org.scalatra.ActionResult
+import org.scalatra.Ok
 import org.slf4j.LoggerFactory
-import play.api.libs.json.{JsNull, Json}
+import play.api.libs.json.JsNull
+import play.api.libs.json.Json
 import software.altitude.core.controllers.Util
 import software.altitude.core.models.Asset
-import software.altitude.core.util.{SearchQuery, SearchSort}
+import software.altitude.core.util.SearchQuery
+import software.altitude.core.util.SearchSort
 import software.altitude.core.{Const => C}
 
 class SearchController extends BaseApiController {

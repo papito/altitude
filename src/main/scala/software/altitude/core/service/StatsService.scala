@@ -3,11 +3,15 @@ package software.altitude.core.service
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+import software.altitude.core.Altitude
+import software.altitude.core.Context
 import software.altitude.core.dao.StatDao
-import software.altitude.core.models.{Asset, Stat, Stats}
-import software.altitude.core.transactions.{AbstractTransactionManager, TransactionId}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Stat
+import software.altitude.core.models.Stats
+import software.altitude.core.transactions.AbstractTransactionManager
+import software.altitude.core.transactions.TransactionId
 import software.altitude.core.util.Query
-import software.altitude.core.{Altitude, Context}
 
 class StatsService(val app: Altitude) {
   private final val log = LoggerFactory.getLogger(getClass)

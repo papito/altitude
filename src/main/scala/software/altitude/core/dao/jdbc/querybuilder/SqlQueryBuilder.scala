@@ -1,9 +1,10 @@
 package software.altitude.core.dao.jdbc.querybuilder
 
 import org.slf4j.LoggerFactory
+import software.altitude.core.Context
+import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
-import software.altitude.core.util.{Query, Sort}
-import software.altitude.core.{Context, Const => C}
+import software.altitude.core.{Const => C}
 
 protected object SqlQueryBuilder {
   val SELECT = "select"
@@ -87,13 +88,13 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
     }
   }
 
-  protected def select(query: QueryT, ctx: Context) = ClauseComponents(elements = selColumnNames)
+  protected def select(query: QueryT, ctx: Context): ClauseComponents = ClauseComponents(elements = selColumnNames)
   protected def selectStr(clauseComponents: ClauseComponents): String = {
     val columnNames = clauseComponents.elements
     s"SELECT ${columnNames.mkString(", ")}"
   }
 
-  protected def from(query: QueryT, ctx: Context) = ClauseComponents(elements = tableNames.toList)
+  protected def from(query: QueryT, ctx: Context): ClauseComponents = ClauseComponents(elements = tableNames.toList)
   protected def fromStr(clauseComponents: ClauseComponents): String = {
     val tableNames = clauseComponents.elements
     s" FROM ${tableNames.mkString(", ")}"

@@ -1,16 +1,16 @@
 package software.altitude.core.dao.postgres
 
-import java.sql.Timestamp
-
 import org.joda.time.DateTime
 import software.altitude.core.dao.jdbc.BaseJdbcDao
 import software.altitude.core.models.BaseModel
 import software.altitude.core.{Const => C}
 
+import java.sql.Timestamp
+
 
 trait Postgres { this: BaseJdbcDao =>
 
-  override protected def defaultSqlColsForSelect = List(
+  override protected def defaultSqlColsForSelect: List[String] = List(
     C.Base.ID,
     "*",
     "EXTRACT(EPOCH FROM created_at) AS created_at",

@@ -1,6 +1,7 @@
 package software.altitude.core
 
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 import software.altitude.core.{Const => C}
 
 /**

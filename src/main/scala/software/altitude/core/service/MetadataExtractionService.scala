@@ -1,8 +1,10 @@
 package software.altitude.core.service
 
-import java.io.InputStream
+import software.altitude.core.models.AssetType
+import software.altitude.core.models.ImportAsset
+import software.altitude.core.models.Metadata
 
-import software.altitude.core.models.{AssetType, ImportAsset, Metadata}
+import java.io.InputStream
 
 abstract class MetadataExtractionService {
 

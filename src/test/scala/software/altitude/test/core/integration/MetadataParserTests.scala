@@ -1,11 +1,11 @@
 package software.altitude.test.core.integration
 
-import java.io.File
-
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.{contain, be}
+import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.models.Metadata
+
+import java.io.File
 
 @DoNotDiscover class MetadataParserTests(val config: Map[String, Any]) extends IntegrationTestCore {
 

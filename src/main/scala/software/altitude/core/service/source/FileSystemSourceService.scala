@@ -1,12 +1,14 @@
 package software.altitude.core.service.source
 
-import java.io.File
-
 import org.apache.commons.io.FileUtils
-import org.apache.commons.io.filefilter.{IOFileFilter, TrueFileFilter}
+import org.apache.commons.io.filefilter.IOFileFilter
+import org.apache.commons.io.filefilter.TrueFileFilter
 import org.slf4j.LoggerFactory
+import software.altitude.core.Altitude
 import software.altitude.core.models._
-import software.altitude.core.{Altitude, Const => C}
+import software.altitude.core.{Const => C}
+
+import java.io.File
 
 object FileSystemSourceService {
   private val ANY_FILE_FILTER: IOFileFilter = TrueFileFilter.INSTANCE

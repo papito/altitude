@@ -1,14 +1,23 @@
 package software.altitude.test.core.integration
 
-import java.io.File
-
-import org.apache.commons.io.{FileUtils, FilenameUtils}
+import org.apache.commons.io.FileUtils
+import org.apache.commons.io.FilenameUtils
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.{equal, not, empty}
+import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.must.Matchers.equal
+import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import play.api.libs.json.{JsObject, Json}
-import software.altitude.core.models.{Asset, Folder, Repository}
-import software.altitude.core.{NotFoundException, StorageException, Util, Const => C}
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
+import software.altitude.core.NotFoundException
+import software.altitude.core.StorageException
+import software.altitude.core.Util
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Folder
+import software.altitude.core.models.Repository
+import software.altitude.core.{Const => C}
+
+import java.io.File
 
 @DoNotDiscover class FileStoreServiceTests(val config: Map[String, Any]) extends IntegrationTestCore {
 

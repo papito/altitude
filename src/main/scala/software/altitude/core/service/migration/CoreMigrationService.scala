@@ -1,13 +1,14 @@
 package software.altitude.core.service.migration
 
-import java.io.File
-
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
+import software.altitude.core.AltitudeCoreApp
+import software.altitude.core.Context
 import software.altitude.core.dao.MigrationDao
-import software.altitude.core.transactions.{AbstractTransactionManager, TransactionId}
-import software.altitude.core.{AltitudeCoreApp, Context}
+import software.altitude.core.transactions.AbstractTransactionManager
+import software.altitude.core.transactions.TransactionId
 
+import java.io.File
 import scala.io.Source
 
 abstract class CoreMigrationService {

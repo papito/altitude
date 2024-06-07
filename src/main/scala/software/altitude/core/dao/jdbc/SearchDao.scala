@@ -1,17 +1,21 @@
 package software.altitude.core.dao.jdbc
 
-import java.sql.{PreparedStatement, Types}
-
 import org.apache.commons.dbutils.QueryRunner
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+import software.altitude.core.Altitude
+import software.altitude.core.Context
 import software.altitude.core.models._
 import software.altitude.core.transactions.TransactionId
-import software.altitude.core.util.{SearchQuery, SearchResult}
-import software.altitude.core.{Altitude, Context, Const => C}
+import software.altitude.core.util.SearchQuery
+import software.altitude.core.util.SearchResult
+import software.altitude.core.{Const => C}
+
+import java.sql.PreparedStatement
+import java.sql.Types
 
 object SearchDao {
-  val VALUE_INSERT_SQL = s"""
+  val VALUE_INSERT_SQL: String = s"""
             INSERT INTO search_parameter (
                         ${C.SearchToken.REPO_ID}, ${C.SearchToken.ASSET_ID},
                         ${C.SearchToken.FIELD_ID},

@@ -1,15 +1,18 @@
 package software.altitude.test.core.suites
 
-import java.sql.DriverManager
-
-import org.scalatest.{BeforeAndAfterAll, Suite}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.Suite
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import software.altitude.core.{Configuration, Environment}
+import software.altitude.core.Configuration
+import software.altitude.core.Environment
 import software.altitude.test.core.integration.IntegrationTestCore
+
+import java.sql.DriverManager
 
 trait SqliteSuiteSetup extends Suite with BeforeAndAfterAll {
   Environment.ENV = Environment.TEST
-  protected final val log = LoggerFactory.getLogger(getClass)
+  protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
   override def beforeAll(): Unit = {
     IntegrationTestCore.createTestDir(SqliteSuite.app)

@@ -1,8 +1,11 @@
 package software.altitude.core.controllers
 
 import play.api.libs.json.JsObject
-import software.altitude.core.models.{Asset, MetadataField}
-import software.altitude.core.{Altitude, Context, Const => C}
+import software.altitude.core.Altitude
+import software.altitude.core.Context
+import software.altitude.core.models.Asset
+import software.altitude.core.models.MetadataField
+import software.altitude.core.{Const => C}
 
 object Util {
   def withFormattedMetadata(app: Altitude, asset: Asset, allFields: Option[Map[String, MetadataField]] = None)

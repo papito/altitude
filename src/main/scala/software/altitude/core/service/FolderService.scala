@@ -20,11 +20,11 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   private final val log = LoggerFactory.getLogger(getClass)
   override protected val dao: FolderDao = app.injector.instance[FolderDao]
 
-  override final val cleaner = Some(
+  override final val cleaner: Some[Cleaners.Cleaner] = Some(
     Cleaners.Cleaner(
       trim = Some(List(C.Folder.NAME, C.Folder.PARENT_ID))))
 
-  override final val validator = Some(new FolderService.FolderValidator)
+  override final val validator: Some[FolderService.FolderValidator] = Some(new FolderService.FolderValidator)
 
   /**
    * Add a new folder - THIS SHOULD NOT BE USED DIRECTLY. Use <code>addFolder</code>

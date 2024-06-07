@@ -1,7 +1,10 @@
 package software.altitude.core.service.filestore
 
 import software.altitude.core.Context
-import software.altitude.core.models.{Asset, Data, Folder, Preview}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Data
+import software.altitude.core.models.Folder
+import software.altitude.core.models.Preview
 import software.altitude.core.transactions.TransactionId
 
 trait FileStoreService {
@@ -10,25 +13,25 @@ trait FileStoreService {
   def getById(id: String)
              (implicit ctx: Context, txId: TransactionId = new TransactionId): Data
 
-  def createPath(relPath: String)(implicit ctx: Context)
+  def createPath(relPath: String)(implicit ctx: Context): Unit
 
-  def addAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId)
+  def addAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
 
-  def purgeAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId)
+  def purgeAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
 
-  def moveAsset(srcAsset: Asset, destAsset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId)
+  def moveAsset(srcAsset: Asset, destAsset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
 
-  def recycleAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId)
+  def recycleAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
 
-  def restoreAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId)
+  def restoreAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
 
-  def addFolder(folder: Folder)(implicit ctx: Context)
+  def addFolder(folder: Folder)(implicit ctx: Context): Unit
 
-  def deleteFolder(folder: Folder)(implicit ctx: Context)
+  def deleteFolder(folder: Folder)(implicit ctx: Context): Unit
 
-  def renameFolder(folder: Folder, newName: String)(implicit ctx: Context)
+  def renameFolder(folder: Folder, newName: String)(implicit ctx: Context): Unit
 
-  def moveFolder(folder: Folder, newParent: Folder)(implicit ctx: Context)
+  def moveFolder(folder: Folder, newParent: Folder)(implicit ctx: Context): Unit
 
   def getFolderPath(name: String, parentId: String)
                          (implicit ctx: Context, txId: TransactionId = new TransactionId): String
@@ -50,7 +53,7 @@ trait FileStoreService {
 
   def landfillFolderPath(implicit ctx: Context): String
 
-  def addPreview(preview: Preview)(implicit ctx: Context)
+  def addPreview(preview: Preview)(implicit ctx: Context): Unit
 
   def getPreviewById(assetId: String)(implicit ctx: Context): Preview
 

@@ -1,6 +1,6 @@
 package software.altitude.core.util
 
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
 
 case class SearchResult(records: List[JsObject], total: Int, rpp: Int, sort: List[SearchSort]) {
   val nonEmpty: Boolean = records.nonEmpty

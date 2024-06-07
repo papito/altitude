@@ -1,18 +1,20 @@
 package software.altitude.core
 
-import java.sql.DriverManager
-
-import com.google.inject.{AbstractModule, Guice, Injector}
+import com.google.inject.AbstractModule
+import com.google.inject.Guice
+import com.google.inject.Injector
 import net.codingwell.scalaguice.InjectorExtensions._
 import net.codingwell.scalaguice.ScalaModule
 import org.slf4j.LoggerFactory
 import software.altitude.core.dao._
 import software.altitude.core.service._
-import software.altitude.core.service.filestore.{FileStoreService, FileSystemStoreService}
+import software.altitude.core.service.filestore.FileStoreService
+import software.altitude.core.service.filestore.FileSystemStoreService
 import software.altitude.core.service.migration._
-import software.altitude.core.service.source.FileSystemSourceService
 import software.altitude.core.transactions._
 import software.altitude.core.{Const => C}
+
+import java.sql.DriverManager
 
 class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCoreApp  {
   private final val log = LoggerFactory.getLogger(getClass)
@@ -35,7 +37,6 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
    */
   override val txManager: AbstractTransactionManager = app.injector.instance[AbstractTransactionManager]
 
-  // scalastyle:off
   object service {
     val user = new UserService(app)
     val repository = new RepositoryService(app)
@@ -53,12 +54,7 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
       case _ => throw new NotImplementedError
     }
 
-    object source {
-      val fileSystem = new FileSystemSourceService(app)
-    }
-    // scalastyle:on
-
-    final val schemaVersion = 1
+    private final val schemaVersion = 1
 
     val migrationService: MigrationService = dataSourceType match {
       case C.DatasourceType.SQLITE => new MigrationService(app) with JdbcMigrationService with SqliteMigration {
@@ -133,5 +129,5 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
   //F FIXME: temporary
   val USER_ID = "100000000000000000000000000000000000"
   val REPOSITORY_ID = "100000000000000000000000000000000000"
-  log.info(s"Altitude Server instance initialized")
+  log.info("Altitude Server instance initialized")
 }

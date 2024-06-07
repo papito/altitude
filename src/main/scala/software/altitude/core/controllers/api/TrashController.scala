@@ -4,7 +4,9 @@ import org.scalatra.Ok
 import org.slf4j.LoggerFactory
 import play.api.libs.json.Json
 import software.altitude.core.Const.Api
-import software.altitude.core.Const.Api.{Folder, Search, Trash}
+import software.altitude.core.Const.Api.Folder
+import software.altitude.core.Const.Api.Search
+import software.altitude.core.Const.Api.Trash
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.Util
 import software.altitude.core.models.Asset
@@ -14,7 +16,7 @@ import software.altitude.core.{Const => C}
 class TrashController extends BaseApiController {
   private final val log = LoggerFactory.getLogger(getClass)
 
-  post(s"/recycle/:id") {
+  post("/recycle/:id") {
     val id = params.get(Api.ID).get
     log.info(s"Moving $id to TRASH")
     app.service.library.recycleAsset(id)
@@ -22,8 +24,8 @@ class TrashController extends BaseApiController {
     OK
   }
 
-  post(s"/recycle") {
-    log.info(s"Deleting assets")
+  post("/recycle") {
+    log.info("Deleting assets")
 
     val validator = ApiRequestValidator(List(Folder.ASSET_IDS))
     validator.validate(requestJson.get)
@@ -61,7 +63,7 @@ class TrashController extends BaseApiController {
     OK
   }
 
-  post(s"/:id/restore") {
+  post("/:id/restore") {
     val assetId = params.get("id").get
     log.info(s"Restoring asset $assetId")
 
@@ -70,7 +72,7 @@ class TrashController extends BaseApiController {
     OK
   }
 
-  post(s"/restore") {
+  post("/restore") {
     log.info("Restoring multiple assets")
 
     val validator = ApiRequestValidator(List(Api.Trash.ASSET_IDS))

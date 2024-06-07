@@ -1,10 +1,9 @@
 package software.altitude.core.models
 
-import java.util.Base64
-
 import play.api.libs.json._
 import software.altitude.core.{Const => C}
 
+import java.util.Base64
 import scala.language.implicitConversions
 
 object MetadataValue {
