@@ -21,9 +21,9 @@ libraryDependencies ++= Seq(
   "org.scalatra"                %% "scalatra"                 % scalatraVersion,
   "org.scalatra"                %% "scalatra-atmosphere"      % scalatraVersion,
   "org.scalatra"                %% "scalatra-scalatest"       % scalatraVersion % Test,
+  "org.scalatra" %% "scalatra-scalate" % scalatraVersion,
+  "org.scalatra" %% "scalatra-auth" % scalatraVersion,
   "org.scalatra.scalate"        %% "scalate-core"             % "1.10.1",
-  "org.scalatra"                %% "scalatra-scalate"         % scalatraVersion,
-  "org.mockito"                   % "mockito-core"              % "5.11.0" % Test,
 
   "com.typesafe.play"           %% "play-json"                % "2.10.5",
   "org.apache.tika"              % "tika-core"                % "2.9.2",
@@ -44,7 +44,11 @@ libraryDependencies ++= Seq(
 
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
 
-  // The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x
+  "org.mockito" % "mockito-core" % "5.11.0" % Test,
+
+  //
+  // ATTN: The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x
+  //
   "org.eclipse.jetty"            % "jetty-webapp"             % jettyVersion % "container;compile",
   "javax.servlet"                % "javax.servlet-api"        % "3.1.0" % Provided
 ).map(_.exclude("commons-logging", "commons-logging"))
