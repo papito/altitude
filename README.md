@@ -18,6 +18,11 @@ $ sbt
 FIXME: does not seem to work anymore with newer sbt
 `watch` starts Jetty server while watching files for changes. 
 
+## Major maintenance points
+
+* SQL schema needs to be updated for *both* Postgres and SQLite. The schemas are in `src/main/resources/migrations/`
+* In development, the type of database running is configured in `core.Configuration` class
+
 ## Logging
 
 See `logback.xml` for configuration.

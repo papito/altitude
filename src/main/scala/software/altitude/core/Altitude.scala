@@ -3,24 +3,24 @@ package software.altitude.core
 import com.google.inject.AbstractModule
 import com.google.inject.Guice
 import com.google.inject.Injector
-import net.codingwell.scalaguice.InjectorExtensions._
 import net.codingwell.scalaguice.ScalaModule
 import org.slf4j.LoggerFactory
 import software.altitude.core.dao._
 import software.altitude.core.service._
 import software.altitude.core.service.filestore.FileStoreService
 import software.altitude.core.service.filestore.FileSystemStoreService
-import software.altitude.core.service.migration._
 import software.altitude.core.transactions._
 import software.altitude.core.{Const => C}
 
 import java.sql.DriverManager
 
-class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCoreApp  {
+class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeAppContext  {
   private final val log = LoggerFactory.getLogger(getClass)
   log.info(s"Initializing Altitude Server application instance with ID [$id]")
 
   final val app: Altitude = this
+
+  var isInitialized = false
 
   final val fileStoreType = config.fileStoreType
   log.info(s"File store type: $fileStoreType")
@@ -35,9 +35,24 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
   /**
    * Injected transaction manager, determined based on our database.
    */
-  override val txManager: AbstractTransactionManager = app.injector.instance[AbstractTransactionManager]
+  override val txManager: TransactionManager = new software.altitude.core.transactions.TransactionManager(app)
+
+  private final val schemaVersion = 1
 
   object service {
+
+    val migrationService: MigrationService = dataSourceType match {
+      case C.DatasourceType.SQLITE => new MigrationService(app) {
+        override final val CURRENT_VERSION = schemaVersion
+        override final val MIGRATIONS_DIR = "/migrations/sqlite"
+      }
+      case C.DatasourceType.POSTGRES => new MigrationService(app) {
+        override final val CURRENT_VERSION = schemaVersion
+        override final val MIGRATIONS_DIR = "/migrations/postgres"
+      }
+    }
+
+    val system = new SystemService(app)
     val user = new UserService(app)
     val repository = new RepositoryService(app)
     val assetImport = new AssetImportService(app)
@@ -53,58 +68,39 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
       case C.FileStoreType.FS => new FileSystemStoreService(app)
       case _ => throw new NotImplementedError
     }
-
-    private final val schemaVersion = 1
-
-    val migrationService: MigrationService = dataSourceType match {
-      case C.DatasourceType.SQLITE => new MigrationService(app) with JdbcMigrationService with SqliteMigration {
-        override final val CURRENT_VERSION = schemaVersion
-        override final val MIGRATIONS_DIR = "/migrations/server/sqlite"
-      }
-      case C.DatasourceType.POSTGRES => new MigrationService(app) with JdbcMigrationService with PostgresMigration {
-        override final val CURRENT_VERSION = schemaVersion
-        override final val MIGRATIONS_DIR = "/migrations/server/postgres"
-      }
-    }
   }
 
   /**
    * Inject dependencies
    */
-  class InjectionModule extends AbstractModule with ScalaModule  {
+  private class InjectionModule extends AbstractModule with ScalaModule  {
     override def configure(): Unit = {
 
       dataSourceType match {
         case C.DatasourceType.POSTGRES =>
           DriverManager.registerDriver(new org.postgresql.Driver)
 
-          val jdbcTxManager = new software.altitude.core.transactions.JdbcTransactionManager(app)
-          bind[AbstractTransactionManager].toInstance(jdbcTxManager)
-          bind[JdbcTransactionManager].toInstance(jdbcTxManager)
-
-          bind[UserDao].toInstance(new jdbc.UserDao(app) with dao.postgres.Postgres)
-          bind[MigrationDao].toInstance(new jdbc.MigrationDao(app) with dao.postgres.Postgres)
+          bind[SystemMetadataDao].toInstance(new jdbc.SystemMetadataDao(app) with dao.postgres.PostgresOverrides)
+          bind[UserDao].toInstance(new jdbc.UserDao(app) with dao.postgres.PostgresOverrides)
+          bind[MigrationDao].toInstance(new jdbc.MigrationDao(app) with dao.postgres.PostgresOverrides)
           bind[RepositoryDao].toInstance(new postgres.RepositoryDao(app))
-          bind[AssetDao].toInstance(new postgres.AssetDao(app) with dao.postgres.Postgres)
-          bind[FolderDao].toInstance(new jdbc.FolderDao(app) with dao.postgres.Postgres)
-          bind[StatDao].toInstance(new jdbc.StatDao(app) with dao.postgres.Postgres with dao.jdbc.Stats)
-          bind[MetadataFieldDao].toInstance(new jdbc.MetadataFieldDao(app) with dao.postgres.Postgres)
+          bind[AssetDao].toInstance(new postgres.AssetDao(app) with dao.postgres.PostgresOverrides)
+          bind[FolderDao].toInstance(new jdbc.FolderDao(app) with dao.postgres.PostgresOverrides)
+          bind[StatDao].toInstance(new jdbc.StatDao(app) with dao.postgres.PostgresOverrides)
+          bind[MetadataFieldDao].toInstance(new jdbc.MetadataFieldDao(app) with dao.postgres.PostgresOverrides)
           bind[SearchDao].toInstance(new postgres.SearchDao(app))
 
         case C.DatasourceType.SQLITE =>
           DriverManager.registerDriver(new org.sqlite.JDBC)
 
-          val jdbcTxManager = new SqliteTransactionManager(app)
-          bind[AbstractTransactionManager].toInstance(jdbcTxManager)
-          bind[JdbcTransactionManager].toInstance(jdbcTxManager)
-
-          bind[UserDao].toInstance(new jdbc.UserDao(app) with dao.sqlite.Sqlite)
-          bind[MigrationDao].toInstance(new jdbc.MigrationDao(app) with dao.sqlite.Sqlite)
-          bind[RepositoryDao].toInstance(new jdbc.RepositoryDao(app) with dao.sqlite.Sqlite)
-          bind[AssetDao].toInstance(new jdbc.AssetDao(app) with dao.sqlite.Sqlite)
-          bind[FolderDao].toInstance(new jdbc.FolderDao(app) with dao.sqlite.Sqlite)
-          bind[StatDao].toInstance(new jdbc.StatDao(app) with dao.sqlite.Sqlite with dao.jdbc.Stats)
-          bind[MetadataFieldDao].toInstance(new jdbc.MetadataFieldDao(app) with dao.sqlite.Sqlite)
+          bind[SystemMetadataDao].toInstance(new jdbc.SystemMetadataDao(app) with dao.sqlite.SqliteOverrides)
+          bind[UserDao].toInstance(new jdbc.UserDao(app) with dao.sqlite.SqliteOverrides)
+          bind[MigrationDao].toInstance(new jdbc.MigrationDao(app) with dao.sqlite.SqliteOverrides)
+          bind[RepositoryDao].toInstance(new jdbc.RepositoryDao(app) with dao.sqlite.SqliteOverrides)
+          bind[AssetDao].toInstance(new jdbc.AssetDao(app) with dao.sqlite.SqliteOverrides)
+          bind[FolderDao].toInstance(new jdbc.FolderDao(app) with dao.sqlite.SqliteOverrides)
+          bind[StatDao].toInstance(new jdbc.StatDao(app) with dao.sqlite.SqliteOverrides)
+          bind[MetadataFieldDao].toInstance(new jdbc.MetadataFieldDao(app) with dao.sqlite.SqliteOverrides)
           bind[SearchDao].toInstance(new sqlite.SearchDao(app))
 
         case _ =>
@@ -113,11 +109,16 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
     }
   }
 
-  def freeResources(): Unit = {
-    txManager.freeResources()
+  def freeResources(): Unit = {}
+
+  def setIsInitializedState(): Unit = {
+    this.isInitialized = service.system.readMetadata.isInitialized
+    if (!this.isInitialized) {
+      log.warn("Instance NOT YET INITIALIZED!")
+    }
   }
 
-  override def runMigrations(): Unit = {
+  def runMigrations(): Unit = {
     if (service.migrationService.migrationRequired) {
       log.warn("Migration is required!")
       if (Environment.ENV != Environment.TEST) {
@@ -126,8 +127,5 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeCor
     }
   }
 
-  //F FIXME: temporary
-  val USER_ID = "100000000000000000000000000000000000"
-  val REPOSITORY_ID = "100000000000000000000000000000000000"
   log.info("Altitude Server instance initialized")
 }

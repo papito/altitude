@@ -21,22 +21,21 @@ libraryDependencies ++= Seq(
   "org.scalatra"                %% "scalatra"                 % scalatraVersion,
   "org.scalatra"                %% "scalatra-atmosphere"      % scalatraVersion,
   "org.scalatra"                %% "scalatra-scalatest"       % scalatraVersion % Test,
-  "org.scalatra" %% "scalatra-scalate" % scalatraVersion,
-  "org.scalatra" %% "scalatra-auth" % scalatraVersion,
+  "org.scalatra"                %% "scalatra-scalate" % scalatraVersion,
+  "org.scalatra"                %% "scalatra-auth" % scalatraVersion,
   "org.scalatra.scalate"        %% "scalate-core"             % "1.10.1",
-
   "com.typesafe.play"           %% "play-json"                % "2.10.5",
   "org.apache.tika"              % "tika-core"                % "2.9.2",
   "org.apache.tika"              % "tika-parsers" % "2.9.2",
   "org.apache.tika"              % "tika-parser-image-module" % "2.9.2",
 
-  "joda-time"                    % "joda-time"                % "2.12.7",
   "commons-io"                   % "commons-io"               % "2.16.1",
   "commons-codec"                % "commons-codec"            % "1.17.0",
   "commons-dbutils"              % "commons-dbutils"          % "1.8.1",
-
+  "commons-logging"             % "commons-logging"           % "1.3.1",
+  "org.mindrot"                  % "jbcrypt"                  % "0.4",
   "org.postgresql"               % "postgresql"               % "42.7.3",
-  "org.xerial"                   % "sqlite-jdbc"              % "3.15.1",
+  "org.xerial"                   % "sqlite-jdbc"              % "3.46.0.0",
 
   "com.google.guava"             % "guava"                    % "19.0",
   "net.codingwell"              %% "scala-guice"              % "7.0.0",
@@ -85,11 +84,20 @@ commands += Command.command("testFocusedSqlite") { state =>
 commands += Command.command("testFocusedPostgres") { state =>
   "testOnly software.altitude.test.core.suites.PostgresSuite -- -n focused" :: state
 }
+commands += Command.command("testFocusedWeb") { state =>
+  "testOnly software.altitude.test.core.suites.WebSuite -- -n focused" :: state
+}
 commands += Command.command("testSqlite") { state =>
   "testOnly software.altitude.test.core.suites.SqliteSuite" :: state
 }
 commands += Command.command("testPostgres") { state =>
   "testOnly software.altitude.test.core.suites.PostgresSuite" :: state
+}
+commands += Command.command("testUnit") { state =>
+  "testOnly software.altitude.test.core.suites.UnitTestSuite" :: state
+}
+commands += Command.command("testWeb") { state =>
+  "testOnly software.altitude.test.core.suites.WebSuite" :: state
 }
 commands += Command.command("watch") { state =>
   "~;jetty:stop;jetty:start" :: state

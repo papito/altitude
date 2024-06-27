@@ -1,0 +1,27 @@
+<style>
+    nav {
+        display: grid;
+        grid-template-columns: 1fr;
+        place-items: center;
+        background: var(--background-aux-color);
+        color: #fff;
+        box-shadow: var(--box-shadow);
+        border-bottom: var(--navbar-border);
+        text-shadow: var(--navbar-text-shadow);
+        height: 100%;
+    }
+    nav .brand a {
+        letter-spacing: .15em;
+        text-transform: uppercase;
+        text-decoration: none;
+        color: #979393;
+        font-weight: bold;
+        font-size: 1.4em;
+    }
+</style>
+
+<nav>
+    <div class="brand">
+        <a href="/">Altitude</a>
+    </div>
+</nav>

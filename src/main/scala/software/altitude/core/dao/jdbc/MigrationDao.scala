@@ -1,16 +1,10 @@
 package software.altitude.core.dao.jdbc
-
-import org.apache.commons.dbutils.QueryRunner
-import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
-import software.altitude.core.AltitudeCoreApp
-import software.altitude.core.Context
-import software.altitude.core.transactions.TransactionId
+import software.altitude.core.AltitudeAppContext
+import software.altitude.core.RequestContext
 
-abstract class MigrationDao(val app: AltitudeCoreApp)
-  extends BaseJdbcDao with software.altitude.core.dao.MigrationDao {
-
-  private final val log = LoggerFactory.getLogger(getClass)
+abstract class MigrationDao(val appContext: AltitudeAppContext)
+  extends BaseDao with software.altitude.core.dao.MigrationDao {
 
   override val tableName = "system"
 
@@ -19,11 +13,11 @@ abstract class MigrationDao(val app: AltitudeCoreApp)
    *
    * @return The integer version
    */
-  override def currentVersion(implicit ctx: Context, txId: TransactionId = new TransactionId): Int = {
+  override def currentVersion: Int = {
     val sql = s"SELECT version FROM $tableName"
     val version = try {
-      val rec = oneBySqlQuery(sql)
-      rec.get("version").asInstanceOf[Int]
+      val rec = getOneBySql(sql)
+      rec("version").asInstanceOf[Int]
     }
     catch {
       // table does not exist
@@ -35,21 +29,10 @@ abstract class MigrationDao(val app: AltitudeCoreApp)
   /**
    * Execute an arbitrary command
    */
-  override def executeCommand(command: String)(implicit ctx: Context, txId: TransactionId): Unit = {
-    val stmt = conn.createStatement()
+  override def executeCommand(command: String): Unit = {
+    val stmt = RequestContext.getConn.createStatement()
     stmt.executeUpdate(command)
     stmt.close()
-  }
-
-  /**
-   * Up the schema version by one after completion
-   */
-  override def versionUp()(implicit ctx: Context, txId: TransactionId): Unit = {
-    log.info("VERSION UP")
-    val runner: QueryRunner = new QueryRunner()
-    val sql = s"UPDATE $tableName SET version = 1 WHERE id = 0"
-    log.info(sql)
-    runner.update(conn, sql)
   }
 
   protected override  def makeModel(rec: Map[String, AnyRef]): JsObject = throw new NotImplementedError

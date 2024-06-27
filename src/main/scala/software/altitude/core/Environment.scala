@@ -4,7 +4,7 @@ import java.io.File
 
 object Environment extends Enumeration {
   val TEST, PROD, DEV = Value
-  var ENV = DEV
+  var ENV: Environment.Value = DEV
 
   def root: String = ENV match {
     case PROD =>

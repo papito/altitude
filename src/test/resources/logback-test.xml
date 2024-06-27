@@ -14,4 +14,8 @@
   <logger name="software.altitude" level="OFF" />
   <logger name="software.altitude.core.transactions" level="OFF" />
   <logger name="software.altitude.core.dao" level="OFF" />
+  <logger name="org.eclipse.jetty" level="OFF" />
+  <logger name="org.fusesource.scalate" level="ERROR" />
+  <logger name="org.apache" level="ERROR" />
+  <logger name="org.scalatra" level="ERROR" />
 </configuration>

@@ -6,6 +6,7 @@ import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.models._
 import software.altitude.core.util._
+import software.altitude.test.core.IntegrationTestCore
 
 @DoNotDiscover class SearchServiceTests(val config: Map[String, Any]) extends IntegrationTestCore {
 
@@ -44,10 +45,8 @@ import software.altitude.core.util._
       ),
       field3.id.get -> Set("Lindsay Lohan", "Conan O'Brien", "Teri Hatcher", "Sam Rockwell"))
 
-    val assetData1 = makeAsset(altitude.service.folder.triageFolder, Metadata(data))
-    altitude.service.library.add(assetData1)
+    testContext.persistAsset(metadata = Metadata(data))
 
-    // scalastyle:off
     data = Map[String, Set[String]](
       field1.id.get -> Set("tree", "shoe", "desert", "California"),
       field2.id.get -> Set(
@@ -62,10 +61,8 @@ import software.altitude.core.util._
           """
       ),
       field3.id.get -> Set("Keanu Reeves", "Sandra Bullock", "Dennis Hopper", "Teri Hatcher"))
-    // scalastyle:on
 
-    val assetData2 = makeAsset(altitude.service.folder.triageFolder, Metadata(data))
-    altitude.service.library.add(assetData2)
+    testContext.persistAsset(metadata = Metadata(data))
 
     var results: SearchResult = altitude.service.library.search(new SearchQuery(text = Some("keanu")))
     results.nonEmpty shouldBe true
@@ -97,10 +94,10 @@ import software.altitude.core.util._
       name = "folder1_1", parentId = folder1.id)
 
     1 to 3 foreach {_ =>
-      altitude.service.library.add(makeAsset(folder1_1, metadata))
+      testContext.persistAsset(folder=Some(folder1_1), metadata=metadata)
     }
     1 to 3 foreach {_ =>
-      altitude.service.library.add(makeAsset(folder1, metadata))
+      testContext.persistAsset(folder=Some(folder1), metadata=metadata)
     }
 
     val qFolder1_1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1_1.id.get))
@@ -118,8 +115,8 @@ import software.altitude.core.util._
   }
 
   test("Recycled assets should not be in the search index") {
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
-    altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
+    testContext.persistAsset()
 
     altitude.service.library.recycleAsset(asset.id.get)
 
@@ -129,7 +126,7 @@ import software.altitude.core.util._
 
   test("Pagination") {
     1 to 6 foreach { n =>
-      altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+      testContext.persistAsset()
     }
 
     val q = new SearchQuery(rpp = 2, page = 1)
@@ -154,9 +151,9 @@ import software.altitude.core.util._
     // page too far
     val q4 = new SearchQuery(rpp = 2, page = 4)
     val results4 = altitude.service.library.search(q4)
-    results4.total shouldBe 6
+    results4.total shouldBe 0
     results4.records.length shouldBe 0
-    results4.totalPages shouldBe 3
+    results4.totalPages shouldBe 0
 
     val q5 = new SearchQuery(rpp = 6, page = 1)
     val results5 = altitude.service.library.search(q5)
@@ -191,15 +188,13 @@ import software.altitude.core.util._
       field1.id.get -> Set("one", "two", "three"),
       field2.id.get -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"),
       field3.id.get -> Set("true"))
-    val assetData1 = makeAsset(altitude.service.folder.triageFolder, Metadata(data))
-    altitude.service.library.add(assetData1)
+    testContext.persistAsset(metadata = Metadata(data))
 
     data = Map[String, Set[String]](
       field1.id.get -> Set("six", "seven"),
       field2.id.get -> Set("5", "1001", "1"),
       field3.id.get -> Set("true"))
-    val assetData2 = makeAsset(altitude.service.folder.triageFolder, Metadata(data))
-    altitude.service.library.add(assetData2)
+    testContext.persistAsset(metadata = Metadata(data))
 
     // simple value search
     var results = altitude.service.library.search(new SearchQuery(text = Some("one")))
@@ -231,8 +226,7 @@ import software.altitude.core.util._
       field1.id.get -> Set("one"),
       field2.id.get -> Set("1")
     )
-    val assetData1 = makeAsset(altitude.service.folder.triageFolder, Metadata(data))
-    altitude.service.library.add(assetData1)
+    testContext.persistAsset(metadata = Metadata(data))
 
    val results = altitude.service.library.search(
       new SearchQuery(params = Map(
@@ -252,14 +246,9 @@ import software.altitude.core.util._
         name = "field 2",
         fieldType = FieldType.NUMBER))
 
-    val asset1: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder))
-
-    val asset2: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder))
-
-    val asset3: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder))
+    val asset1: Asset = testContext.persistAsset()
+    val asset2: Asset = testContext.persistAsset()
+    val asset3: Asset = testContext.persistAsset()
 
     altitude.service.library.addMetadataValue(asset1.id.get, fieldId = field1.id.get, newValue = "one")
     altitude.service.library.addMetadataValue(asset2.id.get, fieldId = field1.id.get, newValue = "one")
@@ -291,8 +280,7 @@ import software.altitude.core.util._
         name = "field 2",
         fieldType = FieldType.NUMBER))
 
-    val asset1: Asset = altitude.service.library.add(
-             makeAsset(altitude.service.folder.triageFolder))
+    val asset1: Asset = testContext.persistAsset()
 
     altitude.service.library.addMetadataValue(asset1.id.get, fieldId = field1.id.get, newValue = "one")
     // it's the only value for this field so get it
@@ -355,14 +343,11 @@ import software.altitude.core.util._
         name = "boolean field",
         fieldType = FieldType.BOOL))
 
-    val asset1: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder))
+    val asset1: Asset = testContext.persistAsset()
 
-    val asset2: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder))
+    val asset2: Asset = testContext.persistAsset()
 
-    val asset3: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder))
+    val asset3: Asset = testContext.persistAsset()
 
     altitude.service.library.addMetadataValue(asset1.id.get, fieldId = kwField.id.get, newValue = "c")
     altitude.service.library.addMetadataValue(asset2.id.get, fieldId = kwField.id.get, newValue = "a")
@@ -412,7 +397,7 @@ import software.altitude.core.util._
       ))
 
     1 to 5 foreach { idx =>
-      val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+      val asset: Asset = testContext.persistAsset()
       altitude.service.library.addMetadataValue(asset.id.get, fieldId = kwField.id.get, newValue = idx)
     }
 

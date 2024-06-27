@@ -3,27 +3,23 @@ package software.altitude.core.service
 import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
-import software.altitude.core.Context
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.models.Asset
-import software.altitude.core.transactions.TransactionId
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.{Const => C}
 
 /**
- * This is a "dumb" service - meaning it delegates everything to to the base service implementation
- * and the base DAO. It does the basics, but shall not do anything more than that.
+ * This is a "dumb" DAO service for asset table.
  *
- * If there is anything special to be done with an asset, it's under
- * the jurisdiction of the Library service - it does all the counter decrementin' and wrist slappin'
+ * All the actual asset management logic is handled by the LibraryService exclusively.
  */
 class AssetService(val app: Altitude) extends BaseService[Asset] {
   private final val log = LoggerFactory.getLogger(getClass)
   override protected val dao: AssetDao = app.injector.instance[AssetDao]
 
   def setRecycledProp(asset: Asset, isRecycled: Boolean)
-                     (implicit ctx: Context, txId: TransactionId): Unit = {
+                     : Unit = {
 
     if (asset.isRecycled == isRecycled) {
       return
@@ -36,16 +32,16 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     }
   }
 
-  override def query(q: Query)(implicit ctx: Context, txId: TransactionId): QueryResult = {
-    dao.queryNotRecycled(q)
+  override def query(q: Query): QueryResult = {
+    dao.queryNotRecycled(q.withRepository())
   }
 
-  def queryRecycled(q: Query)(implicit ctx: Context, txId: TransactionId): QueryResult = {
-    dao.queryRecycled(q)
+  def queryRecycled(q: Query): QueryResult = {
+    dao.queryRecycled(q.withRepository())
   }
 
-  def queryAll(q: Query)(implicit ctx: Context, txId: TransactionId): QueryResult = {
-    dao.queryAll(q)
+  def queryAll(q: Query): QueryResult = {
+    dao.queryAll(q.withRepository())
   }
 
   // NO

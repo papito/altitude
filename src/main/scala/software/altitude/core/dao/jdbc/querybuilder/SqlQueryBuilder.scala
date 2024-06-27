@@ -1,15 +1,13 @@
 package software.altitude.core.dao.jdbc.querybuilder
 
 import org.slf4j.LoggerFactory
-import software.altitude.core.Context
+import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
-import software.altitude.core.{Const => C}
 
 protected object SqlQueryBuilder {
   val SELECT = "select"
   val FROM = "from"
-  val JOIN = "join"
   val WHERE = "where"
   val GROUP_BY = "group_by"
   val ORDER_BY = "order_by"
@@ -24,9 +22,9 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
     this(sqlColsForSelect, Set(tableName))
   }
 
-  type ClauseGeneratorType = (QueryT, Context) => ClauseComponents
+  private type ClauseGeneratorType = QueryT => ClauseComponents
 
-  protected val chainMethods: List[(String, ClauseGeneratorType)] = List(
+  private val chainMethods: List[(String, ClauseGeneratorType)] = List(
     (SqlQueryBuilder.SELECT, this.select),
     (SqlQueryBuilder.FROM, this.from),
     (SqlQueryBuilder.WHERE, this.where),
@@ -35,8 +33,8 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
     (SqlQueryBuilder.HAVING, this.having)
   )
 
-  def buildSelectSql(query: QueryT)(implicit ctx: Context): SqlQuery = {
-    val allClauses = compileClauses(query, ctx)
+  def buildSelectSql(query: QueryT): SqlQuery = {
+    val allClauses = compileClauses(query)
 
     val sql: String = selectStr(allClauses(SqlQueryBuilder.SELECT)) +
       fromStr(allClauses(SqlQueryBuilder.FROM)) +
@@ -57,50 +55,30 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
     SqlQuery(sql, bindVals)
   }
 
-  def buildCountSql(query: QueryT)(implicit ctx: Context): SqlQuery = {
-    // the SQL is the same but the SELECT clause is just the COUNT, so override it
-    val selectClauseForCount = ClauseComponents(List("COUNT(*) AS count"))
-    val allClauses = compileClauses(query, ctx) + (
-      SqlQueryBuilder.SELECT -> selectClauseForCount)
-
-    val sql: String = selectStr(allClauses(SqlQueryBuilder.SELECT)) +
-      fromStr(allClauses(SqlQueryBuilder.FROM)) +
-      whereStr(allClauses(SqlQueryBuilder.WHERE)) +
-      groupByStr(allClauses(SqlQueryBuilder.GROUP_BY)) +
-      havingStr(allClauses(SqlQueryBuilder.HAVING))
-
-    val bindVals = allClauses.foldLeft(List[Any]()) { (res, comp) =>
-      res ++ comp._2.bindVals
-    }
-
-    log.debug(s"Count SQL: $sql with $bindVals")
-    // println("COUNT", sql, bindVals)
-    SqlQuery(sql, bindVals)
-  }
-
-  protected def compileClauses(query: QueryT, ctx: Context): Map[String, ClauseComponents] = {
+  protected def compileClauses(query: QueryT): Map[String, ClauseComponents] = {
     // collect clauses so we can refer to them when we build the SQL string
     chainMethods.foldLeft(Map[String, ClauseComponents]()) { (res, m) =>
       val clauseName = m._1
       val clauseGeneratorMethod = m._2
-      val clauseComponents = clauseGeneratorMethod(query, ctx)
+      val clauseComponents = clauseGeneratorMethod(query)
       res + (clauseName -> clauseComponents)
     }
   }
 
-  protected def select(query: QueryT, ctx: Context): ClauseComponents = ClauseComponents(elements = selColumnNames)
+  private def select(query: QueryT): ClauseComponents = ClauseComponents(elements = selColumnNames)
   protected def selectStr(clauseComponents: ClauseComponents): String = {
     val columnNames = clauseComponents.elements
-    s"SELECT ${columnNames.mkString(", ")}"
+    val columnsWithTotalWinFunc = columnNames :+ BaseDao.totalRecsWindowFunction
+    s"SELECT ${columnsWithTotalWinFunc.mkString(", ")}"
   }
 
-  protected def from(query: QueryT, ctx: Context): ClauseComponents = ClauseComponents(elements = tableNames.toList)
+  protected def from(query: QueryT): ClauseComponents = ClauseComponents(elements = tableNames.toList)
   protected def fromStr(clauseComponents: ClauseComponents): String = {
     val tableNames = clauseComponents.elements
     s" FROM ${tableNames.mkString(", ")}"
   }
 
-  protected def where(query: QueryT, ctx: Context): ClauseComponents = {
+  protected def where(query: QueryT): ClauseComponents = {
     // FIXME: find a better way to get elements and bind vals in one swoop
     val elements = query.params.map { el: (String, Any) =>
       val (columnName, value) = el
@@ -109,47 +87,47 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
         case _: Boolean => s"$columnName = ?"
         case _: Number => s"$columnName = ?"
         case qParam: QueryParam => qParam.paramType match {
-          case Query.ParamType.IN => {
+          case Query.ParamType.IN =>
             val placeholders: String = qParam.values.toList.map {_ => "?"}.mkString(", ")
             s"$columnName IN ($placeholders)"
-          }
           case Query.ParamType.EQ => s"$columnName = ?"
 
           case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: ${qParam.paramType}")
         }
         case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
       }
-    }.toList ::: tableNames.map(tableName => s"$tableName.${C.Base.REPO_ID} = ?").toList
+    }.toList
 
     val bindVals = query.params.foldLeft(List[Any]()) { (res, el: (String, Any)) =>
       val value = el._2
       value match {
-        // string or integer values as is
+        // string, integer or boolean values as is
         case _: String => res :+ value
         case _: Number => res :+ value
-        // boolean becomes 0 or 1
-        case _: Boolean => res :+ (if (value == true) 1 else 0)
+        case _: Boolean => res :+ value
         // extract all values from qParam
         case qParam: QueryParam => res ::: qParam.values.toList
         case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
       }
-    } ::: tableNames.toSeq.map(_ => ctx.repo.id.get).toList // repo id for each table
+    }
 
     ClauseComponents(elements, bindVals)
   }
 
   protected def whereStr(clauseComponents: ClauseComponents): String = {
-    val whereClauses = clauseComponents.elements
-    s" WHERE ${whereClauses.mkString(" AND ")}"
+      clauseComponents.elements.length match {
+      case 0 => ""
+      case _ => s" WHERE ${clauseComponents.elements.mkString(" AND ")}"
+    }
   }
 
-  protected def groupBy(query: QueryT, ctx: Context): ClauseComponents = ClauseComponents()
+  protected def groupBy(query: QueryT): ClauseComponents = ClauseComponents()
   protected def groupByStr(clauseComponents: ClauseComponents): String = {
     if (clauseComponents.isEmpty) return ""
     s" GROUP BY ${clauseComponents.elements.mkString(", ")}"
   }
 
-  protected def orderBy(query: QueryT, ctx: Context): ClauseComponents = {
+  protected def orderBy(query: QueryT): ClauseComponents = {
     if (!query.isSorted) return ClauseComponents()
 
    val sort = query.sort.head
@@ -161,7 +139,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
     s" ORDER BY ${clauseComponents.elements.mkString(", ")}"
   }
 
-  protected def having(query: QueryT, ctx: Context): ClauseComponents = ClauseComponents()
+  protected def having(query: QueryT): ClauseComponents = ClauseComponents()
   protected def havingStr(clauseComponents: ClauseComponents): String = {
     if (clauseComponents.isEmpty) return ""
     s" HAVING ${clauseComponents.elements.mkString(", ")}"

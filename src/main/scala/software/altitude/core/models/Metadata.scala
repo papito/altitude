@@ -1,6 +1,7 @@
 package software.altitude.core.models
 
 import play.api.libs.json._
+import software.altitude.core.dao.jdbc.BaseDao
 
 import scala.language.implicitConversions
 
@@ -38,7 +39,7 @@ object Metadata {
     val dataWithIds = metadata.data.map{ case (fieldId, mdVal) =>
       val mdValsWithIds = mdVal.map{ mdVal =>
         mdVal.id match {
-          case None => MetadataValue(id = Some(BaseModel.genId), value = mdVal.value)
+          case None => MetadataValue(id = Some(BaseDao.genId), value = mdVal.value)
           case Some(_) => mdVal
         }
       }

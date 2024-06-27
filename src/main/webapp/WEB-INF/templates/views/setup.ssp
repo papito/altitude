@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>ALTITUDE SETUP</title>
+
+    ${include("includes/header_common.ssp")}
+
+    <style>
+        body {
+            display: grid;
+            grid-template-rows: [header]  3em
+                                [messages] min-content
+                                [content] auto
+                                [footer]  2em;
+            min-height: 100vh;
+        }
+
+        main {
+            padding-top: calc(var(--section-vertical-space) * 2);
+            display: grid;
+            grid-template-columns: 1fr 400px 1fr;
+        }
+
+        main > div {
+            grid-column: 2;
+            display: grid;
+            grid-auto-rows: min-content;
+            grid-row-gap: var(--section-vertical-space);
+        }
+    </style>
+</head>
+
+<body>
+
+<div>
+    ${include("includes/brand.ssp")}
+</div>
+
+<div id="messages">
+    <div id="serverError" hidden></div>
+    <div id="serverWarning" hidden></div>
+</div>
+
+<main>
+    <div>
+        ${include("htmx/admin/setup_form.ssp")}
+    </div>
+</main>
+
+<footer>
+    By Renegade Otter
+</footer>
+
+</body>
+</html>

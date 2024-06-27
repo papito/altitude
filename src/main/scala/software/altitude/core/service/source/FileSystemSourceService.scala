@@ -10,7 +10,7 @@ import software.altitude.core.{Const => C}
 
 import java.io.File
 
-object FileSystemSourceService {
+private object FileSystemSourceService {
   private val ANY_FILE_FILTER: IOFileFilter = TrueFileFilter.INSTANCE
 }
 
@@ -28,11 +28,11 @@ class FileSystemSourceService(app: Altitude) extends AssetSourceService {
 
     new Iterable[ImportAsset] {
       def iterator: Iterator[ImportAsset] = new Iterator[ImportAsset] {
-        def hasNext = files.hasNext
+        def hasNext: Boolean = files.hasNext
 
-        def next() = fileToImportAsset(new File(files.next().toString))
+        def next(): ImportAsset = fileToImportAsset(new File(files.next().toString))
       }
-    }.toIterator
+    }.iterator
   }
 
   override def count(path: String): Int = {
@@ -47,7 +47,7 @@ class FileSystemSourceService(app: Altitude) extends AssetSourceService {
     count
   }
 
-  def fileToImportAsset(file: File): ImportAsset = new ImportAsset(
+  private def fileToImportAsset(file: File): ImportAsset = new ImportAsset(
     fileName = file.getName,
     path = file.getAbsolutePath,
     sourceType = C.FileStoreType.FS,

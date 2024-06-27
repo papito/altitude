@@ -7,15 +7,14 @@ import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.must.Matchers.equal
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 import software.altitude.core.NotFoundException
 import software.altitude.core.StorageException
 import software.altitude.core.Util
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Folder
-import software.altitude.core.models.Repository
 import software.altitude.core.{Const => C}
+import software.altitude.test.core.IntegrationTestCore
+import software.altitude.test.core.IntegrationTestCore.fileToImportAsset
 
 import java.io.File
 
@@ -35,9 +34,9 @@ import java.io.File
 
   test("move folder") {
     var folder1: Folder = altitude.service.library.addFolder("folder1")
-    var asset1: Asset = altitude.service.library.add(makeAsset(folder1))
+    var asset1: Asset = testContext.persistAsset(folder = Some(folder1))
     val folder2: Folder = altitude.service.library.addFolder("folder2")
-    altitude.service.library.add(makeAsset(folder2))
+    testContext.persistAsset(folder = Some(folder2))
 
     altitude.service.library.moveFolder(folder1.id.get, folder2.id.get)
     checkNoRepositoryDirPath(folder1.path.get)
@@ -72,8 +71,8 @@ import java.io.File
   test("rename directory") {
     var folder1: Folder = altitude.service.library.addFolder("folder1")
 
-    var asset1: Asset = altitude.service.library.add(makeAsset(folder1))
-    val asset2: Asset = altitude.service.library.add(makeAsset(folder1))
+    var asset1: Asset = testContext.persistAsset(folder = Some(folder1))
+    val asset2: Asset = testContext.persistAsset(folder = Some(folder1))
 
     asset1.path should not be None
     asset2.path should not be None
@@ -103,8 +102,8 @@ import java.io.File
   test("delete folder and assets") {
     val folder1: Folder = altitude.service.library.addFolder("folder1")
 
-    val asset1: Asset = altitude.service.library.add(makeAsset(folder1))
-    val asset2: Asset = altitude.service.library.add(makeAsset(folder1))
+    val asset1: Asset = testContext.persistAsset(folder = Some(folder1))
+    val asset2: Asset = testContext.persistAsset(folder = Some(folder1))
 
     asset1.path should not be None
     asset2.path should not be None
@@ -250,10 +249,10 @@ import java.io.File
   }
 
   test("Creating new repository sets up the folder tree") {
-    val repository: Repository = altitude.service.repository.addRepository(
+    altitude.service.repository.addRepository(
       name = Util.randomStr(),
       fileStoreType = C.FileStoreType.FS,
-      user = this.currentUser)
+      owner = testContext.user)
 
     checkRepositoryDirPath(C.Path.ROOT)
     checkRepositoryDirPath(C.Path.TRIAGE)
@@ -261,13 +260,11 @@ import java.io.File
   }
 
   test("Recycled path of extension-less files should not contain trailing separator") {
-    val assetToImport: Asset = (makeAsset(altitude.service.folder.triageFolder): JsObject) ++
-      Json.obj(C.Asset.FILENAME -> "filename")
+    val assetModel = testContext.makeAsset(filename = "filename")
+    val asset: Asset = testContext.persistAsset(Some(assetModel))
+    asset.fileName shouldEqual "filename"
 
-    val importedAsset: Asset = altitude.service.library.add(assetToImport)
-    importedAsset.fileName shouldEqual "filename"
-
-    val recycledAsset: Asset = altitude.service.library.recycleAsset(importedAsset.id.get)
+    val recycledAsset: Asset = altitude.service.library.recycleAsset(asset.id.get)
     recycledAsset.fileName shouldEqual "filename"
 
     val relAssetPath = new File(altitude.service.fileStore.trashFolderPath, recycledAsset.id.get)
@@ -294,17 +291,19 @@ import java.io.File
 
   private def checkNoRepositoryFilePath(path: String) = {
     // get current repo root
-    val rootPath = currentRepo.fileStoreConfig(C.Repository.Config.PATH)
+    val rootPath = testContext.repository.fileStoreConfig(C.Repository.Config.PATH)
     val f = new File(rootPath, path)
     f.exists shouldBe false
   }
 
   private def getAbsoluteFile(path: String): File = {
-    val rootPath = currentRepo.fileStoreConfig(C.Repository.Config.PATH)
+    val rootPath = testContext.repository.fileStoreConfig(C.Repository.Config.PATH)
     new File(rootPath, path)
   }
 
   private def importFile(path: String): Asset = {
+    switchContextRepo(testContext.repository)
+
     val _path = getClass.getResource(s"/import/$path").getPath
     val fileImportAsset = fileToImportAsset(new File(_path))
     val importedAsset = altitude.service.assetImport.importAsset(fileImportAsset).get

@@ -5,7 +5,7 @@ import org.scalatra.Ok
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsNull
 import play.api.libs.json.Json
-import software.altitude.core.controllers.Util
+import software.altitude.core.controllers.{BaseApiController, Util}
 import software.altitude.core.models.Asset
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchSort

@@ -7,11 +7,10 @@ import org.slf4j.LoggerFactory
 import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import software.altitude.core.Altitude
-import software.altitude.core.Context
 import software.altitude.core.FormatException
 import software.altitude.core.MetadataExtractorException
+import software.altitude.core.RequestContext
 import software.altitude.core.models._
-import software.altitude.core.transactions.TransactionId
 
 import java.io.InputStream
 
@@ -37,8 +36,7 @@ class AssetImportService(app: Altitude) {
     }
   }
 
-  def importAsset(importAsset: ImportAsset)
-                 (implicit ctx: Context, txId: TransactionId = new TransactionId) : Option[Asset] = {
+  def importAsset(importAsset: ImportAsset): Option[Asset] = {
     log.info(s"Importing file asset '$importAsset'")
     val assetType = detectAssetType(importAsset)
 
@@ -58,13 +56,13 @@ class AssetImportService(app: Altitude) {
     }
 
     val asset: Asset = Asset(
-      userId = ctx.user.id.get,
+      userId = RequestContext.account.value.get.id.get,
       data = importAsset.data,
       fileName = importAsset.fileName,
       checksum = getChecksum(importAsset),
       assetType = assetType,
       sizeBytes = importAsset.data.length,
-      folderId = ctx.repo.triageFolderId,
+      folderId = RequestContext.repository.value.get.triageFolderId,
       extractedMetadata = extractedMetadata)
 
     var res: Option[JsValue] = None
@@ -85,6 +83,6 @@ class AssetImportService(app: Altitude) {
     Some(Asset.fromJson(res.get))
   }
 
-  protected def getChecksum(importAsset: ImportAsset): String =
+  private def getChecksum(importAsset: ImportAsset): String =
     DigestUtils.sha1Hex(importAsset.data)
 }

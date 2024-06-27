@@ -8,6 +8,8 @@ import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.DuplicateException
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Preview
+import software.altitude.test.core.IntegrationTestCore
+import software.altitude.test.core.IntegrationTestCore.fileToImportAsset
 
 import java.io.File
 

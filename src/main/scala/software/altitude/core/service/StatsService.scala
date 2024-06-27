@@ -4,23 +4,22 @@ import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import software.altitude.core.Altitude
-import software.altitude.core.Context
 import software.altitude.core.dao.StatDao
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Stat
 import software.altitude.core.models.Stats
-import software.altitude.core.transactions.AbstractTransactionManager
-import software.altitude.core.transactions.TransactionId
+import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 
 class StatsService(val app: Altitude) {
   private final val log = LoggerFactory.getLogger(getClass)
   protected val dao: StatDao = app.injector.instance[StatDao]
-  protected val txManager: AbstractTransactionManager = app.injector.instance[AbstractTransactionManager]
+  protected val txManager: TransactionManager = app.txManager
 
-  def getStats(implicit ctx: Context, txId: TransactionId = new TransactionId): Stats = {
+  def getStats: Stats = {
     txManager.asReadOnly[Stats] {
-      val stats: List[Stat] = dao.query(new Query()).records.map(Stat.fromJson)
+      val q: Query = new Query().withRepository()
+      val stats: List[Stat] = dao.query(q).records.map(Stat.fromJson)
 
       // Assemble the total stats on-the-fly
       val totalAssetsDims = Stats.SORTED_ASSETS :: Stats.RECYCLED_ASSETS :: Stats.TRIAGE_ASSETS :: Nil
@@ -35,25 +34,23 @@ class StatsService(val app: Altitude) {
     }
   }
 
-  private def incrementStat(statName: String, count: Long = 1)
-                   (implicit ctx: Context, txId: TransactionId): Unit = {
+  private def incrementStat(statName: String, count: Long = 1): Unit = {
     dao.incrementStat(statName, count)
   }
 
-  private def decrementStat(statName: String, count: Long = 1)
-                   (implicit ctx: Context, txId: TransactionId): Unit = {
+  private def decrementStat(statName: String, count: Long = 1): Unit = {
     dao.decrementStat(statName, count)
   }
 
   def createStat(dimension: String)
-                (implicit ctx: Context, txId: TransactionId = new TransactionId): JsObject = {
+                : JsObject = {
     txManager.withTransaction {
       val stat = Stat(dimension, 0)
       dao.add(stat)
     }
   }
 
-  def addAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId): Unit = {
+  def addAsset(asset: Asset): Unit = {
     log.debug(s"Adding asset [${asset.id}]")
 
     /* To TRIAGE */
@@ -75,7 +72,7 @@ class StatsService(val app: Altitude) {
     }
   }
 
-  def moveAsset(asset: Asset, destFolderId: String)(implicit ctx: Context, txId: TransactionId): Unit = {
+  def moveAsset(asset: Asset, destFolderId: String): Unit = {
     log.debug(s"Moving asset [${asset.id}]")
 
     if (asset.isRecycled) {
@@ -134,7 +131,7 @@ class StatsService(val app: Altitude) {
   }
 
   private def moveRecycledAsset(asset: Asset, destFolderId: String)
-                               (implicit ctx: Context, txId: TransactionId): Unit = {
+                               : Unit = {
     log.debug(s"Moving recycled asset [${asset.id}]. Decrementing RECYCLED")
 
     app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
@@ -155,7 +152,7 @@ class StatsService(val app: Altitude) {
     }
   }
 
-  def recycleAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId): Unit = {
+  def recycleAsset(asset: Asset): Unit = {
     log.debug(s"Recycling asset [${asset.id}]. Incrementing RECYCLED")
 
     if (app.service.folder.isTriageFolder(asset.folderId)) {
@@ -177,11 +174,11 @@ class StatsService(val app: Altitude) {
     app.service.folder.decrAssetCount(asset.folderId)
   }
 
-  def restoreAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId): Unit = {
+  def restoreAsset(asset: Asset): Unit = {
     moveRecycledAsset(asset, asset.folderId)
   }
 
-  def purgeAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId): Unit = {
+  def purgeAsset(asset: Asset): Unit = {
     if (app.service.folder.isTriageFolder(asset.folderId)) {
       app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
       app.service.stats.decrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
@@ -189,4 +186,3 @@ class StatsService(val app: Altitude) {
   }
 
 }
-

@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Util
 import software.altitude.core.models.Repository
 import software.altitude.core.{Const => C}
+import software.altitude.test.core.IntegrationTestCore
 
 @DoNotDiscover class RepositoryServiceTests(val config: Map[String, Any]) extends IntegrationTestCore {
 
@@ -14,11 +15,11 @@ import software.altitude.core.{Const => C}
     val repo: Repository = altitude.service.repository.addRepository(
       name = Util.randomStr(),
       fileStoreType = C.FileStoreType.FS,
-      user = this.currentUser)
+      owner = testContext.user)
 
     repo.fileStoreConfig.keys should contain(C.Repository.Config.PATH)
 
-    val storedRepo: Repository = altitude.service.repository.getRepositoryById(repo.id.get)
+    val storedRepo: Repository = altitude.service.repository.getById(repo.id.get)
     storedRepo.name shouldEqual repo.name
     storedRepo.fileStoreConfig.keys should contain(C.Repository.Config.PATH)
     storedRepo.createdAt should not be None

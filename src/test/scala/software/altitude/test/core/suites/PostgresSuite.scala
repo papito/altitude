@@ -9,5 +9,6 @@ object PostgresSuite {
 }
 
 class PostgresSuite
-  extends AllTests(config = Map("datasource" -> C.DatasourceType.POSTGRES))
-  with PostgresSuiteSetup
+  extends AllIntegrationTests(config = Map("datasource" -> C.DatasourceType.POSTGRES))
+  with PostgresSuiteSetup {
+}

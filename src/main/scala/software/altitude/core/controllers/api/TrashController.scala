@@ -8,7 +8,7 @@ import software.altitude.core.Const.Api.Folder
 import software.altitude.core.Const.Api.Search
 import software.altitude.core.Const.Api.Trash
 import software.altitude.core.Validators.ApiRequestValidator
-import software.altitude.core.controllers.Util
+import software.altitude.core.controllers.{BaseApiController, Util}
 import software.altitude.core.models.Asset
 import software.altitude.core.util.Query
 import software.altitude.core.{Const => C}
@@ -27,10 +27,13 @@ class TrashController extends BaseApiController {
   post("/recycle") {
     log.info("Deleting assets")
 
-    val validator = ApiRequestValidator(List(Folder.ASSET_IDS))
-    validator.validate(requestJson.get)
+    val validator = ApiRequestValidator(
+      required=List(Folder.ASSET_IDS)
+    )
 
-    val assetIds = (requestJson.get \ Api.Folder.ASSET_IDS).as[Set[String]]
+    validator.validate(unscrubbedReqJson.get)
+
+    val assetIds = (unscrubbedReqJson.get \ Api.Folder.ASSET_IDS).as[Set[String]]
     log.debug(s"Assets to move to trash: $assetIds")
 
     app.service.library.recycleAssets(assetIds)
@@ -52,10 +55,13 @@ class TrashController extends BaseApiController {
     val folderId = params.get(Api.Asset.FOLDER_ID).get
     log.info(s"Moving recycled assets to $folderId")
 
-    val validator = ApiRequestValidator(List(Trash.ASSET_IDS))
-    validator.validate(requestJson.get)
+    val validator = ApiRequestValidator(
+      required=List(Trash.ASSET_IDS)
+    )
 
-    val assetIds = (requestJson.get \ Api.Trash.ASSET_IDS).as[Set[String]]
+    validator.validate(unscrubbedReqJson.get)
+
+    val assetIds = (unscrubbedReqJson.get \ Api.Trash.ASSET_IDS).as[Set[String]]
     log.debug(s"Recycled assets to move: $assetIds")
 
     app.service.library.moveAssetsToFolder(assetIds, folderId)
@@ -75,10 +81,13 @@ class TrashController extends BaseApiController {
   post("/restore") {
     log.info("Restoring multiple assets")
 
-    val validator = ApiRequestValidator(List(Api.Trash.ASSET_IDS))
-    validator.validate(requestJson.get)
+    val validator = ApiRequestValidator(
+      required=List(Api.Trash.ASSET_IDS)
+    )
 
-    val assetIds = (requestJson.get \ Api.Trash.ASSET_IDS).as[Set[String]]
+    validator.validate(unscrubbedReqJson.get)
+
+    val assetIds = (unscrubbedReqJson.get \ Api.Trash.ASSET_IDS).as[Set[String]]
     log.debug(s"Recycled assets to restore: $assetIds")
 
     app.service.library.restoreRecycledAssets(assetIds)

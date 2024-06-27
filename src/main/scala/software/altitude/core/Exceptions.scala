@@ -5,9 +5,10 @@ import software.altitude.core.models.Asset
 import scala.collection.mutable
 
 case class ValidationException(message: String = "") extends Exception {
-  val errors: mutable.Map[String, String] = mutable.Map()
   final def isEmpty: Boolean = message.isEmpty && errors.isEmpty
   final def nonEmpty: Boolean = !isEmpty
+
+  val errors: mutable.Map[String, String] = mutable.Map()
 
   def trigger(): Unit = {
     if (nonEmpty) {

@@ -1,25 +1,35 @@
 package software.altitude.core.service
 
-import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import software.altitude.core.Altitude
-import software.altitude.core.Context
 import software.altitude.core.DuplicateException
-import software.altitude.core.NotFoundException
-import software.altitude.core.dao.BaseDao
+import software.altitude.core.RequestContext
+import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.BaseModel
-import software.altitude.core.transactions.AbstractTransactionManager
-import software.altitude.core.transactions.TransactionId
+import software.altitude.core.models.Repository
+import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.{Const => C}
 
-abstract class BaseService[Model <: BaseModel] extends ModelValidation {
+import java.sql.Connection
+
+abstract class BaseService[Model <: BaseModel] {
   protected val app: Altitude
   private final val log = LoggerFactory.getLogger(getClass)
   protected val dao: BaseDao
-  protected val txManager: AbstractTransactionManager = app.injector.instance[AbstractTransactionManager]
+  protected val txManager: TransactionManager = app.txManager
+
+  protected def conn: Connection = {
+    // get the connection associated with this request
+    RequestContext.conn.value.get
+  }
+
+  protected def contextRepo: Repository = {
+    // get the connection associated with this request
+    RequestContext.repository.value.get
+  }
 
   /**
    * Add a single document
@@ -28,9 +38,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
    *
    * @return the document, complete with its ID in the database
    */
-  def add(objIn: Model, queryForDup: Option[Query] = None)
-         (implicit ctx: Context, txId: TransactionId = new TransactionId): JsObject = {
-    val cleaned = cleanAndValidate(objIn)
+  def add(objIn: Model, queryForDup: Option[Query] = None): JsObject = {
 
     val existing = if (queryForDup.isDefined) query(queryForDup.get) else QueryResult.EMPTY
 
@@ -41,7 +49,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
     }
 
     txManager.withTransaction[JsObject] {
-      dao.add(cleaned)
+      dao.add(objIn)
     }
   }
 
@@ -60,8 +68,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
    * @return number of documents updated - 0 or 1
    */
   def updateById(id: String, data: Model, fields: List[String], queryForDup: Option[Query] = None)
-                (implicit ctx: Context, txId: TransactionId = new TransactionId): Int = {
-    val cleaned: JsObject = cleanAndValidate(data)
+                : Int = {
 
     val existing = if (queryForDup.isDefined) query(queryForDup.get) else QueryResult.EMPTY
 
@@ -72,7 +79,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
     }
 
     txManager.withTransaction[Int] {
-      dao.updateById(id, cleaned, fields)
+      dao.updateById(id, data, fields)
     }
   }
 
@@ -88,7 +95,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
    * @return number of documents updated
    */
   def updateByQuery(query: Query, data: JsObject, fields: List[String])
-                   (implicit ctx: Context, txId: TransactionId): Int = {
+                   : Int = {
     if (query.params.isEmpty) {
       throw new RuntimeException("Cannot update [ALL] document with an empty Query")
     }
@@ -105,28 +112,16 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
    *
    * @return the document
    */
-  def getById(id: String)(implicit ctx: Context, txId: TransactionId = new TransactionId): JsObject = {
+  def getById(id: String): JsObject = {
     txManager.asReadOnly[JsObject] {
-      dao.getById(id) match {
-        case Some(obj) => obj
-        case None => throw NotFoundException(s"Cannot find ID [$id]")
-      }
-    }
-  }
-
-  /**
-   * Get all documents, which you want to do only sporadically, for not-growing sets of data
-   */
-  def getAll(implicit ctx: Context, txId: TransactionId = new TransactionId): List[JsObject] = {
-    txManager.asReadOnly[List[JsObject]] {
-      dao.getAll
+      dao.getById(id)
     }
   }
 
   /**
    * Get multiple documents using a Query
    */
-  def query(query: Query)(implicit ctx: Context, txId: TransactionId = new TransactionId): QueryResult = {
+  def query(query: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
       dao.query(query)
     }
@@ -137,7 +132,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
    *
    * @return number of documents deleted - 0 or 1
    */
-  def deleteById(id: String)(implicit ctx: Context, txId: TransactionId = new TransactionId): Int = {
+  def deleteById(id: String): Int = {
     txManager.withTransaction[Int] {
       dao.deleteById(id)
     }
@@ -149,7 +144,7 @@ abstract class BaseService[Model <: BaseModel] extends ModelValidation {
    * @throws RuntimeException if attempting to delete all documents with an empty query
    * @return number of documents deleted
    */
-  def deleteByQuery(query: Query)(implicit ctx: Context, txId: TransactionId = new TransactionId): Int = {
+  def deleteByQuery(query: Query): Int = {
     if (query.params.isEmpty) {
       throw new RuntimeException("Cannot delete [ALL] document with an empty Query")
     }

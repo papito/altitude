@@ -1,21 +1,14 @@
 package software.altitude.core.models
 
-import org.joda.time.DateTime
-import org.joda.time.format.ISODateTimeFormat
 import play.api.libs.json.Json.JsValueWrapper
 import play.api.libs.json._
 import software.altitude.core.Util
 import software.altitude.core.{Const => C}
 
-import java.util.UUID
+import java.time.LocalDateTime
 import scala.language.implicitConversions
 
 object BaseModel {
-  final val ID_LEN = 36
-
-  // make a new model ID
-  final def genId: String = UUID.randomUUID.toString
-
   // implicit converter to go from a model to JSON
   implicit def toJson(obj: BaseModel): JsObject = obj.toJson
 }
@@ -23,14 +16,15 @@ object BaseModel {
 abstract class BaseModel {
   val id: Option[String]
 
-  def toJson: JsObject
+  // implicit converter to go from a JSON to model
+  implicit def toJson: JsObject
 
   // created at - mutable, but can only be set once
-  protected var _createdAt: Option[DateTime] = None
+  private var _createdAt: Option[LocalDateTime] = None
 
-  def createdAt: Option[DateTime] = _createdAt
+  def createdAt: Option[LocalDateTime] = _createdAt
 
-  def createdAt_= (arg: DateTime): Unit = {
+  def createdAt_= (arg: LocalDateTime): Unit = {
     if (_createdAt.isDefined) {
       throw new RuntimeException("Cannot set 'created at' twice")
     }
@@ -38,41 +32,15 @@ abstract class BaseModel {
   }
 
   // updated at - mutable, but can only be set once
-  protected var _updatedAt: Option[DateTime] = None
+  private var _updatedAt: Option[LocalDateTime] = None
 
-  def updatedAt: Option[DateTime] = _updatedAt
+  def updatedAt: Option[LocalDateTime] = _updatedAt
 
-  def updatedAt_= (arg: DateTime): Unit = {
+  def updatedAt_= (arg: LocalDateTime): Unit = {
     if (_updatedAt.isDefined) {
       throw new RuntimeException("Cannot set 'updated at' twice")
     }
     _updatedAt = Some(arg)
-  }
-
-  // is clean (for validation) - mutable, but can only be set once
-  protected var _isClean = false
-
-  def isClean: Boolean = _isClean
-
-  def isClean_= (arg: Boolean): Boolean = {
-    if (!_isClean && arg) {
-      _isClean = true
-    }
-
-    isClean
-  }
-
-  // is validated - mutable, but can only be set once
-  protected var _isValidated = false
-
-  def isValidated: Boolean = _isValidated
-
-  def isValidated_= (arg: Boolean): Boolean = {
-    if (!_isValidated && arg) {
-      _isValidated = true
-    }
-
-    isClean
   }
 
   def modify(fields: (String, JsValueWrapper)*): JsObject = {
@@ -94,7 +62,7 @@ abstract class BaseModel {
   }
 
   /**
-    * Returns core JSON attributes that most models should have
+   * Returns core JSON attributes that all models should have
     */
   protected def coreJsonAttrs: JsObject = JsObject(Map(
     C.Base.ID -> {id match {
@@ -104,12 +72,12 @@ abstract class BaseModel {
 
     C.Base.CREATED_AT -> {createdAt match {
       case None => JsNull
-      case _ => JsString(Util.isoDateTime(createdAt))
+      case _ => JsString(Util.localDateTimeToString(createdAt))
     }},
 
     C.Base.UPDATED_AT -> {updatedAt match {
       case None => JsNull
-      case _ => JsString(Util.isoDateTime(updatedAt))
+      case _ => JsString(Util.localDateTimeToString(updatedAt))
     }}
   ).toSeq)
 
@@ -120,12 +88,12 @@ abstract class BaseModel {
   protected def withCoreAttr(json: JsValue): this.type = {
     val isoCreatedAt = (json \ C.Base.CREATED_AT).asOpt[String]
     if (isoCreatedAt.isDefined) {
-      createdAt = ISODateTimeFormat.dateTime().parseDateTime(isoCreatedAt.get)
+      createdAt = Util.stringToLocalDateTime(isoCreatedAt.get).get
     }
 
     val isoUpdatedAt = (json \ C.Base.UPDATED_AT).asOpt[String]
     if (isoUpdatedAt.isDefined) {
-      updatedAt = ISODateTimeFormat.dateTime().parseDateTime(isoUpdatedAt.get)
+      updatedAt = Util.stringToLocalDateTime(isoUpdatedAt.get).get
     }
 
     this

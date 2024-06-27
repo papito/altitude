@@ -1,0 +1,136 @@
+<style>
+    #setupForm {
+        display: grid;
+        grid-auto-rows: min-content;
+        grid-row-gap: var(--section-vertical-space);
+    }
+
+    #setupForm label {
+        display: block;
+        font-weight: bold;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+        font-size: 1.2em;
+    }
+
+    #setupForm input:not([type="submit"]) {
+        width: 100%
+    }
+
+    #setupForm .submit {
+        margin-top: var(--control-vertical-space);
+        display: grid;
+        place-items: center;
+    }
+
+    #setupForm input[type="submit"] {
+        line-height: 1.3em;
+        font-size: 1.2em;
+        width: 50%
+    }
+
+    #setupForm .action-button {
+        padding: 10px 36px;
+        font-size: 1.3em;
+    }
+
+    #setupForm div.error {
+        padding: 5px;
+        margin-top: 2px;
+        background-color: var(--message-background-color);
+        color: #FFF;
+        border: 1px solid var(--error-color);
+        border-bottom: 2px solid var(--error-color);
+        letter-spacing: 1px;
+    }
+</style>
+
+#import(software.altitude.core.Const)
+#import(play.api.libs.json.Json)
+#import(play.api.libs.json.JsObject)
+
+<%@ val fieldErrors: Map[String, String] = Map.empty %>
+<%@ val formJson: JsObject = Json.obj() %>
+
+<form action="#" id="setupForm"
+      hx-swap="outerHTML"
+      hx-post="/htmx/admin/setup"
+      hx-ext="json-enc">
+
+    <div>
+        <label for="<%= Const.Api.Fields.REPOSITORY_NAME %>">Library name</label>
+        <input type="text"
+               id="<%= Const.Api.Fields.REPOSITORY_NAME %>"
+               name="<%= Const.Api.Fields.REPOSITORY_NAME %>"
+               placeholder="Library name"
+               value='<%= (formJson \ Const.Api.Fields.REPOSITORY_NAME).asOpt[String].getOrElse("Personal") %>'
+               autocomplete="off"
+               minlength="<%= Const.Api.Constraints.MIN_REPOSITORY_NAME_LENGTH %>"
+               maxlength="<%= Const.Api.Constraints.MAX_REPOSITORY_NAME_LENGTH %>"/>
+        <% if (fieldErrors.contains(Const.Api.Fields.REPOSITORY_NAME)) { %>
+            <div class="error"><%= fieldErrors(Const.Api.Fields.REPOSITORY_NAME) %></div>
+        <% } %>
+    </div>
+    <div>
+        <label for="fileStore">File storage type</label>
+        <input type="text"
+               id="fileStore"
+               name="fileStore"
+               class="readonly"
+               readonly
+               value="filesystem"/>
+    </div>
+    <div>
+        <label for="dataStore">Metadata storage type</label>
+        <input type="text"
+               id="dataStore"
+               name="dataStore"
+               class="readonly"
+               readonly
+               value="postgres"/>
+    </div>
+    <div>
+        <label for="<%= Const.Api.Fields.ADMIN_EMAIL %>">Administrator Email</label>
+        <input type="email"
+               autocomplete="off"
+               id="<%= Const.Api.Fields.ADMIN_EMAIL %>"
+               name="<%= Const.Api.Fields.ADMIN_EMAIL %>"
+               value='<%= (formJson \ Const.Api.Fields.ADMIN_EMAIL).asOpt[String].getOrElse("") %>'
+               minlength="<%= Const.Api.Constraints.MIN_EMAIL_LENGTH %>"
+               maxlength="<%= Const.Api.Constraints.MAX_EMAIL_LENGTH %>"/>
+        <% if (fieldErrors.contains(Const.Api.Fields.ADMIN_EMAIL)) { %>
+            <div class="error"><%= fieldErrors(Const.Api.Fields.ADMIN_EMAIL) %></div>
+        <% } %>
+    </div>
+    <div>
+        <label for="<%= Const.Api.Fields.PASSWORD %>">Administrator Password</label>
+        <input type="password"
+               id="<%= Const.Api.Fields.PASSWORD %>"
+               name="<%= Const.Api.Fields.PASSWORD  %>"
+               value='<%= (formJson \ Const.Api.Fields.PASSWORD).asOpt[String].getOrElse("") %>'
+               minlength="<%= Const.Api.Constraints.MIN_PASSWORD_LENGTH %>"
+               maxlength="<%= Const.Api.Constraints.MAX_PASSWORD_LENGTH %>"/>
+        <% if (fieldErrors.contains(Const.Api.Fields.PASSWORD)) { %>
+        <div class="error"><%= fieldErrors(Const.Api.Fields.PASSWORD) %></div>
+        <% } %>
+    </div>
+    <div>
+        <label for="<%= Const.Api.Fields.PASSWORD2 %>">Confirm Password</label>
+        <input type="password"
+               id="<%= Const.Api.Fields.PASSWORD2 %>"
+               name="<%= Const.Api.Fields.PASSWORD2 %>"
+               value='<%= (formJson \ Const.Api.Fields.PASSWORD2).asOpt[String].getOrElse("") %>'
+               minlength="<%= Const.Api.Constraints.MIN_PASSWORD_LENGTH %>"
+               maxlength="<%= Const.Api.Constraints.MAX_PASSWORD_LENGTH %>"/>
+        <% if (fieldErrors.contains(Const.Api.Fields.PASSWORD2)) { %>
+        <div class="error"><%= fieldErrors(Const.Api.Fields.PASSWORD2) %></div>
+        <% } %>
+    </div>
+    <div class="submit">
+        <button type="submit"
+                class="action-button"
+                id="initialize">
+            Dazzle Me
+        </button>
+    </div>
+</form>

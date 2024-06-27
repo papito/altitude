@@ -6,6 +6,7 @@ import software.altitude.core.NotFoundException
 import software.altitude.core.models.Asset
 import software.altitude.core.util.Query
 import software.altitude.core.{Const => C}
+import software.altitude.test.core.IntegrationTestCore
 
 
 @DoNotDiscover class AssetServiceTests (val config: Map[String, Any]) extends IntegrationTestCore {
@@ -22,8 +23,7 @@ import software.altitude.core.{Const => C}
   }
 
   test("Should be able to update 'isRecycled' property with 'updateById()'") {
-    val triageFolder = altitude.service.folder.triageFolder
-    val asset: Asset = altitude.service.library.add(makeAsset(triageFolder))
+    val asset: Asset = testContext.persistAsset()
     asset.isRecycled shouldBe false
 
     val updateAsset: Asset = asset.modify(C.Asset.IS_RECYCLED -> true)
@@ -36,10 +36,7 @@ import software.altitude.core.{Const => C}
   }
 
   test("Should be able to query by the recycled property") {
-    val triageFolder = altitude.service.folder.triageFolder
-    altitude.service.library.add(
-      makeAsset(triageFolder).modify(C.Asset.IS_RECYCLED -> false)
-    )
+    testContext.persistAsset()
 
     val q = new Query(params = Map(C.Asset.IS_RECYCLED -> false))
     val result = altitude.service.asset.query(q)

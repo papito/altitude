@@ -1,5 +1,8 @@
 package software.altitude.core.util
 
+import software.altitude.core.Const
+import software.altitude.core.RequestContext
+
 object Query {
   object ParamType extends Enumeration {
     val EQ, GT, LT, GTE, LTE, IN, RANGE, OR, CONTAINS, MATCHES = Value
@@ -18,7 +21,6 @@ object Query {
       this(Set(value), paramType, negate)
   }
 
-  // scalastyle:off
   def EQUALS(value: Any) = new QueryParam(value, ParamType.EQ, negate = false)
   def NOT_EQUALS(value: Any) = new QueryParam(value, ParamType.EQ, negate = true)
 
@@ -55,7 +57,6 @@ object Query {
 
   def MATCHES(value: Any) = new QueryParam(value, ParamType.MATCHES, negate = false)
   def NOT_MATCHES(value: Any) = new QueryParam(value, ParamType.MATCHES, negate = true)
-  // scalastyle:on
 }
 
 object SortDirection extends Enumeration {
@@ -80,6 +81,12 @@ class Query(val params: Map[String, Any] = Map(),
   // append new params to the query and return a new copy
   def add(_params: (String, Any)*): Query = new Query(
     params = params ++ _params,
+    rpp = rpp,
+    page = page,
+    sort = sort)
+
+  def withRepository(): Query = new Query(
+    params = params ++ Map(Const.Base.REPO_ID -> RequestContext.getRepository.id.get),
     rpp = rpp,
     page = page,
     sort = sort)

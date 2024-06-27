@@ -1,6 +1,7 @@
 package software.altitude.core.models
 
 import play.api.libs.json._
+import software.altitude.core.ValidationException
 import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
@@ -28,6 +29,10 @@ case class Folder(id: Option[String] = None,
                   children: List[Folder] = List(),
                   isRecycled: Boolean = false,
                   numOfAssets: Int = 0) extends BaseModel {
+
+  if (name.isEmpty) {
+    throw ValidationException("Folder name cannot be empty")
+  }
 
   val nameLowercase: String = name.toLowerCase
 

@@ -4,14 +4,13 @@ import org.apache.commons.io.FileUtils
 import org.apache.commons.io.FilenameUtils
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
-import software.altitude.core.Context
 import software.altitude.core.NotFoundException
+import software.altitude.core.RequestContext
 import software.altitude.core.StorageException
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Data
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Preview
-import software.altitude.core.transactions.TransactionId
 import software.altitude.core.{Const => C}
 
 import java.io._
@@ -20,12 +19,12 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   private final val log = LoggerFactory.getLogger(getClass)
 
   final override val pathSeparator = File.separator
-  final override def sortedFolderPath(implicit ctx: Context): String = C.Path.ROOT
-  final override def triageFolderPath(implicit ctx: Context): String = C.Path.TRIAGE
-  final override def trashFolderPath(implicit ctx: Context): String = C.Path.TRASH
-  final override def landfillFolderPath(implicit ctx: Context): String = C.Path.LANDFILL
+  final override def sortedFolderPath: String = C.Path.ROOT
+  final override def triageFolderPath: String = C.Path.TRIAGE
+  final override def trashFolderPath: String = C.Path.TRASH
+  final override def landfillFolderPath: String = C.Path.LANDFILL
 
-  override def createPath(relPath: String)(implicit ctx: Context): Unit = {
+  override def createPath(relPath: String): Unit = {
     val destFile = absoluteFile(relPath)
     log.info(s"Adding FS folder [$destFile]")
 
@@ -42,13 +41,13 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  override def addFolder(folder: Folder)(implicit ctx: Context): Unit = {
+  override def addFolder(folder: Folder): Unit = {
     require(folder.path.isDefined)
     require(folder.path.get.nonEmpty)
     createPath(folder.path.get)
   }
 
-  override def deleteFolder(folder: Folder)(implicit ctx: Context): Unit = {
+  override def deleteFolder(folder: Folder): Unit = {
     require(folder.path.isDefined)
     require(folder.path.get.nonEmpty)
 
@@ -74,7 +73,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  override def renameFolder(folder: Folder, newName: String)(implicit ctx: Context): Unit = {
+  override def renameFolder(folder: Folder, newName: String): Unit = {
     require(folder.path.isDefined)
     require(folder.path.get.nonEmpty)
 
@@ -102,7 +101,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  def moveFolder(folder: Folder, newParent: Folder)(implicit ctx: Context): Unit = {
+  def moveFolder(folder: Folder, newParent: Folder): Unit = {
     require(folder.path.isDefined)
     require(newParent.path.get.nonEmpty)
 
@@ -131,7 +130,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   override def getById(id: String)
-             (implicit ctx: Context, txId: TransactionId = new TransactionId): Data = {
+             : Data = {
     val asset: Asset = app.service.library.getById(id)
     val path = getAssetPath(asset)
     val srcFile: File = absoluteFile(path)
@@ -152,7 +151,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
       mimeType = "application/octet-stream")
   }
 
-  override def addAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit = {
+  override def addAsset(asset: Asset): Unit = {
     val path = getAssetPath(asset)
     val destFile = absoluteFile(path)
     log.debug(s"Creating asset [$asset] on file system at [$destFile]")
@@ -167,7 +166,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   override def moveAsset(srcAsset: Asset, destAsset: Asset)
-                        (implicit ctx: Context, txId: TransactionId = new TransactionId): Unit = {
+                        : Unit = {
     val srcFile = absoluteFile(getAssetPath(srcAsset))
     val destFile = absoluteFile(getAssetPath(destAsset))
 
@@ -175,7 +174,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     moveFile(srcFile, destFile)
   }
 
-  override def recycleAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit = {
+  override def recycleAsset(asset: Asset): Unit = {
     log.info(s"Recycling: [$asset]")
 
     val srcFile = absoluteFile(getAssetPath(asset))
@@ -185,7 +184,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     moveFile(srcFile, destFile)
   }
 
-  override def restoreAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit = {
+  override def restoreAsset(asset: Asset): Unit = {
     log.info(s"Restoring: [$asset]")
 
     val relRecyclePath = getRecycledAssetPath(asset)
@@ -195,28 +194,28 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     moveFile(srcFile, destFile)
   }
 
-  override def purgeAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit = {
+  override def purgeAsset(asset: Asset): Unit = {
 
   }
 
   override def getFolderPath(name: String, parentId: String)
-                                  (implicit ctx: Context, txId: TransactionId = new TransactionId): String = {
+                                  : String = {
     val parent: Folder = app.service.folder.getById(parentId)
     new File(parent.path.get, name).getPath
   }
 
   override def calculateNextAvailableFilename(asset: Asset)
-                                             (implicit ctx: Context, txId: TransactionId): String = {
+                                             : String = {
     findNextAvailableFilename(new File(getAssetPath(asset)))
   }
 
   def getPathWithNewFilename(asset: Asset, newFilename: String)
-                                  (implicit ctx: Context, txId: TransactionId): String = {
+                                  : String = {
     val folder: Folder = app.service.folder.getById(asset.folderId)
     FilenameUtils.concat(folder.path.get, newFilename)
   }
 
-  override def getAssetPath(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): String = {
+  override def getAssetPath(asset: Asset): String = {
     if (asset.isRecycled) {
       getRecycledAssetPath(asset)
     }
@@ -226,7 +225,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  override def getRecycledAssetPath(asset: Asset)(implicit ctx: Context): String = {
+  override def getRecycledAssetPath(asset: Asset): String = {
     val ext = FilenameUtils.getExtension(asset.fileName)
 
     // no guarantee there IS an extension
@@ -241,7 +240,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  override def addPreview(preview: Preview)(implicit ctx: Context): Unit = {
+  override def addPreview(preview: Preview): Unit = {
     log.info(s"Adding preview for asset ${preview.assetId}")
 
     // get the full path to our preview file
@@ -259,7 +258,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  override def getPreviewById(assetId: String)(implicit ctx: Context): Preview = {
+  override def getPreviewById(assetId: String): Preview = {
     val f: File = new File(previewFilePath(assetId))
 
     if (!f.isFile) {
@@ -284,24 +283,24 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     pathComponents.mkString(pathSeparator)
   }
 
-  private def previewFilePath(assetId: String)(implicit ctx: Context): String = {
+  private def previewFilePath(assetId: String): String = {
     val dirName = assetId.substring(0, 2)
     new File(new File(previewDirPath, dirName).getPath, assetId + ".png").getPath
   }
 
-  private def previewDirPath(implicit ctx: Context): String =
-    new File(ctx.repo.fileStoreConfig(C.Repository.Config.PATH), "p").getPath
+  private def previewDirPath: String =
+    new File(RequestContext.repository.value.get.fileStoreConfig(C.Repository.Config.PATH), "p").getPath
 
   /**
    * Get the absolute path to the asset on file system,
    * given path relative to repository root
    */
-  private def absoluteFile(relativePath: String)(implicit ctx: Context): File = {
-    val repositoryRoot = ctx.repo.fileStoreConfig(C.Repository.Config.PATH)
+  private def absoluteFile(relativePath: String): File = {
+    val repositoryRoot = RequestContext.repository.value.get.fileStoreConfig(C.Repository.Config.PATH)
     new File(repositoryRoot, relativePath)
   }
 
-  private def findNextAvailableFilename(file: File)(implicit ctx: Context): String = {
+  private def findNextAvailableFilename(file: File): String = {
     val path = FilenameUtils.getPath(file.getPath)
     val ext = FilenameUtils.getExtension(file.getPath)
     var baseName = FilenameUtils.getBaseName(file.getPath)

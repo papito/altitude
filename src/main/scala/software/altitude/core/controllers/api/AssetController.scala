@@ -6,7 +6,7 @@ import play.api.libs.json.Json
 import software.altitude.core.Const.Api
 import software.altitude.core.NotFoundException
 import software.altitude.core.Validators.ApiRequestValidator
-import software.altitude.core.controllers.Util
+import software.altitude.core.controllers.{BaseApiController, Util}
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Data
 import software.altitude.core.models.Preview
@@ -14,6 +14,11 @@ import software.altitude.core.{Const => C}
 
 class AssetController extends BaseApiController {
   private final val log = LoggerFactory.getLogger(getClass)
+
+  private val assetIdValidator = ApiRequestValidator(
+    required=List(C.Api.Folder.ASSET_IDS)
+  )
+
 
   get(s"/:${C.Api.ID}") {
     val id = params.get(C.Api.ID).get
@@ -41,7 +46,7 @@ class AssetController extends BaseApiController {
   post(s"/:${C.Api.ID}/metadata/:${C.Api.Asset.METADATA_FIELD_ID}") {
     val assetId = params.get(C.Api.ID).get
     val fieldId = params.get(C.Api.Asset.METADATA_FIELD_ID).get
-    val newValue = (requestJson.get \ C.Api.Metadata.VALUE).as[String]
+    val newValue = (unscrubbedReqJson.get \ C.Api.Metadata.VALUE).as[String]
 
     log.info(s"Adding metadata value [$newValue] for field [$fieldId] on asset [$assetId]")
 
@@ -57,7 +62,7 @@ class AssetController extends BaseApiController {
   put(s"/:${C.Api.ID}/metadata/value/:${C.Api.Asset.METADATA_VALUE_ID}") {
     val assetId = params.get(C.Api.ID).get
     val valueId = params.get(C.Api.Asset.METADATA_VALUE_ID).get
-    val newValue = (requestJson.get \ C.Api.Metadata.VALUE).as[String]
+    val newValue = (unscrubbedReqJson.get \ C.Api.Metadata.VALUE).as[String]
 
     log.info(s"Updating metadata value [$newValue] for value ID [$valueId] on asset [$assetId]")
 
@@ -102,10 +107,9 @@ class AssetController extends BaseApiController {
 
     log.info(s"Moving assets to $folderId")
 
-    val validator = ApiRequestValidator(List(C.Api.Folder.ASSET_IDS))
-    validator.validate(requestJson.get)
+    assetIdValidator.validate(unscrubbedReqJson.get)
 
-    val assetIds = (requestJson.get \ C.Api.Folder.ASSET_IDS).as[Set[String]]
+    val assetIds = (unscrubbedReqJson.get \ C.Api.Folder.ASSET_IDS).as[Set[String]]
 
     log.debug(s"Assets to move: $assetIds")
 
@@ -127,10 +131,9 @@ class AssetController extends BaseApiController {
   post("/move/to/triage") {
     log.info("Clearing category")
 
-    val validator = ApiRequestValidator(List(C.Api.Folder.ASSET_IDS))
-    validator.validate(requestJson.get)
+    assetIdValidator.validate(unscrubbedReqJson.get)
 
-    val assetIds = (requestJson.get \ C.Api.Folder.ASSET_IDS).as[Set[String]]
+    val assetIds = (unscrubbedReqJson.get \ C.Api.Folder.ASSET_IDS).as[Set[String]]
 
     log.debug(s"Assets to move to traige: $assetIds")
 
@@ -148,7 +151,7 @@ class AssetController extends BaseApiController {
       preview.data
     }
     catch {
-      case ex: NotFoundException => redirect("/i/1x1.png")
+      case _: NotFoundException => redirect("/i/1x1.png")
     }
   }
 

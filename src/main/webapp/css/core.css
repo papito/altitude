@@ -1,69 +1,107 @@
 :root {
     --background-color: #3d3d3d;
+    --background-aux-color: #333;
     --modal-background-color: #3b3b3b;
     --panel-border-color: #343434;
+    --navbar-border: 2px solid #272727;
+    --navbar-text-shadow: rgba(0,0,0,0.75) 0 1px;
+    --box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0;
+    /* Larger spacing for larger app areas, like panels and page paddings */
+    --section-vertical-space: 35px;
+    /* Standard vertical spacing for individual elements and lists */
+    --control-vertical-space: 15px;
+    --success-color: #4dae27;
+    --error-color: #fc1e1e;
+    /* For messages such as form validation and server response status */
+    --message-background-color: #2f2e2e;
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
 }
 
+* {
+    box-sizing: border-box;
+}
+
+/*              */
+/* DEFAULT CORE */
+/*              */
 body {
+    font-size: 14px;
     margin: 0;
     background-color: var(--background-color);
     color: #c6c6c6;
     font-family: var(--font);
 }
 
-main {
-    height: calc(100vh - 4.1em);
-}
-
 footer {
-    background: #333;
+    padding: 5px;
+    background: var(--background-aux-color);
     color: #fff;
     bottom: 0;
     display: grid;
+    font-size: .9em;
     align-items: center;
 }
 
 body {
     display: grid;
-    grid-template-rows: [header]  2em
+    grid-template-rows: [header]  60px
                         [content] 1fr
-                        [footer]  2em;
+                        [footer]  40px;
     min-height: 100vh;
 }
 
 footer {
-    background: #333;
+    background: var(--background-aux-color);
     color: #fff;
     bottom: 0;
     display: grid;
     align-items: center;
 }
 
-.split.split-horizontal,
-.gutter.gutter-horizontal {
-    height: 100%;
-    float: left;
+/*       */
+/* FORMS */
+/*       */
+
+input, textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    color: #2C3E50;
+    font-size: 1.2em;
 }
 
-.gutter {
-    background-color: transparent;
-    background-repeat: no-repeat;
-    background-position: 50%;
+input.readonly {
+    background-color: #ada8a8;
 }
 
-.gutter.gutter-vertical {
-    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
-    cursor: ns-resize;
+/*         */
+/* BUTTONS */
+/*         */
+
+.action-button {
+    background: var(--success-color);
+    font-weight: bold;
+    color: white;
+    border: 0 none;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 10px;
+    margin: 10px 5px;
+    text-decoration: none;
+    text-shadow: rgba(72, 70, 70, 0.45) 1px 1px 1px;
+    font-size: 1em;
+}
+.action-button:hover, .action-button:focus {
+    box-shadow: var(--box-shadow);
 }
 
-.gutter.gutter-horizontal {
-    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
-    cursor: ew-resize;
-}
+/*          */
+/* MESSAGES */
+/*          */
 
-.split {
-    box-sizing: border-box;
-    overflow-y: auto;
-    overflow-x: hidden;
+#serverError {
+    color: #FFF;
+    background-color: var(--message-background-color);
+    border: 1px solid var(--error-color);
+    padding: 8px;
+    font-size: 1.1em;
 }

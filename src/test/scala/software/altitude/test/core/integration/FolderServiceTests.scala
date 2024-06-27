@@ -8,8 +8,10 @@ import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.IllegalOperationException
 import software.altitude.core.NotFoundException
+import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
 import software.altitude.core.models.Folder
+import software.altitude.test.core.IntegrationTestCore
 
 @DoNotDiscover class FolderServiceTests (val config: Map[String, Any]) extends IntegrationTestCore {
 
@@ -22,7 +24,7 @@ import software.altitude.core.models.Folder
 
     val folder1: Folder = altitude.service.library.addFolder("folder1")
 
-    folder1.parentId shouldEqual ctx.repo.rootFolderId
+    folder1.parentId shouldEqual RequestContext.repository.value.get.rootFolderId
 
     val folder1_1: Folder = altitude.service.library.addFolder(
       name = "folder1_1", parentId = folder1.id)
@@ -43,7 +45,7 @@ import software.altitude.core.models.Folder
         val folder2: Folder = altitude.service.library.addFolder(
           name = "folder2")
 
-        folder2.parentId shouldEqual ctx.repo.rootFolderId
+        folder2.parentId shouldEqual RequestContext.repository.value.get.rootFolderId
 
         val folder2_1: Folder = altitude.service.library.addFolder(
           name = "folder2_1", parentId = folder2.id)
@@ -77,7 +79,9 @@ import software.altitude.core.models.Folder
         path(1).id shouldBe folder2.id
         path.last.id shouldBe folder2_1_1.id
 
-        SET_SECOND_REPO()
+        // SECOND REPO
+        val repo2 = testContext.persistRepository()
+        switchContextRepo(repo2)
 
         val hierarchy2 = altitude.service.folder.hierarchy()
         hierarchy2 shouldBe empty
@@ -90,7 +94,7 @@ import software.altitude.core.models.Folder
   }
 
   test("Root folder path should be empty") {
-    val path: List[Folder] = altitude.app.service.folder.pathComponents(folderId = ctx.repo.rootFolderId)
+    val path: List[Folder] = altitude.app.service.folder.pathComponents(folderId = RequestContext.repository.value.get.rootFolderId)
     path.length should equal(0)
   }
 
@@ -195,7 +199,7 @@ import software.altitude.core.models.Folder
 
   test("Deleting the root folder should fail") {
     intercept[IllegalOperationException] {
-      altitude.service.library.deleteFolderById(ctx.repo.rootFolderId)
+      altitude.service.library.deleteFolderById(RequestContext.repository.value.get.rootFolderId)
     }
   }
 
@@ -268,13 +272,13 @@ import software.altitude.core.models.Folder
     val folder2: Folder = altitude.service.library.addFolder("folder2")
 
     // assert initial state
-    altitude.app.service.folder.immediateChildren(rootId = ctx.repo.rootFolderId).length shouldBe 2
+    altitude.app.service.folder.immediateChildren(rootId = RequestContext.repository.value.get.rootFolderId).length shouldBe 2
 
-    altitude.service.library.moveFolder(folder1_1_1.id.get, ctx.repo.rootFolderId)
-    altitude.app.service.folder.immediateChildren(rootId = ctx.repo.rootFolderId).length shouldBe 3
+    altitude.service.library.moveFolder(folder1_1_1.id.get, RequestContext.repository.value.get.rootFolderId)
+    altitude.app.service.folder.immediateChildren(rootId = RequestContext.repository.value.get.rootFolderId).length shouldBe 3
 
-    altitude.service.library.moveFolder(folder1_1.id.get, ctx.repo.rootFolderId)
-    altitude.app.service.folder.immediateChildren(rootId = ctx.repo.rootFolderId).length shouldBe 4
+    altitude.service.library.moveFolder(folder1_1.id.get, RequestContext.repository.value.get.rootFolderId)
+    altitude.app.service.folder.immediateChildren(rootId = RequestContext.repository.value.get.rootFolderId).length shouldBe 4
   }
 
   test("Illegal folder move actions should throw") {
@@ -360,7 +364,7 @@ import software.altitude.core.models.Folder
 
     // rename a system folder
     intercept[IllegalOperationException] {
-      altitude.service.library.renameFolder(ctx.repo.rootFolderId, folder1.name)
+      altitude.service.library.renameFolder(RequestContext.repository.value.get.rootFolderId, folder1.name)
     }
   }
 }

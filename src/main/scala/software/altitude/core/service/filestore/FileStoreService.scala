@@ -1,61 +1,59 @@
 package software.altitude.core.service.filestore
 
-import software.altitude.core.Context
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Data
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Preview
-import software.altitude.core.transactions.TransactionId
 
 trait FileStoreService {
   val pathSeparator: String
 
   def getById(id: String)
-             (implicit ctx: Context, txId: TransactionId = new TransactionId): Data
+             : Data
 
-  def createPath(relPath: String)(implicit ctx: Context): Unit
+  def createPath(relPath: String): Unit
 
-  def addAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
+  def addAsset(asset: Asset): Unit
 
-  def purgeAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
+  def purgeAsset(asset: Asset): Unit
 
-  def moveAsset(srcAsset: Asset, destAsset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
+  def moveAsset(srcAsset: Asset, destAsset: Asset): Unit
 
-  def recycleAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
+  def recycleAsset(asset: Asset): Unit
 
-  def restoreAsset(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): Unit
+  def restoreAsset(asset: Asset): Unit
 
-  def addFolder(folder: Folder)(implicit ctx: Context): Unit
+  def addFolder(folder: Folder): Unit
 
-  def deleteFolder(folder: Folder)(implicit ctx: Context): Unit
+  def deleteFolder(folder: Folder): Unit
 
-  def renameFolder(folder: Folder, newName: String)(implicit ctx: Context): Unit
+  def renameFolder(folder: Folder, newName: String): Unit
 
-  def moveFolder(folder: Folder, newParent: Folder)(implicit ctx: Context): Unit
+  def moveFolder(folder: Folder, newParent: Folder): Unit
 
   def getFolderPath(name: String, parentId: String)
-                         (implicit ctx: Context, txId: TransactionId = new TransactionId): String
+                         : String
 
-  def calculateNextAvailableFilename(asset: Asset)(implicit ctx: Context, txId: TransactionId): String
+  def calculateNextAvailableFilename(asset: Asset): String
 
   def getPathWithNewFilename(asset: Asset, newFilename: String)
-                            (implicit ctx: Context, txId: TransactionId = new TransactionId): String
+                            : String
 
-  def getAssetPath(asset: Asset)(implicit ctx: Context, txId: TransactionId = new TransactionId): String
+  def getAssetPath(asset: Asset): String
 
-  def getRecycledAssetPath(asset: Asset)(implicit ctx: Context): String
+  def getRecycledAssetPath(asset: Asset): String
 
-  def sortedFolderPath(implicit ctx: Context): String
+  def sortedFolderPath: String
 
-  def triageFolderPath(implicit ctx: Context): String
+  def triageFolderPath: String
 
-  def trashFolderPath(implicit ctx: Context): String
+  def trashFolderPath: String
 
-  def landfillFolderPath(implicit ctx: Context): String
+  def landfillFolderPath: String
 
-  def addPreview(preview: Preview)(implicit ctx: Context): Unit
+  def addPreview(preview: Preview): Unit
 
-  def getPreviewById(assetId: String)(implicit ctx: Context): Preview
+  def getPreviewById(assetId: String): Preview
 
   def assemblePath(pathComponents: List[String]): String
 }

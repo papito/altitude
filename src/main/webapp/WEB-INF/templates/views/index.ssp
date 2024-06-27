@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>ALTITUDE</title>
+
+    ${include("includes/header_common.ssp")}
+
+    <style>
+        #browser {
+            border-right: 1px solid var(--panel-border-color);
+            box-shadow: var(--box-shadow);
+            text-shadow: rgba(0,0,0,0.75) 0 1px;
+        }
+
+        #assets {
+            border-left: 1px solid var(--panel-border-color);
+            box-shadow: var(--box-shadow);
+            text-shadow: rgba(0,0,0,0.75) 0 1px;
+        }
+
+        #folders {
+            box-shadow: var(--box-shadow);
+            text-shadow: rgba(0,0,0,0.75) 0 1px;
+        }
+
+        #albums {
+            border-top: 1px solid var(--panel-border-color);
+            box-shadow: var(--box-shadow);
+            text-shadow: rgba(0,0,0,0.75) 0 1px;
+        }
+
+        /* SPLIT */
+        .split.split-horizontal,
+        .gutter.gutter-horizontal {
+            height: 100%;
+            float: left;
+        }
+
+        .gutter {
+            background-color: transparent;
+            background-repeat: no-repeat;
+            background-position: 50%;
+        }
+
+        .gutter.gutter-vertical {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
+            cursor: ns-resize;
+        }
+
+        .gutter.gutter-horizontal {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+            cursor: ew-resize;
+        }
+
+        .split {
+            box-sizing: border-box;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+    </style>
+</head>
+
+#import(software.altitude.core.RequestContext)
+
+<body>
+
+<div>
+    ${include("includes/nav.ssp")}
+</div>
+
+<main>
+    <div id="browser" class="split content split-horizontal">
+        <div id="folders" class="split content">
+            <div id="folders">
+            </div>
+        </div>
+        <div id="albums" class="split content">
+        </div>
+    </div>
+
+    <div id="assets" class="split content split-horizontal">
+    </div>
+</main>
+
+<footer>
+    <%= RequestContext.account.value.getOrElse("None") %>
+</footer>
+
+<script lang="js">
+    Split(["#browser", "#assets"], {
+        sizes: [25, 75]
+    })
+    Split(["#folders", "#albums"], {
+        sizes: [50, 50],
+        direction: 'vertical'
+    })
+</script>
+
+</body>
+</html>

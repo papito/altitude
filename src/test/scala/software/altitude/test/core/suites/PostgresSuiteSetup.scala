@@ -4,44 +4,46 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import software.altitude.core.Configuration
 import software.altitude.core.Environment
-import software.altitude.test.core.integration.IntegrationTestCore
+import software.altitude.core.RequestContext
+import software.altitude.test.core.IntegrationTestCore
 
-import java.sql.DriverManager
-import java.util.Properties
+object PostgresSuiteSetup {
+
+  def setup(): Unit = {
+    IntegrationTestCore.createTestDir(PostgresSuite.app)
+
+    val conn = PostgresSuite.app.txManager.connection(readOnly = false)
+    val stmt = conn.createStatement()
+
+    try {
+      stmt.executeUpdate("DROP SCHEMA IF EXISTS \"public\" CASCADE; CREATE SCHEMA \"public\";")
+      conn.commit()
+    }
+    finally {
+      stmt.close()
+      conn.close()
+    }
+
+    PostgresSuite.app.service.migrationService.migrate()
+  }
+}
 
 trait PostgresSuiteSetup extends Suite with BeforeAndAfterAll {
   Environment.ENV = Environment.TEST
   protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
   override def beforeAll(): Unit = {
-    IntegrationTestCore.createTestDir(PostgresSuite.app)
+    println("\n@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    println("POSTGRES INTEGRATION TESTS")
+    println("@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
 
-    log.info("TEST. Resetting DB schema once")
-    DriverManager.registerDriver(new org.postgresql.Driver)
-    val appConfig = new Configuration()
-    val props = new Properties
-    val user = appConfig.getString("db.postgres.user")
-    props.setProperty("user", user)
-    val password = appConfig.getString("db.postgres.password")
-    props.setProperty("password", password)
-    val url = appConfig.getString("db.postgres.url")
+    PostgresSuiteSetup.setup()
 
-    log.info("Clearing postgres database")
-    val sql = "DROP SCHEMA IF EXISTS \"altitude-test\" CASCADE; CREATE SCHEMA \"altitude-test\";"
+    RequestContext.conn.value = Some(PostgresSuite.app.txManager.connection(readOnly = false))
+  }
 
-    val conn = DriverManager.getConnection(url, props)
-    val stmt = conn.createStatement()
-    try {
-      stmt.executeUpdate(sql)
-    }
-    finally {
-      if (stmt != null) stmt.close()
-      if (conn != null) conn.close()
-    }
-
-    PostgresSuite.app.service.migrationService.migrate()
-    log.info("END SETUP")
+  override def afterAll(): Unit = {
+    PostgresSuite.app.txManager.close()
   }
 }

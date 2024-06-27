@@ -1,31 +1,33 @@
 package software.altitude.core.controllers
 
+import org.scalatra.ContentEncodingSupport
 import org.scalatra.InternalServerError
+import org.scalatra.ScalatraServlet
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import software.altitude.core.Context
-import software.altitude.core.SingleApplication
+import software.altitude.core.AltitudeServletContext
+import software.altitude.core.auth.AuthenticationSupport
 import software.altitude.core.models.Repository
 import software.altitude.core.models.User
 
 import java.io.PrintWriter
 import java.io.StringWriter
-import scala.compat.Platform
+import java.lang.System.currentTimeMillis
 
-abstract class BaseController extends AltitudeStack with SingleApplication {
+abstract class BaseController extends ScalatraServlet
+  with ContentEncodingSupport with AuthenticationSupport with AltitudeServletContext {
+
   private final val log = LoggerFactory.getLogger(getClass)
 
   final def user: User = request.getAttribute("user").asInstanceOf[User]
 
   final def repository: Repository = request.getAttribute("repository").asInstanceOf[Repository]
 
-  implicit lazy val context: Context = new Context(repo = repository, user = user)
-
   before() {
     val requestId = software.altitude.core.Util.randomStr(size = 6)
     request.setAttribute("request_id", requestId)
     MDC.put("REQUEST_ID", s"[$requestId]")
-    request.setAttribute("startTime", Platform.currentTime)
+    request.setAttribute("startTime", currentTimeMillis)
     logRequestStart()
     setUser()
     setRepository()
@@ -37,16 +39,25 @@ abstract class BaseController extends AltitudeStack with SingleApplication {
   }
 
   protected def logRequestStart(): Unit = {
+    if (isAssetRequest) return
+
     log.info(s"Request START: ${request.getRequestURI} args: {${request.getParameterMap}}")
   }
 
   protected def logRequestEnd(): Unit = {
+    if (isAssetRequest) return
+
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    log.info(s"Request END: ${request.getRequestURI} in ${Platform.currentTime - startTime}ms")
+    log.info(s"Request END: ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
   }
 
+  private def isAssetRequest =  request.pathInfo.startsWith("/css") ||
+    request.pathInfo.startsWith("/js") ||
+    request.pathInfo.startsWith("/webfonts") ||
+    request.pathInfo.startsWith("/images")
+
   protected def setUser(): Unit = {
-    val userId =
+/*    val userId =
       Option(request.getAttribute("user_id").asInstanceOf[String]) orElse params.get("user_id")
 
     if (userId.isEmpty) {
@@ -58,10 +69,10 @@ abstract class BaseController extends AltitudeStack with SingleApplication {
     val user: User = app.service.user.getUserById(userId.get)
     MDC.put("USER", s"[$user]")
     request.setAttribute("user", user)
-  }
+*/  }
 
   protected def setRepository(): Unit = {
-    val repositoryId =
+  /*  val repositoryId =
       Option(request.getAttribute("repository_id").asInstanceOf[String]) orElse params.get("repository_id")
 
     if (repositoryId.isEmpty) {
@@ -73,7 +84,7 @@ abstract class BaseController extends AltitudeStack with SingleApplication {
     val repository: Repository = app.service.repository.getRepositoryById(repositoryId.get)
     MDC.put("REPO", s"[$repository]")
     request.setAttribute("repository", repository)
-  }
+  */}
 
   error {
     case ex: Exception =>

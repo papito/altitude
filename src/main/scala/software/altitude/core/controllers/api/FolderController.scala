@@ -4,17 +4,13 @@ import org.scalatra.Ok
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-import software.altitude.core.Context
-import software.altitude.core.Validators.ApiRequestValidator
+import software.altitude.core.RequestContext
+import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Folder
 import software.altitude.core.{Const => C}
 
 class FolderController extends BaseApiController {
   private final val log = LoggerFactory.getLogger(getClass)
-
-  override val HTTP_POST_VALIDATOR: Option[ApiRequestValidator] = Some(ApiRequestValidator(List(
-    C.Api.Folder.NAME, C.Api.Folder.PARENT_ID
-  )))
 
   get() {
     val folders = app.service.folder.hierarchy()
@@ -52,8 +48,8 @@ class FolderController extends BaseApiController {
   }
 
   post("/") {
-    val name = (requestJson.get \ C.Api.Folder.NAME).as[String]
-    val parentId = realId((requestJson.get \ C.Api.Folder.PARENT_ID).as[String])
+    val name = (unscrubbedReqJson.get \ C.Api.Folder.NAME).as[String]
+    val parentId = realId((unscrubbedReqJson.get \ C.Api.Folder.PARENT_ID).as[String])
 
     val newFolder: Folder = app.service.library.addFolder(name = name, parentId = Some(parentId))
     log.debug(s"New folder: $newFolder")
@@ -72,8 +68,8 @@ class FolderController extends BaseApiController {
   put("/:id") {
     val id = realId(params.get(C.Api.ID).get)
     log.info(s"Updating folder: $id")
-    val newName = (requestJson.get \ C.Api.Folder.NAME).asOpt[String]
-    val newParentId = (requestJson.get \ C.Api.Folder.PARENT_ID).asOpt[String]
+    val newName = (unscrubbedReqJson.get \ C.Api.Folder.NAME).asOpt[String]
+    val newParentId = (unscrubbedReqJson.get \ C.Api.Folder.PARENT_ID).asOpt[String]
 
     if (newName.isDefined) {
       app.service.library.renameFolder(id, newName.get)
@@ -86,9 +82,9 @@ class FolderController extends BaseApiController {
     OK
   }
 
-  private def realId(aliasOrId: String)(implicit ctx: Context): String = aliasOrId match {
-    case C.Folder.Alias.ROOT => ctx.repo.rootFolderId
-    case C.Folder.Alias.TRIAGE => ctx.repo.triageFolderId
+  private def realId(aliasOrId: String): String = aliasOrId match {
+    case C.Folder.Alias.ROOT => RequestContext.repository.value.get.rootFolderId
+    case C.Folder.Alias.TRIAGE => RequestContext.repository.value.get.triageFolderId
     case _ => aliasOrId
   }
 

@@ -9,7 +9,9 @@ import software.altitude.core.DuplicateException
 import software.altitude.core.NotFoundException
 import software.altitude.core.Util
 import software.altitude.core.ValidationException
+import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models._
+import software.altitude.test.core.IntegrationTestCore
 
 
 @DoNotDiscover class MetadataServiceTests(val config: Map[String, Any]) extends IntegrationTestCore {
@@ -19,7 +21,7 @@ import software.altitude.core.models._
       MetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](field.id.get -> Set("one"))
     intercept[ValidationException] {
@@ -41,7 +43,7 @@ import software.altitude.core.models._
       MetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.BOOL))
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](field.id.get -> Set("one"))
     intercept[ValidationException] {
@@ -89,12 +91,12 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     // add a field we do not expect
     val badData = Map[String, Set[String]](
         keywordMetadataField.id.get -> Set("one", "two", "three"),
-        BaseModel.genId -> Set("four"))
+        BaseDao.genId -> Set("four"))
 
     intercept[NotFoundException] {
         altitude.service.metadata.setMetadata(asset.id.get, Metadata(badData))
@@ -125,7 +127,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](
       field1.id.get -> Set("one", "two", "three"),
@@ -157,7 +159,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](
         field1.id.get -> Set("one", "two", "three"),
@@ -218,14 +220,20 @@ import software.altitude.core.models._
     altitude.service.metadata.addField(
       MetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
-    SET_SECOND_USER()
+    // SECOND USER
+    val user2 = testContext.persistUser()
+    switchContextUser(user2)
+
     altitude.service.metadata.addField(
       MetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
-    SET_FIRST_USER()
+    // FIRST USER
+    switchContextUser(testContext.users.head)
     altitude.service.metadata.getAllFields.size shouldBe 3
 
-    SET_SECOND_USER()
+    // THIRD USER
+    val user3 = testContext.persistUser()
+    switchContextUser(user3)
     altitude.service.metadata.getAllFields.size shouldBe 3
   }
 
@@ -240,30 +248,6 @@ import software.altitude.core.models._
         }
   }
 
-  test("Sanitizing field names") {
-    val metadataField = altitude.service.metadata.addField(
-      MetadataField(name = " new field\n ", fieldType = FieldType.NUMBER))
-
-    metadataField.name shouldBe "new field"
-  }
-
-  test("Failing validation cases") {
-    intercept[ValidationException] {
-          altitude.service.metadata.addField(
-            MetadataField(name = "  ", fieldType = FieldType.KEYWORD))
-    }
-
-    intercept[ValidationException] {
-          altitude.service.metadata.addField(
-            MetadataField(name = "\t\n\r   ", fieldType = FieldType.KEYWORD))
-    }
-
-    intercept[ValidationException] {
-          altitude.service.metadata.addField(
-            MetadataField(name = "", fieldType = FieldType.KEYWORD))
-    }
-  }
-
   test("Metadata added initially should be present") {
     val field = altitude.service.metadata.addField(
       MetadataField(
@@ -273,8 +257,7 @@ import software.altitude.core.models._
     val data = Map[String, Set[String]](field.id.get -> Set("one", "two"))
     val metadata = Metadata(data)
 
-    val asset: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder, metadata = metadata))
+    val asset: Asset = testContext.persistAsset(metadata = metadata)
 
     val storedAsset: Asset = altitude.service.library.getById(asset.id.get)
 
@@ -301,8 +284,7 @@ import software.altitude.core.models._
     val data = Map[String, Set[String]](field3.id.get -> Set("this is some text"))
     val metadata = Metadata(data)
 
-    val asset: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder, metadata = metadata))
+    val asset: Asset = testContext.persistAsset(metadata = metadata)
 
     val storedAsset: Asset = altitude.service.library.getById(asset.id.get)
 
@@ -319,8 +301,7 @@ import software.altitude.core.models._
     val data = Map[String, Set[String]](field.id.get -> Set("1", "2", "3"))
     val metadata = Metadata(data)
 
-    val asset: Asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder, metadata = metadata))
+    val asset: Asset = testContext.persistAsset(metadata = metadata)
 
     var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
     storedMetadata.get(field.id.get).value.size shouldBe 3
@@ -345,7 +326,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
-    var asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    var asset: Asset = testContext.persistAsset()
 
     val data = Map[String, Set[String]](field1.id.get -> Set("1"))
     val metadata = Metadata(data)
@@ -367,8 +348,7 @@ import software.altitude.core.models._
 
 
     // now set the metadata on asset creation and make sure the auto-generated IDs are there
-    asset = altitude.service.library.add(
-      makeAsset(altitude.service.folder.triageFolder, metadata = metadata))
+    asset = testContext.persistAsset(metadata = metadata)
 
     storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
     storedMetadata.get(field1.id.get).get.head.id should not be None
@@ -381,7 +361,7 @@ import software.altitude.core.models._
     )
 
     val metadataField = altitude.service.metadata.addField(_metadataField)
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     intercept[ValidationException] {
       altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, "")
@@ -403,7 +383,7 @@ import software.altitude.core.models._
     )
 
     val metadataField = altitude.service.metadata.addField(_metadataField)
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, true)
     altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, true)
@@ -420,9 +400,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.TEXT))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
-
-    val data = Map[String, Set[String]](field.id.get -> Set("\n\n\r"))
+    val asset: Asset = testContext.persistAsset()
 
     intercept[ValidationException] {
       altitude.service.library.addMetadataValue(asset.id.value, field.id.value, "   ")
@@ -435,7 +413,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.TEXT))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     val data = Map[String, Set[String]](field.id.get -> Set("Some text"))
     val metadata = Metadata(data)
@@ -463,7 +441,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     val oldValue = "tag1"
     val data = Map[String, Set[String]](field.id.get -> Set(oldValue))
@@ -492,7 +470,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     val oldValue = "tag1"
     val data = Map[String, Set[String]](field.id.get -> Set(oldValue))
@@ -519,7 +497,7 @@ import software.altitude.core.models._
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
-    val asset: Asset = altitude.service.library.add(makeAsset(altitude.service.folder.triageFolder))
+    val asset: Asset = testContext.persistAsset()
 
     val oldValue = "tag1"
     val data = Map[String, Set[String]](field.id.get -> Set(oldValue))
@@ -527,9 +505,8 @@ import software.altitude.core.models._
 
     altitude.service.metadata.setMetadata(asset.id.get, metadata)
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    var storedValue = storedMetadata.get(field.id.get).get.head
-    val oldValueId = storedValue.id
+    val storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
+    val storedValue = storedMetadata.get(field.id.get).get.head
 
     intercept[ValidationException] {
       altitude.service.library.updateMetadataValue(asset.id.get, storedValue.id.get, "  \t  ")
