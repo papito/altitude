@@ -13,10 +13,9 @@ class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
       case Environment.DEV => "development"
       case Environment.PROD => "production"
     }
+
     context.setInitParameter("org.scalatra.environment", environment)
 
-    // FIXME: hardcoded
-    context.setInitParameter("org.scalatra.cors.allowedOrigins", "http://localhost:3000")
     AltitudeServletContext.mountEndpoints(context)
     AltitudeServletContext.app.runMigrations()
     AltitudeServletContext.app.setIsInitializedState()

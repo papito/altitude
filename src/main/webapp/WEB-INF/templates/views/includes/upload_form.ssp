@@ -1,0 +1,32 @@
+<style>
+    #uploadForm {
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: var(--control-vertical-space);
+        color: #FFFFFF;
+    }
+    #uploadForm progress {
+        width: 100%;
+    }
+
+    #uploadForm input[type="file"] {
+        color: white;
+    }
+</style>
+<form id="uploadForm" hx-post="/import/upload" hx-encoding="multipart/form-data">
+    <div>
+        <input type="file" name="files" id="files" multiple>
+    </div>
+    <div id="progressBarControl" hidden>
+        <progress id='progressBar' value='0' max='100'></progress>
+    </div>
+    <div>
+        <button class="action-button">Upload from computer</button>
+    </div>
+    <script>
+        htmx.on('#uploadForm', 'htmx:xhr:progress', function(evt) {
+            document.getElementById("progressBarControl").removeAttribute("hidden")
+            htmx.find('#progressBar').setAttribute('value', evt.detail.loaded/evt.detail.total * 100)
+        });
+    </script>
+</form>

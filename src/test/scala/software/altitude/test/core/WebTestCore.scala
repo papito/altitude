@@ -18,8 +18,7 @@ abstract class WebTestCore
   with ScalatraFunSuite
   with BeforeAndAfter
   with BeforeAndAfterEach
-  with TestFocus
-{
+  with TestFocus {
 
   override def header = null
 

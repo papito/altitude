@@ -20,11 +20,8 @@
             padding: 20px;
             border: 1px solid #ccc;
             border-radius: 5px;
-            height: 170px;
-            font-weight: bold;
-            text-transform: uppercase;
-            background-color: #257008;
             place-items: center;
+            background-color: var(--form-background-color);
         }
     </style>
 </head>
@@ -40,11 +37,7 @@
 <main>
     <div id="importOptions">
         <div id="browseForFiles">
-            <form hx-post="/import/upload" hx-target="#upload-status" enctype="multipart/form-data">
-                <input type="file" name="files" id="files" multiple>
-                <button type="submit" hxz-post="submit">Upload</button>
-            </form>
-            <div id="upload-status" hx-get="/upload-status"></div>
+            ${include("includes/upload_form.ssp")}
         </div>
     </div>
 </main>
