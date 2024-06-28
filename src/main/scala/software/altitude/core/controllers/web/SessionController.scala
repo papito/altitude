@@ -10,7 +10,7 @@ class SessionController extends ScalatraServlet with ScalateSupport with Authent
     logger.info("SessionsController: checking whether to run RememberMeStrategy: " + !isAuthenticated)
 
     if (!isAuthenticated) {
-      scentry.authenticate("RememberMe")
+      scentry.authenticate("RememberMeStrategy")
     }
   }
 

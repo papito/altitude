@@ -11,6 +11,7 @@ import software.altitude.core.Environment
 import software.altitude.test.core.integration.TestContext
 import software.altitude.test.core.suites.PostgresSuite
 import software.altitude.test.core.suites.PostgresSuiteSetup
+import sofware.altitude.test.TestingController
 
 abstract class WebTestCore
   extends funsuite.AnyFunSuite
@@ -27,6 +28,8 @@ abstract class WebTestCore
     mount(servlet, path)
   }
 
+  mount(new TestingController, "/testing/*")
+
   Environment.ENV = Environment.TEST
 
   override def beforeEach(): Unit = {
@@ -42,4 +45,13 @@ abstract class WebTestCore
 
   var testContext: TestContext = new TestContext(altitude)
 
+  def setTestUserOnTheTestingServer(): Unit = {
+    // this saves the user id DB and lets us track them in tests
+    val user = testContext.persistUser()
+
+    // this hackishly sets the user in the test server so we don't have to jump through AUTH hoops for each test
+    put("/testing/user", Map("userId" -> user.id.get, "userEmail" -> user.email)) {
+      response.status should equal(200)
+    }
+  }
 }

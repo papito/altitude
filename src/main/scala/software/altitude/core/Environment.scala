@@ -4,7 +4,11 @@ import java.io.File
 
 object Environment extends Enumeration {
   val TEST, PROD, DEV = Value
-  var ENV: Environment.Value = DEV
+  var ENV: Environment.Value = System.getenv().getOrDefault("ENV", "DEV") match {
+    case "test" => TEST
+    case "prod" => PROD
+    case _ => DEV
+  }
 
   def root: String = ENV match {
     case PROD =>

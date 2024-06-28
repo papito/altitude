@@ -5,7 +5,9 @@ import org.scalatra.servlet.ServletApiImplicits._
 import org.slf4j.LoggerFactory
 import software.altitude.core.controllers.api._
 import software.altitude.core.controllers.htmx.SetupController
-import software.altitude.core.controllers.web.{ImportController, IndexController, SessionController}
+import software.altitude.core.controllers.web.ImportController
+import software.altitude.core.controllers.web.IndexController
+import software.altitude.core.controllers.web.SessionController
 
 import javax.servlet.ServletContext
 

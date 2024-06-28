@@ -15,8 +15,15 @@ test-focused-psql:
 test-focused-sqlite:
 	sbt testFocusedSqlite
 
+# WEB tests (controllers) do need the ENV explicitly set,
+# as this is picked up by the testing server that is spun up automatically.
+#
+# Other tests run in a single process and force the test environment themselves.
 test-focused-web:
-	sbt testFocusedWeb
+	ENV=test sbt testFocusedWeb
+
+test-web:
+	ENV=test sbt testWeb
 
 test-psql:
 	sbt testPostgres
@@ -26,9 +33,6 @@ test-sqlite:
 
 test-unit:
 	sbt testUnit
-
-test-web:
-	sbt testWeb
 
 lint:
 	sbt scalafixAll

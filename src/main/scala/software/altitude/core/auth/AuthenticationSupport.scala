@@ -7,9 +7,10 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.RequestContext
-import software.altitude.core.auth.strategies.RememberMeStrategy
-import software.altitude.core.auth.strategies.UserPasswordStrategy
 import software.altitude.core.models.User
+
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
 
 trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
   self: ScalatraBase =>
@@ -36,6 +37,10 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
 
   protected def requireLogin(): Unit = {
     if (!isAuthenticated) {
+      scentry.authenticate("RememberMeStrategy")
+    }
+
+    if (!isAuthenticated) {
       redirect(scentryConfig.login)
     }
 
@@ -58,8 +63,11 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
    * strategies to log the user in, falling back if necessary.
    */
   override protected def registerAuthStrategies(): Unit = {
-    scentry.register("UserPassword", app => new UserPasswordStrategy(app))
-    scentry.register("RememberMe", app => new RememberMeStrategy(app))
+    AltitudeServletContext.app.scentryStrategies.foreach { case (strategyName, strategyClass) =>
+      scentry.register(strategyName, app => {
+        val constructor = strategyClass.getConstructor(classOf[ScalatraBase], classOf[HttpServletRequest], classOf[HttpServletResponse])
+        constructor.newInstance(app, request, response)
+      })
+    }
   }
-
 }

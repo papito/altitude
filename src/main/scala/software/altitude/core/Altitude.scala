@@ -4,8 +4,14 @@ import com.google.inject.AbstractModule
 import com.google.inject.Guice
 import com.google.inject.Injector
 import net.codingwell.scalaguice.ScalaModule
+import org.scalatra.auth.ScentryStrategy
 import org.slf4j.LoggerFactory
+import software.altitude.core.auth.strategies.LocalDevRememberMeStrategy
+import software.altitude.core.auth.strategies.RememberMeStrategy
+import software.altitude.core.auth.strategies.TestRememberMeStrategy
+import software.altitude.core.auth.strategies.UserPasswordStrategy
 import software.altitude.core.dao._
+import software.altitude.core.models.User
 import software.altitude.core.service._
 import software.altitude.core.service.filestore.FileStoreService
 import software.altitude.core.service.filestore.FileSystemStoreService
@@ -68,6 +74,20 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeApp
       case C.FileStoreType.FS => new FileSystemStoreService(app)
       case _ => throw new NotImplementedError
     }
+  }
+
+  val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])] = Environment.ENV match {
+    case Environment.PROD => List(
+      ("UserPasswordStrategy", classOf[UserPasswordStrategy]),
+      ("RememberMeStrategy", classOf[RememberMeStrategy])
+    )
+    case Environment.DEV => List(
+      ("RememberMeStrategy", classOf[LocalDevRememberMeStrategy])
+    )
+    case Environment.TEST => List(
+      ("RememberMeStrategy", classOf[TestRememberMeStrategy])
+    )
+    case _ => throw new RuntimeException("Unknown environment")
   }
 
   /**

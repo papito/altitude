@@ -1,7 +1,9 @@
 package software.altitude.core.controllers.web
 
 import org.scalatra.RequestEntityTooLarge
-import org.scalatra.servlet.{FileUploadSupport, MultipartConfig, SizeConstraintExceededException}
+import org.scalatra.servlet.FileUploadSupport
+import org.scalatra.servlet.MultipartConfig
+import org.scalatra.servlet.SizeConstraintExceededException
 import org.slf4j.LoggerFactory
 import software.altitude.core.controllers.BaseWebController
 
@@ -11,10 +13,10 @@ class ImportController extends BaseWebController with FileUploadSupport {
 
   configureMultipartHandling(MultipartConfig(maxFileSize = Some(fileSizeLimitGB*1024*1024)))
 
-/*  before() {
+  before() {
     requireLogin()
   }
-*/
+
   get("/") {
     contentType = "text/html"
     ssp("/import")

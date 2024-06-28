@@ -78,7 +78,7 @@ abstract class MigrationService(val app: Altitude)  {
         * 2. When migrating to version 1 in prod
      */
     val path = Environment.ENV match {
-      case Environment.TEST | Environment.DEV =>entireSchemaPath
+      case Environment.TEST | Environment.DEV => entireSchemaPath
       case Environment.PROD => if (version == 1) entireSchemaPath
       else
         new File(MIGRATIONS_DIR, s"$version$FILE_EXTENSION").toString
