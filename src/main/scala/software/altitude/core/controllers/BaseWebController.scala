@@ -11,9 +11,17 @@ class BaseWebController extends BaseController with ScalateSupport {
       case Environment.PROD =>
 
       case Environment.DEV =>
-        val res = app.service.repository.query(new Query().add(Const.Repository.NAME -> "Personal"))
-        RequestContext.repository.value = Some(res.records.head: Repository)
-        logger.warn(s"Using hardcoded repository: ${RequestContext.repository.value.get.name}")
+        val repoResults = app.service.repository.query(new Query())
+        if (repoResults.records.nonEmpty) {
+          RequestContext.repository.value = Some(repoResults.records.head: Repository)
+          logger.warn(s"Using first found repository: ${RequestContext.repository.value.get.name}")
+        }
+
+        val userResults = app.service.user.query(new Query())
+        if (userResults.records.nonEmpty) {
+          RequestContext.account.value = Some(userResults.records.head: User)
+          logger.warn(s"Using first found user: ${RequestContext.account.value.get.email}")
+        }
 
       case Environment.TEST =>
         logger.info("TEST AUTHENTICATION VIA HEADER")
@@ -28,9 +36,9 @@ class BaseWebController extends BaseController with ScalateSupport {
         if (testUserId != null) {
           val user: User = app.service.user.getById(testUserId)
           RequestContext.account.value = Some(user)
+          logger.info(RequestContext.account.value.toString)
         }
 
-        logger.info(RequestContext.account.value.toString)
       case _ => throw new RuntimeException("Unknown environment")
     }
 

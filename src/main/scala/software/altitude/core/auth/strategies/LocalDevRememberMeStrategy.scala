@@ -4,11 +4,8 @@ import org.scalatra.ScalatraBase
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import software.altitude.core.AltitudeServletContext
-import software.altitude.core.Const
-import software.altitude.core.Environment
+import software.altitude.core.{Environment, RequestContext}
 import software.altitude.core.models.User
-import software.altitude.core.util.Query
 
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
@@ -24,13 +21,11 @@ class LocalDevRememberMeStrategy(protected val app: ScalatraBase)(implicit reque
     if (Environment.ENV != Environment.DEV)
       throw new RuntimeException("LocalDevRememberMeStrategy can only be used in development environment")
 
-    val altitude = AltitudeServletContext.app
-    logger.info("LOCAL AUTHENTICATION - hardcoded user")
-    val res = altitude.service.user.query(new Query().add(Const.User.EMAIL -> "drey10@gmail.com")).records.headOption
-
-    res match {
+    // The base web controller will have already set the repository and user in the request context
+    // by finding the first available repository and user in the database
+    RequestContext.account.value match {
       case Some(user) => Some(user)
-      case None => throw new RuntimeException("Development User not found")
+      case None => None
     }
   }
 }
