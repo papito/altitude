@@ -25,16 +25,11 @@ class TestRememberMeStrategy(protected val app: ScalatraBase)
     if (Environment.ENV != Environment.TEST)
       throw new RuntimeException("TestRememberMeStrategy can only be used in test environment")
 
-    val testUserId: String = request.getHeader(Const.Api.USER_TEST_HEADER_ID)
-
-    logger.info("TEST AUTHENTICATION VIA HEADER")
-    val altitude = AltitudeServletContext.app
-    val user: Option[User] = if (testUserId != null) Some(altitude.service.user.getById(testUserId)) else None
-
-    // persists through the lifespan of the request
-    RequestContext.account.value = user
-
-    logger.info(RequestContext.account.value.toString)
-    user
+    // Where is RequestContext.account set?
+    // See: https://github.com/papito/altitude/wiki/How-the-tests-work#auth-with-controller-tests
+    RequestContext.account.value match {
+      case Some(user) => Some(user)
+      case None => None
+    }
   }
 }
