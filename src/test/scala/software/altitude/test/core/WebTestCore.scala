@@ -9,7 +9,7 @@ import software.altitude.core.Altitude
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Const
 import software.altitude.core.Environment
-import software.altitude.core.models.User
+import software.altitude.core.models.{Repository, User}
 import software.altitude.test.core.integration.TestContext
 import software.altitude.test.core.suites.PostgresBundleSetup
 import software.altitude.test.core.suites.PostgresSuiteBundle
@@ -27,12 +27,20 @@ abstract class WebTestCore
     mount(servlet, path)
   }
 
-  def getUserSessionHeader(user: Option[User] = None): (String, String) = {
-    if (user.isEmpty) {
+  def testAuthHeaders(user: Option[User] = None, repo: Option[Repository] = None): List[(String, String)] = {
+    val userHeader = if (user.isEmpty) {
       Const.Api.USER_TEST_HEADER_ID -> testContext.user.persistedId
     } else {
       Const.Api.USER_TEST_HEADER_ID -> user.get.persistedId
     }
+
+    val repoHeader = if (repo.isEmpty) {
+      Const.Api.REPO_TEST_HEADER_ID -> testContext.repository.persistedId
+    } else {
+      Const.Api.REPO_TEST_HEADER_ID -> repo.get.persistedId
+    }
+
+    List(userHeader, repoHeader)
   }
 
   Environment.ENV = Environment.TEST

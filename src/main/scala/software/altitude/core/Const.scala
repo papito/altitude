@@ -135,6 +135,7 @@ object Const {
     val MULTI_VALUE_DELIM = "+"
     val DUPLICATE_OF = "duplicate_of"
     val USER_TEST_HEADER_ID = "TEST-user-id"
+    val REPO_TEST_HEADER_ID = "TEST-repo-id"
 
     // FIXME: wrong naming convention
     val TOTAL_RECORDS = "totalRecords"
