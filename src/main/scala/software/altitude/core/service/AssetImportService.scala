@@ -62,7 +62,7 @@ class AssetImportService(app: Altitude) {
       assetType = assetType,
       sizeBytes = importAsset.data.length,
       isTriaged = true,
-      folderId = RequestContext.repository.value.get.rootFolderId,
+      folderId = RequestContext.getRepository.rootFolderId,
       extractedMetadata = extractedMetadata)
 
     val storedAsset: Option[Asset] = try {
