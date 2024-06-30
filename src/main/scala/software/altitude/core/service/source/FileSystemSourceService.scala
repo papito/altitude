@@ -6,7 +6,6 @@ import org.apache.commons.io.filefilter.TrueFileFilter
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.models._
-import software.altitude.core.{Const => C}
 
 import java.io.File
 
@@ -49,8 +48,6 @@ class FileSystemSourceService(app: Altitude) extends AssetSourceService {
 
   private def fileToImportAsset(file: File): ImportAsset = new ImportAsset(
     fileName = file.getName,
-    path = file.getAbsolutePath,
-    sourceType = C.FileStoreType.FS,
     data = FileUtils.readFileToByteArray(file),
     metadata = Metadata())
 }

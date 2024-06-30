@@ -44,8 +44,6 @@ object IntegrationTestCore {
   // FIXME: should be moved to a more appropriate location (test utils)
   def fileToImportAsset(file: File): ImportAsset = new ImportAsset(
     fileName = file.getName,
-    path = file.getAbsolutePath,
-    sourceType = C.FileStoreType.FS,
     data = FileUtils.readFileToByteArray(file),
     metadata = Metadata())
 }

@@ -14,7 +14,6 @@ import software.altitude.core.models.Metadata
 import software.altitude.core.models.MetadataValue
 
 import java.io.InputStream
-import java.nio.file.Paths
 
 class TikaMetadataExtractionService extends MetadataExtractionService {
   private final val log = LoggerFactory.getLogger(getClass)
@@ -45,9 +44,8 @@ class TikaMetadataExtractionService extends MetadataExtractionService {
   private def extractMetadata(importAsset: ImportAsset): Option[TikaMetadata] = {
     log.info(s"Extracting metadata for '$importAsset'")
     try {
-      val filePath = Paths.get(importAsset.path)
       val metadata = new TikaMetadata()
-      val inputStream = TikaInputStream.get(filePath, metadata)
+      val inputStream = TikaInputStream.get(importAsset.data, metadata)
       val parser = new AutoDetectParser()
       val handler = new BodyContentHandler()
 

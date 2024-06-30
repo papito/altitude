@@ -27,8 +27,9 @@ class ImportController extends BaseWebController with FileUploadSupport {
 
     fileMultiParams.get("files") match {
       case Some(files) => files.foreach { file =>
-//        println(s"Received file: $file")
-        file.getName
+        println(s"Received file: $file")
+        println(file.getName)
+        val data = file.get()
       }
 
       case None =>

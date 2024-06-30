@@ -40,7 +40,7 @@ class AssetImportService(app: Altitude) {
     val assetType = detectAssetType(importAsset)
 
     if (!AssetImportService.SUPPORTED_MEDIA_TYPES.contains(assetType.mediaType)) {
-      log.warn(s"Ignoring ${importAsset.path} of type ${assetType.mediaType}")
+      log.warn(s"Ignoring ${importAsset.fileName} of type ${assetType.mediaType}")
       return None
     }
 
