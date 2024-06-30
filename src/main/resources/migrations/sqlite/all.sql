@@ -20,7 +20,7 @@ CREATE TABLE account(
 CREATE TABLE repository(
   id CHAR(36) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
-  owner_account_id CHAR(36) REFERENCES account(id) NOT NULL,
+  owner_account_id CHAR(36) REFERENCES account(id) ON DELETE CASCADE,
   description TEXT,
   root_folder_id CHAR(36) NOT NULL,
   file_store_type VARCHAR NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE stats (
   repository_id CHAR(36) NOT NULL,
   dimension VARCHAR(60),
   dim_val INT NOT NULL DEFAULT 0,
-  FOREIGN KEY(repository_id) REFERENCES repository(id)
+  FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
 CREATE INDEX stats_01 ON stats(repository_id);
 CREATE UNIQUE INDEX stats_02 ON stats(repository_id, dimension);
@@ -56,8 +56,8 @@ CREATE TABLE asset  (
   is_triaged TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  FOREIGN KEY(repository_id) REFERENCES repository(id),
-  FOREIGN KEY(user_id) REFERENCES account(id)
+  FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES account(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
 
@@ -69,7 +69,7 @@ CREATE TABLE metadata_field (
   field_type VARCHAR(255) NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  FOREIGN KEY(repository_id) REFERENCES repository(id)
+  FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
 CREATE INDEX metadata_field_01 ON metadata_field(repository_id);
 CREATE UNIQUE INDEX metadata_field_02 ON metadata_field(repository_id, name_lc);
@@ -85,7 +85,7 @@ CREATE TABLE folder (
   is_recycled TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  FOREIGN KEY(repository_id) REFERENCES repository(id)
+  FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
 CREATE INDEX folder_01 ON folder(repository_id, parent_id);
 CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
@@ -98,9 +98,9 @@ CREATE TABLE search_parameter (
   field_value_num DECIMAL,
   field_value_bool BOOLEAN,
   field_value_dt DATEN,
-  FOREIGN KEY(repository_id) REFERENCES repository(id),
-  FOREIGN KEY(asset_id) REFERENCES asset(id),
-  FOREIGN KEY(field_id) REFERENCES metadata_field(id)
+  FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE,
+  FOREIGN KEY(asset_id) REFERENCES asset(id) ON DELETE CASCADE,
+  FOREIGN KEY(field_id) REFERENCES metadata_field(id) ON DELETE CASCADE
 );
 
 CREATE VIRTUAL TABLE search_document USING fts4(repository_id, asset_id, body);

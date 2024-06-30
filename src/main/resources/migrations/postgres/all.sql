@@ -26,14 +26,14 @@ CREATE TABLE repository(
   id CHAR(36) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  owner_account_id CHAR(36) REFERENCES account(id) NOT NULL,
+  owner_account_id CHAR(36) REFERENCES account(id) ON DELETE CASCADE,
   root_folder_id CHAR(36) NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config jsonb
 ) INHERITS (_core);
 
 CREATE TABLE stats (
-  repository_id CHAR(36) REFERENCES repository(id),
+  repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
   dimension VARCHAR(60),
   dim_val INT NOT NULL DEFAULT 0
 );
@@ -41,8 +41,8 @@ CREATE UNIQUE INDEX stats_01 ON stats(repository_id, dimension);
 
 CREATE TABLE asset (
   id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository(id),
-  user_id CHAR(36) REFERENCES account(id),
+  repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
+  user_id CHAR(36) REFERENCES account(id) ON DELETE CASCADE,
   checksum VARCHAR(64) NOT NULL,
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
@@ -60,7 +60,7 @@ CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
 
 CREATE TABLE metadata_field (
   id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository(id),
+  repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
   field_type VARCHAR(255) NOT NULL
@@ -70,7 +70,7 @@ CREATE UNIQUE INDEX metadata_field_02 ON metadata_field(repository_id, name_lc);
 
 CREATE TABLE folder (
   id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository(id),
+  repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
   parent_id CHAR(36) NOT NULL,
@@ -82,8 +82,8 @@ CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
 
 CREATE TABLE search_parameter (
   repository_id CHAR(36) REFERENCES repository(id),
-  asset_id CHAR(36) REFERENCES asset(id),
-  field_id CHAR(36) REFERENCES metadata_field(id),
+  asset_id CHAR(36) REFERENCES asset(id) ON DELETE CASCADE,
+  field_id CHAR(36) REFERENCES metadata_field(id) ON DELETE CASCADE,
   field_value_kw TEXT NULL,
   field_value_num DECIMAL,
   field_value_bool BOOLEAN,
@@ -91,8 +91,8 @@ CREATE TABLE search_parameter (
 );
 
 CREATE TABLE search_document (
-  repository_id CHAR(36) REFERENCES repository(id),
-  asset_id CHAR(36) REFERENCES asset(id),
+  repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
+  asset_id CHAR(36) REFERENCES asset(id) ON DELETE CASCADE,
   metadata_values TEXT NOT NULL,
   body TEXT NOT NULL,
   tsv TSVECTOR NOT NULL
