@@ -35,8 +35,7 @@ class LibraryService(val app: Altitude) {
   private final val log = LoggerFactory.getLogger(getClass)
   protected val txManager: TransactionManager = app.txManager
 
-  // FIXME: does not belong here - image specific
-  val previewBoxSize: Int = app.config.getInt("preview.box.pixels")
+  private val previewBoxSize: Int = app.config.getInt("preview.box.pixels")
 
   /** **************************************************************************
     * ASSETS
@@ -45,17 +44,13 @@ class LibraryService(val app: Altitude) {
   def add(assetIn: Asset): JsObject = {
     log.info(s"Preparing to add asset [$assetIn]")
 
-    if (app.service.folder.isRootFolder(assetIn.folderId)) {
-      throw IllegalOperationException("Cannot have assets in root folder")
-    }
-
     txManager.withTransaction[JsObject] {
       val existing: Option[Asset] = getByChecksum(assetIn.checksum)
 
       if (existing.nonEmpty) {
         log.debug(s"Duplicate found for [$assetIn] and checksum: ${assetIn.checksum}")
         val existingAsset: Asset = existing.get
-        throw DuplicateException(existingAsset.id.get)
+        throw DuplicateException(existingAsset.persistedId)
       }
 
       /**
@@ -65,42 +60,26 @@ class LibraryService(val app: Altitude) {
 
       val assetId = BaseDao.genId
 
-      val fileName = app.service.fileStore.calculateNextAvailableFilename(assetIn)
-
-      val assetToAdd: Asset = Asset(
+      val assetToAddModel: Asset = assetIn.copy(
         id = Some(assetId),
-        data = assetIn.data,
-        userId = assetIn.userId,
-        assetType = assetIn.assetType,
-        fileName = fileName,
-        checksum = assetIn.checksum,
-        sizeBytes = assetIn.sizeBytes,
-        folderId = assetIn.folderId,
         metadata = metadata,
-        extractedMetadata = assetIn.extractedMetadata)
+        data = assetIn.data,
+        extractedMetadata = assetIn.extractedMetadata
+      )
 
-      log.info(s"Adding asset: $assetToAdd")
+      log.info(s"Adding asset: $assetToAddModel")
 
-      val storedAsset: Asset = app.service.asset.add(assetToAdd)
+      app.service.asset.add(assetToAddModel)
 
-      /**
-        * Add to search index
-        */
-      app.service.search.indexAsset(storedAsset)
+      app.service.search.indexAsset(assetToAddModel)
 
-      /**
-        * Update repository counters
-        */
-      app.service.stats.addAsset(assetToAdd)
+      app.service.stats.addAsset(assetToAddModel)
 
-      // add preview data
-      addPreview(assetToAdd)
+      addPreview(assetToAddModel)
 
-      app.service.fileStore.addAsset(assetToAdd)
+      app.service.fileStore.addAsset(assetToAddModel)
 
-      val path = app.service.fileStore.getAssetPath(assetToAdd)
-
-      storedAsset.modify(C.Asset.PATH -> path)
+      assetToAddModel
     }
   }
 
@@ -110,15 +89,13 @@ class LibraryService(val app: Altitude) {
 
   def getById(id: String): JsObject = {
     txManager.asReadOnly[JsObject] {
-      val asset: Asset = app.service.asset.getById(id)
-      val path = app.service.fileStore.getAssetPath(asset)
-      asset.modify(C.Asset.PATH -> path)
+      app.service.asset.getById(id)
     }
   }
 
   def getByChecksum(checksum: String): Option[Asset] = {
     txManager.asReadOnly[Option[Asset]] {
-      val query = new Query(params = Map(C.Asset.CHECKSUM -> checksum))
+      val query = new Query(params = Map(C.Asset.CHECKSUM -> checksum)).withRepository()
       val existing = app.service.asset.query(query)
       if (existing.nonEmpty) Some(existing.records.head: Asset) else None
     }
@@ -132,22 +109,11 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def moveAssetToTriage(assetId: String): Unit = {
-    txManager.withTransaction {
-      moveAssetsToTriage(Set(assetId))
-    }
-  }
-
-  def moveAssetsToTriage(assetIds: Set[String]): Unit = {
-    txManager.withTransaction {
-      moveAssetsToFolder(assetIds, RequestContext.repository.value.get.triageFolderId)
-    }
-  }
-
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
 
     def move(asset: Asset): Unit = {
-      // cannot move to the same folder
+      // Cannot move to the same folder
+      // Note that a recycled asset CAN be restored to its original folder
       if (!asset.isRecycled && asset.folderId == destFolderId) {
         return
       }
@@ -155,18 +121,18 @@ class LibraryService(val app: Altitude) {
       app.service.stats.moveAsset(asset, destFolderId)
 
       /* Point the asset to the new folder.
-         It may or may not be recycled, so we update it as not recycled unconditionally
+         It may or may not be recycled or triaged, so we update it as neither unconditionally
          (saves us a separate update query)
       */
-      val updatedAsset: Asset = asset.modify(
-        C.Asset.FOLDER_ID -> destFolderId,
-        C.Asset.IS_RECYCLED -> false)
+      val updatedAsset: Asset = asset.copy(
+        folderId = destFolderId,
+        isRecycled = false,
+        isTriaged = false)
 
       app.service.asset.updateById(
-        asset.id.get, updatedAsset,
-        fields = List(C.Asset.FOLDER_ID, C.Asset.IS_RECYCLED))
+        asset.persistedId, updatedAsset,
+        fields = List(C.Asset.FOLDER_ID, C.Asset.IS_RECYCLED, C.Asset.IS_TRIAGED))
 
-      app.service.fileStore.moveAsset(asset, updatedAsset)
     }
 
     txManager.withTransaction {
@@ -174,11 +140,6 @@ class LibraryService(val app: Altitude) {
       app.service.folder.getById(destFolderId)
 
       assetIds.foreach { assetId =>
-        // cannot have assets in root folder - just other folders
-        if (app.service.folder.isRootFolder(destFolderId)) {
-          throw IllegalOperationException("Cannot move assets to root folder")
-        }
-
         val asset: Asset = getById(assetId)
 
         move(asset)
@@ -195,16 +156,13 @@ class LibraryService(val app: Altitude) {
         throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
       }
 
-      val updatedAsset: Asset = asset.modify(
-        C.Asset.FILENAME -> newFilename,
-        C.Asset.PATH -> app.service.fileStore.getPathWithNewFilename(asset, newFilename))
+      val updatedAsset: Asset = asset.copy(fileName = newFilename)
 
       // Note that we are not updating the PATH because it does not exist as a property
       app.service.asset.updateById(
-        asset.id.get, updatedAsset,
+        asset.persistedId,
+        updatedAsset,
         fields = List(C.Asset.FILENAME))
-
-      app.service.fileStore.moveAsset(asset, updatedAsset)
 
       updatedAsset
     }
@@ -223,15 +181,13 @@ class LibraryService(val app: Altitude) {
   }
 
   private def addPreview(asset: Asset): Option[Preview] = {
-    require(asset.id.nonEmpty)
-
     val previewData: Array[Byte] = genPreviewData(asset)
 
     previewData.length match {
       case size if size > 0 =>
 
         val preview: Preview = Preview(
-          assetId = asset.id.get,
+          assetId = asset.persistedId,
           mimeType = asset.assetType.mime,
           data = previewData)
 
@@ -245,7 +201,7 @@ class LibraryService(val app: Altitude) {
   // FIXME: this is temporary as only image-specific
   private def makeImageThumbnail(asset: Asset): Array[Byte] = {
     try {
-      require(asset.data.length != 0)
+      require(asset.data.length != 0, "File length cannot be zero")
       val dataStream: InputStream = new ByteArrayInputStream(asset.data)
       val srcImage: BufferedImage = ImageIO.read(dataStream)
       val scaledImage: BufferedImage = Scalr.resize(srcImage, Scalr.Method.ULTRA_QUALITY, previewBoxSize)
@@ -277,6 +233,7 @@ class LibraryService(val app: Altitude) {
   }
 
   def getPreview(assetId: String): Preview = {
+    require(assetId.nonEmpty, "Asset ID cannot be empty")
     app.service.fileStore.getPreviewById(assetId)
   }
 
@@ -343,7 +300,6 @@ class LibraryService(val app: Altitude) {
       val _parentId = if (parentId.isDefined) parentId.get else RequestContext.repository.value.get.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
       val addedFolder = app.service.folder.add(folder)
-      app.service.fileStore.addFolder(addedFolder)
       addedFolder
     }
   }
@@ -357,10 +313,6 @@ class LibraryService(val app: Altitude) {
   def deleteFolderById(id: String): Unit = {
     if (app.service.folder.isRootFolder(id)) {
       throw IllegalOperationException("Cannot delete the root folder")
-    }
-
-    if (app.service.folder.isSystemFolder(Some(id))) {
-      throw IllegalOperationException("Cannot delete system folder")
     }
 
     txManager.withTransaction {
@@ -388,7 +340,7 @@ class LibraryService(val app: Altitude) {
 
         val results: QueryResult = app.service.library.queryAll(folderAssetsQuery)
 
-        log.trace(s"Folder ${folderId} has ${results.total} assets")
+        log.trace(s"Folder $folderId has ${results.total} assets")
 
         // OPTIMIZE: bulk deletions.
         results.records.foreach { record =>
@@ -399,18 +351,17 @@ class LibraryService(val app: Altitude) {
              has any asset references in the repository. This spares us a second
              query.
            */
-          if (!asset.isRecycled) this.recycleAsset(asset.id.get)
+          if (!asset.isRecycled) this.recycleAsset(asset.persistedId)
         }
 
         val treeAssetCount = assetCount + results.total
 
-        log.trace(s"Total assets in the tree of folder ${folder.id.get}: $treeAssetCount")
+        log.trace(s"Total assets in the tree of folder ${folder.persistedId}: $treeAssetCount")
 
         // delete folder if it has no assets, otherwise - recycle it
         if (treeAssetCount == 0) {
           log.trace(s"DELETING (PURGING) folder $f")
           app.service.folder.deleteById(folderId)
-          app.service.fileStore.deleteFolder(childFolder)
         }
         else {
           log.trace(s"RECYCLING folder $folderId")
@@ -424,9 +375,7 @@ class LibraryService(val app: Altitude) {
 
   def renameFolder(folderId: String, newName: String): Folder = {
     txManager.withTransaction[Folder] {
-      val folder: Folder = app.service.folder.getById(folderId)
       val updatedFolder = app.service.folder.rename(folderId, newName)
-      app.service.fileStore.renameFolder(folder, newName)
       updatedFolder
     }
   }
@@ -434,8 +383,7 @@ class LibraryService(val app: Altitude) {
   def moveFolder(folderBeingMovedId: String, destFolderId: String)
                 : Folder = {
     txManager.withTransaction[Folder] {
-      val (movedFolder, newParent) = app.service.folder.move(folderBeingMovedId, destFolderId)
-      app.service.fileStore.moveFolder(movedFolder, newParent)
+      val (movedFolder, _) = app.service.folder.move(folderBeingMovedId, destFolderId)
       movedFolder
     }
   }
@@ -462,7 +410,7 @@ class LibraryService(val app: Altitude) {
       val existing = getByChecksum(asset.checksum)
 
       if (existing.isDefined) {
-        throw DuplicateException(existingAssetId = existing.get.id.get)
+        throw DuplicateException(existingAssetId = existing.get.persistedId)
       }
 
       txManager.withTransaction {
@@ -473,13 +421,10 @@ class LibraryService(val app: Altitude) {
 
           if (folder.isRecycled) {
             app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
-            // the folder is not in the store.
-            app.service.fileStore.addFolder(folder)
           }
 
           val restoredAsset: Asset = getById(assetId)
           app.service.stats.restoreAsset(restoredAsset)
-          app.service.fileStore.restoreAsset(restoredAsset)
         }
       }
     }
@@ -492,24 +437,13 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def recycleFolder(folderId: String): Folder = {
-
-    txManager.withTransaction {
-      val folder: Folder = app.service.folder.getById(folderId)
-      app.service.folder.setRecycledProp(folder, isRecycled = true)
-      folder.modify(C.Folder.IS_RECYCLED -> true)
-    }
-  }
-
   def recycleAssets(assetIds: Set[String]): Unit = {
 
     assetIds.foreach { assetId =>
       txManager.withTransaction {
-        val asset = getById(assetId)
+        val asset: Asset = getById(assetId)
         app.service.asset.setRecycledProp(asset, isRecycled = true)
-        val recycledAsset = getById(assetId)
-        app.service.stats.recycleAsset(recycledAsset)
-        app.service.fileStore.recycleAsset(asset)
+        app.service.stats.recycleAsset(asset.copy(isRecycled = true))
       }
     }
   }

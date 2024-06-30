@@ -4,11 +4,11 @@ package software.altitude.test.core.suites
 import software.altitude.core.Altitude
 import software.altitude.core.{Const => C}
 
-object PostgresSuite {
+object PostgresSuiteBundle {
   val app = new Altitude(Map("datasource" -> C.DatasourceType.POSTGRES))
 }
 
-class PostgresSuite
-  extends AllIntegrationTests(config = Map("datasource" -> C.DatasourceType.POSTGRES))
-  with PostgresSuiteSetup {
+class PostgresSuiteBundle
+  extends AllIntegrationTestSuites(config = Map("datasource" -> C.DatasourceType.POSTGRES))
+  with PostgresBundleSetup {
 }

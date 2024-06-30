@@ -23,19 +23,19 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.NUMBER))
     val asset: Asset = testContext.persistAsset()
 
-    var data = Map[String, Set[String]](field.id.get -> Set("one"))
+    var data = Map[String, Set[String]](field.persistedId -> Set("one"))
     intercept[ValidationException] {
-      altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+      altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
     }
 
-    data = Map[String, Set[String]](field.id.get -> Set("."))
+    data = Map[String, Set[String]](field.persistedId -> Set("."))
     intercept[ValidationException] {
-      altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+      altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
     }
 
     // these should be ok
     data = Map[String, Set[String]](
-      field.id.get -> Set("000.", "0", "", "0000.00123", ".000", "36352424", "234324221"))
+      field.persistedId -> Set("000.", "0", "", "0000.00123", ".000", "36352424", "234324221"))
   }
 
   test("Boolean field type can be added") {
@@ -45,39 +45,39 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.BOOL))
     val asset: Asset = testContext.persistAsset()
 
-    var data = Map[String, Set[String]](field.id.get -> Set("one"))
+    var data = Map[String, Set[String]](field.persistedId -> Set("one"))
     intercept[ValidationException] {
-      altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+      altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
     }
 
-    data = Map[String, Set[String]](field.id.get -> Set("on"))
+    data = Map[String, Set[String]](field.persistedId -> Set("on"))
     intercept[ValidationException] {
-      altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+      altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
     }
 
     // cannot have conflicting boolean values
-    data = Map[String, Set[String]](field.id.get -> Set("TRUE", "FALSE"))
+    data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "FALSE"))
     intercept[ValidationException] {
-      altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+      altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
     }
     // ... but non-conflicting duplicates are ok
-    data = Map[String, Set[String]](field.id.get -> Set("TRUE", "TRUE"))
+    data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "TRUE"))
 
     // these should be ok
-    data = Map[String, Set[String]](field.id.get -> Set("TRUE"))
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    data = Map[String, Set[String]](field.persistedId -> Set("TRUE"))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    data = Map[String, Set[String]](field.id.get -> Set("FALSE"))
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    data = Map[String, Set[String]](field.persistedId -> Set("FALSE"))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    data = Map[String, Set[String]](field.id.get -> Set("true"))
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    data = Map[String, Set[String]](field.persistedId -> Set("true"))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    data = Map[String, Set[String]](field.id.get -> Set("False"))
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    data = Map[String, Set[String]](field.persistedId -> Set("False"))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    data = Map[String, Set[String]](field.id.get -> Set("False"))
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    data = Map[String, Set[String]](field.persistedId -> Set("False"))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
   }
 
   test("Setting metadata values") {
@@ -95,25 +95,25 @@ import software.altitude.test.core.IntegrationTestCore
 
     // add a field we do not expect
     val badData = Map[String, Set[String]](
-        keywordMetadataField.id.get -> Set("one", "two", "three"),
+        keywordMetadataField.persistedId -> Set("one", "two", "three"),
         BaseDao.genId -> Set("four"))
 
     intercept[NotFoundException] {
-        altitude.service.metadata.setMetadata(asset.id.get, Metadata(badData))
+        altitude.service.metadata.setMetadata(asset.persistedId, Metadata(badData))
       }
 
     // valid
     val data = Map[String, Set[String]](
-        keywordMetadataField.id.get -> Set("one", "two", "three"),
-        numberMetadataField.id.get -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
+        keywordMetadataField.persistedId -> Set("one", "two", "three"),
+        numberMetadataField.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
 
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    val storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
+    val storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
 
     storedMetadata.data should not be empty
-    storedMetadata.data.keys should contain(keywordMetadataField.id.get)
-    storedMetadata.data.keys should contain(numberMetadataField.id.get)
+    storedMetadata.data.keys should contain(keywordMetadataField.persistedId)
+    storedMetadata.data.keys should contain(numberMetadataField.persistedId)
   }
 
   test("Test/update empty value sets") {
@@ -130,21 +130,21 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](
-      field1.id.get -> Set("one", "two", "three"),
-      field2.id.get -> Set())
+      field1.persistedId -> Set("one", "two", "three"),
+      field2.persistedId -> Set())
 
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedMetadata.data.keys should contain(field1.id.get)
-    storedMetadata.data.keys shouldNot contain(field2.id.get)
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedMetadata.data.keys should contain(field1.persistedId)
+    storedMetadata.data.keys shouldNot contain(field2.persistedId)
 
     // update with nothing
-    data = Map[String, Set[String]](field1.id.get -> Set())
+    data = Map[String, Set[String]](field1.persistedId -> Set())
 
-    altitude.service.metadata.updateMetadata(asset.id.get, Metadata(data))
+    altitude.service.metadata.updateMetadata(asset.persistedId, Metadata(data))
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
     storedMetadata.data shouldBe empty
   }
 
@@ -162,14 +162,14 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](
-        field1.id.get -> Set("one", "two", "three"),
-        field2.id.get -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
+        field1.persistedId -> Set("one", "two", "three"),
+        field2.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
 
-    altitude.service.metadata.setMetadata(asset.id.get, Metadata(data))
+    altitude.service.metadata.setMetadata(asset.persistedId, Metadata(data))
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedMetadata.data.keys should contain(field1.id.get)
-    storedMetadata.data.keys should contain(field2.id.get)
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedMetadata.data.keys should contain(field1.persistedId)
+    storedMetadata.data.keys should contain(field2.persistedId)
 
     val field3 = altitude.service.metadata.addField(
       MetadataField(
@@ -177,25 +177,25 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.KEYWORD))
 
     data = Map[String, Set[String]](
-        field3.id.get -> Set("test 1", "test 2"),
-        field2.id.get -> Set("3.002", "14.1", "1.25", "123456789"))
+        field3.persistedId -> Set("test 1", "test 2"),
+        field2.persistedId -> Set("3.002", "14.1", "1.25", "123456789"))
 
-    altitude.service.metadata.updateMetadata(asset.id.get, Metadata(data))
+    altitude.service.metadata.updateMetadata(asset.persistedId, Metadata(data))
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedMetadata.data.keys should contain(field1.id.get)
-    storedMetadata.data.keys should contain(field2.id.get)
-    storedMetadata.data.keys should contain(field3.id.get)
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedMetadata.data.keys should contain(field1.persistedId)
+    storedMetadata.data.keys should contain(field2.persistedId)
+    storedMetadata.data.keys should contain(field3.persistedId)
 
-    storedMetadata.data(field2.id.get) shouldNot contain("1")
-    storedMetadata.data(field2.id.get) shouldNot contain("2")
+    storedMetadata.data(field2.persistedId) shouldNot contain("1")
+    storedMetadata.data(field2.persistedId) shouldNot contain("2")
   }
 
   test("Add/get fields") {
     val metadataField = altitude.service.metadata.addField(
       MetadataField(name = "field name", fieldType = FieldType.KEYWORD))
 
-    val storedField: MetadataField = altitude.service.metadata.getFieldById(metadataField.id.get)
+    val storedField: MetadataField = altitude.service.metadata.getFieldById(metadataField.persistedId)
     storedField.fieldType shouldBe FieldType.KEYWORD
   }
 
@@ -205,12 +205,12 @@ import software.altitude.test.core.IntegrationTestCore
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
-    altitude.service.metadata.getFieldById(metadataField.id.get)
+    altitude.service.metadata.getFieldById(metadataField.persistedId)
 
-    altitude.service.metadata.deleteFieldById(metadataField.id.get)
+    altitude.service.metadata.deleteFieldById(metadataField.persistedId)
 
     intercept[NotFoundException] {
-      altitude.service.metadata.getFieldById(metadataField.id.get)
+      altitude.service.metadata.getFieldById(metadataField.persistedId)
     }
   }
 
@@ -254,12 +254,12 @@ import software.altitude.test.core.IntegrationTestCore
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
-    val data = Map[String, Set[String]](field.id.get -> Set("one", "two"))
+    val data = Map[String, Set[String]](field.persistedId -> Set("one", "two"))
     val metadata = Metadata(data)
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
-    val storedAsset: Asset = altitude.service.library.getById(asset.id.get)
+    val storedAsset: Asset = altitude.service.library.getById(asset.persistedId)
 
     storedAsset.metadata.isEmpty shouldBe false
   }
@@ -281,12 +281,12 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.TEXT))
 
 
-    val data = Map[String, Set[String]](field3.id.get -> Set("this is some text"))
+    val data = Map[String, Set[String]](field3.persistedId -> Set("this is some text"))
     val metadata = Metadata(data)
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
-    val storedAsset: Asset = altitude.service.library.getById(asset.id.get)
+    val storedAsset: Asset = altitude.service.library.getById(asset.persistedId)
 
     storedAsset.metadata.isEmpty shouldBe false
     storedAsset.metadata.data.size shouldBe 1
@@ -298,21 +298,21 @@ import software.altitude.test.core.IntegrationTestCore
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
-    val data = Map[String, Set[String]](field.id.get -> Set("1", "2", "3"))
+    val data = Map[String, Set[String]](field.persistedId -> Set("1", "2", "3"))
     val metadata = Metadata(data)
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedMetadata.get(field.id.get).value.size shouldBe 3
-    val values: List[MetadataValue] = storedMetadata.get(field.id.get).value.toList
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedMetadata.get(field.persistedId).value.size shouldBe 3
+    val values: List[MetadataValue] = storedMetadata.get(field.persistedId).value.toList
 
-    altitude.service.library.deleteMetadataValue(asset.id.get, values.head.id.get)
-    altitude.service.library.deleteMetadataValue(asset.id.get, values.last.id.get)
+    altitude.service.library.deleteMetadataValue(asset.persistedId, values.head.persistedId)
+    altitude.service.library.deleteMetadataValue(asset.persistedId, values.last.persistedId)
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
 
-    storedMetadata.get(field.id.get).value.size shouldBe 1
+    storedMetadata.get(field.persistedId).value.size shouldBe 1
   }
 
   test("Metadata IDs should be created and not overwritten") {
@@ -328,30 +328,30 @@ import software.altitude.test.core.IntegrationTestCore
 
     var asset: Asset = testContext.persistAsset()
 
-    val data = Map[String, Set[String]](field1.id.get -> Set("1"))
+    val data = Map[String, Set[String]](field1.persistedId -> Set("1"))
     val metadata = Metadata(data)
 
-    altitude.service.metadata.setMetadata(asset.id.get, metadata)
+    altitude.service.metadata.setMetadata(asset.persistedId, metadata)
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedMetadata.get(field1.id.get) should not be None
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedMetadata.get(field1.persistedId) should not be None
 
-    val field_1_valueId = storedMetadata.get(field1.id.get).get.head.id
+    val field_1_valueId = storedMetadata.get(field1.persistedId).get.head.id
     field_1_valueId should not be None
 
-    altitude.service.library.addMetadataValue(asset.id.get, field2.id.get, "2")
+    altitude.service.library.addMetadataValue(asset.persistedId, field2.persistedId, "2")
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
 
-    storedMetadata.get(field1.id.get).get.head.id should not be None
-    storedMetadata.get(field1.id.get).get.head.id shouldBe field_1_valueId
+    storedMetadata.get(field1.persistedId).get.head.id should not be None
+    storedMetadata.get(field1.persistedId).get.head.id shouldBe field_1_valueId
 
 
     // now set the metadata on asset creation and make sure the auto-generated IDs are there
     asset = testContext.persistAsset(metadata = metadata)
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedMetadata.get(field1.id.get).get.head.id should not be None
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedMetadata.get(field1.persistedId).get.head.id should not be None
   }
 
   test("Adding empty keyword value should be explicitly not allowed") {
@@ -364,15 +364,15 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     intercept[ValidationException] {
-      altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, "")
+      altitude.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, "")
     }
 
     intercept[ValidationException] {
-      altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, "   ")
+      altitude.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, "   ")
     }
 
     intercept[ValidationException] {
-      altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, "  \t \n ")
+      altitude.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, "  \t \n ")
     }
   }
 
@@ -385,12 +385,12 @@ import software.altitude.test.core.IntegrationTestCore
     val metadataField = altitude.service.metadata.addField(_metadataField)
     val asset: Asset = testContext.persistAsset()
 
-    altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, true)
-    altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, true)
-    altitude.service.library.addMetadataValue(asset.id.get, metadataField.id.get, false)
+    altitude.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, true)
+    altitude.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, true)
+    altitude.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, false)
 
-    val metadata = altitude.service.metadata.getMetadata(asset.id.get)
-    metadata.get(metadataField.id.get).get.size shouldBe 1
+    val metadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    metadata.get(metadataField.persistedId).get.size shouldBe 1
   }
 
 
@@ -415,21 +415,21 @@ import software.altitude.test.core.IntegrationTestCore
 
     val asset: Asset = testContext.persistAsset()
 
-    val data = Map[String, Set[String]](field.id.get -> Set("Some text"))
+    val data = Map[String, Set[String]](field.persistedId -> Set("Some text"))
     val metadata = Metadata(data)
 
-    altitude.service.metadata.setMetadata(asset.id.get, metadata)
+    altitude.service.metadata.setMetadata(asset.persistedId, metadata)
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    var storedValue = storedMetadata.get(field.id.get).get.head
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    var storedValue = storedMetadata.get(field.persistedId).get.head
     val oldValueId = storedValue.id
 
     val newValue = "Some updated text"
 
-    altitude.service.library.updateMetadataValue(asset.id.get, storedValue.id.get, newValue)
+    altitude.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, newValue)
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedValue = storedMetadata.get(field.id.get).get.head
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedValue = storedMetadata.get(field.persistedId).get.head
 
     storedValue.id shouldBe oldValueId
     storedValue.value shouldBe newValue
@@ -444,21 +444,21 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     val oldValue = "tag1"
-    val data = Map[String, Set[String]](field.id.get -> Set(oldValue))
+    val data = Map[String, Set[String]](field.persistedId -> Set(oldValue))
     val metadata = Metadata(data)
 
-    altitude.service.metadata.setMetadata(asset.id.get, metadata)
+    altitude.service.metadata.setMetadata(asset.persistedId, metadata)
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    var storedValue = storedMetadata.get(field.id.get).get.head
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    var storedValue = storedMetadata.get(field.persistedId).get.head
     val oldValueId = storedValue.id
 
     val newValue = oldValue.toUpperCase
 
-    altitude.service.library.updateMetadataValue(asset.id.get, storedValue.id.get, newValue)
+    altitude.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, newValue)
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedValue = storedMetadata.get(field.id.get).get.head
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedValue = storedMetadata.get(field.persistedId).get.head
 
     storedValue.id shouldBe oldValueId
     storedValue.value shouldBe newValue
@@ -473,19 +473,19 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     val oldValue = "tag1"
-    val data = Map[String, Set[String]](field.id.get -> Set(oldValue))
+    val data = Map[String, Set[String]](field.persistedId -> Set(oldValue))
     val metadata = Metadata(data)
 
-    altitude.service.metadata.setMetadata(asset.id.get, metadata)
+    altitude.service.metadata.setMetadata(asset.persistedId, metadata)
 
-    var storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    var storedValue = storedMetadata.get(field.id.get).get.head
+    var storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    var storedValue = storedMetadata.get(field.persistedId).get.head
     val oldValueId = storedValue.id
 
-    altitude.service.library.updateMetadataValue(asset.id.get, storedValue.id.get, oldValue)
+    altitude.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, oldValue)
 
-    storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    storedValue = storedMetadata.get(field.id.get).get.head
+    storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    storedValue = storedMetadata.get(field.persistedId).get.head
 
     storedValue.id shouldBe oldValueId
     storedValue.value shouldBe oldValue
@@ -500,16 +500,16 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     val oldValue = "tag1"
-    val data = Map[String, Set[String]](field.id.get -> Set(oldValue))
+    val data = Map[String, Set[String]](field.persistedId -> Set(oldValue))
     val metadata = Metadata(data)
 
-    altitude.service.metadata.setMetadata(asset.id.get, metadata)
+    altitude.service.metadata.setMetadata(asset.persistedId, metadata)
 
-    val storedMetadata = altitude.service.metadata.getMetadata(asset.id.get)
-    val storedValue = storedMetadata.get(field.id.get).get.head
+    val storedMetadata = altitude.service.metadata.getMetadata(asset.persistedId)
+    val storedValue = storedMetadata.get(field.persistedId).get.head
 
     intercept[ValidationException] {
-      altitude.service.library.updateMetadataValue(asset.id.get, storedValue.id.get, "  \t  ")
+      altitude.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, "  \t  ")
     }
   }
 }

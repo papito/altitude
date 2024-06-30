@@ -8,7 +8,7 @@ import software.altitude.test.core.unit.ModelTests
 import software.altitude.test.core.unit.SearchSqlQueryTests
 import software.altitude.test.core.unit.SqlQueryTests
 
-abstract class AllUnitTests extends Suites (
+abstract class AllUnitTestSuites extends Suites (
   new ModelTests,
   new FolderModelTests,
   new SqlQueryTests,

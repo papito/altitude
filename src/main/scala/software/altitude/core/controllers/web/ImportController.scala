@@ -19,7 +19,7 @@ class ImportController extends BaseWebController with FileUploadSupport {
 
   get("/") {
     contentType = "text/html"
-    ssp("/import")
+    layoutTemplate("/WEB-INF/templates/views/import.ssp")
   }
 
   post("/upload") {
@@ -33,10 +33,10 @@ class ImportController extends BaseWebController with FileUploadSupport {
 
       case None =>
         log.warn("No files received for upload")
-        halt(200, ssp("/includes/upload_form"))
+        halt(200, layoutTemplate("/WEB-INF/templates/views/htmx/upload_form.ssp"))
     }
 
-    ssp("/includes/upload_form")
+    layoutTemplate("/WEB-INF/templates/views/htmx/upload_form.ssp")
   }
 
   error {

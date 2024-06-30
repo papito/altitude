@@ -42,8 +42,7 @@ class StatsService(val app: Altitude) {
     dao.decrementStat(statName, count)
   }
 
-  def createStat(dimension: String)
-                : JsObject = {
+  def createStat(dimension: String): JsObject = {
     txManager.withTransaction {
       val stat = Stat(dimension, 0)
       dao.add(stat)
@@ -53,15 +52,11 @@ class StatsService(val app: Altitude) {
   def addAsset(asset: Asset): Unit = {
     log.debug(s"Adding asset [${asset.id}]")
 
-    /* To TRIAGE */
-    if (app.service.folder.isTriageFolder(asset.folderId)) {
+    if (asset.isTriaged) {
       log.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
       app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
       app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    }
-
-    /* To SORTED */
-    if (!app.service.folder.isSystemFolder(Some(asset.folderId))) {
+    } else {
       log.debug(s"Asset [${asset.id}] moving TO sorted. Incrementing SORTED")
 
       app.service.stats.incrementStat(Stats.SORTED_ASSETS)
@@ -81,87 +76,56 @@ class StatsService(val app: Altitude) {
       return
     }
 
-    // short circuit for moving asset within the sorted hierarchy
-    if (!app.service.folder.isSystemFolder(Some(asset.folderId)) &&
-      !app.service.folder.isSystemFolder(Some(destFolderId))) {
-      log.debug(s"Asset [${asset.id}] WITHIN sorted.")
-
-      log.debug(s"Decrementing old folder counter for asset [${asset.id}]")
-      app.service.folder.decrAssetCount(asset.folderId)
-      log.debug(s"Incrementing new folder counter for asset [${asset.id}]")
-      app.service.folder.incrAssetCount(destFolderId)
+    if (asset.isTriaged) {
+      log.debug(s"Asset [${asset.id}] is triaged")
+      moveTriagedAsset(asset, destFolderId)
       return
     }
 
-    /* From TRIAGE */
-    if (app.service.folder.isTriageFolder(asset.folderId)) {
-      log.debug(s"Asset [${asset.id}] moving FROM triage. Decrementing TRIAGE")
-      app.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
-      app.service.stats.decrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    }
+    log.debug(s"Asset [${asset.id}] WITHIN sorted.")
 
-    /* From SORTED */
-    if (!app.service.folder.isSystemFolder(Some(asset.folderId))) {
-      log.debug(s"Asset [${asset.id}] moving FROM sorted. Decrementing SORTED")
-
-      app.service.stats.decrementStat(Stats.SORTED_ASSETS)
-      app.service.stats.decrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
-
-      log.debug(s"Decrementing folder counter for asset [${asset.id}]")
-      app.service.folder.decrAssetCount(asset.folderId)
-    }
-
-    /* To TRIAGE */
-    if (app.service.folder.isTriageFolder(destFolderId)) {
-      log.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
-      app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
-      app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    }
-
-    /* To SORTED */
-    if (!app.service.folder.isSystemFolder(Some(destFolderId))) {
-      log.debug(s"Asset [${asset.id}] moving TO sorted. Incrementing SORTED")
-
-      app.service.stats.incrementStat(Stats.SORTED_ASSETS)
-      app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
-
-      log.debug(s"Incrementing folder counter for asset [${asset.id}]")
-      app.service.folder.incrAssetCount(destFolderId)
-    }
+    log.debug(s"Decrementing old folder counter for asset [${asset.id}]")
+    app.service.folder.decrAssetCount(asset.folderId)
+    log.debug(s"Incrementing new folder counter for asset [${asset.id}]")
+    app.service.folder.incrAssetCount(destFolderId)
   }
 
-  private def moveRecycledAsset(asset: Asset, destFolderId: String)
-                               : Unit = {
+  private def moveTriagedAsset(asset: Asset, destFolderId: String): Unit = {
+    log.debug(s"Moving triaged asset [${asset.id}]. Decrementing TRIAGE")
+
+    app.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
+    app.service.stats.decrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
+
+    log.debug(s"Triaged asset [${asset.id}] moving TO sorted. Incrementing SORTED")
+    app.service.stats.incrementStat(Stats.SORTED_ASSETS)
+    app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
+
+    log.debug(s"Incrementing folder counter for asset [${asset.id}]")
+    app.service.folder.incrAssetCount(destFolderId)
+  }
+
+  private def moveRecycledAsset(asset: Asset, destFolderId: String): Unit = {
     log.debug(s"Moving recycled asset [${asset.id}]. Decrementing RECYCLED")
 
     app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
     app.service.stats.decrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
 
-    if (app.service.folder.isTriageFolder(destFolderId)) {
-      log.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
-      app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
-      app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    }
-    else if (!app.service.folder.isSystemFolder(Some(destFolderId))) {
-      log.debug(s"Recycled asset [${asset.id}] moving TO sorted. Incrementing SORTED")
-      app.service.stats.incrementStat(Stats.SORTED_ASSETS)
-      app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
+    log.debug(s"Recycled asset [${asset.id}] moving TO sorted. Incrementing SORTED")
+    app.service.stats.incrementStat(Stats.SORTED_ASSETS)
+    app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
 
-      log.debug(s"Incrementing folder counter for asset [${asset.id}]")
-      app.service.folder.incrAssetCount(destFolderId)
-    }
+    log.debug(s"Incrementing folder counter for asset [${asset.id}]")
+    app.service.folder.incrAssetCount(destFolderId)
   }
 
   def recycleAsset(asset: Asset): Unit = {
     log.debug(s"Recycling asset [${asset.id}]. Incrementing RECYCLED")
 
-    if (app.service.folder.isTriageFolder(asset.folderId)) {
+    if (asset.isTriaged) {
       log.debug(s"Asset [${asset.id}] recycled and moving FROM triage. Decrementing TRIAGE")
       app.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
       app.service.stats.decrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    }
-
-    if (!app.service.folder.isSystemFolder(Some(asset.folderId))) {
+    } else {
       log.debug(s"Asset [${asset.id}] recycled and moving FROM sorted. Decrementing SORTED")
       app.service.stats.decrementStat(Stats.SORTED_ASSETS)
       app.service.stats.decrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
@@ -177,12 +141,4 @@ class StatsService(val app: Altitude) {
   def restoreAsset(asset: Asset): Unit = {
     moveRecycledAsset(asset, asset.folderId)
   }
-
-  def purgeAsset(asset: Asset): Unit = {
-    if (app.service.folder.isTriageFolder(asset.folderId)) {
-      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
-      app.service.stats.decrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
-    }
-  }
-
 }

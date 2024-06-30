@@ -20,7 +20,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   protected val dao: RepositoryDao = app.injector.instance[RepositoryDao]
   override protected val txManager: TransactionManager = app.txManager
 
-  def addRepository(name: String, fileStoreType: C.FileStoreType.Value, owner: User, id: Option[String] = None): JsObject = {
+  def addRepository(name: String, fileStoreType: C.FileStoreType.Value, owner: User): JsObject = {
     log.info(s"Creating repository [$name]")
 
     val workPath = System.getProperty("user.dir")
@@ -31,14 +31,21 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
     log.info(s"Repository [$name] work path")
     log.info(s"Data path: [$dataPath]")
 
+    val id = BaseDao.genId
+
+    // FIXME: storage service function
+    val reposDataPath = FilenameUtils.concat(dataPath, "repositories")
+    val repoDataPath = FilenameUtils.concat(reposDataPath, id.substring(0, 8))
+
     val repoToSave = Repository(
-      id = id,
+      id = Some(id),
       name = name,
-      ownerAccountId = owner.id.get,
+      ownerAccountId = owner.persistedId,
       rootFolderId = BaseDao.genId,
-      triageFolderId = BaseDao.genId,
       fileStoreType = fileStoreType,
-      fileStoreConfig = Map(C.Repository.Config.PATH -> dataPath))
+      fileStoreConfig = Map(
+        C.Repository.Config.PATH -> repoDataPath)
+    )
 
     txManager.withTransaction[JsObject] {
       val repo: Repository = super.add(repoToSave)
@@ -48,14 +55,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
 
       log.info(s"Creating repository [${repo.name}] system folders")
 
-      val rootFolder = app.service.folder.add(app.service.folder.rootFolder)
-      app.service.fileStore.addFolder(rootFolder)
-
-      val triageFolder = app.service.folder.add(app.service.folder.triageFolder)
-      app.service.fileStore.addFolder(triageFolder)
-
-      // trash does not have an explicit folder record - just the storage location
-      app.service.fileStore.createPath(app.service.fileStore.trashFolderPath)
+      app.service.folder.add(app.service.folder.rootFolder)
 
       log.info(s"Setting up repository [${RequestContext.repository.value.get.name}] statistics")
       app.service.stats.createStat(Stats.SORTED_ASSETS)

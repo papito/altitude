@@ -30,12 +30,12 @@ class MetadataService(val app: Altitude) {
 
       val existing = metadataFieldDao.query(new Query(params = Map(
         C.MetadataField.NAME_LC -> metadataField.nameLowercase
-      )))
+      )).withRepository())
 
       if (existing.nonEmpty) {
         val existingField: MetadataField = existing.records.head
         log.debug(s"Duplicate found for field [${metadataField.name}]")
-        throw DuplicateException(existingField.id.get)
+        throw DuplicateException(existingField.persistedId)
       }
 
       metadataFieldDao.add(metadataField)
@@ -52,7 +52,7 @@ class MetadataService(val app: Altitude) {
 
       allFields.map{ res =>
         val metadataField: MetadataField = res
-        metadataField.id.get -> metadataField
+        metadataField.persistedId -> metadataField
       }.toMap
     }
 
@@ -221,7 +221,7 @@ class MetadataService(val app: Altitude) {
         // return all values as is, only replacing the one value we are working on
         val newMdVals = if (fId == fieldId) {
           mdVals.map { v =>
-            if (v.id.get == valueId) newMdVal else v
+            if (v.persistedId == valueId) newMdVal else v
           }
         }
         else {
@@ -315,7 +315,7 @@ class MetadataService(val app: Altitude) {
       breakable {
         // booleans cannot have multiple values
         if (field.fieldType == FieldType.BOOL && mdVals.size > 1) {
-          ex.errors += (field.id.get -> C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name))
+          ex.errors += (field.persistedId -> C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name))
           break()
         }
 
@@ -323,7 +323,7 @@ class MetadataService(val app: Altitude) {
 
         // add to the validation exception if any
         if (illegalValues.nonEmpty) {
-          ex.errors += (field.id.get ->
+          ex.errors += (field.persistedId ->
             C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name, illegalValues.mkString(", ")))
         }
       }
@@ -343,9 +343,6 @@ class MetadataService(val app: Altitude) {
     validate(cleanMetadata)
     cleanMetadata
   }
-
-  /*
-   */
 
   /**
     * Presentation-level JSON transformer for metadata. This augments the limiting metadata JSON object to supply

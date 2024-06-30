@@ -86,7 +86,7 @@ class Query(val params: Map[String, Any] = Map(),
     sort = sort)
 
   def withRepository(): Query = new Query(
-    params = params ++ Map(Const.Base.REPO_ID -> RequestContext.getRepository.id.get),
+    params = params ++ Map(Const.Base.REPO_ID -> RequestContext.getRepository.persistedId),
     rpp = rpp,
     page = page,
     sort = sort)

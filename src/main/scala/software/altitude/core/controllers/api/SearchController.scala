@@ -5,7 +5,8 @@ import org.scalatra.Ok
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsNull
 import play.api.libs.json.Json
-import software.altitude.core.controllers.{BaseApiController, Util}
+import software.altitude.core.controllers.BaseApiController
+import software.altitude.core.controllers.Util
 import software.altitude.core.models.Asset
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchSort
@@ -54,19 +55,9 @@ class SearchController extends BaseApiController {
   }
 
   get("/triage") {
-    defaultQuery(repository.triageFolderId)
   }
 
   get(s"/triage/p/:${C.Api.Search.PAGE}/rpp/:${C.Api.Search.RESULTS_PER_PAGE}") {
-    val rpp = params.getOrElse(C.Api.Search.RESULTS_PER_PAGE, C.DEFAULT_RPP).toInt
-    val page = params.getOrElse(C.Api.Search.PAGE, "1").toInt
-
-    val q = new SearchQuery(
-      rpp = rpp, page = page,
-      folderIds = Set(repository.triageFolderId)
-    )
-
-    query(q)
   }
 
   private def defaultQuery(folderId: String): ActionResult = {
@@ -80,7 +71,7 @@ class SearchController extends BaseApiController {
     Ok(Json.obj(
       C.Api.Search.ASSETS -> results.records.map { x =>
         val asset = x: Asset
-        Util.withFormattedMetadata(app, asset)
+        asset.metadata.toJson
       },
       C.Api.TOTAL_RECORDS -> results.total,
       C.Api.CURRENT_PAGE -> q.page,
@@ -96,7 +87,7 @@ class SearchController extends BaseApiController {
     Ok(Json.obj(
       C.Api.Search.ASSETS -> results.records.map { x =>
         val asset = x: Asset
-        Util.withFormattedMetadata(app, asset)
+        asset.metadata.toJson
       },
       C.Api.TOTAL_RECORDS -> results.total,
       C.Api.CURRENT_PAGE -> q.page,

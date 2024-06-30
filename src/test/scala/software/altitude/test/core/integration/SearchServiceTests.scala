@@ -27,8 +27,8 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.KEYWORD))
 
     var data = Map[String, Set[String]](
-      field1.id.get -> Set("picture", "man", "office", "monday", "how is this my life?"),
-      field2.id.get -> Set(
+      field1.persistedId -> Set("picture", "man", "office", "monday", "how is this my life?"),
+      field2.persistedId -> Set(
         """
           We have blueberry, raspberry, ginseng, sleepy time, green tea,
           green tea with lemon, green tea with lemon and honey, liver disaster,
@@ -43,13 +43,13 @@ import software.altitude.test.core.IntegrationTestCore
           I partake not in the meat, nor the breast milk, nor the ovum, of any creature, with a face.
           """
       ),
-      field3.id.get -> Set("Lindsay Lohan", "Conan O'Brien", "Teri Hatcher", "Sam Rockwell"))
+      field3.persistedId -> Set("Lindsay Lohan", "Conan O'Brien", "Teri Hatcher", "Sam Rockwell"))
 
     testContext.persistAsset(metadata = Metadata(data))
 
     data = Map[String, Set[String]](
-      field1.id.get -> Set("tree", "shoe", "desert", "California"),
-      field2.id.get -> Set(
+      field1.persistedId -> Set("tree", "shoe", "desert", "California"),
+      field2.persistedId -> Set(
         """
           “If I ever start referring to these as the best years of my life — remind me to kill myself.”
           """,
@@ -60,7 +60,7 @@ import software.altitude.test.core.IntegrationTestCore
           I’d like to stop thinking of the present as some minor, insignificant preamble to something else.
           """
       ),
-      field3.id.get -> Set("Keanu Reeves", "Sandra Bullock", "Dennis Hopper", "Teri Hatcher"))
+      field3.persistedId -> Set("Keanu Reeves", "Sandra Bullock", "Dennis Hopper", "Teri Hatcher"))
 
     testContext.persistAsset(metadata = Metadata(data))
 
@@ -83,7 +83,7 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.KEYWORD))
 
     val data = Map[String, Set[String]](
-      field1.id.get -> Set("space", "force", "tactical", "pants")
+      field1.persistedId -> Set("space", "force", "tactical", "pants")
     )
 
     val metadata = Metadata(data)
@@ -100,11 +100,11 @@ import software.altitude.test.core.IntegrationTestCore
       testContext.persistAsset(folder=Some(folder1), metadata=metadata)
     }
 
-    val qFolder1_1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1_1.id.get))
+    val qFolder1_1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1_1.persistedId))
     var results: SearchResult = altitude.service.library.search(qFolder1_1)
     results.total shouldBe 3
 
-    val qFolder1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1.id.get))
+    val qFolder1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1.persistedId))
     results = altitude.service.library.search(qFolder1)
     results.total shouldBe 6
 
@@ -118,7 +118,7 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
     testContext.persistAsset()
 
-    altitude.service.library.recycleAsset(asset.id.get)
+    altitude.service.library.recycleAsset(asset.persistedId)
 
     val results = altitude.service.library.search(new SearchQuery)
     results.total shouldBe 1
@@ -185,15 +185,15 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.BOOL))
 
     var data = Map[String, Set[String]](
-      field1.id.get -> Set("one", "two", "three"),
-      field2.id.get -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"),
-      field3.id.get -> Set("true"))
+      field1.persistedId -> Set("one", "two", "three"),
+      field2.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"),
+      field3.persistedId -> Set("true"))
     testContext.persistAsset(metadata = Metadata(data))
 
     data = Map[String, Set[String]](
-      field1.id.get -> Set("six", "seven"),
-      field2.id.get -> Set("5", "1001", "1"),
-      field3.id.get -> Set("true"))
+      field1.persistedId -> Set("six", "seven"),
+      field2.persistedId -> Set("5", "1001", "1"),
+      field3.persistedId -> Set("true"))
     testContext.persistAsset(metadata = Metadata(data))
 
     // simple value search
@@ -202,8 +202,8 @@ import software.altitude.test.core.IntegrationTestCore
 
     results = altitude.service.library.search(
       new SearchQuery(params = Map(
-        field3.id.get -> Query.EQUALS(true),
-        field2.id.get -> Query.EQUALS(1)))
+        field3.persistedId -> Query.EQUALS(true),
+        field2.persistedId -> Query.EQUALS(1)))
     )
     results.total shouldBe 2
   }
@@ -223,14 +223,14 @@ import software.altitude.test.core.IntegrationTestCore
         fieldType = FieldType.NUMBER))
 
     val data = Map[String, Set[String]](
-      field1.id.get -> Set("one"),
-      field2.id.get -> Set("1")
+      field1.persistedId -> Set("one"),
+      field2.persistedId -> Set("1")
     )
     testContext.persistAsset(metadata = Metadata(data))
 
    val results = altitude.service.library.search(
       new SearchQuery(params = Map(
-        field1.id.get -> Query.EQUALS(1)))
+        field1.persistedId -> Query.EQUALS(1)))
     )
     results.total shouldBe 0
   }
@@ -250,19 +250,19 @@ import software.altitude.test.core.IntegrationTestCore
     val asset2: Asset = testContext.persistAsset()
     val asset3: Asset = testContext.persistAsset()
 
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = field1.id.get, newValue = "one")
-    altitude.service.library.addMetadataValue(asset2.id.get, fieldId = field1.id.get, newValue = "one")
-    altitude.service.library.addMetadataValue(asset3.id.get, fieldId = field1.id.get, newValue = "two")
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
+    altitude.service.library.addMetadataValue(asset2.persistedId, fieldId = field1.persistedId, newValue = "one")
+    altitude.service.library.addMetadataValue(asset3.persistedId, fieldId = field1.persistedId, newValue = "two")
 
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = field2.id.get, newValue = 1)
-    altitude.service.library.addMetadataValue(asset2.id.get, fieldId = field2.id.get, newValue = 1)
-    altitude.service.library.addMetadataValue(asset3.id.get, fieldId = field2.id.get, newValue = 2)
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 1)
+    altitude.service.library.addMetadataValue(asset2.persistedId, fieldId = field2.persistedId, newValue = 1)
+    altitude.service.library.addMetadataValue(asset3.persistedId, fieldId = field2.persistedId, newValue = 2)
 
     val results = altitude.service.library.search(
       new SearchQuery(
         params = Map(
-          field1.id.get -> Query.EQUALS("one"),
-          field2.id.get -> Query.EQUALS(1)
+          field1.persistedId -> Query.EQUALS("one"),
+          field2.persistedId -> Query.EQUALS(1)
         )
       )
     )
@@ -282,13 +282,13 @@ import software.altitude.test.core.IntegrationTestCore
 
     val asset1: Asset = testContext.persistAsset()
 
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = field1.id.get, newValue = "one")
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
     // it's the only value for this field so get it
-    val metadata: Metadata = altitude.service.metadata.getMetadata(asset1.id.get)
-    val mdVal = metadata(field1.id.get).head
+    val metadata: Metadata = altitude.service.metadata.getMetadata(asset1.persistedId)
+    val mdVal = metadata(field1.persistedId).head
 
     // tag a second field for posterity
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = field2.id.get, newValue = 3)
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 3)
 
     var results = altitude.service.library.search(new SearchQuery(text = Some("one")))
     results.total shouldBe 1
@@ -297,8 +297,8 @@ import software.altitude.test.core.IntegrationTestCore
     results = altitude.service.library.search(
       new SearchQuery(
         params = Map(
-          field1.id.get -> "one",
-          field2.id.get -> 3
+          field1.persistedId -> "one",
+          field2.persistedId -> 3
         )
       )
     )
@@ -306,7 +306,7 @@ import software.altitude.test.core.IntegrationTestCore
     results.total shouldBe 1
 
     // update the value and search again
-    altitude.service.library.updateMetadataValue(asset1.id.get, mdVal.id.get, "newone")
+    altitude.service.library.updateMetadataValue(asset1.persistedId, mdVal.persistedId, "newone")
     results = altitude.service.library.search(new SearchQuery(text = Some("newone")))
     results.total shouldBe 1
 
@@ -314,8 +314,8 @@ import software.altitude.test.core.IntegrationTestCore
     results = altitude.service.library.search(
       new SearchQuery(
         params = Map(
-          field1.id.get -> "newone",
-          field2.id.get -> 3
+          field1.persistedId -> "newone",
+          field2.persistedId -> 3
         )
       )
     )
@@ -323,7 +323,7 @@ import software.altitude.test.core.IntegrationTestCore
     results.total shouldBe 1
 
     // remove the value and search again
-    altitude.service.library.deleteMetadataValue(assetId = asset1.id.get, valueId = mdVal.id.get)
+    altitude.service.library.deleteMetadataValue(assetId = asset1.persistedId, valueId = mdVal.persistedId)
 
     results = altitude.service.library.search(new SearchQuery(text = Some("one")))
     results.isEmpty shouldBe true
@@ -349,44 +349,44 @@ import software.altitude.test.core.IntegrationTestCore
 
     val asset3: Asset = testContext.persistAsset()
 
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = kwField.id.get, newValue = "c")
-    altitude.service.library.addMetadataValue(asset2.id.get, fieldId = kwField.id.get, newValue = "a")
-    altitude.service.library.addMetadataValue(asset3.id.get, fieldId = kwField.id.get, newValue = "b")
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = kwField.persistedId, newValue = "c")
+    altitude.service.library.addMetadataValue(asset2.persistedId, fieldId = kwField.persistedId, newValue = "a")
+    altitude.service.library.addMetadataValue(asset3.persistedId, fieldId = kwField.persistedId, newValue = "b")
 
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = numField.id.get, newValue = 50)
-    altitude.service.library.addMetadataValue(asset2.id.get, fieldId = numField.id.get, newValue = 300)
-    altitude.service.library.addMetadataValue(asset3.id.get, fieldId = numField.id.get, newValue = 200)
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = numField.persistedId, newValue = 50)
+    altitude.service.library.addMetadataValue(asset2.persistedId, fieldId = numField.persistedId, newValue = 300)
+    altitude.service.library.addMetadataValue(asset3.persistedId, fieldId = numField.persistedId, newValue = 200)
 
-    altitude.service.library.addMetadataValue(asset1.id.get, fieldId = boolField.id.get, newValue = false)
-    altitude.service.library.addMetadataValue(asset2.id.get, fieldId = boolField.id.get, newValue = true)
-    altitude.service.library.addMetadataValue(asset3.id.get, fieldId = boolField.id.get, newValue = false)
+    altitude.service.library.addMetadataValue(asset1.persistedId, fieldId = boolField.persistedId, newValue = false)
+    altitude.service.library.addMetadataValue(asset2.persistedId, fieldId = boolField.persistedId, newValue = true)
+    altitude.service.library.addMetadataValue(asset3.persistedId, fieldId = boolField.persistedId, newValue = false)
 
     // sort by string field
     var sort = SearchSort(field = kwField, direction = SortDirection.ASC)
     var results = altitude.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(kwField.id.get).value.head.value shouldBe "a"
+    (results.records.head: Asset).metadata.get(kwField.persistedId).value.head.value shouldBe "a"
 
     sort = SearchSort(field = kwField, direction = SortDirection.DESC)
     results = altitude.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(kwField.id.get).value.head.value shouldBe "c"
+    (results.records.head: Asset).metadata.get(kwField.persistedId).value.head.value shouldBe "c"
 
     // sort by number field
     sort = SearchSort(field = numField, direction = SortDirection.ASC)
     results = altitude.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(numField.id.get).value.head.value shouldBe "50"
+    (results.records.head: Asset).metadata.get(numField.persistedId).value.head.value shouldBe "50"
 
     sort = SearchSort(field = numField, direction = SortDirection.DESC)
     results = altitude.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(numField.id.get).value.head.value shouldBe "300"
+    (results.records.head: Asset).metadata.get(numField.persistedId).value.head.value shouldBe "300"
 
     // sort by number field
     sort = SearchSort(field = boolField, direction = SortDirection.ASC)
     results = altitude.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(boolField.id.get).value.head.value shouldBe "false"
+    (results.records.head: Asset).metadata.get(boolField.persistedId).value.head.value shouldBe "false"
 
     sort = SearchSort(field = boolField, direction = SortDirection.DESC)
     results = altitude.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(boolField.id.get).value.head.value shouldBe "true"
+    (results.records.head: Asset).metadata.get(boolField.persistedId).value.head.value shouldBe "true"
   }
 
   test("Sort info should be returned with query results") {
@@ -398,7 +398,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     1 to 5 foreach { idx =>
       val asset: Asset = testContext.persistAsset()
-      altitude.service.library.addMetadataValue(asset.id.get, fieldId = kwField.id.get, newValue = idx)
+      altitude.service.library.addMetadataValue(asset.persistedId, fieldId = kwField.persistedId, newValue = idx)
     }
 
     // try with no sort info at all

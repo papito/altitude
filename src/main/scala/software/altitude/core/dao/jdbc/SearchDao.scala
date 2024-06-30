@@ -51,7 +51,7 @@ abstract class SearchDao(override val appContext: Altitude)
                   : Unit = {
     log.debug(s"Reindexing asset $asset with metadata [${asset.metadata}]")
 
-    clearMetadata(asset.id.get)
+    clearMetadata(asset.persistedId)
     indexMetadata(asset, metadataFields)
     replaceSearchDocument(asset)
   }
@@ -66,7 +66,7 @@ abstract class SearchDao(override val appContext: Altitude)
                  AND ${C.SearchToken.ASSET_ID} = ?
       """
 
-    val bindValues = List[Object](RequestContext.getRepository.id.get, assetId)
+    val bindValues = List[Object](RequestContext.getRepository.persistedId, assetId)
 
     log.debug(s"Delete SQL: $sql, with values: $bindValues")
     val runner: QueryRunner = new QueryRunner()
@@ -99,17 +99,16 @@ abstract class SearchDao(override val appContext: Altitude)
     addMetadataValues(asset = asset, field = field, values = Set(value))
   }
 
-  override def addMetadataValues(asset: Asset, field: MetadataField, values: Set[String])
-                                : Unit = {
+  override def addMetadataValues(asset: Asset, field: MetadataField, values: Set[String]): Unit = {
     log.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
 
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)
 
       values.foreach { value: String =>
         preparedStatement.clearParameters()
-        preparedStatement.setString(1, RequestContext.getRepository.id.get)
-        preparedStatement.setString(2, asset.id.get)
-        preparedStatement.setString(3, field.id.get)
+        preparedStatement.setString(1, RequestContext.getRepository.persistedId)
+        preparedStatement.setString(2, asset.persistedId)
+        preparedStatement.setString(3, field.persistedId)
 
         // keyword
         if (field.fieldType == FieldType.KEYWORD) {

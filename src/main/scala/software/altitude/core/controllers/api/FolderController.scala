@@ -2,7 +2,6 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseApiController
@@ -33,17 +32,11 @@ class FolderController extends BaseApiController {
     val parentId = realId(params.getAs[String](C.Api.Folder.PARENT_ID).get)
     val allRepoFolders = app.service.folder.getAll
     val folders = app.service.folder.immediateChildren(parentId, allRepoFolders = allRepoFolders)
-    val sysFolders = app.service.folder.sysFoldersByIdMap(allRepoFolders = allRepoFolders)
     val path = app.service.folder.pathComponents(parentId)
 
     Ok(Json.obj(
       C.Api.Folder.PATH -> path.map(_.toJson),
       C.Api.Folder.FOLDERS -> folders.map(_.toJson),
-      C.Api.Folder.SYSTEM -> JsObject(
-        sysFolders.map { case (folderId, folder) =>
-          folderId -> folder.toJson
-        }.toSeq
-      )
     ))
   }
 
@@ -84,7 +77,6 @@ class FolderController extends BaseApiController {
 
   private def realId(aliasOrId: String): String = aliasOrId match {
     case C.Folder.Alias.ROOT => RequestContext.repository.value.get.rootFolderId
-    case C.Folder.Alias.TRIAGE => RequestContext.repository.value.get.triageFolderId
     case _ => aliasOrId
   }
 

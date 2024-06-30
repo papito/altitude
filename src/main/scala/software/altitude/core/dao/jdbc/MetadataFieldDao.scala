@@ -40,7 +40,7 @@ abstract class MetadataFieldDao(val appContext: AltitudeAppContext)
 
     val sqlVals: List[Any] = List(
       id,
-      RequestContext.getRepository.id.get,
+      RequestContext.getRepository.persistedId,
       metadataField.name,
       metadataField.nameLowercase,
       metadataField.fieldType.toString)

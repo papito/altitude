@@ -19,11 +19,11 @@ test-focused-sqlite:
 # as this is picked up by the testing server that is spun up automatically.
 #
 # Other tests run in a single process and force the test environment themselves.
-test-focused-web:
-	ENV=test sbt testFocusedWeb
+test-focused-controller:
+	ENV=test sbt testFocusedController
 
-test-web:
-	ENV=test sbt testWeb
+test-controller:
+	ENV=test sbt testController
 
 test-psql:
 	sbt testPostgres
@@ -43,6 +43,14 @@ clean:
 	rm -rf data/sorted/*
 	rm -rf data/triage/*
 	rm -rf data/trash/*
+
+publish:
+	rm -rf release
+	sbt assembly
+	# we don't need this
+	rm -rf target
+	mkdir -p release/data/db
+
 
 up:
 	docker-compose -f docker-compose.yml -f docker-compose.test.yml up

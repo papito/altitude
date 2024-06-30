@@ -22,11 +22,7 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
   }
 
   protected def toSession: PartialFunction[User, String] = {
-    case usr: User =>
-      if (usr.id.isDefined)
-        usr.id.get
-      else
-        throw new IllegalStateException("User ID is not defined. Cannot serialize user to session.")
+    case usr: User => usr.persistedId
   }
 
   protected val scentryConfig: ScentryConfiguration = (new ScentryConfig {

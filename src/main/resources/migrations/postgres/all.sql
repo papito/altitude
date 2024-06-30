@@ -28,7 +28,6 @@ CREATE TABLE repository(
   description TEXT,
   owner_account_id CHAR(36) REFERENCES account(id) NOT NULL,
   root_folder_id CHAR(36) NOT NULL,
-  triage_folder_id CHAR(36) NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config jsonb
 ) INHERITS (_core);
@@ -38,8 +37,7 @@ CREATE TABLE stats (
   dimension VARCHAR(60),
   dim_val INT NOT NULL DEFAULT 0
 );
-CREATE INDEX stats_01 ON stats(repository_id);
-CREATE UNIQUE INDEX stats_02 ON stats(repository_id, dimension);
+CREATE UNIQUE INDEX stats_01 ON stats(repository_id, dimension);
 
 CREATE TABLE asset (
   id CHAR(36) PRIMARY KEY,
@@ -52,13 +50,13 @@ CREATE TABLE asset (
   metadata jsonb,
   extracted_metadata jsonb,
   raw_metadata jsonb,
-  folder_id CHAR(36) NOT NULL DEFAULT '1',
+  folder_id CHAR(36),
   filename TEXT NOT NULL,
   size_bytes INT NOT NULL,
+  is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
-CREATE UNIQUE INDEX asset_02 ON asset(repository_id, folder_id, filename, is_recycled);
 
 CREATE TABLE metadata_field (
   id CHAR(36) PRIMARY KEY,
@@ -91,10 +89,6 @@ CREATE TABLE search_parameter (
   field_value_bool BOOLEAN,
   field_value_dt TIMESTAMP WITH TIME ZONE
 );
-CREATE INDEX search_parameter_01 ON search_parameter(repository_id, field_id, field_value_kw);
-CREATE INDEX search_parameter_02 ON search_parameter(repository_id, field_id, field_value_num);
-CREATE INDEX search_parameter_03 ON search_parameter(repository_id, field_id, field_value_bool);
-CREATE INDEX search_parameter_04 ON search_parameter(repository_id, field_id, field_value_dt);
 
 CREATE TABLE search_document (
   repository_id CHAR(36) REFERENCES repository(id),

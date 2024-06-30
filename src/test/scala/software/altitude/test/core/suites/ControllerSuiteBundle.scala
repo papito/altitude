@@ -3,7 +3,7 @@ package software.altitude.test.core.suites
 import software.altitude.core.Altitude
 import software.altitude.core.{Const => C}
 
-object WebSuite {
+object ControllerSuiteBundle {
   val app = new Altitude(Map("datasource" -> C.DatasourceType.POSTGRES))
 }
 
@@ -14,7 +14,7 @@ object WebSuite {
  In addition, the default app config will choose one of the DB engines, so the test
  client will run on one and the server will run on another type of DB causing major havoc.
  */
-class WebSuite
-  extends AllWebTests(config = Map("datasource" -> C.DatasourceType.POSTGRES))
-  with WebSuiteSetup {
+class ControllerSuiteBundle
+  extends AllControllerTestSuites(config = Map("datasource" -> C.DatasourceType.POSTGRES))
+  with ControllerBundleSetup {
 }

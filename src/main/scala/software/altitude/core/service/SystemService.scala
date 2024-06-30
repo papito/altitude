@@ -19,18 +19,17 @@ class SystemService(val app: Altitude) {
   protected val txManager: TransactionManager = app.txManager
 
   def version: Int = {
-    txManager.asReadOnly[Int] {
+    txManager.withTransaction[Int] {
       try {
         readMetadata.version
       }
       catch {
-        case ex: SQLException => {
+        case ex: SQLException=> {
           /* Uncomment this if you get "current transaction is aborted, commands ignored until end of transaction block".
              It means the select query failed when it should not have, but the exception itself is normal for new installations
              AND tests (when there is no database yet). Seeing that error when running tests is annoying, so we just
              swallow it here.
            */
-
           // println(ex)
 
           0 // new installation

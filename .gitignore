@@ -1,7 +1,6 @@
 # except for .gitignore
 !.gitignore
 
-data
 
 *.log
 log
@@ -9,7 +8,9 @@ logs
 project/project
 project/target
 test-data
+data
 target
+release
 dist
 *.iml
 *.eml
@@ -26,8 +27,6 @@ dist
 
 # Packages #
 ############
-# it's better to unpack these files and commit the raw source
-# git has its own built in compression methods
 *.jar
 !sbt-launch.jar
 *.rar
@@ -43,10 +42,6 @@ Thumbs.db
 
 # general
 *~
-
-# Eclipse
-eclipse
-.eclipse
 
 # IDEA
 /.idea

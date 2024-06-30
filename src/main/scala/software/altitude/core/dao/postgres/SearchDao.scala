@@ -27,8 +27,8 @@ class SearchDao(override val appContext: Altitude) extends software.altitude.cor
     }
 
     val sqlVals: List[Any] = List(
-      RequestContext.repository.value.get.id.get,
-      asset.id.get,
+      RequestContext.repository.value.get.persistedId,
+      asset.persistedId,
       metadataValues.mkString(" "),
       "" /* body */)
 
@@ -49,7 +49,7 @@ class SearchDao(override val appContext: Altitude) extends software.altitude.cor
     }
 
     val sqlVals: List[Any] = List(
-      metadataValues.mkString(" "), RequestContext.getRepository.id.get, asset.id.get)
+      metadataValues.mkString(" "), RequestContext.getRepository.persistedId, asset.persistedId)
 
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, docSql, sqlVals.map(_.asInstanceOf[Object]): _*)

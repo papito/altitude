@@ -19,7 +19,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     repo.fileStoreConfig.keys should contain(C.Repository.Config.PATH)
 
-    val storedRepo: Repository = altitude.service.repository.getById(repo.id.get)
+    val storedRepo: Repository = altitude.service.repository.getById(repo.persistedId)
     storedRepo.name shouldEqual repo.name
     storedRepo.fileStoreConfig.keys should contain(C.Repository.Config.PATH)
     storedRepo.createdAt should not be None

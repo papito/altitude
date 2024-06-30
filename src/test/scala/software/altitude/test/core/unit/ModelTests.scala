@@ -2,7 +2,6 @@ package software.altitude.test.core.unit
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import play.api.libs.json._
 import software.altitude.core.models.BaseModel
 import software.altitude.test.core.TestFocus
@@ -44,21 +43,5 @@ import scala.language.implicitConversions
 
   test("Create a model") {
     TestModel(stringProp = "stringProp", boolProp = true, intProp = 2)
-  }
-
-  test("Get a modified model copy") {
-    val original = TestModel(stringProp = "stringProp", boolProp = true, intProp = 2)
-    original.stringProp shouldBe "stringProp"
-
-    val modified: TestModel = original.modify("stringProp" -> "new!", "intProp" -> 3)
-    modified.stringProp shouldBe "new!"
-    modified.intProp shouldBe 3
-  }
-
-  test("Attempt to modify a non-existing property should fail") {
-    val original = TestModel(stringProp = "stringProp", boolProp = true, intProp = 2)
-    intercept[IllegalArgumentException] {
-      original.modify("funky" -> "LOLZ", "veryFunky" -> "LOLZ")
-    }
   }
 }

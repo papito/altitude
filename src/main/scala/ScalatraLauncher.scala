@@ -1,30 +1,35 @@
 import org.eclipse.jetty.server._
-import org.eclipse.jetty.server.handler.ContextHandlerCollection
+import org.eclipse.jetty.servlet.DefaultServlet
 import org.eclipse.jetty.webapp.WebAppContext
 import org.scalatra.servlet.ScalatraListener
 import software.altitude.core.AltitudeServletContext
 
 object ScalatraLauncher extends App with AltitudeServletContext {
-  private val host = "localhost"
   private val port = 9010
 
-  private val server = new Server
+  private val server = new Server(port)
+
   server.setStopTimeout(5000)
   server.setStopAtShutdown(true)
 
-  private val connector = new ServerConnector(server)
-  connector.setHost(host)
-  connector.setPort(port)
-  server.addConnector(connector)
+  val context: WebAppContext = new WebAppContext()
+  private val webXml = getClass.getResource("/WEB-INF/web.xml")
 
+  private val webappDirLocation = if(webXml != null){
+    // running the assembly jar
+    webXml.toString.replaceFirst("/WEB-INF/web.xml$", "/")
+  } else {
+    // running on the source tree
+    "src/main/webapp/"
+  }
 
-  val context = new WebAppContext(getClass.getClassLoader.getResource("webapp").toExternalForm, "/")
-  context.setEventListeners(Array(new ScalatraListener))
+  context.setResourceBase(webappDirLocation)
+  context.setDescriptor(webappDirLocation + "WEB-INF/web.xml")
 
-  private val contexts = new ContextHandlerCollection()
-  contexts.setHandlers(List[Handler](context).toArray)
+  context.addEventListener(new ScalatraListener)
+  context.addServlet(classOf[DefaultServlet], "/")
 
-  server.setHandler(contexts)
+  server.setHandler(context)
 
   server.start()
   server.join()

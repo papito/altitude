@@ -83,17 +83,18 @@ class TestContext(val altitude: Altitude) {
     }
 
     val currentRepo = repository.getOrElse(repositories.headOption.get)
-    val folderId = if (folder.isDefined) folder.get.id.get else currentRepo.triageFolderId
+    val folderId = if (folder.isDefined) folder.get.persistedId else currentRepo.rootFolderId
 
     val currentUser = user.getOrElse(this.user)
 
     Asset(
-      userId = currentUser.id.get,
+      userId = currentUser.persistedId,
       folderId = folderId,
       assetType = new AssetType(
-        mediaType = "mediaType", mediaSubtype = "mediaSubtype", mime = "mime"),
+        mediaType = "mediaType",
+        mediaSubtype = "mediaSubtype",
+        mime = "mime"),
       fileName = filename,
-      path = Some(Util.randomStr(50)),
       checksum = Util.randomStr(32),
       metadata = metadata,
       sizeBytes = 1000L)

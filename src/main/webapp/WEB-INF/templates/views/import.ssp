@@ -37,7 +37,7 @@
 <main>
     <div id="importOptions">
         <div id="browseForFiles">
-            ${include("includes/upload_form.ssp")}
+            ${include("htmx/upload_form.ssp")}
         </div>
     </div>
 </main>

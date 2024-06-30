@@ -1,7 +1,5 @@
 package software.altitude.core
 
-import scala.reflect.runtime.universe.{MethodSymbol, runtimeMirror}
-
 object Const {
 
   /**
@@ -46,7 +44,6 @@ object Const {
     val NAME = "name"
     val OWNER_ACCOUNT_ID = "owner_account_id"
     val ROOT_FOLDER_ID = "root_folder_id"
-    val TRIAGE_FOLDER_ID = "triage_folder_id"
     val FILE_STORE_TYPE = "file_store_type"
     val FILES_STORE_CONFIG = "file_store_config"
 
@@ -63,13 +60,13 @@ object Const {
 
   object Asset extends Common {
     val ASSET_TYPE = "asset_type"
-    val PATH = "path"
     val FOLDER_ID = "folder_id"
     val SIZE_BYTES = "size_bytes"
     val FILENAME = "filename"
     val METADATA = "metadata"
     val EXTRACTED_METADATA = "extracted_metadata"
     val IS_RECYCLED = "is_recycled"
+    val IS_TRIAGED = "is_triaged"
   }
 
   object AssetType extends Common {
@@ -82,10 +79,8 @@ object Const {
     val NAME = "name"
     val NAME_LC = "name_lc"
     val PARENT_ID = "parent_id"
-    val PATH = "path"
     val NUM_OF_ASSETS = "num_of_assets"
     val CHILDREN = "children"
-    val IS_ROOT = "is_root"
     val IS_RECYCLED = "is_recycled"
 
     object Name {
@@ -139,6 +134,7 @@ object Const {
     val VALIDATION_ERRORS = "validation_errors"
     val MULTI_VALUE_DELIM = "+"
     val DUPLICATE_OF = "duplicate_of"
+    val USER_TEST_HEADER_ID = "TEST-user-id"
 
     // FIXME: wrong naming convention
     val TOTAL_RECORDS = "totalRecords"
@@ -221,14 +217,6 @@ object Const {
       val PASSWORD = "password"
       val PASSWORD2 = "password2"
       val FIELD_ERRORS = "fieldErrors"
-
-      def getFieldName(value: String): String = {
-        val rm = runtimeMirror(getClass.getClassLoader)
-        val accessors = rm.classSymbol(getClass).toType.members.collect {
-          case m: MethodSymbol if m.isGetter && m.isPublic => m
-        }
-        accessors.find(a => rm.reflect(this).reflectMethod(a).apply().equals(value)).map(_.name.toString).get
-      }
     }
 
     object Constraints {
@@ -268,9 +256,6 @@ object Const {
    */
   object Path {
     val ROOT = "root"
-    val TRIAGE = "triage"
-    val TRASH = "trash"
-    val LANDFILL = "landfill"
   }
 
   // default results per page

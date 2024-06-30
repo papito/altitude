@@ -8,12 +8,12 @@ import software.altitude.core.Environment
 import software.altitude.core.RequestContext
 import software.altitude.test.core.IntegrationTestCore
 
-object PostgresSuiteSetup {
+object PostgresBundleSetup {
 
   def setup(): Unit = {
-    IntegrationTestCore.createTestDir(PostgresSuite.app)
+    IntegrationTestCore.createTestDir(PostgresSuiteBundle.app)
 
-    val conn = PostgresSuite.app.txManager.connection(readOnly = false)
+    val conn = PostgresSuiteBundle.app.txManager.connection(readOnly = false)
     val stmt = conn.createStatement()
 
     try {
@@ -25,11 +25,11 @@ object PostgresSuiteSetup {
       conn.close()
     }
 
-    PostgresSuite.app.service.migrationService.migrate()
+    PostgresSuiteBundle.app.service.migrationService.migrate()
   }
 }
 
-trait PostgresSuiteSetup extends Suite with BeforeAndAfterAll {
+trait PostgresBundleSetup extends Suite with BeforeAndAfterAll {
   Environment.ENV = Environment.TEST
   protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
@@ -38,12 +38,13 @@ trait PostgresSuiteSetup extends Suite with BeforeAndAfterAll {
     println("POSTGRES INTEGRATION TESTS")
     println("@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
 
-    PostgresSuiteSetup.setup()
+    PostgresBundleSetup.setup()
 
-    RequestContext.conn.value = Some(PostgresSuite.app.txManager.connection(readOnly = false))
+    // See: https://github.com/papito/altitude/wiki/How-the-tests-work#why-do-tests-create-a-top-level-database-connection
+    RequestContext.conn.value = Some(PostgresSuiteBundle.app.txManager.connection(readOnly = false))
   }
 
   override def afterAll(): Unit = {
-    PostgresSuite.app.txManager.close()
+    PostgresSuiteBundle.app.txManager.close()
   }
 }

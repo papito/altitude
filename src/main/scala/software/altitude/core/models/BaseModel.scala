@@ -1,6 +1,4 @@
 package software.altitude.core.models
-
-import play.api.libs.json.Json.JsValueWrapper
 import play.api.libs.json._
 import software.altitude.core.Util
 import software.altitude.core.{Const => C}
@@ -9,14 +7,22 @@ import java.time.LocalDateTime
 import scala.language.implicitConversions
 
 object BaseModel {
-  // implicit converter to go from a model to JSON
+  // implicit converter to go from model to JSON
   implicit def toJson(obj: BaseModel): JsObject = obj.toJson
 }
 
 abstract class BaseModel {
   val id: Option[String]
 
-  // implicit converter to go from a JSON to model
+  // Should be always used to get the ID of an object, unless we are positive that the object has not been persisted yet
+  def persistedId: String = {
+    id match {
+      case None => throw new RuntimeException("Cannot get persisted ID for a model that has not been saved yet")
+      case _ => id.get
+    }
+  }
+
+  // implicit converter to go from JSON to model
   implicit def toJson: JsObject
 
   // created at - mutable, but can only be set once
@@ -41,24 +47,6 @@ abstract class BaseModel {
       throw new RuntimeException("Cannot set 'updated at' twice")
     }
     _updatedAt = Some(arg)
-  }
-
-  def modify(fields: (String, JsValueWrapper)*): JsObject = {
-    // get a set of property names that we are updating
-    val updatedPropNames: Set[String] = fields.map(pair => pair._1).toSet
-
-    // Extract the list of property names that are not part of this object -
-    // we won't get any indication of user error
-    val wrongPropNames = updatedPropNames.foldLeft(Set[String]()) { (res, propName) =>
-      if (!this.toJson.keys.contains(propName)) res + propName else res
-    }
-
-    if (wrongPropNames.nonEmpty) {
-      throw new IllegalArgumentException(
-        s"Cannot update the model with these properties ${wrongPropNames}")
-    }
-
-    this.toJson ++ Json.obj(fields: _*)
   }
 
   /**

@@ -10,15 +10,23 @@
 ## Build & Run
 
 ```sh
-$ make up
-$ sbt
-> jetty:start
+# Bring up the Postgres database (dev and test at once)
+make up
+# Run the tests
+make test
+# With hot reload
+make watch 
 ```
 
-FIXME: does not seem to work anymore with newer sbt
-`watch` starts Jetty server while watching files for changes. 
+See the Makefile for all the available commands.
 
-## Major maintenance points
+## Design philosophy, architecture, and patterns
+
+These are covered in the [WIKI](https://github.com/papito/altitude/wiki). Topics:
+
+* [How the tests work](https://github.com/papito/altitude/wiki/How-the-tests-work)
+
+## Databases
 
 * SQL schema needs to be updated for *both* Postgres and SQLite. The schemas are in `src/main/resources/migrations/`
 * In development, the type of database running is configured in `core.Configuration` class

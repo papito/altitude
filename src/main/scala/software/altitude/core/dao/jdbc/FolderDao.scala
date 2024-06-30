@@ -38,7 +38,7 @@ abstract class FolderDao(val appContext: AltitudeAppContext) extends BaseDao wit
 
     val sqlVals: List[Any] = List(
       id,
-      RequestContext.getRepository.id.get,
+      RequestContext.getRepository.persistedId,
       folder.name,
       folder.nameLowercase,
       folder.parentId)

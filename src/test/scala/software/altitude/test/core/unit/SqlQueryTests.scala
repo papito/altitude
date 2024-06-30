@@ -20,7 +20,6 @@ import software.altitude.test.core.TestFocus
     name = "repo name",
     ownerAccountId = Util.randomStr(),
     rootFolderId = "1",
-    triageFolderId = "2",
     fileStoreConfig = Map(),
     fileStoreType = Const.FileStoreType.FS)
 

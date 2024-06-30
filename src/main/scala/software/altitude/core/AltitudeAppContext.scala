@@ -20,9 +20,6 @@ trait AltitudeAppContext {
 
   val txManager: TransactionManager
 
-  // This is set by the TestingController, only mounted in test
-  var loggedInTestUser: Option[User] = None
-
   // ID for this application - which we may have multiple of in the same environment
   final val id: Int = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
 

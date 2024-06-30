@@ -16,32 +16,22 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    * Add a new folder - THIS SHOULD NOT BE USED DIRECTLY. Use <code>addFolder</code>
    */
   override def add(folder: Folder, queryForDup: Option[Query] = None): JsObject = {
-    if (isSystemFolder(Some(folder.parentId))) {
-      throw IllegalOperationException("Cannot add a child to a system folder")
-    }
-
     txManager.withTransaction[JsObject] {
       val dupQuery = new Query(params = Map(
         C.Folder.PARENT_ID -> folder.parentId,
         C.Folder.NAME_LC -> folder.nameLowercase))
 
       try {
-        val addedFolder = addPath(super.add(folder, Some(dupQuery)))
-        require(addedFolder.path.nonEmpty)
-        addedFolder
+        super.add(folder, Some(dupQuery))
       } catch {
-        case _: DuplicateException => {
+        case _: DuplicateException =>
           val ex = ValidationException()
           ex.errors += (C.Folder.NAME -> C.Msg.Err.DUPLICATE)
           throw ex
-        }
       }
     }
   }
 
-  /**
-   * Return ALL folders - system and non-system
-   */
   def getAll: List[JsObject] = {
     txManager.asReadOnly[List[JsObject]] {
       val q: Query = new Query().withRepository()
@@ -58,39 +48,15 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     id = Some(contextRepo.rootFolderId),
     parentId = contextRepo.rootFolderId,
     name = C.Folder.Name.ROOT,
-    path = Some(app.service.fileStore.sortedFolderPath)
   )
-
-  /**
-   * Get the Triage folder for this repository
-   */
-  def triageFolder: Folder = Folder(
-    id = Some(contextRepo.triageFolderId),
-    parentId = contextRepo.rootFolderId,
-    name = C.Folder.Name.TRIAGE,
-    path = Some(app.service.fileStore.triageFolderPath)
-  )
-
-  /**
-   * Get all systems folders - the ones the user cannot alter
-   */
-  def systemFolders: List[Folder] =
-    List(triageFolder)
 
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
 
-  def isTriageFolder(id: String): Boolean =
-    id == contextRepo.triageFolderId
-
-  def isSystemFolder(id: Option[String]): Boolean =
-    systemFolders.exists(_.id == id)
-
   /**
    * Given a list of folders, calculate and append asset counts
    */
-  private def addAssetCount(folders: List[JsObject])
-                           : List[JsObject] = {
+  private def addAssetCount(folders: List[JsObject]): List[JsObject] = {
     folders.map { json =>
       val id = (json \ C.Base.ID).as[String]
       val assetCount = flatChildren(id, folders).toSeq.map(_.numOfAssets).sum
@@ -99,33 +65,13 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     }
   }
 
-  private def addPath(folder: Folder): Folder = {
-    if (isRootFolder(folder.id.get)) {
-      return rootFolder
-    }
-
-    if (isTriageFolder(folder.id.get)) {
-      return triageFolder
-    }
-
-    txManager.asReadOnly[Folder] {
-      val _pathComponents = pathComponents(folder.id.get).map(_.name)
-      val relPath = app.service.fileStore.assemblePath(_pathComponents)
-      folder.modify(C.Folder.PATH -> relPath)
-    }
-  }
-
-  /**
-   * Return all NON-system folders.
-   */
-  def repositoryFolders(allRepoFolders: List[JsObject] = List())
-                      : List[JsObject] = {
+  def repositoryFolders(allRepoFolders: List[JsObject] = List()): List[JsObject] = {
     txManager.asReadOnly[List[JsObject]] {
       val _all = if (allRepoFolders.isEmpty) getAll else allRepoFolders
 
       _all.filter(json => {
         val id = (json \ C.Base.ID).asOpt[String]
-        !isSystemFolder(id) && !isRootFolder(id.get)
+        !isRootFolder(id.get)
       })
     }
   }
@@ -185,9 +131,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val repoFolders = repositoryFolders(allRepoFolders)
 
       repoFolders.filter(json => {
-          val id = (json \ C.Base.ID).as[String]
           val parentId = (json \ C.Folder.PARENT_ID).as[String]
-          parentId == rootId && !isSystemFolder(Some(id))
+          parentId == rootId
         })
         .map{json => Folder.fromJson(json)}
         .sortBy(_.nameLowercase)
@@ -206,21 +151,18 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    * Returns a nested list of children for a given folder.
    * Not a flat list! Subsequent children are in each folders' "children" element.
     */
-  private def children(parentId: String, allRepoFolders: List[JsObject])
-                      : List[Folder] = {
+  private def children(parentId: String, allRepoFolders: List[JsObject]): List[Folder] = {
     val repoFolders = repositoryFolders(allRepoFolders)
     val immediateChildren = this.immediateChildren(parentId, repoFolders)
 
     val folders = for (folder <- immediateChildren.map(_.toJson)) yield  {
       val id: String = (folder \ C.Base.ID).as[String]
       val name = (folder \ C.Folder.NAME).as[String]
-      val path = (folder \ C.Folder.PATH).as[String]
       val assetCount = (folder \ C.Folder.NUM_OF_ASSETS).as[Int]
 
       Folder(
         id = Some(id),
         name = name,
-        path = Some(path),
         parentId = parentId,
         children = this.children(id, repoFolders),
         numOfAssets = assetCount)
@@ -247,7 +189,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
     if (parentElements.nonEmpty) {
       val folder = Folder.fromJson(parentElements.head)
-      List(folder) ++ findParents(folderId = folder.id.get, repoFolders)
+      List(folder) ++ findParents(folderId = folder.persistedId, repoFolders)
     }
     else {
       List()
@@ -256,13 +198,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   override def getById(id: String): JsObject = {
     txManager.asReadOnly[JsObject] {
-      val folder: Folder = if (isRootFolder(id)) rootFolder else super.getById(id)
-      val ret = addPath(folder)
-
-      require(ret.path.isDefined)
-      require(ret.path.get.nonEmpty)
-      ret
-    }
+      if (isRootFolder(id)) rootFolder else super.getById(id)
+   }
   }
 
   /**
@@ -309,8 +246,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   /**
    * Returns flat children as a set of Folder objects
    */
-  def flatChildren(parentId: String, all: List[JsObject], depth: Int = 0): Set[Folder] = {
-    if (isSystemFolder(Some(parentId)) || isRootFolder(parentId)) {
+  private def flatChildren(parentId: String, all: List[JsObject], depth: Int = 0): Set[Folder] = {
+    if (isRootFolder(parentId)) {
       return Set()
     }
 
@@ -326,7 +263,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     // recursively combine with the result of deeper child levels + this one (depth-first)
     (parentElement :: childElements.foldLeft(List[Folder]()) {(res, json) =>
       val folder: Folder = json
-      res ++ flatChildren(folder.id.get, all, depth + 1)}).toSet
+      res ++ flatChildren(folder.persistedId, all, depth + 1)}).toSet
   }
 
   /**
@@ -369,9 +306,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
       val folderForUpdate = Folder(
         parentId = destFolderId,
-        name = folderBeingMoved.name,
-        path = Some(app.service.fileStore.getFolderPath(folderBeingMoved.name, destFolderId)))
-
+        name = folderBeingMoved.name)
       try {
         updateById(folderBeingMovedId, folderForUpdate, List(C.Folder.PARENT_ID), Some(dupQuery))
       } catch {
@@ -397,9 +332,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
         C.Folder.NAME -> newName))
 
       try {
-        val folderForUpdate: Folder = folder.modify(
-          C.Folder.NAME -> newName,
-          C.Folder.PATH -> app.service.fileStore.getFolderPath(newName, folder.parentId)
+        val folderForUpdate: Folder = folder.copy(
+          name = newName
         )
 
         updateById(folderId, folderForUpdate, List(C.Folder.NAME, C.Folder.NAME_LC), Some(dupQuery))
@@ -435,31 +369,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     }
   }
 
-  /**
-   * Get the id -> folder map of system folders
-   */
-  def sysFoldersByIdMap(allRepoFolders: List[JsObject] = List()): Map[String, Folder] = {
-
-    txManager.asReadOnly[Map[String, Folder]] {
-      val allSysFolders = if (allRepoFolders.isEmpty) {
-        val sysFolderIds: Set[String] = systemFolders.map(_.id.get).toSet
-        dao.getByIds(sysFolderIds)
-      }
-      else {
-        allRepoFolders.filter(json => {
-          val id = (json \ C.Base.ID).asOpt[String]
-          isSystemFolder(id)
-        })
-      }
-
-      allSysFolders.map(j => {
-        val id = (j \ C.Base.ID).as[String]
-        val folder = Folder.fromJson(j)
-        id -> folder}
-      ).toMap
-    }
-  }
-
   def setRecycledProp(folder: Folder, isRecycled: Boolean)
                      : Unit = {
     if (folder.isRecycled == isRecycled) {
@@ -467,9 +376,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     }
 
     txManager.withTransaction {
-      log.info(s"Setting folder [${folder.id.get}] recycled flag to [$isRecycled]")
-      val updatedFolder = folder.modify(C.Folder.IS_RECYCLED -> isRecycled)
-      dao.updateById(folder.id.get, data = updatedFolder, fields = List(C.Folder.IS_RECYCLED))
+      log.info(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
+      val updatedFolder = folder.copy(isRecycled = isRecycled)
+      dao.updateById(folder.persistedId, data = updatedFolder, fields = List(C.Folder.IS_RECYCLED))
     }
   }
 

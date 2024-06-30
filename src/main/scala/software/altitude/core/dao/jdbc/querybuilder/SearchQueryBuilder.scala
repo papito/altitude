@@ -84,7 +84,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
   override protected def where(searchQuery: SearchQuery): ClauseComponents = {
     val repoIdElements = allTableNames(searchQuery).map(tableName => s"$tableName.${C.Base.REPO_ID} = ?")
-    val repoIdBindVals = allTableNames(searchQuery).map(_ => RequestContext.repository.value.get.id.get)
+    val repoIdBindVals = allTableNames(searchQuery).map(_ => RequestContext.repository.value.get.persistedId)
 
     ClauseComponents(repoIdElements, repoIdBindVals) +
       textSearch(searchQuery) +
@@ -193,7 +193,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       "AND sort_param.field_id = ? " +
       s"ORDER BY sort_param.$sortColumn ${sort.direction}"
 
-    ClauseComponents(List(sql), List(RequestContext.repository.value.get.id.get, sort.field.id.get))
+    ClauseComponents(List(sql), List(RequestContext.repository.value.get.persistedId, sort.field.persistedId))
   }
 
   override protected def orderByStr(clauseComponents: ClauseComponents): String = {

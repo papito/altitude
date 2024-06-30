@@ -6,7 +6,7 @@ import play.api.libs.json.Json
 import software.altitude.core.Const.Api
 import software.altitude.core.NotFoundException
 import software.altitude.core.Validators.ApiRequestValidator
-import software.altitude.core.controllers.{BaseApiController, Util}
+import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Data
 import software.altitude.core.models.Preview
@@ -26,7 +26,7 @@ class AssetController extends BaseApiController {
     val asset: Asset = app.service.library.getById(id)
 
     Ok(Json.obj(
-      C.Api.Asset.ASSET -> Util.withFormattedMetadata(app, asset)
+      C.Api.Asset.ASSET -> asset.metadata.toJson
     ))
   }
 
@@ -114,30 +114,6 @@ class AssetController extends BaseApiController {
     log.debug(s"Assets to move: $assetIds")
 
     app.service.library.moveAssetsToFolder(assetIds, folderId)
-
-    OK
-  }
-
-  // FIXME: PUT
-  post(s"/:${C.Api.ID}/move/to/triage") {
-    val id = params.get(C.Api.ID).get
-    log.info(s"Moving $id to TRIAGE")
-    app.service.library.moveAssetToTriage(id)
-
-    OK
-  }
-
-  // FIXME: PUT
-  post("/move/to/triage") {
-    log.info("Clearing category")
-
-    assetIdValidator.validate(unscrubbedReqJson.get)
-
-    val assetIds = (unscrubbedReqJson.get \ C.Api.Folder.ASSET_IDS).as[Set[String]]
-
-    log.debug(s"Assets to move to traige: $assetIds")
-
-    app.service.library.moveAssetsToTriage(assetIds)
 
     OK
   }

@@ -8,7 +8,7 @@ import software.altitude.core.Environment
 import software.altitude.core.RequestContext
 import software.altitude.test.core.IntegrationTestCore
 
-trait SqliteSuiteSetup extends Suite with BeforeAndAfterAll {
+trait SqliteBundleSetup extends Suite with BeforeAndAfterAll {
   Environment.ENV = Environment.TEST
   protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
@@ -17,7 +17,7 @@ trait SqliteSuiteSetup extends Suite with BeforeAndAfterAll {
     println("SQLITE INTEGRATION TESTS")
     println("@@@@@@@@@@@@@@@@@@@@@@@@\n")
 
-    IntegrationTestCore.createTestDir(SqliteSuite.app)
+    IntegrationTestCore.createTestDir(SqliteSuiteBundle.app)
 
     log.info("Clearing Sqlite database")
     val sql =
@@ -29,7 +29,7 @@ trait SqliteSuiteSetup extends Suite with BeforeAndAfterAll {
         PRAGMA INTEGRITY_CHECK;
       """.stripMargin
 
-    val conn = SqliteSuite.app.txManager.connection(readOnly = false)
+    val conn = SqliteSuiteBundle.app.txManager.connection(readOnly = false)
     // disables transaction for this connection (cannot user VACUUM in a transaction)
     conn.setAutoCommit(true)
 
@@ -43,12 +43,13 @@ trait SqliteSuiteSetup extends Suite with BeforeAndAfterAll {
       conn.close()
     }
 
-    SqliteSuite.app.service.migrationService.migrate()
+    SqliteSuiteBundle.app.service.migrationService.migrate()
 
-    RequestContext.conn.value = Some(SqliteSuite.app.txManager.connection(readOnly = false))
+    // See: https://github.com/papito/altitude/wiki/How-the-tests-work#why-do-tests-create-a-top-level-database-connection
+    RequestContext.conn.value = Some(SqliteSuiteBundle.app.txManager.connection(readOnly = false))
   }
 
   override def afterAll(): Unit = {
-    SqliteSuite.app.txManager.close()
+    SqliteSuiteBundle.app.txManager.close()
   }
 }

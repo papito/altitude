@@ -18,7 +18,7 @@ class SessionController extends ScalatraServlet with ScalateSupport with Authent
     if (isAuthenticated) redirect("/")
 
     contentType = "text/html"
-    ssp("login")
+    layoutTemplate("/WEB-INF/templates/views/login.ssp")
   }
 
   post("/") {
@@ -27,7 +27,7 @@ class SessionController extends ScalatraServlet with ScalateSupport with Authent
     if (isAuthenticated) {
       redirect("/")
     } else {
-      ssp("login")
+      layoutTemplate("/WEB-INF/templates/views/login.ssp")
     }
   }
 

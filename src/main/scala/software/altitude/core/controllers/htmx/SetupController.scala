@@ -78,8 +78,8 @@ class SetupController extends BaseHtmxController  {
 
     // if we have errors
     if (validationException.errors.nonEmpty) {
-      halt(200, ssp(
-          "/htmx/admin/setup_form",
+      halt(200, layoutTemplate(
+          "/WEB-INF/templates/views/htmx/admin/setup_form.ssp",
           "fieldErrors" -> validationException.errors.toMap, // to immutable map
           "formJson" -> jsonIn)
       )

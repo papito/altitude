@@ -11,30 +11,14 @@ import software.altitude.core.Const
 import software.altitude.core.models._
 import software.altitude.core.{Const => C, _}
 import software.altitude.test.core.integration.TestContext
-import software.altitude.test.core.suites.PostgresSuite
-import software.altitude.test.core.suites.SqliteSuite
+import software.altitude.test.core.suites.PostgresSuiteBundle
+import software.altitude.test.core.suites.SqliteSuiteBundle
 
 import java.io.File
-import scala.Console.println
 import scala.language.implicitConversions
 
 
 object IntegrationTestCore {
-  /*
-  Set to TRUE to TEMPORARILY commit after each test, to be able to explore the state of the DB.
-  You would almost always use this in conjunction with the Focused tag.
-   */
-  private final val COMMIT_AFTER_EACH_TEST = false
-
-  /**
-   * Create a directory for testing purposes.
-   * It takes an instance of `AltitudeAppContext` as an argument.
-   * The `AltitudeAppContext` instance contains the application's configuration.
-   * The function retrieves the path of the test directory from the configuration using the key "testDir".
-   * If the directory does not exist, it is created.
-   *
-   * @param altitude An instance of `AltitudeAppContext` containing the application's configuration.
-   */
   def createTestDir(altitude: AltitudeAppContext): Unit = {
     val testDir = new File(altitude.config.getString("testDir"))
 
@@ -43,22 +27,14 @@ object IntegrationTestCore {
     }
   }
 
-  /**
-   * Create or clean a directory for file storage during testing.
-   * It takes an instance of `AltitudeAppContext` as an argument.
-   * The `AltitudeAppContext` instance contains the application's configuration.
-   * The function retrieves the path of the file storage directory from the configuration using the key "fileStoreDir".
-   * If the directory exists, it is cleaned. If it does not exist, it is created.
-   *
-   * @param altitude An instance of `AltitudeAppContext` containing the application's configuration.
-   */  def createFileStoreDir(altitude: AltitudeAppContext): Unit = {
-    val testDir = new File(altitude.config.getString("fileStoreDir"))
+  def createFileStoreDir(altitude: AltitudeAppContext): Unit = {
+    val dataDir = new File(altitude.config.getString("dataDir"))
 
-    if (testDir.exists()) {
-      FileUtils.cleanDirectory(testDir)
+    if (dataDir.exists()) {
+      FileUtils.cleanDirectory(dataDir)
     }
     else {
-      FileUtils.forceMkdir(testDir)
+      FileUtils.forceMkdir(dataDir)
     }
   }
 
@@ -130,20 +106,10 @@ abstract class IntegrationTestCore
     MDC.put("REQUEST_ID", s"[TEST: $count]")
 
     IntegrationTestCore.createFileStoreDir(altitude)
-
-    if (IntegrationTestCore.COMMIT_AFTER_EACH_TEST) {
-      println("\n\u001B[33mWARNING: Committing after each test.\n" +
-        "To return to the rollback behavior, \nset IntegrationTestCore.COMMIT_AFTER_EACH_TEST to FALSE" +
-        "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\u001B[0m\n\n")
-    }
   }
 
   override def afterEach(): Unit = {
-    if (IntegrationTestCore.COMMIT_AFTER_EACH_TEST) {
-      altitude.txManager.commit()
-    } else {
-      altitude.txManager.rollback()
-    }
+    altitude.txManager.commit()
   }
 
   // Stores test app config overrides, since we run same tests with a different app setup.
@@ -155,8 +121,8 @@ abstract class IntegrationTestCore
   final val datasource: Const.DatasourceType.Value = config("datasource").asInstanceOf[C.DatasourceType.Value]
 
   protected def altitude: Altitude = datasource match {
-    case C.DatasourceType.POSTGRES => PostgresSuite.app
-    case C.DatasourceType.SQLITE => SqliteSuite.app
+    case C.DatasourceType.POSTGRES => PostgresSuiteBundle.app
+    case C.DatasourceType.SQLITE => SqliteSuiteBundle.app
     case _ => throw new IllegalArgumentException(s"Do not know of datasource: $datasource")
   }
 
