@@ -4,5 +4,6 @@
 <link rel="stylesheet" href="/css/font-awesome.min.css">
 <script src="https://unpkg.com/htmx.org@2.0.0/dist/htmx.min.js"></script>
 <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
 <script src="/js/split.min.js"></script>
 <script src="/js/utils.js"></script>

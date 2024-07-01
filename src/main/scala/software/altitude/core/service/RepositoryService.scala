@@ -23,6 +23,9 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   def addRepository(name: String, fileStoreType: C.FileStoreType.Value, owner: User): JsObject = {
     log.info(s"Creating repository [$name]")
 
+    val id = BaseDao.genId
+
+    // FIXME: storage service function
     val workPath = System.getProperty("user.dir")
     log.info(s"Repository [$name] work path: [$workPath]")
     val dataDir = app.config.getString("dataDir")
@@ -31,9 +34,6 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
     log.info(s"Repository [$name] work path")
     log.info(s"Data path: [$dataPath]")
 
-    val id = BaseDao.genId
-
-    // FIXME: storage service function
     val reposDataPath = FilenameUtils.concat(dataPath, "repositories")
     val repoDataPath = FilenameUtils.concat(reposDataPath, id.substring(0, 8))
 

@@ -14,16 +14,13 @@ class Configuration(configOverride: Map[String, Any] = new HashMap()) {
   private val default = HashMap(
     "app.name" -> "Altitude",
     "dataDir" -> "data",
-    "previewDir" -> "p",
 
     "datasource" -> C.DatasourceType.POSTGRES,
     "filestore" -> C.FileStoreType.FS,
-    "importMode" -> C.ImportMode.COPY,
 
     "preview.box.pixels" -> 200,
 
     // safeguard for maximum records allowed at once without pagination
-    "db.max_records" -> 1000,
     "db.postgres.user" -> "altitude",
     "db.postgres.password" -> "dba",
     "db.postgres.url" -> "jdbc:postgresql://localhost/altitude",
@@ -34,7 +31,6 @@ class Configuration(configOverride: Map[String, Any] = new HashMap()) {
   private val test = default ++ HashMap(
     "testDir" -> "./test-data",
     "dataDir" -> "./test-data/file-store",
-    "importMode" -> C.ImportMode.COPY,
     "filestore" -> C.FileStoreType.FS,
 
     "db.postgres.url" -> "jdbc:postgresql://localhost:5433/altitude-test",

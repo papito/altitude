@@ -18,4 +18,5 @@
   <logger name="org.fusesource.scalate" level="ERROR" />
   <logger name="org.apache" level="ERROR" />
   <logger name="org.scalatra" level="ERROR" />
+  <logger name="org.atmosphere" level="OFF" />
 </configuration>

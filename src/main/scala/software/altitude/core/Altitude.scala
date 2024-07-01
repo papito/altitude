@@ -19,17 +19,18 @@ import software.altitude.core.transactions._
 import software.altitude.core.{Const => C}
 
 import java.sql.DriverManager
+import java.util.concurrent.{ExecutorService, Executors}
 
 class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeAppContext  {
-  private final val log = LoggerFactory.getLogger(getClass)
-  log.info(s"Initializing Altitude Server application instance with ID [$id]")
+  private final val logger = LoggerFactory.getLogger(getClass)
+  logger.info(s"Initializing Altitude Server application instance with ID [$id]")
 
   final val app: Altitude = this
 
   var isInitialized = false
 
   final val fileStoreType = config.fileStoreType
-  log.info(s"File store type: $fileStoreType")
+  logger.info(s"File store type: $fileStoreType")
 
   /**
    * At this point determine which data access classes we are loading, which
@@ -134,18 +135,18 @@ class Altitude(val configOverride: Map[String, Any] = Map()) extends AltitudeApp
   def setIsInitializedState(): Unit = {
     this.isInitialized = service.system.readMetadata.isInitialized
     if (!this.isInitialized) {
-      log.warn("Instance NOT YET INITIALIZED!")
+      logger.warn("Instance NOT YET INITIALIZED!")
     }
   }
 
   def runMigrations(): Unit = {
     if (service.migrationService.migrationRequired) {
-      log.warn("Migration is required!")
+      logger.warn("Migration is required!")
       if (Environment.ENV != Environment.TEST) {
         service.migrationService.migrate()
       }
     }
   }
 
-  log.info("Altitude Server instance initialized")
+  logger.info("Altitude Server instance initialized")
 }

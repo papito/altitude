@@ -9,7 +9,6 @@ object ScalatraLauncher extends App with AltitudeServletContext {
 
   private val server = new Server(port)
 
-  server.setStopTimeout(5000)
   server.setStopAtShutdown(true)
 
   val context: WebAppContext = new WebAppContext()

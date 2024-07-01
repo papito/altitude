@@ -10,17 +10,12 @@ object Const {
   }
 
   object FileStoreType extends Enumeration {
-    val FS, S3 = Value
-  }
-
-  object ImportMode extends Enumeration {
-    val COPY, MOVE, COPY_AND_LANDFILL = Value
+    val FS: FileStoreType.Value = Value
   }
 
   /**
-   * MODEL FIELDS (in JSON and database)
+   * FIELDS
    */
-
   object SystemMetadata {
     val VERSION = "version"
     val IS_INITIALIZED = "is_initialized"
@@ -85,11 +80,9 @@ object Const {
 
     object Name {
       val ROOT = "root"
-      val TRIAGE = "triage"
     }
     object Alias {
       val ROOT = "root"
-      val TRIAGE = "triage"
     }
   }
 
@@ -123,7 +116,6 @@ object Const {
     val FIELD_VALUE_KW = "field_value_kw"
     val FIELD_VALUE_NUM = "field_value_num"
     val FIELD_VALUE_BOOL = "field_value_bool"
-    val FIELD_VALUE_DT = "field_value_dt"
   }
 
   object Api {
@@ -133,7 +125,6 @@ object Const {
     val VALIDATION_ERROR = "validation_error"
     val VALIDATION_ERRORS = "validation_errors"
     val MULTI_VALUE_DELIM = "+"
-    val DUPLICATE_OF = "duplicate_of"
     val USER_TEST_HEADER_ID = "TEST-user-id"
     val REPO_TEST_HEADER_ID = "TEST-repo-id"
 
@@ -173,7 +164,6 @@ object Const {
 
     object Sort {
       val DIRECTION = "direction"
-      val PARAMETER = "param"
     }
 
     object SearchSort {
@@ -183,9 +173,6 @@ object Const {
 
     object Folder {
       val HIERARCHY = "hierarchy"
-      val SYSTEM = "system"
-      val TRIAGE = "triage"
-      val TRASH = "trash"
       val FOLDERS = "folders"
       val FOLDER = "folder"
       val ASSET_IDS = "asset_ids"
@@ -217,7 +204,6 @@ object Const {
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
       val PASSWORD2 = "password2"
-      val FIELD_ERRORS = "fieldErrors"
     }
 
     object Constraints {
@@ -234,14 +220,10 @@ object Const {
 
   object Msg {
 
-    object Warn {
-    }
-
     object Err {
       val REQUIRED = "This field is required"
       val CANNOT_BE_EMPTY = "Cannot be empty"
       val VALUE_TOO_LONG = "Value is longer than %s characters"
-      val NOT_A_VALID_EMAIL = "Not a valid email address"
       val VALUE_TOO_SHORT = "Value should be at least %s characters long"
       val VALIDATION_ERROR = "Validation error"
       val VALIDATION_ERRORS = "There are validation errors in: %s"
@@ -250,13 +232,6 @@ object Const {
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
     }
-  }
-
-  /**
-   * Paths for major data partitions, relative to root path
-   */
-  object Path {
-    val ROOT = "root"
   }
 
   // default results per page

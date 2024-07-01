@@ -1,0 +1,27 @@
+#import(software.altitude.core.RequestContext)
+
+<div id="statusTicker" hidden>
+    <div hx-ext="ws" ws-connect="/import/status?userId=<%= RequestContext.getAccount.id.get %>">
+        <div id="statusText"></div>
+    </div>
+</div>
+
+<script lang="js" type="module">
+    const tickerEl = document.getElementById("statusTicker")
+
+    htmx.on('htmx:wsOpen', function(evt) {
+        console.log('WS connection is OPEN');
+    });
+    htmx.on('htmx:wsClose', function(evt) {
+        console.log('WS connection is CLOSED');
+    });
+    htmx.on('htmx:wsAfterMessage', function(evt) {
+        console.log('wsAfterMessage');
+
+        const statusTextEl = document.getElementById("statusText")
+
+        setTimeout(function() {
+            statusTextEl.innerHTML = ""
+        }, 3000);
+    });
+</script>

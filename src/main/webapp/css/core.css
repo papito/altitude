@@ -12,6 +12,7 @@
     /* Standard vertical spacing for individual elements and lists */
     --control-vertical-space: 15px;
     --success-color: #4dae27;
+    --warning-color: #dca051;
     --error-color: #fc1e1e;
     /* For messages such as form validation and server response status */
     --message-background-color: #2f2e2e;
@@ -45,7 +46,7 @@ footer {
 
 body {
     display: grid;
-    grid-template-rows: [header]  60px
+    grid-template-rows: [header]  auto
                         [content] 1fr
                         [footer]  40px;
     min-height: 100vh;
@@ -105,4 +106,22 @@ input.readonly {
     border: 1px solid var(--error-color);
     padding: 8px;
     font-size: 1.1em;
+}
+
+/* Ticker is in core because appears everywhere  */
+#statusTicker {
+    display: grid;
+    background-color: var(--background-aux-color);
+    border-bottom: 2px solid #3a5e5e;
+}
+
+#statusText {
+    color: var(--success-color);
+    font-weight: bold;
+    padding: 10px;
+    font-size: 1.1em;
+}
+
+#statusText.warning {
+    color: var(--warning-color);
 }

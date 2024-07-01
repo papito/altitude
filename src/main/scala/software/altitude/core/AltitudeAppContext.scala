@@ -6,8 +6,10 @@ import org.slf4j.LoggerFactory
 import software.altitude.core.models.User
 import software.altitude.core.transactions.TransactionManager
 
+import java.util.concurrent.{ExecutorService, Executors}
+
 trait AltitudeAppContext {
-  private final val log = LoggerFactory.getLogger(getClass)
+  private final val logger = LoggerFactory.getLogger(getClass)
 
   val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])]
 
@@ -29,11 +31,17 @@ trait AltitudeAppContext {
     case Environment.PROD => "production"
     case Environment.TEST => "test"
   }
-  log.info(s"Environment is: $environment")
+  logger.info(s"Environment is: $environment")
 
   protected val configOverride: Map[String, Any]
   final val config = new Configuration(configOverride = configOverride)
 
   final val dataSourceType = config.datasourceType
-  log.info(s"Datasource type: $dataSourceType")
+  logger.info(s"Datasource type: $dataSourceType")
+
+  private val maxThreads: Int = Runtime.getRuntime.availableProcessors()
+  logger.info(s"Available processors: $maxThreads")
+  val executorService: ExecutorService = Executors.newFixedThreadPool(maxThreads)
+  logger.info("Executor service initialized")
+
 }

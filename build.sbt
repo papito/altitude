@@ -6,6 +6,7 @@ scalaVersion := "2.13.14"
 val json4sVersion = "4.0.7"
 val scalatraVersion = "2.8.4"
 val jettyVersion = "9.4.20.v20190813"
+val AkkaVersion = "2.6.16"
 
 scalacOptions := Seq(
   "-deprecation",
@@ -23,7 +24,9 @@ libraryDependencies ++= Seq(
   "org.scalatra"                %% "scalatra-scalatest"       % scalatraVersion % Test,
   "org.scalatra"                %% "scalatra-scalate"         % scalatraVersion,
   "org.scalatra"                %% "scalatra-auth"            % scalatraVersion,
-  "org.scalatra.scalate"        %% "scalate-core"             % "1.10.1",
+  "org.scalatra"                %% "scalatra-atmosphere"      % scalatraVersion,
+  "org.scalatra"                %% "scalatra-json"            % scalatraVersion,
+  "org.scalatra.scalate"          %% "scalate-core"             % "1.10.1",
 
   "com.typesafe.play"           %% "play-json"                % "2.10.5",
   "org.apache.tika"              % "tika-core"                % "2.9.2",
@@ -33,24 +36,25 @@ libraryDependencies ++= Seq(
   "commons-io"                   % "commons-io"               % "2.16.1",
   "commons-codec"                % "commons-codec"            % "1.17.0",
   "commons-dbutils"              % "commons-dbutils"          % "1.8.1",
-  "commons-logging"             % "commons-logging"           % "1.3.1",
+  "commons-logging"              % "commons-logging"           % "1.3.1",
 
   "org.mindrot"                  % "jbcrypt"                  % "0.4",
   "org.postgresql"               % "postgresql"               % "42.7.3",
   "org.xerial"                   % "sqlite-jdbc"              % "3.46.0.0",
 
-  "com.google.guava"             % "guava"                    % "19.0",
+  "com.google.guava"               % "guava"                    % "19.0",
   "net.codingwell"              %% "scala-guice"              % "7.0.0",
   "org.imgscalr"                 % "imgscalr-lib"             % "4.2",
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
-  "org.slf4j"                     % "slf4j-api"               % "2.0.12" % "runtime",
+  "org.slf4j"                    % "slf4j-api"               % "2.0.12" % "runtime",
 
   "org.mockito" % "mockito-core" % "5.11.0" % Test,
 
   //
   // ATTN: The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x
   //
-  "org.eclipse.jetty"            % "jetty-webapp"             % jettyVersion % "container;compile",
+  "org.eclipse.jetty"            % "jetty-continuation"       % jettyVersion % "container;compile;test",
+  "org.eclipse.jetty"            % "jetty-webapp"             % jettyVersion % "container;compile;test",
   "javax.servlet"                % "javax.servlet-api"        % "3.1.0" % Provided
 )
 

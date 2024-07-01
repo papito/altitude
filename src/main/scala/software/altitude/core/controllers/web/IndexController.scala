@@ -1,5 +1,6 @@
 package software.altitude.core.controllers.web
 
+import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
 
 class IndexController extends BaseWebController {
@@ -14,7 +15,9 @@ class IndexController extends BaseWebController {
     requireLogin()
 
     contentType = "text/html"
-    layoutTemplate("/WEB-INF/templates/views/index.ssp")
+    layoutTemplate(
+      "/WEB-INF/templates/views/index.ssp",
+      "userId" -> RequestContext.getAccount.persistedId)
   }
 
   get("/setup") {

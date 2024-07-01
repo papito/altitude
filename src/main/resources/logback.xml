@@ -11,10 +11,10 @@
     <appender-ref ref="STDOUT" />
   </root>
 
-  <logger name="software.altitude.core.transactions" level="INFO" />
-  <logger name="software.altitude.core.dao" level="INFO" />
+  <logger name="software.altitude.core" level="INFO" />
   <logger name="org.scalatra" level="INFO" />
   <logger name="org.eclipse.jetty" level="ERROR" />
   <logger name="org.fusesource.scalate" level="ERROR" />
   <logger name="org.apache.tika.config.TikaConfig" level="ERROR" />
+  <logger name="org.atmosphere" level="ERROR" />
 </configuration>

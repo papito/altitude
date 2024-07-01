@@ -6,9 +6,14 @@
     ${include("includes/header_common.ssp")}
 
     <style>
+        main {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100%;
+        }
+
         #importOptions {
             display: grid;
-            height:  100%;
             grid-template-columns: 1fr auto 1fr;
             place-items: center;
         }
@@ -24,6 +29,7 @@
             background-color: var(--form-background-color);
         }
     </style>
+
 </head>
 
 #import(software.altitude.core.RequestContext)
@@ -35,6 +41,8 @@
 </div>
 
 <main>
+    ${include("htmx/status_ticker.ssp")}
+
     <div id="importOptions">
         <div id="browseForFiles">
             ${include("htmx/upload_form.ssp")}

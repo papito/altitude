@@ -6,6 +6,12 @@
     ${include("includes/header_common.ssp")}
 
     <style>
+        main {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100%;
+        }
+
         #browser {
             border-right: 1px solid var(--panel-border-color);
             box-shadow: var(--box-shadow);
@@ -69,6 +75,8 @@
 </div>
 
 <main>
+    ${include("htmx/status_ticker.ssp")}
+
     <div id="browser" class="split content split-horizontal">
         <div id="folders" class="split content">
             <div id="folders">
@@ -77,7 +85,7 @@
         <div id="albums" class="split content">
         </div>
     </div>
-
+1
     <div id="assets" class="split content split-horizontal">
     </div>
 </main>
