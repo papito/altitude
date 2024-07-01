@@ -1,6 +1,4 @@
 package software.altitude.core.service
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import play.api.libs.json._
 import software.altitude.core.dao.FolderDao
 import software.altitude.core.models.Folder
@@ -9,7 +7,7 @@ import software.altitude.core.{Const => C, _}
 
 class FolderService(val app: Altitude) extends BaseService[Folder] {
 
-  override protected val dao: FolderDao = app.injector.instance[FolderDao]
+  override protected val dao: FolderDao = app.DAO.folder
 
   /**
    * Add a new folder - THIS SHOULD NOT BE USED DIRECTLY. Use <code>addFolder</code>

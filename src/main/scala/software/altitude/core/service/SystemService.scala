@@ -1,6 +1,5 @@
 package software.altitude.core.service
 
-import net.codingwell.scalaguice.InjectorExtensions.ScalaInjector
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
@@ -16,7 +15,7 @@ import java.sql.SQLException
 class SystemService(val app: Altitude) {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private val systemMetadataDao: SystemMetadataDao = app.injector.instance[SystemMetadataDao]
+  private val systemMetadataDao: SystemMetadataDao = app.DAO.systemMetadata
   protected val txManager: TransactionManager = app.txManager
 
   def version: Int = {

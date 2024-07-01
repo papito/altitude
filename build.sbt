@@ -6,7 +6,7 @@ scalaVersion := "2.13.14"
 val json4sVersion = "4.0.7"
 val scalatraVersion = "2.8.4"
 val jettyVersion = "9.4.20.v20190813"
-val AkkaVersion = "2.6.16"
+// val AkkaVersion = "2.6.16"
 
 scalacOptions := Seq(
   "-deprecation",
@@ -42,8 +42,6 @@ libraryDependencies ++= Seq(
   "org.postgresql"               % "postgresql"               % "42.7.3",
   "org.xerial"                   % "sqlite-jdbc"              % "3.46.0.0",
 
-  "com.google.guava"               % "guava"                    % "19.0",
-  "net.codingwell"              %% "scala-guice"              % "7.0.0",
   "org.imgscalr"                 % "imgscalr-lib"             % "4.2",
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
   "org.slf4j"                    % "slf4j-api"               % "2.0.12" % "runtime",
@@ -54,6 +52,7 @@ libraryDependencies ++= Seq(
   // ATTN: The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x
   //
   "org.eclipse.jetty"            % "jetty-continuation"       % jettyVersion % "container;compile;test",
+  "org.eclipse.jetty.websocket"  % "websocket-server"         % jettyVersion,
   "org.eclipse.jetty"            % "jetty-webapp"             % jettyVersion % "container;compile;test",
   "javax.servlet"                % "javax.servlet-api"        % "3.1.0" % Provided
 )
@@ -86,6 +85,7 @@ unmanagedResourceDirectories in Compile += {
 
 assemblyMergeStrategy in assembly := {
   case PathList("META-INF", xs @ _*) if xs.contains("MANIFEST.MF") => MergeStrategy.discard
+  case "reference.conf" => MergeStrategy.concat
   case PathList(ps @ _*) if ps.last endsWith ".class" => MergeStrategy.first
   case _ => MergeStrategy.first
 }

@@ -1,6 +1,4 @@
 package software.altitude.core.service
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import software.altitude.core.Altitude
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.models.Asset
@@ -14,7 +12,7 @@ import software.altitude.core.{Const => C}
  * All the actual asset management logic is handled by the LibraryService exclusively.
  */
 class AssetService(val app: Altitude) extends BaseService[Asset] {
-  override protected val dao: AssetDao = app.injector.instance[AssetDao]
+  override protected val dao: AssetDao = app.DAO.asset
 
   def setRecycledProp(asset: Asset, isRecycled: Boolean): Unit = {
 

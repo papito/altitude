@@ -1,7 +1,5 @@
 package software.altitude.core.service
 
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import org.apache.commons.io.FilenameUtils
 import play.api.libs.json.JsObject
 import software.altitude.core.Altitude
@@ -15,7 +13,8 @@ import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.{Const => C}
 
 class RepositoryService(val app: Altitude) extends BaseService[Repository] {
-  protected val dao: RepositoryDao = app.injector.instance[RepositoryDao]
+  protected val dao: RepositoryDao = app.DAO.repository
+
   override protected val txManager: TransactionManager = app.txManager
 
   def addRepository(name: String, fileStoreType: C.FileStoreType.Value, owner: User): JsObject = {

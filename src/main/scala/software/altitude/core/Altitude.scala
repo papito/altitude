@@ -1,9 +1,5 @@
 package software.altitude.core
 
-import com.google.inject.AbstractModule
-import com.google.inject.Guice
-import com.google.inject.Injector
-import net.codingwell.scalaguice.ScalaModule
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -19,7 +15,6 @@ import software.altitude.core.service.filestore.FileSystemStoreService
 import software.altitude.core.transactions._
 import software.altitude.core.{Const => C}
 
-import java.sql.DriverManager
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -60,16 +55,78 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
   val executorService: ExecutorService = Executors.newFixedThreadPool(maxThreads)
   logger.info("Executor service initialized")
 
-  /**
-   * At this point determine which data access and storage classes we are loading,
-   * based on data source
-   */
-  final val injector: Injector = Guice.createInjector(new InjectionModule)
-
   final val txManager: TransactionManager = new software.altitude.core.transactions.TransactionManager(app.config)
 
-  object service {
+  /**
+   * Scentry strategies differ from environment to environment.
+   * Production strategy is different from development and test.
+   * In dev, since the cookie store is cleared on every hot reload, logging in every time is a pain.
+   */
+  val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])] = Environment.ENV match {
+    case Environment.PROD => List(
+      ("UserPasswordStrategy", classOf[UserPasswordStrategy]),
+      ("RememberMeStrategy", classOf[RememberMeStrategy])
+    )
+    case Environment.DEV => List(
+      ("RememberMeStrategy", classOf[LocalDevRememberMeStrategy])
+    )
+    case Environment.TEST => List(
+      ("RememberMeStrategy", classOf[TestRememberMeStrategy])
+    )
+    case _ => throw new RuntimeException("Unknown environment")
+  }
 
+  object DAO {
+    val systemMetadata: SystemMetadataDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DatasourceType.SQLITE => new jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val user: UserDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DatasourceType.SQLITE => new jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val repository: RepositoryDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new postgres.RepositoryDao(app.config)
+      case C.DatasourceType.SQLITE => new jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val asset: AssetDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new postgres.AssetDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DatasourceType.SQLITE => new jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val folder: FolderDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DatasourceType.SQLITE => new jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val stats: StatDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DatasourceType.SQLITE => new jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val metadataField: MetadataFieldDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DatasourceType.SQLITE => new jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val search: SearchDao = dataSourceType match {
+      case C.DatasourceType.POSTGRES => new postgres.SearchDao(app.config)
+      case C.DatasourceType.SQLITE => new sqlite.SearchDao(app.config)
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+  }
+
+  object service {
     val migrationService: MigrationService = dataSourceType match {
       case C.DatasourceType.SQLITE => new MigrationService(app) {
         override final val CURRENT_VERSION = schemaVersion
@@ -97,64 +154,6 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
       case C.FileStoreType.FS => new FileSystemStoreService(app)
       // S3-based file store bigly wants to be here
       case _ => throw new NotImplementedError
-    }
-  }
-
-  /**
-   * Scentry strategies differ from environment to environment.
-   * Production strategy is different from development and test.
-   * In dev, since the cookie store is cleared on every hot reload, logging in every time is a pain.
-   */
-  val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])] = Environment.ENV match {
-    case Environment.PROD => List(
-      ("UserPasswordStrategy", classOf[UserPasswordStrategy]),
-      ("RememberMeStrategy", classOf[RememberMeStrategy])
-    )
-    case Environment.DEV => List(
-      ("RememberMeStrategy", classOf[LocalDevRememberMeStrategy])
-    )
-    case Environment.TEST => List(
-      ("RememberMeStrategy", classOf[TestRememberMeStrategy])
-    )
-    case _ => throw new RuntimeException("Unknown environment")
-  }
-
-  /**
-   * Inject data access classes based on the data source type
-   */
-  private class InjectionModule extends AbstractModule with ScalaModule  {
-    override def configure(): Unit = {
-
-      dataSourceType match {
-        case C.DatasourceType.POSTGRES =>
-          DriverManager.registerDriver(new org.postgresql.Driver)
-
-          bind[SystemMetadataDao].toInstance(new jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[UserDao].toInstance(new jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[MigrationDao].toInstance(new jdbc.MigrationDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[RepositoryDao].toInstance(new postgres.RepositoryDao(app.config))
-          bind[AssetDao].toInstance(new postgres.AssetDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[FolderDao].toInstance(new jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[StatDao].toInstance(new jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[MetadataFieldDao].toInstance(new jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides)
-          bind[SearchDao].toInstance(new postgres.SearchDao(app.config))
-
-        case C.DatasourceType.SQLITE =>
-          DriverManager.registerDriver(new org.sqlite.JDBC)
-
-          bind[SystemMetadataDao].toInstance(new jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[UserDao].toInstance(new jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[MigrationDao].toInstance(new jdbc.MigrationDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[RepositoryDao].toInstance(new jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[AssetDao].toInstance(new jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[FolderDao].toInstance(new jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[StatDao].toInstance(new jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[MetadataFieldDao].toInstance(new jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides)
-          bind[SearchDao].toInstance(new sqlite.SearchDao(app.config))
-
-        case _ =>
-          throw new IllegalArgumentException(s"Do not know of datasource [$dataSourceType]")
-      }
     }
   }
 

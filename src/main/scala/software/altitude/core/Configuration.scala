@@ -15,7 +15,7 @@ class Configuration(configOverride: Map[String, Any] = new HashMap()) {
     "app.name" -> "Altitude",
     "dataDir" -> "data",
 
-    "datasource" -> C.DatasourceType.POSTGRES,
+    "datasource" -> C.DatasourceType.SQLITE,
     "filestore" -> C.FileStoreType.FS,
 
     "preview.box.pixels" -> 200,

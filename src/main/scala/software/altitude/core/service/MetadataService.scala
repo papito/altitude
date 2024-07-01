@@ -1,6 +1,4 @@
 package software.altitude.core.service
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
@@ -22,8 +20,8 @@ class MetadataService(val app: Altitude) {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   protected val txManager: TransactionManager = app.txManager
-  private val metadataFieldDao: MetadataFieldDao = app.injector.instance[MetadataFieldDao]
-  private val assetDao: AssetDao = app.injector.instance[AssetDao]
+  private val metadataFieldDao: MetadataFieldDao = app.DAO.metadataField
+  private val assetDao: AssetDao = app.DAO.asset
 
   def addField(metadataField: MetadataField): MetadataField = {
 

@@ -1,6 +1,4 @@
 package software.altitude.core.service
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core._
@@ -10,7 +8,8 @@ import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 
 class UserService(val app: Altitude) extends BaseService[User] {
-  protected val dao: UserDao = app.injector.instance[UserDao]
+  protected val dao: UserDao = app.DAO.user
+
   override protected val txManager: TransactionManager = app.txManager
 
   def switchContextToUser(repo: User): Unit = {

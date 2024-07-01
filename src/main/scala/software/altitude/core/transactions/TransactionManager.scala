@@ -43,6 +43,15 @@ class TransactionManager(val config: Configuration) {
         conn
 
       case C.DatasourceType.SQLITE =>
+        /**
+         * At some point the prod jar stopped working without this line.
+         * This is commonly needed for JDBC drivers to register themselves,
+         * but also to show an error if the driver is not found.
+         *
+         * In this case, it just fixed the problem.
+         */
+        Class.forName("org.sqlite.JDBC")
+
         val url: String = config.getString("db.sqlite.url")
 
         val sqliteConfig: SQLiteConfig = new SQLiteConfig()

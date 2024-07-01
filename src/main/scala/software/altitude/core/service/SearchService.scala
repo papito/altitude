@@ -1,6 +1,4 @@
 package software.altitude.core.service
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
@@ -18,7 +16,7 @@ object SearchService {
 
 class SearchService(val app: Altitude) {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
-  private val searchDao: SearchDao = app.injector.instance[SearchDao]
+  private val searchDao: SearchDao = app.DAO.search
 
   def indexAsset(asset: Asset): Unit = {
     require(asset.id.isDefined, "Asset ID cannot be empty")

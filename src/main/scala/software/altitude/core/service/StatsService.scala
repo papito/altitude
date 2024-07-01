@@ -1,6 +1,4 @@
 package software.altitude.core.service
-
-import net.codingwell.scalaguice.InjectorExtensions._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
@@ -14,7 +12,7 @@ import software.altitude.core.util.Query
 
 class StatsService(val app: Altitude) {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
-  protected val dao: StatDao = app.injector.instance[StatDao]
+  protected val dao: StatDao = app.DAO.stats
   protected val txManager: TransactionManager = app.txManager
 
   def getStats: Stats = {

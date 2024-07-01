@@ -38,8 +38,9 @@ lint:
 	sbt scalafixAll
 
 clean:
-	rm -rf data/db/*
-	rm -rf data/repositorie*
+	rm -rf data/*
+	mkdir -p data/db
+
 
 publish:
 	rm -rf release
