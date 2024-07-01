@@ -1,8 +1,9 @@
 package software.altitude.core.transactions
 
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.{Const => C}
 
@@ -10,21 +11,25 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.util.Properties
 
-class TransactionManager(val app: AltitudeAppContext) {
+object TransactionManager {
+  def apply(config: Configuration): TransactionManager = new TransactionManager(config)
+}
 
-  private final val log = LoggerFactory.getLogger(getClass)
+class TransactionManager(val config: Configuration) {
+
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def connection(readOnly: Boolean): Connection = {
-    app.config.datasourceType match {
+    config.datasourceType match {
       case C.DatasourceType.POSTGRES =>
         val props = new Properties
-        val user = app.config.getString("db.postgres.user")
+        val user = config.getString("db.postgres.user")
         props.setProperty("user", user)
-        val password = app.config.getString("db.postgres.password")
+        val password = config.getString("db.postgres.password")
         props.setProperty("password", password)
-        val url = app.config.getString("db.postgres.url")
+        val url = config.getString("db.postgres.url")
         val conn = DriverManager.getConnection(url, props)
-        log.debug(s"Opening connection $conn. Read-only: $readOnly")
+        logger.debug(s"Opening connection $conn. Read-only: $readOnly")
 
         if (readOnly) {
           conn.setReadOnly(true)
@@ -38,7 +43,7 @@ class TransactionManager(val app: AltitudeAppContext) {
         conn
 
       case C.DatasourceType.SQLITE =>
-        val url: String = app.config.getString("db.sqlite.url")
+        val url: String = config.getString("db.sqlite.url")
 
         val sqliteConfig: SQLiteConfig = new SQLiteConfig()
 
@@ -90,7 +95,7 @@ class TransactionManager(val app: AltitudeAppContext) {
     }
     catch {
       case ex: Exception =>
-        log.error(s"Error (${ex.getClass.getName}): ${ex.getMessage}")
+        logger.error(s"Error (${ex.getClass.getName}): ${ex.getMessage}")
         throw ex
     }
     finally {
@@ -112,7 +117,7 @@ class TransactionManager(val app: AltitudeAppContext) {
 
   def close(): Unit = {
     if (RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed) {
-      log.warn("Connection already closed")
+      logger.warn("Connection already closed")
       return
     }
 

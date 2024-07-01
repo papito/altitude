@@ -3,7 +3,6 @@ package software.altitude.core.controllers
 import org.scalatra.ContentEncodingSupport
 import org.scalatra.InternalServerError
 import org.scalatra.ScalatraServlet
-import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.auth.AuthenticationSupport
@@ -16,8 +15,6 @@ import java.lang.System.currentTimeMillis
 
 abstract class BaseController extends ScalatraServlet
   with ContentEncodingSupport with AuthenticationSupport with AltitudeServletContext {
-
-  private final val log = LoggerFactory.getLogger(getClass)
 
   final def user: User = request.getAttribute("user").asInstanceOf[User]
 
@@ -41,14 +38,14 @@ abstract class BaseController extends ScalatraServlet
   protected def logRequestStart(): Unit = {
     if (isAssetRequest) return
 
-    log.info(s"Request START: ${request.getRequestURI} args: {${request.getParameterMap}}")
+    logger.info(s"Request START: ${request.getRequestURI} args: {${request.getParameterMap}}")
   }
 
   protected def logRequestEnd(): Unit = {
     if (isAssetRequest) return
 
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    log.info(s"Request END: ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
+    logger.info(s"Request END: ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
   }
 
   private def isAssetRequest =  request.pathInfo.startsWith("/css") ||
@@ -92,7 +89,7 @@ abstract class BaseController extends ScalatraServlet
       val sw: StringWriter = new StringWriter()
       val pw: PrintWriter = new PrintWriter(sw)
       ex.printStackTrace(pw)
-      log.error(s"Exception ${sw.toString}")
+      logger.error(s"Exception ${sw.toString}")
       InternalServerError(sw.toString)
   }
 }

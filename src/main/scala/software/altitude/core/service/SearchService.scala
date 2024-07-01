@@ -1,6 +1,7 @@
 package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions._
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.dao.SearchDao
@@ -16,18 +17,18 @@ object SearchService {
 }
 
 class SearchService(val app: Altitude) {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
   private val searchDao: SearchDao = app.injector.instance[SearchDao]
 
   def indexAsset(asset: Asset): Unit = {
     require(asset.id.isDefined, "Asset ID cannot be empty")
-    log.info(s"Indexing asset $asset")
+    logger.info(s"Indexing asset $asset")
     val metadataFields: Map[String, MetadataField] = app.service.metadata.getAllFields
     searchDao.indexAsset(asset, metadataFields)
   }
 
   def reindexAsset(asset: Asset): Unit = {
-    log.info(s"Reindexing asset $asset")
+    logger.info(s"Reindexing asset $asset")
     val metadataFields: Map[String, MetadataField] = app.service.metadata.getAllFields
     searchDao.reindexAsset(asset, metadataFields)
   }

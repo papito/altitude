@@ -1,7 +1,6 @@
 package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions._
-import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.models.Asset
@@ -15,7 +14,6 @@ import software.altitude.core.{Const => C}
  * All the actual asset management logic is handled by the LibraryService exclusively.
  */
 class AssetService(val app: Altitude) extends BaseService[Asset] {
-  private final val log = LoggerFactory.getLogger(getClass)
   override protected val dao: AssetDao = app.injector.instance[AssetDao]
 
   def setRecycledProp(asset: Asset, isRecycled: Boolean): Unit = {
@@ -25,7 +23,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     }
 
     txManager.withTransaction[Unit] {
-      log.info(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
+      logger.info(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
       val updatedAsset: Asset  = asset.copy(isRecycled = isRecycled)
       dao.updateById(asset.persistedId, data = updatedAsset, fields = List(C.Asset.IS_RECYCLED))
     }

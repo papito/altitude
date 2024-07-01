@@ -1,6 +1,6 @@
 package software.altitude.core.dao.postgres
 
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Metadata
 import software.altitude.core.{Const => C}
@@ -14,7 +14,7 @@ object AssetDao {
     )
 }
 
-class AssetDao(app: AltitudeAppContext) extends software.altitude.core.dao.jdbc.AssetDao(app) with PostgresOverrides {
+class AssetDao(override val config: Configuration) extends software.altitude.core.dao.jdbc.AssetDao(config) with PostgresOverrides {
   override protected def columnsForSelect: List[String] = AssetDao.DEFAULT_SQL_COLS_FOR_SELECT
 
   override def getMetadata(assetId: String): Option[Metadata] = {

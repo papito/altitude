@@ -1,9 +1,9 @@
 package software.altitude.core.dao.jdbc
 import play.api.libs.json.JsObject
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 
-abstract class MigrationDao(val appContext: AltitudeAppContext)
+abstract class MigrationDao(override val config: Configuration)
   extends BaseDao with software.altitude.core.dao.MigrationDao {
 
   override val tableName = "system"

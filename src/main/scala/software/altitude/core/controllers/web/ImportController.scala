@@ -1,18 +1,38 @@
 package software.altitude.core.controllers.web
 
-import org.json4s.{DefaultFormats, Formats}
-import org.scalatra.{RequestEntityTooLarge, SessionSupport}
-import org.scalatra.atmosphere.{AtmoReceive, AtmosphereClient, AtmosphereSupport, Connected, Disconnected, Error, JsonMessage, TextMessage}
-import org.scalatra.json.{JValueResult, JacksonJsonSupport}
-import org.scalatra.servlet.{FileUploadSupport, MultipartConfig, SizeConstraintExceededException}
-import software.altitude.core.{DuplicateException, RequestContext}
+import org.json4s.DefaultFormats
+import org.json4s.Formats
+import org.scalatra.RequestEntityTooLarge
+import org.scalatra.SessionSupport
+import org.scalatra.atmosphere.AtmoReceive
+import org.scalatra.atmosphere.AtmosphereClient
+import org.scalatra.atmosphere.AtmosphereSupport
+import org.scalatra.atmosphere.Connected
+import org.scalatra.atmosphere.Disconnected
+import org.scalatra.atmosphere.Error
+import org.scalatra.atmosphere.JsonMessage
+import org.scalatra.atmosphere.TextMessage
+import org.scalatra.json.JValueResult
+import org.scalatra.json.JacksonJsonSupport
+import org.scalatra.servlet.FileUploadSupport
+import org.scalatra.servlet.MultipartConfig
+import org.scalatra.servlet.SizeConstraintExceededException
+import software.altitude.core.DuplicateException
+import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
-import software.altitude.core.models.{Asset, ImportAsset, Metadata}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.ImportAsset
+import software.altitude.core.models.Metadata
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class ImportController extends BaseWebController with FileUploadSupport with AtmosphereSupport   with JValueResult
-  with JacksonJsonSupport with SessionSupport {
+class ImportController
+  extends BaseWebController
+    with FileUploadSupport
+    with AtmosphereSupport
+    with JValueResult
+    with JacksonJsonSupport
+    with SessionSupport {
   private val fileSizeLimitGB = 10
 
   implicit protected val jsonFormats: Formats = DefaultFormats

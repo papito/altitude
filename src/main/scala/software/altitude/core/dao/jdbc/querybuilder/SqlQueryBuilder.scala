@@ -1,5 +1,6 @@
 package software.altitude.core.dao.jdbc.querybuilder
 
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.util.Query
@@ -15,7 +16,7 @@ protected object SqlQueryBuilder {
 }
 
 class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames: Set[String]) {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   // convenience constructor for the common case of just one table
   def this(sqlColsForSelect: List[String], tableName: String) = {
@@ -50,7 +51,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableNames:
       res ++ clause.bindVals
     }
 
-    log.debug(s"Select SQL: $sql with $bindVals")
+    logger.debug(s"Select SQL: $sql with $bindVals")
     // println("SELECT", sql, bindVals)
     SqlQuery(sql, bindVals)
   }

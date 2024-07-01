@@ -1,6 +1,7 @@
 package software.altitude.core.service
 
 import org.imgscalr.Scalr
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import software.altitude.core.Altitude
@@ -32,7 +33,7 @@ import javax.imageio.ImageIO
   * - METADATA
   */
 class LibraryService(val app: Altitude) {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val txManager: TransactionManager = app.txManager
 
   private val previewBoxSize: Int = app.config.getInt("preview.box.pixels")
@@ -42,13 +43,13 @@ class LibraryService(val app: Altitude) {
     * *********************************************************************** */
 
   def add(assetIn: Asset): JsObject = {
-    log.info(s"Preparing to add asset [$assetIn]")
+    logger.info(s"Preparing to add asset [$assetIn]")
 
     txManager.withTransaction[JsObject] {
       val existing: Option[Asset] = getByChecksum(assetIn.checksum)
 
       if (existing.nonEmpty) {
-        log.debug(s"Duplicate found for [$assetIn] and checksum: ${assetIn.checksum}")
+        logger.debug(s"Duplicate found for [$assetIn] and checksum: ${assetIn.checksum}")
         val existingAsset: Asset = existing.get
         throw DuplicateException(existingAsset.persistedId)
       }
@@ -67,7 +68,7 @@ class LibraryService(val app: Altitude) {
         extractedMetadata = assetIn.extractedMetadata
       )
 
-      log.info(s"Adding asset: $assetToAddModel")
+      logger.info(s"Adding asset: $assetToAddModel")
 
       app.service.asset.add(assetToAddModel)
 
@@ -226,7 +227,7 @@ class LibraryService(val app: Altitude) {
       byteArray.toByteArray
     } catch {
       case ex: Exception =>
-        log.error(s"Error generating preview for $asset")
+        logger.error(s"Error generating preview for $asset")
         software.altitude.core.Util.logStacktrace(ex)
         throw FormatException(asset)
     }
@@ -318,7 +319,7 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       val folder: Folder = app.service.folder.getById(id)
 
-      log.info(s"Deleting folder $folder")
+      logger.info(s"Deleting folder $folder")
 
       // get the list of tuples - (depth, id), with most-deep first
       val childrenAndDepths: List[(Int, String)] =
@@ -327,20 +328,20 @@ class LibraryService(val app: Altitude) {
       /* ^^^ sort by depth */
 
 
-      log.trace(s"Folder children, deepest first: $childrenAndDepths")
+      logger.trace(s"Folder children, deepest first: $childrenAndDepths")
 
       childrenAndDepths.foldLeft(0) { (assetCount: Int, f: (Int, String)) =>
         val folderId = f._2
         val childFolder: Folder = app.service.folder.getById(folderId)
 
-        log.trace(s"Deleting or recycling folder $f")
+        logger.trace(s"Deleting or recycling folder $f")
 
         // set all the assets as recycled
         val folderAssetsQuery = new Query(Map(C.Asset.FOLDER_ID -> folderId))
 
         val results: QueryResult = app.service.library.queryAll(folderAssetsQuery)
 
-        log.trace(s"Folder $folderId has ${results.total} assets")
+        logger.trace(s"Folder $folderId has ${results.total} assets")
 
         // OPTIMIZE: bulk deletions.
         results.records.foreach { record =>
@@ -356,15 +357,15 @@ class LibraryService(val app: Altitude) {
 
         val treeAssetCount = assetCount + results.total
 
-        log.trace(s"Total assets in the tree of folder ${folder.persistedId}: $treeAssetCount")
+        logger.trace(s"Total assets in the tree of folder ${folder.persistedId}: $treeAssetCount")
 
         // delete folder if it has no assets, otherwise - recycle it
         if (treeAssetCount == 0) {
-          log.trace(s"DELETING (PURGING) folder $f")
+          logger.trace(s"DELETING (PURGING) folder $f")
           app.service.folder.deleteById(folderId)
         }
         else {
-          log.trace(s"RECYCLING folder $folderId")
+          logger.trace(s"RECYCLING folder $folderId")
           app.service.folder.setRecycledProp(childFolder, isRecycled = true)
         }
 
@@ -401,10 +402,10 @@ class LibraryService(val app: Altitude) {
   }
 
   def restoreRecycledAssets(assetIds: Set[String]): Unit = {
-    log.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
+    logger.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
     assetIds.foreach { assetId =>
-      log.info(s"Restoring recycled asset [$assetId]")
+      logger.info(s"Restoring recycled asset [$assetId]")
 
       val asset: Asset = getById(assetId)
       val existing = getByChecksum(asset.checksum)

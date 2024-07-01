@@ -4,16 +4,17 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import software.altitude.core.Altitude
 import software.altitude.core.Util
 import software.altitude.core.models.AccountType
 import software.altitude.core.models.User
 import software.altitude.test.core.IntegrationTestCore
 
-@DoNotDiscover class UserServiceTests(val config: Map[String, Any]) extends IntegrationTestCore {
+@DoNotDiscover class UserServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Can create and get a new user") {
     val user: User = testContext.persistUser()
-    val storedUser: User = altitude.service.user.getById(user.persistedId)
+    val storedUser: User = testApp.service.user.getById(user.persistedId)
 
     storedUser.createdAt should not be None
     storedUser.updatedAt should be(None)
@@ -31,7 +32,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     testContext.persistUser(Some(userModel), password=password)
 
-    val user: Option[User] = altitude.service.user.loginAndGetUser(userModel.email, password)
+    val user: Option[User] = testApp.service.user.loginAndGetUser(userModel.email, password)
 
     user should not be None
   }

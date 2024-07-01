@@ -1,6 +1,4 @@
 package software.altitude.core.controllers.htmx
-
-import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import software.altitude.core.DataScrubber
 import software.altitude.core.ValidationException
@@ -11,7 +9,6 @@ import software.altitude.core.models.User
 import software.altitude.core.{Const => C}
 
 class SetupController extends BaseHtmxController  {
-  private final val log = LoggerFactory.getLogger(getClass)
 
   private val dataScrubber = DataScrubber(
     trim = List(
@@ -43,7 +40,7 @@ class SetupController extends BaseHtmxController  {
   post("/") {
     if (app.isInitialized) {
       val message = "Instance is already initialized."
-      log.warn(message)
+      logger.warn(message)
       halt(400, message)
     }
 

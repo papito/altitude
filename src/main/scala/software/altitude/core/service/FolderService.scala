@@ -1,7 +1,6 @@
 package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions._
-import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.dao.FolderDao
 import software.altitude.core.models.Folder
@@ -9,7 +8,7 @@ import software.altitude.core.util.Query
 import software.altitude.core.{Const => C, _}
 
 class FolderService(val app: Altitude) extends BaseService[Folder] {
-  private final val log = LoggerFactory.getLogger(getClass)
+
   override protected val dao: FolderDao = app.injector.instance[FolderDao]
 
   /**
@@ -275,7 +274,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       throw IllegalOperationException("Cannot move the root folder")
     }
 
-    log.debug(s"Moving folder $folderBeingMovedId to $destFolderId")
+    logger.debug(s"Moving folder $folderBeingMovedId to $destFolderId")
 
     // cannot move into itself
     if (folderBeingMovedId == destFolderId) {
@@ -351,7 +350,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    * Increase a folder's asset count.
    */
   def incrAssetCount(folderId: String, count: Int = 1): Unit = {
-    log.debug(s"Incrementing folder $folderId count by $count")
+    logger.debug(s"Incrementing folder $folderId count by $count")
 
     txManager.withTransaction {
       dao.increment(folderId, C.Folder.NUM_OF_ASSETS, count)
@@ -362,7 +361,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    * Decrease a folder's asset count.
    */
   def decrAssetCount(folderId: String, count: Int = 1): Unit = {
-    log.debug(s"Decrementing folder $folderId count by $count")
+    logger.debug(s"Decrementing folder $folderId count by $count")
 
     txManager.withTransaction {
       dao.decrement(folderId, C.Folder.NUM_OF_ASSETS, count)
@@ -376,7 +375,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     }
 
     txManager.withTransaction {
-      log.info(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
+      logger.info(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
       val updatedFolder = folder.copy(isRecycled = isRecycled)
       dao.updateById(folder.persistedId, data = updatedFolder, fields = List(C.Folder.IS_RECYCLED))
     }

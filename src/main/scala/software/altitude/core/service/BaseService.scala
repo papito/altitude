@@ -1,5 +1,6 @@
 package software.altitude.core.service
 
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import software.altitude.core.Altitude
@@ -17,7 +18,7 @@ import java.sql.Connection
 
 abstract class BaseService[Model <: BaseModel] {
   protected val app: Altitude
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val dao: BaseDao
   protected val txManager: TransactionManager = app.txManager
 
@@ -43,7 +44,7 @@ abstract class BaseService[Model <: BaseModel] {
     val existing = if (queryForDup.isDefined) query(queryForDup.get) else QueryResult.EMPTY
 
     if (existing.nonEmpty) {
-      log.debug(s"Duplicate found for [$objIn] and query: ${queryForDup.get.params}")
+      logger.debug(s"Duplicate found for [$objIn] and query: ${queryForDup.get.params}")
       val existingId = (existing.records.head \ C.Base.ID).get.toString
       throw DuplicateException(existingId)
     }
@@ -73,7 +74,7 @@ abstract class BaseService[Model <: BaseModel] {
     val existing = if (queryForDup.isDefined) query(queryForDup.get) else QueryResult.EMPTY
 
     if (existing.nonEmpty) {
-      log.debug(s"Duplicate found for [$data] and query: ${queryForDup.get.params}")
+      logger.debug(s"Duplicate found for [$data] and query: ${queryForDup.get.params}")
       val existingId = (existing.records.head \ C.Base.ID).get.toString
       throw DuplicateException(existingId)
     }

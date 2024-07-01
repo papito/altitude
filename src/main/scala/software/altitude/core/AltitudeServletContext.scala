@@ -2,6 +2,7 @@ package software.altitude.core
 
 import org.scalatra.ScalatraServlet
 import org.scalatra.servlet.ServletApiImplicits._
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.controllers.api._
 import software.altitude.core.controllers.htmx.SetupController
@@ -12,11 +13,9 @@ import software.altitude.core.controllers.web.SessionController
 import javax.servlet.ServletContext
 
 object AltitudeServletContext {
-  private final val log = LoggerFactory.getLogger(getClass)
-  log.info("Initializing application context... ")
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  logger.info("Initializing application context... ")
   val app: Altitude = new Altitude
-
-  // private val actorSystem = ActorSystem()
 
   val endpoints: Seq[(ScalatraServlet, String)] = List(
     (new IndexController, "/*"),

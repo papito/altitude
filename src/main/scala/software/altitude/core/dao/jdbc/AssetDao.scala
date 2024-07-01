@@ -1,9 +1,8 @@
 package software.altitude.core.dao.jdbc
 
 import org.apache.commons.dbutils.QueryRunner
-import org.slf4j.LoggerFactory
 import play.api.libs.json._
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.Asset
@@ -13,9 +12,7 @@ import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.{Const => C}
 
-abstract class AssetDao(val appContext: AltitudeAppContext) extends BaseDao with software.altitude.core.dao.AssetDao {
-  private final val log = LoggerFactory.getLogger(getClass)
-
+abstract class AssetDao(val config: Configuration) extends BaseDao with software.altitude.core.dao.AssetDao {
   override final val tableName = "asset"
 
   override val sqlQueryBuilder = new SqlQueryBuilder[Query](columnsForSelect, tableName)
@@ -127,7 +124,7 @@ abstract class AssetDao(val appContext: AltitudeAppContext) extends BaseDao with
       """
 
     val updateValues = List(metadataWithIds.toString, RequestContext.getRepository.persistedId, assetId)
-    log.debug(s"Update SQL: [$sql] with values: $updateValues")
+    logger.debug(s"Update SQL: [$sql] with values: $updateValues")
     val runner: QueryRunner = new QueryRunner()
 
     runner.update(RequestContext.getConn, sql, updateValues: _*)

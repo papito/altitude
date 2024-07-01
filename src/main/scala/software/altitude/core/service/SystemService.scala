@@ -1,6 +1,7 @@
 package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions.ScalaInjector
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.RequestContext
@@ -13,7 +14,7 @@ import software.altitude.core.{Const => C}
 import java.sql.SQLException
 
 class SystemService(val app: Altitude) {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val systemMetadataDao: SystemMetadataDao = app.injector.instance[SystemMetadataDao]
   protected val txManager: TransactionManager = app.txManager
@@ -54,7 +55,7 @@ class SystemService(val app: Altitude) {
   }
 
   def initializeSystem(repositoryName: String, adminModel: User, password: String): Unit = {
-    log.warn("INITIALIZING SYSTEM")
+    logger.warn("INITIALIZING SYSTEM")
 
     txManager.withTransaction {
       val admin = app.service.user.add(adminModel, password = password)

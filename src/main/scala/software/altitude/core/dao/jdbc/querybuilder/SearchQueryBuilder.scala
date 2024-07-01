@@ -1,6 +1,4 @@
 package software.altitude.core.dao.jdbc.querybuilder
-
-import org.slf4j.LoggerFactory
 import software.altitude.core.RequestContext
 import software.altitude.core.models.FieldType
 import software.altitude.core.util.Query
@@ -10,7 +8,7 @@ import software.altitude.core.{Const => C}
 
 
 object SearchQueryBuilder {
-  val ASSET_TABLE_NAME = "asset"
+  private val ASSET_TABLE_NAME = "asset"
 }
 
 /**
@@ -18,8 +16,6 @@ object SearchQueryBuilder {
   */
 abstract class SearchQueryBuilder(selColumnNames: List[String])
   extends SqlQueryBuilder[SearchQuery](selColumnNames, Set(SearchQueryBuilder.ASSET_TABLE_NAME)) {
-
-  private final val log = LoggerFactory.getLogger(getClass)
 
   private val searchParamTable = "search_parameter"
   protected val searchDocumentTable = "search_document"
@@ -77,7 +73,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       res ++ clause.bindVals
     }
 
-    log.debug(s"Select SQL: $sql with $bindVals")
+    logger.debug(s"Select SQL: $sql with $bindVals")
     // println("SELECT", sql, bindVals)
     SqlQuery(sql, bindVals)
   }

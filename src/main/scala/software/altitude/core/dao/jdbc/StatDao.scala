@@ -1,15 +1,13 @@
 package software.altitude.core.dao.jdbc
 
 import org.apache.commons.dbutils.QueryRunner
-import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Stat
 import software.altitude.core.{Const => C}
 
-abstract class StatDao(val appContext: AltitudeAppContext) extends BaseDao with software.altitude.core.dao.StatDao {
-  private final val log = LoggerFactory.getLogger(getClass)
+abstract class StatDao(override val config: Configuration) extends BaseDao with software.altitude.core.dao.StatDao {
 
   override final val tableName = "stats"
 
@@ -30,7 +28,7 @@ abstract class StatDao(val appContext: AltitudeAppContext) extends BaseDao with 
   }
 
   override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any]): Unit = {
-    log.info(s"JDBC INSERT: $jsonIn")
+    logger.info(s"JDBC INSERT: $jsonIn")
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, q, values.map(_.asInstanceOf[Object]): _*)
   }
@@ -46,7 +44,7 @@ abstract class StatDao(val appContext: AltitudeAppContext) extends BaseDao with 
          SET ${C.Stat.DIM_VAL} = ${C.Stat.DIM_VAL} + $count
        WHERE ${C.Base.REPO_ID} = ? and ${C.Stat.DIMENSION} = ?
       """
-    log.debug(s"INCR STAT SQL: $sql, for $statName")
+    logger.debug(s"INCR STAT SQL: $sql, for $statName")
 
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, sql, RequestContext.getRepository.persistedId, statName)

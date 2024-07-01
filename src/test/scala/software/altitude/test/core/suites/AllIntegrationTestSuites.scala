@@ -1,22 +1,23 @@
 package software.altitude.test.core.suites
 
 import org.scalatest.Suites
+import software.altitude.core.Altitude
 import software.altitude.test.core.integration._
 import software.altitude.test.core.unit._
 
-abstract class AllIntegrationTestSuites(val config: Map[String, Any]) extends Suites (
-  new SystemServiceTests(config),
-  new AssetQueryTests(config),
+abstract class AllIntegrationTestSuites(val testApp: Altitude) extends Suites (
+  new SystemServiceTests(testApp),
+  new AssetQueryTests(testApp),
   new SearchQueryModelTests,
-  new AssetServiceTests(config),
-  new MetadataParserTests(config),
-  new SearchServiceTests(config),
-  new RepositoryServiceTests(config),
-  new AssetImportServiceTests(config),
-  new FolderServiceTests(config),
-  new FileStoreServiceTests(config),
-  new StatsServiceTests(config),
-  new UserServiceTests(config),
-  new LibraryServiceTests(config),
-  new MetadataServiceTests(config),
+  new AssetServiceTests(testApp),
+  new MetadataParserTests(testApp),
+  new SearchServiceTests(testApp),
+  new RepositoryServiceTests(testApp),
+  new AssetImportServiceTests(testApp),
+  new FolderServiceTests(testApp),
+  new FileStoreServiceTests(testApp),
+  new StatsServiceTests(testApp),
+  new UserServiceTests(testApp),
+  new LibraryServiceTests(testApp),
+  new MetadataServiceTests(testApp),
 )

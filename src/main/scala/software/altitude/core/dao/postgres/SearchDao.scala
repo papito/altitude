@@ -1,8 +1,7 @@
 package software.altitude.core.dao.postgres
 
 import org.apache.commons.dbutils.QueryRunner
-import org.slf4j.LoggerFactory
-import software.altitude.core.Altitude
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.postgres.querybuilder.AssetSearchQueryBuilder
 import software.altitude.core.models.Asset
@@ -10,8 +9,7 @@ import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 import software.altitude.core.{Const => C}
 
-class SearchDao(override val appContext: Altitude) extends software.altitude.core.dao.jdbc.SearchDao(appContext) with PostgresOverrides {
-  private final val log = LoggerFactory.getLogger(getClass)
+class SearchDao(override val config: Configuration) extends software.altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides {
 
   override protected def addSearchDocument(asset: Asset): Unit = {
     val docSql =
@@ -63,14 +61,14 @@ class SearchDao(override val appContext: Altitude) extends software.altitude.cor
     val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
     val total: Int = count(recs)
 
-    log.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
     if (recs.nonEmpty) {
-      log.debug(recs.map(_.toString()).mkString("\n"))
+      logger.debug(recs.map(_.toString()).mkString("\n"))
     }
 
-    log.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
     if (recs.nonEmpty) {
-      log.debug(recs.map(_.toString()).mkString("\n"))
+      logger.debug(recs.map(_.toString()).mkString("\n"))
     }
 
     SearchResult(

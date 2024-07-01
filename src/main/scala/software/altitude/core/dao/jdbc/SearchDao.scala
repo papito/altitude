@@ -1,9 +1,8 @@
 package software.altitude.core.dao.jdbc
 
 import org.apache.commons.dbutils.QueryRunner
-import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
-import software.altitude.core.Altitude
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models._
 import software.altitude.core.util.SearchQuery
@@ -25,11 +24,9 @@ object SearchDao {
             """
 }
 
-abstract class SearchDao(override val appContext: Altitude)
-  extends AssetDao(appContext)
+abstract class SearchDao(override val config: Configuration)
+  extends AssetDao(config)
     with software.altitude.core.dao.SearchDao {
-
-  private final val log = LoggerFactory.getLogger(getClass)
 
   override def search(query: SearchQuery): SearchResult =
     throw new NotImplementedError
@@ -42,14 +39,14 @@ abstract class SearchDao(override val appContext: Altitude)
 
   override def indexAsset(asset: Asset, metadataFields: Map[String, MetadataField])
                          : Unit = {
-    log.debug(s"Indexing asset $asset with metadata [${asset.metadata}]")
+    logger.debug(s"Indexing asset $asset with metadata [${asset.metadata}]")
     indexMetadata(asset, metadataFields)
     addSearchDocument(asset)
   }
 
   def reindexAsset(asset: Asset, metadataFields: Map[String, MetadataField])
                   : Unit = {
-    log.debug(s"Reindexing asset $asset with metadata [${asset.metadata}]")
+    logger.debug(s"Reindexing asset $asset with metadata [${asset.metadata}]")
 
     clearMetadata(asset.persistedId)
     indexMetadata(asset, metadataFields)
@@ -57,7 +54,7 @@ abstract class SearchDao(override val appContext: Altitude)
   }
 
   def clearMetadata(assetId: String): Unit = {
-    log.debug(s"Clearing asset $assetId metadata")
+    logger.debug(s"Clearing asset $assetId metadata")
 
     val sql =
       s"""
@@ -68,27 +65,27 @@ abstract class SearchDao(override val appContext: Altitude)
 
     val bindValues = List[Object](RequestContext.getRepository.persistedId, assetId)
 
-    log.debug(s"Delete SQL: $sql, with values: $bindValues")
+    logger.debug(s"Delete SQL: $sql, with values: $bindValues")
     val runner: QueryRunner = new QueryRunner()
     val numDeleted = runner.update(RequestContext.getConn, sql, bindValues: _*)
-    log.debug(s"Deleted records: $numDeleted")
+    logger.debug(s"Deleted records: $numDeleted")
   }
 
   def indexMetadata(asset: Asset, metadataFields: Map[String, MetadataField])
                              : Unit = {
-    log.debug(s"Indexing metadata for asset $asset: [${asset.metadata}]")
+    logger.debug(s"Indexing metadata for asset $asset: [${asset.metadata}]")
 
     asset.metadata.data.foreach { m =>
       val fieldId = m._1
 
       if (!metadataFields.contains(fieldId)) {
-        log.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
+        logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
         return
       }
 
       val field = metadataFields(fieldId)
       val values = m._2
-      log.debug(s"Processing field [${field.nameLowercase}] with values [$values]")
+      logger.debug(s"Processing field [${field.nameLowercase}] with values [$values]")
 
       addMetadataValues(asset = asset, field = field, values = values.map(_.value))
     }
@@ -100,7 +97,7 @@ abstract class SearchDao(override val appContext: Altitude)
   }
 
   override def addMetadataValues(asset: Asset, field: MetadataField, values: Set[String]): Unit = {
-    log.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
+    logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
 
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)
 

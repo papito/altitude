@@ -1,6 +1,7 @@
 package software.altitude.core.service
 
 import net.codingwell.scalaguice.InjectorExtensions._
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.dao.AssetDao
@@ -18,7 +19,7 @@ object MetadataService {
 
 
 class MetadataService(val app: Altitude) {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   protected val txManager: TransactionManager = app.txManager
   private val metadataFieldDao: MetadataFieldDao = app.injector.instance[MetadataFieldDao]
@@ -34,7 +35,7 @@ class MetadataService(val app: Altitude) {
 
       if (existing.nonEmpty) {
         val existingField: MetadataField = existing.records.head
-        log.debug(s"Duplicate found for field [${metadataField.name}]")
+        logger.debug(s"Duplicate found for field [${metadataField.name}]")
         throw DuplicateException(existingField.persistedId)
       }
 
@@ -76,7 +77,7 @@ class MetadataService(val app: Altitude) {
 
   def setMetadata(assetId: String, metadata: Metadata)
                : Unit = {
-    log.info(s"Setting metadata for asset [$assetId]: $metadata")
+    logger.info(s"Setting metadata for asset [$assetId]: $metadata")
 
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
@@ -87,7 +88,7 @@ class MetadataService(val app: Altitude) {
 
   // OPTIMIZE: this cleans and validates existing values (the ones that have IDs)
   def updateMetadata(assetId: String, metadata: Metadata): Unit = {
-    log.info(s"Updating metadata for asset [$assetId]: $metadata")
+    logger.info(s"Updating metadata for asset [$assetId]: $metadata")
 
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
@@ -102,7 +103,7 @@ class MetadataService(val app: Altitude) {
   }
 
   def addFieldValue(assetId: String, fieldId: String, newValue: String): Unit = {
-    log.info(s"Adding value [$newValue] for field [$fieldId] on asset [$assetId] ")
+    logger.info(s"Adding value [$newValue] for field [$fieldId] on asset [$assetId] ")
 
     txManager.withTransaction {
       val metadata = Metadata(Map(fieldId -> Set(MetadataValue(newValue))))
@@ -151,7 +152,7 @@ class MetadataService(val app: Altitude) {
   }
 
   def deleteFieldValue(assetId: String, valueId: String): Unit = {
-    log.info(s"Deleting value [$valueId] for on asset [$assetId] ")
+    logger.info(s"Deleting value [$valueId] for on asset [$assetId] ")
 
     txManager.withTransaction {
       val currentMetadata = getMetadata(assetId)
@@ -171,7 +172,7 @@ class MetadataService(val app: Altitude) {
 
   def updateFieldValue(assetId: String, valueId: String, newValue: String): Unit = {
 
-    log.info(s"Updating value [$valueId] for on asset [$assetId] with [$newValue] ")
+    logger.info(s"Updating value [$valueId] for on asset [$assetId] with [$newValue] ")
 
     txManager.withTransaction {
       val currentMetadata = getMetadata(assetId)

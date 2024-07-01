@@ -2,6 +2,7 @@ package software.altitude.core.service.filestore
 
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.FilenameUtils
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.NotFoundException
@@ -15,7 +16,7 @@ import software.altitude.core.{Const => C}
 import java.io._
 
 class FileSystemStoreService(app: Altitude) extends FileStoreService {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   override def getById(id: String): Data = {
     val asset: Asset = app.service.library.getById(id)
@@ -40,7 +41,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
 
   override def addAsset(asset: Asset): Unit = {
     val destFile = fileFromAsset(asset)
-    log.debug(s"Creating asset [$asset] on file system at [$destFile]")
+    logger.debug(s"Creating asset [$asset] on file system at [$destFile]")
 
     try {
       FileUtils.writeByteArrayToFile(destFile, asset.data)
@@ -56,7 +57,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   override def addPreview(preview: Preview): Unit = {
-    log.info(s"Adding preview for asset ${preview.assetId}")
+    logger.info(s"Adding preview for asset ${preview.assetId}")
 
     // get the full path to our preview file
     val destFilePath = previewFilePath(preview.assetId)
@@ -69,7 +70,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
       FileUtils.writeByteArrayToFile(new File(destFilePath), preview.data)
     }
     catch {
-      case _: IOException => log.error(s"Could not save preview data to [$destFilePath]")
+      case _: IOException => logger.error(s"Could not save preview data to [$destFilePath]")
     }
   }
 

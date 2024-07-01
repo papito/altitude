@@ -3,6 +3,7 @@ package software.altitude.core.controllers.api.navigate
 import org.scalatra.CorsSupport
 import org.scalatra.InternalServerError
 import org.scalatra.ScalatraServlet
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.{Const => C}
@@ -13,7 +14,7 @@ import java.io.StringWriter
 import java.nio.file.Paths
 
 class FileSystemBrowserController extends ScalatraServlet with CorsSupport {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
   private val userHomeDir = System.getProperty("user.home")
 
   // OPTIMIZE: Does this even work in Windows?
@@ -49,7 +50,7 @@ class FileSystemBrowserController extends ScalatraServlet with CorsSupport {
   }
 
   private def getDirectoryListing(file: File): JsObject = {
-    log.debug(s"Getting directory name list for $file")
+    logger.debug(s"Getting directory name list for $file")
     val allContents: Seq[File] = file.listFiles().toSeq
 
     val files: Seq[String] = allContents
@@ -81,7 +82,7 @@ class FileSystemBrowserController extends ScalatraServlet with CorsSupport {
       val sw: StringWriter = new StringWriter()
       val pw: PrintWriter = new PrintWriter(sw)
       ex.printStackTrace(pw)
-      log.error(s"Exception ${sw.toString}")
+      logger.error(s"Exception ${sw.toString}")
       InternalServerError(sw.toString)
   }
 }

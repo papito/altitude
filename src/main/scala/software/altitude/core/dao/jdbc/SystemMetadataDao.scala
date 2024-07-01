@@ -2,12 +2,12 @@ package software.altitude.core.dao.jdbc
 
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models.SystemMetadata
 import software.altitude.core.{Const => C}
 
-abstract class SystemMetadataDao(val appContext: AltitudeAppContext)
+abstract class SystemMetadataDao(override val config: Configuration)
   extends BaseDao with software.altitude.core.dao.SystemMetadataDao {
 
   override val tableName = "system"

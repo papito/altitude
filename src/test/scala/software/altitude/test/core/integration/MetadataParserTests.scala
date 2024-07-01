@@ -3,13 +3,14 @@ package software.altitude.test.core.integration
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import software.altitude.core.Altitude
 import software.altitude.core.models.Metadata
+import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
-import software.altitude.test.core.IntegrationTestCore.fileToImportAsset
 
 import java.io.File
 
-@DoNotDiscover class MetadataParserTests(val config: Map[String, Any]) extends IntegrationTestCore {
+@DoNotDiscover class MetadataParserTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("normalize metadata") {
     val metadata: Metadata = getMetadata("images/6.jpg")
@@ -39,8 +40,8 @@ import java.io.File
 
   private def getMetadata(p: String): Metadata = {
     val path = getClass.getResource(s"/import/$p").getPath
-    val importAsset = fileToImportAsset(new File(path))
-    val mediaType = altitude.service.assetImport.detectAssetType(importAsset)
-    altitude.service.metadataExtractor.extract(importAsset, mediaType)
+    val importAsset = IntegrationTestUtil.fileToImportAsset(new File(path))
+    val mediaType = testApp.service.assetImport.detectAssetType(importAsset)
+    testApp.service.metadataExtractor.extract(importAsset, mediaType)
   }
 }

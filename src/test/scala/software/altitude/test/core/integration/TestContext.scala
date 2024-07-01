@@ -11,7 +11,7 @@ import software.altitude.core.models.Repository
 import software.altitude.core.models.User
 import software.altitude.core.{Const => C}
 
-class TestContext(val altitude: Altitude) {
+class TestContext(val testApp: Altitude) {
   var users: List[User] = List()
   var repositories: List[Repository] = List()
   var assets: List[Asset] = List()
@@ -29,12 +29,12 @@ class TestContext(val altitude: Altitude) {
   def persistUser(user: Option[User] = None, password: String = "password"): User = {
     val userModel = user.getOrElse(makeUser())
 
-    val persistedUser: User = altitude.service.user.add(userModel, password = password)
+    val persistedUser: User = testApp.service.user.add(userModel, password = password)
     users = users ::: persistedUser :: Nil
 
     // if this is the only (or the first user), set current request context
     if (users.length == 1) {
-      altitude.service.user.switchContextToUser(persistedUser)
+      testApp.service.user.switchContextToUser(persistedUser)
     }
 
     persistedUser
@@ -53,7 +53,7 @@ class TestContext(val altitude: Altitude) {
     // use supplied user, then existing single user, then new user
     val persistedUser = user.getOrElse(users.headOption.getOrElse(makeUser()))
 
-    val persistedRepo: Repository = altitude.service.repository.addRepository(
+    val persistedRepo: Repository = testApp.service.repository.addRepository(
       name = "Test Repository 1",
       fileStoreType = C.FileStoreType.FS,
       owner = persistedUser)
@@ -61,8 +61,8 @@ class TestContext(val altitude: Altitude) {
 
     // if this is the only (or the first repo), set current request context
     if (repositories.length == 1) {
-      altitude.service.repository.switchContextToRepository(persistedRepo)
-      altitude.service.user.switchContextToUser(persistedUser)
+      testApp.service.repository.switchContextToRepository(persistedRepo)
+      testApp.service.user.switchContextToUser(persistedUser)
     }
 
     persistedRepo
@@ -119,7 +119,7 @@ class TestContext(val altitude: Altitude) {
       makeAsset(
         repository=Some(persistedRepository), folder=folder, metadata=metadata, user=user))
 
-    val persistedAsset: Asset = altitude.service.library.add(assetModel)
+    val persistedAsset: Asset = testApp.service.library.add(assetModel)
 
     assets = assets ::: persistedAsset :: Nil
 

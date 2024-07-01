@@ -1,9 +1,10 @@
 package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
+import software.altitude.core.Altitude
 import software.altitude.test.core.IntegrationTestCore
 
-@DoNotDiscover class ImportProfileTests(val config: Map[String, String]) extends IntegrationTestCore {
+@DoNotDiscover class ImportProfileTests(override val testApp: Altitude) extends IntegrationTestCore {
 /*
   private val VALID_TAG_DATA = JsArray(Seq(
     Json.obj(C.Tag.ID -> TagConfigService.KEYWORDS_TAG_ID, C.ImportProfile.VALUES -> List("k1", "k2"))

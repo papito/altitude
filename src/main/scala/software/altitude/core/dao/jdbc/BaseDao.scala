@@ -2,9 +2,10 @@ package software.altitude.core.dao.jdbc
 
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
-import software.altitude.core.AltitudeAppContext
+import software.altitude.core.Configuration
 import software.altitude.core.ConstraintException
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
@@ -25,14 +26,12 @@ object BaseDao {
 }
 
 abstract class BaseDao {
-  val appContext: AltitudeAppContext
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private final val log = LoggerFactory.getLogger(getClass)
+  val config: Configuration
+  protected def txManager: TransactionManager = TransactionManager(config)
 
   val tableName: String
-
-  protected final def txManager: TransactionManager = appContext.txManager
-
   protected def columnsForSelect: List[String] = List("*")
 
   val sqlQueryBuilder: SqlQueryBuilder[Query] = new SqlQueryBuilder[Query](columnsForSelect, tableName)
@@ -53,7 +52,7 @@ abstract class BaseDao {
     Json.parse(jsonStr).as[JsObject]
   }
 
-  def getOneByQuery(q: Query): JsObject = {
+  private def getOneByQuery(q: Query): JsObject = {
     val sqlQuery = sqlQueryBuilder.buildSelectSql(q)
     getOneBySql(sqlQuery.sqlAsString, sqlQuery.bindValues)
   }
@@ -78,7 +77,7 @@ abstract class BaseDao {
   }
 
   def getById(id: String): JsObject = {
-    log.debug(s"Getting by ID '$id' from '$tableName'")
+    logger.debug(s"Getting by ID '$id' from '$tableName'")
     val q: Query = new Query().add(C.Base.ID -> id)
     getOneByQuery(q)
   }
@@ -103,7 +102,7 @@ abstract class BaseDao {
   }
 
   def deleteByQuery(q: Query): Int = {
-    log.debug(s"Deleting record by query: $q")
+    logger.debug(s"Deleting record by query: $q")
     val fieldPlaceholders: List[String] = q.params.keys.map(_ + " = ?").toList
 
     val sql = s"""
@@ -112,11 +111,11 @@ abstract class BaseDao {
        WHERE ${fieldPlaceholders.mkString(",")}
       """
 
-    log.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
+    logger.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
     val runner = queryRunner
     val numDeleted = runner.update(
       RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object]): _*)
-    log.debug(s"Deleted records: $numDeleted")
+    logger.debug(s"Deleted records: $numDeleted")
     numDeleted
   }
 
@@ -129,10 +128,10 @@ abstract class BaseDao {
     val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
     val total: Int = count(recs)
 
-    log.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
 
     if (recs.nonEmpty) {
-      log.debug(recs.map(_.toString()).mkString("\n"))
+      logger.debug(recs.map(_.toString()).mkString("\n"))
     }
     QueryResult(records = recs.map{makeModel}, total = total, rpp = query.rpp, sort = query.sort.toList)
   }
@@ -163,7 +162,7 @@ abstract class BaseDao {
     val query = new Query().add(C.Base.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
     val sqlQuery = sqlQueryBuilder.buildSelectSql(query)
 
-    log.debug(s"SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")
+    logger.debug(s"SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")
 
     val runner: QueryRunner = new QueryRunner()
 
@@ -173,13 +172,13 @@ abstract class BaseDao {
       new MapListHandler(),
       sqlQuery.bindValues:_*).asScala.toList
 
-    log.debug(s"Found ${res.length} records")
+    logger.debug(s"Found ${res.length} records")
     val recs = res.map{_.asScala.toMap[String, AnyRef]}
     recs.map{makeModel}
   }
 
   def updateByQuery(q: Query, json: JsObject, fields: List[String]): Int = {
-    log.debug(s"Updating record by query $q with data $json for fields: $fields")
+    logger.debug(s"Updating record by query $q with data $json for fields: $fields")
 
     val queryFieldPlaceholders: List[String] = q.params.keys.map(_ + " = ?").toList
     val updateFieldPlaceholders: List[String] = json.fields.filter {
@@ -222,7 +221,7 @@ abstract class BaseDao {
          SET $field = $field + $count
        WHERE id = ?
       """
-    log.debug(s"INCR SQL: $sql, for $id")
+    logger.debug(s"INCR SQL: $sql, for $id")
 
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, id)

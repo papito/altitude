@@ -3,6 +3,7 @@ package software.altitude.core.service.source
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.filefilter.IOFileFilter
 import org.apache.commons.io.filefilter.TrueFileFilter
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.models._
@@ -14,11 +15,11 @@ private object FileSystemSourceService {
 }
 
 class FileSystemSourceService(app: Altitude) extends AssetSourceService {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   override def assetIterator(path: String): Iterator[ImportAsset] = {
     require(path != null)
-    log.info(s"Importing from '$path'")
+    logger.info(s"Importing from '$path'")
 
     val files = FileUtils.iterateFiles(
       new File(path),

@@ -1,5 +1,6 @@
 package software.altitude.core
 import org.mindrot.jbcrypt.BCrypt
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import java.io.PrintWriter
@@ -8,7 +9,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 object Util {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def logStacktrace(e: Exception): String = {
     e.printStackTrace()
@@ -16,7 +17,7 @@ object Util {
     val pw: PrintWriter = new PrintWriter(sw)
     e.printStackTrace(pw)
     val strStacktrace = sw.toString
-    log.error(s"${e.getClass.getName} exception: $strStacktrace")
+    logger.error(s"${e.getClass.getName} exception: $strStacktrace")
     strStacktrace
   }
 

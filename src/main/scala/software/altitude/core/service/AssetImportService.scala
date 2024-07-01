@@ -3,6 +3,7 @@ package software.altitude.core.service
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.tika.io.TikaInputStream
 import org.apache.tika.metadata.{Metadata => TikaMetadata}
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.Json
 import software.altitude.core.Altitude
@@ -18,10 +19,10 @@ object AssetImportService {
 }
 
 class AssetImportService(app: Altitude) {
-  private final val log = LoggerFactory.getLogger(getClass)
+  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def detectAssetType(importAsset: ImportAsset): AssetType = {
-    log.debug(s"Detecting media type for: '$importAsset'")
+    logger.debug(s"Detecting media type for: '$importAsset'")
 
     var inputStream: Option[InputStream] = None
 
@@ -36,11 +37,11 @@ class AssetImportService(app: Altitude) {
   }
 
   def importAsset(importAsset: ImportAsset): Option[Asset] = {
-    log.info(s"Importing file asset '$importAsset'")
+    logger.info(s"Importing file asset '$importAsset'")
     val assetType = detectAssetType(importAsset)
 
     if (!AssetImportService.SUPPORTED_MEDIA_TYPES.contains(assetType.mediaType)) {
-      log.warn(s"Ignoring ${importAsset.fileName} of type ${assetType.mediaType}")
+      logger.warn(s"Ignoring ${importAsset.fileName} of type ${assetType.mediaType}")
       return None
     }
 

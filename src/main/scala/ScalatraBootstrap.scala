@@ -1,12 +1,10 @@
 import org.scalatra._
-import org.slf4j.LoggerFactory
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Environment
 
 import javax.servlet.ServletContext
 
 class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
-  private final val log = LoggerFactory.getLogger(getClass)
 
   override def init(context: javax.servlet.ServletContext): Unit = {
     val environment =  Environment.ENV match {
@@ -22,9 +20,6 @@ class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
   }
 
   override def destroy(context: ServletContext): Unit = {
-    log.info("Cleaning up after ourselves...")
-    app.freeResources()
     super.destroy(context)
-    log.info("All done.")
   }
 }

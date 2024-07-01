@@ -1,14 +1,15 @@
-package software.altitude.test.core.web
+package software.altitude.test.core.controller
 
 import org.scalatest.DoNotDiscover
 import play.api.libs.json.Json
+import software.altitude.core.Altitude
 import software.altitude.core.{Const => C}
-import software.altitude.test.core.HtmxTestCore
+import software.altitude.test.core.ControllerTestCore
 
-@DoNotDiscover class SetupControllerTests(val config: Map[String, Any]) extends HtmxTestCore {
+@DoNotDiscover class SetupControllerTests(override val testApp: Altitude) extends ControllerTestCore {
 
   test("Should return validation errors") {
-    post("/htmx/admin/setup", body = "{}", headers = getHeaders) {
+    post("/htmx/admin/setup", body = "{}") {
       val requiredCount = "required".r.findAllIn(response.body).toList.size
       requiredCount should be (4)
     }
@@ -21,7 +22,7 @@ import software.altitude.test.core.HtmxTestCore
       C.Api.Fields.PASSWORD -> "password",
       C.Api.Fields.PASSWORD2 -> "oops"
     )
-    post("/htmx/admin/setup", body = payload.toString(), headers = getHeaders) {
+    post("/htmx/admin/setup", body = payload.toString()) {
       response.body should include ("Passwords do not match")
     }
   }
@@ -34,7 +35,7 @@ import software.altitude.test.core.HtmxTestCore
       C.Api.Fields.PASSWORD2 -> "password3000"
     )
 
-    post("/htmx/admin/setup", body = payload.toString(), headers = getHeaders) {
+    post("/htmx/admin/setup", body = payload.toString()) {
       status should equal(200)
 
       // Sends HTMX redirect to the root path
