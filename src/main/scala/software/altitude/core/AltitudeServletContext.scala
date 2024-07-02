@@ -6,9 +6,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.controllers.api._
 import software.altitude.core.controllers.htmx.SetupController
-import software.altitude.core.controllers.web.ImportController
-import software.altitude.core.controllers.web.IndexController
-import software.altitude.core.controllers.web.SessionController
+import software.altitude.core.controllers.web.{ImportController, IndexController, SecuredStaticFileController, SessionController}
 
 import javax.servlet.ServletContext
 
@@ -28,10 +26,11 @@ object AltitudeServletContext {
     (new StatsController, "/api/v1/stats/*"),
     (new MetadataController, "/api/v1/metadata/*"),
     (new SessionController, "/sessions/*"),
+    (new SecuredStaticFileController, "/content/*"),
 
     (new SetupController, "/htmx/admin/setup/*"),
-    (new admin.MetadataController, "/api/v1/admin/metadata/*"),
 
+    // (new admin.MetadataController, "/api/v1/admin/metadata/*"),
     // (new FileSystemBrowserController, "/navigate/*"),
     // (new ImportController(actorSystem), "/import/*")
   )

@@ -31,7 +31,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
     logger.info(s"Repository [$name] work path")
     logger.info(s"Data path: [$dataPath]")
 
-    val reposDataPath = FilenameUtils.concat(dataPath, "repositories")
+    val reposDataPath = FilenameUtils.concat(dataPath, C.DataStore.REPOSITORIES)
     val repoDataPath = FilenameUtils.concat(reposDataPath, id.substring(0, 8))
 
     val repoToSave = Repository(

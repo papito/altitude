@@ -19,9 +19,8 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   override def getById(id: String): Data = {
-    val asset: Asset = app.service.library.getById(id)
-    val path = getAssetPath(asset)
-    val srcFile: File = fileFromRelPath(path)
+    val path = filePath(id)
+    val srcFile: File = new File(path)
 
     var byteArray: Option[Array[Byte]] = None
 
@@ -40,7 +39,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   override def addAsset(asset: Asset): Unit = {
-    val destFile = fileFromAsset(asset)
+    val destFile = new File(filePath(asset.persistedId))
     logger.debug(s"Creating asset [$asset] on file system at [$destFile]")
 
     try {
@@ -50,10 +49,6 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
       case ex: IOException =>
         throw StorageException(s"Error creating [$asset] @ [$destFile]: $ex]")
     }
-  }
-
-  override def getAssetPath(asset: Asset): String = {
-    FilenameUtils.concat(asset.persistedId, asset.fileName)
   }
 
   override def addPreview(preview: Preview): Unit = {
@@ -101,7 +96,9 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   private def previewDirPath: String =
-    new File(RequestContext.repository.value.get.fileStoreConfig(C.Repository.Config.PATH), "preview").getPath
+    new File(
+      RequestContext.getRepository.fileStoreConfig(C.Repository.Config.PATH),
+      C.DataStore.PREVIEW).getPath
 
   /**
    * Get the absolute path to the asset on file system,
@@ -112,10 +109,10 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     new File(repositoryRoot, relativePath)
   }
 
-  private def fileFromAsset(asset: Asset): File = {
+  private def filePath(assetId: String): String = {
     val repositoryRoot = RequestContext.repository.value.get.fileStoreConfig(C.Repository.Config.PATH)
-    val absoluteFilesPath = FilenameUtils.concat(repositoryRoot, "files")
-    val absoluteFilePartitionPath = FilenameUtils.concat(absoluteFilesPath, asset.persistedId.substring(0, 2))
-    new File(absoluteFilePartitionPath, asset.persistedId)
+    val absoluteFilesPath = FilenameUtils.concat(repositoryRoot, C.DataStore.FILES)
+    val absoluteFilePartitionPath = FilenameUtils.concat(absoluteFilesPath, assetId.substring(0, 2))
+    FilenameUtils.concat(absoluteFilePartitionPath, assetId)
   }
 }

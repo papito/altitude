@@ -118,6 +118,30 @@ object Const {
     val FIELD_VALUE_BOOL = "field_value_bool"
   }
 
+  object DataStore {
+    val CONTENT = "content"
+    val PREVIEW = "preview"
+    val FILE = "file"
+    val FILES = "files"
+    val REPOSITORIES = "repositories"
+  }
+
+  object Msg {
+
+    object Err {
+      val REQUIRED = "This field is required"
+      val CANNOT_BE_EMPTY = "Cannot be empty"
+      val VALUE_TOO_LONG = "Value is longer than %s characters"
+      val VALUE_TOO_SHORT = "Value should be at least %s characters long"
+      val VALIDATION_ERROR = "Validation error"
+      val VALIDATION_ERRORS = "There are validation errors in: %s"
+      val EMPTY_REQUEST_BODY = "Empty request body"
+      val DUPLICATE = "Duplicate"
+      val INCORRECT_VALUE_TYPE = "Incorrect value type"
+      val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
+    }
+  }
+
   object Api {
     val USER_ID = "user_id"
     val ERROR = "error"
@@ -128,7 +152,6 @@ object Const {
     val USER_TEST_HEADER_ID = "TEST-user-id"
     val REPO_TEST_HEADER_ID = "TEST-repo-id"
 
-    // FIXME: wrong naming convention
     val TOTAL_RECORDS = "totalRecords"
     val TOTAL_PAGES = "totalPages"
     val CURRENT_PAGE = "currentPage"
@@ -160,6 +183,7 @@ object Const {
       val PAGE = "p"
       val FOLDERS = "folders"
       val SORT = "sort"
+      val DEFAULT_RPP = 20
     }
 
     object Sort {
@@ -217,23 +241,4 @@ object Const {
       val MIN_REPOSITORY_NAME_LENGTH = 2
     }
   }
-
-  object Msg {
-
-    object Err {
-      val REQUIRED = "This field is required"
-      val CANNOT_BE_EMPTY = "Cannot be empty"
-      val VALUE_TOO_LONG = "Value is longer than %s characters"
-      val VALUE_TOO_SHORT = "Value should be at least %s characters long"
-      val VALIDATION_ERROR = "Validation error"
-      val VALIDATION_ERRORS = "There are validation errors in: %s"
-      val EMPTY_REQUEST_BODY = "Empty request body"
-      val DUPLICATE = "Duplicate"
-      val INCORRECT_VALUE_TYPE = "Incorrect value type"
-      val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
-    }
-  }
-
-  // default results per page
-  final val DEFAULT_RPP = "20"
 }

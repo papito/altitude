@@ -21,7 +21,7 @@ class SearchController extends BaseApiController {
   }
 
   get(s"/p/:${C.Api.Search.PAGE}/rpp/:${C.Api.Search.RESULTS_PER_PAGE}/?") {
-    val rpp = params.getOrElse(C.Api.Search.RESULTS_PER_PAGE, C.DEFAULT_RPP).toInt
+    val rpp = params.getOrElse(C.Api.Search.RESULTS_PER_PAGE, C.Api.Search.DEFAULT_RPP.toString).toInt
     val page = params.getOrElse(C.Api.Search.PAGE, "1").toInt
     val queryText = params.get(C.Api.Search.QUERY_TEXT)
     val sortArg = params.get(C.Api.Search.SORT)
@@ -59,7 +59,7 @@ class SearchController extends BaseApiController {
 
   private def defaultQuery(folderId: String): ActionResult = {
     val q = new SearchQuery(
-      rpp = C.DEFAULT_RPP.toInt,
+      rpp = C.Api.Search.DEFAULT_RPP,
       folderIds = Set(folderId)
     )
 

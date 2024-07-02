@@ -4,16 +4,16 @@ watch:
 	sbt watch
 
 test:
-	sbt test
+	ENV=test sbt test
 
 test-focused:
-	sbt testFocused
+	ENV=test sbt testFocused
 
 test-focused-psql:
-	sbt testFocusedPostgres
+	ENV=test sbt testFocusedPostgres
 
 test-focused-sqlite:
-	sbt testFocusedSqlite
+	ENV=test sbt testFocusedSqlite
 
 # WEB tests (controllers) do need the ENV explicitly set,
 # as this is picked up by the testing server that is spun up automatically.
@@ -26,13 +26,13 @@ test-controller:
 	ENV=test sbt testController
 
 test-psql:
-	sbt testPostgres
+	ENV=test sbt testPostgres
 
 test-sqlite:
-	sbt testSqlite
+	ENV=test sbt testSqlite
 
 test-unit:
-	sbt testUnit
+	ENV=test sbt testUnit
 
 lint:
 	sbt scalafixAll

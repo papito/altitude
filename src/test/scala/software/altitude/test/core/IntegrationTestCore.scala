@@ -24,6 +24,8 @@ abstract class IntegrationTestCore
   // Force environment to always be TEST
   Environment.ENV = Environment.TEST
 
+  var testContext: TestContext = new TestContext(testApp)
+
   override def beforeEach(): Unit = {
     AltitudeServletContext.app.isInitialized = false
     testContext = new TestContext(testApp)
@@ -43,8 +45,6 @@ abstract class IntegrationTestCore
     // We COULD rollback here, but we don't need to, and committing is better for checking repo/user isolation
     testApp.txManager.commit()
   }
-
-  var testContext: TestContext = new TestContext(testApp)
 
   def savepoint(): Unit = {
     testApp.txManager.savepoint()

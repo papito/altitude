@@ -130,13 +130,13 @@ class AssetController extends BaseApiController {
   }
 
   override def logRequestStart(): Unit = {
-    if (!request.getRequestURI.endsWith("/preview")) {
+    if (!request.getRequestURI.endsWith(s"/${C.DataStore.PREVIEW}")) {
       super.logRequestStart()
     }
   }
 
   override def logRequestEnd(): Unit = {
-    if (!request.getRequestURI.endsWith("/preview")) {
+    if (!request.getRequestURI.endsWith(s"/${C.DataStore.PREVIEW}")) {
       super.logRequestEnd()
     }
   }

@@ -46,7 +46,11 @@ abstract class ControllerTestCore
 
   Environment.ENV = Environment.TEST
 
+  var testContext: TestContext = new TestContext(testApp)
+
   override def beforeEach(): Unit = {
+    testContext = new TestContext(testApp)
+
     // the database is dirtied by the separate process (test server)
     // so we need to reset it before each test
     PostgresSuiteBundle.setup(testApp)
@@ -55,8 +59,6 @@ abstract class ControllerTestCore
     // the few application state variables should also be rolled back
     AltitudeServletContext.app.isInitialized = false
   }
-
-  var testContext: TestContext = new TestContext(testApp)
 
   // I have no idea what this is for
   override def header: Null = null
