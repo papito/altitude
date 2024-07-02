@@ -49,9 +49,15 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
   final val fileStoreType = config.fileStoreType
   logger.info(s"File store type: $fileStoreType")
 
-  // app thread pool, whatever it is needed for
-  private val maxThreads: Int = Runtime.getRuntime.availableProcessors()
+  /**
+   * App thread pool, whatever it is needed for
+   */
+  private val maxThreads: Int = dataSourceType match {
+    case C.DatasourceType.POSTGRES => Runtime.getRuntime.availableProcessors()
+    case C.DatasourceType.SQLITE => 1 // SQLite is single-threaded
+  }
   logger.info(s"Available processors: $maxThreads")
+
   val executorService: ExecutorService = Executors.newFixedThreadPool(maxThreads)
   logger.info("Executor service initialized")
 
