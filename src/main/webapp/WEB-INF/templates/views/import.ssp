@@ -6,14 +6,6 @@
     ${include("includes/header_common.ssp")}
 
     <style>
-        body {
-            min-height: 100vh;
-        }
-
-        main {
-            display: grid;
-            grid-template-rows: auto 1fr;
-        }
 
         #importOptions {
             padding-top: calc(var(--section-vertical-space) * 2);
@@ -42,11 +34,10 @@
 
 <div>
     ${include("includes/nav.ssp")}
+    ${include("htmx/status_ticker.ssp")}
 </div>
 
 <main>
-    ${include("htmx/status_ticker.ssp")}
-
     <div id="importOptions">
         <div id="browseForFiles">
             ${include("htmx/upload_form.ssp")}

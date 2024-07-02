@@ -6,6 +6,20 @@
     ${include("includes/header_common.ssp")}
 
     <style>
+        body {
+            display: grid;
+            grid-template-rows: auto 1fr 40px;
+            height: 100vh;
+            margin: 0;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            height: 100%;
+            overflow: hidden;
+        }
+
         #browser {
             border-right: 1px solid var(--panel-border-color);
             box-shadow: var(--box-shadow);
@@ -13,9 +27,7 @@
         }
 
         #assets {
-            border-left: 1px solid var(--panel-border-color);
-            box-shadow: var(--box-shadow);
-            text-shadow: rgba(0,0,0,0.75) 0 1px;
+            overflow-y: auto;
         }
 
         #folders {
@@ -58,12 +70,6 @@
             overflow-x: hidden;
         }
 
-        .container {
-            margin: 0 auto;
-            max-width: 1200px;
-            padding: 0 1rem;
-        }
-
         .responsive-image {
             max-width: 100%;
         }
@@ -82,7 +88,7 @@
         }
         @media screen and (min-width: 1000px){
             .cell {
-                width:calc (100%/3);
+                width: calc(100%/3);
             }
         }
         .cell {
@@ -96,12 +102,10 @@
         }
         @media screen and (min-width: 1000px){
             .cell{
-                width: calc(50% - 2rem);
+                width: calc(25% - 2rem);
             }
         }
     </style>
-
-
 </head>
 
 #import(software.altitude.core.RequestContext)
@@ -113,33 +117,26 @@
 
 <div>
     ${include("includes/nav.ssp")}
+    ${include("htmx/status_ticker.ssp")}
 </div>
 
 <main>
-    ${include("htmx/status_ticker.ssp")}
-
     <div id="browser" class="split content split-horizontal">
         <div id="folders" class="split content">
-            <div id="folders">
-            </div>
         </div>
         <div id="albums" class="split content">
         </div>
     </div>
 
     <div id="assets" class="split content split-horizontal">
-
-        <div class="container">
-            <div class="grid">
-                #for (idx <- 0 to results.records.length - 1)
-                <div class="cell">
-                    <% val asset: Asset = results.records(idx) %>
-                    <img src="/content/preview/<%= asset.persistedId %>" class="responsive-image"/>
-                </div>
-            #end
+        <div class="grid">
+            #for (idx <- 0 to results.records.length - 1)
+            <div class="cell">
+                <% val asset: Asset = results.records(idx) %>
+                <img src="/content/preview/<%= asset.persistedId %>" class="responsive-image"/>
             </div>
+        #end
         </div>
-
     </div>
 </main>
 
@@ -148,9 +145,7 @@
 </footer>
 
 <script lang="js">
-    Split(["#browser", "#assets"], {
-        sizes: [25, 75]
-    })
+
     Split(["#folders", "#albums"], {
         sizes: [50, 50],
         direction: 'vertical'
