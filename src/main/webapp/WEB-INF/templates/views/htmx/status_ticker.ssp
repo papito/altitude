@@ -17,7 +17,10 @@
     });
     htmx.on('htmx:wsAfterMessage', function(evt) {
         const statusTextEl = htmx.find("#statusText")
-        statusTextEl.style.display = "block"
+        // sometimes empty pings come through
+        if (evt.detail.message) {
+            statusTextEl.style.display = "block"
+        }
 
         setTimeout(function() {
             statusTextEl.innerHTML = ""
