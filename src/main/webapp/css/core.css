@@ -54,7 +54,6 @@ body {
     grid-template-rows: [header]  auto
                         [content] 1fr
                         [footer]  40px;
-    min-height: 100vh;
 }
 
 footer {

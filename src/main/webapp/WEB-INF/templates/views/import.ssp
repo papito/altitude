@@ -6,6 +6,10 @@
     ${include("includes/header_common.ssp")}
 
     <style>
+        body {
+            min-height: 100vh;
+        }
+
         main {
             display: grid;
             grid-template-rows: auto 1fr;

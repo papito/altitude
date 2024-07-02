@@ -1,7 +1,8 @@
 package software.altitude.core.controllers.web
 
-import software.altitude.core.RequestContext
+import software.altitude.core.{Const => C}
 import software.altitude.core.controllers.BaseWebController
+import software.altitude.core.util.{SearchQuery, SearchResult}
 
 class IndexController extends BaseWebController {
 
@@ -15,9 +16,19 @@ class IndexController extends BaseWebController {
     requireLogin()
 
     contentType = "text/html"
+
+    val q = new SearchQuery(
+      rpp = C.Api.Search.DEFAULT_RPP,
+    )
+
+    val results: SearchResult = app.service.library.search(q)
+
+    println(results.total)
+
     layoutTemplate(
       "/WEB-INF/templates/views/index.ssp",
-      "userId" -> RequestContext.getAccount.persistedId)
+        "results" -> results,
+    )
   }
 
   get("/setup") {

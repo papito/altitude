@@ -6,12 +6,6 @@
     ${include("includes/header_common.ssp")}
 
     <style>
-        main {
-            display: grid;
-            grid-template-rows: auto 1fr;
-            height: 100%;
-        }
-
         #browser {
             border-right: 1px solid var(--panel-border-color);
             box-shadow: var(--box-shadow);
@@ -63,10 +57,57 @@
             overflow-y: auto;
             overflow-x: hidden;
         }
+
+        .container {
+            margin: 0 auto;
+            max-width: 1200px;
+            padding: 0 1rem;
+        }
+
+        .responsive-image {
+            max-width: 100%;
+        }
+        .cell img {
+            display: block;
+        }
+        @media screen and (min-width: 600px){
+            .grid {
+                display: flex;
+                flex-wrap: wrap;
+                flex-direction: row;
+            }
+            .cell {
+                width:50%;
+            }
+        }
+        @media screen and (min-width: 1000px){
+            .cell {
+                width:calc (100%/3);
+            }
+        }
+        .cell {
+            margin: 1rem;
+        }
+
+        @media screen and (min-width: 600px){
+            .cell {
+                width: calc(50% - 2rem);
+            }
+        }
+        @media screen and (min-width: 1000px){
+            .cell{
+                width: calc(50% - 2rem);
+            }
+        }
     </style>
+
+
 </head>
 
 #import(software.altitude.core.RequestContext)
+#import(software.altitude.core.models.Asset)
+#import(software.altitude.core.util.SearchResult)
+<%@ val results: SearchResult %>
 
 <body>
 
@@ -87,6 +128,18 @@
     </div>
 
     <div id="assets" class="split content split-horizontal">
+
+        <div class="container">
+            <div class="grid">
+                #for (idx <- 0 to results.records.length - 1)
+                <div class="cell">
+                    <% val asset: Asset = results.records(idx) %>
+                    <img src="/content/preview/<%= asset.persistedId %>" class="responsive-image"/>
+                </div>
+            #end
+            </div>
+        </div>
+
     </div>
 </main>
 
