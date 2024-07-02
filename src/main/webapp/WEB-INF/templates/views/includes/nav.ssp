@@ -3,7 +3,7 @@
         display: grid;
         grid-template-columns: 150px repeat(3, 1fr) 250px;
         grid-column-gap: 10px;
-        background: var(--background-aux-color);
+        background: var(--background-secondary-color);
         color: #fff;
         align-items: center;
         box-shadow: var(--box-shadow);
@@ -58,7 +58,7 @@
     }
 
     nav .active a, nav .active a span {
-        color: var(--success-color);
+        color: var(--success-font-color);
         font-weight: bold;
         font-size: 1em;
     }

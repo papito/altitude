@@ -3,7 +3,7 @@
         display: grid;
         grid-template-columns: 1fr;
         place-items: center;
-        background: var(--background-aux-color);
+        background: var(--background-secondary-color);
         color: #fff;
         box-shadow: var(--box-shadow);
         border-bottom: var(--navbar-border);

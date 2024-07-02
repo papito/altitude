@@ -24,6 +24,9 @@ import software.altitude.core.models.Asset
 import software.altitude.core.models.ImportAsset
 import software.altitude.core.models.Metadata
 
+import java.lang.Thread.sleep
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class ImportController
@@ -35,6 +38,8 @@ class ImportController
     with SessionSupport {
   private val fileSizeLimitGB = 10
 
+  private val importAssetCountPerRepo = new ConcurrentHashMap[String, (AtomicInteger, AtomicInteger)]()
+
   implicit protected val jsonFormats: Formats = DefaultFormats
 
   private val userToWsClientLookup = collection.mutable.Map[String, List[AtmosphereClient]]()
@@ -42,6 +47,7 @@ class ImportController
   // HTMX WS client expects a div with id "status" to update the status ticker
   private val successStatusTickerTemplate = "<div id=\"statusText\">%s</div>"
   private val warningStatusTickerTemplate = "<div id=\"statusText\" class=\"warning\">%s</div>"
+  private val errorStatusTickerTemplate = "<div id=\"statusText\" class=\"error\">%s</div>"
 
   // I don't feel strongly about this
   configureMultipartHandling(MultipartConfig(maxFileSize = Some(fileSizeLimitGB*1024*1024)))
@@ -89,11 +95,18 @@ class ImportController
   post("/upload") {
     contentType = "text/html"
 
+    val repoId = RequestContext.getRepository.persistedId
+
+    val processedAndTotal = importAssetCountPerRepo.computeIfAbsent(repoId, _ =>
+      (new AtomicInteger(0), new AtomicInteger()) )
+
     fileMultiParams.get("files") match {
       case Some(files) => files.foreach { file =>
           logger.info(s"Received file: $file")
 
-          val importAsset = new ImportAsset(
+        processedAndTotal._2.addAndGet(1)
+
+        val importAsset = new ImportAsset(
             fileName = file.getName,
             data = file.get(),
             metadata = Metadata())
@@ -101,18 +114,38 @@ class ImportController
         app.executorService.submit(new Runnable {
           override def run(): Unit = {
             try {
-              val importedAsset: Option[Asset] = app.service.assetImport.importAsset(importAsset)
-              if (importedAsset.isDefined) {
-                sendWsStatusToUserClients(
-                  successStatusTickerTemplate.format("Imported: " + importedAsset.get.fileName))
-              }
+               app.service.assetImport.importAsset(importAsset)
+
+              // will be updated in the finally block
+              val processedSoFar = processedAndTotal._1.get() + 1
+              val total = processedAndTotal._2.get()
+
+              val importedStatusText = s"Imported $processedSoFar of $total: <span>${importAsset.fileName}</span>"
+              sendWsStatusToUserClients(successStatusTickerTemplate.format(importedStatusText))
+
             } catch {
+
               case _: DuplicateException =>
                 logger.warn(s"Duplicate asset: ${importAsset.fileName}")
+                val duplicateStatusText = s"Ignoring duplicate: <span>${importAsset.fileName}</span>"
+                sendWsStatusToUserClients(warningStatusTickerTemplate.format(duplicateStatusText))
+
+              case e: Exception =>
+                logger.error("Error importing asset:", e)
+
+                val errorStatusText = s"Error: <span>${importAsset.fileName}</span>"
+                sendWsStatusToUserClients(errorStatusTickerTemplate.format(errorStatusText))
+
+            } finally {
+              processedAndTotal._1.incrementAndGet()
+
+              if (processedAndTotal._1.get() == processedAndTotal._2.get()) {
+                processedAndTotal._1.set(0)
+                processedAndTotal._2.set(0)
 
                 sendWsStatusToUserClients(
-                  warningStatusTickerTemplate.format(s"Ignoring duplicate: ${importAsset.fileName}"))
-              case e: Exception => logger.error("Error importing asset:", e)
+                  successStatusTickerTemplate.format("All files processed"))
+              }
             }
           }
         })

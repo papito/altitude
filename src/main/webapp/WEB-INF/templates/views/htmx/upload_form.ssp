@@ -2,9 +2,13 @@
     #uploadForm {
         display: grid;
         grid-auto-rows: auto;
-        grid-row-gap: var(--control-vertical-space);
-        color: #FFFFFF;
+        grid-row-gap: calc(var(--control-vertical-space) * 1.5);
     }
+
+    #uploadForm div {
+        text-align: center;
+    }
+
     #uploadForm progress {
         width: 100%;
     }
@@ -12,21 +16,50 @@
     #uploadForm input[type="file"] {
         color: white;
     }
+
+    #uploadForm button {
+        font-size: 1.2em;
+    }
+
+    #abortUploadButtonControl {
+        display: none;
+    }
+
 </style>
+
 <form id="uploadForm" hx-post="/import/upload" hx-encoding="multipart/form-data">
     <div>
         <input type="file" name="files" id="files" multiple>
     </div>
+
     <div id="progressBarControl" hidden>
         <progress id='progressBar' value='0' max='100'></progress>
     </div>
-    <div>
+
+    <div id="progressTextControl" hidden>
+    </div>
+
+    <div id="doItButtonControl">
         <button class="action-button">Upload from computer</button>
     </div>
+
+    <div id="abortUploadButtonControl">
+        <button id="abortButton" onclick="htmx.trigger('#uploadForm', 'htmx:abort')"
+                class="action-button error">Cancel
+        </button>
+    </div>
+
     <script>
         htmx.on('#uploadForm', 'htmx:xhr:progress', function(evt) {
-            document.getElementById("progressBarControl").removeAttribute("hidden")
+            htmx.find("#progressBarControl").removeAttribute("hidden")
             htmx.find('#progressBar').setAttribute('value', evt.detail.loaded/evt.detail.total * 100)
+            htmx.find('#doItButtonControl').setAttribute('hidden', true)
+            htmx.find('#files').setAttribute('disabled', true)
+            htmx.find('#abortUploadButtonControl').style.display = "block"
+
+            htmx.find("#progressTextControl").removeAttribute("hidden")
+            const percentLoaded = parseInt((evt.detail.loaded / evt.detail.total) * 100)
+            htmx.find("#progressTextControl").innerText = percentLoaded+ "%"
         });
     </script>
 </form>
