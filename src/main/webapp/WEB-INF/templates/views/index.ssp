@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+#import(software.altitude.core.Const)
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.models.Asset)
+#import(software.altitude.core.util.SearchResult)
+#import(software.altitude.core.AltitudeServletContext)
+<%@ val results: SearchResult %>
 <html lang="en">
 <head>
     <title>ALTITUDE</title>
@@ -89,17 +95,12 @@
 
         .cell {
             display: grid;
-            width:220px;
+            width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt("preview.box.pixels").toInt + 20 %>px;
             height: 220px;
             place-items: center;
         }
     </style>
 </head>
-
-#import(software.altitude.core.RequestContext)
-#import(software.altitude.core.models.Asset)
-#import(software.altitude.core.util.SearchResult)
-<%@ val results: SearchResult %>
 
 <body>
 
@@ -119,11 +120,13 @@
     <div id="assets" class="split content split-horizontal">
         <div class="grid">
             #for (idx <- 0 to results.records.length - 1)
-            <div class="cell">
-                <% val asset: Asset = results.records(idx) %>
-                <img src="/content/preview/<%= asset.persistedId %>" class="responsive-image"/>
-            </div>
-        #end
+                <div class="cell">
+                    <% val asset: Asset = results.records(idx) %>
+                    <img src="/<%= Const.DataStore.CONTENT %>/<%= Const.DataStore.PREVIEW %>/<%= asset.persistedId %>"
+                         alt = "<%= asset.fileName %>"
+                         class="responsive-image"/>
+                </div>
+            #end
         </div>
     </div>
 </main>
