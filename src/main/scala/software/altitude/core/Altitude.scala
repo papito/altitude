@@ -34,6 +34,13 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
   logger.info(s"Initializing Altitude Server application. Instance ID [$id]")
 
   /**
+   * In development, application-dev.conf will override system defaults.
+   *
+   * Production JAR defaults to SQLITE and can be overridden by application.conf.
+   *
+   * Tests are a different type of fresh hell, as we run integration tests against
+   * both SQLite and Postgres, while controller tests run against only Postgres.
+   * Because reasons: https://github.com/papito/altitude/wiki/How-the-tests-work#controller-tests-and-the-forced-postgres-config
    */
   final val config: Config = Environment.CURRENT match {
 
@@ -41,16 +48,15 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
       ConfigFactory.parseFile(new File("application-dev.conf"))
         .withFallback(ConfigFactory.defaultReference())
 
-
     case Environment.Name.PROD =>
       ConfigFactory.parseFile(new File("application.conf"))
         .withFallback(ConfigFactory.defaultReference())
 
-
     case Environment.Name.TEST =>
       dbEngineOverride match {
         case Some(ds) =>
-          ConfigFactory.defaultReference().withValue(C.Conf.DB_ENGINE, ConfigValueFactory.fromAnyRef(ds))
+          ConfigFactory.defaultReference().withValue(
+            C.Conf.DB_ENGINE, ConfigValueFactory.fromAnyRef(ds))
 
         case None =>
           ConfigFactory.defaultReference()
