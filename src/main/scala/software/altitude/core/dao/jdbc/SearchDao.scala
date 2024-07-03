@@ -1,8 +1,8 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models._
 import software.altitude.core.util.SearchQuery
@@ -24,7 +24,7 @@ object SearchDao {
             """
 }
 
-abstract class SearchDao(override val config: Configuration)
+abstract class SearchDao(override val config: Config)
   extends AssetDao(config)
     with software.altitude.core.dao.SearchDao {
 

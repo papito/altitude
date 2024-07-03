@@ -55,7 +55,7 @@ class TestContext(val testApp: Altitude) {
 
     val persistedRepo: Repository = testApp.service.repository.addRepository(
       name = "Test Repository 1",
-      fileStoreType = C.FileStoreType.FS,
+      fileStoreType = C.StorageEngineName.FS,
       owner = persistedUser)
     repositories = repositories ::: persistedRepo :: Nil
 

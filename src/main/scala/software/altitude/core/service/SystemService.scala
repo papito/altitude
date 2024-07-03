@@ -61,7 +61,7 @@ class SystemService(val app: Altitude) {
 
       app.service.repository.addRepository(
         name = repositoryName,
-        fileStoreType = C.FileStoreType.FS,
+        fileStoreType = C.StorageEngineName.FS, // hard default for now
         owner = admin)
 
       systemMetadataDao.setInitialized()

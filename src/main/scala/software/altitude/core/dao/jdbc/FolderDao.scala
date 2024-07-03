@@ -1,13 +1,13 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Folder
 import software.altitude.core.{Const => C}
 
-abstract class FolderDao(override val config: Configuration) extends BaseDao with software.altitude.core.dao.FolderDao {
+abstract class FolderDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FolderDao {
   override final val tableName = "folder"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {

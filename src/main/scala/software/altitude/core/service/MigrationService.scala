@@ -73,13 +73,14 @@ abstract class MigrationService(val app: Altitude)  {
 
     val entireSchemaPath = new File(MIGRATIONS_DIR, "all.sql").toString
 
-    /* We load the entire schema as the one and only migration in the following cases:
-        * 1. In test and dev environments
-        * 2. When migrating to version 1 in prod
+    /**
+     * We load the entire schema as the one and only migration in the following cases:
+     * 1. In test and dev environments
+     * 2. When migrating to version 1 in prod
      */
-    val path = Environment.ENV match {
-      case Environment.TEST | Environment.DEV => entireSchemaPath
-      case Environment.PROD => if (version == 1) entireSchemaPath
+    val path = Environment.CURRENT match {
+      case Environment.Name.TEST | Environment.Name.DEV => entireSchemaPath
+      case Environment.Name.PROD => if (version == 1) entireSchemaPath
       else
         new File(MIGRATIONS_DIR, s"$version$FILE_EXTENSION").toString
     }

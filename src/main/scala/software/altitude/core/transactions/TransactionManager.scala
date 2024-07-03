@@ -1,9 +1,9 @@
 package software.altitude.core.transactions
 
+import com.typesafe.config.Config
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.{Const => C}
 
@@ -12,22 +12,22 @@ import java.sql.DriverManager
 import java.util.Properties
 
 object TransactionManager {
-  def apply(config: Configuration): TransactionManager = new TransactionManager(config)
+  def apply(config: Config): TransactionManager = new TransactionManager(config)
 }
 
-class TransactionManager(val config: Configuration) {
+class TransactionManager(val config: Config) {
 
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def connection(readOnly: Boolean): Connection = {
-    config.datasourceType match {
-      case C.DatasourceType.POSTGRES =>
+    config.getString(C.Conf.DB_ENGINE) match {
+      case C.DbEngineName.POSTGRES =>
         val props = new Properties
-        val user = config.getString("db.postgres.user")
+        val user = config.getString(C.Conf.POSTGRES_USER)
         props.setProperty("user", user)
-        val password = config.getString("db.postgres.password")
+        val password = config.getString(C.Conf.POSTGRES_PASSWORD)
         props.setProperty("password", password)
-        val url = config.getString("db.postgres.url")
+        val url = config.getString(C.Conf.POSTGRES_URL)
         val conn = DriverManager.getConnection(url, props)
         logger.debug(s"Opening connection $conn. Read-only: $readOnly")
 
@@ -42,7 +42,7 @@ class TransactionManager(val config: Configuration) {
         // println(s"NEW PSQL CONN ${System.identityHashCode(conn)}")
         conn
 
-      case C.DatasourceType.SQLITE =>
+      case C.DbEngineName.SQLITE =>
         /**
          * At some point the prod jar stopped working without this line.
          * This is commonly needed for JDBC drivers to register themselves,
@@ -52,7 +52,7 @@ class TransactionManager(val config: Configuration) {
          */
         Class.forName("org.sqlite.JDBC")
 
-        val url: String = config.getString("db.sqlite.url")
+        val url: String = config.getString(C.Conf.SQLITE_URL)
 
         val sqliteConfig: SQLiteConfig = new SQLiteConfig()
 

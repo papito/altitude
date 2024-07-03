@@ -1,7 +1,7 @@
 package software.altitude.core.dao.postgres
 
+import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.postgres.querybuilder.AssetSearchQueryBuilder
 import software.altitude.core.models.Asset
@@ -9,7 +9,7 @@ import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 import software.altitude.core.{Const => C}
 
-class SearchDao(override val config: Configuration) extends software.altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides {
+class SearchDao(override val config: Config) extends software.altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides {
 
   override protected def addSearchDocument(asset: Asset): Unit = {
     val docSql =

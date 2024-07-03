@@ -1,12 +1,12 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-import software.altitude.core.Configuration
 import software.altitude.core.models.Repository
 import software.altitude.core.{Const => C}
 
-abstract class RepositoryDao(override val config: Configuration) extends BaseDao
+abstract class RepositoryDao(override val config: Config) extends BaseDao
     with software.altitude.core.dao.RepositoryDao {
 
   override final val tableName = "repository"
@@ -26,7 +26,7 @@ abstract class RepositoryDao(override val config: Configuration) extends BaseDao
       name = rec(C.Repository.NAME).asInstanceOf[String],
       ownerAccountId = rec(C.Repository.OWNER_ACCOUNT_ID).asInstanceOf[String],
       rootFolderId = rec(C.Repository.ROOT_FOLDER_ID).asInstanceOf[String],
-      fileStoreType = C.FileStoreType.withName(rec(C.Repository.FILE_STORE_TYPE).asInstanceOf[String]),
+      fileStoreType = rec(C.Repository.FILE_STORE_TYPE).asInstanceOf[String],
       fileStoreConfig = fileStoreConfigJson.as[Map[String, String]]
     )
 
@@ -50,7 +50,7 @@ abstract class RepositoryDao(override val config: Configuration) extends BaseDao
       id,
       repo.name,
       repo.ownerAccountId,
-      repo.fileStoreType.toString,
+      repo.fileStoreType,
       repo.rootFolderId,
       Json.toJson(repo.fileStoreConfig).toString())
 

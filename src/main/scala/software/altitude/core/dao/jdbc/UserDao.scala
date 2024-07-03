@@ -1,13 +1,13 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-import software.altitude.core.Configuration
 import software.altitude.core.models.AccountType.AccountType
 import software.altitude.core.models.User
 import software.altitude.core.{Const => C}
 
-abstract class UserDao(override val config: Configuration) extends BaseDao with software.altitude.core.dao.UserDao {
+abstract class UserDao(override val config: Config) extends BaseDao with software.altitude.core.dao.UserDao {
   override final val tableName = "account"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {

@@ -1,3 +1,8 @@
+#import(software.altitude.core.Const)
+#import(software.altitude.core.AltitudeServletContext)
+#import(play.api.libs.json.Json)
+#import(play.api.libs.json.JsObject)
+
 <style>
     #setupForm {
         display: grid;
@@ -45,10 +50,6 @@
     }
 </style>
 
-#import(software.altitude.core.Const)
-#import(play.api.libs.json.Json)
-#import(play.api.libs.json.JsObject)
-
 <%@ val fieldErrors: Map[String, String] = Map.empty %>
 <%@ val formJson: JsObject = Json.obj() %>
 
@@ -72,22 +73,13 @@
         <% } %>
     </div>
     <div>
-        <label for="fileStore">File storage type</label>
+        <label for="dbEngine">Database type</label>
         <input type="text"
-               id="fileStore"
-               name="fileStore"
+               id="dbEngine"
+               name="dbEngine"
                class="readonly"
                readonly
-               value="filesystem"/>
-    </div>
-    <div>
-        <label for="dataStore">Metadata storage type</label>
-        <input type="text"
-               id="dataStore"
-               name="dataStore"
-               class="readonly"
-               readonly
-               value="postgres"/>
+               value="<%= software.altitude.core.AltitudeServletContext.app.config.getString(Const.Conf.DB_ENGINE) %>"/>
     </div>
     <div>
         <label for="<%= Const.Api.Fields.ADMIN_EMAIL %>">Administrator Email</label>

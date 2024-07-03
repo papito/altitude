@@ -36,7 +36,7 @@ class LibraryService(val app: Altitude) {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val txManager: TransactionManager = app.txManager
 
-  private val previewBoxSize: Int = app.config.getInt("preview.box.pixels")
+  private val previewBoxSize: Int = app.config.getInt(C.Conf.PREVIEW_BOX_PIXELS)
 
   /** **************************************************************************
     * ASSETS

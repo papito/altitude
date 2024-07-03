@@ -2,25 +2,18 @@ package software.altitude.test.core.suites
 
 import org.scalatest.BeforeAndAfterAll
 import software.altitude.core.Altitude
-import software.altitude.core.Environment
 import software.altitude.core.RequestContext
 import software.altitude.core.{Const => C}
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.testAltitudeApp
 
 object SqliteSuiteBundle {
-  Environment.ENV = Environment.TEST
-
-  val testApp: Altitude = new Altitude(configOverride = Map("datasource" -> C.DatasourceType.SQLITE))
+  val testApp: Altitude = new Altitude(dbEngineOverride = Some(C.DbEngineName.SQLITE))
 }
 
 class SqliteSuiteBundle
   extends AllIntegrationTestSuites(testApp = SqliteSuiteBundle.testApp)
     with testAltitudeApp with BeforeAndAfterAll {
-
-  Environment.ENV = Environment.TEST
-  override val testApp: Altitude = new Altitude(configOverride = Map("datasource" -> C.DatasourceType.SQLITE))
-
 
   override def beforeAll(): Unit = {
     println("\n@@@@@@@@@@@@@@@@@@@@@@@@")

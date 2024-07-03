@@ -15,7 +15,7 @@ import software.altitude.test.core.IntegrationTestCore
   test("create repository") {
     val repo: Repository = testApp.service.repository.addRepository(
       name = Util.randomStr(),
-      fileStoreType = C.FileStoreType.FS,
+      fileStoreType = C.StorageEngineName.FS,
       owner = testContext.user)
 
     repo.fileStoreConfig.keys should contain(C.Repository.Config.PATH)

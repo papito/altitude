@@ -1,14 +1,14 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models.FieldType
 import software.altitude.core.models.MetadataField
 import software.altitude.core.{Const => C}
 
-abstract class MetadataFieldDao(override val config: Configuration)
+abstract class MetadataFieldDao(override val config: Config)
   extends BaseDao with software.altitude.core.dao.MetadataFieldDao {
 
   override final val tableName = "metadata_field"

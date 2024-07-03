@@ -26,7 +26,9 @@ libraryDependencies ++= Seq(
   "org.scalatra"                %% "scalatra-auth"            % scalatraVersion,
   "org.scalatra"                %% "scalatra-atmosphere"      % scalatraVersion,
   "org.scalatra"                %% "scalatra-json"            % scalatraVersion,
-  "org.scalatra.scalate"          %% "scalate-core"             % "1.10.1",
+  "org.scalatra.scalate"        %% "scalate-core"             % "1.10.1",
+
+  "com.typesafe"                 % "config"                   % "1.4.3",
 
   "com.typesafe.play"           %% "play-json"                % "2.10.5",
   "org.apache.tika"              % "tika-core"                % "2.9.2",
@@ -44,12 +46,12 @@ libraryDependencies ++= Seq(
 
   "org.imgscalr"                 % "imgscalr-lib"             % "4.2",
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
-  "org.slf4j"                    % "slf4j-api"               % "2.0.12" % "runtime",
+  "org.slf4j"                    % "slf4j-api"                % "2.0.12" % "runtime",
 
   "org.mockito" % "mockito-core" % "5.11.0" % Test,
 
   //
-  // ATTN: The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x
+  // ATTN: The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x upgrade
   //
   "org.eclipse.jetty"            % "jetty-continuation"       % jettyVersion % "container;compile;test",
   "org.eclipse.jetty.websocket"  % "websocket-server"         % jettyVersion,

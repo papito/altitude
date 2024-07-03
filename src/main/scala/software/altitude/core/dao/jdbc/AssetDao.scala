@@ -1,8 +1,8 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json._
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.Asset
@@ -12,7 +12,7 @@ import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.{Const => C}
 
-abstract class AssetDao(val config: Configuration) extends BaseDao with software.altitude.core.dao.AssetDao {
+abstract class AssetDao(val config: Config) extends BaseDao with software.altitude.core.dao.AssetDao {
   override final val tableName = "asset"
 
   override val sqlQueryBuilder = new SqlQueryBuilder[Query](columnsForSelect, tableName)

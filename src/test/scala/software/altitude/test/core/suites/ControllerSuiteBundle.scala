@@ -3,17 +3,13 @@ package software.altitude.test.core.suites
 import org.scalatest.BeforeAndAfterAll
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import software.altitude.core.Environment
 import software.altitude.core.RequestContext
 import software.altitude.test.core.testAltitudeApp
 
-/*
- The web suite does NOT run against all DB engines. It only runs against Postgres..
- */
+// Why is this Postgres and not both?
+// See: https://github.com/papito/altitude/wiki/How-the-tests-work#controller-tests-and-the-forced-postgres-config
 class ControllerSuiteBundle extends AllControllerTestSuites(testApp = PostgresSuiteBundle.testApp)
   with testAltitudeApp with BeforeAndAfterAll {
-
-  Environment.ENV = Environment.TEST
 
   protected final val log: Logger = LoggerFactory.getLogger(getClass)
 

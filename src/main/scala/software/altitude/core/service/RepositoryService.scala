@@ -17,7 +17,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
 
   override protected val txManager: TransactionManager = app.txManager
 
-  def addRepository(name: String, fileStoreType: C.FileStoreType.Value, owner: User): JsObject = {
+  def addRepository(name: String, fileStoreType: String, owner: User): JsObject = {
     logger.info(s"Creating repository [$name]")
 
     val id = BaseDao.genId
@@ -25,7 +25,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
     // FIXME: storage service function
     val workPath = System.getProperty("user.dir")
     logger.info(s"Repository [$name] work path: [$workPath]")
-    val dataDir = app.config.getString("dataDir")
+    val dataDir = app.config.getString(C.Conf.FS_DATA_DIR)
     logger.info(s"Repository [$name] data path: [$dataDir]")
     val dataPath = FilenameUtils.concat(workPath, dataDir)
     logger.info(s"Repository [$name] work path")

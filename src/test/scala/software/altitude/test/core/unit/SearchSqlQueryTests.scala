@@ -22,7 +22,7 @@ import software.altitude.test.core.TestFocus
     ownerAccountId = Util.randomStr(),
     rootFolderId = "1",
     fileStoreConfig = Map(),
-    fileStoreType = C.FileStoreType.FS)
+    fileStoreType = C.StorageEngineName.FS)
 
   RequestContext.repository.value = Some(repo)
   RequestContext.account.value = None

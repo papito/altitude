@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 
 watch:
-	sbt watch
+	ENV=dev sbt watch
 
 test:
 	ENV=test sbt test
@@ -15,10 +15,6 @@ test-focused-psql:
 test-focused-sqlite:
 	ENV=test sbt testFocusedSqlite
 
-# WEB tests (controllers) do need the ENV explicitly set,
-# as this is picked up by the testing server that is spun up automatically.
-#
-# Other tests run in a single process and force the test environment themselves.
 test-focused-controller:
 	ENV=test sbt testFocusedController
 

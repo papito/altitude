@@ -5,7 +5,7 @@ services:
     ports:
       - "5433:5432"
     environment:
-      - POSTGRRES_NAME=altitude-test
+      - POSTGRES_NAME=altitude-test
       - POSTGRES_USER=altitude-test
-      - POSTGRES_PASSWORD=dba
+      - POSTGRES_PASSWORD=testdba
     container_name: altitude-core-postgres-test

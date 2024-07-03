@@ -20,11 +20,9 @@ import org.scalatra.servlet.SizeConstraintExceededException
 import software.altitude.core.DuplicateException
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
-import software.altitude.core.models.Asset
 import software.altitude.core.models.ImportAsset
 import software.altitude.core.models.Metadata
 
-import java.lang.Thread.sleep
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.ExecutionContext.Implicits.global

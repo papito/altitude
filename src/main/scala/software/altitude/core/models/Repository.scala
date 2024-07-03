@@ -12,7 +12,7 @@ object Repository {
       name = (json \ C.Repository.NAME).as[String],
       ownerAccountId = (json \ C.Repository.OWNER_ACCOUNT_ID).as[String],
       rootFolderId = (json \ C.Repository.ROOT_FOLDER_ID).as[String],
-      fileStoreType = C.FileStoreType.withName((json \ C.Repository.FILE_STORE_TYPE).as[String]),
+      fileStoreType = (json \ C.Repository.FILE_STORE_TYPE).as[String],
       fileStoreConfig = (json \ C.Repository.FILES_STORE_CONFIG).as[Map[String, String]]
     ).withCoreAttr(json)
 
@@ -23,7 +23,7 @@ case class Repository(id: Option[String] = None,
                       name: String,
                       ownerAccountId: String,
                       rootFolderId: String,
-                      fileStoreType: C.FileStoreType.Value,
+                      fileStoreType: String,
                       fileStoreConfig: Map[String, String]) extends BaseModel {
 
   def toJson: JsObject = {
@@ -32,7 +32,7 @@ case class Repository(id: Option[String] = None,
       C.Repository.NAME -> name,
       C.Repository.OWNER_ACCOUNT_ID -> ownerAccountId,
       C.Repository.ROOT_FOLDER_ID -> rootFolderId,
-      C.Repository.FILE_STORE_TYPE -> fileStoreType.toString,
+      C.Repository.FILE_STORE_TYPE -> fileStoreType,
       C.Repository.FILES_STORE_CONFIG -> Json.toJson(fileStoreConfig)
     ) ++ coreJsonAttrs
   }

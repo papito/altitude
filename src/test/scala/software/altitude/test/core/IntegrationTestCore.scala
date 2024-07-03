@@ -21,9 +21,6 @@ abstract class IntegrationTestCore
     with TestFocus {
   protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
-  // Force environment to always be TEST
-  Environment.ENV = Environment.TEST
-
   var testContext: TestContext = new TestContext(testApp)
 
   override def beforeEach(): Unit = {

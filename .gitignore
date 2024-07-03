@@ -1,6 +1,8 @@
 # except for .gitignore
 !.gitignore
 
+application.conf
+application-dev.conf
 
 *.log
 log

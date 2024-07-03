@@ -1,10 +1,18 @@
 package software.altitude.core
 
 object Environment extends Enumeration {
-  val TEST, PROD, DEV = Value
-  var ENV: Environment.Value = System.getenv().getOrDefault("ENV", "DEV") match {
-    case "test" => TEST
-    case "prod" => PROD
-    case _ => DEV
+  type Environment = String
+
+  object Name {
+    val TEST = "test"
+    val PROD = "prod"
+    val DEV = "dev"
+  }
+
+  var CURRENT: String = System.getenv().getOrDefault("ENV", Name.PROD) match {
+    case "test" | "TEST" => Name.TEST
+    case "prod" | "production" | "PROD" | "PRODUCTION" => Name.PROD
+    case "dev" | "development" | "DEV" | "DEVELOPMENT" => Name.DEV
+    case _ => Name.DEV
   }
 }

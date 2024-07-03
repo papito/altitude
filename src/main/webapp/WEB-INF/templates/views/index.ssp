@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 #import(software.altitude.core.Const)
+#import(software.altitude.core.AltitudeServletContext)
 #import(software.altitude.core.RequestContext)
 #import(software.altitude.core.models.Asset)
 #import(software.altitude.core.util.SearchResult)
-#import(software.altitude.core.AltitudeServletContext)
 <%@ val results: SearchResult %>
 <html lang="en">
 <head>
@@ -95,7 +95,7 @@
 
         .cell {
             display: grid;
-            width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt("preview.box.pixels").toInt + 20 %>px;
+            width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
             height: 220px;
             place-items: center;
         }

@@ -20,7 +20,7 @@ class TestRememberMeStrategy(protected val app: ScalatraBase)
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def authenticate()(implicit request: HttpServletRequest, response: HttpServletResponse): Option[User] = {
-    if (Environment.ENV != Environment.TEST)
+    if (Environment.CURRENT != Environment.Name.TEST)
       throw new RuntimeException("TestRememberMeStrategy can only be used in test environment")
 
     // Where is RequestContext.account set?

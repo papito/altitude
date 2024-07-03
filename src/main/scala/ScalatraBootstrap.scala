@@ -7,12 +7,8 @@ import javax.servlet.ServletContext
 class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
 
   override def init(context: javax.servlet.ServletContext): Unit = {
-    val environment =  Environment.ENV match {
-      case Environment.DEV => "development"
-      case Environment.PROD => "production"
-    }
 
-    context.setInitParameter("org.scalatra.environment", environment)
+    context.setInitParameter("org.scalatra.environment", Environment.CURRENT)
 
     AltitudeServletContext.mountEndpoints(context)
     AltitudeServletContext.app.runMigrations()

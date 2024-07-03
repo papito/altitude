@@ -4,12 +4,13 @@ import org.apache.commons.io.FileUtils
 import software.altitude.core.Altitude
 import software.altitude.core.models.ImportAsset
 import software.altitude.core.models.Metadata
+import software.altitude.core.{Const => C}
 
 import java.io.File
 
 object IntegrationTestUtil {
   def createTestDir(testApp: Altitude): Unit = {
-    val testDir = new File(testApp.config.getString("testDir"))
+    val testDir = new File(testApp.config.getString(C.Conf.TEST_DIR))
 
     if (!testDir.exists()) {
       FileUtils.forceMkdir(testDir)
@@ -17,7 +18,7 @@ object IntegrationTestUtil {
   }
 
   def createFileStoreDir(testApp: Altitude): Unit = {
-    val dataDir = new File(testApp.config.getString("dataDir"))
+    val dataDir = new File(testApp.config.getString(C.Conf.FS_DATA_DIR))
 
     if (dataDir.exists()) {
       FileUtils.cleanDirectory(dataDir)

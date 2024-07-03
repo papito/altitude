@@ -1,13 +1,13 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
-import software.altitude.core.Configuration
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Stat
 import software.altitude.core.{Const => C}
 
-abstract class StatDao(override val config: Configuration) extends BaseDao with software.altitude.core.dao.StatDao {
+abstract class StatDao(override val config: Config) extends BaseDao with software.altitude.core.dao.StatDao {
 
   override final val tableName = "stats"
 

@@ -2,7 +2,7 @@ package software.altitude.core.controllers.web
 
 import org.scalatra.NotFound
 import software.altitude.core.controllers.BaseWebController
-import software.altitude.core.{RequestContext, Const => C}
+import software.altitude.core.{Const => C}
 
 
 class SecuredStaticFileController extends BaseWebController {

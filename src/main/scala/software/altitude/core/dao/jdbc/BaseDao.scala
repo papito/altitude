@@ -1,11 +1,11 @@
 package software.altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
-import software.altitude.core.Configuration
 import software.altitude.core.ConstraintException
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
@@ -28,7 +28,7 @@ object BaseDao {
 abstract class BaseDao {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  val config: Configuration
+  val config: Config
   protected def txManager: TransactionManager = TransactionManager(config)
 
   val tableName: String

@@ -1,5 +1,8 @@
 package software.altitude.core
 
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigValueFactory
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -15,12 +18,14 @@ import software.altitude.core.service.filestore.FileSystemStoreService
 import software.altitude.core.transactions._
 import software.altitude.core.{Const => C}
 
+import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class Altitude(val configOverride: Map[String, Any] = Map())  {
+
+class Altitude(val dbEngineOverride: Option[String] = None)  {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
-  logger.info(s"Environment is: ${Environment.ENV}")
+  logger.info(s"Environment is: ${Environment.CURRENT}")
 
   final val app: Altitude = this
 
@@ -28,7 +33,32 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
   final val id: Int = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
   logger.info(s"Initializing Altitude Server application. Instance ID [$id]")
 
-  final val config = new Configuration(configOverride = configOverride)
+  /**
+   */
+  final val config: Config = Environment.CURRENT match {
+
+    case Environment.Name.DEV =>
+      ConfigFactory.parseFile(new File("application-dev.conf"))
+        .withFallback(ConfigFactory.defaultReference())
+
+
+    case Environment.Name.PROD =>
+      ConfigFactory.parseFile(new File("application.conf"))
+        .withFallback(ConfigFactory.defaultReference())
+
+
+    case Environment.Name.TEST =>
+      dbEngineOverride match {
+        case Some(ds) =>
+          ConfigFactory.defaultReference().withValue(C.Conf.DB_ENGINE, ConfigValueFactory.fromAnyRef(ds))
+
+        case None =>
+          ConfigFactory.defaultReference()
+      }
+
+    case _ =>
+      throw new RuntimeException("Unknown environment")
+  }
 
   /**
    * Has the first admin user been created?
@@ -43,18 +73,18 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
 
   private final val schemaVersion = 1
 
-  private final val dataSourceType = config.datasourceType
+  private final val dataSourceType = config.getString(C.Conf.DB_ENGINE)
   logger.info(s"Datasource type: $dataSourceType")
 
-  final val fileStoreType = config.fileStoreType
+  final val fileStoreType: String =  config.getString(C.Conf.DEFAULT_STORAGE_ENGINE)
   logger.info(s"File store type: $fileStoreType")
 
   /**
    * App thread pool, whatever it is needed for
    */
   private val maxThreads: Int = dataSourceType match {
-    case C.DatasourceType.POSTGRES => Runtime.getRuntime.availableProcessors()
-    case C.DatasourceType.SQLITE => 1 // SQLite is single-threaded
+    case C.DbEngineName.POSTGRES => Runtime.getRuntime.availableProcessors()
+    case C.DbEngineName.SQLITE => 1 // SQLite is single-threaded
   }
   logger.info(s"Available processors: $maxThreads")
 
@@ -68,15 +98,15 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
    * Production strategy is different from development and test.
    * In dev, since the cookie store is cleared on every hot reload, logging in every time is a pain.
    */
-  val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])] = Environment.ENV match {
-    case Environment.PROD => List(
+  val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])] = Environment.CURRENT match {
+    case Environment.Name.PROD => List(
       ("UserPasswordStrategy", classOf[UserPasswordStrategy]),
       ("RememberMeStrategy", classOf[RememberMeStrategy])
     )
-    case Environment.DEV => List(
+    case Environment.Name.DEV => List(
       ("RememberMeStrategy", classOf[LocalDevRememberMeStrategy])
     )
-    case Environment.TEST => List(
+    case Environment.Name.TEST => List(
       ("RememberMeStrategy", classOf[TestRememberMeStrategy])
     )
     case _ => throw new RuntimeException("Unknown environment")
@@ -84,61 +114,61 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
 
   object DAO {
     val systemMetadata: SystemMetadataDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
-      case C.DatasourceType.SQLITE => new jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val user: UserDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
-      case C.DatasourceType.SQLITE => new jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val repository: RepositoryDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new postgres.RepositoryDao(app.config)
-      case C.DatasourceType.SQLITE => new jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new postgres.RepositoryDao(app.config)
+      case C.DbEngineName.SQLITE => new jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val asset: AssetDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new postgres.AssetDao(app.config) with dao.postgres.PostgresOverrides
-      case C.DatasourceType.SQLITE => new jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new postgres.AssetDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val folder: FolderDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
-      case C.DatasourceType.SQLITE => new jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val stats: StatDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides
-      case C.DatasourceType.SQLITE => new jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val metadataField: MetadataFieldDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
-      case C.DatasourceType.SQLITE => new jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
+      case C.DbEngineName.POSTGRES => new jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val search: SearchDao = dataSourceType match {
-      case C.DatasourceType.POSTGRES => new postgres.SearchDao(app.config)
-      case C.DatasourceType.SQLITE => new sqlite.SearchDao(app.config)
+      case C.DbEngineName.POSTGRES => new postgres.SearchDao(app.config)
+      case C.DbEngineName.SQLITE => new sqlite.SearchDao(app.config)
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
   }
 
   object service {
     val migrationService: MigrationService = dataSourceType match {
-      case C.DatasourceType.SQLITE => new MigrationService(app) {
+      case C.DbEngineName.SQLITE => new MigrationService(app) {
         override final val CURRENT_VERSION = schemaVersion
         override final val MIGRATIONS_DIR = "/migrations/sqlite"
       }
-      case C.DatasourceType.POSTGRES => new MigrationService(app) {
+      case C.DbEngineName.POSTGRES => new MigrationService(app) {
         override final val CURRENT_VERSION = schemaVersion
         override final val MIGRATIONS_DIR = "/migrations/postgres"
       }
@@ -157,7 +187,7 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
     val stats = new StatsService(app)
 
     val fileStore: FileStoreService = fileStoreType match {
-      case C.FileStoreType.FS => new FileSystemStoreService(app)
+      case C.StorageEngineName.FS => new FileSystemStoreService(app)
       // S3-based file store bigly wants to be here
       case _ => throw new NotImplementedError
     }
@@ -171,11 +201,13 @@ class Altitude(val configOverride: Map[String, Any] = Map())  {
   }
 
   def runMigrations(): Unit = {
+    if (Environment.CURRENT == Environment.Name.TEST) {
+      return
+    }
+
     if (service.migrationService.migrationRequired) {
-      logger.warn("Migration is required!")
-      if (Environment.ENV != Environment.TEST) {
-        service.migrationService.migrate()
-      }
+       logger.warn("Migration is required!")
+      service.migrationService.migrate()
     }
   }
 
