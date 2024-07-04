@@ -46,6 +46,7 @@ libraryDependencies ++= Seq(
 
   "org.imgscalr"                 % "imgscalr-lib"             % "4.2",
   "org.apache.commons"           % "commons-imaging"          % "1.0-alpha2",
+  "com.drewnoakes"               % "metadata-extractor"       % "2.19.0",
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
   "org.slf4j"                    % "slf4j-api"                % "2.0.12" % "runtime",
 

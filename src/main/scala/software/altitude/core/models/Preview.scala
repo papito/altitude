@@ -9,8 +9,8 @@ import software.altitude.core.{Const => C}
 import scala.language.implicitConversions
 
 object Preview {
-  final val MIME_TYPE = "image/jpeg"
-  final val FILE_EXTENSION = "jpg"
+  final val MIME_TYPE = "image/png"
+  final val FILE_EXTENSION = "png"
 
   implicit def fromJson(json: JsValue): Preview = {
     val data: String = (json \ C.Preview.DATA).as[String]

@@ -1,9 +1,7 @@
 package software.altitude.core.service
 
-import org.apache.commons.imaging.Imaging
-import org.apache.commons.imaging.formats.jpeg.JpegImageMetadata
-import org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter
-import org.apache.commons.imaging.formats.tiff.TiffImageMetadata
+import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory}
 import org.imgscalr.Scalr
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -20,7 +18,9 @@ import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 import software.altitude.core.{Const => C, _}
 
-import java.awt.image.BufferedImage
+import java.awt.{AlphaComposite, Color, Graphics2D}
+import java.awt.geom.AffineTransform
+import java.awt.image.{AffineTransformOp, BufferedImage, ColorModel}
 import java.io._
 import javax.imageio.ImageIO
 
@@ -203,35 +203,92 @@ class LibraryService(val app: Altitude) {
 
   private def makeImageThumbnail(asset: Asset): Array[Byte] = {
     try {
+      val mt: com.drew.metadata.Metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(asset.data))
+      val exifDirectory = mt.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
+      // val jpegDirectory = mt.getFirstDirectoryOfType(classOf[JpegDirectory])
+
+      val orientation: Int = try {
+        exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
+      } catch {
+        case _: Exception => 1
+      }
+
+      /**
+       * Rotate the image if necessary
+       *
+       * https://sirv.com/help/articles/rotate-photos-to-be-upright/
+       * https://stackoverflow.com/questions/5905868/how-to-rotate-jpeg-images-based-on-the-orientation-metadata
+       */
       val dataStream: InputStream = new ByteArrayInputStream(asset.data)
-
-      println("1")
-      val imageMetadata = Option(Imaging.getMetadata(asset.data))
-      println("2")
-      val metadata: Option[TiffImageMetadata] = imageMetadata match {
-        case Some(imageMetadata) =>
-          val jpegMetadata = imageMetadata.asInstanceOf[JpegImageMetadata]
-          Option(jpegMetadata.getExif)
-        case _ =>
-          None
-      }
-
       val srcImage: BufferedImage = ImageIO.read(dataStream)
-      val scaledImage: BufferedImage = Scalr.resize(srcImage, Scalr.Method.ULTRA_QUALITY, previewBoxSize)
-      val byteArrayStream: ByteArrayOutputStream = new ByteArrayOutputStream
-      ImageIO.write(scaledImage, "JPEG", byteArrayStream)
+      val scaledImage: BufferedImage = Scalr.resize(srcImage, Scalr.Method.QUALITY, previewBoxSize)
 
-      val resizedByteArray = byteArrayStream.toByteArray
+      val width = scaledImage.getWidth
+      val height = scaledImage.getHeight
 
-      metadata match {
-        case Some(metadata) =>
-          val out = new ByteArrayOutputStream()
-          new ExifRewriter().updateExifMetadataLossless(resizedByteArray, out, metadata.getOutputSet)
-          out.close()
-          out.toByteArray
+      val transform: AffineTransform = new AffineTransform()
+      orientation match {
+        case 1 =>
+        case 2 =>
+          transform.scale(-1.0, 1.0);
+          transform.translate(-width, 0);
+        case 3 =>
+          transform.translate(width, height);
+          transform.rotate(Math.PI);
+        case 4 =>
+          transform.scale(1.0, -1.0);
+          transform.translate(0, -height);
+        case 5 =>
+          transform.rotate(-Math.PI / 2);
+          transform.scale(-1.0, 1.0);
+        case 6 =>
+          transform.translate(height, 0);
+          transform.rotate(Math.PI / 2);
+        case 7 =>
+          transform.scale(-1.0, 1.0);
+          transform.translate(-height, 0);
+          transform.translate(0, width);
+          transform.rotate(3 * Math.PI / 2);
+        case 8 =>
+          transform.translate(0, width);
+          transform.rotate(3 * Math.PI / 2);
         case _ =>
-          resizedByteArray
       }
+
+      val op = new AffineTransformOp(transform, AffineTransformOp.TYPE_BICUBIC)
+
+      val colorModel: ColorModel = scaledImage.getType match {
+        case BufferedImage.TYPE_BYTE_GRAY => null
+        case _ => scaledImage.getColorModel
+      }
+
+      val destinationImage = op.createCompatibleDestImage(scaledImage, colorModel)
+
+      val g = destinationImage.createGraphics()
+      g.setBackground(Color.WHITE)
+      g.clearRect(0, 0, destinationImage.getWidth, destinationImage.getHeight)
+      val rotationCorrectScaledImage = op.filter(scaledImage, destinationImage)
+
+      val compositeImage: BufferedImage =
+        new BufferedImage(previewBoxSize, previewBoxSize, BufferedImage.TYPE_INT_ARGB)
+      val G2D: Graphics2D = compositeImage.createGraphics
+
+      val x: Int = if (rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth) {
+        (previewBoxSize - rotationCorrectScaledImage.getWidth) / 2
+      } else 0
+      val y: Int = if (rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth) {
+        (previewBoxSize - rotationCorrectScaledImage.getHeight()) / 2
+      } else 0
+
+      G2D.setComposite(AlphaComposite.Clear)
+      G2D.fillRect(0, 0, previewBoxSize, previewBoxSize)
+      G2D.setComposite(AlphaComposite.Src)
+      G2D.drawImage(rotationCorrectScaledImage, x, y, null)
+      val byteArray: ByteArrayOutputStream = new ByteArrayOutputStream
+      ImageIO.write(compositeImage, "png", byteArray)
+
+      byteArray.toByteArray
+
     } catch {
       case ex: Exception =>
         logger.error(s"Error generating preview for $asset")
@@ -241,7 +298,6 @@ class LibraryService(val app: Altitude) {
   }
 
   def getPreview(assetId: String): Preview = {
-    require(assetId.nonEmpty, "Asset ID cannot be empty")
     app.service.fileStore.getPreviewById(assetId)
   }
 

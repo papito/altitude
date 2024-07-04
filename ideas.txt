@@ -4,7 +4,6 @@ Users can flip quickly between libraries they own or have permissions to
 
 PERMISSIONS
 Can add default permissions to other users at library level
-Can override permissions (remove completely, or add write) on folder/album level
 
 
 FEATURES
