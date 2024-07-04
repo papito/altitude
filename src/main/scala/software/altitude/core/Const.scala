@@ -13,6 +13,7 @@ object Const {
     val POSTGRES_USER = "db.postgres.user"
     val POSTGRES_PASSWORD = "db.postgres.password"
     val POSTGRES_URL = "db.postgres.url"
+    val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
   }
 

@@ -3,6 +3,7 @@ package software.altitude.core
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
+import org.apache.commons.io.FilenameUtils
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -55,8 +56,9 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
    *  For DEV and PROD, application*.conf files have the final say -
    *  and live at the root of the project (and along the live JAR)
    */
-  final val config: Config = Environment.CURRENT match {
 
+  // the config before final actual config as we need to dynamically figure out some values later
+  private val preConfig: Config = Environment.CURRENT match {
     case Environment.Name.DEV =>
       ConfigFactory.parseFile(new File("application-dev.conf"))
         .withFallback(ConfigFactory.defaultReference())
@@ -66,17 +68,44 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
         .withFallback(ConfigFactory.defaultReference())
 
     case Environment.Name.TEST =>
+      val relativeTestDir = ConfigFactory.defaultReference().getString(C.Conf.TEST_DIR)
+      val fsDataDirName = ConfigFactory.defaultReference().getString(C.Conf.FS_DATA_DIR)
+      val relativeFsDataDir = FilenameUtils.concat(relativeTestDir, fsDataDirName)
+
       dbEngineOverride match {
         case Some(ds) =>
-          ConfigFactory.systemEnvironmentOverrides().withFallback(ConfigFactory.defaultReference()).withValue(
-            C.Conf.DB_ENGINE, ConfigValueFactory.fromAnyRef(ds))
+          ConfigFactory.systemEnvironmentOverrides()
+            .withFallback(ConfigFactory.defaultReference())
+            .withValue(C.Conf.DB_ENGINE, ConfigValueFactory.fromAnyRef(ds))
+            .withValue(C.Conf.FS_DATA_DIR, ConfigValueFactory.fromAnyRef(relativeFsDataDir))
 
         case None =>
-          ConfigFactory.systemEnvironmentOverrides().withFallback(ConfigFactory.defaultReference())
+          ConfigFactory.systemEnvironmentOverrides()
+            .withFallback(ConfigFactory.defaultReference())
+            .withValue(C.Conf.FS_DATA_DIR, ConfigValueFactory.fromAnyRef(relativeFsDataDir))
       }
 
     case _ =>
       throw new RuntimeException("Unknown environment")
+
+  }
+
+  /**
+   * Heroically assemble SQLITE URL based on what we have
+   */
+  private final val sqliteRelDbPath = preConfig.getString(C.Conf.REL_SQLITE_DB_PATH)
+
+  final val config: Config = Environment.CURRENT match {
+
+    case Environment.Name.TEST =>
+      val testDir = preConfig.getString(C.Conf.TEST_DIR)
+      val sqliteTestUrl = s"jdbc:sqlite:$testDir${File.separator}$sqliteRelDbPath"
+      preConfig.withValue(C.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteTestUrl))
+
+    case _ =>
+      val dataDir = preConfig.getString(C.Conf.FS_DATA_DIR)
+      val sqliteUrl = s"jdbc:sqlite:$dataDir${File.separator}$sqliteRelDbPath"
+      preConfig.withValue(C.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteUrl))
   }
 
   /**
