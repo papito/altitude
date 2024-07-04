@@ -45,6 +45,7 @@ libraryDependencies ++= Seq(
   "org.xerial"                   % "sqlite-jdbc"              % "3.46.0.0",
 
   "org.imgscalr"                 % "imgscalr-lib"             % "4.2",
+  "org.apache.commons"           % "commons-imaging"          % "1.0-alpha2",
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
   "org.slf4j"                    % "slf4j-api"                % "2.0.12" % "runtime",
 

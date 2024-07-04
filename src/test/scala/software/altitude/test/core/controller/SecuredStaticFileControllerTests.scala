@@ -2,7 +2,7 @@ package software.altitude.test.core.controller
 
 import org.scalatest.DoNotDiscover
 import software.altitude.core.Altitude
-import software.altitude.core.models.Asset
+import software.altitude.core.models.{Asset, Preview}
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.ControllerTestCore
 
@@ -29,7 +29,7 @@ import software.altitude.test.core.ControllerTestCore
 
     get(s"/content/preview/${importedAsset.persistedId}", headers=testAuthHeaders()) {
       status should equal(200)
-      response.getContentType() should be("image/png;charset=utf-8")
+      response.getContentType() should be(s"${Preview.MIME_TYPE};charset=utf-8")
     }
   }
 

@@ -2,6 +2,7 @@ package software.altitude.core.controllers.web
 
 import org.scalatra.NotFound
 import software.altitude.core.controllers.BaseWebController
+import software.altitude.core.models.Preview
 import software.altitude.core.{Const => C}
 
 
@@ -18,7 +19,7 @@ class SecuredStaticFileController extends BaseWebController {
       val assetId = pathSegments.last
 
       val preview = app.service.fileStore.getPreviewById(assetId)
-      contentType = "image/png"
+      contentType = Preview.MIME_TYPE
       response.getOutputStream.write(preview.data)
       halt(200)
     }

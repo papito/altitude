@@ -24,8 +24,21 @@ import software.altitude.test.core.IntegrationTestCore
     }
   }
 
-  test("Imported image should have all properties set") {
+  test("Imported image WITHOUT metadata should successfully import") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
+    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+
+    importedAsset.assetType should equal(importedAsset.assetType)
+    importedAsset.checksum should not be empty
+
+    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    asset.assetType should equal(importedAsset.assetType)
+    asset.checksum should not be empty
+    asset.sizeBytes should not be 0
+  }
+
+  test("Imported image WITH metadata should should successfully import") {
+    val importAsset = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
     val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
 
     importedAsset.assetType should equal(importedAsset.assetType)

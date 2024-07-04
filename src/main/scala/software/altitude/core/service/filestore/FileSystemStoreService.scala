@@ -92,7 +92,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
 
   private def previewFilePath(assetId: String): String = {
     val dirName = assetId.substring(0, 2)
-    new File(new File(previewDirPath, dirName).getPath, assetId + ".png").getPath
+    new File(new File(previewDirPath, dirName).getPath, assetId + Preview.FILE_EXTENSION).getPath
   }
 
   private def previewDirPath: String =

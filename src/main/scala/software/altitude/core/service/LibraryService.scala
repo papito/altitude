@@ -1,5 +1,9 @@
 package software.altitude.core.service
 
+import org.apache.commons.imaging.Imaging
+import org.apache.commons.imaging.formats.jpeg.JpegImageMetadata
+import org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter
+import org.apache.commons.imaging.formats.tiff.TiffImageMetadata
 import org.imgscalr.Scalr
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -16,8 +20,6 @@ import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 import software.altitude.core.{Const => C, _}
 
-import java.awt.AlphaComposite
-import java.awt.Graphics2D
 import java.awt.image.BufferedImage
 import java.io._
 import javax.imageio.ImageIO
@@ -199,32 +201,37 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  // FIXME: this is temporary as only image-specific
   private def makeImageThumbnail(asset: Asset): Array[Byte] = {
     try {
-      require(asset.data.length != 0, "File length cannot be zero")
       val dataStream: InputStream = new ByteArrayInputStream(asset.data)
+
+      println("1")
+      val imageMetadata = Option(Imaging.getMetadata(asset.data))
+      println("2")
+      val metadata: Option[TiffImageMetadata] = imageMetadata match {
+        case Some(imageMetadata) =>
+          val jpegMetadata = imageMetadata.asInstanceOf[JpegImageMetadata]
+          Option(jpegMetadata.getExif)
+        case _ =>
+          None
+      }
+
       val srcImage: BufferedImage = ImageIO.read(dataStream)
       val scaledImage: BufferedImage = Scalr.resize(srcImage, Scalr.Method.ULTRA_QUALITY, previewBoxSize)
-      val height: Int = scaledImage.getHeight
-      val width: Int = scaledImage.getWidth
+      val byteArrayStream: ByteArrayOutputStream = new ByteArrayOutputStream
+      ImageIO.write(scaledImage, "JPEG", byteArrayStream)
 
-      val x: Int = if (height > width) (previewBoxSize - width) / 2 else 0
+      val resizedByteArray = byteArrayStream.toByteArray
 
-      val y: Int = if (height < width) (previewBoxSize - height) / 2 else 0
-
-      val COMPOSITE_IMAGE: BufferedImage =
-        new BufferedImage(previewBoxSize, previewBoxSize, BufferedImage.TYPE_INT_ARGB)
-      val G2D: Graphics2D = COMPOSITE_IMAGE.createGraphics
-
-      G2D.setComposite(AlphaComposite.Clear)
-      G2D.fillRect(0, 0, previewBoxSize, previewBoxSize)
-      G2D.setComposite(AlphaComposite.Src)
-      G2D.drawImage(scaledImage, x, y, null)
-      val byteArray: ByteArrayOutputStream = new ByteArrayOutputStream
-      ImageIO.write(COMPOSITE_IMAGE, "png", byteArray)
-
-      byteArray.toByteArray
+      metadata match {
+        case Some(metadata) =>
+          val out = new ByteArrayOutputStream()
+          new ExifRewriter().updateExifMetadataLossless(resizedByteArray, out, metadata.getOutputSet)
+          out.close()
+          out.toByteArray
+        case _ =>
+          resizedByteArray
+      }
     } catch {
       case ex: Exception =>
         logger.error(s"Error generating preview for $asset")
@@ -237,11 +244,6 @@ class LibraryService(val app: Altitude) {
     require(assetId.nonEmpty, "Asset ID cannot be empty")
     app.service.fileStore.getPreviewById(assetId)
   }
-
-  def getData(assetId: String): Data = {
-    app.service.fileStore.getById(assetId)
-  }
-
 
   /** **************************************************************************
     * DISCOVERY
