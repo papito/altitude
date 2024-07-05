@@ -50,17 +50,20 @@ object ImageHelpers {
    * If the input image is not using an indexed color model with transparency, then the target format and color model will be
    * identical to the source.
    */
-  def resize(source: BufferedImage, dx: Double, dy: Double): BufferedImage = {
+  def resize(source: BufferedImage, previewBoxSize: Int): BufferedImage = {
+    val targetHeight = previewBoxSize
+    val targetWidth = previewBoxSize
     val sourceColorModel = source.getColorModel
     val targetColorModel = source.getColorModel
     val standardColorModel = ColorModel.getRGBdefault
-    val (targetWidth, targetHeight) = (((source.getWidth: Double) * dx).asInstanceOf[Int], ((source.getHeight: Double) * dy).asInstanceOf[Int])
 
     def resize(src: BufferedImage, dst: BufferedImage) {
       val g = dst.createGraphics
       try {
         g.setRenderingHints(highQualityHints)
-        g.drawImage(src, new AffineTransformOp(AffineTransform.getScaleInstance(dx, dy), AffineTransformOp.TYPE_BICUBIC), 0, 0)
+        g.drawImage(src, new AffineTransformOp(
+          AffineTransform.getScaleInstance(targetHeight, targetWidth),
+          AffineTransformOp.TYPE_BICUBIC), 0, 0)
       } finally {
         g.dispose()
       }
@@ -73,8 +76,8 @@ object ImageHelpers {
 
         val transparent = indexColorModel.getRGB(indexColorModel.getTransparentPixel)
         val masked = new BufferedImage(standardColorModel, standardColorModel.createCompatibleWritableRaster(source.getWidth, source.getHeight), standardColorModel.isAlphaPremultiplied, null)
-        var w = masked.getWidth
-        var h = masked.getHeight
+        val w = masked.getWidth
+        val h = masked.getHeight
         var y = 0
         val buf = new Array[Int](w)
 
