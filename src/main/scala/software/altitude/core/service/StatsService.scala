@@ -128,13 +128,13 @@ class StatsService(val app: Altitude) {
       logger.debug(s"Asset [${asset.id}] recycled and moving FROM sorted. Decrementing SORTED")
       app.service.stats.decrementStat(Stats.SORTED_ASSETS)
       app.service.stats.decrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
+
+      logger.debug(s"Decrementing folder counter for recycled asset [${asset.id}]")
+      app.service.folder.decrAssetCount(asset.folderId)
     }
 
     app.service.stats.incrementStat(Stats.RECYCLED_ASSETS)
     app.service.stats.incrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
-
-    logger.debug(s"Decrementing folder counter for recycled asset [${asset.id}]")
-    app.service.folder.decrAssetCount(asset.folderId)
   }
 
   def restoreAsset(asset: Asset): Unit = {

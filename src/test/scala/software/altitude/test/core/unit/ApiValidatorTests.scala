@@ -50,11 +50,11 @@ import software.altitude.test.core.TestFocus
   test("Test failed min length") {
     val minPasswordLength = 6
     val validator: ApiRequestValidator = ApiRequestValidator(
-      minLengths=Map(C.Api.Fields.PASSWORD -> minPasswordLength)
+      minLengths=Map(C.Api.Setup.PASSWORD -> minPasswordLength)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Fields.PASSWORD -> "lol/$",
+      C.Api.Setup.PASSWORD -> "lol/$",
     )
 
     val validationException = intercept[ValidationException] {
@@ -68,8 +68,8 @@ import software.altitude.test.core.TestFocus
   test("Test min length error should not override the REQUIRED error") {
     val minPasswordLength = 6
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(C.Api.Fields.PASSWORD),
-      minLengths=Map(C.Api.Fields.PASSWORD -> minPasswordLength)
+      required=List(C.Api.Setup.PASSWORD),
+      minLengths=Map(C.Api.Setup.PASSWORD -> minPasswordLength)
     )
 
     val jsonIn = Json.obj()

@@ -1,0 +1,67 @@
+#import(software.altitude.core.Const)
+#import(play.api.libs.json.Json)
+#import(play.api.libs.json.JsObject)
+
+<%@ val fieldErrors: Map[String, String] = Map.empty %>
+<%@ val formJson: JsObject = Json.obj() %>
+<%@ val parentId: String %>
+
+<style>
+    #addFolder input {
+        width: 100%;
+    }
+</style>
+
+<form action="#"
+      id="addFolder"
+      folder-id="${parentId}"
+      hx-swap="innerHTML"
+      hx-post="${ url(htmxAddFolder) }"
+      hx-target="#children-${parentId}"
+      hx-trigger="submit"
+      hx-ext="json-enc">
+
+    #if (fieldErrors.contains(Const.Api.Folder.NAME))
+        <div class="error">${ fieldErrors(Const.Api.Folder.NAME) }</div>
+    #end
+
+    <div>
+        <label for="${ Const.Api.Folder.NAME }"></label>
+        <input type="text"
+               id="field${ Const.Api.Folder.NAME }"
+            #if (fieldErrors.contains(Const.Api.Folder.NAME))
+               class="error"
+            #end
+               name="${ Const.Api.Folder.NAME }"
+               autocomplete="off"
+               value='<%= (formJson \ Const.Api.Folder.NAME).asOpt[String].getOrElse("") %>'
+               placeholder="New folder name"
+               maxlength="${ Const.Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+               minlength="${ Const.Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
+
+        <input type="hidden" name="${ Const.Api.Folder.PARENT_ID }" value="${ parentId }">
+    </div>
+</form>
+
+<%@ val minWidth: Int %>
+<%@ val title: String %>
+<script lang="js" type="module">
+    import {Const} from "/js/constants.js";
+
+    showModal({minWidthPx: "${minWidth}", title: "${title}"})
+
+    htmx.find("#field${ Const.Api.Folder.NAME }").focus()
+
+    htmx.find("#addFolder").addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful === true) {
+            const folderAddedEvent = new CustomEvent(
+                    Const.events.folderAdded, {
+                        detail: {${Const.Api.Folder.PARENT_ID}: "${parentId}"}
+                    });
+
+            document.body.dispatchEvent(folderAddedEvent)
+
+            closeModal()
+        }
+    });
+</script>

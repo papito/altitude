@@ -1,7 +1,7 @@
 #import(software.altitude.core.RequestContext)
 
 <div id="statusTicker" hidden>
-    <div hx-ext="ws" ws-connect="/import/status?userId=<%= RequestContext.getAccount.id.get %>">
+    <div hx-ext="ws" ws-connect="/import/status?userId=${ RequestContext.getAccount.id.get }">
         <div id="statusText"></div>
     </div>
 </div>
@@ -10,21 +10,21 @@
     const tickerEl = htmx.find("#statusTicker")
 
     htmx.on('htmx:wsOpen', function(evt) {
-        console.log('WS connection is OPEN');
+        console.log('WS connection is OPEN')
     });
     htmx.on('htmx:wsClose', function(evt) {
-        console.log('WS connection is CLOSED');
+        console.log('WS connection is CLOSED')
     });
     htmx.on('htmx:wsAfterMessage', function(evt) {
         const statusTextEl = htmx.find("#statusText")
         // sometimes empty pings come through
-        if (evt.detail.message) {
+        if (evt.detail.message && evt.detail.message !== "X") {
             statusTextEl.style.display = "block"
         }
 
         setTimeout(function() {
             statusTextEl.innerHTML = ""
-            statusTextEl.style.display = 'none';
+            statusTextEl.style.display = 'none'
         }, 3000);
     });
 </script>

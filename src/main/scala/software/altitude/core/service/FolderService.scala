@@ -14,18 +14,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    */
   override def add(folder: Folder, queryForDup: Option[Query] = None): JsObject = {
     txManager.withTransaction[JsObject] {
-      val dupQuery = new Query(params = Map(
-        C.Folder.PARENT_ID -> folder.parentId,
-        C.Folder.NAME_LC -> folder.nameLowercase))
-
-      try {
-        super.add(folder, Some(dupQuery))
-      } catch {
-        case _: DuplicateException =>
-          val ex = ValidationException()
-          ex.errors += (C.Folder.NAME -> C.Msg.Err.DUPLICATE)
-          throw ex
-      }
+      super.add(folder)
     }
   }
 
@@ -37,15 +26,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
      wPaths
     }
   }
-
-  /**
-   * Get root folder object for this repository.
-   */
-  def rootFolder: Folder = Folder(
-    id = Some(contextRepo.rootFolderId),
-    parentId = contextRepo.rootFolderId,
-    name = C.Folder.Name.ROOT,
-  )
 
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
@@ -114,6 +94,12 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       }
 
       val parents = findParents(folderId = folderId, allRepoFolders = repoFolders)
+
+      val rootFolder = Folder(
+        id = Some(contextRepo.rootFolderId),
+        parentId = contextRepo.rootFolderId,
+        name = C.Folder.Name.ROOT,
+      )
 
       List(rootFolder) ::: (folder :: parents).reverse
     }
@@ -191,12 +177,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     else {
       List()
     }
-  }
-
-  override def getById(id: String): JsObject = {
-    txManager.asReadOnly[JsObject] {
-      if (isRootFolder(id)) rootFolder else super.getById(id)
-   }
   }
 
   /**
@@ -282,8 +262,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     txManager.withTransaction {
       // cannot move into own child
       if (flatChildrenIdsWithDepths(folderBeingMovedId, repositoryFolders()).map(_._2).contains(destFolderId)) {
-        throw IllegalOperationException(
-          s"Cannot move a folder into own child. $destFolderId ID in $folderBeingMovedId path")
+        throw DuplicateException(
+          Some(s"Cannot move parent folder into a child node"))
       }
 
       var destFolder: Option[Folder] = None
@@ -304,12 +284,12 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val folderForUpdate = Folder(
         parentId = destFolderId,
         name = folderBeingMoved.name)
-      try {
-        updateById(folderBeingMovedId, folderForUpdate, List(C.Folder.PARENT_ID), Some(dupQuery))
-      } catch {
-        case _: DuplicateException => throw ValidationException(
-          s"Cannot move to '${destFolder.get.name}' as a folder by this name already exists")
-      }
+
+      updateById(folderBeingMovedId, folderForUpdate, List(C.Folder.PARENT_ID), Some(dupQuery))
+
+      incrChildCount(destFolderId)
+      // this is still the old parent as the model is immutable
+      decrChildCount(folderBeingMoved.parentId)
 
       Tuple2(folderBeingMoved, destFolder.get)
     }
@@ -328,41 +308,44 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
         C.Folder.PARENT_ID -> folder.parentId,
         C.Folder.NAME -> newName))
 
-      try {
-        val folderForUpdate: Folder = folder.copy(
-          name = newName
-        )
+      val folderForUpdate: Folder = folder.copy(
+        name = newName
+      )
 
-        updateById(folderId, folderForUpdate, List(C.Folder.NAME, C.Folder.NAME_LC), Some(dupQuery))
-        folderForUpdate
-      } catch {
-        case _: DuplicateException =>
-          val ex = ValidationException()
-          ex.errors += C.Folder.NAME -> C.Msg.Err.DUPLICATE
-          throw ex
-      }
+      updateById(folderId, folderForUpdate, List(C.Folder.NAME, C.Folder.NAME_LC), Some(dupQuery))
+      folderForUpdate
     }
   }
 
-  /**
-   * Increase a folder's asset count.
-   */
   def incrAssetCount(folderId: String, count: Int = 1): Unit = {
-    logger.debug(s"Incrementing folder $folderId count by $count")
+    logger.debug(s"Incrementing folder $folderId asset count by $count")
 
     txManager.withTransaction {
       dao.increment(folderId, C.Folder.NUM_OF_ASSETS, count)
     }
   }
 
-  /**
-   * Decrease a folder's asset count.
-   */
   def decrAssetCount(folderId: String, count: Int = 1): Unit = {
-    logger.debug(s"Decrementing folder $folderId count by $count")
+    logger.debug(s"Decrementing folder $folderId asset count by $count")
 
     txManager.withTransaction {
       dao.decrement(folderId, C.Folder.NUM_OF_ASSETS, count)
+    }
+  }
+
+  def incrChildCount(folderId: String, count: Int = 1): Unit = {
+    logger.debug(s"Incrementing folder $folderId child folder count by $count")
+
+    txManager.withTransaction {
+      dao.increment(folderId, C.Folder.NUM_OF_CHILDREN, count)
+    }
+  }
+
+  def decrChildCount(folderId: String, count: Int = 1): Unit = {
+    logger.debug(s"Decrementing folder $folderId child folder count by $count")
+
+    txManager.withTransaction {
+      dao.decrement(folderId, C.Folder.NUM_OF_CHILDREN, count)
     }
   }
 

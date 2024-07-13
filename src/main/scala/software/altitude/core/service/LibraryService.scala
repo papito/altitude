@@ -1,7 +1,8 @@
 package software.altitude.core.service
 
 import com.drew.imaging.ImageMetadataReader
-import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory}
+import com.drew.metadata.exif.ExifDirectoryBase
+import com.drew.metadata.exif.ExifIFD0Directory
 import org.imgscalr.Scalr
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -18,9 +19,13 @@ import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 import software.altitude.core.{Const => C, _}
 
-import java.awt.{AlphaComposite, Color, Graphics2D}
+import java.awt.AlphaComposite
+import java.awt.Color
+import java.awt.Graphics2D
 import java.awt.geom.AffineTransform
-import java.awt.image.{AffineTransformOp, BufferedImage, ColorModel}
+import java.awt.image.AffineTransformOp
+import java.awt.image.BufferedImage
+import java.awt.image.ColorModel
 import java.io._
 import javax.imageio.ImageIO
 
@@ -52,8 +57,7 @@ class LibraryService(val app: Altitude) {
 
       if (existing.nonEmpty) {
         logger.debug(s"Duplicate found for [$assetIn] and checksum: ${assetIn.checksum}")
-        val existingAsset: Asset = existing.get
-        throw DuplicateException(existingAsset.persistedId)
+        throw DuplicateException()
       }
 
       /**
@@ -264,9 +268,9 @@ class LibraryService(val app: Altitude) {
 
       val destinationImage = op.createCompatibleDestImage(scaledImage, colorModel)
 
-      val g = destinationImage.createGraphics()
-      g.setBackground(Color.WHITE)
-      g.clearRect(0, 0, destinationImage.getWidth, destinationImage.getHeight)
+      val graphics = destinationImage.createGraphics()
+      graphics.setBackground(Color.WHITE)
+      graphics.clearRect(0, 0, destinationImage.getWidth, destinationImage.getHeight)
       val rotationCorrectScaledImage = op.filter(scaledImage, destinationImage)
 
       val compositeImage: BufferedImage =
@@ -286,6 +290,7 @@ class LibraryService(val app: Altitude) {
       G2D.drawImage(rotationCorrectScaledImage, x, y, null)
       val byteArray: ByteArrayOutputStream = new ByteArrayOutputStream
       ImageIO.write(compositeImage, "png", byteArray)
+      graphics.dispose()
 
       byteArray.toByteArray
 
@@ -354,11 +359,14 @@ class LibraryService(val app: Altitude) {
     * FOLDERS
     * *********************************************************************** */
 
-  def addFolder(name: String, parentId: Option[String] = None): JsObject = {
+  def addFolder(name: String, parentId: Option[String] = None): Folder = {
     txManager.withTransaction[JsObject] {
       val _parentId = if (parentId.isDefined) parentId.get else RequestContext.repository.value.get.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
-      val addedFolder = app.service.folder.add(folder)
+      val addedFolder: Folder = app.service.folder.add(folder)
+
+      app.service.folder.incrChildCount(_parentId)
+
       addedFolder
     }
   }
@@ -429,6 +437,8 @@ class LibraryService(val app: Altitude) {
 
         treeAssetCount // accumulates total asset count for the next step in the fold
       }
+
+      app.service.folder.decrChildCount(folder.parentId)
     }
   }
 
@@ -469,7 +479,7 @@ class LibraryService(val app: Altitude) {
       val existing = getByChecksum(asset.checksum)
 
       if (existing.isDefined) {
-        throw DuplicateException(existingAssetId = existing.get.persistedId)
+        throw DuplicateException()
       }
 
       txManager.withTransaction {
@@ -506,7 +516,6 @@ class LibraryService(val app: Altitude) {
       }
     }
   }
-
 
   /** **************************************************************************
     * METADATA

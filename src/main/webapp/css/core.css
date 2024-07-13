@@ -2,14 +2,18 @@
     --background-color: #3d3d3d;
     --form-background-color: #363535;
     --background-secondary-color: #333;
-    --form-border-color: #646161;
+    --form-border: 2px solid #646161;
+    --modal-border: 3px solid rgba(129, 128, 128, 0.98);
     --modal-background-color: #3b3b3b;
+    --form-error-border: 2px solid var(--error-color);
     --panel-border-color: #343434;
     --navbar-border: 2px solid #272727;
     --navbar-text-shadow: rgba(0,0,0,0.75) 0 1px;
     --box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0;
+
     /* Larger spacing for larger app areas, like panels and page paddings */
     --section-vertical-space: 35px;
+
     /* Standard vertical spacing for individual elements and lists */
     --control-vertical-space: 15px;
     --success-font-color: #82da5f;
@@ -19,6 +23,13 @@
     --error-font-color: #fc1e1e;
     --error-background-color: #a80404;
     --error-color: #fc1e1e;
+
+    /* Dragon Drop */
+    --dnd-can-drop-color: #377a1c;
+    --dnd-drop-target-color: rgb(109, 140, 253);
+    --dnd-draggable-border: 2px solid #b0acac;
+
+
     /* For messages such as form validation and server response status */
     --message-background-color: #2f2e2e;
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
@@ -70,14 +81,26 @@ footer {
 /*       */
 
 input, textarea {
-    padding: 10px;
-    border: 1px solid #ccc;
+    padding: 8px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
     color: #2C3E50;
     font-size: 1.2em;
+    background-color: #f6f6f6;
 }
 
 input.readonly {
     background-color: #ada8a8;
+}
+
+form div.error {
+    color: var(--error-font-color);
+    padding: 5px;
+}
+
+form input.error, form input.error:focus {
+    border: var(--form-error-border);
+    outline: none !important;
 }
 
 /*         */
@@ -88,12 +111,12 @@ input.readonly {
     background: var(--success-background-color);
     font-weight: bold;
     color: white;
-    border: 0 none;
+    border: 2px solid #bdbbbb;
     border-radius: 4px;
     cursor: pointer;
     padding: 7px;
     text-decoration: none;
-    text-shadow: rgba(72, 70, 70, 0.45) 1px 1px 1px;
+    text-shadow: rgba(72, 70, 70, 0.55) 4px 4px 4px;
     font-size: 1em;
 }
 .action-button:hover, .action-button:focus {
@@ -124,7 +147,7 @@ input.readonly {
 #statusTicker {
     display: grid;
     background-color: var(--background-secondary-color);
-    border-bottom: 2px solid var(--form-border-color);
+    border-bottom: var(--form-border);
 }
 
 #statusText {
@@ -141,4 +164,113 @@ input.readonly {
 
 #statusText span {
     color: #FFFFFF;
+}
+
+#snackbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    min-width: 500px;
+    margin-left: -250px;
+    color: #fff;
+    text-align: center;
+    border-radius: 2px;
+    padding: 16px;
+    position: fixed;
+    z-index: 1;
+    left: 50%;
+    top: 50px;
+    height: 30px;
+    border: 1px solid white;
+}
+
+#snackbar.show {
+    visibility: visible;
+    animation: fadein 0.5s;
+}
+
+#snackbar.success {
+    background-color: var(--success-background-color);
+}
+
+#snackbar.warning {
+    background-color: var(--warning-background-color);
+}
+
+#snackbar.error {
+    background-color: var(--error-background-color);
+}
+
+@keyframes fadein {
+    from {bottom: 0; opacity: 0;}
+    to {bottom: 30px; opacity: 1;}
+}
+
+
+/*
+       MODAL
+*/
+#modalContainer {
+    display: none;
+    position: fixed;
+    z-index: 4;
+    padding-top: 100px;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+}
+
+#modalBox {
+    display: grid;
+    grid-template-rows: 30px auto;
+    background-color: var(--background-secondary-color);
+    margin: auto;
+    width: fit-content;
+    border: var(--modal-border);
+    border-radius: 5px;
+    box-shadow: rgba(10, 0, 0, 0.66) 6px 6px 6px;
+}
+
+#modalContent {
+    padding: 15px;
+}
+
+#modalWarning {
+    background-color: var(--warning-font-color);
+}
+
+#modalError {
+    background-color: var(--warning-font-color);
+}
+
+#modalToolbar {
+    display: grid;
+    align-items: center;
+    grid-template-columns: 1fr minmax(auto, max-content);
+    background-color: var(--background-secondary-color);
+    border-bottom: 1px solid #44495e;
+}
+
+#closeModal {
+    font-size: 1.6em;
+    font-weight: bold;
+    padding-right: .4em;
+}
+
+#modalTitle {
+    padding-left: .7em;
+    font-size: 1.1em;
+    font-weight: bold;
+    text-transform: capitalize;
+}
+
+#closeModal:hover,
+#closeModal:focus {
+    color: var(--warning-font-color);
+    text-decoration: none;
+    cursor: pointer;
 }

@@ -16,7 +16,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
       name = rec(C.Folder.NAME).asInstanceOf[String],
       parentId = rec(C.Folder.PARENT_ID).asInstanceOf[String],
       isRecycled = getBooleanField(rec(C.Folder.IS_RECYCLED)),
-      numOfAssets = rec(C.Folder.NUM_OF_ASSETS).asInstanceOf[Int]
+      numOfAssets = rec(C.Folder.NUM_OF_ASSETS).asInstanceOf[Int],
+      numOfChildren = rec(C.Folder.NUM_OF_CHILDREN).asInstanceOf[Int]
     )
     addCoreAttrs(model, rec)
   }

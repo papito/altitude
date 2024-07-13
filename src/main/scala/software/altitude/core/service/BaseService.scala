@@ -12,9 +12,9 @@ import software.altitude.core.models.Repository
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-import software.altitude.core.{Const => C}
 
 import java.sql.Connection
+import java.sql.SQLException
 
 abstract class BaseService[Model <: BaseModel] {
   protected val app: Altitude
@@ -45,12 +45,23 @@ abstract class BaseService[Model <: BaseModel] {
 
     if (existing.nonEmpty) {
       logger.debug(s"Duplicate found for [$objIn] and query: ${queryForDup.get.params}")
-      val existingId = (existing.records.head \ C.Base.ID).get.toString
-      throw DuplicateException(existingId)
+      throw DuplicateException()
     }
 
     txManager.withTransaction[JsObject] {
-      dao.add(objIn)
+
+      try {
+        dao.add(objIn)
+      } catch {
+        case e: SQLException =>
+          if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
+            throw DuplicateException()
+          } else {
+            throw e
+          }
+        case ex: Exception =>
+          throw ex
+      }
     }
   }
 
@@ -75,8 +86,7 @@ abstract class BaseService[Model <: BaseModel] {
 
     if (existing.nonEmpty) {
       logger.debug(s"Duplicate found for [$data] and query: ${queryForDup.get.params}")
-      val existingId = (existing.records.head \ C.Base.ID).get.toString
-      throw DuplicateException(existingId)
+      throw DuplicateException()
     }
 
     txManager.withTransaction[Int] {

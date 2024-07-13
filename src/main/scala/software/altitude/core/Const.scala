@@ -90,6 +90,7 @@ object Const {
     val NAME_LC = "name_lc"
     val PARENT_ID = "parent_id"
     val NUM_OF_ASSETS = "num_of_assets"
+    val NUM_OF_CHILDREN = "num_of_children"
     val CHILDREN = "children"
     val IS_RECYCLED = "is_recycled"
 
@@ -157,6 +158,7 @@ object Const {
       val DUPLICATE = "Duplicate"
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
+      val INVALID_CONTENT_TYPE = "Invalid content type"
     }
   }
 
@@ -217,13 +219,16 @@ object Const {
     }
 
     object Folder {
+      val FOLDER = "folder"
       val HIERARCHY = "hierarchy"
       val FOLDERS = "folders"
-      val FOLDER = "folder"
-      val ASSET_IDS = "asset_ids"
+      val ASSET_IDS = "assetIds"
       val PATH = "path"
       val NAME = "name"
-      val PARENT_ID = "parent_id"
+      val EXISTING_NAME = "existingName"
+      val PARENT_ID = "parentId"
+      val MOVED_FOLDER_ID = "movedFolderId"
+      val NEW_PARENT_ID = "newParentId"
     }
 
     object Trash {
@@ -244,7 +249,7 @@ object Const {
       }
     }
 
-    object Fields {
+    object Setup {
       val ADMIN_EMAIL = "adminEmail"
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
@@ -260,6 +265,22 @@ object Const {
 
       val MAX_REPOSITORY_NAME_LENGTH = 80
       val MIN_REPOSITORY_NAME_LENGTH = 2
+
+      val MAX_FOLDER_NAME_LENGTH = 250
+      val MIN_FOLDER_NAME_LENGTH = 1
     }
+  }
+
+  object UI {
+    private val DEFAULT_MODAL_WIDTH = 400
+
+    val ADD_FOLDER_MODAL_TITLE = "Add a folder"
+    val ADD_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
+
+    val RENAME_FOLDER_MODAL_TITLE = "Rename folder"
+    val RENAME_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
+
+    val DELETE_FOLDER_MODAL_TITLE = "Delete folder"
+    val DELETE_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
   }
 }

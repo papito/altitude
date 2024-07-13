@@ -1,4 +1,5 @@
 package software.altitude.core.controllers.htmx
+import org.scalatra.Route
 import play.api.libs.json.JsObject
 import software.altitude.core.DataScrubber
 import software.altitude.core.ValidationException
@@ -12,32 +13,32 @@ class SetupController extends BaseHtmxController  {
 
   private val dataScrubber = DataScrubber(
     trim = List(
-      C.Api.Fields.REPOSITORY_NAME,
-      C.Api.Fields.ADMIN_EMAIL,
-      C.Api.Fields.PASSWORD,
-      C.Api.Fields.PASSWORD2),
-    lower = List(C.Api.Fields.ADMIN_EMAIL)
+      C.Api.Setup.REPOSITORY_NAME,
+      C.Api.Setup.ADMIN_EMAIL,
+      C.Api.Setup.PASSWORD,
+      C.Api.Setup.PASSWORD2),
+    lower = List(C.Api.Setup.ADMIN_EMAIL)
   )
 
   private val apiRequestValidator = ApiRequestValidator(
     required = List(
-      C.Api.Fields.REPOSITORY_NAME,
-      C.Api.Fields.ADMIN_EMAIL,
-      C.Api.Fields.PASSWORD,
-      C.Api.Fields.PASSWORD2),
+      C.Api.Setup.REPOSITORY_NAME,
+      C.Api.Setup.ADMIN_EMAIL,
+      C.Api.Setup.PASSWORD,
+      C.Api.Setup.PASSWORD2),
     maxLengths = Map(
-      C.Api.Fields.REPOSITORY_NAME -> C.Api.Constraints.MAX_REPOSITORY_NAME_LENGTH,
-      C.Api.Fields.ADMIN_EMAIL -> C.Api.Constraints.MAX_EMAIL_LENGTH,
-      C.Api.Fields.PASSWORD -> C.Api.Constraints.MAX_PASSWORD_LENGTH,
+      C.Api.Setup.REPOSITORY_NAME -> C.Api.Constraints.MAX_REPOSITORY_NAME_LENGTH,
+      C.Api.Setup.ADMIN_EMAIL -> C.Api.Constraints.MAX_EMAIL_LENGTH,
+      C.Api.Setup.PASSWORD -> C.Api.Constraints.MAX_PASSWORD_LENGTH,
     ),
     minLengths = Map(
-      C.Api.Fields.REPOSITORY_NAME -> C.Api.Constraints.MIN_REPOSITORY_NAME_LENGTH,
-      C.Api.Fields.ADMIN_EMAIL -> C.Api.Constraints.MIN_EMAIL_LENGTH,
-      C.Api.Fields.PASSWORD -> C.Api.Constraints.MIN_PASSWORD_LENGTH,
+      C.Api.Setup.REPOSITORY_NAME -> C.Api.Constraints.MIN_REPOSITORY_NAME_LENGTH,
+      C.Api.Setup.ADMIN_EMAIL -> C.Api.Constraints.MIN_EMAIL_LENGTH,
+      C.Api.Setup.PASSWORD -> C.Api.Constraints.MIN_PASSWORD_LENGTH,
     ),
   )
 
-  post("/") {
+  val htmxAdminSetup: Route = post("/") {
     if (app.isInitialized) {
       val message = "Instance is already initialized."
       logger.warn(message)
@@ -58,25 +59,25 @@ class SetupController extends BaseHtmxController  {
         halt(500, "Server error")
     }
 
-    val repositoryName = (jsonIn \ C.Api.Fields.REPOSITORY_NAME).asOpt[String].getOrElse("")
-    val email = (jsonIn \ C.Api.Fields.ADMIN_EMAIL).asOpt[String].getOrElse("")
-    val password = (jsonIn \ C.Api.Fields.PASSWORD).asOpt[String].getOrElse("")
-    val password2 = (jsonIn \ C.Api.Fields.PASSWORD2).asOpt[String].getOrElse("")
+    val repositoryName = (jsonIn \ C.Api.Setup.REPOSITORY_NAME).asOpt[String].getOrElse("")
+    val email = (jsonIn \ C.Api.Setup.ADMIN_EMAIL).asOpt[String].getOrElse("")
+    val password = (jsonIn \ C.Api.Setup.PASSWORD).asOpt[String].getOrElse("")
+    val password2 = (jsonIn \ C.Api.Setup.PASSWORD2).asOpt[String].getOrElse("")
 
     /*
     Continue with secondary validation checks (only if the primary validation checks have passed for these fields)
      */
-    if (!validationException.errors.contains(C.Api.Fields.PASSWORD) &&
-      !validationException.errors.contains(C.Api.Fields.PASSWORD2)) {
+    if (!validationException.errors.contains(C.Api.Setup.PASSWORD) &&
+      !validationException.errors.contains(C.Api.Setup.PASSWORD2)) {
       if (password != password2) {
-        validationException.errors.addOne(C.Api.Fields.PASSWORD -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH)
+        validationException.errors.addOne(C.Api.Setup.PASSWORD -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH)
       }
     }
 
     // if we have errors
     if (validationException.errors.nonEmpty) {
-      halt(200, layoutTemplate(
-          "/WEB-INF/templates/views/htmx/admin/setup_form.ssp",
+      halt(200, ssp(
+          "htmx/admin/setup_form.ssp",
           "fieldErrors" -> validationException.errors.toMap, // to immutable map
           "formJson" -> jsonIn)
       )

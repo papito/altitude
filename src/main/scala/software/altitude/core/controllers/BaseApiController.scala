@@ -1,7 +1,6 @@
 package software.altitude.core.controllers
 
 import org.scalatra._
-import org.scalatra.scalate.ScalateSupport
 import play.api.libs.json.JsNull
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json

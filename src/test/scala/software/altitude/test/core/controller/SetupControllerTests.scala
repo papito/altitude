@@ -9,6 +9,7 @@ import software.altitude.test.core.ControllerTestCore
 @DoNotDiscover class SetupControllerTests(override val testApp: Altitude) extends ControllerTestCore {
 
   test("Should return validation errors") {
+
     post("/htmx/admin/setup", body = "{}") {
       val requiredCount = "required".r.findAllIn(response.body).toList.size
       requiredCount should be (4)
@@ -17,10 +18,10 @@ import software.altitude.test.core.ControllerTestCore
 
   test("Should not allow mismatching passwords") {
     val payload = Json.obj(
-      C.Api.Fields.ADMIN_EMAIL -> "me@me.com",
-      C.Api.Fields.REPOSITORY_NAME -> "My Repository",
-      C.Api.Fields.PASSWORD -> "password",
-      C.Api.Fields.PASSWORD2 -> "oops"
+      C.Api.Setup.ADMIN_EMAIL -> "me@me.com",
+      C.Api.Setup.REPOSITORY_NAME -> "My Repository",
+      C.Api.Setup.PASSWORD -> "password",
+      C.Api.Setup.PASSWORD2 -> "oops"
     )
     post("/htmx/admin/setup", body = payload.toString()) {
       response.body should include ("Passwords do not match")
@@ -29,10 +30,10 @@ import software.altitude.test.core.ControllerTestCore
 
   test("Should successfully initialize when the form is valid") {
     val payload = Json.obj(
-      C.Api.Fields.ADMIN_EMAIL -> "me@me.com",
-      C.Api.Fields.REPOSITORY_NAME -> "My Repository",
-      C.Api.Fields.PASSWORD -> "password3000",
-      C.Api.Fields.PASSWORD2 -> "password3000"
+      C.Api.Setup.ADMIN_EMAIL -> "me@me.com",
+      C.Api.Setup.REPOSITORY_NAME -> "My Repository",
+      C.Api.Setup.PASSWORD -> "password3000",
+      C.Api.Setup.PASSWORD2 -> "password3000"
     )
 
     post("/htmx/admin/setup", body = payload.toString()) {

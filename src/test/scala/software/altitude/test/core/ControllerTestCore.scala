@@ -7,7 +7,6 @@ import org.scalatra.test.ScalatraTests
 import org.scalatra.test.scalatest.ScalatraFunSuite
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Const
-import software.altitude.core.Environment
 import software.altitude.core.models.Repository
 import software.altitude.core.models.User
 import software.altitude.test.IntegrationTestUtil

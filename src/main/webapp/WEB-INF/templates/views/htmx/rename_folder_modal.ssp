@@ -1,0 +1,71 @@
+#import(software.altitude.core.Const)
+#import(play.api.libs.json.Json)
+#import(play.api.libs.json.JsObject)
+
+<%@ val minWidth: Int %>
+<%@ val title: String %>
+
+<%@ val fieldErrors: Map[String, String] = Map.empty %>
+<%@ val formJson: JsObject = Json.obj() %>
+<%@ val id: String %>
+<%@ val existingName: Option[String] = None %>
+<% val name: Option[String] = (formJson \ Const.Api.Folder.NAME).asOpt[String] %>
+
+<style>
+    #renameFolder input {
+        width: 100%;
+    }
+</style>
+
+<form action="#"
+      id="renameFolder"
+      hx-swap="innerHTML"
+      hx-put="${ url(htmxRenameFolder) }"
+      hx-trigger="submit"
+      hx-target="#folderName-${id}"
+      hx-ext="json-enc">
+
+    #if (fieldErrors.contains(Const.Api.Folder.NAME))
+        <div class="error">${ fieldErrors(Const.Api.Folder.NAME) }</div>
+    #end
+
+    <div>
+        <label for="${ Const.Api.Folder.NAME }"></label>
+        <input type="text"
+               id="field-${ Const.Api.Folder.NAME }"
+               name="${ Const.Api.Folder.NAME }"
+               autocomplete="off"
+
+               #if (fieldErrors.contains(Const.Api.Folder.NAME))
+                class="error"
+               #end
+
+               #if (name.isDefined)
+                value="${ name.get }"
+               #else
+                value="${ existingName }"
+               #end
+
+               placeholder="New folder name"
+               maxlength="${ Const.Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+               minlength="${ Const.Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
+
+        <input type="hidden" name="${ Const.Api.ID }" value="${ id }">
+    </div>
+</form>
+
+<script lang="js" type="module">
+    import {Folder} from "/js/models.js";
+
+    showModal({minWidthPx: "${minWidth}", title: "${title}"})
+    htmx.find("#field-${ Const.Api.Folder.NAME }").focus()
+
+    htmx.find("#renameFolder").addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful === true) {
+            const folder = new Folder("${id}")
+            folder.closeContextMenu()
+
+            closeModal()
+        }
+    });
+</script>

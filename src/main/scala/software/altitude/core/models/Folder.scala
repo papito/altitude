@@ -16,6 +16,7 @@ object Folder {
       children = childrenJson.map(Folder.fromJson),
       parentId = (json \ C.Folder.PARENT_ID).as[String],
       numOfAssets = (json \ C.Folder.NUM_OF_ASSETS).as[Int],
+      numOfChildren = (json \ C.Folder.NUM_OF_CHILDREN).as[Int],
       isRecycled = (json \ C.Folder.IS_RECYCLED).as[Boolean]
     ).withCoreAttr(json)
   }
@@ -26,7 +27,8 @@ case class Folder(id: Option[String] = None,
                   name: String,
                   children: List[Folder] = List(),
                   isRecycled: Boolean = false,
-                  numOfAssets: Int = 0) extends BaseModel {
+                  numOfAssets: Int = 0,
+                  numOfChildren: Int = 0) extends BaseModel {
 
   if (name.isEmpty) {
     throw ValidationException("Folder name cannot be empty")
@@ -42,6 +44,7 @@ case class Folder(id: Option[String] = None,
       C.Folder.PARENT_ID -> parentId,
       C.Folder.CHILDREN ->  JsArray(childrenJson),
       C.Folder.NUM_OF_ASSETS -> numOfAssets,
+      C.Folder.NUM_OF_CHILDREN -> numOfChildren,
       C.Folder.IS_RECYCLED -> isRecycled
     ) ++ coreJsonAttrs
   }

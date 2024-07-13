@@ -55,6 +55,14 @@ abstract class IntegrationTestCore
     testApp.service.repository.switchContextToRepository(repository)
   }
 
+  def commit(): Unit = {
+    testApp.txManager.commit()
+  }
+
+  def rollback(): Unit = {
+    testApp.txManager.rollback()
+  }
+
   def reset(): Unit = {
     testApp.txManager.rollback()
     RequestContext.clear()

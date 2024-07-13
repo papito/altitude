@@ -1,10 +1,10 @@
 package software.altitude.core.controllers
 
-import org.scalatra.ContentEncodingSupport
-import org.scalatra.InternalServerError
-import org.scalatra.ScalatraServlet
+import org.scalatra.scalate.ScalateUrlGeneratorSupport
+import org.scalatra.{ContentEncodingSupport, InternalServerError, ScalatraServlet, UrlGeneratorSupport}
 import org.slf4j.MDC
 import software.altitude.core.AltitudeServletContext
+import software.altitude.core.Const
 import software.altitude.core.auth.AuthenticationSupport
 import software.altitude.core.models.Repository
 import software.altitude.core.models.User
@@ -13,8 +13,13 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.lang.System.currentTimeMillis
 
-abstract class BaseController extends ScalatraServlet
-  with ContentEncodingSupport with AuthenticationSupport with AltitudeServletContext {
+abstract class BaseController
+  extends ScalatraServlet
+    with ContentEncodingSupport
+    with UrlGeneratorSupport
+    with ScalateUrlGeneratorSupport
+    with AuthenticationSupport
+    with AltitudeServletContext {
 
   final def user: User = request.getAttribute("user").asInstanceOf[User]
 
@@ -51,7 +56,8 @@ abstract class BaseController extends ScalatraServlet
   private def isAssetRequest =  request.pathInfo.startsWith("/css") ||
     request.pathInfo.startsWith("/js") ||
     request.pathInfo.startsWith("/webfonts") ||
-    request.pathInfo.startsWith("/images")
+    request.pathInfo.startsWith("/images") ||
+    request.pathInfo.startsWith(s"/${Const.DataStore.PREVIEW}")
 
   protected def setUser(): Unit = {
 /*    val userId =

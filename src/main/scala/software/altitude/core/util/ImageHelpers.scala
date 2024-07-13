@@ -16,9 +16,13 @@ package software.altitude.core.util
  * limitations under the License.
  */
 
-import java.awt.{RenderingHints, Transparency}
+import java.awt.RenderingHints
+import java.awt.Transparency
 import java.awt.geom.AffineTransform
-import java.awt.image.{AffineTransformOp, BufferedImage, ColorModel, IndexColorModel}
+import java.awt.image.AffineTransformOp
+import java.awt.image.BufferedImage
+import java.awt.image.ColorModel
+import java.awt.image.IndexColorModel
 
 /**
  * Helpers for manipulating images
@@ -57,7 +61,7 @@ object ImageHelpers {
     val targetColorModel = source.getColorModel
     val standardColorModel = ColorModel.getRGBdefault
 
-    def resize(src: BufferedImage, dst: BufferedImage) {
+    def resize(src: BufferedImage, dst: BufferedImage): Unit = {
       val g = dst.createGraphics
       try {
         g.setRenderingHints(highQualityHints)

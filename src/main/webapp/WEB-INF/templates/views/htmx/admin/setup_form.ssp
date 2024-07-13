@@ -3,6 +3,10 @@
 #import(play.api.libs.json.Json)
 #import(play.api.libs.json.JsObject)
 
+<%@ val fieldErrors: Map[String, String] = Map.empty %>
+<%@ val formJson: JsObject = Json.obj() %>
+
+
 <style>
     #setupForm {
         display: grid;
@@ -16,6 +20,10 @@
         text-transform: uppercase;
         margin-bottom: 5px;
         font-size: 1.2em;
+    }
+
+    #setupForm input {
+        background-color: #FFFFFF;
     }
 
     #setupForm input:not([type="submit"]) {
@@ -50,27 +58,24 @@
     }
 </style>
 
-<%@ val fieldErrors: Map[String, String] = Map.empty %>
-<%@ val formJson: JsObject = Json.obj() %>
-
 <form action="#" id="setupForm"
       hx-swap="outerHTML"
-      hx-post="/htmx/admin/setup"
+      hx-post="${ url(htmxAdminSetup) }"
       hx-ext="json-enc">
 
     <div>
-        <label for="<%= Const.Api.Fields.REPOSITORY_NAME %>">Library name</label>
+        <label for="${ Const.Api.Setup.REPOSITORY_NAME }">Library name</label>
         <input type="text"
-               id="<%= Const.Api.Fields.REPOSITORY_NAME %>"
-               name="<%= Const.Api.Fields.REPOSITORY_NAME %>"
+               id="${ Const.Api.Setup.REPOSITORY_NAME }"
+               name="${ Const.Api.Setup.REPOSITORY_NAME }"
                placeholder="Library name"
-               value='<%= (formJson \ Const.Api.Fields.REPOSITORY_NAME).asOpt[String].getOrElse("Personal") %>'
+               value='<%= (formJson \ Const.Api.Setup.REPOSITORY_NAME).asOpt[String].getOrElse("Personal") %>'
                autocomplete="off"
-               minlength="<%= Const.Api.Constraints.MIN_REPOSITORY_NAME_LENGTH %>"
-               maxlength="<%= Const.Api.Constraints.MAX_REPOSITORY_NAME_LENGTH %>"/>
-        <% if (fieldErrors.contains(Const.Api.Fields.REPOSITORY_NAME)) { %>
-            <div class="error"><%= fieldErrors(Const.Api.Fields.REPOSITORY_NAME) %></div>
-        <% } %>
+               minlength="${ Const.Api.Constraints.MIN_REPOSITORY_NAME_LENGTH }"
+               maxlength="${ Const.Api.Constraints.MAX_REPOSITORY_NAME_LENGTH }"/>
+        #if (fieldErrors.contains(Const.Api.Setup.REPOSITORY_NAME))
+            <div class="error">${ fieldErrors(Const.Api.Setup.REPOSITORY_NAME) }</div>
+        #end
     </div>
     <div>
         <label for="dbEngine">Database type</label>
@@ -82,41 +87,41 @@
                value="<%= software.altitude.core.AltitudeServletContext.app.config.getString(Const.Conf.DB_ENGINE) %>"/>
     </div>
     <div>
-        <label for="<%= Const.Api.Fields.ADMIN_EMAIL %>">Administrator Email</label>
+        <label for="${ Const.Api.Setup.ADMIN_EMAIL }">Administrator Email</label>
         <input type="email"
                autocomplete="off"
-               id="<%= Const.Api.Fields.ADMIN_EMAIL %>"
-               name="<%= Const.Api.Fields.ADMIN_EMAIL %>"
-               value='<%= (formJson \ Const.Api.Fields.ADMIN_EMAIL).asOpt[String].getOrElse("") %>'
-               minlength="<%= Const.Api.Constraints.MIN_EMAIL_LENGTH %>"
-               maxlength="<%= Const.Api.Constraints.MAX_EMAIL_LENGTH %>"/>
-        <% if (fieldErrors.contains(Const.Api.Fields.ADMIN_EMAIL)) { %>
-            <div class="error"><%= fieldErrors(Const.Api.Fields.ADMIN_EMAIL) %></div>
-        <% } %>
+               id="${ Const.Api.Setup.ADMIN_EMAIL }"
+               name="${ Const.Api.Setup.ADMIN_EMAIL }"
+               value='<%= (formJson \ Const.Api.Setup.ADMIN_EMAIL).asOpt[String].getOrElse("") %>'
+               minlength="${ Const.Api.Constraints.MIN_EMAIL_LENGTH }"
+               maxlength="${ Const.Api.Constraints.MAX_EMAIL_LENGTH }"/>
+        #if (fieldErrors.contains(Const.Api.Setup.ADMIN_EMAIL))
+            <div class="error">${ fieldErrors(Const.Api.Setup.ADMIN_EMAIL) }</div>
+        #end
     </div>
     <div>
-        <label for="<%= Const.Api.Fields.PASSWORD %>">Administrator Password</label>
+        <label for="${ Const.Api.Setup.PASSWORD }">Administrator Password</label>
         <input type="password"
-               id="<%= Const.Api.Fields.PASSWORD %>"
-               name="<%= Const.Api.Fields.PASSWORD  %>"
-               value='<%= (formJson \ Const.Api.Fields.PASSWORD).asOpt[String].getOrElse("") %>'
-               minlength="<%= Const.Api.Constraints.MIN_PASSWORD_LENGTH %>"
-               maxlength="<%= Const.Api.Constraints.MAX_PASSWORD_LENGTH %>"/>
-        <% if (fieldErrors.contains(Const.Api.Fields.PASSWORD)) { %>
-        <div class="error"><%= fieldErrors(Const.Api.Fields.PASSWORD) %></div>
-        <% } %>
+               id="${ Const.Api.Setup.PASSWORD }"
+               name="${ Const.Api.Setup.PASSWORD  }"
+               value='<%= (formJson \ Const.Api.Setup.PASSWORD).asOpt[String].getOrElse("") %>'
+               minlength="${ Const.Api.Constraints.MIN_PASSWORD_LENGTH }"
+               maxlength="${ Const.Api.Constraints.MAX_PASSWORD_LENGTH }"/>
+        #if (fieldErrors.contains(Const.Api.Setup.PASSWORD))
+        <div class="error">${ fieldErrors(Const.Api.Setup.PASSWORD) }</div>
+        #end
     </div>
     <div>
-        <label for="<%= Const.Api.Fields.PASSWORD2 %>">Confirm Password</label>
+        <label for="${ Const.Api.Setup.PASSWORD2 }">Confirm Password</label>
         <input type="password"
-               id="<%= Const.Api.Fields.PASSWORD2 %>"
-               name="<%= Const.Api.Fields.PASSWORD2 %>"
-               value='<%= (formJson \ Const.Api.Fields.PASSWORD2).asOpt[String].getOrElse("") %>'
-               minlength="<%= Const.Api.Constraints.MIN_PASSWORD_LENGTH %>"
-               maxlength="<%= Const.Api.Constraints.MAX_PASSWORD_LENGTH %>"/>
-        <% if (fieldErrors.contains(Const.Api.Fields.PASSWORD2)) { %>
-        <div class="error"><%= fieldErrors(Const.Api.Fields.PASSWORD2) %></div>
-        <% } %>
+               id="${ Const.Api.Setup.PASSWORD2 }"
+               name="${ Const.Api.Setup.PASSWORD2 }"
+               value='<%= (formJson \ Const.Api.Setup.PASSWORD2).asOpt[String].getOrElse("") %>'
+               minlength="${ Const.Api.Constraints.MIN_PASSWORD_LENGTH }"
+               maxlength="${ Const.Api.Constraints.MAX_PASSWORD_LENGTH }"/>
+        #if (fieldErrors.contains(Const.Api.Setup.PASSWORD2))
+        <div class="error">${ fieldErrors(Const.Api.Setup.PASSWORD2) }</div>
+        #end
     </div>
     <div class="submit">
         <button type="submit"

@@ -1,0 +1,469 @@
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.Const)
+#import(software.altitude.core.models.Folder)
+<%@ val rootFolder: Folder %>
+
+<style>
+    #rootFolderList .folder.root, .folder-list .children {
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: 4px;
+    }
+
+    #rootFolderList .folder .children {
+        position: relative;
+        margin-left: 20px;
+    }
+
+    #rootFolderList .folder {
+        display: grid;
+        align-items: center;
+        grid-auto-columns: auto;
+    }
+
+    #rootFolderList .folder .controls {
+        display: grid;
+        grid-template-columns: max-content 25px 1fr;
+        align-items: center;
+        touch-action: none;
+    }
+
+
+    #rootFolderList .folder .menu-ctrl {
+        display: grid;
+        padding-left: 6px;
+        place-items: center;
+    }
+
+    #rootFolderList .folder .menu-ctrl a {
+        font-size: 1.3em;
+        color: #FFFFFF;
+        text-decoration: none;
+    }
+
+    #rootFolderList .folder i {
+        font-size: 1.2em;
+    }
+
+    #rootFolderList .folder:not(.root) i {
+        color: var(--success-font-color);
+    }
+
+    #rootFolderList .folder:not(.root) i.fa-folder-minus {
+        color: var(--warning-font-color);
+    }
+
+    #rootFolderList .folder .menu {
+        display: none;
+        padding: 5px 5px 5px 5px;
+        margin: 0 6px 6px 6px;
+        flex-wrap: wrap;
+        border-radius: 5px;
+        gap: 5px;
+        background-color: var(--form-background-color);
+    }
+
+    #rootFolderList .folder .menu span {
+        display: flex;
+        padding: 3px 6px;
+        cursor: pointer;
+        border: 1px solid gray;
+        border-radius: 5px;
+        font-size: .9em;
+    }
+
+    #rootFolderList .folder .controls.draggable {
+        cursor: move;
+    }
+
+    #rootFolderList .folder .drop-target {
+        border-radius: 6px;
+        background-color: var(--dnd-drop-target-color);
+    }
+
+    #rootFolderList .folder .can-drop {
+        padding-left: 4px;
+        border: var(--dnd-draggable-border);
+        border-radius: 4px;
+        background-color: var(--dnd-can-drop-color);
+    }
+</style>
+
+<div id="rootFolderList" class="folder-list">
+    <div class="folder root dropzone"
+         id="folder-${rootFolder.persistedId}"
+         num-of-children="${rootFolder.numOfChildren}"
+         folder-id="${rootFolder.persistedId}"
+         parent-folder-id="${rootFolder.persistedId}"
+         is-root="true"
+         expanded="true">
+
+        <div class="controls"
+             folder-id="${rootFolder.persistedId}">
+            <i class="fas fa-folder"></i>
+            <div class="menu-ctrl">
+                <a href="#"
+                   folder-id="${rootFolder.persistedId}"
+                   id="expand-folder-children-${rootFolder.persistedId}"
+                   hx-get="${ url(showFolderContextMenu) }"
+                   hx-swap="innerHTML"
+                   hx-target="#menu-${rootFolder.persistedId}"
+                   hx-vals='{"folderId": "${rootFolder.persistedId}"}'
+                   hx-trigger="click">&#10247;</a>
+            </div>
+            <span id="folderName-${rootFolder.persistedId}" class="folder-name">/ Root</span>
+        </div>
+
+        <div class="menu"
+             id="menu-${rootFolder.persistedId}"
+             folder-id="${rootFolder.persistedId}"></div>
+
+        <div class="children"
+             id="children-${rootFolder.persistedId}"
+             folder-id="${rootFolder.persistedId}"
+             hx-swap="innerHTML"
+             hx-get="${ url(htmxFolderChildren) }"
+             hx-vals='{"parentId": "${rootFolder.persistedId}"}'
+             hx-trigger="load">
+        </div>
+
+    </div>
+</div>
+
+<!-- Before/after HTMX request listeners -->
+<script type="module">
+    import {Const} from "/js/constants.js";
+    import {Folder} from "/js/models.js";
+
+    /**
+     * This handles multiple "before request" scenarios, short-circuiting the request
+     * if necessary.
+     *
+     * Some actions require a network call (show menu, expand folders)
+     * but other do not (close menu, collapse folders).
+     */
+    htmx.find("#rootFolderList").addEventListener('htmx:beforeRequest', function(evt) {
+        console.log(evt.detail.pathInfo.requestPath)
+        /**
+         * Context menu potential request
+         */
+        if (evt.detail.pathInfo.requestPath  === "${ url(showFolderContextMenu) }") {
+            const folderId = evt.detail.target.getAttribute(Const.attributes.folderId)
+            const folder = new Folder(folderId)
+
+            // Do not go to the server if the menu is already open, just kill it
+            if (folder.isMenuExpanded()) {
+                folder.closeContextMenu()
+                evt.preventDefault()
+            } else {
+                /**
+                 * The request for the context menu will go out, so let's go full Marie Kondo
+                 * on the open menus because they do not bring us JOY.
+                 */
+                const openMenuEls = document.querySelectorAll("#rootFolderList .menu")
+
+                openMenuEls.forEach(menuEl => {
+                    Folder.closeContextMenu(menuEl)
+                })
+            }
+        }
+
+        /**
+         * Folder children potential request
+         */
+        if (evt.detail.pathInfo.requestPath  === "${ url(htmxFolderChildren) }") {
+            // I don't JavaScript good - how do you get a param from a relative URL?
+            const url = new URL("https://dummy.com" + evt.detail.pathInfo.finalRequestPath)
+            const folderId = url.searchParams.get("parentId")
+            const folder = new Folder(folderId)
+
+            if (folder.isRoot) {
+                return
+            }
+
+            if (folder.isExpanded()) {
+                // IF the folder is currently expanded - abort the request and clear the children
+                folder.collapse()
+
+                evt.preventDefault() // do not trip to the server
+            } else {
+                // ELSE proceed with request and update state
+                folder.expand()
+            }
+        }
+
+    });
+
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        console.log("===========")
+        const requestPath = evt.detail.pathInfo.requestPath
+        const status = evt.detail.xhr.status
+
+        if (evt.detail.successful === false) {
+            console.log(evt)
+            showErrorSnackBar("Error for request to " + requestPath + ". HTTP " + status)
+            return
+        }
+
+        console.log("Request path is " + requestPath)
+
+        // on successful context menu request, show the menu
+        if (requestPath  === "${ url(showFolderContextMenu) }") {
+            console.log("Context menu request successful")
+
+            const folder = new Folder(evt.target.getAttribute("folder-id"))
+            folder.showContextMenu()
+
+            if (!folder.isExpanded() && !folder.isRoot) { // root folder is always expanded
+                folder.htmxExpandChildrenAction()
+            }
+        }
+
+        // on successful folder children request or child added request, expand the folder
+        if (requestPath === "${ url(htmxFolderChildren) }" || requestPath === "${ url(htmxAddFolder) }") {
+            const folder = new Folder(evt.target.getAttribute("folder-id"))
+            folder.expand()
+        }
+    });
+
+</script>
+
+<!-- Custom event listeners -->
+<script type="module">
+    import {Const} from "/js/constants.js";
+    import {Folder} from "/js/models.js";
+
+    /**
+     * A folder is dragon dropped in UI BUT not yet removed on the server-side
+     */
+    document.body.addEventListener(Const.events.folderMoved, (event) => {
+        const movedFolderId = event.detail["${Const.Api.Folder.MOVED_FOLDER_ID}"]
+        const movedFolder = new Folder(movedFolderId)
+        const newParentId = event.detail["${Const.Api.Folder.NEW_PARENT_ID}"]
+        const newParent = new Folder(newParentId)
+        const oldParent = movedFolder.parent()
+
+        console.log("Folder " + movedFolder.name() + " dragon dropped from " + oldParent.name() + " into " + newParent.name())
+
+        // The server does check this, but since we remove the moved folder from the DOM, we must short-circuit
+        if (newParentId === movedFolderId) {
+            return
+        }
+
+        function handler(response)  {
+            const status = response['htmx-internal-data'].xhr.status
+
+            if (status === 200) {
+                // IRREGARDLESS of the target folder state, we should declutter the visual state of the moved folder
+                movedFolder.closeContextMenu()
+                movedFolder.clearChildren()
+
+                newParent.incrementNumOfChildren()
+                oldParent.decrementNumOfChildren()
+
+                if (newParent.isExpanded()) {
+                    // target folder is expanded, so append the moved folder
+                    newParent.addChild(movedFolder)
+                    movedFolder.collapse()
+                } else {
+                    console.log("Target folder not expanded - removing the folder being moved.")
+                    // target folder is not expanded, so just make the moved folder disappear
+                    showSuccessSnackBar("Folder \"" + movedFolder.name() + "\" moved to \"" + newParent.name() + '"')
+                    movedFolder.remove()
+                }
+
+                newParent.updateVisualState()
+                oldParent.updateVisualState()
+                console.log("4")
+            } else if (status === 409) {
+                console.log("5")
+                const message = response['htmx-internal-data'].xhr.responseText
+                showWarningSnackBar(message)
+            } else {
+                console.log(response['htmx-internal-data'].xhr.responseText)
+                showErrorSnackBar("Error moving folder \"" + movedFolder.name() + "\". Status: " + status)
+            }
+        }
+
+        htmx.ajax(
+                "POST",
+                "${ url(htmxMoveFolder) }", {
+                    "swap": "none",
+                    "values": {...event.detail},
+                    "handler": handler
+                })
+    })
+
+    /**
+     * A folder is added on the server
+     */
+    document.body.addEventListener(Const.events.folderAdded, (event) => {
+        const parentFolder = new Folder(event.detail["${Const.Api.Folder.PARENT_ID}"])
+        console.log("Folder added event received for parent folder " + parentFolder.name())
+
+        // Update the parent folder's number of children as we are not refreshing
+        // the tree HTML, to avoid aggressive UI changes that might confuse the user
+        parentFolder.incrementNumOfChildren()
+        parentFolder.updateVisualState()
+    })
+
+    /**
+     * A folder is deleted on the server
+     */
+    document.body.addEventListener(Const.events.folderDeleted, (event) => {
+        const folder = new Folder(event.detail["${Const.Api.ID}"])
+        console.log("Folder deleted event received for folder " + folder.name())
+
+        // Update the parent folder's number of children as we are not refreshing
+        // the tree HTML, avoid aggressive UI changes that might confuse the user
+        const parent = folder.parent()
+        console.log("Parent folder is " + parent.name())
+        parent.decrementNumOfChildren()
+        parent.updateVisualState()
+
+        showSuccessSnackBar("Folder \"" + folder.name() + "\" deleted")
+
+        // Elegantly, without major commotion, pluck the folder from the DOM
+        folder.remove()
+    })
+</script>
+
+<!-- DRAGON DROP -->
+<script type="module">
+    import {Const} from "/js/constants.js"
+    import interact from "https://cdn.interactjs.io/v1.9.20/interactjs/index.js"
+
+    /**
+     * Maintain position of the dragged element in order to snap it back at cancel
+     * https://github.com/taye/interact.js/issues/819#issuecomment-626599750
+     */
+    const dragState = {
+        x: 0,
+        y: 0,
+    }
+
+    function dragged(e) {
+        dragState.x = 0;
+        dragState.y = 0;
+        e.target.style.transform = 'translate(0px, 0px)';
+
+        // reset the position attributes for draggablses (on failed drag, it will resume from the last position)
+        e.target.removeAttribute("data-x")
+        e.target.removeAttribute("data-y")
+    }
+
+    interact('#rootFolderList .draggable')
+            .draggable({
+                // enable inertial throwing
+                inertia: true,
+                // keep the element within the area of it's parent
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: '#rootFolderList > div.children',
+                        endOnly: true,
+                        elementRect: {
+                            top: 0,
+                            left: 0,
+                            bottom: 1,
+                            right: 1
+                        }
+                    })
+                ],
+                // enable autoScroll
+                autoScroll: true,
+
+                listeners: {
+                    move: dragMoveListener,
+                    end: dragged,
+                }
+            })
+
+    function dragMoveListener (event) {
+        dragState.x += event.dx;
+        dragState.y += event.dy;
+
+        event.target.style.transform = 'translate(' + dragState.x + 'px, ' + dragState.y + 'px)';
+
+        const target = event.target
+        // keep the dragged position in the data-x/data-y attributes
+        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
+        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
+
+        // translate the element
+        target.style.transform = 'translate(' + x + 'px, ' + y + 'px)'
+
+        // update the position attributes
+        target.setAttribute('data-x', x)
+        target.setAttribute('data-y', y)
+    }
+
+    // enable draggables to be dropped into this
+    interact('#rootFolderList .dropzone').dropzone({
+        // only accept elements matching this CSS selector
+        accept: '#rootFolderList .draggable',
+        // going above seems to break the dropzone
+        overlap: 0.50,
+
+        // listen for drop related events:
+
+        ondropactivate: function (event) {
+            // add active dropzone feedback
+            event.target.classList.add('drop-active')
+        },
+        ondragenter: function (event) {
+            const draggableElement = event.relatedTarget
+            const dropzoneElement = event.target
+
+            // feedback the possibility of a drop
+            dropzoneElement.classList.add('drop-target')
+            draggableElement.classList.add('can-drop')
+        },
+        ondragleave: function (event) {
+            // remove the drop feedback style
+            event.target.classList.remove('drop-target')
+            event.relatedTarget.classList.remove('can-drop')
+        },
+        ondrop: function (event) {
+            const draggableElement = event.relatedTarget
+            const dropzoneElement = event.target
+
+            dropzoneElement.classList.remove('drop-active')
+            dropzoneElement.classList.remove('drop-target')
+
+            draggableElement.classList.remove('can-drop')
+
+            const movedFolderId = draggableElement.getAttribute("folder-id")
+            const newParentFolderId = dropzoneElement.getAttribute("folder-id")
+
+            const movedFolderEvent = new CustomEvent(
+                Const.events.folderMoved, {
+                detail: {
+                    ${Const.Api.Folder.MOVED_FOLDER_ID}: movedFolderId,
+                    ${Const.Api.Folder.NEW_PARENT_ID}: newParentFolderId,
+                }});
+
+            document.body.dispatchEvent(movedFolderEvent)
+        },
+
+        ondropdeactivate: function (event) {
+            // remove active dropzone feedback
+            event.target.classList.remove('drop-active')
+            event.target.classList.remove('drop-target')
+        }
+    })
+
+    interact('#rootFolderList .drag-drop')
+            .draggable({
+                inertia: true,
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: '#rootFolderList .dropzone',
+                        endOnly: true
+                    })
+                ],
+                autoScroll: true,
+                // dragMoveListener from the dragging demo above
+                listeners: { move: dragMoveListener }
+            })
+
+</script>

@@ -1,10 +1,15 @@
 package software.altitude.core.controllers.web
 
-import org.scalatra.ScalatraServlet
-import org.scalatra.scalate.ScalateSupport
+import org.scalatra.{Route, ScalatraServlet, UrlGeneratorSupport}
+import org.scalatra.scalate.{ScalateSupport, ScalateUrlGeneratorSupport}
 import software.altitude.core.auth.AuthenticationSupport
 
-class SessionController extends ScalatraServlet with ScalateSupport with AuthenticationSupport {
+class SessionController
+  extends ScalatraServlet
+    with UrlGeneratorSupport
+    with ScalateUrlGeneratorSupport
+    with ScalateSupport
+    with AuthenticationSupport {
 
   before("/new") {
     logger.info("SessionsController: checking whether to run RememberMeStrategy: " + !isAuthenticated)
@@ -14,14 +19,17 @@ class SessionController extends ScalatraServlet with ScalateSupport with Authent
     }
   }
 
-  get("/new") {
+  /**
+   * WARNING: hard-coded in AuthenticationSupport
+   */
+  val newSession: Route = get("/new") {
     if (isAuthenticated) redirect("/")
 
     contentType = "text/html"
     layoutTemplate("/WEB-INF/templates/views/login.ssp")
   }
 
-  post("/") {
+  val sessions: Route = post("/") {
     scentry.authenticate()
 
     if (isAuthenticated) {
@@ -32,7 +40,7 @@ class SessionController extends ScalatraServlet with ScalateSupport with Authent
   }
 
   //FIXME: use POST
-  get("/logout") {
+  val logout: Route = get("/logout") {
     scentry.logout()
     redirect("/")
   }

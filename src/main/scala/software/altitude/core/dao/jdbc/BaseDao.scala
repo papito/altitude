@@ -221,7 +221,7 @@ abstract class BaseDao {
          SET $field = $field + $count
        WHERE id = ?
       """
-    logger.debug(s"INCR SQL: $sql, for $id")
+    logger.debug(s"INCR SQL: $sql, $id")
 
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, id)

@@ -17,14 +17,10 @@ case class ValidationException(message: String = "") extends Exception {
   }
 }
 
-// All-purpose event to get out of loops with user interrupts or conditionals
-case class AllDone() extends Exception
 
-case class DuplicateException(existingAssetId: String) extends Exception
+case class DuplicateException(message: Option[String] = None) extends Exception
 
 case class ConstraintException(msg: String) extends Exception(msg)
-
-case class FieldValueException() extends IllegalArgumentException
 
 case class FormatException(asset: Asset) extends RuntimeException()
 

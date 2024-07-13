@@ -34,7 +34,7 @@ class MetadataService(val app: Altitude) {
       if (existing.nonEmpty) {
         val existingField: MetadataField = existing.records.head
         logger.debug(s"Duplicate found for field [${metadataField.name}]")
-        throw DuplicateException(existingField.persistedId)
+        throw DuplicateException()
       }
 
       metadataFieldDao.add(metadataField)

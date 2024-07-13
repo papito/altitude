@@ -2,7 +2,8 @@ package software.altitude.test.core.controller
 
 import org.scalatest.DoNotDiscover
 import software.altitude.core.Altitude
-import software.altitude.core.models.{Asset, Preview}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Preview
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.ControllerTestCore
 

@@ -81,6 +81,10 @@
             max-width: 100%;
         }
 
+        .cell {
+            margin: 3px;
+            border: 1px solid #837c7c;
+        }
         .cell img {
             display: block;
         }
@@ -99,6 +103,7 @@
             height: 220px;
             place-items: center;
         }
+
     </style>
 </head>
 
@@ -110,8 +115,11 @@
 </div>
 
 <main>
+    ${include("includes/html_common.ssp")}
+
     <div id="browser" class="split content split-horizontal">
         <div id="folders" class="split content">
+            ${include("htmx/folders.ssp")}
         </div>
         <div id="albums" class="split content">
         </div>
@@ -122,8 +130,8 @@
             #for (idx <- 0 to results.records.length - 1)
                 <div class="cell">
                     <% val asset: Asset = results.records(idx) %>
-                    <img src="/<%= Const.DataStore.CONTENT %>/<%= Const.DataStore.PREVIEW %>/<%= asset.persistedId %>"
-                         alt = "<%= asset.fileName %>"
+                    <img src="/${ Const.DataStore.CONTENT }/${ Const.DataStore.PREVIEW }/${ asset.persistedId }"
+                         alt = "${ asset.fileName }"
                          class="responsive-image"/>
                 </div>
             #end
@@ -135,16 +143,41 @@
     <%= RequestContext.account.value.getOrElse("None") %>
 </footer>
 
-<script lang="js">
+<script type="module">
+    /**
+     * Split.js plumbing
+     *
+     * @see: https://github.com/nathancahill/split/tree/master/packages/splitjs
+     */
+    const savedHorizontalSplitSizes = localStorage.getItem("horizontalSplitSizes")
+    let horizontalSplitSizes = [25, 75]
+
+    if (savedHorizontalSplitSizes) {
+        horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
+    }
+
     Split(["#browser", "#assets"], {
-        sizes: [25, 75]
+        sizes: horizontalSplitSizes,
+        minSize: [100, 300],
+        onDragEnd: function (horizontalSplitSizes) {
+            localStorage.setItem("horizontalSplitSizes", JSON.stringify(horizontalSplitSizes))
+        },
     })
+
+    const savedVerticalSplitSizes = localStorage.getItem("verticalSplitSizes")
+    let verticalSplitSizes = [65, 35]
+
+    if (savedVerticalSplitSizes) {
+        verticalSplitSizes = JSON.parse(savedVerticalSplitSizes)
+    }
 
     Split(["#folders", "#albums"], {
-        sizes: [50, 50],
-        direction: 'vertical'
+        sizes: verticalSplitSizes,
+        direction: 'vertical',
+        onDragEnd: function (verticalSplitSizes) {
+            localStorage.setItem("verticalSplitSizes", JSON.stringify(verticalSplitSizes))
+        },
     })
 </script>
-
 </body>
 </html>
