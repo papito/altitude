@@ -26,14 +26,9 @@ class IndexController extends BaseWebController {
 
     val results: SearchResult = app.service.library.search(q)
 
-    val repo = RequestContext.getRepository
-
-    val rootFolder: Folder = app.service.folder.getById(repo.rootFolderId)
-
     layoutTemplate(
       "/WEB-INF/templates/views/index.ssp",
         "results" -> results,
-        "rootFolder" -> rootFolder
     )
   }
 

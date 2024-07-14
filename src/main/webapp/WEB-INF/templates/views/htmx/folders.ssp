@@ -45,12 +45,17 @@
         font-size: 1.2em;
     }
 
-    #rootFolderList .folder:not(.root) i {
-        color: var(--success-font-color);
+    #rootFolderList .folder.root i {
+        color: #f8c98f;
     }
 
-    #rootFolderList .folder:not(.root) i.fa-folder-minus {
-        color: var(--warning-font-color);
+    #rootFolderList .folder:not(.root) i {
+        color: rgba(234, 231, 231, 0.98);
+    }
+
+    #rootFolderList .folder:not(.root) i.fa-folder-minus,
+    #rootFolderList .folder:not(.root):has(i.fa-folder-minus) .folder i {
+        color: var(--success-font-color);
     }
 
     #rootFolderList .folder .menu {
@@ -129,6 +134,13 @@
 
     </div>
 </div>
+
+<!-- On load -->
+<script type="module">
+    import {selectTab} from "/js/utils.js";
+
+    selectTab("explorer", "foldersTab")
+</script>
 
 <!-- Before/after HTMX request listeners -->
 <script type="module">

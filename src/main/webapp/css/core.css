@@ -1,13 +1,12 @@
 :root {
-    --background-color: #3d3d3d;
+    --background-color: #363636;
     --form-background-color: #363535;
-    --background-secondary-color: #333;
+    --background-secondary-color: rgb(56, 56, 65);
     --form-border: 2px solid #646161;
     --modal-border: 3px solid rgba(129, 128, 128, 0.98);
     --modal-background-color: #3b3b3b;
     --form-error-border: 2px solid var(--error-color);
-    --panel-border-color: #343434;
-    --navbar-border: 2px solid #272727;
+    --navbar-border: 1px solid #272727;
     --navbar-text-shadow: rgba(0,0,0,0.75) 0 1px;
     --box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0;
 
@@ -23,6 +22,10 @@
     --error-font-color: #fc1e1e;
     --error-background-color: #a80404;
     --error-color: #fc1e1e;
+
+    /* Panels */
+    --panel-border-color: #464646;
+    --panel-padding: 12px;
 
     /* Dragon Drop */
     --dnd-can-drop-color: #377a1c;
@@ -147,7 +150,6 @@ form input.error, form input.error:focus {
 #statusTicker {
     display: grid;
     background-color: var(--background-secondary-color);
-    border-bottom: var(--form-border);
 }
 
 #statusText {

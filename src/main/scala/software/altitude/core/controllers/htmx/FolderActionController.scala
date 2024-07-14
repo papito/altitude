@@ -59,6 +59,14 @@ class FolderActionController extends BaseHtmxController{
       "folderId" -> folderId)
   }
 
+  val showFoldersTab: Route = get("/tab") {
+    val repo = RequestContext.getRepository
+    val rootFolder: Folder = app.service.folder.getById(repo.rootFolderId)
+
+    ssp("htmx/folders",
+      "rootFolder" -> rootFolder)
+  }
+
   val htmxAddFolder: Route = post("/add") {
     val dataScrubber = DataScrubber(
       trim = List(C.Api.Folder.NAME),

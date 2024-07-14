@@ -1,0 +1,16 @@
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.Const)
+
+<style>
+</style>
+
+<div id="albumList">
+    ALBUMS
+</div>
+
+<!-- On load -->
+<script type="module">
+    import {selectTab} from "/js/utils.js";
+
+    selectTab("explorer", "albumsTab")
+</script>

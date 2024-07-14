@@ -11,3 +11,11 @@ function _clearNode(node) {
     }
     node.parentNode.removeChild(node);
 }
+
+export function selectTab(parentId, tabId) {
+    htmx.findAll(`#${parentId} button[role='tab'`).forEach(tab => {
+        tab.removeAttribute("aria-selected")
+    })
+
+    htmx.find(`#${tabId}`).setAttribute("aria-selected", "True")
+}

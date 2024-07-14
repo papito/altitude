@@ -1,0 +1,75 @@
+[role="tablist"] {
+    overflow: visible;
+}
+
+[role="tablist"] a {
+    color: white;
+    text-decoration: none;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+[role="tab"] {
+    position: relative;
+    margin-right: .5em;
+    padding: 0.5em;
+    border: 2px solid var(--panel-border-color);
+    border-left: 1px;
+    border-right: 1px;
+    border-bottom: none;
+    border-radius: .2em .2em 0 0;
+    box-shadow: 0 0 .2em var(--background-secondary-color);
+    overflow: visible;
+    letter-spacing: .05em;
+    text-decoration: none;
+    font-size: 0.9em;
+    color: white;
+    background: var(--background-secondary-color);
+    cursor: default;
+}
+
+[role="tab"][aria-selected="True"]::before {
+    position: absolute;
+    bottom: 100%;
+    right: -1px;
+    left: -1px;
+    border-radius: 0.2em 0.2em 0 0;
+    border-top: var(--success-background-color) 2px solid;
+    content: '';
+}
+
+[role="tab"][aria-selected="True"] {
+    border-radius: 0;
+    outline: 0;
+    background: var(--form-border);
+    color: #FFF;
+}
+
+[role="tab"][aria-selected="True"]::after {
+    position: absolute;
+    bottom: -1px;
+    right: 0;
+    left: 0;
+    height: .3em;
+    box-shadow: none;
+    content: '';
+}
+
+[role="tab"]:focus,
+[role="tab"]:active {
+    color: #FFF;
+    outline: 0;
+    border-radius: 0;
+}
+
+[role="tabpanel"] {
+    position: relative;
+    border-top: 1px solid var(--panel-border-color);
+    padding: var(--panel-padding);
+}
+
+[role="tabpanel"]:focus {
+    outline: 0;
+}

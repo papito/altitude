@@ -20,6 +20,8 @@
         // sometimes empty pings come through
         if (evt.detail.message && evt.detail.message !== "X") {
             statusTextEl.style.display = "block"
+        } else {
+            console.log('WS message is empty')
         }
 
         setTimeout(function() {
