@@ -30,10 +30,10 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     val extractedMetadataJson = Json.parse(extractedMetadataJsonStr).as[JsObject]
 
     val model = new Asset(
-      id = Some(rec(C.Base.ID).asInstanceOf[String]),
+      id = Option(rec(C.Base.ID).asInstanceOf[String]),
       userId = rec(C.Base.USER_ID).asInstanceOf[String],
       fileName = rec(C.Asset.FILENAME).asInstanceOf[String],
-      checksum = rec(C.Asset.CHECKSUM).asInstanceOf[String],
+      checksum = rec(C.Asset.CHECKSUM).asInstanceOf[Int],
       assetType = assetType,
       sizeBytes = rec(C.Asset.SIZE_BYTES).asInstanceOf[Int],
       metadata = metadataJson: Metadata,
@@ -65,7 +65,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
        WHERE ${C.Asset.ID} = ?
       """
 
-    val rec = getOneRawRecordBySql(sql, List(assetId))
+    val rec = executeAndGetOne(sql, List(assetId))
     val metadataJson = getJsonFromColumn(rec(C.Asset.METADATA))
     val metadata = Metadata.fromJson(metadataJson)
     Some(metadata)
@@ -112,8 +112,8 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     jsonIn ++ Json.obj(C.Base.ID -> id)
   }
 
-  override def setMetadata(assetId: String, metadata: Metadata)
-                          : Unit = {
+  override def setMetadata(assetId: String, metadata: Metadata): Unit = {
+    BaseDao.incrWriteQueryCount()
 
     val metadataWithIds = Metadata.withIds(metadata)
 

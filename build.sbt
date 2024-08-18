@@ -6,7 +6,7 @@ scalaVersion := "2.13.14"
 val json4sVersion = "4.0.7"
 val scalatraVersion = "2.8.4"
 val jettyVersion = "9.4.20.v20190813"
-// val AkkaVersion = "2.6.16"
+val opencvVersion = "1.5.10"
 
 scalacOptions := Seq(
   "-deprecation",
@@ -21,7 +21,6 @@ libraryDependencies ++= Seq(
 
   "org.scalatra"                %% "scalatra"                 % scalatraVersion,
   "org.scalatra"                %% "scalatra-atmosphere"      % scalatraVersion,
-  "org.scalatra"                %% "scalatra-scalatest"       % scalatraVersion % Test,
   "org.scalatra"                %% "scalatra-scalate"         % scalatraVersion,
   "org.scalatra"                %% "scalatra-auth"            % scalatraVersion,
   "org.scalatra"                %% "scalatra-atmosphere"      % scalatraVersion,
@@ -29,28 +28,28 @@ libraryDependencies ++= Seq(
   "org.scalatra.scalate"        %% "scalate-core"             % "1.10.1",
 
   "com.typesafe"                 % "config"                   % "1.4.3",
-
   "com.typesafe.play"           %% "play-json"                % "2.10.5",
-  "org.apache.tika"              % "tika-core"                % "2.9.2",
-  "org.apache.tika"              % "tika-parsers" % "2.9.2",
-  "org.apache.tika"              % "tika-parser-image-module" % "2.9.2",
 
   "commons-io"                   % "commons-io"               % "2.16.1",
   "commons-codec"                % "commons-codec"            % "1.17.0",
   "commons-dbutils"              % "commons-dbutils"          % "1.8.1",
-  "commons-logging"              % "commons-logging"           % "1.3.1",
+  "commons-logging"              % "commons-logging"           % "1.3.3",
+  "org.apache.commons"           % "commons-imaging"          % "1.0-alpha2",
 
   "org.mindrot"                  % "jbcrypt"                  % "0.4",
+
   "org.postgresql"               % "postgresql"               % "42.7.3",
   "org.xerial"                   % "sqlite-jdbc"              % "3.46.0.0",
 
-  "org.imgscalr"                 % "imgscalr-lib"             % "4.2",
-  "org.apache.commons"           % "commons-imaging"          % "1.0-alpha2",
   "com.drewnoakes"               % "metadata-extractor"       % "2.19.0",
+  "org.apache.tika"              % "tika-core"                % "2.9.2",
+  "org.apache.tika"              % "tika-parsers" % "2.9.2",
+  "org.apache.tika"              % "tika-parser-image-module" % "2.9.2",
   "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
   "org.slf4j"                    % "slf4j-api"                % "2.0.12" % "runtime",
 
-  "org.mockito" % "mockito-core" % "5.11.0" % Test,
+  "org.scalatra"                %% "scalatra-scalatest"       % scalatraVersion % Test,
+  "org.mockito"                  % "mockito-core"             % "5.11.0" % Test,
 
   //
   // ATTN: The old versions are required - we don't need to update them until Scalatra 3.x/Scala 3.x upgrade
@@ -67,9 +66,39 @@ inThisBuild(
   List(
     scalaVersion := scalaVersion.value,
     semanticdbEnabled := true,
-    semanticdbVersion := scalafixSemanticdb.revision
+    semanticdbVersion := scalafixSemanticdb.revision,
   )
 )
+
+val javacppVersion = "1.5.7"
+
+// From: https://github.com/duanebester/streaming-ocr
+
+// Platform classifier for native library dependencies
+val platform = org.bytedeco.javacpp.Loader.getPlatform
+// Seq("windows-x86_64", "macosx-x86_64", "linux-x86_64")
+
+// Libraries with native dependencies
+val bytedecoPresetLibs = Seq(
+  "opencv" -> s"4.5.5-$javacppVersion",
+  "ffmpeg" -> s"5.0-$javacppVersion",
+  "openblas" -> s"0.3.19-$javacppVersion"
+
+  // Fails RN with:
+  //    bytedeco/openblas/linux-x86_64/libjniopenblas_nolapack.so: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.29' not found
+  //"opencv" -> s"4.9.0-$javacppVersion",
+  //"ffmpeg" -> s"6.1.1-$javacppVersion",
+  //"openblas" -> s"0.3.26-$javacppVersion"
+
+).flatMap {
+  case (lib, ver) => Seq(
+    // Add both: dependency and its native binaries for the current `platform`
+    "org.bytedeco" % lib % ver withSources() withJavadoc(),
+    "org.bytedeco" % lib % ver classifier platform
+  )
+}
+
+libraryDependencies ++= bytedecoPresetLibs
 
 ThisBuild / scalacOptions ++= Seq(
   "-deprecation",
@@ -87,6 +116,10 @@ unmanagedResourceDirectories in Compile += {
   baseDirectory.value / "src/main/webapp"
 }
 
+//unmanagedClasspath in Compile += {
+//  baseDirectory.value / "lib"
+//}
+
 assemblyMergeStrategy in assembly := {
   case PathList("META-INF", xs @ _*) if xs.contains("MANIFEST.MF") => MergeStrategy.discard
   case "reference.conf" => MergeStrategy.concat
@@ -100,6 +133,8 @@ assembly / assemblyJarName := {
   val base = name.value
   s"$base-${version.value}.jar"
 }
+
+assembly / mainClass := Some("ScalatraLauncher")
 
 commands += Command.command("testFocused") { state =>
   "testOnly -- -n focused" :: state

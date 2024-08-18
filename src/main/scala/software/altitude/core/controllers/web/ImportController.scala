@@ -2,7 +2,9 @@ package software.altitude.core.controllers.web
 
 import org.json4s.DefaultFormats
 import org.json4s.Formats
-import org.scalatra.{RequestEntityTooLarge, Route, SessionSupport}
+import org.scalatra.RequestEntityTooLarge
+import org.scalatra.Route
+import org.scalatra.SessionSupport
 import org.scalatra.atmosphere.AtmoReceive
 import org.scalatra.atmosphere.AtmosphereClient
 import org.scalatra.atmosphere.AtmosphereSupport
@@ -53,7 +55,7 @@ class ImportController
     requireLogin()
   }
 
-  get("/") {
+  val importView: Route = get("/r/:repoId") {
     contentType = "text/html"
     layoutTemplate("/WEB-INF/templates/views/import.ssp")
   }
@@ -89,7 +91,7 @@ class ImportController
     client
   }
 
-  val uploadFilesForm: Route = post("/upload") {
+  val uploadFilesForm: Route = post("/r/:repoId/upload") {
     contentType = "text/html"
 
     val repoId = RequestContext.getRepository.persistedId
@@ -139,6 +141,9 @@ class ImportController
               if (processedAndTotal._1.get() == processedAndTotal._2.get()) {
                 processedAndTotal._1.set(0)
                 processedAndTotal._2.set(0)
+
+                // save the model after all files have been processed
+                app.service.faceRecognition.saveModel()
 
                 sendWsStatusToUserClients(
                   successStatusTickerTemplate.format("All files processed"))

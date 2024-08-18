@@ -9,7 +9,7 @@ import software.altitude.test.core.IntegrationTestCore
 @DoNotDiscover class FileStoreServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Add asset") {
-    val importAsset = getImportAsset(("images/1.jpg"))
+    val importAsset = getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
     val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
   }

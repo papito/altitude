@@ -3,6 +3,7 @@ package software.altitude.core.dao.sqlite
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import software.altitude.core.RequestContext
+import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.dao.sqlite.querybuilder.AssetSearchQueryBuilder
 import software.altitude.core.models.Asset
 import software.altitude.core.util.SearchQuery
@@ -31,6 +32,8 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
   }
 
   override protected def replaceSearchDocument(asset: Asset): Unit = {
+    BaseDao.incrWriteQueryCount()
+
     val docSql =
       s"""
          UPDATE search_document

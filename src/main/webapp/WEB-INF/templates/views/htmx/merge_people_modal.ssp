@@ -1,0 +1,109 @@
+#import(software.altitude.core.Const)
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.models.Person)
+
+<%@ val minWidth: Int %>
+<%@ val title: String %>
+
+<%@ val mergeSourcePerson: Person %>
+<%@ val mergeDestPerson: Person %>
+
+<style>
+    #mergePeople {
+        display: grid;
+        grid-auto-rows: auto;
+        place-items: center;
+        row-gap: var(--control-vertical-space);
+    }
+
+    #mergePeople .people-to-merge {
+        display: grid;
+        grid-template-columns: 1fr 80px 1fr;
+        place-items: center;
+    }
+
+    #mergePeople .person-to-merge, #mergePeople .person-info {
+        display: grid;
+        grid-template-rows: auto auto;
+        row-gap: 8px;
+        place-items: center;
+    }
+
+    #mergePeople .merge-arrow {
+        display: grid;
+        font-size: 2em;
+        place-items: center;
+    }
+
+    #mergePeople .person-to-merge span {
+        font-size: 0.9em;
+        color: var(--font-color-dim);
+    }
+</style>
+
+<form action="#"
+      id="mergePeople"
+      hx-put='${ url(mergePeople, "repoId" -> RequestContext.getRepository.persistedId, "srcPersonId" -> mergeSourcePerson.persistedId, "destPersonId" -> mergeDestPerson.persistedId) }'
+      hx-trigger="submit"
+      hx-target="#content"
+      hx-swap="innerHTML">
+    <div class="people-to-merge">
+        <div class="person-to-merge">
+            <div>
+                <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${mergeSourcePerson.coverFaceId}">
+            </div>
+            <div class="person-info">
+                <div>
+                    ${mergeSourcePerson.name}
+                </div>
+                <span>
+                    (${mergeSourcePerson.numOfFaces} instances)
+                </span>
+            </div>
+        </div>
+        <div class="merge-arrow">
+            <i class="fas fa-arrow-right"></i>
+        </div>
+        <div class="person-to-merge">
+            <div>
+                <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${mergeDestPerson.coverFaceId}">
+            </div>
+            <div class="person-info">
+                <div>
+                    ${mergeDestPerson.name}
+                </div>
+                <span>
+                    (${mergeDestPerson.numOfFaces} instances)
+                </span>
+            </div>
+        </div>
+    </div>
+    <div>
+        <button type="submit"
+                class="action-button">
+            Merge
+        </button>
+    </div>
+
+</form>
+
+<script lang="js" type="module">
+    import {Const} from "/js/constants.js"
+
+    showModal({minWidthPx: "${minWidth}", title: "${title}"})
+
+    htmx.find("#mergePeople").addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful === true) {
+            closeModal()
+
+            const personMergedEvent = new CustomEvent(
+                    Const.events.personMerged, {
+                        detail: {
+                                ${Const.Api.Person.MERGE_SOURCE_ID}: "${mergeSourcePerson.persistedId}",
+                                ${Const.Api.Person.MERGE_DEST_ID}: "${mergeDestPerson.persistedId}",
+                        }});
+
+            document.body.dispatchEvent(personMergedEvent)
+        }
+    });
+</script>

@@ -28,6 +28,10 @@ object Const {
     val FS = "fs"
   }
 
+  object Security {
+    val MEMBER_ME_COOKIE_EXPIRATION_DAYS = 7
+  }
+
   /**
    * MODELS
    */
@@ -58,14 +62,50 @@ object Const {
     val FILES_STORE_CONFIG = "file_store_config"
 
     object Config {
-      val PATH = "path"
     }
   }
 
   object User extends Common {
     val EMAIL = "email"
+    val NAME = "name"
     val PASSWORD_HASH = "password_hash"
     val ACCOUNT_TYPE = "account_type"
+    val LAST_ACTIVE_REPO_ID = "last_active_repo_id"
+  }
+
+  object UserToken {
+    val ACCOUNT_ID = "account_id"
+    val TOKEN = "token"
+    val EXPIRES_AT = "expires_at"
+  }
+
+  object Face extends Common {
+    val X1 = "x1"
+    val Y1 = "y1"
+    val WIDTH = "width"
+    val HEIGHT = "height"
+    val ASSET_ID = "asset_id"
+    val PERSON_ID = "person_id"
+    val PERSON_LABEL = "person_label"
+    val DETECTION_SCORE = "detection_score"
+    val EMBEDDINGS = "embeddings"
+    val FEATURES = "features"
+    val IMAGE = "image"
+    val DISPLAY_IMAGE = "display_image"
+    val ALIGNED_IMAGE = "aligned_image"
+    val ALIGNED_IMAGE_GS = "aligned_image_gs"
+  }
+
+  object Person extends Common {
+    val LABEL = "label"
+    val NAME = "name"
+    val COVER_FACE_ID = "cover_face_id"
+    val MERGED_WITH_IDS = "merged_with_ids"
+    val NUM_OF_FACES = "num_of_faces"
+    val MERGED_INTO_ID = "merged_into_id"
+    val MERGED_INTO_LABEL = "merged_into_label"
+    val IS_HIDDEN = "is_hidden"
+    val FACES = "faces"
   }
 
   object Asset extends Common {
@@ -102,16 +142,10 @@ object Const {
     }
   }
 
-  object Preview {
-    val ASSET_ID = "asset_id"
+  object MimedData {
     val MIME_TYPE = "mime_type"
     val DATA = "data"
-  }
-
-  object Data {
     val ASSET_ID = "asset_id"
-    val MIME_TYPE = "mime_type"
-    val DATA = "data"
   }
 
   object Stat extends Common {
@@ -139,7 +173,10 @@ object Const {
     val PREVIEW = "preview"
     val FILE = "file"
     val FILES = "files"
+    val FACE = "face"
+    val FACES = "faces"
     val REPOSITORIES = "repositories"
+    val MODELS = "models"
   }
 
   /**
@@ -231,6 +268,14 @@ object Const {
       val NEW_PARENT_ID = "newParentId"
     }
 
+    object Person {
+      val NAME = "name"
+      val MERGE_SOURCE_ID = "mergeSourceId"
+      val MERGE_DEST_ID = "mergeDestId"
+      val MERGE_SOURCE_PERSON = "mergeSourcePerson"
+      val MERGE_DEST_PERSON = "mergeDestPerson"
+    }
+
     object Trash {
       val ASSET_IDS = "asset_ids"
     }
@@ -251,6 +296,7 @@ object Const {
 
     object Setup {
       val ADMIN_EMAIL = "adminEmail"
+      val ADMIN_NAME = "adminName"
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
       val PASSWORD2 = "password2"
@@ -259,6 +305,9 @@ object Const {
     object Constraints {
       val MAX_EMAIL_LENGTH = 80
       val MIN_EMAIL_LENGTH = 3
+
+      val MAX_NAME_LENGTH = 80
+      val MIN_NAME_LENGTH = 2
 
       val MAX_PASSWORD_LENGTH = 50
       val MIN_PASSWORD_LENGTH = 8
@@ -282,5 +331,8 @@ object Const {
 
     val DELETE_FOLDER_MODAL_TITLE = "Delete folder"
     val DELETE_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
+
+    val MERGE_PEOPLE_MODAL_TITLE = "Merge people"
+    val MERGE_PEOPLE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
   }
 }

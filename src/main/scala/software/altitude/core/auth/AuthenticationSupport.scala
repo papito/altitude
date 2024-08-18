@@ -6,11 +6,14 @@ import org.scalatra.auth.ScentrySupport
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.AltitudeServletContext
-import software.altitude.core.RequestContext
 import software.altitude.core.models.User
 
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
+
+object AuthenticationSupport {
+  val loginUrl = "/sessions/new"
+}
 
 trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
   self: ScalatraBase =>
@@ -26,7 +29,7 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
   }
 
   protected val scentryConfig: ScentryConfiguration = (new ScentryConfig {
-    override val login = "/sessions/new"
+    override val login: String = AuthenticationSupport.loginUrl
   }).asInstanceOf[ScentryConfiguration]
 
   val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -41,7 +44,7 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
     }
 
     // we can now access the user via the thread-local RequestContext until the end of the request
-    RequestContext.account.value = Some(user)
+    AltitudeServletContext.app.service.user.switchContextToUser(user)
   }
 
   /**

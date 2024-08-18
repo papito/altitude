@@ -15,6 +15,7 @@ class SetupController extends BaseHtmxController  {
     trim = List(
       C.Api.Setup.REPOSITORY_NAME,
       C.Api.Setup.ADMIN_EMAIL,
+      C.Api.Setup.ADMIN_NAME,
       C.Api.Setup.PASSWORD,
       C.Api.Setup.PASSWORD2),
     lower = List(C.Api.Setup.ADMIN_EMAIL)
@@ -24,16 +25,19 @@ class SetupController extends BaseHtmxController  {
     required = List(
       C.Api.Setup.REPOSITORY_NAME,
       C.Api.Setup.ADMIN_EMAIL,
+      C.Api.Setup.ADMIN_NAME,
       C.Api.Setup.PASSWORD,
       C.Api.Setup.PASSWORD2),
     maxLengths = Map(
       C.Api.Setup.REPOSITORY_NAME -> C.Api.Constraints.MAX_REPOSITORY_NAME_LENGTH,
       C.Api.Setup.ADMIN_EMAIL -> C.Api.Constraints.MAX_EMAIL_LENGTH,
+      C.Api.Setup.ADMIN_NAME -> C.Api.Constraints.MAX_NAME_LENGTH,
       C.Api.Setup.PASSWORD -> C.Api.Constraints.MAX_PASSWORD_LENGTH,
     ),
     minLengths = Map(
       C.Api.Setup.REPOSITORY_NAME -> C.Api.Constraints.MIN_REPOSITORY_NAME_LENGTH,
       C.Api.Setup.ADMIN_EMAIL -> C.Api.Constraints.MIN_EMAIL_LENGTH,
+      C.Api.Setup.ADMIN_NAME -> C.Api.Constraints.MIN_NAME_LENGTH,
       C.Api.Setup.PASSWORD -> C.Api.Constraints.MIN_PASSWORD_LENGTH,
     ),
   )
@@ -61,6 +65,7 @@ class SetupController extends BaseHtmxController  {
 
     val repositoryName = (jsonIn \ C.Api.Setup.REPOSITORY_NAME).asOpt[String].getOrElse("")
     val email = (jsonIn \ C.Api.Setup.ADMIN_EMAIL).asOpt[String].getOrElse("")
+    val name = (jsonIn \ C.Api.Setup.ADMIN_NAME).asOpt[String].getOrElse("")
     val password = (jsonIn \ C.Api.Setup.PASSWORD).asOpt[String].getOrElse("")
     val password2 = (jsonIn \ C.Api.Setup.PASSWORD2).asOpt[String].getOrElse("")
 
@@ -84,7 +89,10 @@ class SetupController extends BaseHtmxController  {
     }
 
     // Oh, we are committed at this point
-    val userModel = new User(email= email, accountType = AccountType.Admin)
+    val userModel = new User(
+      email= email,
+      name = name,
+      accountType = AccountType.Admin)
 
     app.service.system.initializeSystem(
       repositoryName=repositoryName,

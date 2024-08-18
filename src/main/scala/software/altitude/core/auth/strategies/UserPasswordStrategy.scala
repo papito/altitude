@@ -5,6 +5,7 @@ import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.AltitudeServletContext
+import software.altitude.core.auth.AuthenticationSupport
 import software.altitude.core.models.User
 
 import javax.servlet.http.HttpServletRequest
@@ -37,7 +38,7 @@ class UserPasswordStrategy(protected val app: ScalatraBase)
 
   /** What should happen if the user is currently not authenticated? */
   override def unauthenticated()(implicit request: HttpServletRequest, response: HttpServletResponse): Unit = {
-    app.redirect("/session/new")
+    app.redirect(AuthenticationSupport.loginUrl)
   }
 
 }

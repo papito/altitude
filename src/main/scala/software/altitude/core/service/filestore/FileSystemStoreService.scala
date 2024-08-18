@@ -8,9 +8,7 @@ import software.altitude.core.Altitude
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
 import software.altitude.core.StorageException
-import software.altitude.core.models.Asset
-import software.altitude.core.models.Data
-import software.altitude.core.models.Preview
+import software.altitude.core.models.{AssetWithData, Face, MimedAssetData, MimedFaceData, MimedPreviewData}
 import software.altitude.core.{Const => C}
 
 import java.io._
@@ -18,7 +16,7 @@ import java.io._
 class FileSystemStoreService(app: Altitude) extends FileStoreService {
   protected final val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  override def getById(id: String): Data = {
+  override def getAssetById(id: String): MimedAssetData = {
     val path = filePath(id)
     val srcFile: File = new File(path)
 
@@ -32,26 +30,26 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
         throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
     }
 
-    Data(
+    MimedAssetData(
       assetId = id,
       data = byteArray.get,
       mimeType = "application/octet-stream")
   }
 
-  override def addAsset(asset: Asset): Unit = {
-    val destFile = new File(filePath(asset.persistedId))
-    logger.debug(s"Creating asset [$asset] on file system at [$destFile]")
+  override def addAsset(dataAsset: AssetWithData): Unit = {
+    val destFile = new File(filePath(dataAsset.asset.persistedId))
+    logger.info(s"Creating asset [$dataAsset.asset] on file system at [$destFile]")
 
     try {
-      FileUtils.writeByteArrayToFile(destFile, asset.data)
+      FileUtils.writeByteArrayToFile(destFile, dataAsset.data)
     }
     catch {
       case ex: IOException =>
-        throw StorageException(s"Error creating [$asset] @ [$destFile]: $ex]")
+        throw StorageException(s"Error creating [$dataAsset.asset] @ [$destFile]: $ex]")
     }
   }
 
-  override def addPreview(preview: Preview): Unit = {
+  override def addPreview(preview: MimedPreviewData): Unit = {
     logger.info(s"Adding preview for asset ${preview.assetId}")
 
     // get the full path to our preview file
@@ -59,7 +57,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     // parse out the dir path
     val dirPath = FilenameUtils.getFullPath(destFilePath)
 
-    FileUtils.forceMkdir(new File(dirPath))
+//    FileUtils.forceMkdir(new File(dirPath))
 
     try {
       FileUtils.writeByteArrayToFile(new File(destFilePath), preview.data)
@@ -69,7 +67,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
-  override def getPreviewById(assetId: String): Preview = {
+  override def getPreviewById(assetId: String): MimedPreviewData = {
     val f: File = new File(previewFilePath(assetId))
 
     if (!f.isFile) {
@@ -80,10 +78,9 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     val is: InputStream = new ByteArrayInputStream(byteArray)
 
     try {
-      Preview(
+      MimedPreviewData(
         assetId = assetId,
-        data = byteArray,
-        mimeType = "application/octet-stream")
+        data = byteArray)
     }
     finally {
       if (is != null) is.close()
@@ -92,27 +89,93 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
 
   private def previewFilePath(assetId: String): String = {
     val dirName = assetId.substring(0, 2)
-    new File(new File(previewDirPath, dirName).getPath, assetId + Preview.FILE_EXTENSION).getPath
+    new File(new File(previewDataPath, dirName).getPath, s"$assetId.${MimedPreviewData.FILE_EXTENSION}").getPath
   }
 
-  private def previewDirPath: String =
-    new File(
-      RequestContext.getRepository.fileStoreConfig(C.Repository.Config.PATH),
-      C.DataStore.PREVIEW).getPath
-
-  /**
-   * Get the absolute path to the asset on file system,
-   * given path relative to repository root
-   */
-  private def fileFromRelPath(relativePath: String): File = {
-    val repositoryRoot = RequestContext.repository.value.get.fileStoreConfig(C.Repository.Config.PATH)
-    new File(repositoryRoot, relativePath)
+  private def repositoryDataPath: String = {
+    val reposDataPath = FilenameUtils.concat(app.dataPath, C.DataStore.REPOSITORIES)
+    val repositoryDir = RequestContext.getRepository.persistedId
+    FilenameUtils.concat(reposDataPath, repositoryDir)
   }
+
+  private def previewDataPath: String =
+    new File(repositoryDataPath, C.DataStore.PREVIEW).getPath
 
   private def filePath(assetId: String): String = {
-    val repositoryRoot = RequestContext.repository.value.get.fileStoreConfig(C.Repository.Config.PATH)
-    val absoluteFilesPath = FilenameUtils.concat(repositoryRoot, C.DataStore.FILES)
-    val absoluteFilePartitionPath = FilenameUtils.concat(absoluteFilesPath, assetId.substring(0, 2))
-    FilenameUtils.concat(absoluteFilePartitionPath, assetId)
+    val filesPath = FilenameUtils.concat(repositoryDataPath, C.DataStore.FILES)
+    val partitionedFilesPath = FilenameUtils.concat(filesPath, assetId.substring(0, 2))
+    FilenameUtils.concat(partitionedFilesPath, assetId)
+  }
+
+  private def displayFacePath(faceId: String): String = {
+    val facesPath = FilenameUtils.concat(repositoryDataPath, C.DataStore.FACES)
+    val partitionedFacesPath = FilenameUtils.concat(facesPath, faceId.substring(0, 2))
+    FilenameUtils.concat(partitionedFacesPath, s"$faceId-display.png")
+  }
+
+  private def detectedFacePath(faceId: String): String = {
+    val facesPath = FilenameUtils.concat(repositoryDataPath, C.DataStore.FACES)
+    val partitionedFacesPath = FilenameUtils.concat(facesPath, faceId.substring(0, 2))
+    FilenameUtils.concat(partitionedFacesPath, s"$faceId-detected.png")
+  }
+
+  private def alignedGreyscaleFacePath(faceId: String): String = {
+    val facesPath = FilenameUtils.concat(repositoryDataPath, C.DataStore.FACES)
+    val partitionedFacesPath = FilenameUtils.concat(facesPath, faceId.substring(0, 2))
+    FilenameUtils.concat(partitionedFacesPath, s"$faceId-aligned-gs.png")
+  }
+
+  override def addFace(face: Face): Unit = {
+    logger.debug(s"Creating face [${face.persistedId}] on file system")
+
+    val destDisplayFile = new File(displayFacePath(face.persistedId))
+    val detectedFaceFile = new File(detectedFacePath(face.persistedId))
+    val alignedGreyscaleFile = new File(alignedGreyscaleFacePath(face.persistedId))
+
+    try {
+      FileUtils.writeByteArrayToFile(destDisplayFile, face.displayImage)
+      FileUtils.writeByteArrayToFile(detectedFaceFile, face.image)
+      FileUtils.writeByteArrayToFile(alignedGreyscaleFile, face.alignedImageGs)
+    }
+    catch {
+      case ex: IOException =>
+        throw StorageException(s"Error creating [$face] @ [$destDisplayFile]: $ex]")
+    }
+  }
+
+  override def getDisplayFaceById(faceId: String): MimedFaceData = {
+    val path = displayFacePath(faceId)
+    val srcFile: File = new File(path)
+
+    var byteArray: Option[Array[Byte]] = None
+
+    try {
+      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
+    }
+    catch {
+      case ex: IOException =>
+        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
+    }
+
+    MimedFaceData(
+      data = byteArray.get)
+  }
+
+  override def getAlignedGreyscaleFaceById(faceId: String): MimedFaceData = {
+    val path = alignedGreyscaleFacePath(faceId)
+    val srcFile: File = new File(path)
+
+    var byteArray: Option[Array[Byte]] = None
+
+    try {
+      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
+    }
+    catch {
+      case ex: IOException =>
+        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
+    }
+
+    MimedFaceData(
+      data = byteArray.get)
   }
 }

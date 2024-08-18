@@ -20,7 +20,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   def getAll: List[JsObject] = {
     txManager.asReadOnly[List[JsObject]] {
-      val q: Query = new Query().withRepository()
+     val q: Query = new Query().withRepository()
      val wCounts = addAssetCount(dao.query(q).records)
      val wPaths = wCounts
      wPaths
@@ -263,7 +263,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       // cannot move into own child
       if (flatChildrenIdsWithDepths(folderBeingMovedId, repositoryFolders()).map(_._2).contains(destFolderId)) {
         throw DuplicateException(
-          Some(s"Cannot move parent folder into a child node"))
+          Some("Cannot move parent folder into a child node"))
       }
 
       var destFolder: Option[Folder] = None
@@ -276,16 +276,16 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
       val folderBeingMoved: Folder = getById(folderBeingMovedId)
 
-      // destination parent cannot have folder by the same name
-      val dupQuery = new Query(params = Map(
+      val data = Map(
         C.Folder.PARENT_ID -> destFolderId,
-        C.Folder.NAME_LC -> folderBeingMoved.nameLowercase))
-
-      val folderForUpdate = Folder(
-        parentId = destFolderId,
-        name = folderBeingMoved.name)
-
-      updateById(folderBeingMovedId, folderForUpdate, List(C.Folder.PARENT_ID), Some(dupQuery))
+        C.Folder.NAME -> folderBeingMoved.name,
+      )
+      try {
+        updateById(folderBeingMovedId, data)
+      } catch {
+        case e: Exception =>
+          throw e
+      }
 
       incrChildCount(destFolderId)
       // this is still the old parent as the model is immutable
@@ -303,16 +303,15 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     txManager.withTransaction {
       val folder: Folder = getById(folderId)
 
-      // new folder name cannot match existing one
-      val dupQuery = new Query(params = Map(
-        C.Folder.PARENT_ID -> folder.parentId,
-        C.Folder.NAME -> newName))
-
       val folderForUpdate: Folder = folder.copy(
         name = newName
       )
 
-      updateById(folderId, folderForUpdate, List(C.Folder.NAME, C.Folder.NAME_LC), Some(dupQuery))
+      val data = Map(
+        C.Folder.NAME -> newName,
+        C.Folder.NAME_LC -> newName.toLowerCase)
+
+      updateById(folderId, data)
       folderForUpdate
     }
   }
@@ -357,8 +356,10 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
     txManager.withTransaction {
       logger.info(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
-      val updatedFolder = folder.copy(isRecycled = isRecycled)
-      dao.updateById(folder.persistedId, data = updatedFolder, fields = List(C.Folder.IS_RECYCLED))
+
+      dao.updateById(
+        folder.persistedId,
+        Map(C.Folder.IS_RECYCLED -> isRecycled))
     }
   }
 

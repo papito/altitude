@@ -26,7 +26,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val folder1: Folder = testApp.service.library.addFolder("folder1")
 
-    folder1.parentId shouldEqual RequestContext.repository.value.get.rootFolderId
+    folder1.parentId shouldEqual RequestContext.getRepository.rootFolderId
 
     val folder1_1: Folder = testApp.service.library.addFolder(
       name = "folder1_1", parentId = folder1.id)
@@ -47,7 +47,7 @@ import software.altitude.test.core.IntegrationTestCore
     val folder2: Folder = testApp.service.library.addFolder(
       name = "folder2")
 
-    folder2.parentId shouldEqual RequestContext.repository.value.get.rootFolderId
+    folder2.parentId shouldEqual RequestContext.getRepository.rootFolderId
 
     val folder2_1: Folder = testApp.service.library.addFolder(
       name = "folder2_1", parentId = folder2.id)
@@ -96,7 +96,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Root folder path should be empty") {
-    val path: List[Folder] = testApp.app.service.folder.pathComponents(folderId = RequestContext.repository.value.get.rootFolderId)
+    val path: List[Folder] = testApp.app.service.folder.pathComponents(folderId = RequestContext.getRepository.rootFolderId)
     path.length should equal(0)
   }
 
@@ -205,7 +205,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Deleting the root folder should fail") {
     intercept[IllegalOperationException] {
-      testApp.service.library.deleteFolderById(RequestContext.repository.value.get.rootFolderId)
+      testApp.service.library.deleteFolderById(RequestContext.getRepository.rootFolderId)
     }
   }
 
@@ -262,13 +262,13 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.addFolder("folder2")
 
     // assert initial state
-    testApp.app.service.folder.immediateChildren(rootId = RequestContext.repository.value.get.rootFolderId).length shouldBe 2
+    testApp.app.service.folder.immediateChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
 
-    testApp.service.library.moveFolder(folder1_1_1.persistedId, RequestContext.repository.value.get.rootFolderId)
-    testApp.app.service.folder.immediateChildren(rootId = RequestContext.repository.value.get.rootFolderId).length shouldBe 3
+    testApp.service.library.moveFolder(folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
+    testApp.app.service.folder.immediateChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 3
 
-    testApp.service.library.moveFolder(folder1_1.persistedId, RequestContext.repository.value.get.rootFolderId)
-    testApp.app.service.folder.immediateChildren(rootId = RequestContext.repository.value.get.rootFolderId).length shouldBe 4
+    testApp.service.library.moveFolder(folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
+    testApp.app.service.folder.immediateChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
   }
 
   test("Illegal folder move actions should throw") {
@@ -315,15 +315,36 @@ import software.altitude.test.core.IntegrationTestCore
     intercept[DuplicateException] {
       testApp.service.library.moveFolder(folder1_1_1.persistedId, folder2.persistedId)
     }
+  }
+
+  test("Duplicate folder name moves should throw", Focused) {
+    /*
+    folder1
+      child
+    folder2
+        CHILD
+    */
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
+
+    val folder1_1: Folder = testApp.service.library.addFolder(
+      name = "child", parentId = folder1.id)
+
+    val folder2: Folder = testApp.service.library.addFolder("folder2")
+
+    testApp.service.library.addFolder(name = "CHILD", parentId = folder2.id)
 
     // move into a parent with the same immediate child name (different casing)
     intercept[DuplicateException] {
-      testApp.service.library.moveFolder(folder1_1_1.persistedId, folder3.persistedId)
+      testApp.service.library.moveFolder(folder1_1.persistedId, folder2.persistedId)
     }
+  }
+
+  test("Moving into a folder that doe not exist should throw") {
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
 
     // move into a folder that does not exist
     intercept[ValidationException] {
-      testApp.service.library.moveFolder(folder1.persistedId, "bogus")
+      testApp.service.library.moveFolder(folder1.persistedId, "bogus-id")
     }
   }
 
@@ -345,16 +366,21 @@ import software.altitude.test.core.IntegrationTestCore
     renamedFolder.name shouldEqual "Folder"
   }
 
+  test("Duplicate folder rename actions should thrown") {
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder2: Folder = testApp.service.library.addFolder("folder2")
+
+    intercept[DuplicateException] {
+      testApp.service.library.renameFolder(folder1.persistedId, folder2.name)
+    }
+  }
+
   test("Illegal folder rename actions should throw") {
     val folder1: Folder = testApp.service.library.addFolder("folder")
 
-    intercept[DuplicateException] {
-      testApp.service.library.renameFolder(folder1.persistedId, folder1.name)
-    }
-
     // rename a system folder
     intercept[IllegalOperationException] {
-      testApp.service.library.renameFolder(RequestContext.repository.value.get.rootFolderId, folder1.name)
+      testApp.service.library.renameFolder(RequestContext.getRepository.rootFolderId, folder1.name)
     }
   }
 
@@ -383,7 +409,7 @@ import software.altitude.test.core.IntegrationTestCore
     folder1.numOfChildren shouldBe 0
   }
 
-  test("Folders child count should be correct after moving", Focused) {
+  test("Folders child count should be correct after moving") {
     /*
     folder1
       folder1_1

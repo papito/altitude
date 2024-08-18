@@ -1,0 +1,9 @@
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.models.Person)
+
+<%@ val person: Person %>
+
+<span hx-trigger="click"
+      hx-swap="outerHTML"
+      hx-get='${ url(showEditPersonName, "repoId" -> RequestContext.getRepository.persistedId, "personId" -> person.persistedId) }'>
+            ${person.name}<i class="fas fa-edit"></i></span>

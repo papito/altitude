@@ -27,11 +27,9 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
     asset.isRecycled shouldBe false
 
-    val updateAsset: Asset = asset.copy(isRecycled = true)
-
     testApp.service.asset.updateById(
-      asset.persistedId, updateAsset,
-      fields = List(C.Asset.IS_RECYCLED))
+      asset.persistedId,
+      Map(C.Asset.IS_RECYCLED -> true))
 
     (testApp.service.library.getById(asset.persistedId): Asset).isRecycled shouldBe true
   }

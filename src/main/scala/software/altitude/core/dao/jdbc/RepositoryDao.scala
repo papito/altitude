@@ -22,7 +22,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
     val fileStoreConfigJson = Json.parse(fileStoreConfigJsonStr).as[JsObject]
 
     val model = Repository(
-      id = Some(rec(C.Base.ID).asInstanceOf[String]),
+      id = Option(rec(C.Base.ID).asInstanceOf[String]),
       name = rec(C.Repository.NAME).asInstanceOf[String],
       ownerAccountId = rec(C.Repository.OWNER_ACCOUNT_ID).asInstanceOf[String],
       rootFolderId = rec(C.Repository.ROOT_FOLDER_ID).asInstanceOf[String],
@@ -57,5 +57,11 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
     addRecord(jsonIn, sql, sqlVals)
 
     jsonIn ++ Json.obj(C.Base.ID -> id)
+  }
+
+  def getAll: List[Repository] = {
+    val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM $tableName"
+    val recs = manyBySqlQuery(sql)
+    recs.map(makeModel)
   }
 }

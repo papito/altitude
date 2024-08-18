@@ -4,7 +4,6 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.RequestContext
-import software.altitude.core.Util
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.dao.postgres.querybuilder.{AssetSearchQueryBuilder => PostgresAssetSearchQueryBuilder}
 import software.altitude.core.dao.sqlite.querybuilder.{AssetSearchQueryBuilder => SqliteAssetSearchQueryBuilder}
@@ -31,7 +30,7 @@ import software.altitude.test.core.TestFocus
     val builder = new SqliteAssetSearchQueryBuilder(List("*"))
     val q = new SearchQuery()
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset WHERE asset.repository_id = ? AND is_recycled = ?"
+    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset WHERE asset.repository_id = ? AND is_recycled = ?"
     sqlQuery.bindValues.size shouldBe 2
   }
 
@@ -39,7 +38,7 @@ import software.altitude.test.core.TestFocus
     val builder = new SqliteAssetSearchQueryBuilder(List("*"))
     val q = new SearchQuery(folderIds = Set("1", "2", "3"))
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset WHERE asset.repository_id = ? AND is_recycled = ? AND folder_id IN (?, ?, ?)"
+    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset WHERE asset.repository_id = ? AND is_recycled = ? AND folder_id IN (?, ?, ?)"
     sqlQuery.bindValues.size shouldBe 5
   }
 
@@ -47,7 +46,7 @@ import software.altitude.test.core.TestFocus
     val builder = new SqliteAssetSearchQueryBuilder(List("*"))
     val q = new SearchQuery(text = Some("my text"))
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND is_recycled = ? AND search_document.asset_id = asset.id"
+    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND is_recycled = ? AND search_document.asset_id = asset.id"
     sqlQuery.bindValues.size shouldBe 4
   }
 
@@ -55,7 +54,7 @@ import software.altitude.test.core.TestFocus
     val builder = new PostgresAssetSearchQueryBuilder(List("*"))
     val q = new SearchQuery(text = Some("my text"))
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND search_document.tsv @@ to_tsquery(?) AND is_recycled = ? AND search_document.asset_id = asset.id"
+    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND search_document.tsv @@ to_tsquery(?) AND is_recycled = ? AND search_document.asset_id = asset.id"
     sqlQuery.bindValues.size shouldBe 4
   }
 
@@ -69,7 +68,7 @@ import software.altitude.test.core.TestFocus
       searchSort = List(SearchSort(sortField, SortDirection.ASC)))
 
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM (SELECT asset.* FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND is_recycled = ? AND search_document.asset_id = asset.id) AS asset, search_parameter AS sort_param WHERE sort_param.repository_id = ? AND sort_param.asset_id = asset.id AND sort_param.field_id = ? ORDER BY sort_param.field_value_num ASC"
+    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND is_recycled = ? AND search_document.asset_id = asset.id ) AS asset, search_parameter AS sort_param WHERE sort_param.repository_id = ? AND sort_param.asset_id = asset.id AND sort_param.field_id = ? ORDER BY sort_param.field_value_num ASC"
     sqlQuery.bindValues.size shouldBe 6
   }
 
@@ -83,7 +82,7 @@ import software.altitude.test.core.TestFocus
       )
     )
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM asset, search_parameter WHERE asset.repository_id = ? AND search_parameter.repository_id = ? AND is_recycled = ? AND ((field_id = ? AND field_value_kw = ?) OR (field_id = ? AND field_value_num = ?) OR (field_id = ? AND field_value_bool = ?)) AND search_parameter.asset_id = asset.id GROUP BY asset.id HAVING count(asset.id) >= 3"
+    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM asset, search_parameter WHERE asset.repository_id = ? AND search_parameter.repository_id = ? AND is_recycled = ? AND ((field_id = ? AND field_value_kw = ?) OR (field_id = ? AND field_value_num = ?) OR (field_id = ? AND field_value_bool = ?)) AND search_parameter.asset_id = asset.id GROUP BY asset.id HAVING count(asset.id) >= 3"
     sqlQuery.bindValues.size shouldBe 9
   }
 
@@ -101,7 +100,8 @@ import software.altitude.test.core.TestFocus
       searchSort = List(SearchSort(sortField, SortDirection.ASC))
     )
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsString shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM (SELECT asset.* FROM asset, search_parameter WHERE asset.repository_id = ? AND search_parameter.repository_id = ? AND is_recycled = ? AND ((field_id = ? AND field_value_kw = ?) OR (field_id = ? AND field_value_num = ?) OR (field_id = ? AND field_value_bool = ?)) AND search_parameter.asset_id = asset.id GROUP BY asset.id HAVING count(asset.id) >= 3) AS asset, search_parameter AS sort_param WHERE sort_param.repository_id = ? AND sort_param.asset_id = asset.id AND sort_param.field_id = ? ORDER BY sort_param.field_value_bool ASC"
+    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, search_parameter WHERE asset.repository_id = ? AND search_parameter.repository_id = ? AND is_recycled = ? AND ((field_id = ? AND field_value_kw = ?) OR (field_id = ? AND field_value_num = ?) OR (field_id = ? AND field_value_bool = ?)) AND search_parameter.asset_id = asset.id GROUP BY asset.id HAVING count(asset.id) >= 3 ) AS asset, search_parameter AS sort_param WHERE sort_param.repository_id = ? AND sort_param.asset_id = asset.id AND sort_param.field_id = ? ORDER BY sort_param.field_value_bool ASC"
     sqlQuery.bindValues.size shouldBe 11
+
   }
 }

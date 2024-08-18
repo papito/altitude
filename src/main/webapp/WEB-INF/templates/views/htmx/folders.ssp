@@ -110,7 +110,7 @@
                 <a href="#"
                    folder-id="${rootFolder.persistedId}"
                    id="expand-folder-children-${rootFolder.persistedId}"
-                   hx-get="${ url(showFolderContextMenu) }"
+                   hx-get='${ url(showFolderContextMenu, "repoId" -> RequestContext.getRepository.persistedId) }'
                    hx-swap="innerHTML"
                    hx-target="#menu-${rootFolder.persistedId}"
                    hx-vals='{"folderId": "${rootFolder.persistedId}"}'
@@ -127,7 +127,7 @@
              id="children-${rootFolder.persistedId}"
              folder-id="${rootFolder.persistedId}"
              hx-swap="innerHTML"
-             hx-get="${ url(htmxFolderChildren) }"
+             hx-get='${ url(htmxFolderChildren, "repoId" -> RequestContext.getRepository.persistedId) }'
              hx-vals='{"parentId": "${rootFolder.persistedId}"}'
              hx-trigger="load">
         </div>
@@ -159,7 +159,7 @@
         /**
          * Context menu potential request
          */
-        if (evt.detail.pathInfo.requestPath  === "${ url(showFolderContextMenu) }") {
+        if (evt.detail.pathInfo.requestPath  === '${ url(showFolderContextMenu, "repoId" -> RequestContext.getRepository.persistedId) }') {
             const folderId = evt.detail.target.getAttribute(Const.attributes.folderId)
             const folder = new Folder(folderId)
 
@@ -183,7 +183,7 @@
         /**
          * Folder children potential request
          */
-        if (evt.detail.pathInfo.requestPath  === "${ url(htmxFolderChildren) }") {
+        if (evt.detail.pathInfo.requestPath  === '${ url(htmxFolderChildren, "repoId" -> RequestContext.getRepository.persistedId) }') {
             // I don't JavaScript good - how do you get a param from a relative URL?
             const url = new URL("https://dummy.com" + evt.detail.pathInfo.finalRequestPath)
             const folderId = url.searchParams.get("parentId")
@@ -220,7 +220,7 @@
         console.log("Request path is " + requestPath)
 
         // on successful context menu request, show the menu
-        if (requestPath  === "${ url(showFolderContextMenu) }") {
+        if (requestPath  === '${ url(showFolderContextMenu, "repoId" -> RequestContext.getRepository.persistedId) }') {
             console.log("Context menu request successful")
 
             const folder = new Folder(evt.target.getAttribute("folder-id"))
@@ -232,7 +232,7 @@
         }
 
         // on successful folder children request or child added request, expand the folder
-        if (requestPath === "${ url(htmxFolderChildren) }" || requestPath === "${ url(htmxAddFolder) }") {
+        if (requestPath === '${ url(htmxFolderChildren, "repoId" -> RequestContext.getRepository.persistedId) }' || requestPath === '${ url(htmxAddFolder, "repoId" -> RequestContext.getRepository.persistedId) }') {
             const folder = new Folder(evt.target.getAttribute("folder-id"))
             folder.expand()
         }
@@ -299,7 +299,7 @@
 
         htmx.ajax(
                 "POST",
-                "${ url(htmxMoveFolder) }", {
+                '${ url(htmxMoveFolder, "repoId" -> RequestContext.getRepository.persistedId) }', {
                     "swap": "none",
                     "values": {...event.detail},
                     "handler": handler
@@ -359,7 +359,7 @@
         dragState.y = 0;
         e.target.style.transform = 'translate(0px, 0px)';
 
-        // reset the position attributes for draggablses (on failed drag, it will resume from the last position)
+        // reset the position attributes for draggables (on failed drag, it will resume from the last position)
         e.target.removeAttribute("data-x")
         e.target.removeAttribute("data-y")
     }

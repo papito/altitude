@@ -6,8 +6,10 @@ import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.DataScrubber
 import software.altitude.core.NotFoundException
+import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
 import software.altitude.core.Validators.ApiRequestValidator
+import software.altitude.core.util.Util
 import software.altitude.core.{Const => C}
 
 import java.lang.System.currentTimeMillis
@@ -34,7 +36,14 @@ class BaseApiController extends BaseController {
 
   override def logRequestEnd(): Unit = {
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    logger.info(s"API request END: ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
+    logger.info(s"API request END (${response.status}): ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
+
+    if (RequestContext.readQueryCount.value > 0) {
+      logger.info(s"API request READ queries: ${RequestContext.readQueryCount.value}")
+    }
+    if (RequestContext.writeQueryCount.value > 0) {
+      logger.info(s"API request WRITE queries: ${RequestContext.writeQueryCount.value}")
+    }
   }
 
   // override to disable this check in controllers that do not require a JSON payload for post and put
@@ -65,16 +74,10 @@ class BaseApiController extends BaseController {
     case _: NotFoundException =>
       NotFound(Json.obj())
     case ex: Exception =>
-      val strStacktrace = software.altitude.core.Util.logStacktrace(ex)
+      val strStacktrace = Util.logStacktrace(ex)
 
       InternalServerError(Json.obj(
         C.Api.ERROR -> (if (ex.getMessage!= null) ex.getMessage else ex.getClass.getName),
         C.Api.STACKTRACE -> strStacktrace))
-  }
-
-  override def setUser(): Unit = {
-  }
-
-  override def setRepository(): Unit = {
   }
 }

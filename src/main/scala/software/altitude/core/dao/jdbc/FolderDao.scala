@@ -12,7 +12,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val model = Folder(
-      id = Some(rec(C.Base.ID).asInstanceOf[String]),
+      id = Option(rec(C.Base.ID).asInstanceOf[String]),
       name = rec(C.Folder.NAME).asInstanceOf[String],
       parentId = rec(C.Folder.PARENT_ID).asInstanceOf[String],
       isRecycled = getBooleanField(rec(C.Folder.IS_RECYCLED)),

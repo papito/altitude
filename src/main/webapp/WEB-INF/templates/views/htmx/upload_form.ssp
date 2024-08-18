@@ -1,3 +1,5 @@
+#import(software.altitude.core.RequestContext)
+
 <style>
     #uploadForm {
         display: grid;
@@ -28,7 +30,7 @@
 
 </style>
 
-<form id="uploadForm" hx-post="${ url(uploadFilesForm) }" hx-encoding="multipart/form-data">
+<form id="uploadForm" hx-post='${ url(uploadFilesForm, "repoId" -> RequestContext.getRepository.persistedId) }' hx-encoding="multipart/form-data">
     <div>
         <input type="file" name="files" id="files" multiple>
     </div>

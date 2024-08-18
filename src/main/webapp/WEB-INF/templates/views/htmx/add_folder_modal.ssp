@@ -1,4 +1,5 @@
 #import(software.altitude.core.Const)
+#import(software.altitude.core.RequestContext)
 #import(play.api.libs.json.Json)
 #import(play.api.libs.json.JsObject)
 
@@ -16,7 +17,7 @@
       id="addFolder"
       folder-id="${parentId}"
       hx-swap="innerHTML"
-      hx-post="${ url(htmxAddFolder) }"
+      hx-post='${ url(htmxAddFolder, "repoId" -> RequestContext.getRepository.persistedId) }'
       hx-target="#children-${parentId}"
       hx-trigger="submit"
       hx-ext="json-enc">

@@ -74,7 +74,7 @@ class FolderController extends BaseApiController {
   }
 
   private def realId(aliasOrId: String): String = aliasOrId match {
-    case C.Folder.Alias.ROOT => RequestContext.repository.value.get.rootFolderId
+    case C.Folder.Alias.ROOT => RequestContext.getRepository.rootFolderId
     case _ => aliasOrId
   }
 

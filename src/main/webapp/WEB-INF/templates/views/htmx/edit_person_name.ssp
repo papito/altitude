@@ -1,0 +1,36 @@
+#import(software.altitude.core.Const)
+#import(software.altitude.core.RequestContext)
+#import(play.api.libs.json.Json)
+#import(play.api.libs.json.JsObject)
+
+#import(software.altitude.core.models.Person)
+
+<%@ val person: Person %>
+<%@ val fieldErrors: Map[String, String] = Map.empty %>
+<%@ val formJson: JsObject = Json.obj() %>
+<% val newName: Option[String] = (formJson \ Const.Api.Person.NAME).asOpt[String] %>
+
+<form action="#"
+      id="editPersonName"
+      autocomplete="off"
+      hx-swap="outerHTML"
+      hx-put='${ url(editPersonName, "repoId" -> RequestContext.getRepository.persistedId, "personId" -> person.persistedId) }'
+      hx-trigger="submit"
+      hx-ext="json-enc">
+
+    #if (fieldErrors.contains(Const.Api.Person.NAME))
+        <div class="error">${ fieldErrors(Const.Api.Folder.NAME) }</div>
+    #end
+
+<input type="text"
+       name="${Const.Api.Person.NAME}"
+       value="${person.name}"
+    #if (newName.isDefined)
+       value="${ newName.get }"
+    #else
+       value="${ person.name }"
+    #end
+>
+    <input type="hidden" name="${ Const.Api.ID }" value="${ person.persistedId }">
+
+</form>

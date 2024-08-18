@@ -1,0 +1,46 @@
+#import(software.altitude.core.Const)
+#import(software.altitude.core.AltitudeServletContext)
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.models.Asset)
+#import(software.altitude.core.util.SearchResult)
+<%@ val results: SearchResult %>
+
+<style>
+    #assets .cell {
+        margin: 3px;
+        border: var(--result-border);
+    }
+
+    #assets .cell img {
+        display: block;
+    }
+
+    #assets .grid {
+        margin: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    #assets .cell {
+        display: grid;
+        width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
+        height:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
+        place-items: center;
+    }
+
+</style>
+
+<div id="assets">
+    <div class="grid">
+        #for (idx <- 0 to results.records.length - 1)
+        <div class="cell">
+            <% val asset: Asset = results.records(idx) %>
+            <img src="/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }"
+                 alt = "${ asset.fileName }"
+                 class="responsive-image"/>
+        </div>
+    #end
+    </div>
+</div>

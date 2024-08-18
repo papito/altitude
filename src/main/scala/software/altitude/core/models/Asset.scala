@@ -5,6 +5,13 @@ import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
 
+/**
+ * All asset-related metadata.
+ *
+ * Since we do not store actual data in DB, the data itself is only passed via AssetWithData.
+ *
+ * This makes the purpose clear and avoids the confusion of an asset having zero byte data.
+ */
 object Asset {
   implicit def fromJson(json: JsValue): Asset = Asset(
       id = (json \ C.Base.ID).asOpt[String],
@@ -12,7 +19,7 @@ object Asset {
       assetType = (json \ C.Asset.ASSET_TYPE).get,
       fileName = (json \ C.Asset.FILENAME).as[String],
       folderId = (json \ C.Asset.FOLDER_ID).as[String],
-      checksum = (json \ C.Asset.CHECKSUM).as[String],
+      checksum = (json \ C.Asset.CHECKSUM).as[Int],
       sizeBytes = (json \ C.Asset.SIZE_BYTES).as[Long],
       metadata = Metadata.fromJson((json \ C.Asset.METADATA).as[JsObject]),
       extractedMetadata = Metadata.fromJson((json \ C.Asset.EXTRACTED_METADATA).as[JsObject]),
@@ -23,17 +30,15 @@ object Asset {
 
 case class Asset(id: Option[String] = None,
                  userId: String,
-                 data: Array[Byte] = new Array[Byte](0),
                  assetType: AssetType,
                  fileName: String,
-                 checksum: String,
+                 checksum: Int,
                  sizeBytes: Long,
                  folderId: String,
                  metadata: Metadata = Metadata(),
                  isTriaged: Boolean = false,
                  isRecycled: Boolean = false,
-                 extractedMetadata: Metadata = Metadata())
-  extends BaseModel {
+                 extractedMetadata: Metadata = Metadata()) extends BaseModel {
 
   override def toJson: JsObject = Json.obj(
     C.Base.USER_ID -> userId,

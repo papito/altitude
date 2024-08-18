@@ -37,12 +37,11 @@ case class Folder(id: Option[String] = None,
   val nameLowercase: String = name.toLowerCase
 
   override def toJson: JsObject = {
-    val childrenJson: List[JsValue] = children.map(_.toJson)
     Json.obj(
       C.Folder.NAME -> name,
       C.Folder.NAME_LC -> nameLowercase,
       C.Folder.PARENT_ID -> parentId,
-      C.Folder.CHILDREN ->  JsArray(childrenJson),
+      C.Folder.CHILDREN ->  children.map(_.toJson),
       C.Folder.NUM_OF_ASSETS -> numOfAssets,
       C.Folder.NUM_OF_CHILDREN -> numOfChildren,
       C.Folder.IS_RECYCLED -> isRecycled
@@ -61,4 +60,5 @@ case class Folder(id: Option[String] = None,
   }
 
   override def hashCode: Int = super.hashCode
+
 }

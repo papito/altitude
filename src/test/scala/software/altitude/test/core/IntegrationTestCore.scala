@@ -1,5 +1,4 @@
 package software.altitude.test.core
-
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest._
@@ -24,17 +23,21 @@ abstract class IntegrationTestCore
   var testContext: TestContext = new TestContext(testApp)
 
   override def beforeEach(): Unit = {
+    AltitudeServletContext.clearState()
     AltitudeServletContext.app.isInitialized = false
     testContext = new TestContext(testApp)
 
-    /*
-     Every integration test has at least one repository to start with - you can't do anything otherwise.
-     This also creates the first user (owner of the repository).
-
-     Tests then can create additional repos and users to test the boundaries of repository and user separation.
-     */
+    // Every integration test has at least one repository and its admin to start with - you can't test anything otherwise.
+    // Tests then can create additional repos and users to test the boundaries of repository and user separation.
     testContext.persistRepository()
 
+    // Clear the face recognition model before each test
+    testApp.service.faceRecognition.initialize()
+
+    // Clear face recognition cache
+    testApp.service.faceCache.clear()
+
+    // nuke the data dir tree
     IntegrationTestUtil.createFileStoreDir(testApp)
   }
 
@@ -88,5 +91,16 @@ abstract class IntegrationTestCore
    */
   implicit def toAnswerWithArguments[T](f: InvocationOnMock => T): Answer[T] = new Answer[T] {
     override def answer(invocation: InvocationOnMock): T = f(invocation)
+  }
+
+  /**
+   * The number of labels in the model, minus the reserved labels.
+   * That is, this reflects purely our trained labels for easier reasoning about the counts.
+   */
+  def getNumberOfModelLabels: Int = testApp.service.faceRecognition.recognizer.getLabels.size().height.toInt - 2
+
+  def getLabels: Seq[Int] = {
+    val labels = testApp.service.faceRecognition.recognizer.getLabels
+    (0 until labels.height()).map(labels.get(_, 0)(0).toInt)
   }
 }

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.SystemMetadataDao
+import software.altitude.core.models.Repository
 import software.altitude.core.models.SystemMetadata
 import software.altitude.core.models.User
 import software.altitude.core.transactions.TransactionManager
@@ -59,10 +60,12 @@ class SystemService(val app: Altitude) {
     txManager.withTransaction {
       val admin = app.service.user.add(adminModel, password = password)
 
-      app.service.repository.addRepository(
+      val repo: Repository = app.service.repository.addRepository(
         name = repositoryName,
         fileStoreType = C.StorageEngineName.FS, // hard default for now
         owner = admin)
+
+      app.service.user.setLastActiveRepoId(admin, repo.persistedId)
 
       systemMetadataDao.setInitialized()
 

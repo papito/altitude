@@ -17,6 +17,8 @@ case class ValidationException(message: String = "") extends Exception {
   }
 }
 
+// All-purpose event to get out of loops with user interrupts or conditionals
+case class AllDone(success: Boolean) extends Exception
 
 case class DuplicateException(message: Option[String] = None) extends Exception
 

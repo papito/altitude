@@ -8,8 +8,6 @@ import software.altitude.core.models.Metadata
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
 
-import java.io.File
-
 @DoNotDiscover class MetadataParserTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("normalize metadata") {
@@ -38,9 +36,8 @@ import java.io.File
 //    metadata("Y Resolution").map(_.value) should contain ("72 dots per inch")
   }
 
-  private def getMetadata(p: String): Metadata = {
-    val path = getClass.getResource(s"/import/$p").getPath
-    val importAsset = IntegrationTestUtil.fileToImportAsset(new File(path))
+  private def getMetadata(relPath: String): Metadata = {
+    val importAsset = IntegrationTestUtil.getImportAsset(relPath)
     val mediaType = testApp.service.assetImport.detectAssetType(importAsset)
     testApp.service.metadataExtractor.extract(importAsset, mediaType)
   }

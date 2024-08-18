@@ -1,20 +1,27 @@
 :root {
+    color-scheme: dark;
+
     --background-color: #363636;
     --form-background-color: #363535;
     --background-secondary-color: rgb(56, 56, 65);
+    --background-tertiary-color: rgb(75, 75, 87);
     --form-border: 2px solid #646161;
-    --modal-border: 3px solid rgba(129, 128, 128, 0.98);
+    --modal-border: 2px solid rgba(129, 128, 128, 0.98);
     --modal-background-color: #3b3b3b;
+    --result-border: 1px solid #837c7c;
     --form-error-border: 2px solid var(--error-color);
     --navbar-border: 1px solid #272727;
     --navbar-text-shadow: rgba(0,0,0,0.75) 0 1px;
     --box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0;
+    --font-color-dim: #b0acac;
 
     /* Larger spacing for larger app areas, like panels and page paddings */
     --section-vertical-space: 35px;
 
-    /* Standard vertical spacing for individual elements and lists */
+    /* Standard spacing for individual elements and lists */
     --control-vertical-space: 15px;
+    --control-horizontal-space: 25px;
+
     --success-font-color: #82da5f;
     --success-background-color: #377a1c;
     --warning-font-color: #dca051;

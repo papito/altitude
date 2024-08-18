@@ -15,7 +15,7 @@ object SearchQueryBuilder {
   * Common code for JDBC search query builders
   */
 abstract class SearchQueryBuilder(selColumnNames: List[String])
-  extends SqlQueryBuilder[SearchQuery](selColumnNames, Set(SearchQueryBuilder.ASSET_TABLE_NAME)) {
+  extends SqlQueryBuilder[SearchQuery](selColumnNames, SearchQueryBuilder.ASSET_TABLE_NAME) {
 
   private val searchParamTable = "search_parameter"
   protected val searchDocumentTable = "search_document"
@@ -28,6 +28,10 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
   override protected def from(searchQuery: SearchQuery): ClauseComponents = {
     ClauseComponents(elements = allTableNames(searchQuery))
+  }
+  override protected def fromStr(clauseComponents: ClauseComponents): String = {
+    val tableNames = clauseComponents.elements
+    s"FROM ${tableNames.mkString(", ")}"
   }
 
   /**
@@ -52,11 +56,13 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   private def buildSelectSqlAsSubquery(query: SearchQuery): SqlQuery = {
     val allClauses = compileClauses(query)
 
-    val subquerySql: String = s"SELECT ${SearchQueryBuilder.ASSET_TABLE_NAME}.*" +
-      fromStr(allClauses(SqlQueryBuilder.FROM)) +
-      whereStr(allClauses(SqlQueryBuilder.WHERE)) +
-      groupByStr(allClauses(SqlQueryBuilder.GROUP_BY)) +
-      havingStr(allClauses(SqlQueryBuilder.HAVING))
+    val subquerySql: String = s"""
+        SELECT ${SearchQueryBuilder.ASSET_TABLE_NAME}.*
+          ${fromStr(allClauses(SqlQueryBuilder.FROM))}
+        ${whereStr(allClauses(SqlQueryBuilder.WHERE))}
+      ${groupByStr(allClauses(SqlQueryBuilder.GROUP_BY))}
+        ${havingStr(allClauses(SqlQueryBuilder.HAVING))}
+      """
 
     val sql =
       selectStr(allClauses(SqlQueryBuilder.SELECT)) +
@@ -80,7 +86,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
   override protected def where(searchQuery: SearchQuery): ClauseComponents = {
     val repoIdElements = allTableNames(searchQuery).map(tableName => s"$tableName.${C.Base.REPO_ID} = ?")
-    val repoIdBindVals = allTableNames(searchQuery).map(_ => RequestContext.repository.value.get.persistedId)
+    val repoIdBindVals = allTableNames(searchQuery).map(_ => RequestContext.getRepository.persistedId)
 
     ClauseComponents(repoIdElements, repoIdBindVals) +
       textSearch(searchQuery) +
@@ -189,7 +195,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       "AND sort_param.field_id = ? " +
       s"ORDER BY sort_param.$sortColumn ${sort.direction}"
 
-    ClauseComponents(List(sql), List(RequestContext.repository.value.get.persistedId, sort.field.persistedId))
+    ClauseComponents(List(sql), List(RequestContext.getRepository.persistedId, sort.field.persistedId))
   }
 
   override protected def orderByStr(clauseComponents: ClauseComponents): String = {

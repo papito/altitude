@@ -1,9 +1,4 @@
 package software.altitude.core.service
-
-import com.drew.imaging.ImageMetadataReader
-import com.drew.metadata.exif.ExifDirectoryBase
-import com.drew.metadata.exif.ExifIFD0Directory
-import org.imgscalr.Scalr
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
@@ -13,21 +8,12 @@ import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Folder
 import software.altitude.core.models._
 import software.altitude.core.transactions.TransactionManager
+import software.altitude.core.util.ImageUtil.makeImageThumbnail
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 import software.altitude.core.{Const => C, _}
-
-import java.awt.AlphaComposite
-import java.awt.Color
-import java.awt.Graphics2D
-import java.awt.geom.AffineTransform
-import java.awt.image.AffineTransformOp
-import java.awt.image.BufferedImage
-import java.awt.image.ColorModel
-import java.io._
-import javax.imageio.ImageIO
 
 /**
   * The class that stitches it all together
@@ -49,44 +35,47 @@ class LibraryService(val app: Altitude) {
     * ASSETS
     * *********************************************************************** */
 
-  def add(assetIn: Asset): JsObject = {
-    logger.info(s"Preparing to add asset [$assetIn]")
+  def add(dataAssetIn: AssetWithData): JsObject = {
+    logger.info(s"Preparing to add asset [$dataAssetIn]")
 
     txManager.withTransaction[JsObject] {
-      val existing: Option[Asset] = getByChecksum(assetIn.checksum)
+      val existing: Option[Asset] = getByChecksum(dataAssetIn.asset.checksum)
 
       if (existing.nonEmpty) {
-        logger.debug(s"Duplicate found for [$assetIn] and checksum: ${assetIn.checksum}")
+        logger.debug(s"Duplicate found for [$dataAssetIn] and checksum: ${dataAssetIn.asset.checksum}")
         throw DuplicateException()
       }
 
       /**
-        * Process metadata and append it to the asset
+        * Create the version of the asset with ID and metadata (we don't have that yet)
         */
-      val metadata = app.service.metadata.cleanAndValidate(assetIn.metadata)
-
+      val metadata = app.service.metadata.cleanAndValidate(dataAssetIn.asset.metadata)
       val assetId = BaseDao.genId
 
-      val assetToAddModel: Asset = assetIn.copy(
+      val asset: Asset = dataAssetIn.asset.copy(
         id = Some(assetId),
         metadata = metadata,
-        data = assetIn.data,
-        extractedMetadata = assetIn.extractedMetadata
+        extractedMetadata = dataAssetIn.asset.extractedMetadata
       )
 
-      logger.info(s"Adding asset: $assetToAddModel")
+      /**
+       * This data asset has:
+       *    - Asset with ID
+       *    - Asset with metadata
+       *    - The data, obviously
+       */
+      val dataAsset = AssetWithData(asset, dataAssetIn.data)
 
-      app.service.asset.add(assetToAddModel)
+      logger.info(s"Adding asset: $dataAsset")
 
-      app.service.search.indexAsset(assetToAddModel)
+      app.service.asset.add(asset)
+      app.service.faceRecognition.processAsset(dataAsset)
+      app.service.search.indexAsset(asset)
+      app.service.stats.addAsset(asset)
+      app.service.fileStore.addAsset(dataAsset)
+      addPreview(dataAsset)
 
-      app.service.stats.addAsset(assetToAddModel)
-
-      addPreview(assetToAddModel)
-
-      app.service.fileStore.addAsset(assetToAddModel)
-
-      assetToAddModel
+      asset
     }
   }
 
@@ -100,7 +89,7 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def getByChecksum(checksum: String): Option[Asset] = {
+  private def getByChecksum(checksum: Int): Option[Asset] = {
     txManager.asReadOnly[Option[Asset]] {
       val query = new Query(params = Map(C.Asset.CHECKSUM -> checksum)).withRepository()
       val existing = app.service.asset.query(query)
@@ -131,14 +120,13 @@ class LibraryService(val app: Altitude) {
          It may or may not be recycled or triaged, so we update it as neither unconditionally
          (saves us a separate update query)
       */
-      val updatedAsset: Asset = asset.copy(
-        folderId = destFolderId,
-        isRecycled = false,
-        isTriaged = false)
+      val data = Map(
+        C.Asset.FOLDER_ID -> destFolderId,
+        C.Asset.IS_RECYCLED -> false,
+        C.Asset.IS_TRIAGED -> false
+      )
 
-      app.service.asset.updateById(
-        asset.persistedId, updatedAsset,
-        fields = List(C.Asset.FOLDER_ID, C.Asset.IS_RECYCLED, C.Asset.IS_TRIAGED))
+      app.service.asset.updateById(asset.persistedId, data)
 
     }
 
@@ -163,15 +151,12 @@ class LibraryService(val app: Altitude) {
         throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
       }
 
-      val updatedAsset: Asset = asset.copy(fileName = newFilename)
+      val data = Map(
+        C.Asset.FILENAME -> newFilename
+      )
+      app.service.asset.updateById(asset.persistedId, data)
 
-      // Note that we are not updating the PATH because it does not exist as a property
-      app.service.asset.updateById(
-        asset.persistedId,
-        updatedAsset,
-        fields = List(C.Asset.FILENAME))
-
-      updatedAsset
+      asset.copy(fileName = newFilename)
     }
   }
 
@@ -179,23 +164,22 @@ class LibraryService(val app: Altitude) {
     * DATA/PREVIEW
     * *********************************************************************** */
 
-  private def genPreviewData(asset: Asset): Array[Byte] = {
-    asset.assetType.mediaType match {
+  private def genPreviewData(dataAsset: AssetWithData): Array[Byte] = {
+    dataAsset.asset.assetType.mediaType match {
       case "image" =>
-        makeImageThumbnail(asset)
+        makeImageThumbnail(dataAsset.data, previewBoxSize)
       case _ => new Array[Byte](0)
     }
   }
 
-  private def addPreview(asset: Asset): Option[Preview] = {
-    val previewData: Array[Byte] = genPreviewData(asset)
+  private def addPreview(dataAsset: AssetWithData): Option[MimedPreviewData] = {
+    val previewData: Array[Byte] = genPreviewData(dataAsset)
 
     previewData.length match {
       case size if size > 0 =>
 
-        val preview: Preview = Preview(
-          assetId = asset.persistedId,
-          mimeType = asset.assetType.mime,
+        val preview: MimedPreviewData = MimedPreviewData(
+          assetId = dataAsset.asset.persistedId,
           data = previewData)
 
         app.service.fileStore.addPreview(preview)
@@ -205,104 +189,7 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  private def makeImageThumbnail(asset: Asset): Array[Byte] = {
-    try {
-      val mt: com.drew.metadata.Metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(asset.data))
-      val exifDirectory = mt.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
-      // val jpegDirectory = mt.getFirstDirectoryOfType(classOf[JpegDirectory])
-
-      val orientation: Int = try {
-        exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
-      } catch {
-        case _: Exception => 1
-      }
-
-      /**
-       * Rotate the image if necessary
-       *
-       * https://sirv.com/help/articles/rotate-photos-to-be-upright/
-       * https://stackoverflow.com/questions/5905868/how-to-rotate-jpeg-images-based-on-the-orientation-metadata
-       */
-      val dataStream: InputStream = new ByteArrayInputStream(asset.data)
-      val srcImage: BufferedImage = ImageIO.read(dataStream)
-      val scaledImage: BufferedImage = Scalr.resize(srcImage, Scalr.Method.QUALITY, previewBoxSize)
-
-      val width = scaledImage.getWidth
-      val height = scaledImage.getHeight
-
-      val transform: AffineTransform = new AffineTransform()
-      orientation match {
-        case 1 =>
-        case 2 =>
-          transform.scale(-1.0, 1.0);
-          transform.translate(-width, 0);
-        case 3 =>
-          transform.translate(width, height);
-          transform.rotate(Math.PI);
-        case 4 =>
-          transform.scale(1.0, -1.0);
-          transform.translate(0, -height);
-        case 5 =>
-          transform.rotate(-Math.PI / 2);
-          transform.scale(-1.0, 1.0);
-        case 6 =>
-          transform.translate(height, 0);
-          transform.rotate(Math.PI / 2);
-        case 7 =>
-          transform.scale(-1.0, 1.0);
-          transform.translate(-height, 0);
-          transform.translate(0, width);
-          transform.rotate(3 * Math.PI / 2);
-        case 8 =>
-          transform.translate(0, width);
-          transform.rotate(3 * Math.PI / 2);
-        case _ =>
-      }
-
-      val op = new AffineTransformOp(transform, AffineTransformOp.TYPE_BICUBIC)
-
-      val colorModel: ColorModel = scaledImage.getType match {
-        case BufferedImage.TYPE_BYTE_GRAY => null
-        case _ => scaledImage.getColorModel
-      }
-
-      val destinationImage = op.createCompatibleDestImage(scaledImage, colorModel)
-
-      val graphics = destinationImage.createGraphics()
-      graphics.setBackground(Color.WHITE)
-      graphics.clearRect(0, 0, destinationImage.getWidth, destinationImage.getHeight)
-      val rotationCorrectScaledImage = op.filter(scaledImage, destinationImage)
-
-      val compositeImage: BufferedImage =
-        new BufferedImage(previewBoxSize, previewBoxSize, BufferedImage.TYPE_INT_ARGB)
-      val G2D: Graphics2D = compositeImage.createGraphics
-
-      val x: Int = if (rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth) {
-        (previewBoxSize - rotationCorrectScaledImage.getWidth) / 2
-      } else 0
-      val y: Int = if (rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth) {
-        (previewBoxSize - rotationCorrectScaledImage.getHeight()) / 2
-      } else 0
-
-      G2D.setComposite(AlphaComposite.Clear)
-      G2D.fillRect(0, 0, previewBoxSize, previewBoxSize)
-      G2D.setComposite(AlphaComposite.Src)
-      G2D.drawImage(rotationCorrectScaledImage, x, y, null)
-      val byteArray: ByteArrayOutputStream = new ByteArrayOutputStream
-      ImageIO.write(compositeImage, "png", byteArray)
-      graphics.dispose()
-
-      byteArray.toByteArray
-
-    } catch {
-      case ex: Exception =>
-        logger.error(s"Error generating preview for $asset")
-        software.altitude.core.Util.logStacktrace(ex)
-        throw FormatException(asset)
-    }
-  }
-
-  def getPreview(assetId: String): Preview = {
+  def getPreview(assetId: String): MimedPreviewData = {
     app.service.fileStore.getPreviewById(assetId)
   }
 
@@ -361,7 +248,7 @@ class LibraryService(val app: Altitude) {
 
   def addFolder(name: String, parentId: Option[String] = None): Folder = {
     txManager.withTransaction[JsObject] {
-      val _parentId = if (parentId.isDefined) parentId.get else RequestContext.repository.value.get.rootFolderId
+      val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
       val addedFolder: Folder = app.service.folder.add(folder)
 
@@ -449,8 +336,7 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def moveFolder(folderBeingMovedId: String, destFolderId: String)
-                : Folder = {
+  def moveFolder(folderBeingMovedId: String, destFolderId: String): Folder = {
     txManager.withTransaction[Folder] {
       val (movedFolder, _) = app.service.folder.move(folderBeingMovedId, destFolderId)
       movedFolder
@@ -548,5 +434,4 @@ class LibraryService(val app: Altitude) {
       app.service.search.reindexAsset(asset)
     }
   }
-
 }

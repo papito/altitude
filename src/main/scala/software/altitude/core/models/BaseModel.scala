@@ -1,6 +1,6 @@
 package software.altitude.core.models
 import play.api.libs.json._
-import software.altitude.core.Util
+import software.altitude.core.util.Util
 import software.altitude.core.{Const => C}
 
 import java.time.LocalDateTime

@@ -87,6 +87,19 @@
                value="<%= software.altitude.core.AltitudeServletContext.app.config.getString(Const.Conf.DB_ENGINE) %>"/>
     </div>
     <div>
+        <label for="${ Const.Api.Setup.ADMIN_NAME }">Administrator Name</label>
+        <input type="text"
+               autocomplete="off"
+               id="${ Const.Api.Setup.ADMIN_NAME }"
+               name="${ Const.Api.Setup.ADMIN_NAME }"
+               value='<%= (formJson \ Const.Api.Setup.ADMIN_NAME).asOpt[String].getOrElse("") %>'
+               minlength="${ Const.Api.Constraints.MIN_NAME_LENGTH }"
+               maxlength="${ Const.Api.Constraints.MAX_NAME_LENGTH }"/>
+        #if (fieldErrors.contains(Const.Api.Setup.ADMIN_NAME))
+            <div class="error">${ fieldErrors(Const.Api.Setup.ADMIN_NAME) }</div>
+        #end
+    </div>
+    <div>
         <label for="${ Const.Api.Setup.ADMIN_EMAIL }">Administrator Email</label>
         <input type="email"
                autocomplete="off"

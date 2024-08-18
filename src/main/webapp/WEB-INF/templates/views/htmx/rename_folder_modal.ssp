@@ -1,4 +1,5 @@
 #import(software.altitude.core.Const)
+#import(software.altitude.core.RequestContext)
 #import(play.api.libs.json.Json)
 #import(play.api.libs.json.JsObject)
 
@@ -20,7 +21,7 @@
 <form action="#"
       id="renameFolder"
       hx-swap="innerHTML"
-      hx-put="${ url(htmxRenameFolder) }"
+      hx-put='${ url(htmxRenameFolder, "repoId" -> RequestContext.getRepository.persistedId) }'
       hx-trigger="submit"
       hx-target="#folderName-${id}"
       hx-ext="json-enc">

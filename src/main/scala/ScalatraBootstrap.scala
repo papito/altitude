@@ -13,6 +13,9 @@ class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
     AltitudeServletContext.mountEndpoints(context)
     AltitudeServletContext.app.runMigrations()
     AltitudeServletContext.app.setIsInitializedState()
+
+    AltitudeServletContext.app.service.faceCache.loadCacheForAll()
+    AltitudeServletContext.app.service.faceRecognition.initialize()
   }
 
   override def destroy(context: ServletContext): Unit = {

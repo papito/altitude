@@ -29,6 +29,9 @@ abstract class StatDao(override val config: Config) extends BaseDao with softwar
 
   override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any]): Unit = {
     logger.info(s"JDBC INSERT: $jsonIn")
+
+    BaseDao.incrWriteQueryCount()
+
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, q, values.map(_.asInstanceOf[Object]): _*)
   }
@@ -39,6 +42,8 @@ abstract class StatDao(override val config: Config) extends BaseDao with softwar
    * @param count the value to increment by - CAN be negative
    */
   def incrementStat(statName: String, count: Long = 1): Unit = {
+    BaseDao.incrWriteQueryCount()
+
     val sql = s"""
       UPDATE $tableName
          SET ${C.Stat.DIM_VAL} = ${C.Stat.DIM_VAL} + $count

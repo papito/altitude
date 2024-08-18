@@ -8,10 +8,10 @@ import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
 import software.altitude.core.NotFoundException
-import software.altitude.core.Util
 import software.altitude.core.ValidationException
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models._
+import software.altitude.core.util.Util
 import software.altitude.test.core.IntegrationTestCore
 
 

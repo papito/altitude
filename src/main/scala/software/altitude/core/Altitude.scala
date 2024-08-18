@@ -3,6 +3,7 @@ package software.altitude.core
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
+import org.apache.commons.io.FileUtils
 import org.apache.commons.io.FilenameUtils
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
@@ -90,6 +91,11 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
 
   }
 
+  final def dataPath: String = {
+    val dataDir: String = app.config.getString(C.Conf.FS_DATA_DIR)
+    FilenameUtils.concat(Environment.ROOT_PATH, dataDir)
+  }
+
   /**
    * Heroically assemble SQLITE URL based on what we have
    */
@@ -121,7 +127,7 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
 
   private final val schemaVersion = 1
 
-  private final val dataSourceType = config.getString(C.Conf.DB_ENGINE)
+  final val dataSourceType: String = config.getString(C.Conf.DB_ENGINE)
   logger.info(s"Datasource type: $dataSourceType")
 
   final val fileStoreType: String =  config.getString(C.Conf.DEFAULT_STORAGE_ENGINE)
@@ -148,6 +154,7 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
    */
   val scentryStrategies: List[(String, Class[_ <: ScentryStrategy[User]])] = Environment.CURRENT match {
     case Environment.Name.PROD => List(
+//      ("RememberMeStrategy", classOf[LocalDevRememberMeStrategy])
       ("UserPasswordStrategy", classOf[UserPasswordStrategy]),
       ("RememberMeStrategy", classOf[RememberMeStrategy])
     )
@@ -170,6 +177,12 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
     val user: UserDao = dataSourceType match {
       case C.DbEngineName.POSTGRES => new jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
       case C.DbEngineName.SQLITE => new jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val userToken: UserTokenDao = dataSourceType match {
+      case C.DbEngineName.POSTGRES => new jdbc.UserTokenDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.UserTokenDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
@@ -208,6 +221,18 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
       case C.DbEngineName.SQLITE => new sqlite.SearchDao(app.config)
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
+
+    val person: PersonDao = dataSourceType match {
+      case C.DbEngineName.POSTGRES => new postgres.PersonDao(app.config)
+      case C.DbEngineName.SQLITE => new sqlite.PersonDao(app.config)
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val face: FaceDao = dataSourceType match {
+      case C.DbEngineName.POSTGRES => new jdbc.FaceDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.FaceDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
   }
 
   object service {
@@ -233,11 +258,23 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
     val asset = new AssetService(app)
     val folder = new FolderService(app)
     val stats = new StatsService(app)
+    val person = new PersonService(app)
+    val faceDetection = new FaceDetectionService()
+    val faceRecognition = new FaceRecognitionService(app)
+    val faceCache = new FaceCacheService(app)
 
     val fileStore: FileStoreService = fileStoreType match {
       case C.StorageEngineName.FS => new FileSystemStoreService(app)
       // S3-based file store bigly wants to be here
       case _ => throw new NotImplementedError
+    }
+
+    if (dataSourceType == C.DbEngineName.SQLITE) {
+      val dbFolder = new File(dataPath, "db")
+      if (!dbFolder.exists()) {
+        logger.info("Creating the DB folder for SQLite: " + dbFolder)
+        FileUtils.forceMkdir(dbFolder)
+      }
     }
   }
 

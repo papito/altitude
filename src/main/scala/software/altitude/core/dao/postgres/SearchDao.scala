@@ -3,6 +3,7 @@ package software.altitude.core.dao.postgres
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import software.altitude.core.RequestContext
+import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.dao.postgres.querybuilder.AssetSearchQueryBuilder
 import software.altitude.core.models.Asset
 import software.altitude.core.util.SearchQuery
@@ -25,7 +26,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
     }
 
     val sqlVals: List[Any] = List(
-      RequestContext.repository.value.get.persistedId,
+      RequestContext.getRepository.persistedId,
       asset.persistedId,
       metadataValues.mkString(" "),
       "" /* body */)
@@ -34,6 +35,8 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
   }
 
   override protected def replaceSearchDocument(asset: Asset): Unit = {
+    BaseDao.incrWriteQueryCount()
+
     val docSql =
       s"""
          UPDATE search_document

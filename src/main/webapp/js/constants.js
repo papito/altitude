@@ -4,6 +4,8 @@ export const Const = {
         folderDeleted: "FOLDER_DELETED_EVENT",
         folderAdded: "FOLDER_ADDED_EVENT",
         folderCollapsed: "FOLDER_COLLAPSED_EVENT",
+        personMerged: "PERSON_MERGED_EVENT",
+        confirmPersonMerge: "CONFIRM_PERSON_MERGE_EVENT",
     },
 
     /**

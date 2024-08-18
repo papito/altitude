@@ -1,13 +1,15 @@
 package software.altitude.core.service.filestore
 
-import software.altitude.core.models.Asset
-import software.altitude.core.models.Data
-import software.altitude.core.models.Preview
+import software.altitude.core.models.{AssetWithData, Face, MimedAssetData, MimedFaceData, MimedPreviewData}
 
 trait FileStoreService {
-  def addAsset(asset: Asset): Unit
-  def getById(id: String): Data
+  def addAsset(assetWithData: AssetWithData): Unit
+  def getAssetById(id: String): MimedAssetData
 
-  def addPreview(preview: Preview): Unit
-  def getPreviewById(assetId: String): Preview
+  def addPreview(preview: MimedPreviewData): Unit
+  def getPreviewById(assetId: String): MimedPreviewData
+
+  def addFace(face: Face): Unit
+  def getDisplayFaceById(faceId: String): MimedFaceData
+  def getAlignedGreyscaleFaceById(faceId: String): MimedFaceData
 }

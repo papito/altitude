@@ -8,7 +8,6 @@ import software.altitude.core.DuplicateException
 import software.altitude.core.IllegalOperationException
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
-import software.altitude.core.Util
 import software.altitude.core.models._
 import software.altitude.core.util.Query
 import software.altitude.core.{Const => C}
@@ -64,11 +63,11 @@ import software.altitude.test.core.IntegrationTestCore
     (testApp.service.folder.getByIdWithChildAssetCounts(folder2.persistedId, all): Folder).numOfAssets shouldBe 10
 
     // test counts for immediate children
-    val rootChildren = testApp.service.folder.immediateChildren(RequestContext.repository.value.get.rootFolderId, all)
+    val rootChildren = testApp.service.folder.immediateChildren(RequestContext.getRepository.rootFolderId, all)
     rootChildren.head.numOfAssets shouldBe 2
     rootChildren.last.numOfAssets shouldBe 10
 
-    val rootChildren2 = testApp.service.folder.immediateChildren(RequestContext.repository.value.get.rootFolderId)
+    val rootChildren2 = testApp.service.folder.immediateChildren(RequestContext.getRepository.rootFolderId)
     rootChildren2.head.numOfAssets shouldBe 2
     rootChildren2.last.numOfAssets shouldBe 10
 
@@ -135,29 +134,9 @@ import software.altitude.test.core.IntegrationTestCore
 
     val mediaType = new AssetType(mediaType = "mediaType", mediaSubtype = "mediaSubtype", mime = "mime")
 
-    testApp.service.asset.add(new Asset(
-      folderId = folder1_1.persistedId,
-      userId = testContext.user.persistedId,
-      assetType = mediaType,
-      fileName = "filename.ext",
-      checksum = Util.randomStr(32),
-      sizeBytes = 1L))
-
-    testApp.service.asset.add(new Asset(
-      folderId = folder1_2.persistedId,
-      userId = testContext.user.persistedId,
-      assetType = mediaType,
-      fileName = "filename.ext",
-      checksum = Util.randomStr(32),
-      sizeBytes = 1L))
-
-    testApp.service.asset.add(new Asset(
-      folderId = folder1.persistedId,
-      userId = testContext.user.persistedId,
-      assetType = mediaType,
-      fileName = "filename.ext",
-      checksum = Util.randomStr(32),
-      sizeBytes = 1L))
+    testContext.persistAsset(folder = Some(folder1_1))
+    testContext.persistAsset(folder = Some(folder1_2))
+    testContext.persistAsset(folder = Some(folder1))
 
     testApp.service.library.query(
       new Query(Map(C.Asset.FOLDER_ID -> folder1_2.persistedId))
@@ -340,17 +319,18 @@ import software.altitude.test.core.IntegrationTestCore
   test("Restore an asset that was imported again") {
     val folder1: Folder = testApp.service.library.addFolder("folder1")
 
-    val asset: Asset = testContext.persistAsset(folder=Some(folder1))
+    val dataAsset = testContext.makeAssetWithData(folder=Some(folder1))
+    val persistedAsset: Asset = testApp.service.library.add(dataAsset)
 
     // recycle the asset
-    testApp.service.library.recycleAsset(asset.persistedId)
+    testApp.service.library.recycleAsset(persistedAsset.persistedId)
 
     // import a new copy of it (should be allowed)
-    testApp.service.library.add(asset)
+    testApp.service.library.add(dataAsset)
 
     // now restore the previously deleted copy into itself
     intercept[DuplicateException] {
-      testApp.service.library.restoreRecycledAsset(asset.persistedId)
+      testApp.service.library.restoreRecycledAsset(persistedAsset.persistedId)
     }
   }
 

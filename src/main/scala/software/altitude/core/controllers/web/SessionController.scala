@@ -1,7 +1,10 @@
 package software.altitude.core.controllers.web
 
-import org.scalatra.{Route, ScalatraServlet, UrlGeneratorSupport}
-import org.scalatra.scalate.{ScalateSupport, ScalateUrlGeneratorSupport}
+import org.scalatra.Route
+import org.scalatra.ScalatraServlet
+import org.scalatra.UrlGeneratorSupport
+import org.scalatra.scalate.ScalateSupport
+import org.scalatra.scalate.ScalateUrlGeneratorSupport
 import software.altitude.core.auth.AuthenticationSupport
 
 class SessionController
@@ -29,7 +32,7 @@ class SessionController
     layoutTemplate("/WEB-INF/templates/views/login.ssp")
   }
 
-  val sessions: Route = post("/") {
+  val doLogin: Route = post("/login") {
     scentry.authenticate()
 
     if (isAuthenticated) {
@@ -39,8 +42,7 @@ class SessionController
     }
   }
 
-  //FIXME: use POST
-  val logout: Route = get("/logout") {
+  val logout: Route = post("/logout") {
     scentry.logout()
     redirect("/")
   }

@@ -12,19 +12,25 @@ object User {
   implicit def fromJson(json: JsValue): User = User(
     id = (json \ C.Base.ID).asOpt[String],
     email = (json \ C.User.EMAIL).as[String],
+    name = (json \ C.User.NAME).as[String],
     accountType = (json \ C.User.ACCOUNT_TYPE).as[AccountType],
+    lastActiveRepoId = (json \ C.User.LAST_ACTIVE_REPO_ID).asOpt[String],
   ).withCoreAttr(json)
 
 }
 
 case class User(id: Option[String] = None,
                 email: String,
-                accountType: AccountType) extends BaseModel {
+                name: String,
+                accountType: AccountType,
+                lastActiveRepoId: Option[String] = None) extends BaseModel {
 
   override def toJson: JsObject = Json.obj(
     C.Base.ID -> id,
     C.User.EMAIL -> email,
+    C.User.NAME -> name,
     C.User.ACCOUNT_TYPE -> accountType,
+    C.User.LAST_ACTIVE_REPO_ID -> lastActiveRepoId
   ) ++ coreJsonAttrs
 
   override def toString: String = s"<user> ${id.getOrElse("NO ID")}, email: $email, accountType: $accountType"

@@ -2,9 +2,7 @@
 #import(software.altitude.core.Const)
 #import(software.altitude.core.AltitudeServletContext)
 #import(software.altitude.core.RequestContext)
-#import(software.altitude.core.models.Asset)
-#import(software.altitude.core.util.SearchResult)
-<%@ val results: SearchResult %>
+
 <html lang="en">
 <head>
     <title>ALTITUDE</title>
@@ -31,13 +29,6 @@
             padding-top: var(--panel-padding);
         }
 
-        #assets {
-            border-left: 1px solid var(--panel-border-color);
-            box-shadow: var(--box-shadow);
-            text-shadow: rgba(0,0,0,0.75) 0 1px;
-            overflow-y: auto;
-        }
-
         #explorerViews {
             box-shadow: var(--box-shadow);
             text-shadow: rgba(0,0,0,0.75) 0 1px;
@@ -47,6 +38,14 @@
             border-top: 1px solid var(--panel-border-color);
             box-shadow: var(--box-shadow);
             text-shadow: rgba(0,0,0,0.75) 0 1px;
+        }
+
+        #content {
+            border-left: 1px solid var(--panel-border-color);
+            box-shadow: var(--box-shadow);
+            text-shadow: rgba(0,0,0,0.75) 0 1px;
+            overflow-y: auto;
+            max-width: 100%;
         }
 
         /* SPLIT */
@@ -78,33 +77,6 @@
             overflow-x: hidden;
         }
 
-        .responsive-image {
-            max-width: 100%;
-        }
-
-        .cell {
-            margin: 3px;
-            border: 1px solid #837c7c;
-        }
-        .cell img {
-            display: block;
-        }
-
-        .grid {
-            margin: 10px;
-            display: flex;
-            flex-wrap: wrap;
-            flex-direction: row;
-            justify-content: center;
-        }
-
-        .cell {
-            display: grid;
-            width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
-            height: 220px;
-            place-items: center;
-        }
-
     </style>
 </head>
 
@@ -128,7 +100,7 @@
                            hx-target="#explorerPanelContent"
                            hx-swap="innerHTML"
                            hx-trigger="load, click"
-                           hx-get="${ url(showFoldersTab) }">Folders</a>
+                           hx-get='${ url(showFoldersTab, "repoId" -> RequestContext.getRepository.persistedId) }'>Folders</a>
                     </button>
 
                     <button type="button" id="albumsTab" role="tab"
@@ -137,8 +109,16 @@
                            hx-target="#explorerPanelContent"
                            hx-trigger="click"
                            hx-swap="innerHTML"
-                           hx-replace-url="/albums"
-                           hx-get="${ url(showAlbumsTab) }">Albums</a>
+                           hx-get='${ url(showAlbumsTab, "repoId" -> RequestContext.getRepository.persistedId) }'>Albums</a>
+                    </button>
+
+                    <button type="button" id="peopleTab" role="tab"
+                            data-tab-container-no-tabstop>
+                        <a href="#"
+                           hx-target="#explorerPanelContent"
+                           hx-trigger="click"
+                           hx-swap="innerHTML"
+                           hx-get='${ url(showPeopleTab, "repoId" -> RequestContext.getRepository.persistedId) }'>People</a>
                     </button>
                 </div>
 
@@ -152,17 +132,8 @@
         </div>
     </div>
 
-    <div id="assets" class="split content split-horizontal">
-        <div class="grid">
-            #for (idx <- 0 to results.records.length - 1)
-                <div class="cell">
-                    <% val asset: Asset = results.records(idx) %>
-                    <img src="/${ Const.DataStore.CONTENT }/${ Const.DataStore.PREVIEW }/${ asset.persistedId }"
-                         alt = "${ asset.fileName }"
-                         class="responsive-image"/>
-                </div>
-            #end
-        </div>
+    <div id="content" class="split content split-horizontal">
+        ${include("includes/results.ssp")}
     </div>
 </main>
 
@@ -183,7 +154,7 @@
         horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
     }
 
-    Split(["#explorer", "#assets"], {
+    Split(["#explorer", "#content"], {
         sizes: horizontalSplitSizes,
         minSize: [100, 300],
         onDragEnd: function (horizontalSplitSizes) {

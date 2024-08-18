@@ -1,0 +1,275 @@
+#import(software.altitude.core.RequestContext)
+#import(software.altitude.core.Const)
+#import(software.altitude.core.models.Person)
+
+<%@ val people: List[Person] %>
+
+<style>
+    #people .cell {
+        margin: 3px;
+        border: var(--result-border);
+        border-radius: 5px;
+    }
+
+    #people .cell img {
+        display: block;
+        border-radius: 4px;
+    }
+
+    #people .grid {
+        margin: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    #people .cell {
+        display: grid;
+        width:<%= software.altitude.core.service.FaceDetectionService.faceDetectionBoxPx + 60 %>px;
+        height: <%= software.altitude.core.service.FaceDetectionService.faceDetectionBoxPx + 40 %>px;
+        place-items: center;
+        touch-action: none;
+        row-gap: var(--control-vertical-space);
+    }
+
+    #people .cell a {
+        color: #FFFFFF;
+        text-decoration: none;
+
+    }
+
+    #people .draggable {
+        cursor: move;
+    }
+
+    #people .drop-target {
+        border-radius: 6px;
+        background-color: var(--dnd-drop-target-color);
+    }
+
+    #people .can-drop {
+        padding-left: 4px;
+        border: var(--dnd-draggable-border);
+        border-radius: 4px;
+        background-color: var(--dnd-can-drop-color);
+    }
+</style>
+
+<div id="peopleList">
+    <div id="people">
+        <div class="grid">
+            #for (person <- people)
+            <div id="person-${person.persistedId}"
+                 class="cell draggable drag-drop dropzone"
+                 person-id="${person.persistedId}">
+                <div>
+                    <a href="#"
+                       hx-target="#content"
+                       hx-trigger="click"
+                       hx-swap="innerHTML"
+                       hx-get='${ url(searchPerson, "repoId" -> RequestContext.getRepository.persistedId, "personId" -> person.persistedId) }'>
+                    <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}">
+                    </a>
+                </div>
+                <div>
+                    <a href="#"
+                       hx-target="#content"
+                       hx-trigger="click"
+                       hx-swap="innerHTML"
+                       hx-get='${ url(searchPerson, "repoId" -> RequestContext.getRepository.persistedId, "personId" -> person.persistedId) }'>
+                        ${person.name.get}
+                    </a>
+                </div>
+            </div>
+            #end
+        </div>
+    </div>
+</div>
+
+<!-- On load -->
+<script type="module">
+    import {selectTab} from "/js/utils.js";
+
+    selectTab("explorer", "peopleTab")
+</script>
+
+<!-- Custom event listeners -->
+<script type="module">
+    import {Const} from "/js/constants.js";
+    import {Folder} from "/js/models.js";
+
+    /**
+     * A folder is dragon dropped in UI BUT not yet removed on the server-side
+     */
+    document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
+        const mergeSourceId = event.detail["${Const.Api.Person.MERGE_SOURCE_ID}"]
+        const mergeDestId = event.detail["${Const.Api.Person.MERGE_DEST_ID}"]
+
+        console.log("Person " + mergeSourceId + " dragon dropped into " + mergeDestId)
+
+        if (mergeSourceId === mergeDestId) {
+            return
+        }
+
+        htmx.ajax(
+                "GET",
+                '${ url(showMergePeopleModal, "repoId" -> RequestContext.getRepository.persistedId) }', {
+                    "swap": "innerHTML",
+                    "target": "#modalContent",
+                    "values": {...event.detail},
+                })
+    })
+
+    document.body.addEventListener(Const.events.personMerged, (event) => {
+        const mergeSourceId = event.detail["${Const.Api.Person.MERGE_SOURCE_ID}"]
+        const mergeDestId = event.detail["${Const.Api.Person.MERGE_DEST_ID}"]
+
+        console.log("Person " + mergeSourceId + " MERGED into " + mergeDestId)
+
+        // remove the source person from the DOM
+        htmx.find("#person-" + mergeSourceId).remove()
+
+        showSuccessSnackBar("Person merged successfully")
+
+    })
+</script>
+
+
+<!-- DRAGON DROP -->
+<script type="module">
+    import {Const} from "/js/constants.js"
+    import interact from "https://cdn.interactjs.io/v1.9.20/interactjs/index.js"
+
+    /**
+     * Maintain position of the dragged element in order to snap it back at cancel
+     * https://github.com/taye/interact.js/issues/819#issuecomment-626599750
+     */
+    const dragState = {
+        x: 0,
+        y: 0,
+    }
+
+    function dragged(e) {
+        dragState.x = 0;
+        dragState.y = 0;
+        e.target.style.transform = 'translate(0px, 0px)';
+
+        // reset the position attributes for draggables (on failed drag, it will resume from the last position)
+        e.target.removeAttribute("data-x")
+        e.target.removeAttribute("data-y")
+    }
+
+    interact('#people .draggable')
+            .draggable({
+                // enable inertial throwing
+                inertia: true,
+                // keep the element within the area of it's parent
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: 'parent',
+                        endOnly: true,
+                        elementRect: {
+                            top: 0,
+                            left: 0,
+                            bottom: 1,
+                            right: 1
+                        }
+                    })
+                ],
+                autoScroll: {container: document.getElementById('explorerViews')},
+                listeners: {
+                    move: dragMoveListener,
+                    end: dragged,
+                }
+            })
+
+    function dragMoveListener (event) {
+        dragState.x += event.dx;
+        dragState.y += event.dy;
+
+        event.target.style.transform = 'translate(' + dragState.x + 'px, ' + dragState.y + 'px)';
+
+        const target = event.target
+        // keep the dragged position in the data-x/data-y attributes
+        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
+        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
+
+        // translate the element
+        target.style.transform = 'translate(' + x + 'px, ' + y + 'px)'
+
+        // update the position attributes
+        target.setAttribute('data-x', x)
+        target.setAttribute('data-y', y)
+    }
+
+    // enable draggables to be dropped into this
+    interact('#people .dropzone').dropzone({
+        // only accept elements matching this CSS selector
+        accept: '#people .draggable',
+        // going above seems to break the dropzone
+        overlap: 0.50,
+
+        // listen for drop related events:
+
+        ondropactivate: function (event) {
+            // add active dropzone feedback
+            event.target.classList.add('drop-active')
+        },
+        ondragenter: function (event) {
+            const draggableElement = event.relatedTarget
+            const dropzoneElement = event.target
+
+            // feedback the possibility of a drop
+            dropzoneElement.classList.add('drop-target')
+            draggableElement.classList.add('can-drop')
+        },
+        ondragleave: function (event) {
+            // remove the drop feedback style
+            event.target.classList.remove('drop-target')
+            event.relatedTarget.classList.remove('can-drop')
+        },
+        ondrop: function (event) {
+            const draggableElement = event.relatedTarget
+            const dropzoneElement = event.target
+
+            dropzoneElement.classList.remove('drop-active')
+            dropzoneElement.classList.remove('drop-target')
+
+            draggableElement.classList.remove('can-drop')
+
+            const mergeSrcId = draggableElement.getAttribute("person-id")
+            const mergeDestId = dropzoneElement.getAttribute("person-id")
+
+            const confirmPersonMergeEvent = new CustomEvent(
+                    Const.events.confirmPersonMerge, {
+                        detail: {
+                                ${Const.Api.Person.MERGE_SOURCE_ID}: mergeSrcId,
+                                ${Const.Api.Person.MERGE_DEST_ID}: mergeDestId,
+                        }});
+
+            document.body.dispatchEvent(confirmPersonMergeEvent)
+        },
+
+        ondropdeactivate: function (event) {
+            // remove active dropzone feedback
+            event.target.classList.remove('drop-active')
+            event.target.classList.remove('drop-target')
+        }
+    })
+
+    interact('#people .drag-drop')
+            .draggable({
+                inertia: true,
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: '#people .dropzone',
+                        endOnly: true
+                    })
+                ],
+                autoScroll: true,
+                // dragMoveListener from the dragging demo above
+                listeners: { move: dragMoveListener }
+            })
+
+</script>

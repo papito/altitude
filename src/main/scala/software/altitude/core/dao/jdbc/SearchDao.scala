@@ -56,6 +56,8 @@ abstract class SearchDao(override val config: Config)
   def clearMetadata(assetId: String): Unit = {
     logger.debug(s"Clearing asset $assetId metadata")
 
+    BaseDao.incrWriteQueryCount()
+
     val sql =
       s"""
          DELETE FROM search_parameter
@@ -126,14 +128,16 @@ abstract class SearchDao(override val config: Config)
           preparedStatement.setNull(6, Types.BOOLEAN)
         }
 
+        BaseDao.incrWriteQueryCount()
         preparedStatement.execute()
       }
 
     replaceSearchDocument(asset)
   }
 
-  override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any])
-                                  : Unit = {
+  override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any]): Unit = {
+    BaseDao.incrWriteQueryCount()
+
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, q, values.map(_.asInstanceOf[Object]): _*)
   }

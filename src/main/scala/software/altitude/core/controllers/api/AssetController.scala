@@ -7,8 +7,8 @@ import software.altitude.core.NotFoundException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
-import software.altitude.core.models.Data
-import software.altitude.core.models.Preview
+import software.altitude.core.models.MimedAssetData
+import software.altitude.core.models.MimedPreviewData
 import software.altitude.core.{Const => C}
 
 class AssetController extends BaseApiController {
@@ -32,7 +32,7 @@ class AssetController extends BaseApiController {
     val id = params.get(C.Api.ID).get
 
     try {
-      val data: Data = app.service.fileStore.getById(id)
+      val data: MimedAssetData = app.service.fileStore.getAssetById(id)
       this.contentType = data.mimeType
       data.data
     }
@@ -120,7 +120,7 @@ class AssetController extends BaseApiController {
     val id = params(Api.ID)
 
     try {
-      val preview: Preview = app.service.library.getPreview(id)
+      val preview: MimedPreviewData = app.service.library.getPreview(id)
       this.contentType = preview.mimeType
       preview.data
     }

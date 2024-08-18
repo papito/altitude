@@ -24,7 +24,7 @@ class AssetDao(override val config: Config) extends software.altitude.core.dao.j
        WHERE ${C.Asset.ID} = ?
       """
 
-    val rec = getOneRawRecordBySql(sql, List(assetId))
+    val rec = executeAndGetOne(sql, List(assetId))
     val metadataJson = getJsonFromColumn(rec(C.Asset.METADATA))
     val metadata = Metadata.fromJson(metadataJson)
     Some(metadata)

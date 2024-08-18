@@ -27,6 +27,13 @@ abstract class ControllerTestCore
     mount(servlet, path)
   }
 
+  /**
+   * Generate headers for controller tests to pass user and repo ids.
+   *
+   * If either of those is not provided, the test context values are used.
+   *
+   * These values are read by TestRememberMeStrategy to simulate the user being logged in.
+   */
   def testAuthHeaders(user: Option[User] = None, repo: Option[Repository] = None): List[(String, String)] = {
     val userHeader = if (user.isEmpty) {
       Const.Api.USER_TEST_HEADER_ID -> testContext.user.persistedId

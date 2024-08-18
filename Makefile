@@ -35,15 +35,12 @@ lint:
 
 clean:
 	rm -rf data/*
-	mkdir -p data/db
-
 
 publish:
 	rm -rf release
 	sbt assembly
 	# we don't need this
 	rm -rf target
-	mkdir -p release/data/db
 
 
 up:

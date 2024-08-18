@@ -11,7 +11,7 @@ import software.altitude.test.core.IntegrationTestCore
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  val ASSET_SIZE = 1000
+  val ASSET_SIZE = 652084 // size of our "test_asset.png" file.
 
   test("Test totals (simple cases)") {
     // create an asset in a folder

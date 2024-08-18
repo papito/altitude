@@ -15,7 +15,7 @@ abstract class MetadataFieldDao(override val config: Config)
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val model = MetadataField(
-      id = Some(rec(C.Base.ID).asInstanceOf[String]),
+      id = Option(rec(C.Base.ID).asInstanceOf[String]),
       name = rec(C.MetadataField.NAME).asInstanceOf[String],
       fieldType = FieldType.withName(
         rec(C.MetadataField.FIELD_TYPE).asInstanceOf[String])

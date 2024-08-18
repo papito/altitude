@@ -11,11 +11,12 @@ import java.io.File
 
   test("Upload with multiple files") {
     testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
 
-    val file1 = new File(getClass.getResource("/import/images/1.jpg").getPath)
-    val file2 = new File(getClass.getResource("/import/images/cactus.jpg").getPath)
+    val file1 = new File(getClass.getResource("/import/people/bullock.jpg").getPath)
+    val file2 = new File(getClass.getResource("/import/people/meme-ben.jpg").getPath)
 
-    post("/import/upload",
+    post(s"/import/r/${repoId}/upload",
       Map(),
       files=List(("files", file1), ("files", file2)),
       headers=testAuthHeaders()) {
