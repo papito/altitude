@@ -33,9 +33,8 @@ libraryDependencies ++= Seq(
   "commons-io"                   % "commons-io"               % "2.16.1",
   "commons-codec"                % "commons-codec"            % "1.17.0",
   "commons-dbutils"              % "commons-dbutils"          % "1.8.1",
-  "commons-logging"              % "commons-logging"           % "1.3.3",
-  "org.apache.commons"           % "commons-imaging"          % "1.0-alpha2",
-
+  "commons-logging"              % "commons-logging"          % "1.3.3",
+  "commons-fileupload"           % "commons-fileupload"       % "1.5",
   "org.mindrot"                  % "jbcrypt"                  % "0.4",
 
   "org.postgresql"               % "postgresql"               % "42.7.3",

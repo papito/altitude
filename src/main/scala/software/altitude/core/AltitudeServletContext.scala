@@ -5,7 +5,11 @@ import org.scalatra.servlet.ServletApiImplicits._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.controllers.api._
-import software.altitude.core.controllers.htmx.{AlbumActionController, FolderActionController, PeopleActionController, SetupController, UserInterfaceHtmxController}
+import software.altitude.core.controllers.htmx.AlbumActionController
+import software.altitude.core.controllers.htmx.FolderActionController
+import software.altitude.core.controllers.htmx.PeopleActionController
+import software.altitude.core.controllers.htmx.SetupController
+import software.altitude.core.controllers.htmx.UserInterfaceHtmxController
 import software.altitude.core.controllers.web.ContentViewController
 import software.altitude.core.controllers.web.ImportController
 import software.altitude.core.controllers.web.IndexController

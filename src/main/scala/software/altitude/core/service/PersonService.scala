@@ -1,7 +1,6 @@
 package software.altitude.core.service
 
 import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 import software.altitude.core.Altitude
 import software.altitude.core.dao.FaceDao
 import software.altitude.core.dao.PersonDao

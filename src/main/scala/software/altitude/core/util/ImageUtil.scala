@@ -8,8 +8,6 @@ import org.opencv.core.MatOfByte
 import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
-import software.altitude.core.FormatException
-import software.altitude.core.models.AssetWithData
 
 import java.awt.AlphaComposite
 import java.awt.Color

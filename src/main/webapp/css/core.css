@@ -153,28 +153,6 @@ form input.error, form input.error:focus {
     font-size: 1.1em;
 }
 
-/* Ticker is in core because appears everywhere  */
-#statusTicker {
-    display: grid;
-    background-color: var(--background-secondary-color);
-}
-
-#statusText {
-    display: none;
-    color: var(--success-font-color);
-    font-weight: bold;
-    padding: 10px;
-    font-size: 1.1em;
-}
-
-#statusText.warning {
-    color: var(--warning-font-color);
-}
-
-#statusText span {
-    color: #FFFFFF;
-}
-
 #snackbar {
     display: flex;
     align-items: center;

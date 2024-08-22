@@ -204,6 +204,7 @@ object Const {
    */
   object Api {
     val USER_ID = "user_id"
+    val REPO_ID = "repoId"
     val ERROR = "error"
     val STACKTRACE = "stacktrace"
     val VALIDATION_ERROR = "validation_error"
@@ -300,6 +301,10 @@ object Const {
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
       val PASSWORD2 = "password2"
+    }
+
+    object Upload {
+      val UPLOAD_ID = "uploadId"
     }
 
     object Constraints {

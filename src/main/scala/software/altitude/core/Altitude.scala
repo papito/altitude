@@ -137,7 +137,7 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
    * App thread pool, whatever it is needed for
    */
   private val maxThreads: Int = dataSourceType match {
-    case C.DbEngineName.POSTGRES => Runtime.getRuntime.availableProcessors()
+    case C.DbEngineName.POSTGRES => 1 // Runtime.getRuntime.availableProcessors()
     case C.DbEngineName.SQLITE => 1 // SQLite is single-threaded
   }
   logger.info(s"Available processors: $maxThreads")

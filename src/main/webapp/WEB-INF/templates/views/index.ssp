@@ -84,7 +84,6 @@
 
 <div>
     ${include("includes/nav.ssp")}
-    ${include("htmx/status_ticker.ssp")}
 </div>
 
 <main>

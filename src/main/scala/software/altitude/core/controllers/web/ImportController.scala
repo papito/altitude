@@ -1,5 +1,7 @@
 package software.altitude.core.controllers.web
 
+import org.apache.commons.fileupload.servlet.ServletFileUpload
+import org.apache.commons.io.IOUtils
 import org.json4s.DefaultFormats
 import org.json4s.Formats
 import org.scalatra.RequestEntityTooLarge
@@ -15,29 +17,42 @@ import org.scalatra.atmosphere.JsonMessage
 import org.scalatra.atmosphere.TextMessage
 import org.scalatra.json.JValueResult
 import org.scalatra.json.JacksonJsonSupport
-import org.scalatra.servlet.FileUploadSupport
-import org.scalatra.servlet.MultipartConfig
 import org.scalatra.servlet.SizeConstraintExceededException
-import software.altitude.core.DuplicateException
-import software.altitude.core.RequestContext
+import software.altitude.core.{Const, DuplicateException, RequestContext}
 import software.altitude.core.controllers.BaseWebController
+import software.altitude.core.controllers.web.ImportController.isCancelled
 import software.altitude.core.models.ImportAsset
 import software.altitude.core.models.Metadata
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.collection.concurrent.TrieMap
+
+object ImportController {
+  private val uploadCancelRequest = TrieMap[String, Boolean]()
+
+  def isCancelled(uploadId: String): Boolean = {
+    ImportController.uploadCancelRequest.contains(uploadId)
+  }
+}
 
 class ImportController
   extends BaseWebController
-    with FileUploadSupport
     with AtmosphereSupport
     with JValueResult
     with JacksonJsonSupport
     with SessionSupport {
   private val fileSizeLimitGB = 10
 
-  private val importAssetCountPerRepo = new ConcurrentHashMap[String, (AtomicInteger, AtomicInteger)]()
+  private class ImportCounters {
+    val processedSoFar = new AtomicInteger(0)
+    val inProgress = new AtomicInteger(0)
+    val total = new AtomicInteger(0)
+    val isFinishedUploading = new AtomicBoolean(false)
+  }
+
+  private val importAssetCountPerRepo = new ConcurrentHashMap[String, ImportCounters]()
 
   implicit protected val jsonFormats: Formats = DefaultFormats
 
@@ -49,7 +64,7 @@ class ImportController
   private val errorStatusTickerTemplate = "<div id=\"statusText\" class=\"error\">%s</div>"
 
   // I don't feel strongly about this
-  configureMultipartHandling(MultipartConfig(maxFileSize = Some(fileSizeLimitGB*1024*1024)))
+  // configureMultipartHandling(MultipartConfig(maxFileSize = Some(fileSizeLimitGB*1024*1024)))
 
   before() {
     requireLogin()
@@ -91,71 +106,92 @@ class ImportController
     client
   }
 
-  val uploadFilesForm: Route = post("/r/:repoId/upload") {
+  val cancelUpload: Route = delete(s"/r/:repoId/upload/:${Const.Api.Upload.UPLOAD_ID}/cancel") {
+    val uploadId = params(Const.Api.Upload.UPLOAD_ID)
+    logger.info(s"CANCELLING upload ID: $uploadId")
+    ImportController.uploadCancelRequest(uploadId) = true
+  }
+
+  val uploadFilesForm: Route = post(s"/r/:repoId/upload/:${Const.Api.Upload.UPLOAD_ID}") {
     contentType = "text/html"
+    val uploadId = params(Const.Api.Upload.UPLOAD_ID)
+    logger.info(s"Uploading selected files. Upload ID: $uploadId")
 
-    val repoId = RequestContext.getRepository.persistedId
+    val servletFileUpload = new ServletFileUpload()
+    servletFileUpload.setFileSizeMax(fileSizeLimitGB * 1024 * 1024)
 
-    val processedAndTotal = importAssetCountPerRepo.computeIfAbsent(repoId, _ =>
-      (new AtomicInteger(0), new AtomicInteger()) )
+    if (!ServletFileUpload.isMultipartContent(request)) {
+      logger.error("Not a multipart upload")
+      halt(200, layoutTemplate("/WEB-INF/templates/views/htmx/upload_form.ssp"))
+    }
 
-    fileMultiParams.get("files") match {
-      case Some(files) => files.foreach { file =>
-          logger.info(s"Received file: $file")
+    val importStatus = importAssetCountPerRepo.computeIfAbsent(uploadId, _ => new ImportCounters )
 
-        processedAndTotal._2.addAndGet(1)
+    val iter = servletFileUpload.getItemIterator(request)
+    while (iter.hasNext && !isCancelled(uploadId)) {
+      logger.debug("Next file")
+      importStatus.total.addAndGet(1)
 
-        val importAsset = new ImportAsset(
-            fileName = file.getName,
-            data = file.get(),
-            metadata = Metadata())
+      val fileItemStream = iter.next()
+      val fStream = fileItemStream.openStream()
+      val bytes = IOUtils.toByteArray(fStream)
+      logger.info(s"Received file: ${fileItemStream.getName}]")
 
-        app.executorService.submit(new Runnable {
-          override def run(): Unit = {
-            try {
-               app.service.assetImport.importAsset(importAsset)
+      val importAsset = new ImportAsset(
+        fileName = fileItemStream.getName,
+        data = bytes,
+        metadata = Metadata())
 
-              // will be updated in the finally block
-              val processedSoFar = processedAndTotal._1.get() + 1
-              val total = processedAndTotal._2.get()
+      app.executorService.submit(new Runnable {
+        override def run(): Unit = {
+          logger.debug(s"Processing file ${importAsset.fileName} in thread")
+          try {
+            val processedSoFar = importStatus.processedSoFar.addAndGet(1)
+            importStatus.inProgress.addAndGet(1)
 
-              val importedStatusText = s"Imported $processedSoFar of $total: <span>${importAsset.fileName}</span>"
-              sendWsStatusToUserClients(successStatusTickerTemplate.format(importedStatusText))
+            app.service.assetImport.importAsset(importAsset)
 
-            } catch {
+            val importedStatusText = s"Imported $processedSoFar: <span>${importAsset.fileName}</span>"
 
-              case _: DuplicateException =>
-                logger.warn(s"Duplicate asset: ${importAsset.fileName}")
-                val duplicateStatusText = s"Ignoring duplicate: <span>${importAsset.fileName}</span>"
-                sendWsStatusToUserClients(warningStatusTickerTemplate.format(duplicateStatusText))
+            sendWsStatusToUserClients(successStatusTickerTemplate.format(importedStatusText))
+          } catch {
+            case _: DuplicateException =>
+              logger.warn(s"Duplicate asset: ${importAsset.fileName}")
+              val duplicateStatusText = s"Ignoring duplicate: <span>${importAsset.fileName}</span>"
+              sendWsStatusToUserClients(warningStatusTickerTemplate.format(duplicateStatusText))
 
-              case e: Exception =>
-                logger.error("Error importing asset:", e)
+            case e: Exception =>
+              logger.error("Error importing asset:", e)
 
-                val errorStatusText = s"Error: <span>${importAsset.fileName}</span>"
-                sendWsStatusToUserClients(errorStatusTickerTemplate.format(errorStatusText))
+              val errorStatusText = s"Error: <span>${importAsset.fileName}</span>"
+              sendWsStatusToUserClients(errorStatusTickerTemplate.format(errorStatusText))
 
-            } finally {
-              processedAndTotal._1.incrementAndGet()
+          } finally {
+            val isFinishedUploading =  importStatus.isFinishedUploading.get()
+            val inProgress = importStatus.inProgress.decrementAndGet()
+            val processedSoFar = importStatus.processedSoFar.get()
+            val total = importStatus.total.get()
+            val _isCancelled = isCancelled(uploadId)
 
-              if (processedAndTotal._1.get() == processedAndTotal._2.get()) {
-                processedAndTotal._1.set(0)
-                processedAndTotal._2.set(0)
+            logger.info(s"Is cancelled: ${_isCancelled}, is finished uploading: $isFinishedUploading, total: $total, in progress: $inProgress, processed so far: $processedSoFar")
+            val isDone = isFinishedUploading && (processedSoFar == total) && inProgress == 0
 
-                // save the model after all files have been processed
-                app.service.faceRecognition.saveModel()
+            if (isDone || _isCancelled) {
+              // save the model after all files have been processed
+              app.service.faceRecognition.saveModel()
 
-                sendWsStatusToUserClients(
-                  successStatusTickerTemplate.format("All files processed"))
-              }
+              sendWsStatusToUserClients(
+                successStatusTickerTemplate.format("All files processed"))
             }
           }
-        })
-      }
-      case None =>
-        logger.warn("No files received for upload")
-        halt(200, layoutTemplate("/WEB-INF/templates/views/htmx/upload_form.ssp"))
+        }
+      })
+
+      fStream.close()
     }
+
+    // if false, then true
+    importStatus.isFinishedUploading.compareAndExchange(false, true)
 
     layoutTemplate("/WEB-INF/templates/views/htmx/upload_form.ssp")
   }

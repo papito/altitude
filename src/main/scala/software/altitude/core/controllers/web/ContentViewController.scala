@@ -2,7 +2,6 @@ package software.altitude.core.controllers.web
 
 import org.scalatra.NotFound
 import software.altitude.core.controllers.BaseWebController
-import software.altitude.core.models.Face
 import software.altitude.core.models.MimedPreviewData
 import software.altitude.core.{Const => C}
 

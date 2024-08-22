@@ -7,6 +7,12 @@
 
     <style>
 
+        main {
+            display: grid;
+            grid-template-rows: max-content auto;
+            row-gap: var(--section-vertical-space);
+        }
+
         #importOptions {
             padding-top: calc(var(--section-vertical-space) * 2);
             display: grid;
@@ -24,6 +30,10 @@
             place-items: center;
             background-color: var(--form-background-color);
         }
+
+        #importLog {
+            border-top: var(--form-border);
+        }
     </style>
 
 </head>
@@ -34,7 +44,6 @@
 
 <div>
     ${include("includes/nav.ssp")}
-    ${include("htmx/status_ticker.ssp")}
 </div>
 
 <main>
@@ -43,7 +52,13 @@
             ${include("htmx/upload_form.ssp")}
         </div>
     </div>
+    <div id="importLog">
+        <div hx-ext="ws" ws-connect="/import/status?userId=${ RequestContext.getAccount.id.get }">
+            <div id="statusText"></div>
+        </div>
+    </div>
 </main>
+
 
 <footer>
     <%= RequestContext.account.value.getOrElse("None") %>
@@ -51,6 +66,27 @@
 
 <script lang="js" type="module">
     highlightNav("import");
+</script>
+
+<script lang="js" type="module">
+    htmx.on('htmx:wsOpen', function(evt) {
+        console.log('WS connection is OPEN')
+    });
+    htmx.on('htmx:wsClose', function(evt) {
+        console.log('WS connection is CLOSED')
+    });
+    htmx.on('htmx:wsAfterMessage', function(evt) {
+        const statusTextEl = htmx.find("#statusText")
+        // sometimes empty pings come through
+        if (evt.detail.message && evt.detail.message !== "X") {
+            statusTextEl.style.display = "block"
+        }
+
+        setTimeout(function() {
+            statusTextEl.innerHTML = ""
+            statusTextEl.style.display = 'none'
+        }, 3000);
+    });
 </script>
 
 </body>

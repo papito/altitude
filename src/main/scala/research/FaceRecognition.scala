@@ -7,7 +7,8 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.face.LBPHFaceRecognizer
 import org.opencv.imgcodecs.Imgcodecs
-import software.altitude.core.service.{FaceDetectionService, FaceRecognitionService}
+import software.altitude.core.service.FaceDetectionService
+import software.altitude.core.service.FaceRecognitionService
 import software.altitude.core.util.ImageUtil.matFromBytes
 
 import java.io.File
