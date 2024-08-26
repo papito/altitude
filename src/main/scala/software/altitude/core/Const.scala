@@ -203,12 +203,12 @@ object Const {
    * API
    */
   object Api {
-    val USER_ID = "user_id"
+    val USER_ID = "userId"
     val REPO_ID = "repoId"
     val ERROR = "error"
     val STACKTRACE = "stacktrace"
-    val VALIDATION_ERROR = "validation_error"
-    val VALIDATION_ERRORS = "validation_errors"
+    val VALIDATION_ERROR = "validationError"
+    val VALIDATION_ERRORS = "validationErrors"
     val MULTI_VALUE_DELIM = "+"
     val USER_TEST_HEADER_ID = "TEST-user-id"
     val REPO_TEST_HEADER_ID = "TEST-repo-id"
@@ -223,18 +223,18 @@ object Const {
     val PATH = "path"
     val DIRECTORIES = "directories"
     val FILES = "files"
-    val CURRENT_PATH = "current_path"
-    val CURRENT_PATH_BREADCRUMBS = "path_breadcrumbs"
+    val CURRENT_PATH = "currentPath"
+    val CURRENT_PATH_BREADCRUMBS = "pathBreadcrumbs"
     val PATH_POS = "pos"
     val CHILD_DIR = "dir"
 
     object Asset {
       val ASSET = "asset"
-      val FOLDER_ID = "folder_id"
+      val FOLDER_ID = "folderId"
       val ASSETS = "assets"
       val METADATA = "metadata"
-      val METADATA_FIELD_ID = "metadata_field_id"
-      val METADATA_VALUE_ID = "metadata_value_id"
+      val METADATA_FIELD_ID = "metadataFieldId"
+      val METADATA_VALUE_ID = "metadataValueId"
     }
 
     object Search {
@@ -278,7 +278,7 @@ object Const {
     }
 
     object Trash {
-      val ASSET_IDS = "asset_ids"
+      val ASSET_IDS = "assetIds"
     }
 
     object Stats {
