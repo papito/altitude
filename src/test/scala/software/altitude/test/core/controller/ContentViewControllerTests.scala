@@ -26,7 +26,7 @@ import software.altitude.test.core.ControllerTestCore
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
 
-    get(s"/content/r/$repoId/${C.DataStore.PREVIEW}/${importedAsset.persistedId}", headers=testAuthHeaders()) {
+    get(s"/${C.DataStore.CONTENT}/r/$repoId/${C.DataStore.PREVIEW}/${importedAsset.persistedId}", headers=testAuthHeaders()) {
       status should equal(200)
       response.getContentType() should be(s"${MimedPreviewData.MIME_TYPE};charset=utf-8")
     }
@@ -39,7 +39,7 @@ import software.altitude.test.core.ControllerTestCore
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
 
-    get(s"/content/r/$repoId/${C.DataStore.FILE}/${importedAsset.persistedId}", headers=testAuthHeaders()) {
+    get(s"/${C.DataStore.CONTENT}/r/$repoId/${C.DataStore.FILE}/${importedAsset.persistedId}", headers=testAuthHeaders()) {
       response.getContentType() should startWith("application/octet-stream")
       status should equal(200)
     }
@@ -56,7 +56,7 @@ import software.altitude.test.core.ControllerTestCore
     val faces = testApp.service.person.getAssetFaces(importedAsset.persistedId)
     val face: Face = faces.head
 
-    get(s"/content/r/$repoId/${C.DataStore.FACE}/${face.persistedId}", headers=testAuthHeaders()) {
+    get(s"/${C.DataStore.CONTENT}/r/$repoId/${C.DataStore.FACE}/${face.persistedId}", headers=testAuthHeaders()) {
       response.getContentType() should startWith("image/png")
       status should equal(200)
     }

@@ -33,7 +33,7 @@ abstract class BaseController
    */
   override def invoke(matchedRoute: MatchedRoute): Option[Any] = {
     withRouteMultiParams(Some(matchedRoute)){
-      val repoId: Option[String] = params.get("repoId")
+      val repoId: Option[String] = params.get(Const.Api.REPO_ID)
       app.service.repository.setContextFromRequest(repoId)
       BaseController.super.invoke(matchedRoute)
     }

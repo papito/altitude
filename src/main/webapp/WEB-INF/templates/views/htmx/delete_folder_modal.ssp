@@ -17,7 +17,7 @@
 <button class="action-button error"
         id="deleteFolder"
         hx-swap="none"
-        hx-delete='${ url(htmxDeleteFolder, "repoId" -> RequestContext.getRepository.persistedId) }'
+        hx-delete='${ url(htmxDeleteFolder, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
         hx-trigger="click"
         hx-vars="{'${Const.Api.ID}': '${folder.id}'}"
         hx-ext="json-enc">

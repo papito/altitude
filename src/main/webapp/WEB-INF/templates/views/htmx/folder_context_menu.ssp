@@ -4,7 +4,7 @@
 <% val rootFolderId = RequestContext.getRepository.rootFolderId %>
 <%@ val folderId: String %>
 
-<span hx-get='${ url(showAddFolderModal, "repoId" -> RequestContext.getRepository.persistedId) }'
+<span hx-get='${ url(showAddFolderModal, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
       hx-target="#modalContent"
       hx-vals='{"minWidth": ${Const.UI.ADD_FOLDER_MODAL_MIN_WIDTH}, "parentId": "${folderId}"}'
       hx-trigger="click">
@@ -12,13 +12,13 @@
 </span>
 
 #if (folderId != rootFolderId)
-    <span hx-get='${ url(showRenameFolderModal, "repoId" -> RequestContext.getRepository.persistedId) }'
+    <span hx-get='${ url(showRenameFolderModal, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
           hx-target="#modalContent"
           hx-vals='{"minWidth": ${Const.UI.RENAME_FOLDER_MODAL_MIN_WIDTH}, "id": "${folderId}"}'
           hx-trigger="click">
         Rename
     </span>
-    <span hx-get='${ url(showDeleteFolderModal, "repoId" -> RequestContext.getRepository.persistedId) }'
+    <span hx-get='${ url(showDeleteFolderModal, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
       hx-target="#modalContent"
       hx-vals='{"minWidth": ${Const.UI.DELETE_FOLDER_MODAL_MIN_WIDTH}, "id": "${folderId}"}'
       hx-trigger="click">

@@ -14,7 +14,7 @@
       id="editPersonName"
       autocomplete="off"
       hx-swap="outerHTML"
-      hx-put='${ url(editPersonName, "repoId" -> RequestContext.getRepository.persistedId, "personId" -> person.persistedId) }'
+      hx-put='${ url(editPersonName, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.PERSON_ID -> person.persistedId) }'
       hx-trigger="submit"
       hx-ext="json-enc">
 

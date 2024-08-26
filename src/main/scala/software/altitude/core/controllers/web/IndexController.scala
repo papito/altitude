@@ -40,7 +40,7 @@ class IndexController extends BaseWebController {
     val user: User = RequestContext.getAccount
     require(user.lastActiveRepoId.isDefined, "User has no last active repo")
 
-    redirect(url(indexViewRepo, "repoId" -> user.lastActiveRepoId.get))
+    redirect(url(indexViewRepo, C.Api.REPO_ID -> user.lastActiveRepoId.get))
   }
 
 

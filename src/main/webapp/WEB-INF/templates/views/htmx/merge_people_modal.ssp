@@ -43,7 +43,7 @@
 
 <form action="#"
       id="mergePeople"
-      hx-put='${ url(mergePeople, "repoId" -> RequestContext.getRepository.persistedId, "srcPersonId" -> mergeSourcePerson.persistedId, "destPersonId" -> mergeDestPerson.persistedId) }'
+      hx-put='${ url(mergePeople, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.SRC_PERSON_ID -> mergeSourcePerson.persistedId, Const.Api.DEST_PERSON_ID -> mergeDestPerson.persistedId) }'
       hx-trigger="submit"
       hx-target="#content"
       hx-swap="innerHTML">

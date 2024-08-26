@@ -17,7 +17,7 @@
       id="addFolder"
       folder-id="${parentId}"
       hx-swap="innerHTML"
-      hx-post='${ url(htmxAddFolder, "repoId" -> RequestContext.getRepository.persistedId) }'
+      hx-post='${ url(htmxAddFolder, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
       hx-target="#children-${parentId}"
       hx-trigger="submit"
       hx-ext="json-enc">

@@ -21,7 +21,7 @@
 <form action="#"
       id="renameFolder"
       hx-swap="innerHTML"
-      hx-put='${ url(htmxRenameFolder, "repoId" -> RequestContext.getRepository.persistedId) }'
+      hx-put='${ url(htmxRenameFolder, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
       hx-trigger="submit"
       hx-target="#folderName-${id}"
       hx-ext="json-enc">

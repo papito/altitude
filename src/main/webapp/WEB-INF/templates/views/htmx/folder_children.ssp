@@ -1,3 +1,4 @@
+#import(software.altitude.core.Const)
 #import(software.altitude.core.RequestContext)
 #import(software.altitude.core.models.Folder)
 
@@ -18,7 +19,7 @@
         <a href="#" hx-swap="innerHTML"
            id="expand-folder-children-${folder.persistedId}"
            folder-id="${folder.persistedId}"
-           hx-get='${ url(htmxFolderChildren, "repoId" -> RequestContext.getRepository.persistedId) }'
+           hx-get='${ url(htmxFolderChildren, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
            hx-target="#children-${folder.persistedId}"
            hx-vals='{"parentId": "${folder.persistedId}"}'>
 
@@ -34,7 +35,7 @@
             <div>
                 <a href="#"
                    folder-id="${folder.persistedId}"
-                   hx-get='${ url(showFolderContextMenu, "repoId" -> RequestContext.getRepository.persistedId) }'
+                   hx-get='${ url(showFolderContextMenu, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
                    hx-swap="innerHTML"
                    hx-target="#menu-${folder.persistedId}"
                    hx-vals='{"folderId": "${folder.persistedId}"}'

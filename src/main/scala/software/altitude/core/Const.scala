@@ -205,6 +205,9 @@ object Const {
   object Api {
     val USER_ID = "userId"
     val REPO_ID = "repoId"
+    val PERSON_ID = "personId"
+    val SRC_PERSON_ID = "srcPersonId"
+    val DEST_PERSON_ID = "destPersonId"
     val ERROR = "error"
     val STACKTRACE = "stacktrace"
     val VALIDATION_ERROR = "validationError"
