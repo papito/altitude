@@ -317,7 +317,7 @@ import software.altitude.test.core.IntegrationTestCore
     }
   }
 
-  test("Duplicate folder name moves should throw", Focused) {
+  test("Duplicate folder name moves should throw") {
     /*
     folder1
       child

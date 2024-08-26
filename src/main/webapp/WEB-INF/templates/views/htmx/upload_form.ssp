@@ -83,7 +83,7 @@
 
             if (percentLoaded === 100) {
                 htmx.find("#progressBarControl").setAttribute('hidden', true)
-                htmx.find("#stayOnPage").setAttribute("hidden")
+                htmx.find("#stayOnPage").setAttribute("hidden", true)
                 htmx.find('#startUploadButtonControl').setAttribute('hidden', false)
                 htmx.find('#files').setAttribute('disabled', false)
             }

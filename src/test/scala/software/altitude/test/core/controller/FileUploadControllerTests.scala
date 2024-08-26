@@ -9,7 +9,7 @@ import java.io.File
 
 @DoNotDiscover class FileUploadControllerTests(override val testApp: Altitude) extends ControllerTestCore {
 
-  test("Upload with multiple files") {
+  test("Upload with multiple files", Focused) {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
