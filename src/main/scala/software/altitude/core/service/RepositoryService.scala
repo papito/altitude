@@ -19,8 +19,6 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   override protected val txManager: TransactionManager = app.txManager
 
   def addRepository(name: String, fileStoreType: String, owner: User): JsObject = {
-    logger.info(s"Creating repository [$name]")
-
     val id = BaseDao.genId
 
     val repoToSave = Repository(
@@ -37,7 +35,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       // we must force the context to the new repository because following operations depend on this
       switchContextToRepository(repo)
 
-      logger.info(s"Creating repository [${repo.name}] system folders")
+      logger.info(s"Creating repository [${repo}] system folders")
 
       val rootFolder = Folder(
         id = Some(contextRepo.rootFolderId),
@@ -54,6 +52,8 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       app.service.stats.createStat(Stats.TRIAGE_BYTES)
       app.service.stats.createStat(Stats.RECYCLED_ASSETS)
       app.service.stats.createStat(Stats.RECYCLED_BYTES)
+
+      logger.info(s"Created repository [$repo]")
 
       repo
     }

@@ -18,16 +18,19 @@ import org.scalatra.atmosphere.TextMessage
 import org.scalatra.json.JValueResult
 import org.scalatra.json.JacksonJsonSupport
 import org.scalatra.servlet.SizeConstraintExceededException
-import software.altitude.core.{Const, DuplicateException, RequestContext}
+import software.altitude.core.Const
+import software.altitude.core.DuplicateException
+import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
 import software.altitude.core.controllers.web.ImportController.isCancelled
 import software.altitude.core.models.ImportAsset
 import software.altitude.core.models.Metadata
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import scala.concurrent.ExecutionContext.Implicits.global
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object ImportController {
   private val uploadCancelRequest = TrieMap[String, Boolean]()

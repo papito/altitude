@@ -3,20 +3,21 @@ package software.altitude.test.core.controller
 
 import org.scalatest.DoNotDiscover
 import software.altitude.core.Altitude
+import software.altitude.core.util.Util
 import software.altitude.test.core.ControllerTestCore
 
 import java.io.File
 
-@DoNotDiscover class FileUploadControllerTests(override val testApp: Altitude) extends ControllerTestCore {
+@DoNotDiscover class FileUploadControllerTests(override val testApp: Altitude) extends ControllerTestCore  {
 
   test("Upload with multiple files", Focused) {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
-
+    val uploadId = Util.randomStr()
     val file1 = new File(getClass.getResource("/import/people/bullock.jpg").getPath)
     val file2 = new File(getClass.getResource("/import/people/meme-ben.jpg").getPath)
 
-    post(s"/import/r/${repoId}/upload",
+    post(s"/import/r/$repoId/upload/$uploadId",
       Map(),
       files=List(("files", file1), ("files", file2)),
       headers=testAuthHeaders()) {
