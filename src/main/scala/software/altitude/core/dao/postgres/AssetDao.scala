@@ -2,14 +2,14 @@ package software.altitude.core.dao.postgres
 
 import com.typesafe.config.Config
 import software.altitude.core.dao.jdbc.BaseDao
+import software.altitude.core.models.Field
 import software.altitude.core.models.Metadata
-import software.altitude.core.{Const => C}
 
 object AssetDao {
     val DEFAULT_SQL_COLS_FOR_SELECT: List[String] = List(
       "asset.*",
-      s"(asset.${C.Asset.METADATA}#>>'{}')::text AS ${C.Asset.METADATA}",
-      s"(asset.${C.Asset.EXTRACTED_METADATA}#>>'{}')::text AS ${C.Asset.EXTRACTED_METADATA}",
+      s"(asset.${Field.Asset.METADATA}#>>'{}')::text AS ${Field.Asset.METADATA}",
+      s"(asset.${Field.Asset.EXTRACTED_METADATA}#>>'{}')::text AS ${Field.Asset.EXTRACTED_METADATA}",
       BaseDao.totalRecsWindowFunction
     )
 }
@@ -19,13 +19,13 @@ class AssetDao(override val config: Config) extends software.altitude.core.dao.j
 
   override def getMetadata(assetId: String): Option[Metadata] = {
     val sql = s"""
-      SELECT (${C.Asset.METADATA}#>>'{}')::text AS ${C.Asset.METADATA}
+      SELECT (${Field.Asset.METADATA}#>>'{}')::text AS ${Field.Asset.METADATA}
          FROM $tableName
-       WHERE ${C.Asset.ID} = ?
+       WHERE ${Field.ID} = ?
       """
 
     val rec = executeAndGetOne(sql, List(assetId))
-    val metadataJson = getJsonFromColumn(rec(C.Asset.METADATA))
+    val metadataJson = getJsonFromColumn(rec(Field.Asset.METADATA))
     val metadata = Metadata.fromJson(metadataJson)
     Some(metadata)
   }

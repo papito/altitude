@@ -5,10 +5,10 @@ import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
+import software.altitude.core.models.Field
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
 import software.altitude.core.service.PersonService
-import software.altitude.core.{Const => C}
 
 class PersonDao(override val config: Config)
   extends software.altitude.core.dao.jdbc.PersonDao(config)
@@ -23,7 +23,7 @@ class PersonDao(override val config: Config)
 
     val sql =
       s"""
-        INSERT INTO $tableName (${C.Person.ID}, ${C.Asset.REPO_ID}, ${C.Person.LABEL}, ${C.Person.NAME})
+        INSERT INTO $tableName (${Field.ID}, ${Field.REPO_ID}, ${Field.Person.LABEL}, ${Field.Person.NAME})
              VALUES (?, ?, ?, ?)
     """
 
@@ -41,8 +41,8 @@ class PersonDao(override val config: Config)
     addRecord(jsonIn, sql, sqlVals)
 
     jsonIn ++ Json.obj(
-      C.Base.ID -> id,
-      C.Person.LABEL -> label,
-      C.Person.NAME -> Some(personName))
+      Field.ID -> id,
+      Field.Person.LABEL -> label,
+      Field.Person.NAME -> Some(personName))
   }
 }

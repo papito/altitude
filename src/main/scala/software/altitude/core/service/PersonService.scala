@@ -6,13 +6,13 @@ import software.altitude.core.dao.FaceDao
 import software.altitude.core.dao.PersonDao
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Face
+import software.altitude.core.models.Field
 import software.altitude.core.models.Person
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.util.Sort
 import software.altitude.core.util.SortDirection
-import software.altitude.core.{Const => C}
 
 object PersonService {
   val UNKNOWN_NAME_PREFIX = "Unknown"
@@ -55,7 +55,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
       }
 
       // face number + 1
-      increment(person.persistedId, C.Person.NUM_OF_FACES)
+      increment(person.persistedId, Field.Person.NUM_OF_FACES)
 
       val cachedPerson = app.service.faceCache.getPersonByLabel(persistedFace.personLabel.get)
 
@@ -111,13 +111,13 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
         logger.info(s"Source person ${source.name} was merged with other people before. IDs: ${source.mergedWithIds}")
         logger.info("Updating the old merge sources with the new destination info")
         val oldMergeSourcesQ = new Query().add(
-          C.Person.ID -> Query.IN(source.mergedWithIds.toSet))
+          Field.ID -> Query.IN(source.mergedWithIds.toSet))
 
         updateByQuery(
           oldMergeSourcesQ,
           Map(
-            C.Person.MERGED_INTO_ID -> dest.persistedId,
-            C.Person.MERGED_INTO_LABEL -> dest.label))
+            Field.Person.MERGED_INTO_ID -> dest.persistedId,
+            Field.Person.MERGED_INTO_LABEL -> dest.label))
 
         // update the cache with the new destination info
         source.mergedWithIds.foreach { oldMergeSourceId =>
@@ -136,11 +136,11 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
       // update new destination count
       updateById(
         dest.persistedId,
-        Map(C.Person.NUM_OF_FACES -> updatedDest.numOfFaces))
+        Map(Field.Person.NUM_OF_FACES -> updatedDest.numOfFaces))
 
       // move all faces from source to destination
       logger.debug(s"Moving faces from ${source.name.get} to ${dest.name.get}")
-      val q = new Query().add(C.Face.PERSON_ID -> source.persistedId)
+      val q = new Query().add(Field.Face.PERSON_ID -> source.persistedId)
 
       val allSourceFaces: List[Face] = faceDao.query(q).records.map(Face.fromJson(_))
       logger.info(s"Training the ${allSourceFaces.size} faces on the destination label ${dest.label}")
@@ -148,7 +148,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
       // train the faces on the destination label
       app.service.faceRecognition.addFacesToPerson(allSourceFaces, persistedDest)
 
-      faceDao.updateByQuery(q, Map(C.Face.PERSON_ID -> dest.persistedId))
+      faceDao.updateByQuery(q, Map(Field.Face.PERSON_ID -> dest.persistedId))
 
       // specify ID/label of where the source person was merged into
       val updatedSource: Person = persistedSource.copy(
@@ -160,9 +160,9 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
       updateById(
         updatedSource.persistedId,
         Map(
-          C.Person.MERGED_INTO_ID -> updatedSource.mergedIntoId.get,
-          C.Person.MERGED_INTO_LABEL -> updatedSource.mergedIntoLabel.get,
-          C.Person.NUM_OF_FACES -> 0
+          Field.Person.MERGED_INTO_ID -> updatedSource.mergedIntoId.get,
+          Field.Person.MERGED_INTO_LABEL -> updatedSource.mergedIntoLabel.get,
+          Field.Person.NUM_OF_FACES -> 0
         ))
 
       // get the top face after merge
@@ -178,10 +178,10 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
 
   def getPersonFaces(personId: String, limit: Int = 50): List[Face] = {
     txManager.asReadOnly[List[Face]] {
-      val sort: Sort = Sort(C.Face.DETECTION_SCORE, SortDirection.DESC)
+      val sort: Sort = Sort(Field.Face.DETECTION_SCORE, SortDirection.DESC)
 
       val q = new Query(
-        params=Map(C.Face.PERSON_ID -> personId),
+        params=Map(Field.Face.PERSON_ID -> personId),
         sort=List(sort))
 
       val qRes: QueryResult = faceDao.query(q)
@@ -192,7 +192,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
   def getAssetFaces(assetId: String): List[Face] = {
     txManager.asReadOnly[List[Face]] {
       val q = new Query(
-        params=Map(C.Face.ASSET_ID -> assetId))
+        params=Map(Field.Face.ASSET_ID -> assetId))
 
       val qRes: QueryResult = faceDao.query(q)
       qRes.records.map(Face.fromJson(_))
@@ -205,7 +205,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
       val personIds = faces.map(_.personId.get)
 
       val q = new Query(
-        params=Map(C.Person.ID -> Query.IN(personIds.toSet)))
+        params=Map(Field.ID -> Query.IN(personIds.toSet)))
 
       val qRes: QueryResult = dao.query(q)
       qRes.records.map(Person.fromJson(_))
@@ -218,7 +218,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
 
       updateById(
         person.persistedId,
-        Map(C.Person.COVER_FACE_ID -> face.persistedId))
+        Map(Field.Person.COVER_FACE_ID -> face.persistedId))
 
       personForUpdate
     }
@@ -229,7 +229,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
 
       updateById(
         person.persistedId,
-        Map(C.Person.NAME -> newName))
+        Map(Field.Person.NAME -> newName))
 
       person.copy(name = Some(newName))
     }

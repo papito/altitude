@@ -13,10 +13,10 @@ import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQuery
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.BaseModel
+import software.altitude.core.models.Field
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-import software.altitude.core.{Const => C}
 
 import java.util.UUID
 import scala.jdk.CollectionConverters._
@@ -88,17 +88,17 @@ abstract class BaseDao {
 
   def getById(id: String): JsObject = {
     logger.debug(s"Getting by ID '$id' from '$tableName'")
-    val q: Query = new Query().add(C.Base.ID -> id)
+    val q: Query = new Query().add(Field.ID -> id)
     getOneByQuery(q)
   }
 
   def deleteById(id: String): Int = {
-    val q: Query = new Query().add(C.Base.ID -> id)
+    val q: Query = new Query().add(Field.ID -> id)
     deleteByQuery(q)
   }
 
   def updateById(id: String, data: Map[String, Any]): Int = {
-    val q: Query = new Query().add(C.Base.ID -> id)
+    val q: Query = new Query().add(Field.ID -> id)
     updateByQuery(q, data)
   }
 
@@ -172,7 +172,7 @@ abstract class BaseDao {
 
     BaseDao.incrReadQueryCount()
 
-    val query = new Query().add(C.Base.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
+    val query = new Query().add(Field.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
     val sqlQuery = sqlQueryBuilder.buildSelectSql(query)
 
     logger.debug(s"SELECT SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")

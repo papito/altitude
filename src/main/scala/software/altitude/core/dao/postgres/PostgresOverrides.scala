@@ -1,20 +1,19 @@
 package software.altitude.core.dao.postgres
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.BaseModel
-import software.altitude.core.{Const => C}
-
+import software.altitude.core.models.Field
 
 trait PostgresOverrides { this: BaseDao =>
   override protected def jsonFunc = "CAST(? as jsonb)"
 
   override protected def addCoreAttrs(model: BaseModel, rec: Map[String, AnyRef]): model.type = {
-    if (rec(C.Base.CREATED_AT) != null) {
-      val createdAtTimestamp = rec(C.Base.CREATED_AT).asInstanceOf[java.sql.Timestamp]
+    if (rec(Field.CREATED_AT) != null) {
+      val createdAtTimestamp = rec(Field.CREATED_AT).asInstanceOf[java.sql.Timestamp]
       model.createdAt = createdAtTimestamp.toLocalDateTime
     }
 
-    if (rec(C.Base.UPDATED_AT) != null) {
-      val updatedAtTimestamp = rec(C.Base.UPDATED_AT).asInstanceOf[java.sql.Timestamp]
+    if (rec(Field.UPDATED_AT) != null) {
+      val updatedAtTimestamp = rec(Field.UPDATED_AT).asInstanceOf[java.sql.Timestamp]
       model.updatedAt = updatedAtTimestamp.toLocalDateTime
     }
 

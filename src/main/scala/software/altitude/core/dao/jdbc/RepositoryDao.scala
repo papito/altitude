@@ -3,8 +3,8 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+import software.altitude.core.models.Field
 import software.altitude.core.models.Repository
-import software.altitude.core.{Const => C}
 
 abstract class RepositoryDao(override val config: Config) extends BaseDao
     with software.altitude.core.dao.RepositoryDao {
@@ -12,7 +12,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
   override final val tableName = "repository"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
-    val fileStoreConfigCol = rec(C.Repository.FILES_STORE_CONFIG)
+    val fileStoreConfigCol = rec(Field.Repository.FILES_STORE_CONFIG)
     val fileStoreConfigJsonStr: String = if (fileStoreConfigCol == null) {
       "{}"
     } else {
@@ -22,11 +22,11 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
     val fileStoreConfigJson = Json.parse(fileStoreConfigJsonStr).as[JsObject]
 
     val model = Repository(
-      id = Option(rec(C.Base.ID).asInstanceOf[String]),
-      name = rec(C.Repository.NAME).asInstanceOf[String],
-      ownerAccountId = rec(C.Repository.OWNER_ACCOUNT_ID).asInstanceOf[String],
-      rootFolderId = rec(C.Repository.ROOT_FOLDER_ID).asInstanceOf[String],
-      fileStoreType = rec(C.Repository.FILE_STORE_TYPE).asInstanceOf[String],
+      id = Option(rec(Field.ID).asInstanceOf[String]),
+      name = rec(Field.Repository.NAME).asInstanceOf[String],
+      ownerAccountId = rec(Field.Repository.OWNER_ACCOUNT_ID).asInstanceOf[String],
+      rootFolderId = rec(Field.Repository.ROOT_FOLDER_ID).asInstanceOf[String],
+      fileStoreType = rec(Field.Repository.FILE_STORE_TYPE).asInstanceOf[String],
       fileStoreConfig = fileStoreConfigJson.as[Map[String, String]]
     )
 
@@ -38,9 +38,9 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
 
     val sql = s"""
         INSERT INTO $tableName (
-             ${C.Repository.ID}, ${C.Repository.NAME}, ${C.Repository.OWNER_ACCOUNT_ID}, ${C.Repository.FILE_STORE_TYPE},
-             ${C.Repository.ROOT_FOLDER_ID},
-             ${C.Repository.FILES_STORE_CONFIG})
+             ${Field.ID}, ${Field.Repository.NAME}, ${Field.Repository.OWNER_ACCOUNT_ID}, ${Field.Repository.FILE_STORE_TYPE},
+             ${Field.Repository.ROOT_FOLDER_ID},
+             ${Field.Repository.FILES_STORE_CONFIG})
             VALUES (?, ?, ?, ?, ?,$jsonFunc)
     """
 
@@ -56,7 +56,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
 
     addRecord(jsonIn, sql, sqlVals)
 
-    jsonIn ++ Json.obj(C.Base.ID -> id)
+    jsonIn ++ Json.obj(Field.ID -> id)
   }
 
   def getAll: List[Repository] = {

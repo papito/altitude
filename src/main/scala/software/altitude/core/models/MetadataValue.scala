@@ -1,7 +1,6 @@
 package software.altitude.core.models
 
 import play.api.libs.json._
-import software.altitude.core.{Const => C}
 
 import java.util.Base64
 import scala.language.implicitConversions
@@ -9,8 +8,8 @@ import scala.language.implicitConversions
 object MetadataValue {
   implicit def fromJson(json: JsValue): MetadataValue = {
     MetadataValue(
-      id = (json \ C.Base.ID).asOpt[String],
-      value = (json \ C.Base.VALUE).as[String]
+      id = (json \ Field.ID).asOpt[String],
+      value = (json \ Field.VALUE).as[String]
     )
   }
 
@@ -37,8 +36,8 @@ case class MetadataValue(id: Option[String] = None,
   }
 
   override def toJson: JsObject = Json.obj(
-    C.Base.VALUE -> value,
-    C.Base.ID -> {id match {
+    Field.VALUE -> value,
+    Field.ID -> {id match {
       case None => JsNull
       case _ => JsString(id.get)
     }}

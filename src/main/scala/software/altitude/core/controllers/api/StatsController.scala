@@ -5,6 +5,7 @@ import play.api.libs.json.JsNumber
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.controllers.BaseApiController
+import software.altitude.core.models.Field
 import software.altitude.core.{Const => C}
 
 class StatsController extends BaseApiController {
@@ -17,12 +18,12 @@ class StatsController extends BaseApiController {
       )))
   }
 
-  get(s"/:${C.Stat.DIMENSION}") {
-    val dimension = params.get(C.Stat.DIMENSION).get.toLowerCase
+  get(s"/:${Field.Stat.DIMENSION}") {
+    val dimension = params.get(Field.Stat.DIMENSION).get.toLowerCase
     val dimVal = app.service.stats.getStats.getStatValue(dimension)
 
     Ok(Json.obj(
-      C.Stat.DIM_VAL -> dimVal
+      Field.Stat.DIM_VAL -> dimVal
     ))
   }
 }

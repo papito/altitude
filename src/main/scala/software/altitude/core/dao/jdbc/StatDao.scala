@@ -4,20 +4,20 @@ import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
 import software.altitude.core.RequestContext
+import software.altitude.core.models.Field
 import software.altitude.core.models.Stat
-import software.altitude.core.{Const => C}
 
 abstract class StatDao(override val config: Config) extends BaseDao with software.altitude.core.dao.StatDao {
 
   override final val tableName = "stats"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = Stat(
-    rec(C.Stat.DIMENSION).asInstanceOf[String],
-    rec(C.Stat.DIM_VAL).asInstanceOf[Int])
+    rec(Field.Stat.DIMENSION).asInstanceOf[String],
+    rec(Field.Stat.DIM_VAL).asInstanceOf[Int])
 
   override def add(jsonIn: JsObject): JsObject = {
     val sql: String = s"""
-      INSERT INTO $tableName (${C.Base.REPO_ID}, ${C.Stat.DIMENSION})
+      INSERT INTO $tableName (${Field.REPO_ID}, ${Field.Stat.DIMENSION})
            VALUES (? ,?)"""
 
     val stat: Stat = jsonIn
@@ -46,8 +46,8 @@ abstract class StatDao(override val config: Config) extends BaseDao with softwar
 
     val sql = s"""
       UPDATE $tableName
-         SET ${C.Stat.DIM_VAL} = ${C.Stat.DIM_VAL} + $count
-       WHERE ${C.Base.REPO_ID} = ? and ${C.Stat.DIMENSION} = ?
+         SET ${Field.Stat.DIM_VAL} = ${Field.Stat.DIM_VAL} + $count
+       WHERE ${Field.REPO_ID} = ? and ${Field.Stat.DIMENSION} = ?
       """
     logger.debug(s"INCR STAT SQL: $sql, for $statName")
 

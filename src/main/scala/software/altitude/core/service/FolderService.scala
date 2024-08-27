@@ -1,9 +1,14 @@
 package software.altitude.core.service
 import play.api.libs.json._
+import software.altitude.core.Altitude
+import software.altitude.core.DuplicateException
+import software.altitude.core.IllegalOperationException
+import software.altitude.core.NotFoundException
+import software.altitude.core.ValidationException
 import software.altitude.core.dao.FolderDao
+import software.altitude.core.models.Field
 import software.altitude.core.models.Folder
 import software.altitude.core.util.Query
-import software.altitude.core.{Const => C, _}
 
 class FolderService(val app: Altitude) extends BaseService[Folder] {
 
@@ -35,10 +40,10 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    */
   private def addAssetCount(folders: List[JsObject]): List[JsObject] = {
     folders.map { json =>
-      val id = (json \ C.Base.ID).as[String]
+      val id = (json \ Field.ID).as[String]
       val assetCount = flatChildren(id, folders).toSeq.map(_.numOfAssets).sum
 
-      json ++ Json.obj(C.Folder.NUM_OF_ASSETS -> JsNumber(assetCount))
+      json ++ Json.obj(Field.Folder.NUM_OF_ASSETS -> JsNumber(assetCount))
     }
   }
 
@@ -47,7 +52,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val _all = if (allRepoFolders.isEmpty) getAll else allRepoFolders
 
       _all.filter(json => {
-        val id = (json \ C.Base.ID).asOpt[String]
+        val id = (json \ Field.ID).asOpt[String]
         !isRootFolder(id.get)
       })
     }
@@ -63,7 +68,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     txManager.asReadOnly {
       val repoFolders = repositoryFolders(allRepoFolders)
 
-      val rootEl = repoFolders.find(json => (json \ C.Base.ID).as[String] == _rootId)
+      val rootEl = repoFolders.find(json => (json \ Field.ID).as[String] == _rootId)
 
       if (isRootFolder(_rootId) || rootEl.isDefined) {
         children(_rootId, repoFolders)
@@ -86,7 +91,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     txManager.asReadOnly[List[Folder]] {
       val repoFolders = repositoryFolders()
 
-      val folderEl = repoFolders.find(json => (json \ C.Base.ID).as[String] == folderId)
+      val folderEl = repoFolders.find(json => (json \ Field.ID).as[String] == folderId)
       val folder: Folder = if (folderEl.isDefined) {
         Folder.fromJson(folderEl.get)
       } else {
@@ -98,7 +103,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val rootFolder = Folder(
         id = Some(contextRepo.rootFolderId),
         parentId = contextRepo.rootFolderId,
-        name = C.Folder.Name.ROOT,
+        name = Field.Folder.Name.ROOT,
       )
 
       List(rootFolder) ::: (folder :: parents).reverse
@@ -114,7 +119,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val repoFolders = repositoryFolders(allRepoFolders)
 
       repoFolders.filter(json => {
-          val parentId = (json \ C.Folder.PARENT_ID).as[String]
+          val parentId = (json \ Field.Folder.PARENT_ID).as[String]
           parentId == rootId
         })
         .map{json => Folder.fromJson(json)}
@@ -139,9 +144,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     val immediateChildren = this.immediateChildren(parentId, repoFolders)
 
     val folders = for (folder <- immediateChildren.map(_.toJson)) yield  {
-      val id: String = (folder \ C.Base.ID).as[String]
-      val name = (folder \ C.Folder.NAME).as[String]
-      val assetCount = (folder \ C.Folder.NUM_OF_ASSETS).as[Int]
+      val id: String = (folder \ Field.ID).as[String]
+      val name = (folder \ Field.Folder.NAME).as[String]
+      val assetCount = (folder \ Field.Folder.NUM_OF_ASSETS).as[Int]
 
       Folder(
         id = Some(id),
@@ -160,15 +165,15 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    */
   private def findParents(folderId: String, allRepoFolders: List[JsObject]): List[Folder] = {
     val repoFolders = repositoryFolders(allRepoFolders)
-    val folderEl = repoFolders.find(json => (json \ C.Base.ID).as[String] == folderId)
+    val folderEl = repoFolders.find(json => (json \ Field.ID).as[String] == folderId)
 
     val parentId = if (folderEl.isDefined) {
-      (folderEl.get \ C.Folder.PARENT_ID).as[String]
+      (folderEl.get \ Field.Folder.PARENT_ID).as[String]
     } else {
       throw NotFoundException(s"Folder with ID '$folderId' not found")
     }
 
-    val parentElements = repoFolders filter (json => (json \ C.Base.ID).as[String] == parentId)
+    val parentElements = repoFolders filter (json => (json \ Field.ID).as[String] == parentId)
 
     if (parentElements.nonEmpty) {
       val folder = Folder.fromJson(parentElements.head)
@@ -184,7 +189,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
    */
   def getByIdWithChildAssetCounts(id: String, allRepoFolders: List[JsObject] = List()): JsObject = {
     val repoFolders = repositoryFolders(allRepoFolders)
-    val matching = repoFolders.filter(j => (j \ C.Base.ID).asOpt[String].contains(id))
+    val matching = repoFolders.filter(j => (j \ Field.ID).asOpt[String].contains(id))
 
     if (matching.isEmpty) {
       throw NotFoundException(s"Base.ID $id not found")
@@ -202,11 +207,11 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
                      : List[(Int, String)] = {
     val repoFolders = repositoryFolders(allRepoFolders)
 
-    val childElements = repoFolders.filter(j => (j \ C.Folder.PARENT_ID).asOpt[String].contains(parentId))
+    val childElements = repoFolders.filter(j => (j \ Field.Folder.PARENT_ID).asOpt[String].contains(parentId))
 
     // recursively combine with the result of deeper child levels + this one (depth-first)
     (depth, parentId) :: childElements.foldLeft(List[(Int, String)]()) { (res, json) =>
-      val folderId = (json \ C.Base.ID).as[String]
+      val folderId = (json \ Field.ID).as[String]
       res ++ flatChildrenIdsWithDepths(folderId, repoFolders, depth + 1)}
   }
 
@@ -228,14 +233,14 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       return Set()
     }
 
-    val parentElements = all filter (json => (json \ C.Base.ID).as[String] == parentId)
+    val parentElements = all filter (json => (json \ Field.ID).as[String] == parentId)
 
     if (parentElements.isEmpty) {
       return Set()
     }
 
     val parentElement: Folder = parentElements.head
-    val childElements = all.filter(j => (j \ C.Folder.PARENT_ID).asOpt[String].contains(parentId))
+    val childElements = all.filter(j => (j \ Field.Folder.PARENT_ID).asOpt[String].contains(parentId))
 
     // recursively combine with the result of deeper child levels + this one (depth-first)
     (parentElement :: childElements.foldLeft(List[Folder]()) {(res, json) =>
@@ -277,8 +282,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val folderBeingMoved: Folder = getById(folderBeingMovedId)
 
       val data = Map(
-        C.Folder.PARENT_ID -> destFolderId,
-        C.Folder.NAME -> folderBeingMoved.name,
+        Field.Folder.PARENT_ID -> destFolderId,
+        Field.Folder.NAME -> folderBeingMoved.name,
       )
       try {
         updateById(folderBeingMovedId, data)
@@ -308,8 +313,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       )
 
       val data = Map(
-        C.Folder.NAME -> newName,
-        C.Folder.NAME_LC -> newName.toLowerCase)
+        Field.Folder.NAME -> newName,
+        Field.Folder.NAME_LC -> newName.toLowerCase)
 
       updateById(folderId, data)
       folderForUpdate
@@ -320,7 +325,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     logger.debug(s"Incrementing folder $folderId asset count by $count")
 
     txManager.withTransaction {
-      dao.increment(folderId, C.Folder.NUM_OF_ASSETS, count)
+      dao.increment(folderId, Field.Folder.NUM_OF_ASSETS, count)
     }
   }
 
@@ -328,7 +333,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     logger.debug(s"Decrementing folder $folderId asset count by $count")
 
     txManager.withTransaction {
-      dao.decrement(folderId, C.Folder.NUM_OF_ASSETS, count)
+      dao.decrement(folderId, Field.Folder.NUM_OF_ASSETS, count)
     }
   }
 
@@ -336,7 +341,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     logger.debug(s"Incrementing folder $folderId child folder count by $count")
 
     txManager.withTransaction {
-      dao.increment(folderId, C.Folder.NUM_OF_CHILDREN, count)
+      dao.increment(folderId, Field.Folder.NUM_OF_CHILDREN, count)
     }
   }
 
@@ -344,7 +349,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     logger.debug(s"Decrementing folder $folderId child folder count by $count")
 
     txManager.withTransaction {
-      dao.decrement(folderId, C.Folder.NUM_OF_CHILDREN, count)
+      dao.decrement(folderId, Field.Folder.NUM_OF_CHILDREN, count)
     }
   }
 
@@ -359,7 +364,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
       dao.updateById(
         folder.persistedId,
-        Map(C.Folder.IS_RECYCLED -> isRecycled))
+        Map(Field.Folder.IS_RECYCLED -> isRecycled))
     }
   }
 

@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.dao.MetadataFieldDao
+import software.altitude.core.models.Field
 import software.altitude.core.models._
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
@@ -28,7 +29,7 @@ class MetadataService(val app: Altitude) {
     txManager.withTransaction[MetadataField] {
 
       val existing = metadataFieldDao.query(new Query(params = Map(
-        C.MetadataField.NAME_LC -> metadataField.nameLowercase
+        Field.MetadataField.NAME_LC -> metadataField.nameLowercase
       )).withRepository())
 
       if (existing.nonEmpty) {
@@ -375,11 +376,11 @@ class MetadataService(val app: Altitude) {
 
       def toJson(field: MetadataField, mdVals: Set[MetadataValue]): JsObject = {
         Json.obj(
-          C.MetadataField.FIELD -> (field.toJson -
-            C.Base.UPDATED_AT -
-            C.Base.CREATED_AT -
-            C.MetadataField.NAME_LC),
-          C.MetadataField.VALUES -> JsArray(mdVals.toSeq.map(_.toJson))
+          Field.MetadataField.FIELD -> (field.toJson -
+            Field.UPDATED_AT -
+            Field.CREATED_AT -
+            Field.MetadataField.NAME_LC),
+          Field.VALUES -> JsArray(mdVals.toSeq.map(_.toJson))
         )
       }
 
@@ -398,8 +399,8 @@ class MetadataService(val app: Altitude) {
       }
 
       val sorted = (res ++ emptyFields).sortWith{ (left, right) =>
-        val leftFieldName: String = (left \ C.MetadataField.FIELD \ C.MetadataField.NAME).as[String]
-        val rightFieldName: String = (right \ C.MetadataField.FIELD \ C.MetadataField.NAME).as[String]
+        val leftFieldName: String = (left \ Field.MetadataField.FIELD \ Field.MetadataField.NAME).as[String]
+        val rightFieldName: String = (right \ Field.MetadataField.FIELD \ Field.MetadataField.NAME).as[String]
         leftFieldName.compareToIgnoreCase(rightFieldName) < 1
       }
 

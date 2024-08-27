@@ -4,17 +4,16 @@ import play.api.libs.json.JsObject
 import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import software.altitude.core.models.AccountType.AccountType
-import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
 
 object User {
   implicit def fromJson(json: JsValue): User = User(
-    id = (json \ C.Base.ID).asOpt[String],
-    email = (json \ C.User.EMAIL).as[String],
-    name = (json \ C.User.NAME).as[String],
-    accountType = (json \ C.User.ACCOUNT_TYPE).as[AccountType],
-    lastActiveRepoId = (json \ C.User.LAST_ACTIVE_REPO_ID).asOpt[String],
+    id = (json \ Field.ID).asOpt[String],
+    email = (json \ Field.User.EMAIL).as[String],
+    name = (json \ Field.User.NAME).as[String],
+    accountType = (json \ Field.User.ACCOUNT_TYPE).as[AccountType],
+    lastActiveRepoId = (json \ Field.User.LAST_ACTIVE_REPO_ID).asOpt[String],
   ).withCoreAttr(json)
 
 }
@@ -26,11 +25,11 @@ case class User(id: Option[String] = None,
                 lastActiveRepoId: Option[String] = None) extends BaseModel {
 
   override def toJson: JsObject = Json.obj(
-    C.Base.ID -> id,
-    C.User.EMAIL -> email,
-    C.User.NAME -> name,
-    C.User.ACCOUNT_TYPE -> accountType,
-    C.User.LAST_ACTIVE_REPO_ID -> lastActiveRepoId
+    Field.ID -> id,
+    Field.User.EMAIL -> email,
+    Field.User.NAME -> name,
+    Field.User.ACCOUNT_TYPE -> accountType,
+    Field.User.LAST_ACTIVE_REPO_ID -> lastActiveRepoId
   ) ++ coreJsonAttrs
 
   override def toString: String = s"<user> ${id.getOrElse("NO ID")}, email: $email, accountType: $accountType"

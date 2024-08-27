@@ -1,7 +1,6 @@
 package software.altitude.core.models
 
 import play.api.libs.json._
-import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
 
@@ -14,17 +13,17 @@ import scala.language.implicitConversions
  */
 object Asset {
   implicit def fromJson(json: JsValue): Asset = Asset(
-      id = (json \ C.Base.ID).asOpt[String],
-      userId = (json \ C.Base.USER_ID).as[String],
-      assetType = (json \ C.Asset.ASSET_TYPE).get,
-      fileName = (json \ C.Asset.FILENAME).as[String],
-      folderId = (json \ C.Asset.FOLDER_ID).as[String],
-      checksum = (json \ C.Asset.CHECKSUM).as[Int],
-      sizeBytes = (json \ C.Asset.SIZE_BYTES).as[Long],
-      metadata = Metadata.fromJson((json \ C.Asset.METADATA).as[JsObject]),
-      extractedMetadata = Metadata.fromJson((json \ C.Asset.EXTRACTED_METADATA).as[JsObject]),
-      isTriaged = (json \ C.Asset.IS_TRIAGED).as[Boolean],
-      isRecycled = (json \ C.Asset.IS_RECYCLED).as[Boolean]
+      id = (json \ Field.ID).asOpt[String],
+      userId = (json \ Field.USER_ID).as[String],
+      assetType = (json \ Field.Asset.ASSET_TYPE).get,
+      fileName = (json \ Field.Asset.FILENAME).as[String],
+      folderId = (json \ Field.Asset.FOLDER_ID).as[String],
+      checksum = (json \ Field.Asset.CHECKSUM).as[Int],
+      sizeBytes = (json \ Field.Asset.SIZE_BYTES).as[Long],
+      metadata = Metadata.fromJson((json \ Field.Asset.METADATA).as[JsObject]),
+      extractedMetadata = Metadata.fromJson((json \ Field.Asset.EXTRACTED_METADATA).as[JsObject]),
+      isTriaged = (json \ Field.Asset.IS_TRIAGED).as[Boolean],
+      isRecycled = (json \ Field.Asset.IS_RECYCLED).as[Boolean]
     ).withCoreAttr(json)
 }
 
@@ -41,16 +40,16 @@ case class Asset(id: Option[String] = None,
                  extractedMetadata: Metadata = Metadata()) extends BaseModel {
 
   override def toJson: JsObject = Json.obj(
-    C.Base.USER_ID -> userId,
-    C.Asset.FOLDER_ID -> folderId,
-    C.Asset.CHECKSUM -> checksum,
-    C.Asset.FILENAME -> fileName,
-    C.Asset.SIZE_BYTES -> sizeBytes,
-    C.Asset.ASSET_TYPE -> (assetType: JsValue),
-    C.Asset.METADATA -> metadata.toJson,
-    C.Asset.EXTRACTED_METADATA -> extractedMetadata.toJson,
-    C.Asset.IS_TRIAGED -> isTriaged,
-    C.Asset.IS_RECYCLED -> isRecycled
+    Field.USER_ID -> userId,
+    Field.Asset.FOLDER_ID -> folderId,
+    Field.Asset.CHECKSUM -> checksum,
+    Field.Asset.FILENAME -> fileName,
+    Field.Asset.SIZE_BYTES -> sizeBytes,
+    Field.Asset.ASSET_TYPE -> (assetType: JsValue),
+    Field.Asset.METADATA -> metadata.toJson,
+    Field.Asset.EXTRACTED_METADATA -> extractedMetadata.toJson,
+    Field.Asset.IS_TRIAGED -> isTriaged,
+    Field.Asset.IS_RECYCLED -> isRecycled
   ) ++ coreJsonAttrs
 
   override def toString: String =

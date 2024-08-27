@@ -1,7 +1,6 @@
 package software.altitude.core.models
 import play.api.libs.json._
 import software.altitude.core.util.Util
-import software.altitude.core.{Const => C}
 
 import java.time.LocalDateTime
 import scala.language.implicitConversions
@@ -53,17 +52,17 @@ abstract class BaseModel {
    * Returns core JSON attributes that all models should have
     */
   protected def coreJsonAttrs: JsObject = JsObject(Map(
-    C.Base.ID -> {id match {
+    Field.ID -> {id match {
       case None => JsNull
       case _ => JsString(id.get)
     }},
 
-    C.Base.CREATED_AT -> {createdAt match {
+    Field.CREATED_AT -> {createdAt match {
       case None => JsNull
       case _ => JsString(Util.localDateTimeToString(createdAt))
     }},
 
-    C.Base.UPDATED_AT -> {updatedAt match {
+    Field.UPDATED_AT -> {updatedAt match {
       case None => JsNull
       case _ => JsString(Util.localDateTimeToString(updatedAt))
     }}
@@ -74,12 +73,12 @@ abstract class BaseModel {
     * present, parsed from the passed in JSON object (if the values are present)
     */
   protected def withCoreAttr(json: JsValue): this.type = {
-    val isoCreatedAt = (json \ C.Base.CREATED_AT).asOpt[String]
+    val isoCreatedAt = (json \ Field.CREATED_AT).asOpt[String]
     if (isoCreatedAt.isDefined) {
       createdAt = Util.stringToLocalDateTime(isoCreatedAt.get).get
     }
 
-    val isoUpdatedAt = (json \ C.Base.UPDATED_AT).asOpt[String]
+    val isoUpdatedAt = (json \ Field.UPDATED_AT).asOpt[String]
     if (isoUpdatedAt.isDefined) {
       updatedAt = Util.stringToLocalDateTime(isoUpdatedAt.get).get
     }

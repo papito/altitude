@@ -4,10 +4,10 @@ import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
 import software.altitude.core.RequestContext
+import software.altitude.core.models.Field
 import software.altitude.core.models._
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
-import software.altitude.core.{Const => C}
 
 import java.sql.PreparedStatement
 import java.sql.Types
@@ -15,11 +15,11 @@ import java.sql.Types
 object SearchDao {
   private val VALUE_INSERT_SQL: String = s"""
             INSERT INTO search_parameter (
-                        ${C.SearchToken.REPO_ID}, ${C.SearchToken.ASSET_ID},
-                        ${C.SearchToken.FIELD_ID},
-                        ${C.SearchToken.FIELD_VALUE_KW},
-                        ${C.SearchToken.FIELD_VALUE_NUM},
-                        ${C.SearchToken.FIELD_VALUE_BOOL})
+                        ${Field.REPO_ID}, ${Field.SearchToken.ASSET_ID},
+                        ${Field.SearchToken.FIELD_ID},
+                        ${Field.SearchToken.FIELD_VALUE_KW},
+                        ${Field.SearchToken.FIELD_VALUE_NUM},
+                        ${Field.SearchToken.FIELD_VALUE_BOOL})
                  VALUES (?, ?, ?, ?, ?, ?)
             """
 }
@@ -61,8 +61,8 @@ abstract class SearchDao(override val config: Config)
     val sql =
       s"""
          DELETE FROM search_parameter
-               WHERE ${C.SearchToken.REPO_ID} = ?
-                 AND ${C.SearchToken.ASSET_ID} = ?
+               WHERE ${Field.REPO_ID} = ?
+                 AND ${Field.SearchToken.ASSET_ID} = ?
       """
 
     val bindValues = List[Object](RequestContext.getRepository.persistedId, assetId)

@@ -1,7 +1,6 @@
 package software.altitude.core.models
 
 import play.api.libs.json._
-import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
 
@@ -16,9 +15,9 @@ object FieldType extends Enumeration {
 object MetadataField {
   implicit def fromJson(json: JsValue): MetadataField =
     MetadataField(
-      id = (json \ C.Base.ID).asOpt[String],
-      name = (json \ C.MetadataField.NAME).as[String],
-      fieldType = FieldType.withName((json \ C.MetadataField.FIELD_TYPE).as[String])
+      id = (json \ Field.ID).asOpt[String],
+      name = (json \ Field.MetadataField.NAME).as[String],
+      fieldType = FieldType.withName((json \ Field.MetadataField.FIELD_TYPE).as[String])
     ).withCoreAttr(json)
 }
 
@@ -28,9 +27,9 @@ case class MetadataField(id: Option[String] = None,
   val nameLowercase: String = name.toLowerCase
 
   override def toJson: JsObject = Json.obj(
-      C.MetadataField.NAME -> name,
-      C.MetadataField.NAME_LC -> nameLowercase,
-      C.MetadataField.FIELD_TYPE -> fieldType.toString
+      Field.MetadataField.NAME -> name,
+      Field.MetadataField.NAME_LC -> nameLowercase,
+      Field.MetadataField.FIELD_TYPE -> fieldType.toString
     ) ++ coreJsonAttrs
 
 }

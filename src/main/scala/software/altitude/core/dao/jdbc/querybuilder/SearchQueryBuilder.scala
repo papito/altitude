@@ -1,10 +1,10 @@
 package software.altitude.core.dao.jdbc.querybuilder
 import software.altitude.core.RequestContext
+import software.altitude.core.models.Field
 import software.altitude.core.models.FieldType
 import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
 import software.altitude.core.util.SearchQuery
-import software.altitude.core.{Const => C}
 
 
 object SearchQueryBuilder {
@@ -21,7 +21,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   protected val searchDocumentTable = "search_document"
 
   private val notRecycledFilter: ClauseComponents = ClauseComponents(
-    elements = List(s"${C.Asset.IS_RECYCLED} = ?"),
+    elements = List(s"${Field.Asset.IS_RECYCLED} = ?"),
     bindVals = List(false))
 
   protected def textSearch(searchQuery: SearchQuery): ClauseComponents
@@ -85,7 +85,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   }
 
   override protected def where(searchQuery: SearchQuery): ClauseComponents = {
-    val repoIdElements = allTableNames(searchQuery).map(tableName => s"$tableName.${C.Base.REPO_ID} = ?")
+    val repoIdElements = allTableNames(searchQuery).map(tableName => s"$tableName.${Field.REPO_ID} = ?")
     val repoIdBindVals = allTableNames(searchQuery).map(_ => RequestContext.getRepository.persistedId)
 
     ClauseComponents(repoIdElements, repoIdBindVals) +
@@ -107,7 +107,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     val folderIdPlaceholders: String = List.fill(searchQuery.folderIds.size)("?").mkString(", ")
 
     ClauseComponents(
-      elements = List(s"${C.Asset.FOLDER_ID} IN ($folderIdPlaceholders)"),
+      elements = List(s"${Field.Asset.FOLDER_ID} IN ($folderIdPlaceholders)"),
       bindVals = searchQuery.folderIds.toList
     )
   }
@@ -170,12 +170,12 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
   override protected def groupBy(searchQuery: SearchQuery): ClauseComponents = {
     if (!searchQuery.isParameterized) return ClauseComponents()
-    ClauseComponents(elements = List(s"asset.${C.Asset.ID}"))
+    ClauseComponents(elements = List(s"asset.${Field.ID}"))
   }
 
   override protected def having(searchQuery: SearchQuery): ClauseComponents = {
     if (!searchQuery.isParameterized) return ClauseComponents()
-    ClauseComponents(elements = List(s"count(asset.${C.Asset.ID}) >= ${searchQuery.params.size}"))
+    ClauseComponents(elements = List(s"count(asset.${Field.ID}) >= ${searchQuery.params.size}"))
   }
 
   override protected def orderBy(query: SearchQuery): ClauseComponents = {

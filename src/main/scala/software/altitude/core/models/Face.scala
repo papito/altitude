@@ -4,7 +4,6 @@ import org.opencv.core.Mat
 import org.opencv.core.MatOfFloat
 import play.api.libs.json._
 import software.altitude.core.util.ImageUtil.matFromBytes
-import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
 
@@ -12,21 +11,21 @@ object Face {
   implicit def fromJson(json: JsValue): Face = {
 
     Face(
-      id = (json \ C.Base.ID).asOpt[String],
-      x1 = (json \ C.Face.X1).as[Int],
-      y1 = (json \ C.Face.Y1).as[Int],
-      width = (json \ C.Face.WIDTH).as[Int],
-      height = (json \ C.Face.HEIGHT).as[Int],
-      assetId = (json \ C.Face.ASSET_ID).asOpt[String],
-      personId = (json \ C.Face.PERSON_ID).asOpt[String],
-      personLabel = (json \ C.Face.PERSON_LABEL).asOpt[Int],
-      detectionScore = (json \ C.Face.DETECTION_SCORE).as[Double],
-      embeddings = (json \ C.Face.EMBEDDINGS).as[Array[Float]],
-      features = (json \ C.Face.FEATURES).as[Array[Float]],
-      image = (json \ C.Face.IMAGE).as[Array[Byte]],
-      displayImage = (json \ C.Face.DISPLAY_IMAGE).as[Array[Byte]],
-      alignedImage = (json \ C.Face.ALIGNED_IMAGE).as[Array[Byte]],
-      alignedImageGs = (json \ C.Face.ALIGNED_IMAGE_GS).as[Array[Byte]]
+      id = (json \ Field.ID).asOpt[String],
+      x1 = (json \ Field.Face.X1).as[Int],
+      y1 = (json \ Field.Face.Y1).as[Int],
+      width = (json \ Field.Face.WIDTH).as[Int],
+      height = (json \ Field.Face.HEIGHT).as[Int],
+      assetId = (json \ Field.Face.ASSET_ID).asOpt[String],
+      personId = (json \ Field.Face.PERSON_ID).asOpt[String],
+      personLabel = (json \ Field.Face.PERSON_LABEL).asOpt[Int],
+      detectionScore = (json \ Field.Face.DETECTION_SCORE).as[Double],
+      embeddings = (json \ Field.Face.EMBEDDINGS).as[Array[Float]],
+      features = (json \ Field.Face.FEATURES).as[Array[Float]],
+      image = (json \ Field.Face.IMAGE).as[Array[Byte]],
+      displayImage = (json \ Field.Face.DISPLAY_IMAGE).as[Array[Byte]],
+      alignedImage = (json \ Field.Face.ALIGNED_IMAGE).as[Array[Byte]],
+      alignedImageGs = (json \ Field.Face.ALIGNED_IMAGE_GS).as[Array[Byte]]
     ).withCoreAttr(json)
   }
 
@@ -60,20 +59,20 @@ case class Face(id: Option[String] = None,
 
   override def toJson: JsObject = {
     Json.obj(
-      C.Face.X1 -> x1,
-      C.Face.Y1 -> y1,
-      C.Face.WIDTH -> width,
-      C.Face.HEIGHT -> height,
-      C.Face.ASSET_ID -> assetId,
-      C.Face.PERSON_ID -> personId,
-      C.Face.PERSON_LABEL -> personLabel,
-      C.Face.DETECTION_SCORE -> detectionScore,
-      C.Face.EMBEDDINGS -> embeddings,
-      C.Face.FEATURES -> features,
-      C.Face.IMAGE -> image,
-      C.Face.DISPLAY_IMAGE -> displayImage,
-      C.Face.ALIGNED_IMAGE -> alignedImage,
-      C.Face.ALIGNED_IMAGE_GS -> alignedImageGs
+      Field.Face.X1 -> x1,
+      Field.Face.Y1 -> y1,
+      Field.Face.WIDTH -> width,
+      Field.Face.HEIGHT -> height,
+      Field.Face.ASSET_ID -> assetId,
+      Field.Face.PERSON_ID -> personId,
+      Field.Face.PERSON_LABEL -> personLabel,
+      Field.Face.DETECTION_SCORE -> detectionScore,
+      Field.Face.EMBEDDINGS -> embeddings,
+      Field.Face.FEATURES -> features,
+      Field.Face.IMAGE -> image,
+      Field.Face.DISPLAY_IMAGE -> displayImage,
+      Field.Face.ALIGNED_IMAGE -> alignedImage,
+      Field.Face.ALIGNED_IMAGE_GS -> alignedImageGs
     ) ++ coreJsonAttrs
   }
 

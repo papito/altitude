@@ -5,8 +5,8 @@ import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.NotFoundException
 import software.altitude.core.models.Asset
+import software.altitude.core.models.Field
 import software.altitude.core.util.Query
-import software.altitude.core.{Const => C}
 import software.altitude.test.core.IntegrationTestCore
 
 
@@ -29,7 +29,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     testApp.service.asset.updateById(
       asset.persistedId,
-      Map(C.Asset.IS_RECYCLED -> true))
+      Map(Field.Asset.IS_RECYCLED -> true))
 
     (testApp.service.library.getById(asset.persistedId): Asset).isRecycled shouldBe true
   }
@@ -37,7 +37,7 @@ import software.altitude.test.core.IntegrationTestCore
   test("Should be able to query by the recycled property") {
     testContext.persistAsset()
 
-    val q = new Query(params = Map(C.Asset.IS_RECYCLED -> false))
+    val q = new Query(params = Map(Field.Asset.IS_RECYCLED -> false))
     val result = testApp.service.asset.query(q)
 
     result.total shouldBe 1

@@ -2,22 +2,21 @@ package software.altitude.core.models
 
 import play.api.libs.json._
 import software.altitude.core.ValidationException
-import software.altitude.core.{Const => C}
 
 import scala.language.implicitConversions
 
 object Folder {
   implicit def fromJson(json: JsValue): Folder = {
-    val childrenJson = (json \ C.Folder.CHILDREN).as[List[JsValue]]
+    val childrenJson = (json \ Field.Folder.CHILDREN).as[List[JsValue]]
 
     Folder(
-      id = (json \ C.Base.ID).asOpt[String],
-      name = (json \ C.Folder.NAME).as[String],
+      id = (json \ Field.ID).asOpt[String],
+      name = (json \ Field.Folder.NAME).as[String],
       children = childrenJson.map(Folder.fromJson),
-      parentId = (json \ C.Folder.PARENT_ID).as[String],
-      numOfAssets = (json \ C.Folder.NUM_OF_ASSETS).as[Int],
-      numOfChildren = (json \ C.Folder.NUM_OF_CHILDREN).as[Int],
-      isRecycled = (json \ C.Folder.IS_RECYCLED).as[Boolean]
+      parentId = (json \ Field.Folder.PARENT_ID).as[String],
+      numOfAssets = (json \ Field.Folder.NUM_OF_ASSETS).as[Int],
+      numOfChildren = (json \ Field.Folder.NUM_OF_CHILDREN).as[Int],
+      isRecycled = (json \ Field.Folder.IS_RECYCLED).as[Boolean]
     ).withCoreAttr(json)
   }
 }
@@ -38,13 +37,13 @@ case class Folder(id: Option[String] = None,
 
   override def toJson: JsObject = {
     Json.obj(
-      C.Folder.NAME -> name,
-      C.Folder.NAME_LC -> nameLowercase,
-      C.Folder.PARENT_ID -> parentId,
-      C.Folder.CHILDREN ->  children.map(_.toJson),
-      C.Folder.NUM_OF_ASSETS -> numOfAssets,
-      C.Folder.NUM_OF_CHILDREN -> numOfChildren,
-      C.Folder.IS_RECYCLED -> isRecycled
+      Field.Folder.NAME -> name,
+      Field.Folder.NAME_LC -> nameLowercase,
+      Field.Folder.PARENT_ID -> parentId,
+      Field.Folder.CHILDREN ->  children.map(_.toJson),
+      Field.Folder.NUM_OF_ASSETS -> numOfAssets,
+      Field.Folder.NUM_OF_CHILDREN -> numOfChildren,
+      Field.Folder.IS_RECYCLED -> isRecycled
     ) ++ coreJsonAttrs
   }
 

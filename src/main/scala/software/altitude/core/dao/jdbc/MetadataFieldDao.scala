@@ -4,9 +4,9 @@ import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.RequestContext
+import software.altitude.core.models.Field
 import software.altitude.core.models.FieldType
 import software.altitude.core.models.MetadataField
-import software.altitude.core.{Const => C}
 
 abstract class MetadataFieldDao(override val config: Config)
   extends BaseDao with software.altitude.core.dao.MetadataFieldDao {
@@ -15,10 +15,10 @@ abstract class MetadataFieldDao(override val config: Config)
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val model = MetadataField(
-      id = Option(rec(C.Base.ID).asInstanceOf[String]),
-      name = rec(C.MetadataField.NAME).asInstanceOf[String],
+      id = Option(rec(Field.ID).asInstanceOf[String]),
+      name = rec(Field.MetadataField.NAME).asInstanceOf[String],
       fieldType = FieldType.withName(
-        rec(C.MetadataField.FIELD_TYPE).asInstanceOf[String])
+        rec(Field.MetadataField.FIELD_TYPE).asInstanceOf[String])
     )
     addCoreAttrs(model, rec)
   }
@@ -28,11 +28,11 @@ abstract class MetadataFieldDao(override val config: Config)
 
     val sql = s"""
         INSERT INTO $tableName (
-             ${C.MetadataField.ID},
-             ${C.MetadataField.REPO_ID},
-             ${C.MetadataField.NAME},
-             ${C.MetadataField.NAME_LC},
-             ${C.MetadataField.FIELD_TYPE})
+             ${Field.ID},
+             ${Field.REPO_ID},
+             ${Field.MetadataField.NAME},
+             ${Field.MetadataField.NAME_LC},
+             ${Field.MetadataField.FIELD_TYPE})
             VALUES (?, ?, ?, ?, ?)
         """
 
@@ -47,6 +47,6 @@ abstract class MetadataFieldDao(override val config: Config)
 
     addRecord(jsonIn, sql, sqlVals)
 
-    jsonIn ++ Json.obj(C.Base.ID -> id)
+    jsonIn ++ Json.obj(Field.ID -> id)
   }
 }

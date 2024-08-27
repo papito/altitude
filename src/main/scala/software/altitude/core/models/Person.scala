@@ -1,7 +1,6 @@
 package software.altitude.core.models
 
 import play.api.libs.json._
-import software.altitude.core.{Const => C}
 
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -9,18 +8,18 @@ import scala.language.implicitConversions
 object Person {
   implicit def fromJson(json: JsValue): Person = {
     val person = Person(
-      id = (json \ C.Base.ID).asOpt[String],
-      name = (json \ C.Person.NAME).asOpt[String],
-      coverFaceId = (json \ C.Person.COVER_FACE_ID).asOpt[String],
-      label = (json \ C.Person.LABEL).as[Int],
-      mergedWithIds = (json \ C.Person.MERGED_WITH_IDS).as[List[String]],
-      mergedIntoId = (json \ C.Person.MERGED_INTO_ID).asOpt[String],
-      mergedIntoLabel = (json \ C.Person.MERGED_INTO_LABEL).asOpt[Int],
-      numOfFaces = (json \ C.Person.NUM_OF_FACES).as[Int],
-      isHidden = (json \ C.Person.IS_HIDDEN).as[Boolean]
+      id = (json \ Field.ID).asOpt[String],
+      name = (json \ Field.Person.NAME).asOpt[String],
+      coverFaceId = (json \ Field.Person.COVER_FACE_ID).asOpt[String],
+      label = (json \ Field.Person.LABEL).as[Int],
+      mergedWithIds = (json \ Field.Person.MERGED_WITH_IDS).as[List[String]],
+      mergedIntoId = (json \ Field.Person.MERGED_INTO_ID).asOpt[String],
+      mergedIntoLabel = (json \ Field.Person.MERGED_INTO_LABEL).asOpt[Int],
+      numOfFaces = (json \ Field.Person.NUM_OF_FACES).as[Int],
+      isHidden = (json \ Field.Person.IS_HIDDEN).as[Boolean]
     ).withCoreAttr(json)
 
-    val faces: List[Face] = (json \ C.Person.FACES).asOpt[List[JsValue]].getOrElse(List()).map(Face.fromJson)
+    val faces: List[Face] = (json \ Field.Person.FACES).asOpt[List[JsValue]].getOrElse(List()).map(Face.fromJson)
     person.setFaces(faces)
     person
   }
@@ -38,15 +37,15 @@ case class Person(id: Option[String] = None,
 
   override def toJson: JsObject = {
     Json.obj(
-      C.Person.LABEL -> label,
-      C.Person.NAME -> name,
-      C.Person.COVER_FACE_ID -> coverFaceId,
-      C.Person.NUM_OF_FACES -> numOfFaces,
-      C.Person.MERGED_WITH_IDS -> mergedWithIds,
-      C.Person.MERGED_INTO_ID -> mergedIntoId,
-      C.Person.MERGED_INTO_LABEL -> mergedIntoLabel,
-      C.Person.IS_HIDDEN -> isHidden,
-      C.Person.FACES -> _faces.toList.map(_.toJson)
+      Field.Person.LABEL -> label,
+      Field.Person.NAME -> name,
+      Field.Person.COVER_FACE_ID -> coverFaceId,
+      Field.Person.NUM_OF_FACES -> numOfFaces,
+      Field.Person.MERGED_WITH_IDS -> mergedWithIds,
+      Field.Person.MERGED_INTO_ID -> mergedIntoId,
+      Field.Person.MERGED_INTO_LABEL -> mergedIntoLabel,
+      Field.Person.IS_HIDDEN -> isHidden,
+      Field.Person.FACES -> _faces.toList.map(_.toJson)
     ) ++ coreJsonAttrs
   }
 

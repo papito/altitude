@@ -6,16 +6,16 @@ import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.dao.sqlite.querybuilder.AssetSearchQueryBuilder
 import software.altitude.core.models.Asset
+import software.altitude.core.models.Field
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
-import software.altitude.core.{Const => C}
 
 class SearchDao(override val config: Config) extends software.altitude.core.dao.jdbc.SearchDao(config) with SqliteOverrides {
 
   override protected def addSearchDocument(asset: Asset): Unit = {
     val docSql =
       s"""
-         INSERT INTO search_document (${C.Base.REPO_ID}, ${C.SearchToken.ASSET_ID}, body)
+         INSERT INTO search_document (${Field.REPO_ID}, ${Field.SearchToken.ASSET_ID}, body)
               VALUES (?, ?, ?)
        """
 
@@ -38,8 +38,8 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
       s"""
          UPDATE search_document
             SET body = ?
-          WHERE ${C.Base.REPO_ID} = ?
-            AND ${C.SearchToken.ASSET_ID} = ?
+          WHERE ${Field.REPO_ID} = ?
+            AND ${Field.SearchToken.ASSET_ID} = ?
        """
 
     val metadataValues = asset.metadata.data.foldLeft(Set[String]()) { (res, m) =>

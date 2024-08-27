@@ -2,9 +2,9 @@ package software.altitude.core.service
 import software.altitude.core.Altitude
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.models.Asset
+import software.altitude.core.models.Field
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-import software.altitude.core.{Const => C}
 
 /**
  * This is a "dumb" DAO service for asset table.
@@ -25,7 +25,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
 
       dao.updateById(
         asset.persistedId,
-        Map(C.Asset.IS_RECYCLED -> isRecycled))
+        Map(Field.Asset.IS_RECYCLED -> isRecycled))
     }
   }
 

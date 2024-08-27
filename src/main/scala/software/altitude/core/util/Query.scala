@@ -1,7 +1,6 @@
 package software.altitude.core.util
-
-import software.altitude.core.Const
 import software.altitude.core.RequestContext
+import software.altitude.core.models.Field
 
 object Query {
   object ParamType extends Enumeration {
@@ -86,7 +85,7 @@ class Query(val params: Map[String, Any] = Map(),
     sort = sort)
 
   def withRepository(): Query = new Query(
-    params = params ++ Map(Const.Base.REPO_ID -> RequestContext.getRepository.persistedId),
+    params = params ++ Map(Field.REPO_ID -> RequestContext.getRepository.persistedId),
     rpp = rpp,
     page = page,
     sort = sort)

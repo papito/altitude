@@ -5,6 +5,7 @@ import software.altitude.core.AltitudeServletContext
 import software.altitude.core._
 import software.altitude.core.dao.UserDao
 import software.altitude.core.dao.UserTokenDao
+import software.altitude.core.models.Field
 import software.altitude.core.models.User
 import software.altitude.core.models.UserToken
 import software.altitude.core.transactions.TransactionManager
@@ -53,7 +54,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
   def add(objIn: User, password: String): JsObject = {
     // password and hash are not stored in the model and are not passed around outside of login flow
     val passwordHash = Util.hashPassword(password)
-    dao.add(objIn.toJson ++ Json.obj(Const.User.PASSWORD_HASH -> passwordHash))
+    dao.add(objIn.toJson ++ Json.obj(Field.User.PASSWORD_HASH -> passwordHash))
   }
 
   private def getPasswordHashByEmail(email: String): String = {
@@ -62,14 +63,14 @@ class UserService(val app: Altitude) extends BaseService[User] {
       return AltitudeServletContext.usersPasswordHashByEmail(email)
     }
 
-    val query = new Query(params = Map(Const.User.EMAIL -> email))
+    val query = new Query(params = Map(Field.User.EMAIL -> email))
     val sqlQuery = dao.sqlQueryBuilder.buildSelectSql(query)
 
     /* Since the user model does not explicitly store the hashed password,
        we need to do a low-level query to get the password hash */
     val userRec: Map[String, AnyRef] = dao.executeAndGetOne(sqlQuery.sqlAsString, sqlQuery.bindValues)
 
-    val passwordHash = userRec(Const.User.PASSWORD_HASH).asInstanceOf[String]
+    val passwordHash = userRec(Field.User.PASSWORD_HASH).asInstanceOf[String]
 
     AltitudeServletContext.usersPasswordHashByEmail += (email -> passwordHash)
     passwordHash
@@ -85,7 +86,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
 
   def deleteToken(token: String): Unit = {
     logger.info("Deleting token: " + token)
-    tokenDao.deleteByQuery(new Query(params = Map(Const.UserToken.TOKEN -> token)))
+    tokenDao.deleteByQuery(new Query(params = Map(Field.UserToken.TOKEN -> token)))
     AltitudeServletContext.usersByToken -= token
   }
 
@@ -95,7 +96,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
       return AltitudeServletContext.usersByEmail(email).toJson
     }
 
-    val query = new Query(params = Map(Const.User.EMAIL -> email))
+    val query = new Query(params = Map(Field.User.EMAIL -> email))
 
     /* Since the user model does not explicitly store the hashed password,
        we need to do a low-level query to get the password hash */
@@ -120,7 +121,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
     txManager.withTransaction {
       dao.updateById(
         user.persistedId,
-        Map(Const.User.LAST_ACTIVE_REPO_ID -> repoId))
+        Map(Field.User.LAST_ACTIVE_REPO_ID -> repoId))
     }
   }
 

@@ -9,6 +9,7 @@ import software.altitude.core.Const.Api.Trash
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
+import software.altitude.core.models.Field
 import software.altitude.core.util.Query
 import software.altitude.core.{Const => C}
 
@@ -39,7 +40,7 @@ class TrashController extends BaseApiController {
     OK
   }
 
-  post(s"/:id/move/:${C.Asset.FOLDER_ID}") {
+  post(s"/:id/move/:${Field.Asset.FOLDER_ID}") {
     val id = params.get(C.Api.ID).get
     val folderId = params.get(Api.Asset.FOLDER_ID).get
     logger.info(s"Moving recycled asset $id to $folderId")
