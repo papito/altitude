@@ -6,7 +6,7 @@ import org.scalatest.funsuite
 import org.scalatra.test.ScalatraTests
 import org.scalatra.test.scalatest.ScalatraFunSuite
 import software.altitude.core.AltitudeServletContext
-import software.altitude.core.Const
+import software.altitude.core.Api
 import software.altitude.core.models.Repository
 import software.altitude.core.models.User
 import software.altitude.test.IntegrationTestUtil
@@ -36,15 +36,15 @@ abstract class ControllerTestCore
    */
   def testAuthHeaders(user: Option[User] = None, repo: Option[Repository] = None): List[(String, String)] = {
     val userHeader = if (user.isEmpty) {
-      Const.Api.USER_TEST_HEADER_ID -> testContext.user.persistedId
+      Api.Field.USER_TEST_HEADER_ID -> testContext.user.persistedId
     } else {
-      Const.Api.USER_TEST_HEADER_ID -> user.get.persistedId
+      Api.Field.USER_TEST_HEADER_ID -> user.get.persistedId
     }
 
     val repoHeader = if (repo.isEmpty) {
-      Const.Api.REPO_TEST_HEADER_ID -> testContext.repository.persistedId
+      Api.Field.REPO_TEST_HEADER_ID -> testContext.repository.persistedId
     } else {
-      Const.Api.REPO_TEST_HEADER_ID -> repo.get.persistedId
+      Api.Field.REPO_TEST_HEADER_ID -> repo.get.persistedId
     }
 
     List(userHeader, repoHeader)

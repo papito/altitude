@@ -2,7 +2,7 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import play.api.libs.json.Json
-import software.altitude.core.Const.Api
+import software.altitude.core.Api
 import software.altitude.core.NotFoundException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseApiController
@@ -14,22 +14,22 @@ import software.altitude.core.{Const => C}
 class AssetController extends BaseApiController {
 
   private val assetIdValidator = ApiRequestValidator(
-    required=List(C.Api.Folder.ASSET_IDS)
+    required=List(Api.Field.Folder.ASSET_IDS)
   )
 
 
-  get(s"/:${C.Api.ID}") {
-    val id = params.get(C.Api.ID).get
+  get(s"/:${Api.Field.ID}") {
+    val id = params.get(Api.Field.ID).get
 
     val asset: Asset = app.service.library.getById(id)
 
     Ok(Json.obj(
-      C.Api.Asset.ASSET -> asset.metadata.toJson
+      Api.Field.Asset.ASSET -> asset.metadata.toJson
     ))
   }
 
-  get(s"/:${C.Api.ID}/data") {
-    val id = params.get(C.Api.ID).get
+  get(s"/:${Api.Field.ID}/data") {
+    val id = params.get(Api.Field.ID).get
 
     try {
       val data: MimedAssetData = app.service.fileStore.getAssetById(id)
@@ -41,10 +41,10 @@ class AssetController extends BaseApiController {
     }
   }
 
-  post(s"/:${C.Api.ID}/metadata/:${C.Api.Asset.METADATA_FIELD_ID}") {
-    val assetId = params.get(C.Api.ID).get
-    val fieldId = params.get(C.Api.Asset.METADATA_FIELD_ID).get
-    val newValue = (unscrubbedReqJson.get \ C.Api.Metadata.VALUE).as[String]
+  post(s"/:${Api.Field.ID}/metadata/:${Api.Field.Asset.METADATA_FIELD_ID}") {
+    val assetId = params.get(Api.Field.ID).get
+    val fieldId = params.get(Api.Field.Asset.METADATA_FIELD_ID).get
+    val newValue = (unscrubbedReqJson.get \ Api.Field.Metadata.VALUE).as[String]
 
     logger.info(s"Adding metadata value [$newValue] for field [$fieldId] on asset [$assetId]")
 
@@ -53,14 +53,14 @@ class AssetController extends BaseApiController {
     val newMetadata = app.service.metadata.getMetadata(assetId)
 
     Ok(Json.obj(
-      C.Api.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
+      Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
     ))
   }
 
-  put(s"/:${C.Api.ID}/metadata/value/:${C.Api.Asset.METADATA_VALUE_ID}") {
-    val assetId = params.get(C.Api.ID).get
-    val valueId = params.get(C.Api.Asset.METADATA_VALUE_ID).get
-    val newValue = (unscrubbedReqJson.get \ C.Api.Metadata.VALUE).as[String]
+  put(s"/:${Api.Field.ID}/metadata/value/:${Api.Field.Asset.METADATA_VALUE_ID}") {
+    val assetId = params.get(Api.Field.ID).get
+    val valueId = params.get(Api.Field.Asset.METADATA_VALUE_ID).get
+    val newValue = (unscrubbedReqJson.get \ Api.Field.Metadata.VALUE).as[String]
 
     logger.info(s"Updating metadata value [$newValue] for value ID [$valueId] on asset [$assetId]")
 
@@ -69,13 +69,13 @@ class AssetController extends BaseApiController {
     val newMetadata = app.service.metadata.getMetadata(assetId)
 
     Ok(Json.obj(
-      C.Api.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
+      Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
     ))
   }
 
-  delete(s"/:${C.Api.ID}/metadata/value/:${C.Api.Asset.METADATA_VALUE_ID}") {
-    val assetId = params.get(C.Api.ID).get
-    val valueId = params.get(C.Api.Asset.METADATA_VALUE_ID).get
+  delete(s"/:${Api.Field.ID}/metadata/value/:${Api.Field.Asset.METADATA_VALUE_ID}") {
+    val assetId = params.get(Api.Field.ID).get
+    val valueId = params.get(Api.Field.Asset.METADATA_VALUE_ID).get
 
     logger.info(s"Removing metadata value [$valueId] on asset [$assetId]")
 
@@ -84,14 +84,14 @@ class AssetController extends BaseApiController {
     val newMetadata = app.service.metadata.getMetadata(assetId)
 
     Ok(Json.obj(
-      C.Api.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
+      Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
     ))
   }
 
   // FIXME: PUT
-  post(s"/:${C.Api.ID}/move/:${C.Api.Asset.FOLDER_ID}") {
-    val id = params.get(C.Api.ID).get
-    val folderId = params.get(C.Api.Asset.FOLDER_ID).get
+  post(s"/:${Api.Field.ID}/move/:${Api.Field.Asset.FOLDER_ID}") {
+    val id = params.get(Api.Field.ID).get
+    val folderId = params.get(Api.Field.Asset.FOLDER_ID).get
     logger.info(s"Moving asset $id to $folderId")
 
     app.service.library.moveAssetToFolder(id, folderId)
@@ -100,14 +100,14 @@ class AssetController extends BaseApiController {
   }
 
   // FIXME: PUT
-  post(s"/move/to/:${C.Api.Asset.FOLDER_ID}") {
-    val folderId = params.get(C.Api.Asset.FOLDER_ID).get
+  post(s"/move/to/:${Api.Field.Asset.FOLDER_ID}") {
+    val folderId = params.get(Api.Field.Asset.FOLDER_ID).get
 
     logger.info(s"Moving assets to $folderId")
 
     assetIdValidator.validate(unscrubbedReqJson.get)
 
-    val assetIds = (unscrubbedReqJson.get \ C.Api.Folder.ASSET_IDS).as[Set[String]]
+    val assetIds = (unscrubbedReqJson.get \ Api.Field.Folder.ASSET_IDS).as[Set[String]]
 
     logger.debug(s"Assets to move: $assetIds")
 
@@ -117,7 +117,7 @@ class AssetController extends BaseApiController {
   }
 
   get("/:id/preview") {
-    val id = params(Api.ID)
+    val id = params(Api.Field.ID)
 
     try {
       val preview: MimedPreviewData = app.service.library.getPreview(id)

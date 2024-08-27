@@ -4,32 +4,32 @@ import org.scalatra.ActionResult
 import org.scalatra.Ok
 import play.api.libs.json.JsNull
 import play.api.libs.json.Json
+import software.altitude.core.Api
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Repository
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchSort
-import software.altitude.core.{Const => C}
 
 class SearchController extends BaseApiController {
 
   get("/r/:repoId/") {
     val repo: Repository = RequestContext.getRepository
-    val foldersQuery = params.getOrElse(C.Api.Search.FOLDERS, "")
+    val foldersQuery = params.getOrElse(Api.Field.Search.FOLDERS, "")
 
     val folderId = if (foldersQuery.isEmpty) repo.rootFolderId else foldersQuery
 
     defaultQuery(folderId)
   }
 
-  get(s"/r/:repoId/p/:${C.Api.Search.PAGE}/rpp/:${C.Api.Search.RESULTS_PER_PAGE}/?") {
+  get(s"/r/:repoId/p/:${Api.Field.Search.PAGE}/rpp/:${Api.Field.Search.RESULTS_PER_PAGE}/?") {
     val repo: Repository = RequestContext.getRepository
 
-    val rpp = params.getOrElse(C.Api.Search.RESULTS_PER_PAGE, C.Api.Search.DEFAULT_RPP.toString).toInt
-    val page = params.getOrElse(C.Api.Search.PAGE, "1").toInt
-    val queryText = params.get(C.Api.Search.QUERY_TEXT)
-    val sortArg = params.get(C.Api.Search.SORT)
+    val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Api.Field.Search.DEFAULT_RPP.toString).toInt
+    val page = params.getOrElse(Api.Field.Search.PAGE, "1").toInt
+    val queryText = params.get(Api.Field.Search.QUERY_TEXT)
+    val sortArg = params.get(Api.Field.Search.SORT)
     logger.info(s"Query string: $queryText")
 
     logger.info(s"Sort: $sortArg")
@@ -43,7 +43,7 @@ class SearchController extends BaseApiController {
     }
 
     // TODO: if there is query text, do not specify folder ids. Search everything
-    val foldersQuery = params.getOrElse(C.Api.Search.FOLDERS, "")
+    val foldersQuery = params.getOrElse(Api.Field.Search.FOLDERS, "")
     val folderIdsArg = if (foldersQuery.isEmpty) repo.rootFolderId else foldersQuery
 
     val q = new SearchQuery(
@@ -59,27 +59,27 @@ class SearchController extends BaseApiController {
   get("/r/:repoId/triage") {
   }
 
-  get(s"/r/:repoId/triage/p/:${C.Api.Search.PAGE}/rpp/:${C.Api.Search.RESULTS_PER_PAGE}") {
+  get(s"/r/:repoId/triage/p/:${Api.Field.Search.PAGE}/rpp/:${Api.Field.Search.RESULTS_PER_PAGE}") {
   }
 
   private def defaultQuery(folderId: String): ActionResult = {
     val q = new SearchQuery(
-      rpp = C.Api.Search.DEFAULT_RPP,
+      rpp = Api.Field.Search.DEFAULT_RPP,
       folderIds = Set(folderId)
     )
 
     val results = app.service.library.search(q)
 
     Ok(Json.obj(
-      C.Api.Search.ASSETS -> results.records.map { x =>
+      Api.Field.Search.ASSETS -> results.records.map { x =>
         val asset = x: Asset
         asset.metadata.toJson
       },
-      C.Api.TOTAL_RECORDS -> results.total,
-      C.Api.CURRENT_PAGE -> q.page,
-      C.Api.TOTAL_PAGES -> results.totalPages,
-      C.Api.RESULTS_PER_PAGE -> q.rpp,
-      C.Api.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
+      Api.Field.TOTAL_RECORDS -> results.total,
+      Api.Field.CURRENT_PAGE -> q.page,
+      Api.Field.TOTAL_PAGES -> results.totalPages,
+      Api.Field.RESULTS_PER_PAGE -> q.rpp,
+      Api.Field.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
     ))
   }
 
@@ -87,15 +87,15 @@ class SearchController extends BaseApiController {
     val results = app.service.library.search(q)
 
     Ok(Json.obj(
-      C.Api.Search.ASSETS -> results.records.map { x =>
+      Api.Field.Search.ASSETS -> results.records.map { x =>
         val asset = x: Asset
         asset.metadata.toJson
       },
-      C.Api.TOTAL_RECORDS -> results.total,
-      C.Api.CURRENT_PAGE -> q.page,
-      C.Api.TOTAL_PAGES -> results.totalPages,
-      C.Api.RESULTS_PER_PAGE -> q.rpp,
-      C.Api.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
+      Api.Field.TOTAL_RECORDS -> results.total,
+      Api.Field.CURRENT_PAGE -> q.page,
+      Api.Field.TOTAL_PAGES -> results.totalPages,
+      Api.Field.RESULTS_PER_PAGE -> q.rpp,
+      Api.Field.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
     ))
   }
 
@@ -105,7 +105,7 @@ class SearchController extends BaseApiController {
     }
     else {
       folderIds
-        .split(s"\\${C.Api.MULTI_VALUE_DELIM}")
+        .split(s"\\${Api.Field.MULTI_VALUE_DELIM}")
         .map(_.trim)
         .filter(_.nonEmpty).toSet
     }

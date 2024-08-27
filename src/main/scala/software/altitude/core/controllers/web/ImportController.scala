@@ -18,7 +18,7 @@ import org.scalatra.atmosphere.TextMessage
 import org.scalatra.json.JValueResult
 import org.scalatra.json.JacksonJsonSupport
 import org.scalatra.servlet.SizeConstraintExceededException
-import software.altitude.core.Const
+import software.altitude.core.Api
 import software.altitude.core.DuplicateException
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
@@ -109,15 +109,15 @@ class ImportController
     client
   }
 
-  val cancelUpload: Route = delete(s"/r/:repoId/upload/:${Const.Api.Upload.UPLOAD_ID}/cancel") {
-    val uploadId = params(Const.Api.Upload.UPLOAD_ID)
+  val cancelUpload: Route = delete(s"/r/:repoId/upload/:${Api.Field.Upload.UPLOAD_ID}/cancel") {
+    val uploadId = params(Api.Field.Upload.UPLOAD_ID)
     logger.info(s"CANCELLING upload ID: $uploadId")
     ImportController.uploadCancelRequest(uploadId) = true
   }
 
-  val uploadFilesForm: Route = post(s"/r/:repoId/upload/:${Const.Api.Upload.UPLOAD_ID}") {
+  val uploadFilesForm: Route = post(s"/r/:repoId/upload/:${Api.Field.Upload.UPLOAD_ID}") {
     contentType = "text/html"
-    val uploadId = params(Const.Api.Upload.UPLOAD_ID)
+    val uploadId = params(Api.Field.Upload.UPLOAD_ID)
     logger.info(s"Uploading selected files. Upload ID: $uploadId")
 
     val servletFileUpload = new ServletFileUpload()

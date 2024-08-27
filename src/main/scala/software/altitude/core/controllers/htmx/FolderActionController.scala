@@ -2,6 +2,7 @@ package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
 import play.api.libs.json.JsObject
+import software.altitude.core.Api
 import software.altitude.core.DataScrubber
 import software.altitude.core.DuplicateException
 import software.altitude.core.RequestContext
@@ -22,35 +23,35 @@ class FolderActionController extends BaseHtmxController{
   }
 
   val showAddFolderModal: Route = get("/r/:repoId/modals/add-folder") {
-    val parentId: String = params.get(C.Api.Folder.PARENT_ID).get
+    val parentId: String = params.get(Api.Field.Folder.PARENT_ID).get
 
     ssp("htmx/add_folder_modal",
       "minWidth" -> C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
       "title" -> C.UI.ADD_FOLDER_MODAL_TITLE,
-      C.Api.Folder.PARENT_ID -> parentId)
+      Api.Field.Folder.PARENT_ID -> parentId)
   }
 
   val showRenameFolderModal: Route = get("/r/:repoId/modals/rename-folder") {
-    val folderId: String = params.get(C.Api.ID).get
+    val folderId: String = params.get(Api.Field.ID).get
 
     val folder: Folder = app.service.folder.getById(folderId)
 
     ssp("htmx/rename_folder_modal",
       "minWidth" -> C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
       "title" -> C.UI.RENAME_FOLDER_MODAL_TITLE,
-      C.Api.Folder.EXISTING_NAME -> Some(folder.name),
-      C.Api.ID -> folderId)
+      Api.Field.Folder.EXISTING_NAME -> Some(folder.name),
+      Api.Field.ID -> folderId)
   }
 
   val showDeleteFolderModal: Route = get("/r/:repoId/modals/delete-folder") {
-    val folderId: String = params.get(C.Api.ID).get
+    val folderId: String = params.get(Api.Field.ID).get
 
     val folder: Folder = app.service.folder.getById(folderId)
 
     ssp("htmx/delete_folder_modal",
       "minWidth" -> C.UI.DELETE_FOLDER_MODAL_MIN_WIDTH,
       "title" -> C.UI.DELETE_FOLDER_MODAL_TITLE,
-      C.Api.Folder.FOLDER -> folder)
+      Api.Field.Folder.FOLDER -> folder)
   }
 
   val showFolderContextMenu: Route = get("/r/:repoId/context-menu") {
@@ -70,17 +71,17 @@ class FolderActionController extends BaseHtmxController{
 
   val htmxAddFolder: Route = post("/r/:repoId/add") {
     val dataScrubber = DataScrubber(
-      trim = List(C.Api.Folder.NAME),
+      trim = List(Api.Field.Folder.NAME),
     )
 
     val apiRequestValidator = ApiRequestValidator(
       required = List(
-        C.Api.Folder.NAME, C.Api.Folder.PARENT_ID),
+        Api.Field.Folder.NAME, Api.Field.Folder.PARENT_ID),
       maxLengths = Map(
-        C.Api.Folder.NAME -> C.Api.Constraints.MAX_FOLDER_NAME_LENGTH,
+        Api.Field.Folder.NAME -> Api.Constraints.MAX_FOLDER_NAME_LENGTH,
       ),
       minLengths = Map(
-        C.Api.Folder.NAME -> C.Api.Constraints.MIN_FOLDER_NAME_LENGTH,
+        Api.Field.Folder.NAME -> Api.Constraints.MIN_FOLDER_NAME_LENGTH,
       ),
     )
 
@@ -94,7 +95,7 @@ class FolderActionController extends BaseHtmxController{
           "title" -> C.UI.ADD_FOLDER_MODAL_TITLE,
           "fieldErrors" -> errors,
           "formJson" -> jsonIn,
-          C.Api.Folder.PARENT_ID -> parentId
+          Api.Field.Folder.PARENT_ID -> parentId
         ),
         // we want to change the folder modal to show the errors, not reload the folder list!
         headers=Map("HX-Retarget" -> "this", "HX-Reswap" -> "innerHTML")
@@ -107,18 +108,18 @@ class FolderActionController extends BaseHtmxController{
       case validationException: ValidationException =>
         haltWithValidationErrors(
           validationException.errors.toMap,
-          parentId = (jsonIn \ C.Api.Folder.PARENT_ID).as[String])
+          parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String])
     }
 
-    val folderName = (jsonIn \ C.Api.Folder.NAME).as[String]
-    val parentId = (jsonIn \ C.Api.Folder.PARENT_ID).as[String]
+    val folderName = (jsonIn \ Api.Field.Folder.NAME).as[String]
+    val parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String]
 
     try {
       app.service.library.addFolder(folderName, parentId = Some(parentId))
     } catch {
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
-        haltWithValidationErrors(Map(C.Api.Folder.NAME -> message), parentId = parentId)
+        haltWithValidationErrors(Map(Api.Field.Folder.NAME -> message), parentId = parentId)
     }
 
     val childFolders: List[Folder] = app.service.folder.immediateChildren(parentId)
@@ -131,17 +132,17 @@ class FolderActionController extends BaseHtmxController{
 
   val htmxRenameFolder: Route = put("/r/:repoId/rename") {
     val dataScrubber = DataScrubber(
-      trim = List(C.Api.Folder.NAME),
+      trim = List(Api.Field.Folder.NAME),
     )
 
     val apiRequestValidator = ApiRequestValidator(
       required = List(
-        C.Api.Folder.NAME, C.Api.ID),
+        Api.Field.Folder.NAME, Api.Field.ID),
       maxLengths = Map(
-        C.Api.Folder.NAME -> C.Api.Constraints.MAX_FOLDER_NAME_LENGTH,
+        Api.Field.Folder.NAME -> Api.Constraints.MAX_FOLDER_NAME_LENGTH,
       ),
       minLengths = Map(
-        C.Api.Folder.NAME -> C.Api.Constraints.MIN_FOLDER_NAME_LENGTH,
+        Api.Field.Folder.NAME -> Api.Constraints.MIN_FOLDER_NAME_LENGTH,
       ),
     )
 
@@ -155,7 +156,7 @@ class FolderActionController extends BaseHtmxController{
           "title" -> C.UI.RENAME_FOLDER_MODAL_TITLE,
           "fieldErrors" -> errors,
           "formJson" -> jsonIn,
-          C.Api.ID -> folderId
+          Api.Field.ID -> folderId
         ),
         // we want to change the folder modal to show the errors, not reload the folder list!
         headers=Map("HX-Retarget" -> "this", "HX-Reswap" -> "innerHTML")
@@ -168,25 +169,25 @@ class FolderActionController extends BaseHtmxController{
       case validationException: ValidationException =>
         haltWithValidationErrors(
           validationException.errors.toMap,
-          folderId = (jsonIn \ C.Api.ID).as[String])
+          folderId = (jsonIn \ Api.Field.ID).as[String])
     }
 
-    val newName = (jsonIn \ C.Api.Folder.NAME).as[String]
-    val folderId = (jsonIn \ C.Api.ID).as[String]
+    val newName = (jsonIn \ Api.Field.Folder.NAME).as[String]
+    val folderId = (jsonIn \ Api.Field.ID).as[String]
 
     try {
       app.service.library.renameFolder(folderId=folderId, newName=newName)
     } catch {
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
-        haltWithValidationErrors(Map(C.Api.Folder.NAME -> message), folderId = folderId)
+        haltWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)
     }
 
     halt(200, newName)
   }
 
   val htmxFolderChildren: Route = get("/r/:repoId/children") {
-    val parentId: String = params.get(C.Api.Folder.PARENT_ID).get
+    val parentId: String = params.get(Api.Field.Folder.PARENT_ID).get
     val childFolders: List[Folder] = app.service.folder.immediateChildren(parentId)
 
     ssp("htmx/folder_children",
@@ -194,8 +195,8 @@ class FolderActionController extends BaseHtmxController{
   }
 
   val htmxMoveFolder: Route = post("/r/:repoId/move") {
-    val movedFolderId = request.getParameter(C.Api.Folder.MOVED_FOLDER_ID)
-    val newParentId = request.getParameter(C.Api.Folder.NEW_PARENT_ID)
+    val movedFolderId = request.getParameter(Api.Field.Folder.MOVED_FOLDER_ID)
+    val newParentId = request.getParameter(Api.Field.Folder.NEW_PARENT_ID)
 
     logger.info(s"Moving folder $movedFolderId to $newParentId")
 
@@ -216,7 +217,7 @@ class FolderActionController extends BaseHtmxController{
   }
 
   val htmxDeleteFolder: Route = delete("/r/:repoId/") {
-    val folderId = params.get(C.Api.ID).get
+    val folderId = params.get(Api.Field.ID).get
     app.service.library.deleteFolderById(folderId)
     halt(200)
   }

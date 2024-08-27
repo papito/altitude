@@ -5,6 +5,7 @@ import org.scalatest.funsuite
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import play.api.libs.json.Json
+import software.altitude.core.Api
 import software.altitude.core.ValidationException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.{Const => C}
@@ -15,11 +16,11 @@ import software.altitude.test.core.TestFocus
 
   test("Test multiple failed required fields") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(C.Api.ID, C.Api.Folder.NAME)
+      required=List(Api.Field.ID, Api.Field.Folder.NAME)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Folder.PATH -> "Bright Future Path"
+      Api.Field.Folder.PATH -> "Bright Future Path"
     )
 
     val validationException = intercept[ValidationException] {
@@ -32,11 +33,11 @@ import software.altitude.test.core.TestFocus
   test("Test failed max length") {
     val maxFieldLength = 5
     val validator: ApiRequestValidator = ApiRequestValidator(
-      maxLengths=Map(C.Api.Folder.NAME -> maxFieldLength)
+      maxLengths=Map(Api.Field.Folder.NAME -> maxFieldLength)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Folder.NAME -> "Bright Future Name",
+      Api.Field.Folder.NAME -> "Bright Future Name",
     )
 
     val validationException = intercept[ValidationException] {
@@ -50,11 +51,11 @@ import software.altitude.test.core.TestFocus
   test("Test failed min length") {
     val minPasswordLength = 6
     val validator: ApiRequestValidator = ApiRequestValidator(
-      minLengths=Map(C.Api.Setup.PASSWORD -> minPasswordLength)
+      minLengths=Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Setup.PASSWORD -> "lol/$",
+      Api.Field.Setup.PASSWORD -> "lol/$",
     )
 
     val validationException = intercept[ValidationException] {
@@ -68,8 +69,8 @@ import software.altitude.test.core.TestFocus
   test("Test min length error should not override the REQUIRED error") {
     val minPasswordLength = 6
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(C.Api.Setup.PASSWORD),
-      minLengths=Map(C.Api.Setup.PASSWORD -> minPasswordLength)
+      required=List(Api.Field.Setup.PASSWORD),
+      minLengths=Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
     )
 
     val jsonIn = Json.obj()
@@ -84,12 +85,12 @@ import software.altitude.test.core.TestFocus
 
   test("Test multiple failed length checks") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      maxLengths=Map(C.Api.Folder.NAME -> 5, C.Api.Folder.PATH -> 10)
+      maxLengths=Map(Api.Field.Folder.NAME -> 5, Api.Field.Folder.PATH -> 10)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Folder.NAME -> "Bright Future Name",
-      C.Api.Folder.PATH -> "Bright Future Path"
+      Api.Field.Folder.NAME -> "Bright Future Name",
+      Api.Field.Folder.PATH -> "Bright Future Path"
     )
 
     val validationException = intercept[ValidationException] {
@@ -101,8 +102,8 @@ import software.altitude.test.core.TestFocus
 
   test("Test missing required field should not be checked for length") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(C.Api.Folder.NAME),
-      maxLengths=Map(C.Api.Folder.NAME -> 5)
+      required=List(Api.Field.Folder.NAME),
+      maxLengths=Map(Api.Field.Folder.NAME -> 5)
     )
 
     val jsonIn = Json.obj()
@@ -118,30 +119,30 @@ import software.altitude.test.core.TestFocus
     val maxFieldLength = 10
 
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(C.Api.Folder.NAME),
-      maxLengths=Map(C.Api.Folder.NAME -> maxFieldLength, C.Api.Folder.PATH -> maxFieldLength)
+      required=List(Api.Field.Folder.NAME),
+      maxLengths=Map(Api.Field.Folder.NAME -> maxFieldLength, Api.Field.Folder.PATH -> maxFieldLength)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Folder.PATH -> "Bright Future Path"
+      Api.Field.Folder.PATH -> "Bright Future Path"
     )
 
     val validationException = intercept[ValidationException] {
       validator.validate(jsonIn)
     }
 
-    validationException.errors(C.Api.Folder.PATH) should be(C.Msg.Err.VALUE_TOO_LONG.format(maxFieldLength))
-    validationException.errors(C.Api.Folder.NAME) should be(C.Msg.Err.REQUIRED)
+    validationException.errors(Api.Field.Folder.PATH) should be(C.Msg.Err.VALUE_TOO_LONG.format(maxFieldLength))
+    validationException.errors(Api.Field.Folder.NAME) should be(C.Msg.Err.REQUIRED)
 
   }
 
   test("Test empty strings fail the required check") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(C.Api.Folder.NAME)
+      required=List(Api.Field.Folder.NAME)
     )
 
     val jsonIn = Json.obj(
-      C.Api.Folder.NAME -> ""
+      Api.Field.Folder.NAME -> ""
     )
 
     val validationException = intercept[ValidationException] {

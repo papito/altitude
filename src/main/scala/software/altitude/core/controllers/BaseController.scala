@@ -8,6 +8,7 @@ import org.scalatra.UrlGeneratorSupport
 import org.scalatra.scalate.ScalateUrlGeneratorSupport
 import org.slf4j.MDC
 import software.altitude.core.AltitudeServletContext
+import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.RequestContext
 import software.altitude.core.auth.AuthenticationSupport
@@ -33,7 +34,7 @@ abstract class BaseController
    */
   override def invoke(matchedRoute: MatchedRoute): Option[Any] = {
     withRouteMultiParams(Some(matchedRoute)){
-      val repoId: Option[String] = params.get(Const.Api.REPO_ID)
+      val repoId: Option[String] = params.get(Api.Field.REPO_ID)
       app.service.repository.setContextFromRequest(repoId)
       BaseController.super.invoke(matchedRoute)
     }

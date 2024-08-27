@@ -1,6 +1,6 @@
-#import(software.altitude.core.Const)
 #import(software.altitude.core.RequestContext)
 #import(software.altitude.core.util.Util)
+#import(software.altitude.core.Api)
 
 <style>
     #uploadForm {
@@ -49,7 +49,7 @@
 
 <%@ val uploadId: String = Util.randomStr() %>
 
-<form id="uploadForm" hx-post='${ url(uploadFilesForm, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.Upload.UPLOAD_ID -> uploadId) }' hx-encoding="multipart/form-data">
+<form id="uploadForm" hx-post='${ url(uploadFilesForm, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.Upload.UPLOAD_ID -> uploadId) }' hx-encoding="multipart/form-data">
     <div>
         <input type="file" name="files" id="files" multiple>
     </div>

@@ -6,7 +6,7 @@ import org.scalatra.ScalatraServlet
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
-import software.altitude.core.{Const => C}
+import software.altitude.core.Api
 
 import java.io.File
 import java.io.PrintWriter
@@ -24,27 +24,27 @@ class FileSystemBrowserController extends ScalatraServlet with CorsSupport {
   }
 
   get("/fs/listing") {
-    val currentPathFile: File = new File(params.getOrElse(C.Api.PATH, userHomeDir))
+    val currentPathFile: File = new File(params.getOrElse(Api.Field.PATH, userHomeDir))
     getDirectoryListing(currentPathFile)
   }
 
   get("/fs/listing/parent") {
-    val currentPathFile = new File(params.getOrElse(C.Api.PATH, ""))
+    val currentPathFile = new File(params.getOrElse(Api.Field.PATH, ""))
     val parentDir: String = currentPathFile.getParent
     val parentDirFile = if (parentDir != null) new File(parentDir) else currentPathFile
     getDirectoryListing(parentDirFile)
   }
 
   get("/fs/listing/child") {
-    val currentPathFile: File = new File(params.getOrElse(C.Api.PATH, ""))
-    val childDirName = params.get(C.Api.CHILD_DIR)
+    val currentPathFile: File = new File(params.getOrElse(Api.Field.PATH, ""))
+    val childDirName = params.get(Api.Field.CHILD_DIR)
     val childDirPath = Paths.get(currentPathFile.getAbsolutePath, childDirName.get)
     getDirectoryListing(childDirPath.toFile)
   }
 
   get("/fs/listing/jump") {
-    val currentPathFile: File = new File(params.getOrElse(C.Api.PATH, ""))
-    val position = params.getOrElse(C.Api.PATH_POS, "1").toInt
+    val currentPathFile: File = new File(params.getOrElse(Api.Field.PATH, ""))
+    val position = params.getOrElse(Api.Field.PATH_POS, "1").toInt
     val paths: List[File] = Iterator.iterate(currentPathFile)(_.getParentFile).takeWhile(_ != null).toList.reverse
     getDirectoryListing(paths(position + 1))
   }
@@ -69,10 +69,10 @@ class FileSystemBrowserController extends ScalatraServlet with CorsSupport {
     val pathBreadcrumbs = file.getAbsolutePath.split(File.separator.toCharArray).filter(!_.isBlank).toList
 
     Json.obj(
-      C.Api.FILES -> files,
-      C.Api.DIRECTORIES -> directories,
-      C.Api.CURRENT_PATH -> file.getAbsolutePath,
-      C.Api.CURRENT_PATH_BREADCRUMBS -> pathBreadcrumbs
+      Api.Field.FILES -> files,
+      Api.Field.DIRECTORIES -> directories,
+      Api.Field.CURRENT_PATH -> file.getAbsolutePath,
+      Api.Field.CURRENT_PATH_BREADCRUMBS -> pathBreadcrumbs
     )
   }
 

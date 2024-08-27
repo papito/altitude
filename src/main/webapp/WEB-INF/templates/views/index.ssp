@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-#import(software.altitude.core.Const)
+#import(software.altitude.core.Api)
 #import(software.altitude.core.AltitudeServletContext)
 #import(software.altitude.core.RequestContext)
 
@@ -99,7 +99,7 @@
                            hx-target="#explorerPanelContent"
                            hx-swap="innerHTML"
                            hx-trigger="load, click"
-                           hx-get='${ url(showFoldersTab, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'>Folders</a>
+                           hx-get='${ url(showFoldersTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Folders</a>
                     </button>
 
                     <button type="button" id="albumsTab" role="tab"
@@ -108,7 +108,7 @@
                            hx-target="#explorerPanelContent"
                            hx-trigger="click"
                            hx-swap="innerHTML"
-                           hx-get='${ url(showAlbumsTab, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'>Albums</a>
+                           hx-get='${ url(showAlbumsTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Albums</a>
                     </button>
 
                     <button type="button" id="peopleTab" role="tab"
@@ -117,7 +117,7 @@
                            hx-target="#explorerPanelContent"
                            hx-trigger="click"
                            hx-swap="innerHTML"
-                           hx-get='${ url(showPeopleTab, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'>People</a>
+                           hx-get='${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>People</a>
                     </button>
                 </div>
 

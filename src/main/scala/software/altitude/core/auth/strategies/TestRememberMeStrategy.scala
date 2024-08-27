@@ -5,7 +5,7 @@ import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core.AltitudeServletContext
-import software.altitude.core.Const
+import software.altitude.core.Api
 import software.altitude.core.Environment
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Repository
@@ -28,13 +28,13 @@ class TestRememberMeStrategy(protected val app: ScalatraBase)
 
     // See: https://github.com/papito/altitude/wiki/How-the-tests-work#auth-with-controller-tests
 
-    val testRepoId: String = request.getHeader(Const.Api.REPO_TEST_HEADER_ID)
+    val testRepoId: String = request.getHeader(Api.Field.REPO_TEST_HEADER_ID)
     if (testRepoId != null) {
       val repo: Repository = AltitudeServletContext.app.service.repository.getById(testRepoId)
       RequestContext.repository.value = Some(repo)
     }
 
-    val testUserId: String = request.getHeader(Const.Api.USER_TEST_HEADER_ID)
+    val testUserId: String = request.getHeader(Api.Field.USER_TEST_HEADER_ID)
 
     if (testUserId != null) {
       val user: User = AltitudeServletContext.app.service.user.getById(testUserId)

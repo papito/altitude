@@ -1,10 +1,10 @@
-#import(software.altitude.core.Const)
 #import(software.altitude.core.RequestContext)
 #import(software.altitude.core.models.Person)
+#import(software.altitude.core.Api)
 
 <%@ val person: Person %>
 
 <span hx-trigger="click"
       hx-swap="outerHTML"
-      hx-get='${ url(showEditPersonName, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.PERSON_ID -> person.persistedId) }'>
+      hx-get='${ url(showEditPersonName, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'>
             ${person.name}<i class="fas fa-edit"></i></span>

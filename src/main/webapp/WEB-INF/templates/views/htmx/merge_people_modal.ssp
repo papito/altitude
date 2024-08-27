@@ -1,6 +1,7 @@
 #import(software.altitude.core.Const)
 #import(software.altitude.core.RequestContext)
 #import(software.altitude.core.models.Person)
+#import(software.altitude.core.Api)
 
 <%@ val minWidth: Int %>
 <%@ val title: String %>
@@ -43,7 +44,7 @@
 
 <form action="#"
       id="mergePeople"
-      hx-put='${ url(mergePeople, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.SRC_PERSON_ID -> mergeSourcePerson.persistedId, Const.Api.DEST_PERSON_ID -> mergeDestPerson.persistedId) }'
+      hx-put='${ url(mergePeople, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.SRC_PERSON_ID -> mergeSourcePerson.persistedId, Api.Field.DEST_PERSON_ID -> mergeDestPerson.persistedId) }'
       hx-trigger="submit"
       hx-target="#content"
       hx-swap="innerHTML">
@@ -99,8 +100,8 @@
             const personMergedEvent = new CustomEvent(
                     Const.events.personMerged, {
                         detail: {
-                                ${Const.Api.Person.MERGE_SOURCE_ID}: "${mergeSourcePerson.persistedId}",
-                                ${Const.Api.Person.MERGE_DEST_ID}: "${mergeDestPerson.persistedId}",
+                                ${Api.Field.Person.MERGE_SOURCE_ID}: "${mergeSourcePerson.persistedId}",
+                                ${Api.Field.Person.MERGE_DEST_ID}: "${mergeDestPerson.persistedId}",
                         }});
 
             document.body.dispatchEvent(personMergedEvent)

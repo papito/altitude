@@ -1,6 +1,6 @@
-#import(software.altitude.core.Const)
 #import(software.altitude.core.RequestContext)
 #import(software.altitude.core.models.Folder)
+#import(software.altitude.core.Api)
 
 <%@ val folder: Folder %>
 <%@ val minWidth: Int %>
@@ -17,9 +17,9 @@
 <button class="action-button error"
         id="deleteFolder"
         hx-swap="none"
-        hx-delete='${ url(htmxDeleteFolder, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
+        hx-delete='${ url(htmxDeleteFolder, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
         hx-trigger="click"
-        hx-vars="{'${Const.Api.ID}': '${folder.id}'}"
+        hx-vars="{'${ Api.Field.ID}': '${folder.id}'}"
         hx-ext="json-enc">
     Delete <strong>${folder.name}</strong> and move assets into Recycle Bin
 </button>
@@ -36,7 +36,7 @@
         if (evt.detail.successful === true) {
             const deletedFolderEvent = new CustomEvent(
                     Const.events.folderDeleted, {
-                        detail: {${Const.Api.ID}: "${folder.id}"}
+                        detail: {${Api.Field.ID}: "${folder.id}"}
                     });
 
             document.body.dispatchEvent(deletedFolderEvent)

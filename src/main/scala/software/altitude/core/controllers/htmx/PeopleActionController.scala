@@ -2,6 +2,7 @@ package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
 import play.api.libs.json.JsObject
+import software.altitude.core.Api
 import software.altitude.core.DataScrubber
 import software.altitude.core.DuplicateException
 import software.altitude.core.ValidationException
@@ -39,22 +40,22 @@ class PeopleActionController extends BaseHtmxController{
 
   val editPersonName: Route = put("/r/:repoId/p/:personId/name/edit") {
     val dataScrubber = DataScrubber(
-      trim = List(C.Api.Person.NAME),
+      trim = List(Api.Field.Person.NAME),
     )
 
     val apiRequestValidator = ApiRequestValidator(
       required = List(
-        C.Api.Person.NAME, C.Api.ID),
+        Api.Field.Person.NAME, Api.Field.ID),
       maxLengths = Map(
-        C.Api.Person.NAME -> C.Api.Constraints.MAX_NAME_LENGTH,
+        Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH,
       ),
       minLengths = Map(
-        C.Api.Person.NAME -> C.Api.Constraints.MIN_NAME_LENGTH,
+        Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH,
       ),
     )
 
     val jsonIn: JsObject = dataScrubber.scrub(unscrubbedReqJson.get)
-    val personId =  (jsonIn \ C.Api.ID).as[String]
+    val personId =  (jsonIn \ Api.Field.ID).as[String]
     val person: Person = app.service.person.getById(personId)
 
     def haltWithValidationErrors(errors: Map[String, String]): Unit = {
@@ -64,7 +65,7 @@ class PeopleActionController extends BaseHtmxController{
           "fieldErrors" -> errors,
           "formJson" -> jsonIn,
           "person" -> person,
-          "newName" -> (jsonIn \ C.Api.Person.NAME).asOpt[String],
+          "newName" -> (jsonIn \ Api.Field.Person.NAME).asOpt[String],
         ),
       )
     }
@@ -77,14 +78,14 @@ class PeopleActionController extends BaseHtmxController{
           validationException.errors.toMap)
     }
 
-    val newName = (jsonIn \ C.Api.Person.NAME).as[String]
+    val newName = (jsonIn \ Api.Field.Person.NAME).as[String]
 
     try {
       app.service.person.updateName(person, newName=newName)
     } catch {
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Person by that name already exists")
-        haltWithValidationErrors(Map(C.Api.Person.NAME -> message))
+        haltWithValidationErrors(Map(Api.Field.Person.NAME -> message))
     }
 
     val updatedPerson: Person = app.service.person.getById(personId)
@@ -92,8 +93,8 @@ class PeopleActionController extends BaseHtmxController{
   }
 
   val showMergePeopleModal: Route = get("/r/:repoId/modals/merge") {
-    val srcPersonId = request.getParameter(C.Api.Person.MERGE_SOURCE_ID)
-    val destPersonId = request.getParameter(C.Api.Person.MERGE_DEST_ID)
+    val srcPersonId = request.getParameter(Api.Field.Person.MERGE_SOURCE_ID)
+    val destPersonId = request.getParameter(Api.Field.Person.MERGE_DEST_ID)
 
     val requestedSourcePerson: Person = app.service.person.getById(srcPersonId)
     val requestedDestPerson: Person = app.service.person.getById(destPersonId)
@@ -108,8 +109,8 @@ class PeopleActionController extends BaseHtmxController{
     ssp("htmx/merge_people_modal",
       "minWidth" -> C.UI.MERGE_PEOPLE_MODAL_MIN_WIDTH,
       "title" -> C.UI.MERGE_PEOPLE_MODAL_TITLE,
-      C.Api.Person.MERGE_SOURCE_PERSON -> sourcePerson,
-      C.Api.Person.MERGE_DEST_PERSON -> destPerson)
+      Api.Field.Person.MERGE_SOURCE_PERSON -> sourcePerson,
+      Api.Field.Person.MERGE_DEST_PERSON -> destPerson)
   }
 
   val mergePeople: Route = put("/r/:repoId/src/:srcPersonId/dest/:destPersonId") {

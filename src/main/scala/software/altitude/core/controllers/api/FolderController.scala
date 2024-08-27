@@ -2,11 +2,11 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import play.api.libs.json.Json
+import software.altitude.core.Api
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Field
 import software.altitude.core.models.Folder
-import software.altitude.core.{Const => C}
 
 class FolderController extends BaseApiController {
 
@@ -14,43 +14,43 @@ class FolderController extends BaseApiController {
     val folders = app.service.folder.hierarchy()
 
     Ok(Json.obj(
-      C.Api.Folder.HIERARCHY -> folders.map(_.toJson)
+      Api.Field.Folder.HIERARCHY -> folders.map(_.toJson)
     ))
   }
 
   get("/:id") {
-    val id = realId(params.get(C.Api.ID).get)
+    val id = realId(params.get(Api.Field.ID).get)
     val folder: Folder = app.service.folder.getById(id)
 
     Ok(Json.obj(
-      C.Api.Folder.FOLDER -> folder.toJson
+      Api.Field.Folder.FOLDER -> folder.toJson
     ))
   }
 
-  get(s"/:${C.Api.Folder.PARENT_ID}/children") {
-    val parentId = realId(params.getAs[String](C.Api.Folder.PARENT_ID).get)
+  get(s"/:${Api.Field.Folder.PARENT_ID}/children") {
+    val parentId = realId(params.getAs[String](Api.Field.Folder.PARENT_ID).get)
     val allRepoFolders = app.service.folder.getAll
     val folders = app.service.folder.immediateChildren(parentId, allRepoFolders = allRepoFolders)
     val path = app.service.folder.pathComponents(parentId)
 
     Ok(Json.obj(
-      C.Api.Folder.PATH -> path.map(_.toJson),
-      C.Api.Folder.FOLDERS -> folders.map(_.toJson),
+      Api.Field.Folder.PATH -> path.map(_.toJson),
+      Api.Field.Folder.FOLDERS -> folders.map(_.toJson),
     ))
   }
 
   post("/") {
-    val name = (unscrubbedReqJson.get \ C.Api.Folder.NAME).as[String]
-    val parentId = realId((unscrubbedReqJson.get \ C.Api.Folder.PARENT_ID).as[String])
+    val name = (unscrubbedReqJson.get \ Api.Field.Folder.NAME).as[String]
+    val parentId = realId((unscrubbedReqJson.get \ Api.Field.Folder.PARENT_ID).as[String])
 
     val newFolder: Folder = app.service.library.addFolder(name = name, parentId = Some(parentId))
     logger.debug(s"New folder: $newFolder")
 
-    Ok(Json.obj(C.Api.Folder.FOLDER -> newFolder.toJson))
+    Ok(Json.obj(Api.Field.Folder.FOLDER -> newFolder.toJson))
   }
 
   delete("/:id") {
-    val id = realId(params.get(C.Api.ID).get)
+    val id = realId(params.get(Api.Field.ID).get)
     logger.info(s"Deleting folder: $id")
     app.service.library.deleteFolderById(id)
 
@@ -58,10 +58,10 @@ class FolderController extends BaseApiController {
   }
 
   put("/:id") {
-    val id = realId(params.get(C.Api.ID).get)
+    val id = realId(params.get(Api.Field.ID).get)
     logger.info(s"Updating folder: $id")
-    val newName = (unscrubbedReqJson.get \ C.Api.Folder.NAME).asOpt[String]
-    val newParentId = (unscrubbedReqJson.get \ C.Api.Folder.PARENT_ID).asOpt[String]
+    val newName = (unscrubbedReqJson.get \ Api.Field.Folder.NAME).asOpt[String]
+    val newParentId = (unscrubbedReqJson.get \ Api.Field.Folder.PARENT_ID).asOpt[String]
 
     if (newName.isDefined) {
       app.service.library.renameFolder(id, newName.get)

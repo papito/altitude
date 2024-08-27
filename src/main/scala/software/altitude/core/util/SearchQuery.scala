@@ -2,13 +2,13 @@ package software.altitude.core.util
 
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+import software.altitude.core.Api
 import software.altitude.core.models.MetadataField
-import software.altitude.core.{Const => C}
 
 case class SearchSort(field: MetadataField, direction: SortDirection.Value) {
   def toJson: JsObject = Json.obj(
-    C.Api.SearchSort.DIRECTION -> direction.toString,
-      C.Api.SearchSort.FIELD -> field.toJson
+    Api.Field.SearchSort.DIRECTION -> direction.toString,
+      Api.Field.SearchSort.FIELD -> field.toJson
   )
 }
 

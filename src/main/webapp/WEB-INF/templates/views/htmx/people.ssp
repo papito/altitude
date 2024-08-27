@@ -1,6 +1,7 @@
 #import(software.altitude.core.RequestContext)
-#import(software.altitude.core.Const)
 #import(software.altitude.core.models.Person)
+#import(software.altitude.core.Const)
+#import(software.altitude.core.Api)
 
 <%@ val people: List[Person] %>
 
@@ -68,7 +69,7 @@
                        hx-target="#content"
                        hx-trigger="click"
                        hx-swap="innerHTML"
-                       hx-get='${ url(searchPerson, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.PERSON_ID -> person.persistedId) }'>
+                       hx-get='${ url(searchPerson, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'>
                     <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}">
                     </a>
                 </div>
@@ -77,7 +78,7 @@
                        hx-target="#content"
                        hx-trigger="click"
                        hx-swap="innerHTML"
-                       hx-get='${ url(searchPerson, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.PERSON_ID -> person.persistedId) }'>
+                       hx-get='${ url(searchPerson, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'>
                         ${person.name.get}
                     </a>
                 </div>
@@ -103,8 +104,8 @@
      * A folder is dragon dropped in UI BUT not yet removed on the server-side
      */
     document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
-        const mergeSourceId = event.detail["${Const.Api.Person.MERGE_SOURCE_ID}"]
-        const mergeDestId = event.detail["${Const.Api.Person.MERGE_DEST_ID}"]
+        const mergeSourceId = event.detail["${ Api.Field.Person.MERGE_SOURCE_ID}"]
+        const mergeDestId = event.detail["${ Api.Field.Person.MERGE_DEST_ID}"]
 
         console.log("Person " + mergeSourceId + " dragon dropped into " + mergeDestId)
 
@@ -114,7 +115,7 @@
 
         htmx.ajax(
                 "GET",
-                '${ url(showMergePeopleModal, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }', {
+                '${ url(showMergePeopleModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }', {
                     "swap": "innerHTML",
                     "target": "#modalContent",
                     "values": {...event.detail},
@@ -122,8 +123,8 @@
     })
 
     document.body.addEventListener(Const.events.personMerged, (event) => {
-        const mergeSourceId = event.detail["${Const.Api.Person.MERGE_SOURCE_ID}"]
-        const mergeDestId = event.detail["${Const.Api.Person.MERGE_DEST_ID}"]
+        const mergeSourceId = event.detail["${ Api.Field.Person.MERGE_SOURCE_ID}"]
+        const mergeDestId = event.detail["${ Api.Field.Person.MERGE_DEST_ID}"]
 
         console.log("Person " + mergeSourceId + " MERGED into " + mergeDestId)
 
@@ -244,8 +245,8 @@
             const confirmPersonMergeEvent = new CustomEvent(
                     Const.events.confirmPersonMerge, {
                         detail: {
-                                ${Const.Api.Person.MERGE_SOURCE_ID}: mergeSrcId,
-                                ${Const.Api.Person.MERGE_DEST_ID}: mergeDestId,
+                                ${ Api.Field.Person.MERGE_SOURCE_ID}: mergeSrcId,
+                                ${ Api.Field.Person.MERGE_DEST_ID}: mergeDestId,
                         }});
 
             document.body.dispatchEvent(confirmPersonMergeEvent)

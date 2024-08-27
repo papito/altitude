@@ -1,29 +1,30 @@
-#import(software.altitude.core.Const)
 #import(software.altitude.core.RequestContext)
 #import(play.api.libs.json.Json)
 #import(play.api.libs.json.JsObject)
+#import(software.altitude.core.Api)
 
 #import(software.altitude.core.models.Person)
 
 <%@ val person: Person %>
 <%@ val fieldErrors: Map[String, String] = Map.empty %>
 <%@ val formJson: JsObject = Json.obj() %>
-<% val newName: Option[String] = (formJson \ Const.Api.Person.NAME).asOpt[String] %>
+<% val newName: Option[String] = (formJson \ Api.Field.Person.NAME).asOpt[String] %>
 
 <form action="#"
       id="editPersonName"
       autocomplete="off"
       hx-swap="outerHTML"
-      hx-put='${ url(editPersonName, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId, Const.Api.PERSON_ID -> person.persistedId) }'
+      hx-put='${ url(editPersonName, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'
       hx-trigger="submit"
       hx-ext="json-enc">
 
-    #if (fieldErrors.contains(Const.Api.Person.NAME))
-        <div class="error">${ fieldErrors(Const.Api.Folder.NAME) }</div>
+    #if (fieldErrors.contains( Api.Field.Person.NAME))
+        <div class="error">${ fieldErrors( Api.Field.Folder.NAME) }</div>
     #end
 
 <input type="text"
-       name="${Const.Api.Person.NAME}"
+       id="field-${ Api.Field.Person.NAME }"
+       name="${ Api.Field.Person.NAME }"
        value="${person.name}"
     #if (newName.isDefined)
        value="${ newName.get }"
@@ -31,6 +32,11 @@
        value="${ person.name }"
     #end
 >
-    <input type="hidden" name="${ Const.Api.ID }" value="${ person.persistedId }">
+    <input type="hidden" name="${ Api.Field.ID }" value="${ person.persistedId }">
 
 </form>
+
+<script lang="js" type="module">
+    htmx.find("#field-${ Api.Field.Person.NAME }").focus()
+    htmx.find("#field-${ Api.Field.Person.NAME }").select()
+</script>

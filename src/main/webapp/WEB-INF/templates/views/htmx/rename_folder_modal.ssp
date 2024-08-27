@@ -1,4 +1,4 @@
-#import(software.altitude.core.Const)
+#import(software.altitude.core.Api)
 #import(software.altitude.core.RequestContext)
 #import(play.api.libs.json.Json)
 #import(play.api.libs.json.JsObject)
@@ -10,7 +10,7 @@
 <%@ val formJson: JsObject = Json.obj() %>
 <%@ val id: String %>
 <%@ val existingName: Option[String] = None %>
-<% val name: Option[String] = (formJson \ Const.Api.Folder.NAME).asOpt[String] %>
+<% val name: Option[String] = (formJson \ Api.Field.Folder.NAME).asOpt[String] %>
 
 <style>
     #renameFolder input {
@@ -21,23 +21,23 @@
 <form action="#"
       id="renameFolder"
       hx-swap="innerHTML"
-      hx-put='${ url(htmxRenameFolder, Const.Api.REPO_ID -> RequestContext.getRepository.persistedId) }'
+      hx-put='${ url(htmxRenameFolder, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
       hx-trigger="submit"
       hx-target="#folderName-${id}"
       hx-ext="json-enc">
 
-    #if (fieldErrors.contains(Const.Api.Folder.NAME))
-        <div class="error">${ fieldErrors(Const.Api.Folder.NAME) }</div>
+    #if (fieldErrors.contains(Api.Field.Folder.NAME))
+        <div class="error">${ fieldErrors(Api.Field.Folder.NAME) }</div>
     #end
 
     <div>
-        <label for="${ Const.Api.Folder.NAME }"></label>
+        <label for="${ Api.Field.Folder.NAME }"></label>
         <input type="text"
-               id="field-${ Const.Api.Folder.NAME }"
-               name="${ Const.Api.Folder.NAME }"
+               id="field-${ Api.Field.Folder.NAME }"
+               name="${ Api.Field.Folder.NAME }"
                autocomplete="off"
 
-               #if (fieldErrors.contains(Const.Api.Folder.NAME))
+               #if (fieldErrors.contains(Api.Field.Folder.NAME))
                 class="error"
                #end
 
@@ -48,10 +48,10 @@
                #end
 
                placeholder="New folder name"
-               maxlength="${ Const.Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
-               minlength="${ Const.Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
+               maxlength="${ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+               minlength="${ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
 
-        <input type="hidden" name="${ Const.Api.ID }" value="${ id }">
+        <input type="hidden" name="${ Api.Field.ID }" value="${ id }">
     </div>
 </form>
 
@@ -59,7 +59,8 @@
     import {Folder} from "/js/models.js";
 
     showModal({minWidthPx: "${minWidth}", title: "${title}"})
-    htmx.find("#field-${ Const.Api.Folder.NAME }").focus()
+    htmx.find("#field-${ Api.Field.Folder.NAME }").focus()
+    htmx.find("#field-${ Api.Field.Folder.NAME }").select()
 
     htmx.find("#renameFolder").addEventListener('htmx:afterRequest', function(evt) {
         if (evt.detail.successful === true) {

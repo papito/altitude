@@ -4,6 +4,7 @@ import org.scalatra._
 import play.api.libs.json.JsNull
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+import software.altitude.core.Api
 import software.altitude.core.DataScrubber
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
@@ -68,8 +69,8 @@ class BaseApiController extends BaseController {
       }
 
       BadRequest(Json.obj(
-        C.Api.VALIDATION_ERROR -> ex.message,
-        C.Api.VALIDATION_ERRORS -> (if (ex.errors.isEmpty) JsNull else jsonErrors)
+        Api.Field.VALIDATION_ERROR -> ex.message,
+        Api.Field.VALIDATION_ERRORS -> (if (ex.errors.isEmpty) JsNull else jsonErrors)
       ))
     case _: NotFoundException =>
       NotFound(Json.obj())
@@ -77,7 +78,7 @@ class BaseApiController extends BaseController {
       val strStacktrace = Util.logStacktrace(ex)
 
       InternalServerError(Json.obj(
-        C.Api.ERROR -> (if (ex.getMessage!= null) ex.getMessage else ex.getClass.getName),
-        C.Api.STACKTRACE -> strStacktrace))
+        Api.Field.ERROR -> (if (ex.getMessage!= null) ex.getMessage else ex.getClass.getName),
+        Api.Field.STACKTRACE -> strStacktrace))
   }
 }
