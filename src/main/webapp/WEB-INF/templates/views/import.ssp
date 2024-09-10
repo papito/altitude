@@ -70,10 +70,10 @@
 
 <script lang="js" type="module">
     htmx.on('htmx:wsOpen', function(evt) {
-        console.log('WS connection is OPEN')
+        console.debug('WS connection is OPEN')
     });
     htmx.on('htmx:wsClose', function(evt) {
-        console.log('WS connection is CLOSED')
+        console.debug('WS connection is CLOSED')
     });
     htmx.on('htmx:wsAfterMessage', function(evt) {
         const statusTextEl = htmx.find("#statusText")

@@ -14,7 +14,7 @@ import software.altitude.core.{Const => C}
 /**
   * @ /htmx/people/
  */
-class PeopleActionController extends BaseHtmxController{
+class PeopleActionController extends BaseHtmxController {
 
   before() {
     requireLogin()

@@ -78,6 +78,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
       records = recs.map{makeModel},
       total = total,
       rpp = searchQuery.rpp,
-      sort = searchQuery.searchSort.toList)
+      page = searchQuery.page,
+      sort = searchQuery.searchSort)
   }
 }

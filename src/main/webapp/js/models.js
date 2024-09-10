@@ -35,7 +35,7 @@ export class Folder {
     }
 
     showContextMenu() {
-        console.log("Showing context menu for folder " + this.name())
+        console.debug("Showing context menu for folder " + this.name())
         this.menuEl().style.display = "flex"
     }
 
@@ -66,25 +66,25 @@ export class Folder {
     }
 
     incrementNumOfChildren() {
-        console.log("Incrementing # of children for  " + this.name() + ". New value: " + this.numOfChildren())
-        console.log("\tOld value: " + this.numOfChildren())
+        console.debug("Incrementing # of children for  " + this.name() + ". New value: " + this.numOfChildren())
+        console.debug("\tOld value: " + this.numOfChildren())
         this.element.setAttribute(Const.attributes.numOfChildren, this.numOfChildren() + 1)
-        console.log("\tNew value: " + this.numOfChildren())
+        console.debug("\tNew value: " + this.numOfChildren())
     }
 
     decrementNumOfChildren() {
-        console.log("Decrementing # of children for  " + this.name() + ". New value: " + this.numOfChildren())
-        console.log("\tOld value: " + this.numOfChildren())
+        console.debug("Decrementing # of children for  " + this.name() + ". New value: " + this.numOfChildren())
+        console.debug("\tOld value: " + this.numOfChildren())
         this.element.setAttribute(Const.attributes.numOfChildren, this.numOfChildren() - 1)
-        console.log("\tNew value: " + this.numOfChildren())
+        console.debug("\tNew value: " + this.numOfChildren())
     }
 
     updateVisualState() {
-        console.log("Updating visual state for folder " + this.name())
-        console.log("\tNumber of children: " + this.numOfChildren())
+        console.debug("Updating visual state for folder " + this.name())
+        console.debug("\tNumber of children: " + this.numOfChildren())
 
         if (this.isRoot) {
-            console.log("\tRoot folder")
+            console.debug("\tRoot folder")
             return
         }
 
@@ -93,11 +93,11 @@ export class Folder {
             this.closeContextMenu()
 
             if (this.numOfChildren()) {
-                console.log("\tFolder is collapsed and has children")
+                console.debug("\tFolder is collapsed and has children")
                 this.iconEl.classList.remove("fa-folder-minus")
                 this.iconEl.classList.add("fa-folder-plus")
             } else {
-                console.log("\tFolder is collapsed and has no children")
+                console.debug("\tFolder is collapsed and has no children")
                 this.iconEl.classList.remove("fa-folder-plus")
                 this.iconEl.classList.remove("fa-folder-minus")
                 this.iconEl.classList.add("fa-folder")
@@ -106,11 +106,11 @@ export class Folder {
 
         if (this.isExpanded()) {
             if (this.numOfChildren()) {
-                console.log("\tFolder is expanded and has children")
+                console.debug("\tFolder is expanded and has children")
                 this.iconEl.classList.remove("fa-folder-plus")
                 this.iconEl.classList.add("fa-folder-minus")
             } else {
-                console.log("\tFolder is expanded and has no children")
+                console.debug("\tFolder is expanded and has no children")
                 this.iconEl.classList.remove("fa-folder-plus")
                 this.iconEl.classList.remove("fa-folder-minus")
                 this.iconEl.classList.add("fa-folder")
@@ -125,13 +125,13 @@ export class Folder {
     }
 
     collapse() {
-        console.log("Setting folder " + this.name() + " to collapsed")
+        console.debug("Setting folder " + this.name() + " to collapsed")
         this.element.removeAttribute(Const.attributes.expanded)
         this.updateVisualState()
     }
 
     expand() {
-        console.log("Setting folder " + this.name() + " to expanded")
+        console.debug("Setting folder " + this.name() + " to expanded")
         this.element.setAttribute(Const.attributes.expanded, "true")
         this.updateVisualState()}
 
@@ -145,7 +145,7 @@ export class Folder {
     }
 
     htmxExpandChildrenAction() {
-        console.log("Triggering expand children action for " + this.name())
+        console.debug("Triggering expand children action for " + this.name())
         const expandFolderChildrenEl = htmx.find("#" + "expand-folder-children-" + this.id)
         htmx.trigger(expandFolderChildrenEl, "click")
 

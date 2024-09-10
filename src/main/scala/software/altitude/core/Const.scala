@@ -28,6 +28,10 @@ object Const {
     val FS = "fs"
   }
 
+  object Search {
+    val DEFAULT_RPP = 50
+  }
+
   object Security {
     val MEMBER_ME_COOKIE_EXPIRATION_DAYS = 7
   }

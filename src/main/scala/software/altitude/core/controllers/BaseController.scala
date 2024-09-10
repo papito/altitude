@@ -1,5 +1,4 @@
 package software.altitude.core.controllers
-
 import org.scalatra.ContentEncodingSupport
 import org.scalatra.InternalServerError
 import org.scalatra.MatchedRoute
@@ -84,7 +83,7 @@ abstract class BaseController
 
 
   error {
-    case ex: Exception =>
+    case ex: Throwable =>
       ex.printStackTrace()
       val sw: StringWriter = new StringWriter()
       val pw: PrintWriter = new PrintWriter(sw)

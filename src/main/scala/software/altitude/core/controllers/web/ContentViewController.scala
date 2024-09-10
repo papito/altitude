@@ -1,10 +1,10 @@
 package software.altitude.core.controllers.web
 
+import org.eclipse.jetty.io.EofException
 import org.scalatra.NotFound
 import software.altitude.core.controllers.BaseWebController
 import software.altitude.core.models.MimedPreviewData
 import software.altitude.core.{Const => C}
-
 
 class ContentViewController extends BaseWebController {
 
@@ -46,5 +46,4 @@ class ContentViewController extends BaseWebController {
 
     halt(NotFound("Not Found"))
   }
-
 }

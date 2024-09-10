@@ -156,7 +156,7 @@
      * but other do not (close menu, collapse folders).
      */
     htmx.find("#rootFolderList").addEventListener('htmx:beforeRequest', function(evt) {
-        console.log(evt.detail.pathInfo.requestPath)
+        console.debug(evt.detail.pathInfo.requestPath)
         /**
          * Context menu potential request
          */
@@ -207,22 +207,22 @@
 
     });
 
-    document.addEventListener('htmx:afterRequest', function(evt) {
-        console.log("===========")
+    htmx.find("#rootFolderList").addEventListener('htmx:afterRequest', function(evt) {
+        console.debug("===========")
         const requestPath = evt.detail.pathInfo.requestPath
         const status = evt.detail.xhr.status
 
         if (evt.detail.successful === false) {
-            console.log(evt)
+            console.debug(evt)
             showErrorSnackBar("Error for request to " + requestPath + ". HTTP " + status)
             return
         }
 
-        console.log("Request path is " + requestPath)
+        console.debug("Request path is " + requestPath)
 
         // on successful context menu request, show the menu
         if (requestPath  === '${ url(showFolderContextMenu, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }') {
-            console.log("Context menu request successful")
+            console.debug("Context menu request successful")
 
             const folder = new Folder(evt.target.getAttribute("folder-id"))
             folder.showContextMenu()
@@ -256,7 +256,7 @@
         const newParent = new Folder(newParentId)
         const oldParent = movedFolder.parent()
 
-        console.log("Folder " + movedFolder.name() + " dragon dropped from " + oldParent.name() + " into " + newParent.name())
+        console.debug("Folder " + movedFolder.name() + " dragon dropped from " + oldParent.name() + " into " + newParent.name())
 
         // The server does check this, but since we remove the moved folder from the DOM, we must short-circuit
         if (newParentId === movedFolderId) {
@@ -279,7 +279,7 @@
                     newParent.addChild(movedFolder)
                     movedFolder.collapse()
                 } else {
-                    console.log("Target folder not expanded - removing the folder being moved.")
+                    console.debug("Target folder not expanded - removing the folder being moved.")
                     // target folder is not expanded, so just make the moved folder disappear
                     showSuccessSnackBar("Folder \"" + movedFolder.name() + "\" moved to \"" + newParent.name() + '"')
                     movedFolder.remove()
@@ -287,13 +287,11 @@
 
                 newParent.updateVisualState()
                 oldParent.updateVisualState()
-                console.log("4")
             } else if (status === 409) {
-                console.log("5")
                 const message = response['htmx-internal-data'].xhr.responseText
                 showWarningSnackBar(message)
             } else {
-                console.log(response['htmx-internal-data'].xhr.responseText)
+                console.debug(response['htmx-internal-data'].xhr.responseText)
                 showErrorSnackBar("Error moving folder \"" + movedFolder.name() + "\". Status: " + status)
             }
         }
@@ -312,7 +310,7 @@
      */
     document.body.addEventListener(Const.events.folderAdded, (event) => {
         const parentFolder = new Folder(event.detail["${Api.Field.Folder.PARENT_ID}"])
-        console.log("Folder added event received for parent folder " + parentFolder.name())
+        console.debug("Folder added event received for parent folder " + parentFolder.name())
 
         // Update the parent folder's number of children as we are not refreshing
         // the tree HTML, to avoid aggressive UI changes that might confuse the user
@@ -325,12 +323,12 @@
      */
     document.body.addEventListener(Const.events.folderDeleted, (event) => {
         const folder = new Folder(event.detail["${Api.Field.ID}"])
-        console.log("Folder deleted event received for folder " + folder.name())
+        console.debug("Folder deleted event received for folder " + folder.name())
 
         // Update the parent folder's number of children as we are not refreshing
         // the tree HTML, avoid aggressive UI changes that might confuse the user
         const parent = folder.parent()
-        console.log("Parent folder is " + parent.name())
+        console.debug("Parent folder is " + parent.name())
         parent.decrementNumOfChildren()
         parent.updateVisualState()
 

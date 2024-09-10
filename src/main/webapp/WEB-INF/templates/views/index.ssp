@@ -44,7 +44,7 @@
             border-left: 1px solid var(--panel-border-color);
             box-shadow: var(--box-shadow);
             text-shadow: rgba(0,0,0,0.75) 0 1px;
-            overflow-y: auto;
+            overflow-y: scroll;
             max-width: 100%;
         }
 
@@ -132,7 +132,7 @@
     </div>
 
     <div id="content" class="split content split-horizontal">
-        ${include("includes/results.ssp")}
+        ${include("htmx/search_results.ssp")}
     </div>
 </main>
 

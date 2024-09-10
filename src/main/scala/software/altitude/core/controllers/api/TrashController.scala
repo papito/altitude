@@ -3,6 +3,7 @@ package software.altitude.core.controllers.api
 import org.scalatra.Ok
 import play.api.libs.json.Json
 import software.altitude.core.Api
+import software.altitude.core.Const
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
@@ -91,7 +92,7 @@ class TrashController extends BaseApiController {
   }
 
   get(s"/p/:${Api.Field.Search.PAGE}/rpp/:${Api.Field.Search.RESULTS_PER_PAGE}") {
-    val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Api.Field.Search.DEFAULT_RPP.toString).toInt
+    val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = params.getOrElse(Api.Field.Search.PAGE, "1").toInt
 
     // FIXME: use search() not query()

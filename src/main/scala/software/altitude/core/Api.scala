@@ -64,7 +64,6 @@ object Api {
       val PAGE = "p"
       val FOLDERS = "folders"
       val SORT = "sort"
-      val DEFAULT_RPP = 100
     }
 
     object Sort {

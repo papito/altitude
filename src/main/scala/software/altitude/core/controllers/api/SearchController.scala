@@ -5,6 +5,7 @@ import org.scalatra.Ok
 import play.api.libs.json.JsNull
 import play.api.libs.json.Json
 import software.altitude.core.Api
+import software.altitude.core.Const
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
@@ -26,7 +27,7 @@ class SearchController extends BaseApiController {
   get(s"/r/:repoId/p/:${Api.Field.Search.PAGE}/rpp/:${Api.Field.Search.RESULTS_PER_PAGE}/?") {
     val repo: Repository = RequestContext.getRepository
 
-    val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Api.Field.Search.DEFAULT_RPP.toString).toInt
+    val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = params.getOrElse(Api.Field.Search.PAGE, "1").toInt
     val queryText = params.get(Api.Field.Search.QUERY_TEXT)
     val sortArg = params.get(Api.Field.Search.SORT)
@@ -42,7 +43,6 @@ class SearchController extends BaseApiController {
       List()
     }
 
-    // TODO: if there is query text, do not specify folder ids. Search everything
     val foldersQuery = params.getOrElse(Api.Field.Search.FOLDERS, "")
     val folderIdsArg = if (foldersQuery.isEmpty) repo.rootFolderId else foldersQuery
 
@@ -56,15 +56,9 @@ class SearchController extends BaseApiController {
     query(q)
   }
 
-  get("/r/:repoId/triage") {
-  }
-
-  get(s"/r/:repoId/triage/p/:${Api.Field.Search.PAGE}/rpp/:${Api.Field.Search.RESULTS_PER_PAGE}") {
-  }
-
   private def defaultQuery(folderId: String): ActionResult = {
     val q = new SearchQuery(
-      rpp = Api.Field.Search.DEFAULT_RPP,
+      rpp = Const.Search.DEFAULT_RPP,
       folderIds = Set(folderId)
     )
 
