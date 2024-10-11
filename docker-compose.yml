@@ -4,8 +4,13 @@ services:
     image: postgres:13.0
     ports:
       - "5432:5432"
+    networks:
+      - db
     environment:
       - POSTGRES_NAME=altitude
       - POSTGRES_USER=altitude
       - POSTGRES_PASSWORD=dba
     container_name: altitude-core-postgres-dev
+networks:
+  db:
+    driver: bridge
