@@ -48,7 +48,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
     }
   }
 
-  override def add(objIn: User, queryForDup: Option[Query] = None): JsObject =
+  override def add(objIn: User): JsObject =
     throw new NotImplementedError("Use the alternate add() method with password")
 
   def add(objIn: User, password: String): JsObject = {

@@ -17,7 +17,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   /**
    * Add a new folder - THIS SHOULD NOT BE USED DIRECTLY. Use <code>addFolder</code>
    */
-  override def add(folder: Folder, queryForDup: Option[Query] = None): JsObject = {
+  override def add(folder: Folder): JsObject = {
     txManager.withTransaction[JsObject] {
       super.add(folder)
     }

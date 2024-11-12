@@ -32,15 +32,7 @@ abstract class BaseService[Model <: BaseModel] {
     RequestContext.getRepository
   }
 
-  def add(objIn: Model, queryForDup: Option[Query] = None): JsObject = {
-
-    val existing = if (queryForDup.isDefined) query(queryForDup.get) else QueryResult.EMPTY
-
-    if (existing.nonEmpty) {
-      logger.debug(s"Duplicate found for [$objIn] and query: ${queryForDup.get.params}")
-      throw DuplicateException()
-    }
-
+  def add(objIn: Model): JsObject = {
     txManager.withTransaction[JsObject] {
 
       try {

@@ -3,6 +3,9 @@ SHELL=/bin/sh
 watch:
 	ENV=dev sbt watch
 
+compile:
+	sbt compile
+
 test:
 	ENV=test sbt test
 

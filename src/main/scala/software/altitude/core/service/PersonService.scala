@@ -24,7 +24,7 @@ class PersonService (val app: Altitude) extends BaseService[Person] {
 
   override protected val txManager: TransactionManager = app.txManager
 
-  override def add(objIn: Person, queryForDup: Option[Query] = None): JsObject = {
+  override def add(objIn: Person): JsObject = {
     throw new NotImplementedError("Use the alternate addPerson() method2")
   }
 
