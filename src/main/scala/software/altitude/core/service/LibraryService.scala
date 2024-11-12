@@ -47,22 +47,25 @@ class LibraryService(val app: Altitude) {
       }
 
       /**
-        * Create the version of the asset with ID and metadata (we don't have that yet)
+        * Create the version of the asset with ID and metadata
         */
-      val metadata = app.service.metadata.cleanAndValidate(dataAssetIn.asset.metadata)
       val assetId = BaseDao.genId
+      val userMetadata = app.service.metadata.cleanAndValidate(dataAssetIn.asset.userMetadata)
+      val extractedMetadata = app.service.metadataExtractor.extract(dataAssetIn.data)
+      val publicMetadata = Asset.getPublicMetadata(extractedMetadata)
 
       val asset: Asset = dataAssetIn.asset.copy(
         id = Some(assetId),
-        metadata = metadata,
-        extractedMetadata = dataAssetIn.asset.extractedMetadata
+        userMetadata = userMetadata,
+        extractedMetadata = extractedMetadata,
+        publicMetadata = publicMetadata
       )
 
       /**
        * This data asset has:
        *    - Asset with ID
        *    - Asset with metadata
-       *    - The data, obviously
+       *    - The actual data (which we normally do not pass around for performance reasons)
        */
       val dataAsset = AssetWithData(asset, dataAssetIn.data)
 
@@ -410,7 +413,7 @@ class LibraryService(val app: Altitude) {
   def addMetadataValue(assetId: String, fieldId: String, newValue: Any): Unit = {
     txManager.withTransaction {
       app.service.metadata.addFieldValue(assetId, fieldId, newValue.toString)
-      val field: MetadataField = app.service.metadata.getFieldById(fieldId)
+      val field: UserMetadataField = app.service.metadata.getFieldById(fieldId)
       val asset: Asset = getById(assetId)
       app.service.search.addMetadataValue(asset, field, newValue.toString)
     }

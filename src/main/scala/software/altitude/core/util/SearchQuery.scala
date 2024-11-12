@@ -3,9 +3,9 @@ package software.altitude.core.util
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.Api
-import software.altitude.core.models.MetadataField
+import software.altitude.core.models.UserMetadataField
 
-case class SearchSort(field: MetadataField, direction: SortDirection.Value) {
+case class SearchSort(field: UserMetadataField, direction: SortDirection.Value) {
   def toJson: JsObject = Json.obj(
     Api.Field.SearchSort.DIRECTION -> direction.toString,
       Api.Field.SearchSort.FIELD -> field.toJson

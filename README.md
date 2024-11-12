@@ -11,11 +11,11 @@
 
 ```sh
 # Bring up the Postgres database (dev and test at once)
-make up
+make db
 # Run the tests
 make test
 # With hot reload
-make watch 
+make watch
 ```
 
 See the Makefile for all the available commands.
@@ -25,6 +25,7 @@ See the Makefile for all the available commands.
 These are covered in the [WIKI](https://github.com/papito/altitude/wiki). Topics:
 
 * [How the tests work](https://github.com/papito/altitude/wiki/How-the-tests-work)
+* [How to](https://github.com/papito/altitude/wiki/How-to...)
 
 ## Databases
 

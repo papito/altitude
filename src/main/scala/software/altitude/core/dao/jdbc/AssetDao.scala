@@ -7,8 +7,10 @@ import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.Asset
 import software.altitude.core.models.AssetType
+import software.altitude.core.models.ExtractedMetadata
 import software.altitude.core.models.Field
-import software.altitude.core.models.Metadata
+import software.altitude.core.models.PublicMetadata
+import software.altitude.core.models.UserMetadata
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 
@@ -24,12 +26,6 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       mediaSubtype = rec(Field.AssetType.MEDIA_SUBTYPE).asInstanceOf[String],
       mime = rec(Field.AssetType.MIME_TYPE).asInstanceOf[String])
 
-    val metadataJson = getJsonFromColumn(rec(Field.Asset.METADATA))
-
-    val extractedMetadataCol = rec(Field.Asset.EXTRACTED_METADATA)
-    val extractedMetadataJsonStr: String = if (extractedMetadataCol == null) "{}" else extractedMetadataCol.asInstanceOf[String]
-    val extractedMetadataJson = Json.parse(extractedMetadataJsonStr).as[JsObject]
-
     val model = new Asset(
       id = Option(rec(Field.ID).asInstanceOf[String]),
       userId = rec(Field.USER_ID).asInstanceOf[String],
@@ -37,8 +33,9 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       checksum = rec(Field.Asset.CHECKSUM).asInstanceOf[Int],
       assetType = assetType,
       sizeBytes = rec(Field.Asset.SIZE_BYTES).asInstanceOf[Int],
-      metadata = metadataJson: Metadata,
-      extractedMetadata = extractedMetadataJson: Metadata,
+      extractedMetadata = getJsonFromColumn(rec(Field.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
+      publicMetadata = getJsonFromColumn(rec(Field.Asset.PUBLIC_METADATA)): PublicMetadata,
+      userMetadata =getJsonFromColumn(rec(Field.Asset.USER_METADATA)): UserMetadata,
       folderId = rec(Field.Asset.FOLDER_ID).asInstanceOf[String],
       isRecycled = getBooleanField(rec(Field.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(Field.Asset.IS_TRIAGED)),
@@ -59,34 +56,30 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     this.query(q.withRepository(), sqlQueryBuilder)
   }
 
-  override def getMetadata(assetId: String): Option[Metadata] = {
+  override def getUserMetadata(assetId: String): Option[UserMetadata] = {
     val sql = s"""
-      SELECT ${Field.Asset.METADATA}
+      SELECT ${Field.Asset.USER_METADATA}
          FROM $tableName
        WHERE ${Field.ID} = ?
       """
 
     val rec = executeAndGetOne(sql, List(assetId))
-    val metadataJson = getJsonFromColumn(rec(Field.Asset.METADATA))
-    val metadata = Metadata.fromJson(metadataJson)
-    Some(metadata)
+    val userMetadataJson = getJsonFromColumn(rec(Field.Asset.USER_METADATA))
+    val userMetadata = UserMetadata.fromJson(userMetadataJson)
+    Some(userMetadata)
   }
 
   override def add(jsonIn: JsObject): JsObject = {
     val asset = jsonIn: Asset
-
-    val metadataWithIds = Metadata.withIds(asset.metadata)
-
-    val metadata: String = metadataWithIds.toString().replaceAll("\\\\u0000", "")
-    val extractedMetadata: String = asset.extractedMetadata.toString().replaceAll("\\\\u0000", "")
 
     val sql = s"""
         INSERT INTO $tableName (
              ${Field.ID}, ${Field.REPO_ID}, ${Field.USER_ID}, ${Field.Asset.CHECKSUM},
              ${Field.Asset.FILENAME}, ${Field.Asset.SIZE_BYTES},
              ${Field.AssetType.MEDIA_TYPE}, ${Field.AssetType.MEDIA_SUBTYPE}, ${Field.AssetType.MIME_TYPE},
-             ${Field.Asset.FOLDER_ID}, ${Field.Asset.IS_TRIAGED}, ${Field.Asset.METADATA}, ${Field.Asset.EXTRACTED_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc)
+             ${Field.Asset.FOLDER_ID}, ${Field.Asset.IS_TRIAGED}, ${Field.Asset.USER_METADATA},
+             ${Field.Asset.EXTRACTED_METADATA}, ${Field.Asset.PUBLIC_METADATA})
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match {
@@ -106,21 +99,23 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       asset.assetType.mime,
       asset.folderId,
       asset.isTriaged,
-      metadata,
-      extractedMetadata)
+      UserMetadata.withIds(asset.userMetadata).toString,
+      asset.extractedMetadata.toString,
+      asset.publicMetadata.toString
+    )
 
     addRecord(jsonIn, sql, sqlVals)
     jsonIn ++ Json.obj(Field.ID -> id)
   }
 
-  override def setMetadata(assetId: String, metadata: Metadata): Unit = {
+  override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Unit = {
     BaseDao.incrWriteQueryCount()
 
-    val metadataWithIds = Metadata.withIds(metadata)
+    val metadataWithIds = UserMetadata.withIds(userMetadata)
 
     val sql = s"""
       UPDATE $tableName
-         SET ${Field.Asset.METADATA} = $jsonFunc
+         SET ${Field.Asset.USER_METADATA} = $jsonFunc
        WHERE ${Field.REPO_ID} = ? AND ${Field.ID} = ?
       """
 

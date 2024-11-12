@@ -2,7 +2,7 @@ package software.altitude.core.controllers.api.admin
 import software.altitude.core.Api
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.FieldType
-import software.altitude.core.models.MetadataField
+import software.altitude.core.models.UserMetadataField
 
 class MetadataController extends BaseApiController {
 
@@ -11,7 +11,7 @@ class MetadataController extends BaseApiController {
     val fieldType = (unscrubbedReqJson.get \ Api.Field.Metadata.Field.TYPE).as[String]
     logger.info(s"Adding metadata field [$name] of type [$fieldType]")
 
-    val newField = MetadataField(name = name, fieldType = FieldType.withName(fieldType.toUpperCase))
+    val newField = UserMetadataField(name = name, fieldType = FieldType.withName(fieldType.toUpperCase))
 
     app.service.metadata.addField(newField)
 

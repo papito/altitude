@@ -7,7 +7,7 @@ import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 
 /**
- * This is a "dumb" DAO service for asset table.
+ * This is a "dumb" DAO service for the "asset" table.
  *
  * All the actual asset management logic is handled by the LibraryService exclusively.
  */
@@ -41,6 +41,8 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     dao.queryAll(q.withRepository())
   }
 
+  //
   // NO
-  // Read the class description
+  //
+  // Read the class description before adding new methods
 }

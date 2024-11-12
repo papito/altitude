@@ -210,7 +210,7 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
-    val metadataField: MetadataFieldDao = dataSourceType match {
+    val metadataField: UserMetadataFieldDao = dataSourceType match {
       case C.DbEngineName.POSTGRES => new jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
       case C.DbEngineName.SQLITE => new jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
@@ -251,8 +251,8 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
     val user = new UserService(app)
     val repository = new RepositoryService(app)
     val assetImport = new AssetImportService(app)
-    val metadataExtractor = new TikaMetadataExtractionService
-    val metadata = new MetadataService(app)
+    val metadataExtractor = new MetadataExtractionService
+    val metadata = new UserMetadataService(app)
     val library = new LibraryService(app)
     val search = new SearchService(app)
     val asset = new AssetService(app)

@@ -37,23 +37,21 @@ abstract class SearchDao(override val config: Config)
   protected def replaceSearchDocument(asset: Asset): Unit =
     throw new NotImplementedError
 
-  override def indexAsset(asset: Asset, metadataFields: Map[String, MetadataField])
-                         : Unit = {
-    logger.debug(s"Indexing asset $asset with metadata [${asset.metadata}]")
+  override def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]) : Unit = {
+    logger.debug(s"Indexing asset ${asset.persistedId} for search")
     indexMetadata(asset, metadataFields)
     addSearchDocument(asset)
   }
 
-  def reindexAsset(asset: Asset, metadataFields: Map[String, MetadataField])
+  def reindexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField])
                   : Unit = {
-    logger.debug(s"Reindexing asset $asset with metadata [${asset.metadata}]")
 
     clearMetadata(asset.persistedId)
     indexMetadata(asset, metadataFields)
     replaceSearchDocument(asset)
   }
 
-  def clearMetadata(assetId: String): Unit = {
+  private def clearMetadata(assetId: String): Unit = {
     logger.debug(s"Clearing asset $assetId metadata")
 
     BaseDao.incrWriteQueryCount()
@@ -73,11 +71,11 @@ abstract class SearchDao(override val config: Config)
     logger.debug(s"Deleted records: $numDeleted")
   }
 
-  def indexMetadata(asset: Asset, metadataFields: Map[String, MetadataField])
+  private def indexMetadata(asset: Asset, metadataFields: Map[String, UserMetadataField])
                              : Unit = {
-    logger.debug(s"Indexing metadata for asset $asset: [${asset.metadata}]")
+    logger.debug(s"Indexing metadata for asset ${asset.persistedId}")
 
-    asset.metadata.data.foreach { m =>
+    asset.userMetadata.data.foreach { m =>
       val fieldId = m._1
 
       if (!metadataFields.contains(fieldId)) {
@@ -93,12 +91,12 @@ abstract class SearchDao(override val config: Config)
     }
   }
 
-  override def addMetadataValue(asset: Asset, field: MetadataField, value: String)
+  override def addMetadataValue(asset: Asset, field: UserMetadataField, value: String)
                                : Unit = {
     addMetadataValues(asset = asset, field = field, values = Set(value))
   }
 
-  override def addMetadataValues(asset: Asset, field: MetadataField, values: Set[String]): Unit = {
+  override def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit = {
     logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
 
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)

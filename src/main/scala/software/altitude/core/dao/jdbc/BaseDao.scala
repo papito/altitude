@@ -58,7 +58,7 @@ abstract class BaseDao {
   def add(jsonIn: JsObject): JsObject = throw new NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): JsObject = {
-    val jsonStr: String = if (column == null) "{}" else column.asInstanceOf[String]
+    val jsonStr: String = if (column == null) "{}" else column.toString
     Json.parse(jsonStr).as[JsObject]
   }
 
@@ -138,7 +138,7 @@ abstract class BaseDao {
 //    if (recs.nonEmpty) {
 //      logger.debug(recs.map(_.toString()).mkString("\n"))
 //    }
-    QueryResult(records = recs.map{makeModel}, total = total, rpp = query.rpp, sort = query.sort.toList)
+    QueryResult(records = recs.map{makeModel}, total = total, rpp = query.rpp, sort = query.sort)
   }
 
   protected def addRecord(jsonIn: JsObject, sql: String, values: List[Any]): Unit = {
@@ -151,7 +151,7 @@ abstract class BaseDao {
   private def executeAndGetMany(sql: String, values: List[Any]): List[Map[String, AnyRef]] = {
     BaseDao.incrReadQueryCount()
 
-    logger.debug(s"SELECT SQL: ${sql} with values: ${values}")
+    logger.debug(s"SELECT SQL: $sql with values: $values")
 
     val res = queryRunner.query(
       RequestContext.getConn,

@@ -12,18 +12,18 @@ object FieldType extends Enumeration {
   val DATETIME: Value = Value("DATETIME")
 }
 
-object MetadataField {
-  implicit def fromJson(json: JsValue): MetadataField =
-    MetadataField(
+object UserMetadataField {
+  implicit def fromJson(json: JsValue): UserMetadataField =
+    UserMetadataField(
       id = (json \ Field.ID).asOpt[String],
       name = (json \ Field.MetadataField.NAME).as[String],
       fieldType = FieldType.withName((json \ Field.MetadataField.FIELD_TYPE).as[String])
     ).withCoreAttr(json)
 }
 
-case class MetadataField(id: Option[String] = None,
-                         name: String,
-                         fieldType: FieldType.Value) extends BaseModel {
+case class UserMetadataField(id: Option[String] = None,
+                             name: String,
+                             fieldType: FieldType.Value) extends BaseModel {
   val nameLowercase: String = name.toLowerCase
 
   override def toJson: JsObject = Json.obj(

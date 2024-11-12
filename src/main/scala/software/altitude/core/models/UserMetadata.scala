@@ -5,15 +5,15 @@ import software.altitude.core.dao.jdbc.BaseDao
 
 import scala.language.implicitConversions
 
-object Metadata {
-  implicit def fromJson(json: JsObject): Metadata = {
-    val data = json.keys.foldLeft(Map[String, Set[MetadataValue]]()) { (res, fieldId) =>
+object UserMetadata {
+  implicit def fromJson(json: JsObject): UserMetadata = {
+    val data = json.keys.foldLeft(Map[String, Set[UserMetadataValue]]()) { (res, fieldId) =>
       val valuesJson = (json \ fieldId).as[List[JsValue]]
-      valuesJson.map(MetadataValue.fromJson)
-      res + (fieldId -> valuesJson.map(MetadataValue.fromJson).toSet)
+      valuesJson.map(UserMetadataValue.fromJson)
+      res + (fieldId -> valuesJson.map(UserMetadataValue.fromJson).toSet)
     }
 
-    new Metadata(data)
+    new UserMetadata(data)
   }
 
   /**
@@ -22,39 +22,39 @@ object Metadata {
    * due to type erasure
    * @param data { fieldId -> Set of string }
    */
-  def apply(data: Map[String, Set[String]])(implicit d: DummyImplicit): Metadata = {
-    val convertedData: Map[String, Set[MetadataValue]] = data.foldLeft(Map[String, Set[MetadataValue]]()) {
+  def apply(data: Map[String, Set[String]])(implicit d: DummyImplicit): UserMetadata = {
+    val convertedData: Map[String, Set[UserMetadataValue]] = data.foldLeft(Map[String, Set[UserMetadataValue]]()) {
       case (a, (fieldId, strValues)) =>
-        a ++ Map[String, Set[MetadataValue]](fieldId -> strValues.map(MetadataValue.apply))
+        a ++ Map[String, Set[UserMetadataValue]](fieldId -> strValues.map(UserMetadataValue.apply))
     }
 
-    Metadata(convertedData)
+    UserMetadata(convertedData)
   }
 
-  def apply(): Metadata = {
-    Metadata(Map[String, Set[MetadataValue]]())
+  def apply(): UserMetadata = {
+    UserMetadata(Map[String, Set[UserMetadataValue]]())
   }
 
-  def withIds(metadata: Metadata): Metadata = {
+  def withIds(metadata: UserMetadata): UserMetadata = {
     val dataWithIds = metadata.data.map{ case (fieldId, mdVal) =>
       val mdValsWithIds = mdVal.map{ mdVal =>
         mdVal.id match {
-          case None => MetadataValue(id = Some(BaseDao.genId), value = mdVal.value)
+          case None => UserMetadataValue(id = Some(BaseDao.genId), value = mdVal.value)
           case Some(_) => mdVal
         }
       }
       (fieldId, mdValsWithIds)
     }
 
-    Metadata(dataWithIds)
+    UserMetadata(dataWithIds)
   }
 }
 
-case class Metadata(data: Map[String, Set[MetadataValue]])
+case class UserMetadata(data: Map[String, Set[UserMetadataValue]])
   extends BaseModel with NoId {
 
-  def get(key: String): Option[Set[MetadataValue]] = data.get(key)
-  def apply(key: String): Set[MetadataValue] = data(key)
+  def get(key: String): Option[Set[UserMetadataValue]] = data.get(key)
+  def apply(key: String): Set[UserMetadataValue] = data(key)
   def contains(key: String): Boolean = data.keys.toSeq.contains(key)
   def isEmpty: Boolean = data.isEmpty
 

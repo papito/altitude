@@ -5,19 +5,19 @@ import play.api.libs.json._
 import java.util.Base64
 import scala.language.implicitConversions
 
-object MetadataValue {
-  implicit def fromJson(json: JsValue): MetadataValue = {
-    MetadataValue(
+object UserMetadataValue {
+  implicit def fromJson(json: JsValue): UserMetadataValue = {
+    UserMetadataValue(
       id = (json \ Field.ID).asOpt[String],
       value = (json \ Field.VALUE).as[String]
     )
   }
 
-  def apply(value: String): MetadataValue = MetadataValue(id = None, value = value)
+  def apply(value: String): UserMetadataValue = UserMetadataValue(id = None, value = value)
 }
 
-case class MetadataValue(id: Option[String] = None,
-                         value: String) extends BaseModel {
+case class UserMetadataValue(id: Option[String] = None,
+                             value: String) extends BaseModel {
   private val md = java.security.MessageDigest.getInstance("SHA-1")
   val checksum: String = Base64.getEncoder.encodeToString(
     md.digest(
@@ -25,13 +25,13 @@ case class MetadataValue(id: Option[String] = None,
     )
   )
 
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[MetadataValue]
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[UserMetadataValue]
 
   final def nonEmpty: Boolean = value.nonEmpty
 
   override def equals( that: Any): Boolean = that match {
-    case that: MetadataValue if !that.canEqual( this) => false
-    case that: MetadataValue => this.checksum == that.checksum
+    case that: UserMetadataValue if !that.canEqual( this) => false
+    case that: UserMetadataValue => this.checksum == that.checksum
     case _ => false
   }
 

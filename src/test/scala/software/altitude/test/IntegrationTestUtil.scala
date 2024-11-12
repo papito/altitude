@@ -3,7 +3,7 @@ package software.altitude.test
 import org.apache.commons.io.FileUtils
 import software.altitude.core.Altitude
 import software.altitude.core.models.ImportAsset
-import software.altitude.core.models.Metadata
+import software.altitude.core.models.UserMetadata
 import software.altitude.core.{Const => C}
 
 import java.awt.image.BufferedImage
@@ -37,7 +37,7 @@ object IntegrationTestUtil {
   def fileToImportAsset(file: File): ImportAsset = new ImportAsset(
     fileName = file.getName,
     data = FileUtils.readFileToByteArray(file),
-    metadata = Metadata())
+    metadata = UserMetadata())
 
   def getImportAsset(relPath: String): ImportAsset = {
     val path = getClass.getResource(s"/import/$relPath").getPath

@@ -67,7 +67,7 @@ class SearchController extends BaseApiController {
     Ok(Json.obj(
       Api.Field.Search.ASSETS -> results.records.map { x =>
         val asset = x: Asset
-        asset.metadata.toJson
+        asset.userMetadata.toJson
       },
       Api.Field.TOTAL_RECORDS -> results.total,
       Api.Field.CURRENT_PAGE -> q.page,
@@ -83,7 +83,7 @@ class SearchController extends BaseApiController {
     Ok(Json.obj(
       Api.Field.Search.ASSETS -> results.records.map { x =>
         val asset = x: Asset
-        asset.metadata.toJson
+        asset.userMetadata.toJson
       },
       Api.Field.TOTAL_RECORDS -> results.total,
       Api.Field.CURRENT_PAGE -> q.page,

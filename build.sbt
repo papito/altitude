@@ -44,7 +44,7 @@ libraryDependencies ++= Seq(
   "org.apache.tika"              % "tika-core"                % "2.9.2",
   "org.apache.tika"              % "tika-parsers" % "2.9.2",
   "org.apache.tika"              % "tika-parser-image-module" % "2.9.2",
-  "ch.qos.logback"               % "logback-classic"          % "1.5.6" % "runtime",
+  "ch.qos.logback"               % "logback-classic"          % "1.5.9" % "runtime",
   "org.slf4j"                    % "slf4j-api"                % "2.0.12" % "runtime",
 
   "org.scalatra"                %% "scalatra-scalatest"       % scalatraVersion % Test,

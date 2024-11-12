@@ -13,17 +13,17 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Index and search by term") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "keywords",
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "quotes",
         fieldType = FieldType.TEXT))
 
     val field3 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "cast",
         fieldType = FieldType.KEYWORD))
 
@@ -46,7 +46,7 @@ import software.altitude.test.core.IntegrationTestCore
       ),
       field3.persistedId -> Set("Lindsay Lohan", "Conan O'Brien", "Teri Hatcher", "Sam Rockwell"))
 
-    testContext.persistAsset(metadata = Metadata(data))
+    testContext.persistAsset(metadata = UserMetadata(data))
 
     data = Map[String, Set[String]](
       field1.persistedId -> Set("tree", "shoe", "desert", "California"),
@@ -63,7 +63,7 @@ import software.altitude.test.core.IntegrationTestCore
       ),
       field3.persistedId -> Set("Keanu Reeves", "Sandra Bullock", "Dennis Hopper", "Teri Hatcher"))
 
-    testContext.persistAsset(metadata = Metadata(data))
+    testContext.persistAsset(metadata = UserMetadata(data))
 
     var results: SearchResult = testApp.service.library.search(new SearchQuery(text = Some("keanu")))
     results.nonEmpty shouldBe true
@@ -79,7 +79,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Narrow down search to a folder") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "keywords",
         fieldType = FieldType.KEYWORD))
 
@@ -87,7 +87,7 @@ import software.altitude.test.core.IntegrationTestCore
       field1.persistedId -> Set("space", "force", "tactical", "pants")
     )
 
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     val folder1: Folder = testApp.service.library.addFolder("folder1")
 
@@ -171,17 +171,17 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Create assets and search by metadata") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 1",
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 2",
         fieldType = FieldType.NUMBER))
 
     val field3 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 3",
         fieldType = FieldType.BOOL))
 
@@ -189,13 +189,13 @@ import software.altitude.test.core.IntegrationTestCore
       field1.persistedId -> Set("one", "two", "three"),
       field2.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"),
       field3.persistedId -> Set("true"))
-    testContext.persistAsset(metadata = Metadata(data))
+    testContext.persistAsset(metadata = UserMetadata(data))
 
     data = Map[String, Set[String]](
       field1.persistedId -> Set("six", "seven"),
       field2.persistedId -> Set("5", "1001", "1"),
       field3.persistedId -> Set("true"))
-    testContext.persistAsset(metadata = Metadata(data))
+    testContext.persistAsset(metadata = UserMetadata(data))
 
     // simple value search
     var results = testApp.service.library.search(new SearchQuery(text = Some("one")))
@@ -214,12 +214,12 @@ import software.altitude.test.core.IntegrationTestCore
     */
   test("Search by wrong field type") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 1",
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 2",
         fieldType = FieldType.NUMBER))
 
@@ -227,7 +227,7 @@ import software.altitude.test.core.IntegrationTestCore
       field1.persistedId -> Set("one"),
       field2.persistedId -> Set("1")
     )
-    testContext.persistAsset(metadata = Metadata(data))
+    testContext.persistAsset(metadata = UserMetadata(data))
 
    val results = testApp.service.library.search(
       new SearchQuery(params = Map(
@@ -238,12 +238,12 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Parametarized search") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 1",
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 2",
         fieldType = FieldType.NUMBER))
 
@@ -272,12 +272,12 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Updating and removing metadata values updates search index") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 1",
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "field 2",
         fieldType = FieldType.NUMBER))
 
@@ -285,7 +285,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
     // it's the only value for this field so get it
-    val metadata: Metadata = testApp.service.metadata.getMetadata(asset1.persistedId)
+    val metadata: UserMetadata = testApp.service.metadata.getMetadata(asset1.persistedId)
     val mdVal = metadata(field1.persistedId).head
 
     // tag a second field for posterity
@@ -332,15 +332,15 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Can sort in ASC and DESC order on a user meta field") {
     val kwField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "keyword field",
         fieldType = FieldType.KEYWORD))
     val numField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "number field",
         fieldType = FieldType.NUMBER))
     val boolField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "boolean field",
         fieldType = FieldType.BOOL))
 
@@ -365,34 +365,34 @@ import software.altitude.test.core.IntegrationTestCore
     // sort by string field
     var sort = SearchSort(field = kwField, direction = SortDirection.ASC)
     var results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(kwField.persistedId).value.head.value shouldBe "a"
+    (results.records.head: Asset).userMetadata.get(kwField.persistedId).value.head.value shouldBe "a"
 
     sort = SearchSort(field = kwField, direction = SortDirection.DESC)
     results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(kwField.persistedId).value.head.value shouldBe "c"
+    (results.records.head: Asset).userMetadata.get(kwField.persistedId).value.head.value shouldBe "c"
 
     // sort by number field
     sort = SearchSort(field = numField, direction = SortDirection.ASC)
     results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(numField.persistedId).value.head.value shouldBe "50"
+    (results.records.head: Asset).userMetadata.get(numField.persistedId).value.head.value shouldBe "50"
 
     sort = SearchSort(field = numField, direction = SortDirection.DESC)
     results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(numField.persistedId).value.head.value shouldBe "300"
+    (results.records.head: Asset).userMetadata.get(numField.persistedId).value.head.value shouldBe "300"
 
     // sort by number field
     sort = SearchSort(field = boolField, direction = SortDirection.ASC)
     results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(boolField.persistedId).value.head.value shouldBe "false"
+    (results.records.head: Asset).userMetadata.get(boolField.persistedId).value.head.value shouldBe "false"
 
     sort = SearchSort(field = boolField, direction = SortDirection.DESC)
     results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).metadata.get(boolField.persistedId).value.head.value shouldBe "true"
+    (results.records.head: Asset).userMetadata.get(boolField.persistedId).value.head.value shouldBe "true"
   }
 
   test("Sort info should be returned with query results") {
     val kwField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = "keyword field",
         fieldType = FieldType.NUMBER
       ))

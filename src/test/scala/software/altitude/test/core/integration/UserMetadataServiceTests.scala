@@ -15,23 +15,23 @@ import software.altitude.core.util.Util
 import software.altitude.test.core.IntegrationTestCore
 
 
-@DoNotDiscover class MetadataServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class UserMetadataServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Number field type can be added") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
     val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](field.persistedId -> Set("one"))
     intercept[ValidationException] {
-      testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+      testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
 
     data = Map[String, Set[String]](field.persistedId -> Set("."))
     intercept[ValidationException] {
-      testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+      testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
 
     // these should be ok
@@ -41,54 +41,54 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Boolean field type can be added") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.BOOL))
     val asset: Asset = testContext.persistAsset()
 
     var data = Map[String, Set[String]](field.persistedId -> Set("one"))
     intercept[ValidationException] {
-      testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+      testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
 
     data = Map[String, Set[String]](field.persistedId -> Set("on"))
     intercept[ValidationException] {
-      testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+      testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
 
     // cannot have conflicting boolean values
     data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "FALSE"))
     intercept[ValidationException] {
-      testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+      testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
     // ... but non-conflicting duplicates are ok
     data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "TRUE"))
 
     // these should be ok
     data = Map[String, Set[String]](field.persistedId -> Set("TRUE"))
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     data = Map[String, Set[String]](field.persistedId -> Set("FALSE"))
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     data = Map[String, Set[String]](field.persistedId -> Set("true"))
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     data = Map[String, Set[String]](field.persistedId -> Set("False"))
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     data = Map[String, Set[String]](field.persistedId -> Set("False"))
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
   }
 
   test("Setting metadata values") {
     val keywordMetadataField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     val numberMetadataField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
@@ -100,7 +100,7 @@ import software.altitude.test.core.IntegrationTestCore
         BaseDao.genId -> Set("four"))
 
     intercept[NotFoundException] {
-        testApp.service.metadata.setMetadata(asset.persistedId, Metadata(badData))
+        testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(badData))
       }
 
     // valid
@@ -108,7 +108,7 @@ import software.altitude.test.core.IntegrationTestCore
         keywordMetadataField.persistedId -> Set("one", "two", "three"),
         numberMetadataField.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
 
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     val storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
 
@@ -119,12 +119,12 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Test/update empty value sets") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
@@ -134,7 +134,7 @@ import software.altitude.test.core.IntegrationTestCore
       field1.persistedId -> Set("one", "two", "three"),
       field2.persistedId -> Set())
 
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     var storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedMetadata.data.keys should contain(field1.persistedId)
@@ -143,7 +143,7 @@ import software.altitude.test.core.IntegrationTestCore
     // update with nothing
     data = Map[String, Set[String]](field1.persistedId -> Set())
 
-    testApp.service.metadata.updateMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.updateMetadata(asset.persistedId, UserMetadata(data))
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedMetadata.data shouldBe empty
@@ -151,12 +151,12 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Update metadata values") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
@@ -166,14 +166,14 @@ import software.altitude.test.core.IntegrationTestCore
         field1.persistedId -> Set("one", "two", "three"),
         field2.persistedId -> Set("1", "2", "3.002", "14.1", "1.25", "123456789"))
 
-    testApp.service.metadata.setMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
 
     var storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedMetadata.data.keys should contain(field1.persistedId)
     storedMetadata.data.keys should contain(field2.persistedId)
 
     val field3 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
@@ -181,7 +181,7 @@ import software.altitude.test.core.IntegrationTestCore
         field3.persistedId -> Set("test 1", "test 2"),
         field2.persistedId -> Set("3.002", "14.1", "1.25", "123456789"))
 
-    testApp.service.metadata.updateMetadata(asset.persistedId, Metadata(data))
+    testApp.service.metadata.updateMetadata(asset.persistedId, UserMetadata(data))
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedMetadata.data.keys should contain(field1.persistedId)
@@ -194,15 +194,15 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Add/get fields") {
     val metadataField = testApp.service.metadata.addField(
-      MetadataField(name = "field name", fieldType = FieldType.KEYWORD))
+      UserMetadataField(name = "field name", fieldType = FieldType.KEYWORD))
 
-    val storedField: MetadataField = testApp.service.metadata.getFieldById(metadataField.persistedId)
+    val storedField: UserMetadataField = testApp.service.metadata.getFieldById(metadataField.persistedId)
     storedField.fieldType shouldBe FieldType.KEYWORD
   }
 
   test("Delete metadata field") {
     val metadataField = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
@@ -217,16 +217,16 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Get all fields for a repo") {
     testApp.service.metadata.addField(
-      MetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+      UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
     testApp.service.metadata.addField(
-      MetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+      UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     // SECOND USER
     val user2 = testContext.persistUser()
     switchContextUser(user2)
 
     testApp.service.metadata.addField(
-      MetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+      UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     // FIRST USER
     switchContextUser(testContext.users.head)
@@ -241,72 +241,72 @@ import software.altitude.test.core.IntegrationTestCore
   test("Adding a duplicate-named field should not succeed") {
     val fieldName = "field name"
     testApp.service.metadata.addField(
-      MetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
+      UserMetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
 
     intercept[DuplicateException] {
           testApp.service.metadata.addField(
-            MetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
+            UserMetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
         }
   }
 
   test("Metadata added initially should be present") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     val data = Map[String, Set[String]](field.persistedId -> Set("one", "two"))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
     val storedAsset: Asset = testApp.service.library.getById(asset.persistedId)
 
-    storedAsset.metadata.isEmpty shouldBe false
+    storedAsset.userMetadata.isEmpty shouldBe false
   }
 
   test("Not defined user metadata values should not return") {
     testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
     val field3 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.TEXT))
 
 
     val data = Map[String, Set[String]](field3.persistedId -> Set("this is some text"))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
     val storedAsset: Asset = testApp.service.library.getById(asset.persistedId)
 
-    storedAsset.metadata.isEmpty shouldBe false
-    storedAsset.metadata.data.size shouldBe 1
+    storedAsset.userMetadata.isEmpty shouldBe false
+    storedAsset.userMetadata.data.size shouldBe 1
   }
 
   test("Delete metadata value") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     val data = Map[String, Set[String]](field.persistedId -> Set("1", "2", "3"))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
     var storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedMetadata.get(field.persistedId).value.size shouldBe 3
-    val values: List[MetadataValue] = storedMetadata.get(field.persistedId).value.toList
+    val values: List[UserMetadataValue] = storedMetadata.get(field.persistedId).value.toList
 
     testApp.service.library.deleteMetadataValue(asset.persistedId, values.head.persistedId)
     testApp.service.library.deleteMetadataValue(asset.persistedId, values.last.persistedId)
@@ -318,19 +318,19 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Metadata IDs should be created and not overwritten") {
     val field1 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.NUMBER))
 
     var asset: Asset = testContext.persistAsset()
 
     val data = Map[String, Set[String]](field1.persistedId -> Set("1"))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     testApp.service.metadata.setMetadata(asset.persistedId, metadata)
 
@@ -356,7 +356,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Adding empty keyword value should be explicitly not allowed") {
-    val _metadataField = MetadataField(
+    val _metadataField = UserMetadataField(
       name = Util.randomStr(),
       fieldType = FieldType.KEYWORD
     )
@@ -378,7 +378,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Boolean values should replace each other with no errors") {
-    val _metadataField = MetadataField(
+    val _metadataField = UserMetadataField(
       name = Util.randomStr(),
       fieldType = FieldType.BOOL
     )
@@ -397,7 +397,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Text fields cannot be blank") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.TEXT))
 
@@ -410,14 +410,14 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Update value by ID") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.TEXT))
 
     val asset: Asset = testContext.persistAsset()
 
     val data = Map[String, Set[String]](field.persistedId -> Set("Some text"))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     testApp.service.metadata.setMetadata(asset.persistedId, metadata)
 
@@ -438,7 +438,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Updating value by ID should work case-insensitively") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
@@ -446,7 +446,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val oldValue = "tag1"
     val data = Map[String, Set[String]](field.persistedId -> Set(oldValue))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     testApp.service.metadata.setMetadata(asset.persistedId, metadata)
 
@@ -467,7 +467,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Updating value by ID with the same value should not raise exceptions") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
@@ -475,7 +475,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val oldValue = "tag1"
     val data = Map[String, Set[String]](field.persistedId -> Set(oldValue))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     testApp.service.metadata.setMetadata(asset.persistedId, metadata)
 
@@ -494,7 +494,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Updating value by ID with empty value should raise") {
     val field = testApp.service.metadata.addField(
-      MetadataField(
+      UserMetadataField(
         name = Util.randomStr(),
         fieldType = FieldType.KEYWORD))
 
@@ -502,7 +502,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val oldValue = "tag1"
     val data = Map[String, Set[String]](field.persistedId -> Set(oldValue))
-    val metadata = Metadata(data)
+    val metadata = UserMetadata(data)
 
     testApp.service.metadata.setMetadata(asset.persistedId, metadata)
 

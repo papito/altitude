@@ -19,7 +19,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
               VALUES (?, ?, ?)
        """
 
-    val metadataValues = asset.metadata.data.foldLeft(Set[String]()) { (res, m) =>
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]()) { (res, m) =>
       res ++ m._2.map(_.value)
     }
 
@@ -42,7 +42,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
             AND ${Field.SearchToken.ASSET_ID} = ?
        """
 
-    val metadataValues = asset.metadata.data.foldLeft(Set[String]()) { (res, m) =>
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]()) { (res, m) =>
       res ++ m._2.map(_.value)
     }
 

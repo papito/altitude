@@ -24,7 +24,7 @@ class AssetController extends BaseApiController {
     val asset: Asset = app.service.library.getById(id)
 
     Ok(Json.obj(
-      Api.Field.Asset.ASSET -> asset.metadata.toJson
+      Api.Field.Asset.ASSET -> asset.userMetadata.toJson
     ))
   }
 

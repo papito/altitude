@@ -24,7 +24,7 @@ import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
 import software.altitude.core.controllers.web.ImportController.isCancelled
 import software.altitude.core.models.ImportAsset
-import software.altitude.core.models.Metadata
+import software.altitude.core.models.UserMetadata
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -143,7 +143,7 @@ class ImportController
       val importAsset = new ImportAsset(
         fileName = fileItemStream.getName,
         data = bytes,
-        metadata = Metadata())
+        metadata = UserMetadata())
 
       app.executorService.submit(new Runnable {
         override def run(): Unit = {

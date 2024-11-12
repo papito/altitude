@@ -1,20 +1,14 @@
 package software.altitude.core.service
-import org.apache.tika.io.TikaInputStream
-import org.apache.tika.metadata.{Metadata => TikaMetadata}
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.Json
 import software.altitude.core.Altitude
 import software.altitude.core.FormatException
-import software.altitude.core.MetadataExtractorException
 import software.altitude.core.RequestContext
 import software.altitude.core.models._
 import software.altitude.core.util.MurmurHash
 
-import java.io.InputStream
-
 object AssetImportService {
-  private val SUPPORTED_MEDIA_TYPES: Set[String] = Set("audio", "image")
+  private val SUPPORTED_MEDIA_TYPES: Set[String] = Set("video", "image")
 }
 
 class AssetImportService(app: Altitude) {
@@ -22,17 +16,7 @@ class AssetImportService(app: Altitude) {
 
   def detectAssetType(importAsset: ImportAsset): AssetType = {
     logger.debug(s"Detecting media type for: '$importAsset'")
-
-    var inputStream: Option[InputStream] = None
-
-    try {
-      val metadata: TikaMetadata = new TikaMetadata
-      inputStream = Some(TikaInputStream.get(importAsset.data, metadata))
-      app.service.metadataExtractor.detectAssetTypeFromStream(inputStream.get)
-    }
-    finally {
-      if (inputStream.isDefined) inputStream.get.close()
-    }
+    app.service.metadataExtractor.detectAssetType(importAsset.data)
   }
 
   def importAsset(importAsset: ImportAsset): Option[Asset] = {
@@ -44,16 +28,6 @@ class AssetImportService(app: Altitude) {
       return None
     }
 
-    var metadataParserException: Option[Exception] = None
-    val extractedMetadata: Metadata = try {
-      app.service.metadataExtractor.extract(importAsset, assetType)
-    }
-    catch {
-      case ex: Exception =>
-        metadataParserException = Some(ex)
-        Json.obj()
-    }
-
     val asset: Asset = Asset(
       userId = RequestContext.account.value.get.persistedId,
       fileName = importAsset.fileName,
@@ -61,8 +35,7 @@ class AssetImportService(app: Altitude) {
       assetType = assetType,
       sizeBytes = importAsset.data.length,
       isTriaged = true,
-      folderId = RequestContext.getRepository.rootFolderId,
-      extractedMetadata = extractedMetadata)
+      folderId = RequestContext.getRepository.rootFolderId)
 
     val assetWithData = AssetWithData(asset, importAsset.data)
 
@@ -72,11 +45,6 @@ class AssetImportService(app: Altitude) {
     catch {
       case _: FormatException =>
         return None
-    }
-
-    // if there was a parser error, throw exception, the caller needs to know there was an error
-    if (metadataParserException.isDefined) {
-      throw MetadataExtractorException(asset, metadataParserException.get)
     }
 
     storedAsset

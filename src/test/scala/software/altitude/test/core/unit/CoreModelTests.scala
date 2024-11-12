@@ -9,11 +9,8 @@ import software.altitude.test.core.TestFocus
 import scala.language.implicitConversions
 
 
-@DoNotDiscover class ModelTests extends funsuite.AnyFunSuite with TestFocus {
+@DoNotDiscover class CoreModelTests extends funsuite.AnyFunSuite with TestFocus {
 
-  /**
-    * Start test model definition
-    */
   object TestModel {
     implicit def fromJson(json: JsValue): TestModel = {
       TestModel(
@@ -36,10 +33,6 @@ import scala.language.implicitConversions
       "intProp" -> intProp
     ) ++ coreJsonAttrs
   }
-  /**
-    * End test model definition
-    */
-
 
   test("Create a model") {
     TestModel(stringProp = "stringProp", boolProp = true, intProp = 2)

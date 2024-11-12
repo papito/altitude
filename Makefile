@@ -42,6 +42,5 @@ publish:
 	# we don't need this
 	rm -rf target
 
-
-up:
+db:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up

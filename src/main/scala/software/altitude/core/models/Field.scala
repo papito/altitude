@@ -73,10 +73,20 @@ object Field {
     val FOLDER_ID = "folder_id"
     val SIZE_BYTES = "size_bytes"
     val FILENAME = "filename"
-    val METADATA = "metadata"
     val EXTRACTED_METADATA = "extracted_metadata"
+    val PUBLIC_METADATA = "public_metadata"
+    val USER_METADATA = "user_metadata"
     val IS_RECYCLED = "is_recycled"
     val IS_TRIAGED = "is_triaged"
+  }
+
+  object PublicMetadata {
+    val DEVICE_MODEL = "device_model"
+    val F_NUMBER = "f_number"
+    val EXPOSURE_TIME = "exposure_time"
+    val ISO = "iso"
+    val FOCAL_LENGTH = "focal_length"
+    val DATE_TIME_ORIGINAL = "date_time_original"
   }
 
   object AssetType {

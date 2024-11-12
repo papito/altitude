@@ -8,8 +8,8 @@ import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.dao.postgres.querybuilder.{AssetSearchQueryBuilder => PostgresAssetSearchQueryBuilder}
 import software.altitude.core.dao.sqlite.querybuilder.{AssetSearchQueryBuilder => SqliteAssetSearchQueryBuilder}
 import software.altitude.core.models.FieldType
-import software.altitude.core.models.MetadataField
 import software.altitude.core.models.Repository
+import software.altitude.core.models.UserMetadataField
 import software.altitude.core.util._
 import software.altitude.core.{Const => C}
 import software.altitude.test.core.TestFocus
@@ -61,7 +61,7 @@ import software.altitude.test.core.TestFocus
   test("Text search SQL query with sorting is built correctly") {
     val builder = new SqliteAssetSearchQueryBuilder(List("*"))
 
-    val sortField = new MetadataField(id = Some("sort_field_id"), name = "sortField", fieldType = FieldType.NUMBER)
+    val sortField = new UserMetadataField(id = Some("sort_field_id"), name = "sortField", fieldType = FieldType.NUMBER)
 
     val q = new SearchQuery(
       text = Some("my text"),
@@ -89,7 +89,7 @@ import software.altitude.test.core.TestFocus
   test("Parameterized asset search SQL with sorting is built correctly") {
     val builder = new PostgresAssetSearchQueryBuilder(List("*"))
 
-    val sortField = new MetadataField(id = Some("sort_field_id"), name = "sortField", fieldType = FieldType.BOOL)
+    val sortField = new UserMetadataField(id = Some("sort_field_id"), name = "sortField", fieldType = FieldType.BOOL)
 
     val q = new SearchQuery(
       params = Map(
