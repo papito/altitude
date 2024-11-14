@@ -1,0 +1,3 @@
+*
+* When leaving the project for a bit, use this as the brain dump for what you were working on and what you need to do next.
+*********************************************************************************************************************/

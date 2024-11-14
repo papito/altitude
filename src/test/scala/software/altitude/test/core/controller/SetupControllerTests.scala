@@ -4,7 +4,7 @@ import org.scalatest.DoNotDiscover
 import play.api.libs.json.Json
 import software.altitude.core.Altitude
 import software.altitude.core.Api
-import software.altitude.core.models.Field
+import software.altitude.core.FieldConst
 import software.altitude.core.models.User
 import software.altitude.core.util.Query
 import software.altitude.core.util.Util
@@ -46,7 +46,7 @@ import software.altitude.test.core.ControllerTestCore
     post("/htmx/admin/setup", body = payload.toString()) {
       status should equal(200)
 
-      val query = new Query(params = Map(Field.User.EMAIL -> email))
+      val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
       val user: User = testApp.service.user.getOneByQuery(query)
       user.lastActiveRepoId should not be None
 

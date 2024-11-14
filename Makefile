@@ -18,6 +18,9 @@ test-focused-psql:
 test-focused-sqlite:
 	ENV=test sbt testFocusedSqlite
 
+test-focused-unit:
+	ENV=test sbt testFocusedUnit
+
 test-focused-controller:
 	ENV=test sbt testFocusedController
 

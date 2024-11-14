@@ -3,8 +3,8 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
+import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
-import software.altitude.core.models.Field
 import software.altitude.core.models.SystemMetadata
 
 abstract class SystemMetadataDao(override val config: Config)
@@ -13,14 +13,14 @@ abstract class SystemMetadataDao(override val config: Config)
   override val tableName = "system"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = SystemMetadata(
-    version = rec(Field.SystemMetadata.VERSION).asInstanceOf[Int],
-    isInitialized = getBooleanField(rec(Field.SystemMetadata.IS_INITIALIZED))
+    version = rec(FieldConst.SystemMetadata.VERSION).asInstanceOf[Int],
+    isInitialized = getBooleanField(rec(FieldConst.SystemMetadata.IS_INITIALIZED))
   ).toJson
 
   def updateVersion(toVersion: Int): Unit = {
     val runner: QueryRunner = new QueryRunner()
 
-    val sql = s"UPDATE $tableName SET ${Field.SystemMetadata.VERSION} = ? WHERE id = ?"
+    val sql = s"UPDATE $tableName SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
 
     runner.update(
       RequestContext.getConn,
@@ -30,7 +30,7 @@ abstract class SystemMetadataDao(override val config: Config)
   def setInitialized(): Unit = {
     val runner: QueryRunner = new QueryRunner()
 
-    val sql = s"UPDATE $tableName SET ${Field.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
+    val sql = s"UPDATE $tableName SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
 
     runner.update(
       RequestContext.getConn,

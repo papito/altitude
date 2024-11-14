@@ -1,6 +1,7 @@
 package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
@@ -20,5 +21,6 @@ import software.altitude.test.core.IntegrationTestCore
     val storedRepo: Repository = testApp.service.repository.getById(repo.persistedId)
     storedRepo.name shouldEqual repo.name
     storedRepo.createdAt should not be None
+    storedRepo.updatedAt should be(None)
   }
 }

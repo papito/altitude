@@ -1,8 +1,8 @@
 package software.altitude.core.service
 import software.altitude.core.Altitude
+import software.altitude.core.FieldConst
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.models.Asset
-import software.altitude.core.models.Field
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 
@@ -25,7 +25,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
 
       dao.updateById(
         asset.persistedId,
-        Map(Field.Asset.IS_RECYCLED -> isRecycled))
+        Map(FieldConst.Asset.IS_RECYCLED -> isRecycled))
     }
   }
 

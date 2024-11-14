@@ -355,7 +355,7 @@ import software.altitude.test.core.IntegrationTestCore
     storedMetadata.get(field1.persistedId).get.head.id should not be None
   }
 
-  test("Adding empty keyword value should be explicitly not allowed") {
+  test("Adding empty keyword value should be explicitly not allowed", Focused) {
     val _metadataField = UserMetadataField(
       name = Util.randomStr(),
       fieldType = FieldType.KEYWORD

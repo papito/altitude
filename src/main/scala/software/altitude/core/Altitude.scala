@@ -40,22 +40,18 @@ class Altitude(val dbEngineOverride: Option[String] = None)  {
    *
    * Production JAR defaults to SQLITE and can be overridden by application.conf.
    *
-   * Integration tests against run against both SQLite and Postgres, while
-   * controller tests run against only Postgres. Because reasons:
-   * https://github.com/papito/altitude/wiki/How-the-tests-work#controller-tests-and-the-forced-postgres-config
-   *
    * ENV var overrides are a Typesafe Config feature:
    * https://github.com/lightbend/config?tab=readme-ov-file#optional-system-or-env-variable-overrides
    *
    * In short: FORCE_CONFIG_db_engine=mongo will override db.engine=mysql in the config. This is only for tests,
    *
-   * Default reference configs live in
+   * Default reference configs are in
    *  src/main/resources/reference.conf
    * and
    *  src/test/resources/reference.conf
    *
    *  For DEV and PROD, application*.conf files have the final say -
-   *  and live at the root of the project (and along the live JAR)
+   *  and are in the root of the project (and along the live JAR in release)
    */
 
   // the config before final actual config as we need to dynamically figure out some values later

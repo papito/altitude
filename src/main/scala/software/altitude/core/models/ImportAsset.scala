@@ -6,9 +6,9 @@ import play.api.libs.json.Json
 class ImportAsset(val fileName: String,
                   val data: Array[Byte],
                   val metadata: UserMetadata)
-  extends BaseModel with NoId {
+  extends BaseModel with NoId with NoDates {
 
-  override val toJson: JsObject = Json.obj(
+  lazy val toJson: JsObject = Json.obj(
     "fileName" -> fileName,
   )
 }

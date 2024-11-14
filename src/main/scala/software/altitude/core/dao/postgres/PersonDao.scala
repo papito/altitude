@@ -3,9 +3,9 @@ package software.altitude.core.dao.postgres
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
-import software.altitude.core.models.Field
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
 import software.altitude.core.service.PersonService
@@ -25,7 +25,7 @@ class PersonDao(override val config: Config)
 
     val sql =
       s"""
-        INSERT INTO $tableName (${Field.ID}, ${Field.REPO_ID}, ${Field.Person.LABEL}, ${Field.Person.NAME})
+        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Person.LABEL}, ${FieldConst.Person.NAME})
               VALUES (?, ?, ?, ?)
     """
 
@@ -43,8 +43,8 @@ class PersonDao(override val config: Config)
     addRecord(jsonIn, sql, sqlVals)
 
     jsonIn ++ Json.obj(
-      Field.ID -> id,
-      Field.Person.LABEL -> label,
-      Field.Person.NAME -> Some(personName))
+      FieldConst.ID -> id,
+      FieldConst.Person.LABEL -> label,
+      FieldConst.Person.NAME -> Some(personName))
   }
 }

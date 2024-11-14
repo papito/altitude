@@ -1,35 +1,31 @@
 package software.altitude.core.models
 
+import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
 
 import scala.language.implicitConversions
 
 object FieldType extends Enumeration {
+  type FieldType = Value
   val KEYWORD: Value = Value("KEYWORD")
   val TEXT: Value = Value("TEXT")
   val NUMBER: Value = Value("NUMBER")
   val BOOL: Value = Value("BOOLEAN")
   val DATETIME: Value = Value("DATETIME")
+
+  implicit val format: Format[FieldType] = Json.formatEnum(this)
 }
 
 object UserMetadataField {
-  implicit def fromJson(json: JsValue): UserMetadataField =
-    UserMetadataField(
-      id = (json \ Field.ID).asOpt[String],
-      name = (json \ Field.MetadataField.NAME).as[String],
-      fieldType = FieldType.withName((json \ Field.MetadataField.FIELD_TYPE).as[String])
-    ).withCoreAttr(json)
+  implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  implicit val format: OFormat[UserMetadataField] = Json.format[UserMetadataField]
+  implicit def fromJson(json: JsValue): UserMetadataField = Json.fromJson[UserMetadataField](json).get
 }
 
 case class UserMetadataField(id: Option[String] = None,
                              name: String,
-                             fieldType: FieldType.Value) extends BaseModel {
+                             fieldType: FieldType.Value) extends BaseModel with NoDates {
   val nameLowercase: String = name.toLowerCase
 
-  override def toJson: JsObject = Json.obj(
-      Field.MetadataField.NAME -> name,
-      Field.MetadataField.NAME_LC -> nameLowercase,
-      Field.MetadataField.FIELD_TYPE -> fieldType.toString
-    ) ++ coreJsonAttrs
-
+  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 }

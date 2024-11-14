@@ -4,10 +4,10 @@ import org.scalatra.Ok
 import play.api.libs.json.Json
 import software.altitude.core.Api
 import software.altitude.core.Const
+import software.altitude.core.FieldConst
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
-import software.altitude.core.models.Field
 import software.altitude.core.util.Query
 
 class TrashController extends BaseApiController {
@@ -37,7 +37,7 @@ class TrashController extends BaseApiController {
     OK
   }
 
-  post(s"/:id/move/:${Field.Asset.FOLDER_ID}") {
+  post(s"/:id/move/:${FieldConst.Asset.FOLDER_ID}") {
     val id = params.get(Api.Field.ID).get
     val folderId = params.get(Api.Field.Asset.FOLDER_ID).get
     logger.info(s"Moving recycled asset $id to $folderId")

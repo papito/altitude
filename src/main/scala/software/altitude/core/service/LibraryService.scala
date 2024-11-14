@@ -3,6 +3,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
 import software.altitude.core.Altitude
+import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Folder
@@ -94,7 +95,7 @@ class LibraryService(val app: Altitude) {
 
   private def getByChecksum(checksum: Int): Option[Asset] = {
     txManager.asReadOnly[Option[Asset]] {
-      val query = new Query(params = Map(Field.Asset.CHECKSUM -> checksum)).withRepository()
+      val query = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum)).withRepository()
       val existing = app.service.asset.query(query)
       if (existing.nonEmpty) Some(existing.records.head: Asset) else None
     }
@@ -124,9 +125,9 @@ class LibraryService(val app: Altitude) {
          (saves us a separate update query)
       */
       val data = Map(
-        Field.Asset.FOLDER_ID -> destFolderId,
-        Field.Asset.IS_RECYCLED -> false,
-        Field.Asset.IS_TRIAGED -> false
+        FieldConst.Asset.FOLDER_ID -> destFolderId,
+        FieldConst.Asset.IS_RECYCLED -> false,
+        FieldConst.Asset.IS_TRIAGED -> false
       )
 
       app.service.asset.updateById(asset.persistedId, data)
@@ -155,7 +156,7 @@ class LibraryService(val app: Altitude) {
       }
 
       val data = Map(
-        Field.Asset.FILENAME -> newFilename
+        FieldConst.Asset.FILENAME -> newFilename
       )
       app.service.asset.updateById(asset.persistedId, data)
 
@@ -202,11 +203,11 @@ class LibraryService(val app: Altitude) {
 
   def query(query: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
-      val folderId = query.params.get(Field.Asset.FOLDER_ID).asInstanceOf[Option[String]]
+      val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
 
       val _query: Query = if (folderId.isDefined) {
         val allFolderIds = app.service.folder.flatChildrenIds(parentIds = Set(folderId.get))
-        query.add(Field.Asset.FOLDER_ID ->  Query.IN(allFolderIds.asInstanceOf[Set[Any]]))
+        query.add(FieldConst.Asset.FOLDER_ID ->  Query.IN(allFolderIds.asInstanceOf[Set[Any]]))
       }
       else {
         query
@@ -293,7 +294,7 @@ class LibraryService(val app: Altitude) {
         logger.trace(s"Deleting or recycling folder $f")
 
         // set all the assets as recycled
-        val folderAssetsQuery = new Query(Map(Field.Asset.FOLDER_ID -> folderId))
+        val folderAssetsQuery = new Query(Map(FieldConst.Asset.FOLDER_ID -> folderId))
 
         val results: QueryResult = app.service.library.queryAll(folderAssetsQuery)
 

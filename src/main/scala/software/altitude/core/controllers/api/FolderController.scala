@@ -3,9 +3,9 @@ package software.altitude.core.controllers.api
 import org.scalatra.Ok
 import play.api.libs.json.Json
 import software.altitude.core.Api
+import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseApiController
-import software.altitude.core.models.Field
 import software.altitude.core.models.Folder
 
 class FolderController extends BaseApiController {
@@ -75,7 +75,7 @@ class FolderController extends BaseApiController {
   }
 
   private def realId(aliasOrId: String): String = aliasOrId match {
-    case Field.Folder.Alias.ROOT => RequestContext.getRepository.rootFolderId
+    case FieldConst.Folder.Alias.ROOT => RequestContext.getRepository.rootFolderId
     case _ => aliasOrId
   }
 

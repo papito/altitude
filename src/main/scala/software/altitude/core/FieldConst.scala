@@ -1,6 +1,6 @@
-package software.altitude.core.models
+package software.altitude.core
 
-object Field {
+object FieldConst {
   val ID = "id"
   val REPO_ID = "repository_id"
   val USER_ID = "user_id"

@@ -8,16 +8,16 @@ import org.slf4j.LoggerFactory
 import play.api.libs.json.JsValue.jsValueToJsLookup
 import play.api.libs.json._
 import software.altitude.core.ConstraintException
+import software.altitude.core.FieldConst
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQuery
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
-import software.altitude.core.models.BaseModel
-import software.altitude.core.models.Field
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 
+import java.time.LocalDateTime
 import java.util.UUID
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -88,17 +88,17 @@ abstract class BaseDao {
 
   def getById(id: String): JsObject = {
     logger.debug(s"Getting by ID '$id' from '$tableName'")
-    val q: Query = new Query().add(Field.ID -> id)
+    val q: Query = new Query().add(FieldConst.ID -> id)
     getOneByQuery(q)
   }
 
   def deleteById(id: String): Int = {
-    val q: Query = new Query().add(Field.ID -> id)
+    val q: Query = new Query().add(FieldConst.ID -> id)
     deleteByQuery(q)
   }
 
   def updateById(id: String, data: Map[String, Any]): Int = {
-    val q: Query = new Query().add(Field.ID -> id)
+    val q: Query = new Query().add(FieldConst.ID -> id)
     updateByQuery(q, data)
   }
 
@@ -172,7 +172,7 @@ abstract class BaseDao {
 
     BaseDao.incrReadQueryCount()
 
-    val query = new Query().add(Field.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
+    val query = new Query().add(FieldConst.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
     val sqlQuery = sqlQueryBuilder.buildSelectSql(query)
 
     logger.debug(s"SELECT SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")
@@ -252,8 +252,5 @@ abstract class BaseDao {
    */
   protected def makeModel(rec: Map[String, AnyRef]): JsObject
 
-  /**
-   *  Given a model and an SQL record, calculate and set properties common to most models
-   */
-  protected def addCoreAttrs(model: BaseModel, rec: Map[String, AnyRef]): model.type
+  protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
 }

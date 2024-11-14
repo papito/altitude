@@ -5,6 +5,7 @@ import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
+import software.altitude.core.FieldConst
 import software.altitude.core.IllegalOperationException
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
@@ -107,7 +108,7 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.asset.query(new Query()).records.length shouldBe 1
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 1
 
     val all = testApp.service.folder.repositoryFolders()
@@ -138,15 +139,15 @@ import software.altitude.test.core.IntegrationTestCore
     testContext.persistAsset(folder = Some(folder1))
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1_2.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1_2.persistedId))
     ).records.length shouldBe 1
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1_1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1_1.persistedId))
     ).records.length shouldBe 1
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 3
   }
 
@@ -171,15 +172,15 @@ import software.altitude.test.core.IntegrationTestCore
     }
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 2
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder2_1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder2_1.persistedId))
     ).records.length shouldBe 2
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder2.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder2.persistedId))
     ).records.length shouldBe 4
   }
 
@@ -195,17 +196,17 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 1
 
     testApp.service.library.moveAssetToFolder(asset.persistedId, folder2.persistedId)
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 0
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder2.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder2.persistedId))
     ).records.length shouldBe 1
 
     // SECOND REPO
@@ -215,7 +216,7 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.query(new Query()).isEmpty shouldBe true
 
     testApp.service.library.query(
-      new Query(Map(Field.Asset.FOLDER_ID -> folder1.persistedId))
+      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).isEmpty shouldBe true
   }
 

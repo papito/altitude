@@ -1,21 +1,14 @@
 package software.altitude.core.models
 
+import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
 
 import scala.language.implicitConversions
 
 object PublicMetadata {
-  implicit def fromJson(json: JsValue): PublicMetadata = {
-
-    PublicMetadata(
-      deviceModel = (json \ Field.PublicMetadata.DEVICE_MODEL).asOpt[String],
-      fNumber = (json \ Field.PublicMetadata.F_NUMBER).asOpt[String],
-      focalLength = (json \ Field.PublicMetadata.FOCAL_LENGTH).asOpt[String],
-      iso = (json \ Field.PublicMetadata.ISO).asOpt[String],
-      exposureTime = (json \ Field.PublicMetadata.EXPOSURE_TIME).asOpt[String],
-      dateTimeOriginal = (json \ Field.PublicMetadata.DATE_TIME_ORIGINAL).asOpt[String]
-    )
-  }
+  implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  implicit val format: OFormat[PublicMetadata] = Json.format[PublicMetadata]
+  implicit def fromJson(json: JsValue): PublicMetadata = Json.fromJson[PublicMetadata](json).get
 }
 
 case class PublicMetadata(deviceModel: Option[String] = None,
@@ -23,16 +16,8 @@ case class PublicMetadata(deviceModel: Option[String] = None,
                           focalLength: Option[String] = None,
                           iso: Option[String] = None,
                           exposureTime: Option[String] = None,
-                          dateTimeOriginal: Option[String] = None) extends BaseModel with NoId {
+                          dateTimeOriginal: Option[String] = None)
+  extends BaseModel with NoId with NoDates {
 
-  override def toJson: JsObject = {
-    Json.obj(
-      Field.PublicMetadata.DEVICE_MODEL -> deviceModel,
-      Field.PublicMetadata.F_NUMBER -> fNumber,
-      Field.PublicMetadata.FOCAL_LENGTH -> focalLength,
-      Field.PublicMetadata.ISO -> iso,
-      Field.PublicMetadata.EXPOSURE_TIME -> exposureTime,
-      Field.PublicMetadata.DATE_TIME_ORIGINAL -> dateTimeOriginal
-    )
-  }
+  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 }

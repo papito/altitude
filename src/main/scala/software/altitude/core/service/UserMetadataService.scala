@@ -4,7 +4,6 @@ import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.altitude.core.dao.AssetDao
 import software.altitude.core.dao.UserMetadataFieldDao
-import software.altitude.core.models.Field
 import software.altitude.core.models._
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
@@ -27,9 +26,8 @@ class UserMetadataService(val app: Altitude) {
   def addField(metadataField: UserMetadataField): UserMetadataField = {
 
     txManager.withTransaction[UserMetadataField] {
-
       val existing = metadataFieldDao.query(new Query(params = Map(
-        Field.MetadataField.NAME_LC -> metadataField.nameLowercase
+        FieldConst.MetadataField.NAME_LC -> metadataField.nameLowercase
       )).withRepository())
 
       if (existing.nonEmpty) {
@@ -104,7 +102,7 @@ class UserMetadataService(val app: Altitude) {
     logger.info(s"Adding value [$newValue] for field [$fieldId] on asset [$assetId] ")
 
     txManager.withTransaction {
-      val metadata = UserMetadata(Map(fieldId -> Set(UserMetadataValue(newValue))))
+      val metadata = UserMetadata(Map(fieldId -> Set(UserMetadataValue(value = newValue))))
       val cleanMetadata = cleanAndValidate(metadata)
 
       // if after cleaning the value is not there - it's empty
@@ -184,7 +182,7 @@ class UserMetadataService(val app: Altitude) {
 
       val (fieldId, currentMdVals) = search.head
 
-      val metadata = UserMetadata(Map(fieldId -> Set(UserMetadataValue(newValue))))
+      val metadata = UserMetadata(Map(fieldId -> Set(UserMetadataValue(value = newValue))))
       val cleanMetadata = cleanAndValidate(metadata)
 
       // if after cleaning the value is not there - it's empty
@@ -259,7 +257,7 @@ class UserMetadataService(val app: Altitude) {
       val mdVals: Set[UserMetadataValue] = m._2
 
       val trimmed: Set[UserMetadataValue] = field.fieldType match {
-        case FieldType.KEYWORD => {
+        case FieldType.KEYWORD =>
           mdVals
           // trim leading/trailing
           .map{ mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim) }
@@ -269,23 +267,20 @@ class UserMetadataService(val app: Altitude) {
           .map{ mdVal => UserMetadataValue(mdVal.id, mdVal.value.replaceAll("\\s", " ")) }
           // and lose the blanks
           .filter(_.nonEmpty)
-        }
 
-        case FieldType.TEXT => {
+        case FieldType.TEXT =>
           mdVals
           // trim leading/trailing
           .map{ mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim) }
           // and lose the blanks
           .filter(_.nonEmpty)
-        }
 
-        case FieldType.NUMBER | FieldType.BOOL => {
+        case FieldType.NUMBER | FieldType.BOOL =>
           mdVals
           // trim leading/trailing
           .map{ mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim) }
           // and lose the blanks
           .filter(_.nonEmpty)
-        }
       }
 
       if (trimmed.nonEmpty) res + (fieldId -> trimmed) else res
@@ -375,11 +370,11 @@ class UserMetadataService(val app: Altitude) {
 
       def toJson(field: UserMetadataField, mdVals: Set[UserMetadataValue]): JsObject = {
         Json.obj(
-          Field.MetadataField.FIELD -> (field.toJson -
-            Field.UPDATED_AT -
-            Field.CREATED_AT -
-            Field.MetadataField.NAME_LC),
-          Field.VALUES -> JsArray(mdVals.toSeq.map(_.toJson))
+          FieldConst.MetadataField.FIELD -> (field.toJson -
+            FieldConst.UPDATED_AT -
+            FieldConst.CREATED_AT -
+            FieldConst.MetadataField.NAME_LC),
+          FieldConst.VALUES -> JsArray(mdVals.toSeq.map(_.toJson))
         )
       }
 
@@ -398,8 +393,8 @@ class UserMetadataService(val app: Altitude) {
       }
 
       val sorted = (res ++ emptyFields).sortWith{ (left, right) =>
-        val leftFieldName: String = (left \ Field.MetadataField.FIELD \ Field.MetadataField.NAME).as[String]
-        val rightFieldName: String = (right \ Field.MetadataField.FIELD \ Field.MetadataField.NAME).as[String]
+        val leftFieldName: String = (left \ FieldConst.MetadataField.FIELD \ FieldConst.MetadataField.NAME).as[String]
+        val rightFieldName: String = (right \ FieldConst.MetadataField.FIELD \ FieldConst.MetadataField.NAME).as[String]
         leftFieldName.compareToIgnoreCase(rightFieldName) < 1
       }
 

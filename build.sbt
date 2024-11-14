@@ -147,6 +147,9 @@ commands += Command.command("testFocusedPostgres") { state =>
 commands += Command.command("testFocusedController") { state =>
   "testOnly software.altitude.test.core.suites.ControllerSuiteBundle -- -n focused" :: state
 }
+commands += Command.command("testFocusedUnit") { state =>
+  "testOnly software.altitude.test.core.suites.UnitSuiteBundle -- -n focused" :: state
+}
 commands += Command.command("testSqlite") { state =>
   "testOnly software.altitude.test.core.suites.SqliteSuiteBundle" :: state
 }
