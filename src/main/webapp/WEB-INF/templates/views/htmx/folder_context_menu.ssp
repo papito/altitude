@@ -1,6 +1,6 @@
-#import(software.altitude.core.RequestContext)
-#import(software.altitude.core.Api)
-#import(software.altitude.core.Const)
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.Const %>
 
 <% val rootFolderId = RequestContext.getRepository.rootFolderId %>
 <%@ val folderId: String %>

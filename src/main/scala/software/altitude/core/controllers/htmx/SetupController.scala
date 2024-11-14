@@ -10,7 +10,7 @@ import software.altitude.core.models.AccountType
 import software.altitude.core.models.User
 import software.altitude.core.{Const => C}
 
-class SetupController extends BaseHtmxController  {
+class SetupController extends BaseHtmxController {
 
   private val dataScrubber = DataScrubber(
     trim = List(

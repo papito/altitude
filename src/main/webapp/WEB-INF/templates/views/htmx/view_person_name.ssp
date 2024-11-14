@@ -1,6 +1,6 @@
-#import(software.altitude.core.RequestContext)
-#import(software.altitude.core.models.Person)
-#import(software.altitude.core.Api)
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.models.Person %>
+<% import software.altitude.core.Api %>
 
 <%@ val person: Person %>
 

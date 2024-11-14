@@ -6,7 +6,7 @@ import software.altitude.core.controllers.BaseHtmxController
 /**
   * @ /htmx/album/
  */
-class AlbumActionController extends BaseHtmxController{
+class AlbumActionController extends BaseHtmxController {
 
   before() {
     requireLogin()

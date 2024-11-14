@@ -211,7 +211,11 @@ form input.error, form input.error:focus {
     background-color: rgba(0,0,0,0.4);
 }
 
-#modalBox {
+#modalContent {
+    padding: 15px;
+}
+
+.modal-box {
     display: grid;
     grid-template-rows: 30px auto;
     background-color: var(--background-secondary-color);
@@ -222,19 +226,7 @@ form input.error, form input.error:focus {
     box-shadow: rgba(10, 0, 0, 0.66) 6px 6px 6px;
 }
 
-#modalContent {
-    padding: 15px;
-}
-
-#modalWarning {
-    background-color: var(--warning-font-color);
-}
-
-#modalError {
-    background-color: var(--warning-font-color);
-}
-
-#modalToolbar {
+.modal-toolbar {
     display: grid;
     align-items: center;
     grid-template-columns: 1fr minmax(auto, max-content);
@@ -242,22 +234,37 @@ form input.error, form input.error:focus {
     border-bottom: 1px solid #44495e;
 }
 
-#closeModal {
+.close-modal {
     font-size: 1.6em;
     font-weight: bold;
     padding-right: .4em;
 }
 
-#modalTitle {
+.close-modal:hover,
+.close-modal:focus {
+    color: var(--warning-font-color);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.modal-title {
     padding-left: .7em;
     font-size: 1.1em;
     font-weight: bold;
     text-transform: capitalize;
 }
 
-#closeModal:hover,
-#closeModal:focus {
-    color: var(--warning-font-color);
-    text-decoration: none;
-    cursor: pointer;
+#imageDetailModalContainer {
+    display: none;
+    place-items: center;
+    position: fixed;
+    z-index: 4;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#imageDetailModalContainer .modal-box {
+    border: none;
 }

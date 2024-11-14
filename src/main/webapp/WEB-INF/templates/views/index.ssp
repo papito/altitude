@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-#import(software.altitude.core.Api)
-#import(software.altitude.core.AltitudeServletContext)
-#import(software.altitude.core.RequestContext)
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.AltitudeServletContext %>
+<% import software.altitude.core.RequestContext %>
 
 <html lang="en">
 <head>
     <title>ALTITUDE</title>
 
-    ${include("includes/header_common.ssp")}
+    <% include("includes/header_common.ssp") %>
 
     <style>
         body {
@@ -83,11 +83,11 @@
 <body>
 
 <div>
-    ${include("includes/nav.ssp")}
+    <% include("includes/nav.ssp") %>
 </div>
 
 <main>
-    ${include("includes/html_common.ssp")}
+    <% include("includes/html_common.ssp") %>
 
     <div id="explorer" class="split content split-horizontal">
         <div id="explorerViews" class="split content">
@@ -132,7 +132,7 @@
     </div>
 
     <div id="content" class="split content split-horizontal">
-        ${include("htmx/search_results.ssp")}
+        <% include("htmx/search_results.ssp") %>
     </div>
 </main>
 

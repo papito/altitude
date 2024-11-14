@@ -1,16 +1,31 @@
 <div id="snackbar"></div>
 
 <div id="modalContainer">
-    <div id="modalBox">
-        <div id="modalToolbar">
-            <div id="modalTitle">Title!</div>
-            <div id="closeModal"
+    <div class="modal-box">
+        <div class="modal-toolbar">
+            <div class="modal-title">Title!</div>
+            <div class="close-modal"
                  hx-get="${ url(closeModal) }"
                  hx-swap-oob="innerHTML"
                  hx-target="#modalContent"
             >&times;</div>
         </div>
         <div id="modalContent">
+        </div>
+    </div>
+</div>
+
+<div id="imageDetailModalContainer">
+    <div class="modal-box">
+        <div class="modal-toolbar">
+            <div class="modal-title">Title!</div>
+            <div class="close-modal"
+                 hx-get="${ url(closeModal) }"
+                 hx-swap-oob="innerHTML"
+                 hx-target="#imageDetailModalContent"
+            >&times;</div>
+        </div>
+        <div id="imageDetailModalContent">
         </div>
     </div>
 </div>

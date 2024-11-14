@@ -1,9 +1,9 @@
-#import(software.altitude.core.Const)
-#import(software.altitude.core.AltitudeServletContext)
-#import(software.altitude.core.RequestContext)
-#import(software.altitude.core.models.Asset)
-#import(software.altitude.core.util.SearchResult)
-#import(software.altitude.core.Api)
+<% import software.altitude.core.Const %>
+<% import software.altitude.core.AltitudeServletContext %>
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.models.Asset %>
+<% import software.altitude.core.util.SearchResult %>
+<% import software.altitude.core.Api %>
 
 
 <%@ val page: Int = 1 %>
@@ -21,27 +21,35 @@ NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad"
 --%>
 
 #for (idx <- 0 to results.records.length - 1)
-<% val asset: Asset = results.records(idx) %>
-#if (idx == results.records.length - 1 && results.hasMoreResults)
-<%-- Last cell is special because it tells HTMX to load the next page --%>
-<div class="cell last-cell"
-     hx-trigger="intersect"
-     hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}'
-     hx-swap="afterend">
-#else
-<div class="cell">
-#end
 
-<% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
-<img id="asset-${asset.persistedId}"
-     #if (isServerSideLoad)
-     src="${imgUrl}"
-     #else
-     data-src="${imgUrl}"
-     #end
-     alt="${ asset.fileName }"
-     class="responsive-image">
+    <% val asset: Asset = results.records(idx) %>
+    #if (idx == results.records.length - 1 && results.hasMoreResults)
 
-</div>
+        <%-- Last cell is special because it tells HTMX to load the next page --%>
+        <div class="cell last-cell"
+             hx-trigger="intersect"
+             hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}'
+             hx-swap="afterend">
+    #else
+        <div class="cell">
+    #end
+
+    <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
+    <img id="asset-${asset.persistedId}"
+         hx-trigger="click"
+         hx-target="#imageDetailModalContent"
+         hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+
+         #if (isServerSideLoad) <%-- First page is rendered by server not via infinite scroll --%>
+         src="${imgUrl}"
+         #else
+         data-src="${imgUrl}"
+         #end
+
+         alt="${ asset.fileName }"
+         class="responsive-image">
+
+    <%-- this closes the cell element --%>
+    </div>
 
 #end

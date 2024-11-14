@@ -1,0 +1,28 @@
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.Const %>
+<% import software.altitude.core.models.Asset %>
+
+<%@ val asset: Asset %>
+
+<style>
+    #imageDetailView {
+        display: grid;
+        place-items: center;
+    }
+
+    #imageDetailView img {
+        max-width:100%;
+        height:auto
+    }
+</style>
+
+<div id="imageDetailView">
+    <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }" %>
+    <img id="imageDetailView"
+         src="${imgUrl}"
+         alt="${ asset.fileName }">
+
+    <script lang="js" type="module">
+        showAssetDetailModal({title: "${asset.fileName}"})
+    </script>
+</div>

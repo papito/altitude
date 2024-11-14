@@ -16,7 +16,7 @@ import software.altitude.core.{Const => C}
 /**
   @ /htmx/folder/
  */
-class FolderActionController extends BaseHtmxController{
+class FolderActionController extends BaseHtmxController {
 
   before() {
     requireLogin()

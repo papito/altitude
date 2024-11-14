@@ -3,7 +3,7 @@
 <head>
     <title>ALTITUDE</title>
 
-    ${include("includes/header_common.ssp")}
+    <% include("includes/header_common.ssp") %>
 
     <style>
 
@@ -38,18 +38,18 @@
 
 </head>
 
-#import(software.altitude.core.RequestContext)
+<% import software.altitude.core.RequestContext %>
 
 <body>
 
 <div>
-    ${include("includes/nav.ssp")}
+    <% include("includes/nav.ssp") %>
 </div>
 
 <main>
     <div id="importOptions">
         <div id="browseForFiles">
-            ${include("htmx/upload_form.ssp")}
+            <% include("htmx/upload_form.ssp") %>
         </div>
     </div>
     <div id="importLog">

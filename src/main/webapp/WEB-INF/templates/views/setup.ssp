@@ -3,7 +3,7 @@
 <head>
     <title>ALTITUDE SETUP</title>
 
-    ${include("includes/header_common.ssp")}
+    <% include("includes/header_common.ssp") %>
 
     <style>
         body {
@@ -33,7 +33,7 @@
 <body>
 
 <div>
-    ${include("includes/brand.ssp")}
+    <% include("includes/brand.ssp") %>
 </div>
 
 <div id="messages">
@@ -43,7 +43,7 @@
 
 <main>
     <div>
-        ${include("htmx/admin/setup_form.ssp")}
+        <% include("htmx/admin/setup_form.ssp") %>
     </div>
 </main>
 

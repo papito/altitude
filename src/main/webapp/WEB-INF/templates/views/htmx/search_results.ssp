@@ -1,8 +1,8 @@
-#import(software.altitude.core.Const)
-#import(software.altitude.core.AltitudeServletContext)
-#import(software.altitude.core.RequestContext)
-#import(software.altitude.core.models.Asset)
-#import(software.altitude.core.util.SearchResult)
+<% import software.altitude.core.Const %>
+<% import software.altitude.core.AltitudeServletContext %>
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.models.Asset %>
+<% import software.altitude.core.util.SearchResult %>
 <%@ val results: SearchResult %>
 
 <style>
@@ -13,6 +13,7 @@
 
     #assets .cell img {
         display: block;
+        cursor: pointer;
     }
 
     #assets .grid {
@@ -109,7 +110,7 @@
     </script>
 
     <div class="grid">
-        ${include("results_grid.ssp")}
+        <% include("results_grid.ssp") %>
     </div>
 
     <script lang="javascript">

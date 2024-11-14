@@ -1,5 +1,5 @@
-#import(software.altitude.core.Api)
-#import(software.altitude.core.RequestContext)
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.RequestContext %>
 
 <style>
     nav {
@@ -73,7 +73,7 @@
         <a href=""><i class="fas fa-database"></i><span>${RequestContext.getRepository.name}</span></a>
     </div>
     <div class="menu import">
-        <a href='${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'><i class="fas fa-download"></i><span>Import</span></a></span>
+        <a href='${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'><i class="fas fa-download"></i><span>Import</span></a>
     </div>
     <div class="menu">
         <a href=""><i class="fas fa-adjust"></i><span>Settings</span></a>
