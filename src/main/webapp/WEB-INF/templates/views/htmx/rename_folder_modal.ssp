@@ -57,6 +57,7 @@
 
 <script lang="js" type="module">
     import {Folder} from "/js/models.js";
+    import {showModal, closeModal} from "/js/common/modal.js";
 
     showModal({minWidthPx: "${minWidth}", title: "${title}"})
     htmx.find("#field-${ Api.Field.Folder.NAME }").focus()

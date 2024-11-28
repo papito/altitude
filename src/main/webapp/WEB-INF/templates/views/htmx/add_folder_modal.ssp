@@ -46,8 +46,9 @@
 
 <%@ val minWidth: Int %>
 <%@ val title: String %>
-<script lang="js" type="module">
+<script type="module">
     import {Const} from "/js/constants.js";
+    import {showModal, closeModal} from "/js/common/modal.js";
 
     showModal({minWidthPx: "${minWidth}", title: "${title}"})
 

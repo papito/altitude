@@ -13,7 +13,7 @@
      parent-folder-id="${folder.parentId}"
      folder-id="${folder.persistedId}">
 
-    <div class="controls draggable drag-drop"
+    <div class="controls drag-drop"
          folder-id="${folder.persistedId}">
 
         <a href="#" hx-swap="innerHTML"

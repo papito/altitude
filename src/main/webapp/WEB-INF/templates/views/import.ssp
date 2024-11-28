@@ -65,6 +65,8 @@
 </footer>
 
 <script lang="js" type="module">
+    import {highlightNav} from "/js/common/navigation.js";
+
     highlightNav("import");
 </script>
 

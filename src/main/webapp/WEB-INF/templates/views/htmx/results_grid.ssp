@@ -26,12 +26,12 @@ NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad"
     #if (idx == results.records.length - 1 && results.hasMoreResults)
 
         <%-- Last cell is special because it tells HTMX to load the next page --%>
-        <div class="cell last-cell"
+        <div class="cell last-cell drag-drop"
              hx-trigger="intersect"
              hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}'
              hx-swap="afterend">
     #else
-        <div class="cell">
+        <div class="cell drag-drop">
     #end
 
     <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>

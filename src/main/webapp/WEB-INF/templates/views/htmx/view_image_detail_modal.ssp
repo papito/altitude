@@ -22,7 +22,9 @@
          src="${imgUrl}"
          alt="${ asset.fileName }">
 
-    <script lang="js" type="module">
+    <script type="module">
+        import {showAssetDetailModal} from "/js/common/modal.js";
+
         showAssetDetailModal({title: "${asset.fileName}"})
     </script>
 </div>

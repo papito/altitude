@@ -72,7 +72,6 @@
         }
 
         .split {
-            box-sizing: border-box;
             overflow-y: auto;
             overflow-x: hidden;
         }
@@ -132,12 +131,12 @@
     </div>
 
     <div id="content" class="split content split-horizontal">
-        <% include("htmx/search_results.ssp") %>
+        <% include("includes/search_results.ssp") %>
     </div>
 </main>
 
 <footer>
-    <%= RequestContext.account.value.getOrElse("None") %>
+    <%= RequestContext.account.value.get.name %>
 </footer>
 
 <script type="module">
