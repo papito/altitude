@@ -6,6 +6,4 @@
 <link rel="stylesheet" href="/css/tabs.css">
 <script src="/js/htmx.min.js"></script>
 <script src="/js/json-enc.js"></script>
-<script src="/js/ws.js"></script>
-<script src="/js/split.min.js"></script>
 <script type="module" src="/js/global.js"></script>

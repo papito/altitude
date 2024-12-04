@@ -58,6 +58,11 @@ body {
     background-color: var(--background-color);
     color: #FFFFFF;
     font-family: var(--font);
+    display: grid;
+    grid-template-rows: [header]  auto
+                        [content] 1fr
+                        [footer]  40px;
+    min-height: 100vh;
 }
 
 footer {
@@ -68,22 +73,7 @@ footer {
     display: grid;
     font-size: .9em;
     align-items: center;
-}
-
-body {
-    display: grid;
-    grid-template-rows: [header]  auto
-                        [content] 1fr
-                        [footer]  40px;
-    min-height: 100vh;
-}
-
-footer {
     background: var(--background-secondary-color);
-    color: #fff;
-    bottom: 0;
-    display: grid;
-    align-items: center;
 }
 
 /*       */

@@ -31,6 +31,13 @@
         height:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
         place-items: center;
     }
+
+    #assets .cell  > .inner-cell.can-drop {
+        padding-left: 4px;
+        border: var(--dnd-draggable-border);
+        border-radius: 4px;
+        background-color: var(--dnd-can-drop-color);
+    }
 </style>
 
 <div id="assets">

@@ -97,7 +97,7 @@
 </style>
 
 <div id="rootFolderList" class="folder-list">
-    <div class="folder root dropzone"
+    <div class="folder root"
          id="folder-${rootFolder.persistedId}"
          num-of-children="${rootFolder.numOfChildren}"
          folder-id="${rootFolder.persistedId}"
@@ -105,7 +105,7 @@
          is-root="true"
          expanded="true">
 
-        <div class="controls"
+        <div class="controls dropzone"
              folder-id="${rootFolder.persistedId}">
             <i class="fas fa-folder"></i>
             <div class="menu-ctrl">
@@ -123,7 +123,9 @@
 
         <div class="menu"
              id="menu-${rootFolder.persistedId}"
-             folder-id="${rootFolder.persistedId}"></div>
+             folder-id="${rootFolder.persistedId}">
+
+        </div>
 
         <div class="children"
              id="children-${rootFolder.persistedId}"

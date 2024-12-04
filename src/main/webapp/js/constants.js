@@ -1,6 +1,7 @@
 export const Const = {
     events: {
         folderMoved: "FOLDER_MOVED_EVENT",
+        assetMoved: "ASSET_MOVED_EVENT",
         folderDeleted: "FOLDER_DELETED_EVENT",
         folderAdded: "FOLDER_ADDED_EVENT",
         folderCollapsed: "FOLDER_COLLAPSED_EVENT",

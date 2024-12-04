@@ -7,13 +7,13 @@
 #for (idx <- 0 to folders.length - 1)
 
 <% val folder: Folder = folders(idx) %>
-<div class="folder dropzone"
+<div class="folder"
      id="folder-${folder.persistedId}"
      num-of-children="${folder.numOfChildren}"
      parent-folder-id="${folder.parentId}"
      folder-id="${folder.persistedId}">
 
-    <div class="controls drag-drop"
+    <div class="controls drag-drop dropzone"
          folder-id="${folder.persistedId}">
 
         <a href="#" hx-swap="innerHTML"

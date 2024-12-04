@@ -6,11 +6,21 @@ const dragState = {
 export function dragged(e) {
     dragState.x = 0;
     dragState.y = 0;
+
+    let target = e.target;
+    target.style.position = "relative";
+    target.style.top = "auto";
     e.target.style.transform = 'translate(0px, 0px)';
 
     // reset the position attributes for draggables (on failed drag, it will resume from the last position)
     e.target.removeAttribute("data-x")
     e.target.removeAttribute("data-y")
+
+    let imgElement = target.querySelector('img')
+    if (imgElement) {
+        imgElement.style.width = imgElement.getAttribute("x-og-width") + "px"
+        imgElement.removeAttribute("x-og-width")
+    }
 }
 
 export function dragMoveListener (event) {

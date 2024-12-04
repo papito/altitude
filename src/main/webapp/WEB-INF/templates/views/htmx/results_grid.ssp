@@ -26,30 +26,33 @@ NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad"
     #if (idx == results.records.length - 1 && results.hasMoreResults)
 
         <%-- Last cell is special because it tells HTMX to load the next page --%>
-        <div class="cell last-cell drag-drop"
+        <div class="cell last-cell"
              hx-trigger="intersect"
              hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}'
              hx-swap="afterend">
     #else
-        <div class="cell drag-drop">
+        <div class="cell">
     #end
 
-    <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
-    <img id="asset-${asset.persistedId}"
-         hx-trigger="click"
-         hx-target="#imageDetailModalContent"
-         hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+        <div class="inner-cell drag-drop" asset-id="${asset.persistedId}">
 
-         #if (isServerSideLoad) <%-- First page is rendered by server not via infinite scroll --%>
-         src="${imgUrl}"
-         #else
-         data-src="${imgUrl}"
-         #end
+            <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
+            <img id="asset-${asset.persistedId}" asset-id="${asset.persistedId}"
+                 draggable="false"
+                 hx-trigger="click"
+                 hx-target="#imageDetailModalContent"
+                 hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
 
-         alt="${ asset.fileName }"
-         class="responsive-image">
+                 #if (isServerSideLoad) <%-- First page is rendered by server not via infinite scroll --%>
+                 src="${imgUrl}"
+                 #else
+                 data-src="${imgUrl}"
+                 #end
 
-    <%-- this closes the cell element --%>
-    </div>
+                 alt="${ asset.fileName }"
+                 class="responsive-image">
+
+      </div><%-- /inner cell --%>
+    </div><%-- /cell --%>
 
 #end

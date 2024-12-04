@@ -139,6 +139,8 @@
     <%= RequestContext.account.value.get.name %>
 </footer>
 
+<script src="/js/split.min.js"></script>
+
 <script type="module">
     /**
      * Split.js plumbing
