@@ -44,7 +44,7 @@
 
 <form action="#"
       id="mergePeople"
-      hx-put='${ url(mergePeople, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.SRC_PERSON_ID -> mergeSourcePerson.persistedId, Api.Field.DEST_PERSON_ID -> mergeDestPerson.persistedId) }'
+      hx-put='${ url(mergePeople, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.Person.SRC_PERSON_ID -> mergeSourcePerson.persistedId, Api.Field.Person.DEST_PERSON_ID -> mergeDestPerson.persistedId) }'
       hx-trigger="submit"
       hx-target="#content"
       hx-swap="innerHTML">
@@ -88,24 +88,25 @@
 
 </form>
 
-<script lang="js" type="module">
-    import {Const} from "/js/constants.js"
-    import {showModal, closeModal} from "/js/common/modal.js";
+<script type="module">
+    import { showModal, closeModal } from "../../../../js/common/modal.js"
+    import { Const } from "../../../../js/constants.js"
 
-    showModal({minWidthPx: "${minWidth}", title: "${title}"})
+    showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
-    htmx.find("#mergePeople").addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.detail.successful === true) {
-            closeModal()
+    htmx.find("#mergePeople").addEventListener("htmx:afterRequest", function (evt) {
+      if (evt.detail.successful === true) {
+        closeModal()
 
-            const personMergedEvent = new CustomEvent(
-                    Const.events.personMerged, {
-                        detail: {
-                                ${Api.Field.Person.MERGE_SOURCE_ID}: "${mergeSourcePerson.persistedId}",
-                                ${Api.Field.Person.MERGE_DEST_ID}: "${mergeDestPerson.persistedId}",
-                        }});
+        const personMergedEvent = new CustomEvent(Const.events.personMerged, {
+          detail: {
+            "${Api.Field.Person.MERGE_SOURCE_ID}":
+              "${mergeSourcePerson.persistedId}",
+            "${Api.Field.Person.MERGE_DEST_ID}": "${mergeDestPerson.persistedId}",
+          },
+        })
 
-            document.body.dispatchEvent(personMergedEvent)
-        }
-    });
+        document.body.dispatchEvent(personMergedEvent)
+      }
+    })
 </script>

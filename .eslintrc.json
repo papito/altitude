@@ -1,0 +1,50 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": [
+    "prettier",
+    "plugin:prettier/recommended",
+    "plugin:import/recommended"
+  ],
+  "parserOptions": {
+    "ecmaVersion": 14,
+    "sourceType": "module"
+  },
+  "ignorePatterns": ["src/main/webapp/js/lib/**"],
+  "plugins": [
+    "html"
+  ],
+  "rules": {
+    "prettier/prettier": [
+      "error", {
+        "endOfLine": "auto"
+      }
+    ],
+    "no-use-before-define": "off",
+    "import/extensions": [
+      "error",
+      "ignorePackages",
+      {
+        "js": "always"
+      }
+    ],
+    "no-shadow": "off",
+    "max-len": [ "warn", {
+      "code": 160,
+      "ignoreComments": true,
+      "ignoreUrls": true
+    } ],
+    "import/no-unresolved": ["error", { "ignore": ["^https://"] }],
+    "semi": ["error", "never"]
+  },
+  "settings": {
+    "import/resolver": {
+      "node": {
+        "extensions": [".js"]
+      }
+    },
+    "html/html-extensions": [".html", ".ssp"]
+  }
+}

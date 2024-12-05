@@ -20,6 +20,6 @@ class AssetActionController extends BaseHtmxController {
     val asset: Asset = app.service.asset.getById(assetId)
 
     ssp("htmx/view_image_detail_modal",
-        "asset" -> asset)
+        Api.Field.Asset.ASSET -> asset)
   }
 }

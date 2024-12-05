@@ -15,7 +15,7 @@
 
 <form action="#"
       id="addFolder"
-      folder-id="${parentId}"
+      alt-folder-id="${parentId}"
       hx-swap="innerHTML"
       hx-post='${ url(htmxAddFolder, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
       hx-target="#children-${parentId}"
@@ -47,23 +47,22 @@
 <%@ val minWidth: Int %>
 <%@ val title: String %>
 <script type="module">
-    import {Const} from "/js/constants.js";
-    import {showModal, closeModal} from "/js/common/modal.js";
+    import { showModal, closeModal } from "../../../../js/common/modal.js"
+    import { Const } from "../../../../js/constants.js"
 
-    showModal({minWidthPx: "${minWidth}", title: "${title}"})
+    showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
     htmx.find("#field${ Api.Field.Folder.NAME }").focus()
 
-    htmx.find("#addFolder").addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.detail.successful === true) {
-            const folderAddedEvent = new CustomEvent(
-                    Const.events.folderAdded, {
-                        detail: {${Api.Field.Folder.PARENT_ID}: "${parentId}"}
-                    });
+    htmx.find("#addFolder").addEventListener("htmx:afterRequest", function (evt) {
+      if (evt.detail.successful === true) {
+        const folderAddedEvent = new CustomEvent(Const.events.folderAdded, {
+          detail: { "${Api.Field.Folder.PARENT_ID}": "${parentId}" },
+        })
 
-            document.body.dispatchEvent(folderAddedEvent)
+        document.body.dispatchEvent(folderAddedEvent)
 
-            closeModal()
-        }
-    });
+        closeModal()
+      }
+    })
 </script>

@@ -34,10 +34,12 @@ NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad"
         <div class="cell">
     #end
 
-        <div class="inner-cell drag-drop" asset-id="${asset.persistedId}">
+        <div class="inner-cell drag-drop"
+             alt-asset-id="${asset.persistedId}">
 
             <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
-            <img id="asset-${asset.persistedId}" asset-id="${asset.persistedId}"
+            <img id="asset-${asset.persistedId}"
+                 alt-asset-id="${asset.persistedId}"
                  draggable="false"
                  hx-trigger="click"
                  hx-target="#imageDetailModalContent"
@@ -46,7 +48,7 @@ NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad"
                  #if (isServerSideLoad) <%-- First page is rendered by server not via infinite scroll --%>
                  src="${imgUrl}"
                  #else
-                 data-src="${imgUrl}"
+                 alt-data-src="${imgUrl}"
                  #end
 
                  alt="${ asset.fileName }"

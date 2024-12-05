@@ -1,0 +1,20 @@
+{
+  "name": "altitude-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint \"src/main/webapp/js/**/*.{js,css}\" \"src/main/webapp/WEB-INF/templates/views/**/*.ssp\"",
+    "lint:fix": "eslint --fix \"src/main/webapp/js/**/*.{js,css}\" \"src/main/webapp/WEB-INF/templates/views/**/*.ssp\"",
+    "format": "prettier --write \"src/main/webapp/js/**/*.{js,css}\" --config ./.prettierrc.json --ignore-path .prettierignore"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.11.1",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-html": "^8.1.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "pretier": "^0.0.1"
+  }
+}

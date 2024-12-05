@@ -5,11 +5,11 @@
  * as shown below:
  *
  * <script type="module">
- *     import {context} from "/js/context.js"
+ *     import {context} from "../context.js"
  *
  *      context.repoId = "${ RequestContext.getRepository.persistedId }"
  * </script>
  */
 export const context = {
-    repoId: null,
+  repoId: null,
 }

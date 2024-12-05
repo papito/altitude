@@ -23,8 +23,8 @@
          alt="${ asset.fileName }">
 
     <script type="module">
-        import {showAssetDetailModal} from "/js/common/modal.js";
+        import { showAssetDetailModal } from "../../../../js/common/modal.js"
 
-        showAssetDetailModal({title: "${asset.fileName}"})
+        showAssetDetailModal({ title: "${asset.fileName}" })
     </script>
 </div>

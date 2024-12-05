@@ -6,6 +6,7 @@
 
 * Java (11)
 * Postgres database (13)
+* NPM
 
 ## Build & Run
 
@@ -18,7 +19,10 @@ make test
 make watch
 ```
 
-See the Makefile for all the available commands.
+Run `npm install` to install dev-time dependencies (these are just formatters and linters)
+in order to have the `make lint` command work.
+
+**See the Makefile for all the available commands.**
 
 ## Design philosophy, architecture, and patterns
 
@@ -32,25 +36,27 @@ These are covered in the [WIKI](https://github.com/papito/altitude/wiki). Topics
 * SQL schema needs to be updated for *both* Postgres and SQLite. The schemas are in `src/main/resources/migrations/`
 * In development, the type of database running is configured in `core.Configuration` class
 
+### PRE-COMMIT HOOK SETUP
+
+In `.git/hooks/pre-commit `:
+
+    #!/bin/sh
+
+    make lint
+
 ## Logging
 
 See `logback.xml` for configuration.
 
 ## Style and formatting
 
-For formatting, using `scalafmt`: `.scalafmt.conf`
+Linting configurations are in:
 
-For style, using `scalafix`: `.scalafix.conf`
-
-`scalafixAll` will run with the pre-commit hook configured in `.git/hooks/pre-commit`
-
-To configure the pre-commit hook:
-
-```sh
-#!/bin/sh
-
-sbt scalafixAll
-```
+    * .scalafmt.conf
+    * .scalafix.conf
+    * .prettierignore
+    * .prettierrc
+    * .eslintrc
 
 ## Running a tagged test(s):
 Update your test as such:

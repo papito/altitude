@@ -9,16 +9,16 @@
 <% val folder: Folder = folders(idx) %>
 <div class="folder"
      id="folder-${folder.persistedId}"
-     num-of-children="${folder.numOfChildren}"
-     parent-folder-id="${folder.parentId}"
-     folder-id="${folder.persistedId}">
+     alt-num-of-children="${folder.numOfChildren}"
+     alt-parent-folder-id="${folder.parentId}"
+     alt-folder-id="${folder.persistedId}">
 
     <div class="controls drag-drop dropzone"
-         folder-id="${folder.persistedId}">
+         alt-folder-id="${folder.persistedId}">
 
         <a href="#" hx-swap="innerHTML"
            id="expand-folder-children-${folder.persistedId}"
-           folder-id="${folder.persistedId}"
+           alt-folder-id="${folder.persistedId}"
            hx-get='${ url(htmxFolderChildren, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
            hx-target="#children-${folder.persistedId}"
            hx-vals='{"parentId": "${folder.persistedId}"}'>
@@ -34,7 +34,7 @@
         <div class="menu-ctrl">
             <div>
                 <a href="#"
-                   folder-id="${folder.persistedId}"
+                   alt-folder-id="${folder.persistedId}"
                    hx-get='${ url(showFolderContextMenu, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
                    hx-swap="innerHTML"
                    hx-target="#menu-${folder.persistedId}"
@@ -48,11 +48,11 @@
 
     <div class="menu"
          id="menu-${folder.persistedId}"
-         folder-id="${folder.persistedId}">
+         alt-folder-id="${folder.persistedId}">
     </div>
     <div class="children"
          id="children-${folder.persistedId}"
-         folder-id="${folder.persistedId}"></div>
+         alt-folder-id="${folder.persistedId}"></div>
 </div>
 
 #end

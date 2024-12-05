@@ -64,33 +64,33 @@
     <%= RequestContext.account.value.getOrElse("None") %>
 </footer>
 
-<script src="/js/ws.js"></script>
+<script src="/js/lib/ws.js"></script>
 
 <script lang="js" type="module">
-    import {highlightNav} from "/js/common/navigation.js";
+    import { highlightNav } from "../../../js/common/navigation.js"
 
-    highlightNav("import");
+    highlightNav("import")
 </script>
 
-<script lang="js" type="module">
-    htmx.on('htmx:wsOpen', function(evt) {
-        console.debug('WS connection is OPEN')
-    });
-    htmx.on('htmx:wsClose', function(evt) {
-        console.debug('WS connection is CLOSED')
-    });
-    htmx.on('htmx:wsAfterMessage', function(evt) {
-        const statusTextEl = htmx.find("#statusText")
-        // sometimes empty pings come through
-        if (evt.detail.message && evt.detail.message !== "X") {
-            statusTextEl.style.display = "block"
-        }
+<script type="module">
+    htmx.on("htmx:wsOpen", function (evt) {
+      console.debug("WS connection is OPEN")
+    })
+htmx.on("htmx:wsClose", function (evt) {
+      console.debug("WS connection is CLOSED")
+    })
+htmx.on("htmx:wsAfterMessage", function (evt) {
+      const statusTextEl = htmx.find("#statusText")
+      // sometimes empty pings come through
+      if (evt.detail.message && evt.detail.message !== "X") {
+        statusTextEl.style.display = "block"
+      }
 
-        setTimeout(function() {
-            statusTextEl.innerHTML = ""
-            statusTextEl.style.display = 'none'
-        }, 3000);
-    });
+      setTimeout(function () {
+        statusTextEl.innerHTML = ""
+        statusTextEl.style.display = "none"
+      }, 3000)
+    })
 </script>
 
 </body>

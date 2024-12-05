@@ -46,8 +46,8 @@ class SearchResultsController extends BaseHtmxController {
 
     ssp(
       "/htmx/results_grid.ssp",
-      "results" -> results,
-      "page" -> page
+      Api.Field.Search.RESULTS -> results,
+      Api.Field.Search.PAGE -> page
     )
   }
 

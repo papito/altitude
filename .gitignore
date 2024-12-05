@@ -4,6 +4,8 @@
 application.conf
 application-dev.conf
 
+node_modules
+
 *.log
 log
 logs

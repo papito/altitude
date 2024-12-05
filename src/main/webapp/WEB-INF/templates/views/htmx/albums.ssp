@@ -10,7 +10,7 @@
 
 <!-- On load -->
 <script type="module">
-    import {selectTab} from "/js/common/navigation.js";
+    import { selectTab } from "../../../../js/common/navigation.js"
 
-    selectTab("explorer", "albumsTab")
+selectTab("explorer", "albumsTab")
 </script>

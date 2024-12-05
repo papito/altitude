@@ -28,22 +28,22 @@
 <%@ val title: String %>
 
 <script lang="js" type="module">
-    import {Const} from "/js/constants.js";
-    import {showModal, closeModal} from "/js/common/modal.js";
+    import { showModal, closeModal } from "../../../../js/common/modal.js"
+    import { Const } from "../../../../js/constants.js"
 
-    showModal({minWidthPx: "${minWidth}", title: "${title}"})
+    showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
-    htmx.find("#deleteFolder").addEventListener('htmx:afterRequest', function(evt) {
+    htmx
+  .find("#deleteFolder")
+  .addEventListener("htmx:afterRequest", function (evt) {
         if (evt.detail.successful === true) {
-            const deletedFolderEvent = new CustomEvent(
-                    Const.events.folderDeleted, {
-                        detail: {${Api.Field.ID}: "${folder.id}"}
-                    });
+          const deletedFolderEvent = new CustomEvent(Const.events.folderDeleted, {
+            detail: { "${Api.Field.ID}": "${folder.id}" },
+          })
 
-            document.body.dispatchEvent(deletedFolderEvent)
+          document.body.dispatchEvent(deletedFolderEvent)
 
-            closeModal()
+          closeModal()
         }
-
-    });
+      })
 </script>

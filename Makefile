@@ -37,6 +37,8 @@ test-unit:
 	ENV=test sbt testUnit
 
 lint:
+	npm run format
+	npm run lint:fix
 	sbt scalafixAll
 
 clean:

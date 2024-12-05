@@ -99,18 +99,18 @@
 <div id="rootFolderList" class="folder-list">
     <div class="folder root"
          id="folder-${rootFolder.persistedId}"
-         num-of-children="${rootFolder.numOfChildren}"
-         folder-id="${rootFolder.persistedId}"
-         parent-folder-id="${rootFolder.persistedId}"
-         is-root="true"
-         expanded="true">
+         alt-num-of-children="${rootFolder.numOfChildren}"
+         alt-folder-id="${rootFolder.persistedId}"
+         alt-parent-folder-id="${rootFolder.persistedId}"
+         alt-is-root="true"
+         alt-expanded="true">
 
         <div class="controls dropzone"
-             folder-id="${rootFolder.persistedId}">
+             alt-folder-id="${rootFolder.persistedId}">
             <i class="fas fa-folder"></i>
             <div class="menu-ctrl">
                 <a href="#"
-                   folder-id="${rootFolder.persistedId}"
+                   alt-folder-id="${rootFolder.persistedId}"
                    id="expand-folder-children-${rootFolder.persistedId}"
                    hx-get='${ url(showFolderContextMenu, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
                    hx-swap="innerHTML"
@@ -123,13 +123,13 @@
 
         <div class="menu"
              id="menu-${rootFolder.persistedId}"
-             folder-id="${rootFolder.persistedId}">
+             alt-folder-id="${rootFolder.persistedId}">
 
         </div>
 
         <div class="children"
              id="children-${rootFolder.persistedId}"
-             folder-id="${rootFolder.persistedId}"
+             alt-folder-id="${rootFolder.persistedId}"
              hx-swap="innerHTML"
              hx-get='${ url(htmxFolderChildren, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
              hx-vals='{"parentId": "${rootFolder.persistedId}"}'
@@ -141,8 +141,8 @@
 
 <!-- On load -->
 <script type="module">
-    import {selectTab} from "/js/common/navigation.js";
-    import {context} from "/js/context.js"
+    import { selectTab } from "../../../../js/common/navigation.js"
+import { context } from "../../../../js/context.js"
 
     selectTab("explorer", "foldersTab")
 
@@ -152,6 +152,6 @@
     context.repoId = "${ RequestContext.getRepository.persistedId }"
 </script>
 
-<script type="module" src="/js/folders/htmx.js"></script>
-<script type="module" src="/js/folders/events.js"></script>
+<script type="module" src="/js/folders/htmx_event_handlers.js"></script>
+<script type="module" src="/js/folders/event_handlers.js"></script>
 <script type="module" src="/js/folders/dragon-drop.js"></script>

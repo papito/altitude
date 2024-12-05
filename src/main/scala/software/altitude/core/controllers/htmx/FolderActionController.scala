@@ -26,8 +26,8 @@ class FolderActionController extends BaseHtmxController {
     val parentId: String = params.get(Api.Field.Folder.PARENT_ID).get
 
     ssp("htmx/add_folder_modal",
-      "minWidth" -> C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
-      "title" -> C.UI.ADD_FOLDER_MODAL_TITLE,
+      Api.Modal.MIN_WIDTH -> C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
+      Api.Modal.TITLE -> C.UI.ADD_FOLDER_MODAL_TITLE,
       Api.Field.Folder.PARENT_ID -> parentId)
   }
 
@@ -37,8 +37,8 @@ class FolderActionController extends BaseHtmxController {
     val folder: Folder = app.service.folder.getById(folderId)
 
     ssp("htmx/rename_folder_modal",
-      "minWidth" -> C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
-      "title" -> C.UI.RENAME_FOLDER_MODAL_TITLE,
+      Api.Modal.MIN_WIDTH -> C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
+      Api.Modal.TITLE -> C.UI.RENAME_FOLDER_MODAL_TITLE,
       Api.Field.Folder.EXISTING_NAME -> Some(folder.name),
       Api.Field.ID -> folderId)
   }
@@ -49,8 +49,8 @@ class FolderActionController extends BaseHtmxController {
     val folder: Folder = app.service.folder.getById(folderId)
 
     ssp("htmx/delete_folder_modal",
-      "minWidth" -> C.UI.DELETE_FOLDER_MODAL_MIN_WIDTH,
-      "title" -> C.UI.DELETE_FOLDER_MODAL_TITLE,
+      Api.Modal.MIN_WIDTH -> C.UI.DELETE_FOLDER_MODAL_MIN_WIDTH,
+      Api.Modal.TITLE -> C.UI.DELETE_FOLDER_MODAL_TITLE,
       Api.Field.Folder.FOLDER -> folder)
   }
 
@@ -58,7 +58,7 @@ class FolderActionController extends BaseHtmxController {
     val folderId: String = params.get("folderId").get
 
     ssp("htmx/folder_context_menu",
-      "folderId" -> folderId)
+      Api.Field.FOLDER_ID -> folderId)
   }
 
   val showFoldersTab: Route = get("/r/:repoId/tab") {
@@ -66,7 +66,7 @@ class FolderActionController extends BaseHtmxController {
     val rootFolder: Folder = app.service.folder.getById(repo.rootFolderId)
 
     ssp("htmx/folders",
-      "rootFolder" -> rootFolder)
+      Api.Field.Folder.ROOT_FOLDER -> rootFolder)
   }
 
   val htmxAddFolder: Route = post("/r/:repoId/add") {
@@ -91,10 +91,10 @@ class FolderActionController extends BaseHtmxController {
       halt(200,
         ssp(
           "htmx/add_folder_modal",
-          "minWidth" -> C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
-          "title" -> C.UI.ADD_FOLDER_MODAL_TITLE,
-          "fieldErrors" -> errors,
-          "formJson" -> jsonIn,
+          Api.Modal.MIN_WIDTH -> C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
+          Api.Modal.TITLE -> C.UI.ADD_FOLDER_MODAL_TITLE,
+          Api.Modal.FIELD_ERRORS -> errors,
+          Api.Modal.FORM_JSON -> jsonIn,
           Api.Field.Folder.PARENT_ID -> parentId
         ),
         // we want to change the folder modal to show the errors, not reload the folder list!
@@ -126,7 +126,7 @@ class FolderActionController extends BaseHtmxController {
 
     halt(200,
       ssp("htmx/folder_children.ssp",
-        "folders" -> childFolders)
+        Api.Field.Folder.FOLDERS -> childFolders)
     )
   }
 
@@ -152,10 +152,10 @@ class FolderActionController extends BaseHtmxController {
       halt(200,
         ssp(
           "htmx/rename_folder_modal",
-          "minWidth" -> C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
-          "title" -> C.UI.RENAME_FOLDER_MODAL_TITLE,
-          "fieldErrors" -> errors,
-          "formJson" -> jsonIn,
+          Api.Modal.MIN_WIDTH -> C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
+          Api.Modal.TITLE -> C.UI.RENAME_FOLDER_MODAL_TITLE,
+          Api.Modal.FIELD_ERRORS -> errors,
+          Api.Modal.FORM_JSON -> jsonIn,
           Api.Field.ID -> folderId
         ),
         // we want to change the folder modal to show the errors, not reload the folder list!
@@ -191,7 +191,7 @@ class FolderActionController extends BaseHtmxController {
     val childFolders: List[Folder] = app.service.folder.immediateChildren(parentId)
 
     ssp("htmx/folder_children",
-      "folders" -> childFolders)
+      Api.Field.Folder.FOLDERS -> childFolders)
   }
 
   val htmxMoveFolder: Route = post("/r/:repoId/move") {

@@ -1,3 +1,6 @@
+The lint error "Insert `··`" typically indicates that there are missing spaces for proper indentation or alignment. Here is the fixed version of the code with the necessary spaces inserted:
+
+```scala
 <% import software.altitude.core.Api %>
 <% import software.altitude.core.RequestContext %>
 <% import play.api.libs.json.Json %>
@@ -13,9 +16,9 @@
 <% val name: Option[String] = (formJson \ Api.Field.Folder.NAME).asOpt[String] %>
 
 <style>
-    #renameFolder input {
-        width: 100%;
-    }
+  #renameFolder input {
+    width: 100%;
+  }
 </style>
 
 <form action="#"
@@ -26,49 +29,52 @@
       hx-target="#folderName-${id}"
       hx-ext="json-enc">
 
-    #if (fieldErrors.contains(Api.Field.Folder.NAME))
-        <div class="error">${ fieldErrors(Api.Field.Folder.NAME) }</div>
-    #end
+  <% if (fieldErrors.contains(Api.Field.Folder.NAME)) { %>
+  <div class="error">${ fieldErrors(Api.Field.Folder.NAME) }</div>
+  <% } %>
 
-    <div>
-        <label for="${ Api.Field.Folder.NAME }"></label>
-        <input type="text"
-               id="field-${ Api.Field.Folder.NAME }"
-               name="${ Api.Field.Folder.NAME }"
-               autocomplete="off"
+  <div>
+    <label for="${ Api.Field.Folder.NAME }"></label>
+    <input type="text"
+           id="field-${ Api.Field.Folder.NAME }"
+           name="${ Api.Field.Folder.NAME }"
+           autocomplete="off"
 
-               #if (fieldErrors.contains(Api.Field.Folder.NAME))
-                class="error"
-               #end
+    <% if (fieldErrors.contains(Api.Field.Folder.NAME)) { %>
+    class="error"
+    <% } %>
 
-               #if (name.isDefined)
-                value="${ name.get }"
-               #else
-                value="${ existingName }"
-               #end
+    <% if (name.isDefined) { %>
+    value="${ name.get }"
+    <% } else { %>
+    value="${ existingName.getOrElse("") }"
+    <% } %>
 
-               placeholder="New folder name"
-               maxlength="${ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
-               minlength="${ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
+    placeholder="New folder name"
+    maxlength="${ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+    minlength="${ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
 
-        <input type="hidden" name="${ Api.Field.ID }" value="${ id }">
-    </div>
+    <input type="hidden" name="${ Api.Field.ID }" value="${ id }">
+  </div>
 </form>
 
-<script lang="js" type="module">
-    import {Folder} from "/js/models.js";
-    import {showModal, closeModal} from "/js/common/modal.js";
+<script type="module">
+  import { Folder } from "../../../../js/models.js"
+  import { showModal, closeModal } from "../../../../js/common/modal.js"
 
-    showModal({minWidthPx: "${minWidth}", title: "${title}"})
-    htmx.find("#field-${ Api.Field.Folder.NAME }").focus()
-    htmx.find("#field-${ Api.Field.Folder.NAME }").select()
+  showModal({ minWidthPx: "${minWidth}", title: "${title}" })
+  htmx.find("#field-${ Api.Field.Folder.NAME }").focus()
+  htmx.find("#field-${ Api.Field.Folder.NAME }").select()
 
-    htmx.find("#renameFolder").addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.detail.successful === true) {
-            const folder = new Folder("${id}")
-            folder.closeContextMenu()
+  htmx
+    .find("#renameFolder")
+    .addEventListener("htmx:afterRequest", function (evt) {
+      if (evt.detail.successful === true) {
+        const folder = new Folder("${id}")
+        folder.closeContextMenu()
 
-            closeModal()
-        }
-    });
+        closeModal()
+      }
+    })
 </script>
+```

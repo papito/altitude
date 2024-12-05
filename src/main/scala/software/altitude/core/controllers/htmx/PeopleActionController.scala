@@ -23,7 +23,8 @@ class PeopleActionController extends BaseHtmxController {
   val showPeopleTab: Route = get("/r/:repoId/tab") {
     val people: List[Person] = app.service.person.getAll
 
-    ssp("htmx/people", "people" -> people)
+    ssp("htmx/people",
+      Api.Field.Person.PEOPLE -> people)
   }
 
   val searchPerson: Route = get("/r/:repoId/p/:personId/search") {
@@ -35,7 +36,8 @@ class PeopleActionController extends BaseHtmxController {
     val personId: String = params.get("personId").get
     val person: Person = app.service.person.getById(personId)
 
-    ssp("htmx/edit_person_name", "person" -> person)
+    ssp("htmx/edit_person_name",
+      Api.Field.Person.PERSON -> person)
   }
 
   val editPersonName: Route = put("/r/:repoId/p/:personId/name/edit") {
@@ -62,10 +64,10 @@ class PeopleActionController extends BaseHtmxController {
       halt(200,
         ssp(
           "htmx/edit_person_name",
-          "fieldErrors" -> errors,
-          "formJson" -> jsonIn,
-          "person" -> person,
-          "newName" -> (jsonIn \ Api.Field.Person.NAME).asOpt[String],
+          Api.Modal.FIELD_ERRORS -> errors,
+          Api.Modal.FORM_JSON -> jsonIn,
+          Api.Field.Person.PERSON -> person,
+          Api.Field.Person.NEW_NAME -> (jsonIn \ Api.Field.Person.NAME).asOpt[String],
         ),
       )
     }
@@ -89,7 +91,8 @@ class PeopleActionController extends BaseHtmxController {
     }
 
     val updatedPerson: Person = app.service.person.getById(personId)
-    ssp("htmx/view_person_name", "person" -> updatedPerson)
+    ssp("htmx/view_person_name",
+      Api.Field.Person.PERSON -> updatedPerson)
   }
 
   val showMergePeopleModal: Route = get("/r/:repoId/modals/merge") {
@@ -107,8 +110,8 @@ class PeopleActionController extends BaseHtmxController {
     }
 
     ssp("htmx/merge_people_modal",
-      "minWidth" -> C.UI.MERGE_PEOPLE_MODAL_MIN_WIDTH,
-      "title" -> C.UI.MERGE_PEOPLE_MODAL_TITLE,
+      Api.Modal.MIN_WIDTH -> C.UI.MERGE_PEOPLE_MODAL_MIN_WIDTH,
+      Api.Modal.TITLE -> C.UI.MERGE_PEOPLE_MODAL_TITLE,
       Api.Field.Person.MERGE_SOURCE_PERSON -> sourcePerson,
       Api.Field.Person.MERGE_DEST_PERSON -> destPerson)
   }
@@ -128,6 +131,7 @@ class PeopleActionController extends BaseHtmxController {
   private def searchPerson(personId: String): String = {
     val person: Person = app.service.person.getById(personId)
 
-    ssp("htmx/person", "person" -> person)
+    ssp("htmx/person",
+      Api.Field.Person.PERSON -> person)
   }
 }

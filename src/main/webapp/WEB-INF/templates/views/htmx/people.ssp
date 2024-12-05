@@ -87,8 +87,8 @@
 
 <!-- On load -->
 <script type="module">
-    import {selectTab} from "/js/common/navigation.js";
-    import {context} from "/js/context.js"
+    import { selectTab } from "../../../../js/common/navigation.js"
+import { context } from "../../../../js/context.js"
 
     /**
      * Set the necessary context for script includes
@@ -98,5 +98,5 @@
     selectTab("explorer", "peopleTab")
 </script>
 
-<script type="module" src="/js/people/events.js"></script>
+<script type="module" src="/js/people/events_handlers.js"></script>
 <script type="module" src="/js/people/dragon-drop.js"></script>

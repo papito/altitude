@@ -1,6 +1,7 @@
 package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
+import software.altitude.core.Api
 import software.altitude.core.controllers.BaseHtmxController
 
 /**
@@ -13,7 +14,8 @@ class AlbumActionController extends BaseHtmxController {
   }
 
   val showAlbumsTab: Route = get("/r/:repoId/tab") {
-    ssp("htmx/albums", "albums" -> List())
+    ssp("htmx/albums",
+     Api.Field.ALBUM.ALBUMS -> List())
   }
 
 }

@@ -3,90 +3,100 @@
 <% import software.altitude.core.Api %>
 
 <style>
-    #uploadForm {
-        display: grid;
-        grid-auto-rows: auto;
-        grid-row-gap: calc(var(--control-vertical-space) * 1.5);
-    }
+  #uploadForm {
+    display: grid;
+    grid-auto-rows: auto;
+    grid-row-gap: calc(var(--control-vertical-space) * 1.5);
+  }
 
-    #uploadForm div {
-        text-align: center;
-    }
+  #uploadForm div {
+    text-align: center;
+  }
 
-    #uploadForm progress {
-        width: 100%;
-    }
+  #uploadForm progress {
+    width: 100%;
+  }
 
-    #uploadForm input[type="file"] {
-        background-color: var(--form-background-color);
-        color: #FFFFFF;
-    }
+  #uploadForm input[type="file"] {
+    background-color: var(--form-background-color);
+    color: #FFFFFF;
+  }
 
-    #uploadForm button {
-        font-size: 1.2em;
-    }
+  #uploadForm button {
+    font-size: 1.2em;
+  }
 
-    #statusTicker {
-    }
+  #statusTicker {
+  }
 
-    #statusText {
-        display: none;
-        color: var(--success-font-color);
-        font-weight: bold;
-        padding: 10px;
-        font-size: 1.1em;
-    }
+  #statusText {
+    display: none;
+    color: var(--success-font-color);
+    font-weight: bold;
+    padding: 10px;
+    font-size: 1.1em;
+  }
 
-    #statusText.warning {
-        color: var(--warning-font-color);
-    }
+  #statusText.warning {
+    color: var(--warning-font-color);
+  }
 
-    #statusText span {
-        color: #FFFFFF;
-    }
+  #statusText span {
+    color: #FFFFFF;
+  }
 
 </style>
 
 <%@ val uploadId: String = Util.randomStr() %>
 
 <form id="uploadForm" hx-post='${ url(uploadFilesForm, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.Upload.UPLOAD_ID -> uploadId) }' hx-encoding="multipart/form-data">
-    <div>
-        <input type="file" name="files" id="files" multiple>
-    </div>
+  <div>
+    <input type="file" name="files" id="files" multiple>
+  </div>
 
-    <div id="stayOnPage" hidden>
-        Files are being uploaded - do not navigate from this page
-    </div>
+  <div id="stayOnPage" hidden>
+    Files are being uploaded - do not navigate from this page
+  </div>
 
-    <div id="progressBarControl" hidden>
-        <progress id='progressBar' value='0' max='100'></progress>
-    </div>
+  <div id="progressBarControl" hidden>
+    <progress id='progressBar' value='0' max='100'></progress>
+  </div>
 
-    <div id="progressTextControl" hidden>
-    </div>
+  <div id="progressTextControl" hidden>
+  </div>
 
-    <div id="startUploadButtonControl">
-        <button class="action-button">Upload from computer</button>
-    </div>
+  <div id="startUploadButtonControl">
+    <button class="action-button">Upload from computer</button>
+  </div>
 
-    <script>
-        htmx.on('#uploadForm', 'htmx:xhr:progress', function(evt) {
-            htmx.find("#progressBarControl").removeAttribute("hidden")
-            htmx.find("#stayOnPage").removeAttribute("hidden")
-            htmx.find('#progressBar').setAttribute('value', evt.detail.loaded/evt.detail.total * 100)
-            htmx.find('#startUploadButtonControl').setAttribute('hidden', true)
-            htmx.find('#files').setAttribute('disabled', true)
+  <script type="module">
+    const elProgressBarCtrl = htmx.find("#progressBarControl")
+    const elStartUploadButton = htmx.find("#startUploadButtonControl")
+    const elStayOnPage = htmx.find("#stayOnPage")
+    const elProgressBar = htmx.find("#progressBar")
+    const elFiles = htmx.find("#files")
+    const elProgressTextCtrl = htmx.find("#progressTextControl")
 
-            htmx.find("#progressTextControl").removeAttribute("hidden")
-            const percentLoaded = parseInt((evt.detail.loaded / evt.detail.total) * 100)
-            htmx.find("#progressTextControl").innerText = percentLoaded+ "%"
+    htmx.on("#uploadForm", "htmx:xhr:progress", function (evt) {
+      elProgressBarCtrl.removeAttribute("hidden")
+      elStayOnPage.removeAttribute("hidden")
+      elProgressBar.setAttribute(
+        "value",
+        (evt.detail.loaded / evt.detail.total) * 100,
+      )
+      elStartUploadButton.setAttribute("hidden", "true")
+      elFiles.setAttribute("disabled", "true")
 
-            if (percentLoaded === 100) {
-                htmx.find("#progressBarControl").setAttribute('hidden', true)
-                htmx.find("#stayOnPage").setAttribute("hidden", true)
-                htmx.find('#startUploadButtonControl').setAttribute('hidden', false)
-                htmx.find('#files').setAttribute('disabled', false)
-            }
-        });
-    </script>
+      elProgressTextCtrl.removeAttribute("hidden")
+      const percentLoaded = parseInt(evt.detail.loaded / evt.detail.total) * 100
+      elProgressTextCtrl.innerText = percentLoaded + "%"
+
+      if (percentLoaded === 100) {
+        elProgressBarCtrl.setAttribute("hidden", "true")
+        elStayOnPage.setAttribute("hidden", "true")
+        elStartUploadButton.setAttribute("hidden", "false")
+        elFiles.setAttribute("disabled", "false")
+      }
+    })
+  </script>
 </form>
