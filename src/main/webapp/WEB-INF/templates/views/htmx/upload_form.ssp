@@ -18,8 +18,13 @@
   }
 
   #uploadForm input[type="file"] {
-    background-color: var(--form-background-color);
+    background-color: var(--background-form-color);
     color: #FFFFFF;
+  }
+
+  #uploadForm input::file-selector-button {
+    color: #FFFFFF;
+    background-color: var(--background-form-color);
   }
 
   #uploadForm button {

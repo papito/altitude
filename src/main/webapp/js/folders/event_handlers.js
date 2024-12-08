@@ -50,19 +50,14 @@ document.body.addEventListener(Const.events.folderMoved, (event) => {
         console.debug(
           "Target folder not expanded - removing the folder being moved.",
         )
-        // target folder is not expanded, so just make the moved folder disappear
-        showSuccessSnackBar(
-          'Folder "' +
-            movedFolder.name() +
-            '" moved to "' +
-            newParent.name() +
-            '"',
-        )
         movedFolder.remove()
       }
 
       newParent.updateVisualState()
       oldParent.updateVisualState()
+
+      const message = `Folder ${movedFolder.name()} moved to ${newParent.name()}`
+      showSuccessSnackBar(message)
     } else if (status === 409) {
       const message = response["htmx-internal-data"].xhr.responseText
       showWarningSnackBar(message)
@@ -73,6 +68,7 @@ document.body.addEventListener(Const.events.folderMoved, (event) => {
     }
   }
 
+  console.log("1 !!!!")
   htmx.ajax("post", `/htmx/folder/r/${context.repoId}/move`, {
     swap: "none",
     values: { ...event.detail },

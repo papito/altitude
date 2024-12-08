@@ -28,7 +28,7 @@
             border: var(--form-border);
             border-radius: 5px;
             place-items: center;
-            background-color: var(--form-background-color);
+            background-color: var(--background-form-color);
         }
 
         #importLog {
