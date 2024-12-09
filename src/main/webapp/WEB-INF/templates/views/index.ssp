@@ -5,141 +5,141 @@
 
 <html lang="en">
 <head>
-    <title>ALTITUDE</title>
+  <title>ALTITUDE</title>
 
-    <% include("includes/header_common.ssp") %>
+  <% include("includes/header_common.ssp") %>
 
-    <style>
-        body {
-            display: grid;
-            grid-template-rows: auto 1fr 40px;
-            height: 100vh;
-            margin: 0;
-        }
+  <script type="module" src="/js/index/init.js"></script>
 
-        main {
-            height: 100%;
-            overflow: hidden;
-        }
+  <style>
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr 40px;
+      height: 100vh;
+      margin: 0;
+    }
 
-        #explorer {
-            border-right: 1px solid var(--panel-border-color);
-            box-shadow: var(--box-shadow);
-            text-shadow: rgba(0,0,0,0.75) 0 1px;
-            padding-top: var(--panel-padding);
-        }
+    main {
+      height: 100%;
+      overflow: hidden;
+    }
 
-        #explorerViews {
-            box-shadow: var(--box-shadow);
-            text-shadow: rgba(0,0,0,0.75) 0 1px;
-        }
+    #explorer {
+      border-right: 1px solid var(--panel-border-color);
+      box-shadow: var(--box-shadow);
+      text-shadow: rgba(0,0,0,0.75) 0 1px;
+      padding-top: var(--panel-padding);
+    }
 
-        #infoPanel {
-            border-top: 1px solid var(--panel-border-color);
-            box-shadow: var(--box-shadow);
-            text-shadow: rgba(0,0,0,0.75) 0 1px;
-        }
+    #explorerViews {
+      box-shadow: var(--box-shadow);
+      text-shadow: rgba(0,0,0,0.75) 0 1px;
+    }
 
-        #content {
-            border-left: 1px solid var(--panel-border-color);
-            box-shadow: var(--box-shadow);
-            text-shadow: rgba(0,0,0,0.75) 0 1px;
-            overflow-y: scroll;
-            max-width: 100%;
-        }
+    #infoPanel {
+      border-top: 1px solid var(--panel-border-color);
+      box-shadow: var(--box-shadow);
+      text-shadow: rgba(0,0,0,0.75) 0 1px;
+    }
 
-        /* SPLIT */
-        .split.split-horizontal,
-        .gutter.gutter-horizontal {
-            height: 100%;
-            float: left;
-        }
+    #content {
+      border-left: 1px solid var(--panel-border-color);
+      box-shadow: var(--box-shadow);
+      text-shadow: rgba(0,0,0,0.75) 0 1px;
+      overflow-y: scroll;
+      max-width: 100%;
+    }
 
-        .gutter {
-            background-color: transparent;
-            background-repeat: no-repeat;
-            background-position: 50%;
-        }
+    /* SPLIT */
+    .split.split-horizontal,
+    .gutter.gutter-horizontal {
+      height: 100%;
+      float: left;
+    }
 
-        .gutter.gutter-vertical {
-            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
-            cursor: ns-resize;
-        }
+    .gutter {
+      background-color: transparent;
+      background-repeat: no-repeat;
+      background-position: 50%;
+    }
 
-        .gutter.gutter-horizontal {
-            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
-            cursor: ew-resize;
-        }
+    .gutter.gutter-vertical {
+      background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
+      cursor: ns-resize;
+    }
 
-        .split {
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
+    .gutter.gutter-horizontal {
+      background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+      cursor: ew-resize;
+    }
 
-    </style>
+    .split {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+  </style>
 </head>
 
 <body>
 
 <div>
-    <% include("includes/nav.ssp") %>
+  <% include("includes/nav.ssp") %>
 </div>
 
 <main>
-    <% include("includes/html_common.ssp") %>
+  <% include("includes/html_common.ssp") %>
 
-    <div id="explorer" class="split content split-horizontal">
-        <div id="explorerViews" class="split content">
-            <tab-container>
-                <div role="tablist">
-                    <button type="button" id="foldersTab" role="tab"
-                            data-tab-container-no-tabstop>
-                        <a href="#"
-                           hx-target="#explorerPanelContent"
-                           hx-swap="innerHTML"
-                           hx-trigger="load, click"
-                           hx-get='${ url(showFoldersTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Folders</a>
-                    </button>
+  <div id="explorer" class="split content split-horizontal">
+    <div id="explorerViews" class="split content">
+      <tab-container>
+        <div role="tablist">
+          <button type="button" id="foldersTab" role="tab"
+                  data-tab-container-no-tabstop>
+            <a href="#"
+               hx-target="#explorerPanelContent"
+               hx-swap="innerHTML"
+               hx-trigger="load, click"
+               hx-get='${ url(showFoldersTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Folders</a>
+          </button>
 
-                    <button type="button" id="albumsTab" role="tab"
-                            data-tab-container-no-tabstop>
-                        <a href="#"
-                           hx-target="#explorerPanelContent"
-                           hx-trigger="click"
-                           hx-swap="innerHTML"
-                           hx-get='${ url(showAlbumsTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Albums</a>
-                    </button>
+          <button type="button" id="albumsTab" role="tab"
+                  data-tab-container-no-tabstop>
+            <a href="#"
+               hx-target="#explorerPanelContent"
+               hx-trigger="click"
+               hx-swap="innerHTML"
+               hx-get='${ url(showAlbumsTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Albums</a>
+          </button>
 
-                    <button type="button" id="peopleTab" role="tab"
-                            data-tab-container-no-tabstop>
-                        <a href="#"
-                           hx-target="#explorerPanelContent"
-                           hx-trigger="click"
-                           hx-swap="innerHTML"
-                           hx-get='${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>People</a>
-                    </button>
-                </div>
-
-                <div id="explorerPanelContent" role="tabpanel" class="tab-content">
-                </div>
-
-            </tab-container>
+          <button type="button" id="peopleTab" role="tab"
+                  data-tab-container-no-tabstop>
+            <a href="#"
+               hx-target="#explorerPanelContent"
+               hx-trigger="click"
+               hx-swap="innerHTML"
+               hx-get='${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>People</a>
+          </button>
         </div>
 
-        <div id="infoPanel" class="split content">
+        <div id="explorerPanelContent" role="tabpanel" class="tab-content">
         </div>
+
+      </tab-container>
     </div>
 
-    <div id="content" class="split content split-horizontal">
-        <% include("includes/search_results.ssp") %>
+    <div id="infoPanel" class="split content">
     </div>
+  </div>
+
+  <div id="content" class="split content split-horizontal">
+    <% include("includes/search_results.ssp") %>
+  </div>
 </main>
 
 <footer>
-    <%= RequestContext.account.value.get.name %>
+  <%= RequestContext.account.value.get.name %>
 </footer>
-
-<script type="module" src="/js/index/init.js"></script>
 
 </body>
 </html>

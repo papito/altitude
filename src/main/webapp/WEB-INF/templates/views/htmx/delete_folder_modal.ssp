@@ -27,7 +27,7 @@
 <%@ val minWidth: Int %>
 <%@ val title: String %>
 
-<script lang="js" type="module">
+<script type="module">
     import { showModal, closeModal } from "../../../../js/common/modal.js"
     import { Const } from "../../../../js/constants.js"
 

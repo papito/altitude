@@ -3,6 +3,10 @@
  */
 import Split from "../lib/split.es.js"
 
+import { highlightNav } from "../common/navigation.js"
+
+highlightNav("repository")
+
 const savedHorizontalSplitSizes = localStorage.getItem("horizontalSplitSizes")
 let horizontalSplitSizes = [25, 75]
 

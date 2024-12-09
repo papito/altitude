@@ -2,84 +2,88 @@
 <% import software.altitude.core.RequestContext %>
 
 <style>
-    nav {
-        display: grid;
-        grid-template-columns: 150px repeat(3, 1fr) 250px;
-        grid-column-gap: 10px;
-        background: var(--background-secondary-color);
-        color: #fff;
-        align-items: center;
-        border-bottom: var(--navbar-border);
-        text-shadow: var(--navbar-text-shadow);
-    }
+  nav {
+    display: grid;
+    grid-template-columns: 150px repeat(3, 1fr) 250px;
+    grid-column-gap: 10px;
+    background: var(--background-secondary-color);
+    color: #fff;
+    align-items: center;
+    border-bottom: var(--navbar-border);
+    text-shadow: var(--navbar-text-shadow);
+  }
 
-    nav span, nav a {
-        color: #FFF;
-        text-decoration: none;
-        font-size: .9em;
-        font-weight: bold;
-        font-family: var(--font);
-        text-transform: uppercase;
-    }
-    nav .brand a {
-        letter-spacing: .15em;
-        text-transform: uppercase;
-        text-decoration: none;
-        color: #979393;
-        font-weight: bold;
-        font-size: 1.3em;
-    }
+  nav span, nav a {
+    color: #FFF;
+    text-decoration: none;
+    font-size: .9em;
+    font-weight: bold;
+    font-family: var(--font);
+    text-transform: uppercase;
+  }
+  nav .brand a {
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: #979393;
+    font-weight: bold;
+    font-size: 1.3em;
+  }
 
-    nav div {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+  nav div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
-    nav .menu {
-        letter-spacing: .10em;
-        color: #9399b4;
-        cursor: pointer;
-    }
+  nav .menu {
+    letter-spacing: .10em;
+    color: #9399b4;
+    cursor: pointer;
+  }
 
-    nav input {
-        border-radius: .4em;
-        border: 2px groove #5a5855;
-        padding: .3em;
-        background-color: #FFFFFF;
-        width: 90%;
-    }
+  nav input {
+    border-radius: .4em;
+    border: 2px groove #5a5855;
+    padding: .3em;
+    background-color: #FFFFFF;
+    width: 90%;
+  }
 
-    nav input::placeholder {
-        color: #a5a2a2;
-    }
+  nav input::placeholder {
+    color: #a5a2a2;
+  }
 
-    nav .menu span {
-        margin-left: .5em;
-    }
+  nav .menu span {
+    margin-left: .5em;
+  }
 
-    nav .active a, nav .active a span {
-        color: var(--success-font-color);
-        font-weight: bold;
-        font-size: 1em;
-    }
+  nav .menu.active {
+    background-color: var(--background-tertiary-color);
+    color: #FFF;
+    border: 2px solid var(--warning-background-color);
+    border-radius: 5px;
+    padding: 6px;
+    font-weight: bold;
+  }
+
 </style>
 
 <nav>
-    <div class="brand">
-        <a href="/">Altitude</a>
-    </div>
-    <div class="menu">
-        <a href="/"><i class="fas fa-database"></i><span>${RequestContext.getRepository.name}</span></a>
-    </div>
-    <div class="menu import">
-        <a href='${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'><i class="fas fa-download"></i><span>Import</span></a>
-    </div>
-    <div class="menu">
-        <a href=""><i class="fas fa-adjust"></i><span>Settings</span></a>
-    </div>
-    <div class="search">
-        <label for="search"></label>
-        <input id="search" type="text" name="search" placeholder="Search">
-    </div>
+  <div class="brand">
+    <a href="/">Altitude</a>
+  </div>
+  <div class="menu repository">
+    <a href="/"><i class="fas fa-database"></i><span>${RequestContext.getRepository.name}</span></a>
+  </div>
+  <div class="menu import">
+    <a href='${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'><i class="fas fa-plus-square"></i><span>Import</span></a>
+  </div>
+  <div class="menu settings">
+    <a href=""><i class="fas fa-cog"></i><span>Settings</span></a>
+  </div>
+  <div class="search">
+    <label for="search"></label>
+    <input id="search" type="text" name="search" placeholder="Search">
+  </div>
 </nav>

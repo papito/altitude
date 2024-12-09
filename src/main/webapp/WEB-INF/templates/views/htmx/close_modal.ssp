@@ -1,4 +1,4 @@
-<script lang="javascript" type="module">
+<script type="module">
     import { closeModal } from "../../../../js/common/modal.js"
 
     closeModal()
