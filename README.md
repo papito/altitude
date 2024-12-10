@@ -4,8 +4,8 @@
 
 ### Core system requirements
 
-* Java (11)
-* Postgres database (13)
+* Java 11
+* Docker
 * NPM
 
 ## Build & Run
