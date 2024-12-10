@@ -55,14 +55,14 @@
     htmx.find("#field${ Api.Field.Folder.NAME }").focus()
 
     htmx.find("#addFolder").addEventListener("htmx:afterRequest", function (evt) {
-      if (evt.detail.successful === true) {
-        const folderAddedEvent = new CustomEvent(Const.events.folderAdded, {
-          detail: { "${Api.Field.Folder.PARENT_ID}": "${parentId}" },
-        })
+        if (evt.detail.successful === true) {
+            const folderAddedEvent = new CustomEvent(Const.events.folderAdded, {
+                detail: { "<%= Api.Field.Folder.PARENT_ID %>": "<%= parentId %>" },
+            })
 
-        document.body.dispatchEvent(folderAddedEvent)
+            document.body.dispatchEvent(folderAddedEvent)
 
-        closeModal()
-      }
+            closeModal()
+        }
     })
 </script>

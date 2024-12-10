@@ -1,58 +1,61 @@
+// src/main/scala/software/altitude/core/Validators.scala
 package software.altitude.core
 
 import play.api.libs.json.JsObject
 import software.altitude.core.{Const => C}
 
-object Validators {
+import scala.util.matching.Regex
 
-  /**
-   * API request validator for JSON payloads
-   *
-   * @param required List of required fields in the request.
-   * @param maxLengths Map of fields to their maximum allowed lengths.
-   * @param minLengths Map of fields to their minimum required lengths.
-   */
+object Validators {
+  private val emailRegex: Regex = """^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""".r
+  private val uuidRegex: Regex = """^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$""".r
+
   case class ApiRequestValidator(required: List[String] = List(),
                                  maxLengths: Map[String, Int] = Map.empty,
-                                 minLengths: Map[String, Int] = Map.empty) {
-    /**
-     * Validates a JSON object based on the specified rules.
-     *
-     * @param json The JSON object to validate.
-     * @throws ValidationException If the JSON object does not meet the validation criteria.
-     */
+                                 minLengths: Map[String, Int] = Map.empty,
+                                 email: List[String] = List.empty,
+                                 uuid: List[String] = List.empty) {
+
     def validate(json: JsObject): Unit = {
       val ex: ValidationException = ValidationException()
 
-      // Check for required fields
       required.foreach { field =>
         if (!json.keys.contains(field) || json(field).as[String].isEmpty) {
-          ex.errors += (field -> C.Msg.Err.REQUIRED)
+          ex.errors += (field -> C.Msg.Err.VALUE_REQUIRED)
         }
       }
 
-      // Check for fields exceeding maximum length
       maxLengths foreach { case (field, maxLength) =>
         if (json.keys.contains(field) && json(field).as[String].length > maxLength) {
           ex.errors += (field -> C.Msg.Err.VALUE_TOO_LONG.format(maxLength))
         }
       }
 
-      // Check for fields not meeting minimum length
       minLengths foreach { case (field, minLength) =>
-        /* We add a check here to make sure there is no existing error for this field already.
-           The required check should not be overridden by the min length check (which it would be otherwise)
-         */
-        if (json.keys.contains(field) &&
-          json(field).as[String].length < minLength
-          && !ex.errors.contains(field)) {
-
+        if (json.keys.contains(field) && json(field).as[String].length < minLength) {
           ex.errors += (field -> C.Msg.Err.VALUE_TOO_SHORT.format(minLength))
         }
       }
 
-      // Trigger the exception if there are any validation errors
+      email.foreach { field =>
+        if (isStillValid(ex, field, json) && json.keys.contains(field) &&
+          !emailRegex.matches(json(field).as[String])) {
+          ex.errors += (field -> C.Msg.Err.VALUE_NOT_AN_EMAIL)
+        }
+      }
+
+      uuid.foreach { field =>
+        if (isStillValid(ex, field, json) &&
+          !uuidRegex.matches(json(field).as[String])) {
+          ex.errors += (field -> C.Msg.Err.VALUE_NOT_A_UUID)
+        }
+      }
+
       ex.trigger()
+    }
+
+    private def isStillValid(ex: ValidationException, field: String, json: JsObject): Boolean = {
+      !ex.errors.contains(field) && json.keys.contains(field)
     }
   }
 }

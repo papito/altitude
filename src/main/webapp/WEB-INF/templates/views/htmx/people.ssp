@@ -85,18 +85,13 @@
     </div>
 </div>
 
-<!-- On load -->
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
-import { context } from "../../../../js/context.js"
-
-    /**
-     * Set the necessary context for script includes
-     */
-    context.repoId = "${ RequestContext.getRepository.persistedId }"
+    import { context } from "../../../../js/context.js"
 
     selectTab("explorer", "peopleTab")
+    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>
 
-<script type="module" src="/js/people/events_handlers.js"></script>
+<script type="module" src="/js/people/event_handlers.js"></script>
 <script type="module" src="/js/people/dragon-drop.js"></script>

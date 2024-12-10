@@ -3,69 +3,69 @@ import interact from "https://cdn.interactjs.io/v1.9.20/interactjs/index.js"
 import { Const } from "../constants.js"
 import { dragged, dragMoveListener } from "../common/dragon-drop.js"
 interact("#people .drag-drop").draggable({
-  inertia: true,
-  modifiers: [
-    interact.modifiers.restrict({
-      restriction: "parent",
-      endOnly: true,
-    }),
-  ],
-  autoScroll: { container: document.getElementById("explorerViews") },
-  listeners: {
-    move: dragMoveListener,
-    end: dragged,
-  },
+    inertia: true,
+    modifiers: [
+        interact.modifiers.restrict({
+            restriction: "parent",
+            endOnly: true,
+        }),
+    ],
+    autoScroll: { container: document.getElementById("explorerViews") },
+    listeners: {
+        move: dragMoveListener,
+        end: dragged,
+    },
 })
 
 interact("#people .dropzone").dropzone({
-  accept: "#people .drag-drop",
-  overlap: 0.5,
+    accept: "#people .drag-drop",
+    overlap: 0.5,
 
-  ondropactivate: function (event) {
-    event.target.classList.add("drop-active")
-  },
+    ondropactivate: function (event) {
+        event.target.classList.add("drop-active")
+    },
 
-  ondragenter: function (event) {
-    const draggableElement = event.relatedTarget
-    const dropzoneElement = event.target
+    ondragenter: function (event) {
+        const draggableElement = event.relatedTarget
+        const dropzoneElement = event.target
 
-    dropzoneElement.classList.add("drop-target")
-    draggableElement.classList.add("can-drop")
-  },
+        dropzoneElement.classList.add("drop-target")
+        draggableElement.classList.add("can-drop")
+    },
 
-  ondragleave: function (event) {
-    event.target.classList.remove("drop-target")
-    event.relatedTarget.classList.remove("can-drop")
-  },
+    ondragleave: function (event) {
+        event.target.classList.remove("drop-target")
+        event.relatedTarget.classList.remove("can-drop")
+    },
 
-  ondrop: function (event) {
-    const draggableElement = event.relatedTarget
-    const dropzoneElement = event.target
+    ondrop: function (event) {
+        const draggableElement = event.relatedTarget
+        const dropzoneElement = event.target
 
-    dropzoneElement.classList.remove("drop-active")
-    dropzoneElement.classList.remove("drop-target")
+        dropzoneElement.classList.remove("drop-active")
+        dropzoneElement.classList.remove("drop-target")
 
-    draggableElement.classList.remove("can-drop")
+        draggableElement.classList.remove("can-drop")
 
-    const mergeSrcId = draggableElement.getAttribute("person-id")
-    const mergeDestId = dropzoneElement.getAttribute("person-id")
+        const mergeSrcId = draggableElement.getAttribute("person-id")
+        const mergeDestId = dropzoneElement.getAttribute("person-id")
 
-    console.debug("Merging " + mergeSrcId + " into " + mergeDestId)
-    const confirmPersonMergeEvent = new CustomEvent(
-      Const.events.confirmPersonMerge,
-      {
-        detail: {
-          mergeSourceId: mergeSrcId,
-          mergeDestId: mergeDestId,
-        },
-      },
-    )
+        console.debug("Merging " + mergeSrcId + " into " + mergeDestId)
+        const confirmPersonMergeEvent = new CustomEvent(
+            Const.events.confirmPersonMerge,
+            {
+                detail: {
+                    mergeSourceId: mergeSrcId,
+                    mergeDestId: mergeDestId,
+                },
+            },
+        )
 
-    document.body.dispatchEvent(confirmPersonMergeEvent)
-  },
+        document.body.dispatchEvent(confirmPersonMergeEvent)
+    },
 
-  ondropdeactivate: function (event) {
-    event.target.classList.remove("drop-active")
-    event.target.classList.remove("drop-target")
-  },
+    ondropdeactivate: function (event) {
+        event.target.classList.remove("drop-active")
+        event.target.classList.remove("drop-target")
+    },
 })

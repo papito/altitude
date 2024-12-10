@@ -142,14 +142,10 @@
 <!-- On load -->
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
-import { context } from "../../../../js/context.js"
+    import { context } from "../../../../js/context.js"
 
     selectTab("explorer", "foldersTab")
-
-    /**
-     * Set the necessary context for script includes
-     */
-    context.repoId = "${ RequestContext.getRepository.persistedId }"
+    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>
 
 <script type="module" src="/js/folders/htmx_event_handlers.js"></script>

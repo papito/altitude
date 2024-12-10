@@ -13,7 +13,7 @@ import software.altitude.core.{Const => C}
 
 class AssetController extends BaseApiController {
 
-  private val assetIdValidator = ApiRequestValidator(
+  private val assetIdsValidator = ApiRequestValidator(
     required=List(Api.Field.Folder.ASSET_IDS)
   )
 
@@ -105,7 +105,7 @@ class AssetController extends BaseApiController {
 
     logger.info(s"Moving assets to $folderId")
 
-    assetIdValidator.validate(unscrubbedReqJson.get)
+    assetIdsValidator.validate(unscrubbedReqJson.get)
 
     val assetIds = (unscrubbedReqJson.get \ Api.Field.Folder.ASSET_IDS).as[Set[String]]
 

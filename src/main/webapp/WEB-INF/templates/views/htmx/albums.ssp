@@ -8,9 +8,10 @@
     ALBUMS
 </div>
 
-<!-- On load -->
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
+    import { context } from "../../../../js/context.js"
 
-selectTab("explorer", "albumsTab")
+    selectTab("explorer", "albumsTab")
+    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>

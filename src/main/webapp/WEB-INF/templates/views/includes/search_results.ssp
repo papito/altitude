@@ -58,13 +58,13 @@
    * Observe every new cell element in the grid for lazy loading/unloading
    */
   document
-    .querySelector("#assets .grid")
-    .addEventListener("htmx:load", function (evt) {
-      const imgEl = evt.target.querySelector("img")
-      if (imgEl !== null) {
-        observer.observe(imgEl)
-      }
-    })
+      .querySelector("#assets .grid")
+      .addEventListener("htmx:load", function (evt) {
+          const imgEl = evt.target.querySelector("img")
+          if (imgEl !== null) {
+              observer.observe(imgEl)
+          }
+      })
 
   /**
    * Set the necessary context for script includes (below)

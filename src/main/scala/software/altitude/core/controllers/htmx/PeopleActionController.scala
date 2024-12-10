@@ -54,6 +54,7 @@ class PeopleActionController extends BaseHtmxController {
       minLengths = Map(
         Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH,
       ),
+      uuid = List(Api.Field.ID),
     )
 
     val jsonIn: JsObject = dataScrubber.scrub(unscrubbedReqJson.get)

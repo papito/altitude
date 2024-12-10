@@ -21,21 +21,21 @@ const assetsElement = document.getElementById("assets")
  * we infinite-load more images.
  */
 assetsElement.addEventListener("htmx:beforeRequest", function (evt) {
-  if (!evt.target.classList.contains("last-cell")) {
-    return
-  }
-  if (evt.detail.target.getAttribute("data-hx-revealed")) {
-    evt.preventDefault()
-  } else {
-    console.debug("Loading more: %s", evt.detail.pathInfo.requestPath)
-  }
+    if (!evt.target.classList.contains("last-cell")) {
+        return
+    }
+    if (evt.detail.target.getAttribute("data-hx-revealed")) {
+        evt.preventDefault()
+    } else {
+        console.debug("Loading more: %s", evt.detail.pathInfo.requestPath)
+    }
 })
 
 assetsElement.addEventListener("htmx:afterRequest", function (evt) {
-  if (!evt.target.classList.contains("last-cell")) {
-    return
-  }
-  evt.detail.target.setAttribute("data-hx-revealed", "true")
+    if (!evt.target.classList.contains("last-cell")) {
+        return
+    }
+    evt.detail.target.setAttribute("data-hx-revealed", "true")
 })
 
 /**
@@ -46,32 +46,34 @@ assetsElement.addEventListener("htmx:afterRequest", function (evt) {
  * Once an image is out of the view, replace "src" with a placeholder.
  */
 const observerOptions = {
-  root: null, // intersection with Viewport
-  rootMargin: "0px 100% 0px 100%",
-  threshold: [0, 1], // when goes fully invisible OR visible
+    root: null, // intersection with Viewport
+    rootMargin: "0px 100% 0px 100%",
+    threshold: [0, 1], // when goes fully invisible OR visible
 }
 
 // This is a transparent GIF image
 const placeholderImageData =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
+    "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
 
 export const observer = new IntersectionObserver(function (entries, self) {
-  entries.forEach((entry) => {
-    if (entry.isIntersecting) {
-      if (
-        entry.target.getAttribute("src") ===
-        entry.target.getAttribute(Const.attributes.dataSrc)
-      ) {
-        // console.debug("Already loaded: %s", entry.target.getAttribute(Const.attributes.dataSrc))
-        return
-      }
-      entry.target.src = entry.target.getAttribute(Const.attributes.dataSrc)
-    } else {
-      if (entry.target.getAttribute("src") === placeholderImageData) {
-        return
-      }
-      // console.debug("Unloading %s", entry.target.getAttribute(Const.attributes.dataSrc))
-      entry.target.src = placeholderImageData
-    }
-  })
+    entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+            if (
+                entry.target.getAttribute("src") ===
+                entry.target.getAttribute(Const.attributes.dataSrc)
+            ) {
+                // console.debug("Already loaded: %s", entry.target.getAttribute(Const.attributes.dataSrc))
+                return
+            }
+            entry.target.src = entry.target.getAttribute(
+                Const.attributes.dataSrc,
+            )
+        } else {
+            if (entry.target.getAttribute("src") === placeholderImageData) {
+                return
+            }
+            // console.debug("Unloading %s", entry.target.getAttribute(Const.attributes.dataSrc))
+            entry.target.src = placeholderImageData
+        }
+    })
 }, observerOptions)

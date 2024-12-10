@@ -108,7 +108,7 @@ class UserMetadataService(val app: Altitude) {
       // if after cleaning the value is not there - it's empty
       if (!cleanMetadata.contains(fieldId)) {
         val ex = ValidationException()
-        ex.errors += (fieldId -> C.Msg.Err.CANNOT_BE_EMPTY)
+        ex.errors += (fieldId -> C.Msg.Err.VALUE_CANNOT_BE_EMPTY)
         ex.trigger()
       }
 
@@ -188,7 +188,7 @@ class UserMetadataService(val app: Altitude) {
       // if after cleaning the value is not there - it's empty
       if (!cleanMetadata.contains(fieldId)) {
         val ex = ValidationException()
-        ex.errors += (fieldId -> C.Msg.Err.CANNOT_BE_EMPTY)
+        ex.errors += (fieldId -> C.Msg.Err.VALUE_CANNOT_BE_EMPTY)
         ex.trigger()
       }
 

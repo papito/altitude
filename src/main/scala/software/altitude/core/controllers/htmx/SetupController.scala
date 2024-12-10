@@ -41,6 +41,7 @@ class SetupController extends BaseHtmxController {
       Api.Field.Setup.ADMIN_NAME -> Api.Constraints.MIN_NAME_LENGTH,
       Api.Field.Setup.PASSWORD -> Api.Constraints.MIN_PASSWORD_LENGTH,
     ),
+    email = List(Api.Field.Setup.ADMIN_EMAIL)
   )
 
   val htmxAdminSetup: Route = post("/") {

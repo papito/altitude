@@ -1,3 +1,6 @@
+import { Const } from "./constants.js"
+import { Alpine } from "./lib/alpine.esm.min.js"
+
 /**
  * This module is used to store the context of the current user/request.
  *
@@ -7,9 +10,14 @@
  * <script type="module">
  *     import {context} from "../context.js"
  *
- *      context.repoId = "${ RequestContext.getRepository.persistedId }"
+ *      context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
  * </script>
  */
 export const context = {
-  repoId: null,
+    setRepoId: function (repoId) {
+        Alpine.store(Const.context.repoId, repoId)
+    },
+    getRepoId: function () {
+        return Alpine.store(Const.context.repoId)
+    },
 }

@@ -144,6 +144,7 @@ class FolderActionController extends BaseHtmxController {
       minLengths = Map(
         Api.Field.Folder.NAME -> Api.Constraints.MIN_FOLDER_NAME_LENGTH,
       ),
+      uuid = List(Api.Field.ID),
     )
 
     val jsonIn: JsObject = dataScrubber.scrub(unscrubbedReqJson.get)

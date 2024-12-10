@@ -74,22 +74,22 @@
 
 <script type="module">
     htmx.on("htmx:wsOpen", function (evt) {
-      console.debug("WS connection is OPEN")
+        console.debug("WS connection is OPEN")
     })
 htmx.on("htmx:wsClose", function (evt) {
-      console.debug("WS connection is CLOSED")
+        console.debug("WS connection is CLOSED")
     })
 htmx.on("htmx:wsAfterMessage", function (evt) {
-      const statusTextEl = htmx.find("#statusText")
-      // sometimes empty pings come through
-      if (evt.detail.message && evt.detail.message !== "X") {
-        statusTextEl.style.display = "block"
-      }
+        const statusTextEl = htmx.find("#statusText")
+        // sometimes empty pings come through
+        if (evt.detail.message && evt.detail.message !== "X") {
+            statusTextEl.style.display = "block"
+        }
 
-      setTimeout(function () {
-        statusTextEl.innerHTML = ""
-        statusTextEl.style.display = "none"
-      }, 3000)
+        setTimeout(function () {
+            statusTextEl.innerHTML = ""
+            statusTextEl.style.display = "none"
+        }, 3000)
     })
 </script>
 

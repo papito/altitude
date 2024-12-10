@@ -53,10 +53,12 @@ object Const {
   object Msg {
 
     object Err {
-      val REQUIRED = "This field is required"
-      val CANNOT_BE_EMPTY = "Cannot be empty"
+      val VALUE_REQUIRED = "This field is required"
+      val VALUE_CANNOT_BE_EMPTY = "Cannot be empty"
       val VALUE_TOO_LONG = "Value is longer than %s characters"
       val VALUE_TOO_SHORT = "Value should be at least %s characters long"
+      val VALUE_NOT_AN_EMAIL = "This is a clown email"
+      val VALUE_NOT_A_UUID = "This is not a valid UUID"
       val VALIDATION_ERROR = "Validation error"
       val VALIDATION_ERRORS = "There are validation errors in: %s"
       val EMPTY_REQUEST_BODY = "Empty request body"

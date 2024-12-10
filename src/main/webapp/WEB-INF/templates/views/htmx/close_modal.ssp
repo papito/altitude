@@ -1,5 +1,0 @@
-<script type="module">
-    import { closeModal } from "../../../../js/common/modal.js"
-
-    closeModal()
-</script>

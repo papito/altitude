@@ -10,7 +10,6 @@ import software.altitude.core.controllers.htmx.FolderActionController
 import software.altitude.core.controllers.htmx.PeopleActionController
 import software.altitude.core.controllers.htmx.SearchResultsController
 import software.altitude.core.controllers.htmx.SetupController
-import software.altitude.core.controllers.htmx.UserInterfaceHtmxController
 import software.altitude.core.controllers.web.ContentViewController
 import software.altitude.core.controllers.web.ImportController
 import software.altitude.core.controllers.web.IndexController
@@ -51,7 +50,6 @@ object AltitudeServletContext {
 
     (new SessionController, "/sessions/*"),
     (new ContentViewController, "/content/*"),
-    (new UserInterfaceHtmxController, "/htmx/*"),
     (new FolderActionController, "/htmx/folder/*"),
     (new AssetActionController, "/htmx/asset/*"),
     (new AlbumActionController, "/htmx/album/*"),

@@ -95,18 +95,19 @@
     showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
     htmx.find("#mergePeople").addEventListener("htmx:afterRequest", function (evt) {
-      if (evt.detail.successful === true) {
-        closeModal()
+        if (evt.detail.successful === true) {
+            closeModal()
 
-        const personMergedEvent = new CustomEvent(Const.events.personMerged, {
-          detail: {
-            "${Api.Field.Person.MERGE_SOURCE_ID}":
-              "${mergeSourcePerson.persistedId}",
-            "${Api.Field.Person.MERGE_DEST_ID}": "${mergeDestPerson.persistedId}",
-          },
-        })
+            const personMergedEvent = new CustomEvent(Const.events.personMerged, {
+                detail: {
+                    "<%= Api.Field.Person.MERGE_SOURCE_ID %>":
+                        "<%= mergeSourcePerson.persistedId %>",
+                    "<%= Api.Field.Person.MERGE_DEST_ID %>":
+                        "<%= mergeDestPerson.persistedId %>",
+                },
+            })
 
-        document.body.dispatchEvent(personMergedEvent)
-      }
+            document.body.dispatchEvent(personMergedEvent)
+        }
     })
 </script>

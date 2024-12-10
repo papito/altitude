@@ -1,13 +1,12 @@
 <div id="snackbar"></div>
 
+## The wiring for closing the modal is in the modal.js file
+
 <div id="modalContainer">
     <div class="modal-box">
         <div class="modal-toolbar">
             <div class="modal-title">Title!</div>
             <div class="close-modal"
-                 hx-get="${ url(closeModal) }"
-                 hx-swap-oob="innerHTML"
-                 hx-target="#modalContent"
             >&times;</div>
         </div>
         <div id="modalContent">
@@ -19,11 +18,7 @@
     <div class="modal-box">
         <div class="modal-toolbar">
             <div class="modal-title">Title!</div>
-            <div class="close-modal"
-                 hx-get="${ url(closeModal) }"
-                 hx-swap-oob="innerHTML"
-                 hx-target="#imageDetailModalContent"
-            >&times;</div>
+            <div class="close-modal">&times;</div>
         </div>
         <div id="imageDetailModalContent">
         </div>
