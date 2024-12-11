@@ -139,7 +139,6 @@
     </div>
 </div>
 
-<!-- On load -->
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
     import { context } from "../../../../js/context.js"

@@ -37,6 +37,6 @@
 </form>
 
 <script type="module">
-    htmx.find("#field-${ Api.Field.Person.NAME }").focus()
-    htmx.find("#field-${ Api.Field.Person.NAME }").select()
+    htmx.find("#field-<%= Api.Field.Person.NAME %>").focus()
+    htmx.find("#field-<%= Api.Field.Person.NAME %>").select()
 </script>

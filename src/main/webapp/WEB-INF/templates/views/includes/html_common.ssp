@@ -1,6 +1,6 @@
 <div id="snackbar"></div>
 
-## The wiring for closing the modal is in the modal.js file
+<!-- The wiring for closing the modal is in the modal.js file -->
 
 <div id="modalContainer">
     <div class="modal-box">
