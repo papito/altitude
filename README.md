@@ -26,12 +26,12 @@ in order to have the `make lint` command work.
 
 ## Design decisions and other resources
 
-These are covered in the [WIKI](https://github.com/papito/altitude/wiki).
+These are covered in the [WIKI](https://github.com/papito/altitude/wiki)
 
 ## Databases
 
 * SQL schema needs to be updated for *both* Postgres and SQLite. The schemas are in `src/main/resources/migrations/`
-* In development, the type of database running is configured in `core.Configuration` class
+* In development, the type of database running is configured in `core.Configuration` class.
 
 ### PRE-COMMIT HOOK SETUP
 
