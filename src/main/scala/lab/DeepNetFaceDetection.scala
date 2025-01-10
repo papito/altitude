@@ -1,14 +1,12 @@
-package research
+package lab
 
 import java.io.File
 import org.apache.commons.io.FileUtils
 import org.opencv.core._
+import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
-import software.altitude.core.service.FaceDetectionService
-import software.altitude.core.util.ImageUtil.matFromBytes
-
-object YuNetFaceDetection extends SandboxApp {
+object DeepNetFaceDetection extends SandboxApp {
   private var totalFaceRegions = 0
   private val markerColor = new Scalar(0, 255, 255, 0)
 
@@ -19,13 +17,12 @@ object YuNetFaceDetection extends SandboxApp {
     println(s"Processing ${file.getAbsolutePath}")
 
     val fileByteArray: Array[Byte] = FileUtils.readFileToByteArray(file)
-    val image: Mat = matFromBytes(fileByteArray)
+    val image: Mat = Imgcodecs.imdecode(new MatOfByte(fileByteArray: _*), Imgcodecs.IMREAD_ANYCOLOR)
 
-    val results: List[Mat] = altitude.service.faceDetection.detectFacesWithYunet(image)
+    val faces: List[Rect] = altitude.service.faceDetection.detectFacesWithDnnNet(image)
 
-    for (res <- results) {
+    for (rect <- faces) {
       totalFaceRegions += 1
-      val rect = FaceDetectionService.faceDetectToRect(res)
       Imgproc.rectangle(image, rect.tl(), rect.br(), markerColor, 2)
     }
 

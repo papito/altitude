@@ -1,6 +1,50 @@
 # Altitude #
 
-## DEVELOPMENT SETUP
+A self-hosted web-based digital asset manager (DAM) that is meant to be simple, resilient, and fast.
+
+There are plenty of media managers in existence at this point, but they often require considerable technical
+skills to just get up and running. Altitude is meant to be easy-to-use and easy-to-deploy.
+
+The **only** thing needed is a Java runtime on the target system, and Altitude will take care 
+of the rest. You don't need to know what Postgres or microservices are, or how to clear the cache state 
+from Redis if something is broken (there are no microservices and there is no Redis).
+
+Altitude will use Sqlite by default, so nothing else needs to be done. The database cannot be changed
+after the fact, so if you want to use Postgres, 
+move `application-dev.conf.postgres` into `application-dev.conf` before running the app for the first time
+in setup mode.
+
+## Technology Stack
+
+* Scala & Scalatra
+* Postgres OR Sqlite
+* HTMX
+* OpenCV
+* Pekko (formerly Akka) Streams
+
+## Status
+
+This project is still in its "technology preview" stage. At this point it features:
+
+* Web-based setup on the first run
+* Streams-based fast import pipeline
+* Facial detection and recognition
+* Default result display with lazy loading and infinite scrolling
+* Drag-and-drop file and folder management
+* Rudimentary results display
+* A test suite that runs against both Postgres and Sqlite
+
+Missing features:
+
+* Right now there is only the single-user, single-library mode.
+* Results are displayed in their default order and there are no advanced display features yet.
+* Search indexing is implemented but not yet wired to be a user-facing feature.
+* No support for video files yet.
+* No location editing or display.
+* No metadata view (but it IS being extracted and saved).
+* Facial recognition works at a basic level but most management features are still to be done.
+
+## Development setup
 
 ### Core system requirements
 
