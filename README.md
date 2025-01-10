@@ -4,7 +4,7 @@
 
 ### Core system requirements
 
-* Java 11
+* Java 11/17
 * Docker
 * NPM
 
