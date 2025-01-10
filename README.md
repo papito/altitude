@@ -48,7 +48,7 @@ Missing features:
 
 ### Core system requirements
 
-* Java 11/17
+* Java 11+
 * Docker
 * NPM
 
