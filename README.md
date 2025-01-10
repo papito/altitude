@@ -24,12 +24,9 @@ in order to have the `make lint` command work.
 
 **See the Makefile for all the available commands.**
 
-## Design philosophy, architecture, and patterns
+## Design decisions and other resources
 
-These are covered in the [WIKI](https://github.com/papito/altitude/wiki). Topics:
-
-* [How the tests work](https://github.com/papito/altitude/wiki/How-the-tests-work)
-* [How to](https://github.com/papito/altitude/wiki/How-to...)
+These are covered in the [WIKI](https://github.com/papito/altitude/wiki).
 
 ## Databases
 
@@ -65,30 +62,24 @@ Update your test as such:
 test("work in progress", Focused) {
 }
 ```
-    sbt> testFocused
-    sbt> tetestFocusedSqlite
-    sbt> tetestFocusedPostgres
+    make test-focused-sqlite
+    make test-focused-psql
+    make test-focused-controller
+    make test-focused-unit
 
 ## Running tests against a particular database:
 
-    sbt> testOnly software.altitude.test.core.suites.[SqliteSuite|PostgresSuite]
-
-## Remote debugging
-
-1. Create a regular `Remote` run configuration (port 5005)
-2. Start Jetty server via SBT as usual
-3. Run the configuration created in Step 1
-
+    make test-sqlite
+    make test-psql
+    
+## Running controller and unit tests separately
+    make test-controller
+    make test-unit
+    
 ## Packaging
-* Update `Environment` to `PROD`
 
-        assembly
+    make publish
 
-The jar will be in `target/`. The jar needs to reside along these assets:
+The jar will be in `target/`. The jar can be run with:
 
-* data/
-* client/ (from src/main/webapp/WEB-INF/client)
-* static/ (js/ css/ i/ from src/main/webapp)
-
-
-    java -jar [jar]
+    java -jar [jar name]
