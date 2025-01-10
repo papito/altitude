@@ -2,6 +2,7 @@ package software.altitude.core.dao.postgres
 
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
@@ -21,15 +22,10 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
               VALUES (?, ?, ?, ?)
        """
 
-    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]()) { (res, m) =>
-      res ++ m._2.map(_.value)
-    }
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
 
-    val sqlVals: List[Any] = List(
-      RequestContext.getRepository.persistedId,
-      asset.persistedId,
-      metadataValues.mkString(" "),
-      "" /* body */)
+    val sqlVals: List[Any] =
+      List(RequestContext.getRepository.persistedId, asset.persistedId, metadataValues.mkString(" "), "" /* body */ )
 
     addRecord(asset, docSql, sqlVals)
   }
@@ -45,12 +41,9 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
             AND ${FieldConst.SearchToken.ASSET_ID} = ?
        """
 
-    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]()) { (res, m) =>
-      res ++ m._2.map(_.value)
-    }
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
 
-    val sqlVals: List[Any] = List(
-      metadataValues.mkString(" "), RequestContext.getRepository.persistedId, asset.persistedId)
+    val sqlVals: List[Any] = List(metadataValues.mkString(" "), RequestContext.getRepository.persistedId, asset.persistedId)
 
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, docSql, sqlVals.map(_.asInstanceOf[Object]): _*)
@@ -75,7 +68,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
     }
 
     SearchResult(
-      records = recs.map{makeModel},
+      records = recs.map(makeModel),
       total = total,
       rpp = searchQuery.rpp,
       page = searchQuery.page,

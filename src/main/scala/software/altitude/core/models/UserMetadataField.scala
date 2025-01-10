@@ -1,7 +1,7 @@
 package software.altitude.core.models
 
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
+import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.language.implicitConversions
 
@@ -22,9 +22,7 @@ object UserMetadataField {
   implicit def fromJson(json: JsValue): UserMetadataField = Json.fromJson[UserMetadataField](json).get
 }
 
-case class UserMetadataField(id: Option[String] = None,
-                             name: String,
-                             fieldType: FieldType.Value) extends BaseModel with NoDates {
+case class UserMetadataField(id: Option[String] = None, name: String, fieldType: FieldType.Value) extends BaseModel with NoDates {
   val nameLowercase: String = name.toLowerCase
 
   lazy val toJson: JsObject = Json.toJson(this).as[JsObject]

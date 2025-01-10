@@ -13,20 +13,22 @@ import software.altitude.core.models.MimedPreviewData
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
 
+
 @DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Import duplicate") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/2.jpg")
-    testApp.service.assetImport.importAsset(importAsset).get
+    testApp.service.library.addImportAsset(importAsset)
 
     intercept[DuplicateException] {
-      testApp.service.assetImport.importAsset(importAsset).get
+      testApp.service.library.addImportAsset(importAsset)
     }
   }
 
   test("Imported image with extracted metadata should successfully import") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/bullock.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     importedAsset.assetType should equal(importedAsset.assetType)
     importedAsset.checksum should not be 0
@@ -48,7 +50,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Imported image should have a preview") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
     val preview: MimedPreviewData = testApp.service.library.getPreview(asset.persistedId)
 
@@ -58,7 +60,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Imported image is triaged") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
     asset.isTriaged should be(true)
   }

@@ -7,7 +7,7 @@ object Query {
     val EQ, GT, LT, GTE, LTE, IN, RANGE, OR, CONTAINS, MATCHES = Value
   }
 
-  case class QueryParam (values: Set[Any], paramType: ParamType.Value, negate: Boolean = false) {
+  case class QueryParam(values: Set[Any], paramType: ParamType.Value, negate: Boolean = false) {
     require(values.nonEmpty)
 
     // types that requires two values
@@ -49,9 +49,9 @@ object Query {
       QueryParam(values, ParamType.IN, negate)
     }
   }
-  def NOT_IN(values: Set[Any]): QueryParam  = IN(values, negate = true)
+  def NOT_IN(values: Set[Any]): QueryParam = IN(values, negate = true)
 
-  def CONTAINS (value: Any) = new QueryParam(value, ParamType.CONTAINS, negate = false)
+  def CONTAINS(value: Any) = new QueryParam(value, ParamType.CONTAINS, negate = false)
   def NOT_CONTAINS(value: Any) = new QueryParam(value, ParamType.CONTAINS, negate = true)
 
   def MATCHES(value: Any) = new QueryParam(value, ParamType.MATCHES, negate = false)
@@ -64,10 +64,7 @@ object SortDirection extends Enumeration {
 
 case class Sort(param: String, direction: SortDirection.Value)
 
-class Query(val params: Map[String, Any] = Map(),
-            val rpp: Int = 0,
-            val page: Int = 1,
-            val sort: List[Sort] = List()) {
+class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: Int = 1, val sort: List[Sort] = List()) {
   if (rpp < 0) throw new IllegalArgumentException(s"Invalid results per page value: $rpp")
   if (page < 1) throw new IllegalArgumentException(s"Invalid page value: $page")
 
@@ -78,16 +75,13 @@ class Query(val params: Map[String, Any] = Map(),
   val isSorted: Boolean = sort.nonEmpty
 
   // append new params to the query and return a new copy
-  def add(_params: (String, Any)*): Query = new Query(
-    params = params ++ _params,
-    rpp = rpp,
-    page = page,
-    sort = sort)
+  def add(_params: (String, Any)*): Query = new Query(params = params ++ _params, rpp = rpp, page = page, sort = sort)
 
-  def withRepository(): Query = new Query(
-    params = params ++ Map(FieldConst.REPO_ID -> RequestContext.getRepository.persistedId),
-    rpp = rpp,
-    page = page,
-    sort = sort)
+  def withRepository(): Query =
+    new Query(
+      params = params ++ Map(FieldConst.REPO_ID -> RequestContext.getRepository.persistedId),
+      rpp = rpp,
+      page = page,
+      sort = sort)
 
 }

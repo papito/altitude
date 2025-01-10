@@ -78,6 +78,8 @@ object FieldConst {
     val USER_METADATA = "user_metadata"
     val IS_RECYCLED = "is_recycled"
     val IS_TRIAGED = "is_triaged"
+    val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
+    val IS_IN_FACE_REC_MODEL = "is_in_face_rec_model"
   }
 
   object PublicMetadata {

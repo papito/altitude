@@ -7,7 +7,6 @@ object SystemMetadataDao {
   val SYSTEM_RECORD_ID = 1
 }
 
-
 trait SystemMetadataDao extends BaseDao {
   def updateVersion(toVersion: Int): Unit
   def setInitialized(): Unit

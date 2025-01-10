@@ -2,14 +2,15 @@ package software.altitude.core.models
 
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 import play.api.libs.json.JsSuccess
 import play.api.libs.json.JsValue
-import play.api.libs.json.Json
 import play.api.libs.json.OWrites
 import play.api.libs.json.Reads
-import software.altitude.core.FieldConst
 
 import scala.language.implicitConversions
+
+import software.altitude.core.FieldConst
 
 object MimedFaceData {
   final val MIME_TYPE = "image/png"
@@ -17,9 +18,10 @@ object MimedFaceData {
 
   implicit val reads: Reads[MimedFaceData] = (json: JsValue) => {
     val data: String = (json \ FieldConst.MimedData.DATA).as[String]
-    JsSuccess(MimedFaceData(
-      data = Base64.decodeBase64(data)
-    ))
+    JsSuccess(
+      MimedFaceData(
+        data = Base64.decodeBase64(data)
+      ))
   }
 
   implicit val writes: OWrites[MimedFaceData] = (mimedFaceData: MimedFaceData) => {

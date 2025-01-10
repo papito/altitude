@@ -3,9 +3,6 @@ package software.altitude.core.util
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/**
- * Totally ripped off Copilot at my own risk because I am coding through a Covid haze ;)
- */
 object MurmurHash {
   def hash32(data: Array[Byte], seed: Int = 0): Int = {
     val c1 = 0xcc9e2d51

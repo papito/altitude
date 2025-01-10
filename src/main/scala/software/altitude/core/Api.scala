@@ -93,8 +93,8 @@ object Api {
     }
 
     object Person {
-      val PERSON  = "person"
-      val PEOPLE  = "people"
+      val PERSON = "person"
+      val PEOPLE = "people"
       val NAME = "name"
       val NEW_NAME = "newName"
       val MERGE_SOURCE_ID = "mergeSourceId"

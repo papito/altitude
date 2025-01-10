@@ -1,10 +1,12 @@
 package software.altitude.core.service
 
+import java.sql.Connection
+import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Altitude
-import software.altitude.core.DuplicateException
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.BaseModel
@@ -12,13 +14,11 @@ import software.altitude.core.models.Repository
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-
-import java.sql.Connection
-import java.sql.SQLException
+import software.altitude.core.util.Util.getDuplicateExceptionOrSame
 
 abstract class BaseService[Model <: BaseModel] {
   protected val app: Altitude
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val dao: BaseDao
   protected val txManager: TransactionManager = app.txManager
 
@@ -39,12 +39,7 @@ abstract class BaseService[Model <: BaseModel] {
         dao.add(objIn)
       } catch {
         // NOTE: duplicate logic in add() and updateById()
-        case e: SQLException =>
-          if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
-            throw DuplicateException()
-          } else {
-            throw e
-          }
+        case e: SQLException => throw getDuplicateExceptionOrSame(e)
         case ex: Exception =>
           throw ex
       }
@@ -57,13 +52,7 @@ abstract class BaseService[Model <: BaseModel] {
       try {
         dao.updateById(id, data)
       } catch {
-        case e: SQLException =>
-          // NOTE: duplicate logic in add() and updateById()
-          if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
-            throw DuplicateException()
-          } else {
-            throw e
-          }
+        case e: SQLException => throw getDuplicateExceptionOrSame(e)
         case ex: Exception =>
           println(ex.toString)
           throw ex
@@ -71,8 +60,7 @@ abstract class BaseService[Model <: BaseModel] {
     }
   }
 
-  def updateByQuery(query: Query, data: Map[String, Any])
-                   : Int = {
+  def updateByQuery(query: Query, data: Map[String, Any]): Int = {
     if (query.params.isEmpty) {
       throw new RuntimeException("Cannot update [ALL] document with an empty Query")
     }
@@ -88,18 +76,14 @@ abstract class BaseService[Model <: BaseModel] {
     }
   }
 
-  /**
-   * Get a single document using a Query
-   */
+  /** Get a single document using a Query */
   def getOneByQuery(query: Query): JsObject = {
     txManager.asReadOnly[JsObject] {
       dao.getOneByQuery(query)
     }
   }
 
-  /**
-   * Get multiple documents using a Query
-   */
+  /** Get multiple documents using a Query */
   def query(query: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
       dao.query(query)

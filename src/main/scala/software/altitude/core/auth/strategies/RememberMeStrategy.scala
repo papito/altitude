@@ -1,17 +1,17 @@
 package software.altitude.core.auth.strategies
 
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
 import org.scalatra.CookieOptions
 import org.scalatra.ScalatraBase
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Const
 import software.altitude.core.models.User
 import software.altitude.core.util.Util
-
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 class RememberMeStrategy(protected val app: ScalatraBase)(implicit request: HttpServletRequest, response: HttpServletResponse)
   extends ScentryStrategy[User] {
@@ -42,9 +42,7 @@ class RememberMeStrategy(protected val app: ScalatraBase)(implicit request: Http
     tokenVal != ""
   }
 
-  /**
-   * The member me strategy authenticates by means of an existing valid token.
-   */
+  /** The member me strategy authenticates by means of an existing valid token. */
   def authenticate()(implicit request: HttpServletRequest, response: HttpServletResponse): Option[User] = {
     AltitudeServletContext.app.service.user.getByToken(tokenVal) match {
       case Some(user) =>
@@ -55,7 +53,7 @@ class RememberMeStrategy(protected val app: ScalatraBase)(implicit request: Http
         logger.warn("RememberMeStrategy: authenticate: user not found")
         None
     }
-   }
+  }
 
   /** What should happen if the user is currently not authenticated? */
   override def unauthenticated()(implicit request: HttpServletRequest, response: HttpServletResponse): Unit = {
@@ -68,9 +66,9 @@ class RememberMeStrategy(protected val app: ScalatraBase)(implicit request: Http
   override def afterAuthenticate(winningStrategy: String, user: User)(implicit
       request: HttpServletRequest,
       response: HttpServletResponse): Unit = {
-      logger.info("rememberMe: afterAuth fired")
-      val token = "foobar"
-      app.cookies.set(COOKIE_KEY, token)(CookieOptions(maxAge = ONE_WEEK, path = "/"))
+    logger.info("rememberMe: afterAuth fired")
+    val token = "foobar"
+    app.cookies.set(COOKIE_KEY, token)(CookieOptions(maxAge = ONE_WEEK, path = "/"))
   }
 
   /** Run this code before logout, to clean up any leftover database state and delete the rememberMe token cookie. */

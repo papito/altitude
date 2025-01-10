@@ -12,9 +12,7 @@ object Stats {
 }
 
 case class Stats(stats: List[Stat]) {
-  private val lookup: Map[String, Stat] = stats.foldLeft(Map[String, Stat]()) {
-    (res, stat) => res + (stat.dimension -> stat)
-  }
+  private val lookup: Map[String, Stat] = stats.foldLeft(Map[String, Stat]())((res, stat) => res + (stat.dimension -> stat))
 
   def getStatValue(key: String): Int = {
     if (!lookup.contains(key)) {

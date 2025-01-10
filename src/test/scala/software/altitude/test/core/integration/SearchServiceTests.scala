@@ -5,6 +5,7 @@ import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
+import software.altitude.core.FieldConst
 import software.altitude.core.models._
 import software.altitude.core.util._
 import software.altitude.test.core.IntegrationTestCore
@@ -414,4 +415,21 @@ import software.altitude.test.core.IntegrationTestCore
     results.sort.head.field.name shouldBe kwField.name
   }
 
+  test("Dangling assets should not be searchable") {
+    val assetCount = 3
+    for (_ <- 1 to assetCount)
+      testContext.persistAsset()
+
+    val assetQuery = new Query(Map(FieldConst.Asset.FOLDER_ID -> testContext.repository.rootFolderId))
+    testApp.service.asset.queryAll(assetQuery).total shouldBe assetCount
+
+    // make all assets "dangling"
+    val updateData = Map(
+      FieldConst.Asset.IS_PIPELINE_PROCESSED -> false,
+    )
+    testApp.service.asset.updateByQuery(assetQuery, updateData)
+
+    val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
+    testApp.service.library.search(assetSearchQuery).total shouldBe 0
+  }
 }

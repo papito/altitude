@@ -29,5 +29,4 @@ class ControllerSuiteBundle extends AllControllerTestSuites(testApp = PostgresSu
   override def afterAll(): Unit = {
     testApp.txManager.close()
   }
-
 }

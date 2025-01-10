@@ -3,17 +3,17 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Stat
 
 abstract class StatDao(override val config: Config) extends BaseDao with software.altitude.core.dao.StatDao {
 
-  override final val tableName = "stats"
+  final override val tableName = "stats"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject = Stat(
-    rec(FieldConst.Stat.DIMENSION).asInstanceOf[String],
-    rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int])
+  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int])
 
   override def add(jsonIn: JsObject): JsObject = {
     val sql: String = s"""
@@ -38,8 +38,10 @@ abstract class StatDao(override val config: Config) extends BaseDao with softwar
 
   /**
    * Increment a particular stat name, per repository
-   * @param statName the name of the stat
-   * @param count the value to increment by - CAN be negative
+   * @param statName
+   *   the name of the stat
+   * @param count
+   *   the value to increment by - CAN be negative
    */
   def incrementStat(statName: String, count: Long = 1): Unit = {
     BaseDao.incrWriteQueryCount()

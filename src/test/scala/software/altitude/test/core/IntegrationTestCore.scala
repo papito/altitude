@@ -1,14 +1,23 @@
 package software.altitude.test.core
+import org.apache.pekko.actor.typed.Scheduler
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
+import org.apache.pekko.util.Timeout
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import software.altitude.core._
+import software.altitude.core.actors.FaceRecManagerActor
+import software.altitude.core.actors.FaceRecModelActor.ModelLabels
+import software.altitude.core.actors.FaceRecModelActor.ModelSize
 import software.altitude.core.models._
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.integration.TestContext
 
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 import scala.language.implicitConversions
 
 abstract class IntegrationTestCore
@@ -21,6 +30,9 @@ abstract class IntegrationTestCore
   protected final val log: Logger = LoggerFactory.getLogger(getClass)
 
   var testContext: TestContext = new TestContext(testApp)
+
+  implicit val scheduler: Scheduler = testApp.actorSystem.scheduler
+  implicit val timeout: Timeout = 3.seconds
 
   override def beforeEach(): Unit = {
     AltitudeServletContext.clearState()
@@ -41,34 +53,12 @@ abstract class IntegrationTestCore
     IntegrationTestUtil.createFileStoreDir(testApp)
   }
 
-  override def afterEach(): Unit = {
-    // We COULD rollback here, but we don't need to, and committing is better for checking repo/user isolation
-    testApp.txManager.commit()
-  }
-
-  def savepoint(): Unit = {
-    testApp.txManager.savepoint()
-  }
-
   def switchContextUser(user: User): Unit = {
     testApp.service.user.switchContextToUser(user)
   }
 
   def switchContextRepo(repository: Repository): Unit = {
     testApp.service.repository.switchContextToRepository(repository)
-  }
-
-  def commit(): Unit = {
-    testApp.txManager.commit()
-  }
-
-  def rollback(): Unit = {
-    testApp.txManager.rollback()
-  }
-
-  def reset(): Unit = {
-    testApp.txManager.rollback()
-    RequestContext.clear()
   }
 
   /**
@@ -97,10 +87,15 @@ abstract class IntegrationTestCore
    * The number of labels in the model, minus the reserved labels.
    * That is, this reflects purely our trained labels for easier reasoning about the counts.
    */
-  def getNumberOfModelLabels: Int = testApp.service.faceRecognition.recognizer.getLabels.size().height.toInt - 2
+  def getNumberOfModelLabels: Int = {
+    val repositoryId = RequestContext.getRepository.persistedId
+    val futureResp: Future[ModelSize] = testApp.actorSystem ? (ref => FaceRecManagerActor.GetModelSize(repositoryId, ref))
+    Await.result(futureResp, timeout.duration).size
+  }
 
   def getLabels: Seq[Int] = {
-    val labels = testApp.service.faceRecognition.recognizer.getLabels
-    (0 until labels.height()).map(labels.get(_, 0)(0).toInt)
+    val repositoryId = RequestContext.getRepository.persistedId
+    val futureResp: Future[ModelLabels] = testApp.actorSystem ? (ref => FaceRecManagerActor.GetModelLabels(repositoryId, ref))
+    Await.result(futureResp, timeout.duration).labels
   }
 }

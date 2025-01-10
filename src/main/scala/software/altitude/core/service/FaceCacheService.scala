@@ -2,6 +2,9 @@ package software.altitude.core.service
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.collection.concurrent.TrieMap
+
 import software.altitude.core.Altitude
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.FaceDao
@@ -11,11 +14,8 @@ import software.altitude.core.models.Person
 import software.altitude.core.models.Repository
 import software.altitude.core.transactions.TransactionManager
 
-import scala.collection.concurrent.TrieMap
-
-
 class FaceCacheService(app: Altitude) {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val personDao: PersonDao = app.DAO.person
   private val faceDao: FaceDao = app.DAO.face
@@ -46,10 +46,10 @@ class FaceCacheService(app: Altitude) {
     }
 
     if (personOpt.isEmpty) {
-      logger.warn(s"Person with label ${label} not found in cache")
+      logger.info(s"Person with label $label not found in cache")
       None
     } else {
-      logger.info(s"Returning label ${label} from cache: ${personOpt.get.name}")
+      logger.debug(s"Returning label $label from cache: ${personOpt.get.name}")
       personOpt
     }
   }
@@ -68,22 +68,15 @@ class FaceCacheService(app: Altitude) {
     val person = getRepositoryPersonCache(face.personLabel.get)
 
     /**
-     * Add the face and trim the number to top X faces - we don't need all of them.
-     * Note that we are not getting cute here with checking the list size or anything -
-     * the list is sorted by detection score, so it must be pruned AFTER the sort settles.
+     * Add the face and trim the number to top X faces - we don't need all of them. The faces are sorted by detection score
+     * automatically, so we can just take the top X.
      */
     val faces = person.getFaces
 
-    // Strip the binary data we don't need. We are just interested in the aligned greyscale image
-    val liteFace = face.copy(
-      image = Array[Byte](0),
-      alignedImage = Array[Byte](0),
-      displayImage = Array[Byte](0))
-
-    faces.add(liteFace)
+    faces.add(face)
     person.setFaces(faces.take(FaceRecognitionService.MAX_COMPARISONS_PER_PERSON).toSeq)
 
-    // keep true to the actual number of faces
+    // record the latest number of faces for this person
     val updatedPerson = person.copy(numOfFaces = person.numOfFaces + 1)
     updatedPerson.setFaces(person.getFaces.toSeq)
     putPerson(updatedPerson)
@@ -96,64 +89,70 @@ class FaceCacheService(app: Altitude) {
 
   def size(): Int = getRepositoryPersonCache.keys.size
 
+  /** This should only be used for debugging and testing */
   def getAll: List[Person] = getRepositoryPersonCache.values.toList
+
+  /**
+   * In "dirty" (post-startup-load) cache state, we need to filter out the people that have been merged from. These will be gone
+   * on the next cache load as the model will be retrained and the old labels purged.
+   *
+   * This is the method that should always be used for face rec.
+   */
+  def getAllMatchable: List[Person] = getRepositoryPersonCache.values.toList.filterNot(_.wasMergedFrom)
 
   def clear(): Unit = getRepositoryPersonCache.clear()
 
   def loadCache(repository: Repository): Unit = {
-    logger.info(s"Loading faces for repository ${repository.name}")
+    txManager.asReadOnly {
+      logger.info(s"Loading faces for repository ${repository.name}")
 
-    RequestContext.repository.value = Some(repository)
+      val allTopFaces: List[Face] = faceDao.getAllForCache
+      val personLookup: Map[String, Person] = personDao.getAll
 
-    val allTopFaces: List[Face] = faceDao.getAllForCache
-    val allPeople: Map[String, Person] = personDao.getAll
+      var faceCount = 0
+      allTopFaces.foreach {
+        face: Face =>
+          val person: Person = personLookup(face.personId.get)
 
-    var faceCount = 0
-    allTopFaces.foreach { face: Face =>
-      val person: Person = allPeople(face.personId.get)
+          val alignedGreyscaleData = app.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
+          val faceWithImageData = face.copy(alignedImageGs = alignedGreyscaleData.data)
+          person.addFace(faceWithImageData)
+          faceCount += 1
+      }
 
-      val alignedGreyscaleData = app.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
-      val faceWithImageData = face.copy(alignedImageGs = alignedGreyscaleData.data)
-      person.addFace(faceWithImageData)
-      faceCount += 1
+      // faces added, now cache the peeps whole
+      personLookup.foreach {
+        case (_, person) =>
+          putPerson(person)
+      }
+
+      logger.info(s"Loaded ${personLookup.size} people into the cache, $faceCount faces.")
     }
 
-    // faces added, now cache the peeps whole
-    allPeople.foreach { case (_, person) =>
-      putPerson(person)
-    }
-
-    logger.info(s"Loaded ${allPeople.size} people into the cache, ${faceCount} faces.")
-
-    RequestContext.repository.value = None
   }
 
   def loadCacheForAll(): Unit = {
-    txManager.asReadOnly {
-      logger.info("Loading face cache from the database")
-      val repositories = app.DAO.repository.getAll
-      repositories.foreach(loadCache)
-    }
+    app.service.library.forEachRepository(repository => loadCache(repository))
   }
 
   def dump(): Unit = {
-    cache.foreach { case (repoId, personCache) =>
-      println(s"Repository: $repoId\n")
-      personCache.foreach { case (label, person) =>
-        println(s"  ID: ${person.persistedId}")
-        println(s"  Label: $label -> ${person.name.get}")
-        println(s"  Merged with IDs: ${person.mergedWithIds}")
-        println(s"  Merged into: ${person.mergedIntoId.getOrElse("Nothing")}, ${person.mergedIntoLabel.getOrElse("Nothing")}")
+    cache.foreach {
+      case (repoId, personCache) =>
+        println(s"Repository: $repoId\n")
+        personCache.foreach {
+          case (label, person) =>
+            println(s"  ID: ${person.persistedId}")
+            println(s"  Label: $label -> ${person.name.get}")
+            println(s"  Merged with IDs: ${person.mergedWithIds}")
+            println(s"  Merged into: ${person.mergedIntoId.getOrElse("Nothing")}, ${person.mergedIntoLabel.getOrElse("Nothing")}")
 
-        if (person.hasFaces) {
-          person.getFaces.foreach { face =>
-            println(s"    Face $face")
-          }
-        } else {
-          println("    Person has no faces stored in cache")
+            if (person.hasFaces) {
+              person.getFaces.foreach(face => println(s"    Face $face"))
+            } else {
+              println("    Person has no faces stored in cache")
+            }
+            println()
         }
-        println()
-      }
     }
   }
 }

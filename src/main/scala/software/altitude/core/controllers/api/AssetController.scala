@@ -2,6 +2,8 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import play.api.libs.json.Json
+
+import software.altitude.core.{ Const => C }
 import software.altitude.core.Api
 import software.altitude.core.NotFoundException
 import software.altitude.core.Validators.ApiRequestValidator
@@ -9,23 +11,22 @@ import software.altitude.core.controllers.BaseApiController
 import software.altitude.core.models.Asset
 import software.altitude.core.models.MimedAssetData
 import software.altitude.core.models.MimedPreviewData
-import software.altitude.core.{Const => C}
 
 class AssetController extends BaseApiController {
 
   private val assetIdsValidator = ApiRequestValidator(
-    required=List(Api.Field.Folder.ASSET_IDS)
+    required = List(Api.Field.Folder.ASSET_IDS)
   )
-
 
   get(s"/:${Api.Field.ID}") {
     val id = params.get(Api.Field.ID).get
 
     val asset: Asset = app.service.library.getById(id)
 
-    Ok(Json.obj(
-      Api.Field.Asset.ASSET -> asset.userMetadata.toJson
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Asset.ASSET -> asset.userMetadata.toJson
+      ))
   }
 
   get(s"/:${Api.Field.ID}/data") {
@@ -35,8 +36,7 @@ class AssetController extends BaseApiController {
       val data: MimedAssetData = app.service.fileStore.getAssetById(id)
       this.contentType = data.mimeType
       data.data
-    }
-    catch {
+    } catch {
       case _: NotFoundException => redirect("/i/1x1.png")
     }
   }
@@ -52,9 +52,10 @@ class AssetController extends BaseApiController {
 
     val newMetadata = app.service.metadata.getMetadata(assetId)
 
-    Ok(Json.obj(
-      Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
+      ))
   }
 
   put(s"/:${Api.Field.ID}/metadata/value/:${Api.Field.Asset.METADATA_VALUE_ID}") {
@@ -68,9 +69,10 @@ class AssetController extends BaseApiController {
 
     val newMetadata = app.service.metadata.getMetadata(assetId)
 
-    Ok(Json.obj(
-      Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
+      ))
   }
 
   delete(s"/:${Api.Field.ID}/metadata/value/:${Api.Field.Asset.METADATA_VALUE_ID}") {
@@ -83,9 +85,10 @@ class AssetController extends BaseApiController {
 
     val newMetadata = app.service.metadata.getMetadata(assetId)
 
-    Ok(Json.obj(
-      Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Asset.METADATA -> app.service.metadata.toJson(newMetadata)
+      ))
   }
 
   // FIXME: PUT
@@ -123,8 +126,7 @@ class AssetController extends BaseApiController {
       val preview: MimedPreviewData = app.service.library.getPreview(id)
       this.contentType = preview.mimeType
       preview.data
-    }
-    catch {
+    } catch {
       case _: NotFoundException => redirect("/i/1x1.png")
     }
   }

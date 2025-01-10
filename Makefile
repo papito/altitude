@@ -1,5 +1,8 @@
 SHELL=/bin/sh
 
+start:
+	ENV=dev sbt jetty:start
+
 watch:
 	ENV=dev sbt watch
 
@@ -39,6 +42,7 @@ test-unit:
 lint:
 	npm run format
 	npm run lint:fix
+	sbt scalafmt
 	sbt scalafixAll
 
 clean:

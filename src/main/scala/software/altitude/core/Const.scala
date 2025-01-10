@@ -1,9 +1,8 @@
 package software.altitude.core
 
 object Const {
-  /**
-   * CONFIGURATION
-   */
+
+  /** CONFIGURATION */
   object Conf {
     val TEST_DIR = "test.dir"
     val FS_DATA_DIR = "fs.data.dir"
@@ -47,9 +46,7 @@ object Const {
     val MODELS = "models"
   }
 
-  /**
-   * MESSAGES
-   */
+  /** MESSAGES */
   object Msg {
 
     object Err {

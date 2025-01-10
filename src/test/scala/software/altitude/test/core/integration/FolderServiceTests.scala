@@ -109,13 +109,9 @@ import software.altitude.test.core.IntegrationTestCore
   test("Adding a duplicate folder under the same parent should fail") {
     val folder: Folder = testApp.service.library.addFolder("folder1")
 
-    commit()
-
     intercept[DuplicateException] {
       testApp.service.library.addFolder(folder.name)
     }
-
-    rollback()
 
     val folders = testApp.service.folder.hierarchy()
     folders.length shouldBe 1

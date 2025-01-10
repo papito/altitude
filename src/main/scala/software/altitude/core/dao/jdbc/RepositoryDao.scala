@@ -3,13 +3,13 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
 import software.altitude.core.FieldConst
 import software.altitude.core.models.Repository
 
-abstract class RepositoryDao(override val config: Config) extends BaseDao
-    with software.altitude.core.dao.RepositoryDao {
+abstract class RepositoryDao(override val config: Config) extends BaseDao with software.altitude.core.dao.RepositoryDao {
 
-  override final val tableName = "repository"
+  final override val tableName = "repository"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val fileStoreConfigCol = rec(FieldConst.Repository.FILES_STORE_CONFIG)
@@ -46,13 +46,14 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao
 
     val id = BaseDao.genId
 
-    val sqlVals: List[Any] = List(
-      id,
-      repo.name,
-      repo.ownerAccountId,
-      repo.fileStoreType,
-      repo.rootFolderId,
-      Json.toJson(repo.fileStoreConfig).toString())
+    val sqlVals: List[Any] =
+      List(
+        id,
+        repo.name,
+        repo.ownerAccountId,
+        repo.fileStoreType,
+        repo.rootFolderId,
+        Json.toJson(repo.fileStoreConfig).toString())
 
     addRecord(jsonIn, sql, sqlVals)
 

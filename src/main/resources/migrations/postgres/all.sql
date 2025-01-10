@@ -62,9 +62,14 @@ CREATE TABLE asset (
   filename TEXT NOT NULL,
   size_bytes INT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
-  is_recycled BOOLEAN NOT NULL DEFAULT FALSE
+  is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
+  is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
+  is_in_face_rec_model BOOLEAN NOT NULL DEFAULT FALSE
+
 ) INHERITS (_core);
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
+CREATE INDEX asset_02 on asset(is_pipeline_processed);
+CREATE INDEX asset_03 on asset(is_in_face_rec_model);
 
 
 CREATE SEQUENCE person_label;
@@ -112,10 +117,6 @@ CREATE TABLE face (
   detection_score FLOAT NOT NULL,
   embeddings TEXT NOT NULL,
   features TEXT NOT NULL,
-  image BYTEA NOT NULL,
-  display_image BYTEA NOT NULL,
-  aligned_image BYTEA NOT NULL,
-  aligned_image_gs BYTEA NOT NULL,
   checksum INT NOT NULL
 ) INHERITS (_core);
 CREATE UNIQUE INDEX face_01 ON face(person_id, asset_id);

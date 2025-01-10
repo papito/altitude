@@ -2,12 +2,13 @@ package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
+
 import software.altitude.core.FieldConst
 import software.altitude.core.models.UserToken
 import software.altitude.core.util.Util
 
 abstract class UserTokenDao(override val config: Config) extends BaseDao with software.altitude.core.dao.UserTokenDao {
-  override final val tableName = "user_token"
+  final override val tableName = "user_token"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val expiresAtStr = rec(FieldConst.UserToken.EXPIRES_AT).asInstanceOf[String]

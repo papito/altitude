@@ -1,10 +1,10 @@
 package software.altitude.core.models
 
 import play.api.libs.json.JsObject
-import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import play.api.libs.json.JsonConfiguration
 import play.api.libs.json.JsonNaming.SnakeCase
+import play.api.libs.json.JsValue
 import play.api.libs.json.OFormat
 
 import scala.language.implicitConversions

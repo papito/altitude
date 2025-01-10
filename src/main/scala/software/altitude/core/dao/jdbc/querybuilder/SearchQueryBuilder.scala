@@ -6,23 +6,22 @@ import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
 import software.altitude.core.util.SearchQuery
 
-
 object SearchQueryBuilder {
   private val ASSET_TABLE_NAME = "asset"
 }
 
-/**
-  * Common code for JDBC search query builders
-  */
+/** Common code for JDBC search query builders */
 abstract class SearchQueryBuilder(selColumnNames: List[String])
   extends SqlQueryBuilder[SearchQuery](selColumnNames, SearchQueryBuilder.ASSET_TABLE_NAME) {
 
   private val searchParamTable = "search_parameter"
   protected val searchDocumentTable = "search_document"
 
-  private val notRecycledFilter: ClauseComponents = ClauseComponents(
-    elements = List(s"${FieldConst.Asset.IS_RECYCLED} = ?"),
-    bindVals = List(false))
+  private val notRecycledFilter: ClauseComponents =
+    ClauseComponents(elements = List(s"${FieldConst.Asset.IS_RECYCLED} = ?"), bindVals = List(false))
+
+  private val isPipelineProcessedFilter: ClauseComponents =
+    ClauseComponents(elements = List(s"${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?"), bindVals = List(true))
 
   protected def textSearch(searchQuery: SearchQuery): ClauseComponents
 
@@ -34,9 +33,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     s"FROM ${tableNames.mkString(", ")}"
   }
 
-  /**
-    * If we are joining a table - this will also include its name(s)
-    */
+  /** If we are joining a table - this will also include its name(s) */
   private def allTableNames(searchQuery: SearchQuery): List[String] = {
     val _tablesNames = List(SearchQueryBuilder.ASSET_TABLE_NAME) ++
       (if (searchQuery.isParameterized) Set(searchParamTable) else Set()) ++
@@ -66,7 +63,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
     val sql =
       selectStr(allClauses(SqlQueryBuilder.SELECT)) +
-      s" FROM ($subquerySql) AS asset" +
+        s" FROM ($subquerySql) AS asset" +
         orderByStr(allClauses(SqlQueryBuilder.ORDER_BY)) +
         limitStr(query) +
         offsetStr(query)
@@ -75,9 +72,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       allClauses(SqlQueryBuilder.WHERE),
       allClauses(SqlQueryBuilder.ORDER_BY)
     )
-    val bindVals = bindValClauses.foldLeft(List[Any]()) { (res, clause) =>
-      res ++ clause.bindVals
-    }
+    val bindVals = bindValClauses.foldLeft(List[Any]())((res, clause) => res ++ clause.bindVals)
 
     logger.debug(s"Select SQL: $sql with $bindVals")
     // println("SELECT", sql, bindVals)
@@ -91,15 +86,14 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     ClauseComponents(repoIdElements, repoIdBindVals) +
       textSearch(searchQuery) +
       notRecycledFilter +
+      isPipelineProcessedFilter +
       folderFilter(searchQuery) +
       fieldFilter(searchQuery) +
       searchDocumentJoin(searchQuery) +
       searchParameterJoin(searchQuery)
   }
 
-  /**
-    * Generates a SQL "IN" clause for folder IDs
-    */
+  /** Generates a SQL "IN" clause for folder IDs */
   protected def folderFilter(searchQuery: SearchQuery): ClauseComponents = {
     if (searchQuery.folderIds.isEmpty) return ClauseComponents()
 
@@ -113,48 +107,49 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   }
 
   protected def fieldFilter(searchQuery: SearchQuery): ClauseComponents = {
-    val filters = searchQuery.params.map { el: (String, Any) =>
-      val (_, value) = el
-      value match {
-        case _: String => "(field_id = ? AND field_value_kw = ?)"
-        case _: Boolean => "(field_id = ? AND field_value_bool = ?)"
-        case _: Number => "(field_id = ? AND field_value_num = ?)"
-        case qParam: QueryParam => qParam.paramType match {
-          case Query.ParamType.EQ => qParam.values.head match {
-            case _: String => "(field_id = ? AND field_value_kw = ?)"
-            case _: Boolean => "(field_id = ? AND field_value_bool = ?)"
-            case _: Number => "(field_id = ? AND field_value_num = ?)"
-          }
-          case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: ${qParam.paramType}")
+    val filters = searchQuery.params.map {
+      el: (String, Any) =>
+        val (_, value) = el
+        value match {
+          case _: String => "(field_id = ? AND field_value_kw = ?)"
+          case _: Boolean => "(field_id = ? AND field_value_bool = ?)"
+          case _: Number => "(field_id = ? AND field_value_num = ?)"
+          case qParam: QueryParam =>
+            qParam.paramType match {
+              case Query.ParamType.EQ =>
+                qParam.values.head match {
+                  case _: String => "(field_id = ? AND field_value_kw = ?)"
+                  case _: Boolean => "(field_id = ? AND field_value_bool = ?)"
+                  case _: Number => "(field_id = ? AND field_value_num = ?)"
+                }
+              case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: ${qParam.paramType}")
+            }
+          case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
         }
-        case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
-      }
     }.toList
 
-    val bindVals = searchQuery.params.foldLeft(List[Any]()) { (res, el) =>
-      val (metadataFieldId, value) = el
+    val bindVals = searchQuery.params.foldLeft(List[Any]()) {
+      (res, el) =>
+        val (metadataFieldId, value) = el
 
-      // field id, value binds
-      res :+ metadataFieldId :+ (value match {
-        case qParam: QueryParam => qParam.values.head
-        case _ => value
-      })
+        // field id, value binds
+        res :+ metadataFieldId :+ (value match {
+          case qParam: QueryParam => qParam.values.head
+          case _ => value
+        })
     }
 
     if (filters.isEmpty) {
       ClauseComponents()
-    }
-    else {
-      ClauseComponents(
-        elements = List("(" + filters.mkString(" OR ") + ")"), bindVals = bindVals)
+    } else {
+      ClauseComponents(elements = List("(" + filters.mkString(" OR ") + ")"), bindVals = bindVals)
     }
   }
 
   protected def searchDocumentJoin(searchQuery: SearchQuery): ClauseComponents = {
     if (searchQuery.isText) {
       ClauseComponents(elements = List(s"$searchDocumentTable.asset_id = asset.id"))
-    }
-    else {
+    } else {
       ClauseComponents()
     }
   }
@@ -162,8 +157,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   protected def searchParameterJoin(searchQuery: SearchQuery): ClauseComponents = {
     if (searchQuery.isParameterized) {
       ClauseComponents(elements = List(s"$searchParamTable.asset_id = asset.id"))
-    }
-    else {
+    } else {
       ClauseComponents()
     }
   }

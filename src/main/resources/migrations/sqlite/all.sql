@@ -62,6 +62,8 @@ CREATE TABLE asset  (
   size_bytes INT NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
+  is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
+  is_in_face_rec_model TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
@@ -117,13 +119,9 @@ CREATE TABLE face (
   detection_score FLOAT NOT NULL,
   embeddings TEXT NOT NULL,
   features TEXT NOT NULL,
+  checksum INT NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  image BLOB NOT NULL,
-  display_image BLOB NOT NULL,
-  aligned_image BLOB NOT NULL,
-  aligned_image_gs BLOB NOT NULL,
-  checksum INT NOT NULL,
   FOREIGN KEY(person_id) REFERENCES person(id) ON DELETE CASCADE,
   FOREIGN KEY(asset_id) REFERENCES asset(id) ON DELETE CASCADE,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE

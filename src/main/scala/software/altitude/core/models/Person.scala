@@ -1,7 +1,7 @@
 package software.altitude.core.models
 
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
+import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -12,15 +12,18 @@ object Person {
   implicit def fromJson(json: JsValue): Person = Json.fromJson[Person](json).get
 }
 
-case class Person(id: Option[String] = None,
-                  name: Option[String] = None,
-                  coverFaceId: Option[String] = None,
-                  mergedWithIds: List[String] = List(),
-                  mergedIntoId: Option[String] = None,
-                  mergedIntoLabel: Option[Int] = None,
-                  label: Int = -1,
-                  numOfFaces: Int = 0,
-                  isHidden: Boolean = false) extends BaseModel with NoDates {
+case class Person(
+    id: Option[String] = None,
+    name: Option[String] = None,
+    coverFaceId: Option[String] = None,
+    mergedWithIds: List[String] = List(),
+    mergedIntoId: Option[String] = None,
+    mergedIntoLabel: Option[Int] = None,
+    label: Int = -1,
+    numOfFaces: Int = 0,
+    isHidden: Boolean = false)
+  extends BaseModel
+  with NoDates {
 
   lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 
@@ -45,7 +48,7 @@ case class Person(id: Option[String] = None,
   def getFaces: mutable.TreeSet[Face] = {
     // we do not get faces for a person automatically, but "numOfFaces" reflects the actual number in DB
     if (numOfFaces > 0 && _faces.isEmpty) {
-      throw new IllegalStateException("Faces have not been loaded for this person.")
+      throw new IllegalStateException(s"Faces have not been loaded for person $this")
     }
 
     _faces

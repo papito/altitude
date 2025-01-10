@@ -1,10 +1,11 @@
 package software.altitude.core.models
 
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
-import software.altitude.core.ValidationException
+import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.language.implicitConversions
+
+import software.altitude.core.ValidationException
 
 object Folder {
   implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
@@ -12,14 +13,16 @@ object Folder {
   implicit def fromJson(json: JsValue): Folder = Json.fromJson[Folder](json).get
 }
 
-case class Folder(id: Option[String] = None,
-                  parentId: String,
-                  name: String,
-                  children: List[Folder] = List(),
-                  isRecycled: Boolean = false,
-                  numOfAssets: Int = 0,
-                  numOfChildren: Int = 0
-                 ) extends BaseModel with NoDates {
+case class Folder(
+    id: Option[String] = None,
+    parentId: String,
+    name: String,
+    children: List[Folder] = List(),
+    isRecycled: Boolean = false,
+    numOfAssets: Int = 0,
+    numOfChildren: Int = 0)
+  extends BaseModel
+  with NoDates {
 
   if (name.isEmpty) {
     throw ValidationException("Folder name cannot be empty")
@@ -32,7 +35,7 @@ case class Folder(id: Option[String] = None,
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Folder]
 
   override def equals(that: Any): Boolean = that match {
-    case that: Folder if !that.canEqual( this) => false
+    case that: Folder if !that.canEqual(this) => false
     case that: Folder =>
       val thisStringRepr = this.id.getOrElse("") + this.parentId + this.nameLowercase
       val thatStringRepr = that.id.getOrElse("") + that.parentId + that.nameLowercase

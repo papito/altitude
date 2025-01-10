@@ -2,6 +2,7 @@ import org.eclipse.jetty.server._
 import org.eclipse.jetty.servlet.DefaultServlet
 import org.eclipse.jetty.webapp.WebAppContext
 import org.scalatra.servlet.ScalatraListener
+
 import software.altitude.core.AltitudeServletContext
 
 object ScalatraLauncher extends App with AltitudeServletContext {
@@ -14,7 +15,7 @@ object ScalatraLauncher extends App with AltitudeServletContext {
   val context: WebAppContext = new WebAppContext()
   private val webXml = getClass.getResource("/WEB-INF/web.xml")
 
-  private val webappDirLocation = if(webXml != null){
+  private val webappDirLocation = if (webXml != null) {
     // running the assembly jar
     webXml.toString.replaceFirst("/WEB-INF/web.xml$", "/")
   } else {

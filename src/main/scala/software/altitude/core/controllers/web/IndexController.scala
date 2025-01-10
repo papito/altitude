@@ -1,6 +1,7 @@
 package software.altitude.core.controllers.web
 
 import org.scalatra.Route
+
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.RequestContext
@@ -16,7 +17,7 @@ class IndexController extends BaseWebController {
     contentType = "text/html"
 
     val q = new SearchQuery(
-      rpp = Const.Search.DEFAULT_RPP,
+      rpp = Const.Search.DEFAULT_RPP
     )
 
     val results: SearchResult = app.service.library.search(q)
@@ -44,7 +45,6 @@ class IndexController extends BaseWebController {
 
     redirect(url(indexViewRepo, Api.Field.REPO_ID -> user.lastActiveRepoId.get))
   }
-
 
   get("/setup") {
     contentType = "text/html"

@@ -4,6 +4,7 @@ import org.scalatra.ActionResult
 import org.scalatra.Ok
 import play.api.libs.json.JsNull
 import play.api.libs.json.Json
+
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.RequestContext
@@ -48,7 +49,8 @@ class SearchController extends BaseApiController {
 
     val q = new SearchQuery(
       text = queryText,
-      rpp = rpp, page = page,
+      rpp = rpp,
+      page = page,
       folderIds = parseFolderIds(folderIds = folderIdsArg),
       searchSort = sort
     )
@@ -64,44 +66,48 @@ class SearchController extends BaseApiController {
 
     val results = app.service.library.search(q)
 
-    Ok(Json.obj(
-      Api.Field.Search.ASSETS -> results.records.map { x =>
-        val asset = x: Asset
-        asset.userMetadata.toJson
-      },
-      Api.Field.TOTAL_RECORDS -> results.total,
-      Api.Field.CURRENT_PAGE -> q.page,
-      Api.Field.TOTAL_PAGES -> results.totalPages,
-      Api.Field.RESULTS_PER_PAGE -> q.rpp,
-      Api.Field.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Search.ASSETS -> results.records.map {
+          x =>
+            val asset = x: Asset
+            asset.userMetadata.toJson
+        },
+        Api.Field.TOTAL_RECORDS -> results.total,
+        Api.Field.CURRENT_PAGE -> q.page,
+        Api.Field.TOTAL_PAGES -> results.totalPages,
+        Api.Field.RESULTS_PER_PAGE -> q.rpp,
+        Api.Field.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
+      ))
   }
 
   private def query(q: SearchQuery): ActionResult = {
     val results = app.service.library.search(q)
 
-    Ok(Json.obj(
-      Api.Field.Search.ASSETS -> results.records.map { x =>
-        val asset = x: Asset
-        asset.userMetadata.toJson
-      },
-      Api.Field.TOTAL_RECORDS -> results.total,
-      Api.Field.CURRENT_PAGE -> q.page,
-      Api.Field.TOTAL_PAGES -> results.totalPages,
-      Api.Field.RESULTS_PER_PAGE -> q.rpp,
-      Api.Field.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Search.ASSETS -> results.records.map {
+          x =>
+            val asset = x: Asset
+            asset.userMetadata.toJson
+        },
+        Api.Field.TOTAL_RECORDS -> results.total,
+        Api.Field.CURRENT_PAGE -> q.page,
+        Api.Field.TOTAL_PAGES -> results.totalPages,
+        Api.Field.RESULTS_PER_PAGE -> q.rpp,
+        Api.Field.Search.SORT -> (if (results.sort.isEmpty) JsNull else results.sort.head.toJson)
+      ))
   }
 
   private def parseFolderIds(folderIds: String): Set[String] = {
     if (folderIds.isEmpty) {
       Set[String]()
-    }
-    else {
+    } else {
       folderIds
         .split(s"\\${Api.Field.MULTI_VALUE_DELIM}")
         .map(_.trim)
-        .filter(_.nonEmpty).toSet
+        .filter(_.nonEmpty)
+        .toSet
     }
   }
 }

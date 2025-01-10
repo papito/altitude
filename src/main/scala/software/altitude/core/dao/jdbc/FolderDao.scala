@@ -3,12 +3,13 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Folder
 
 abstract class FolderDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FolderDao {
-  override final val tableName = "folder"
+  final override val tableName = "folder"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     Folder(
@@ -36,12 +37,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
              VALUES (?, ? , ?, ?, ?)
     """
 
-    val sqlVals: List[Any] = List(
-      id,
-      RequestContext.getRepository.persistedId,
-      folder.name,
-      folder.nameLowercase,
-      folder.parentId)
+    val sqlVals: List[Any] =
+      List(id, RequestContext.getRepository.persistedId, folder.name, folder.nameLowercase, folder.parentId)
 
     addRecord(jsonIn, sql, sqlVals)
     jsonIn ++ Json.obj(FieldConst.ID -> id)

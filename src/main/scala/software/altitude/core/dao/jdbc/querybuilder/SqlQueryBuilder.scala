@@ -2,6 +2,7 @@ package software.altitude.core.dao.jdbc.querybuilder
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
@@ -17,7 +18,7 @@ protected object SqlQueryBuilder {
 }
 
 class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: String) {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private type ClauseGeneratorType = QueryT => ClauseComponents
 
@@ -35,18 +36,16 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: 
     val allClauses = compileClauses(query)
 
     /**
-     *  --SELECT
-     *  ----FROM
-     *  ---WHERE
-     *  GROUP BY
-     *  --HAVING
-     *  ORDER BY
-     *  ---LIMIT
-     *  --OFFSET
+     * --SELECT
+     * ----FROM
+     * ---WHERE GROUP BY
+     * --HAVING ORDER BY
+     * ---LIMIT
+     * --OFFSET
      */
     val sql = s"""
         ${selectStr(allClauses(SqlQueryBuilder.SELECT))}
-          ${fromStr(allClauses(SqlQueryBuilder.FROM)) }
+          ${fromStr(allClauses(SqlQueryBuilder.FROM))}
          ${whereStr(allClauses(SqlQueryBuilder.WHERE))}
       ${groupByStr(allClauses(SqlQueryBuilder.GROUP_BY))}
         ${havingStr(allClauses(SqlQueryBuilder.HAVING))}
@@ -56,9 +55,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: 
       """
 
     val bindValClauses = List(allClauses(SqlQueryBuilder.WHERE))
-    val bindVals = bindValClauses.foldLeft(List[Any]()) { (res, clause) =>
-      res ++ clause.bindVals
-    }
+    val bindVals = bindValClauses.foldLeft(List[Any]())((res, clause) => res ++ clause.bindVals)
 
     SqlQuery(sql, bindVals)
   }
@@ -79,13 +76,10 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: 
 
     // SET binds, then WHERE binds
     val whereBindClauses = List(allClauses(SqlQueryBuilder.WHERE))
-    val bindVals = data.values.toList ::: whereBindClauses.foldLeft(List[Any]()) { (res, clause) =>
-      res ++ clause.bindVals
-    }
+    val bindVals = data.values.toList ::: whereBindClauses.foldLeft(List[Any]())((res, clause) => res ++ clause.bindVals)
 
     SqlQuery(sql, bindVals)
   }
-
 
   private def setStr(data: Map[String, Any]): String = {
     val updateFieldPlaceholders: List[String] = data.keys.map(field => s"$field = ?").toList
@@ -95,11 +89,12 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: 
 
   protected def compileClauses(query: QueryT): Map[String, ClauseComponents] = {
     // collect clauses so we can refer to them when we build the SQL string
-    chainMethods.foldLeft(Map[String, ClauseComponents]()) { (res, m) =>
-      val clauseName = m._1
-      val clauseGeneratorMethod = m._2
-      val clauseComponents = clauseGeneratorMethod(query)
-      res + (clauseName -> clauseComponents)
+    chainMethods.foldLeft(Map[String, ClauseComponents]()) {
+      (res, m) =>
+        val clauseName = m._1
+        val clauseGeneratorMethod = m._2
+        val clauseComponents = clauseGeneratorMethod(query)
+        res + (clauseName -> clauseComponents)
     }
   }
 
@@ -122,35 +117,38 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: 
 
   protected def where(query: QueryT): ClauseComponents = {
     // FIXME: find a better way to get elements and bind vals in one swoop
-    val elements = query.params.map { el: (String, Any) =>
-      val (columnName, value) = el
-      value match {
-        case _: String => s"$columnName = ?"
-        case _: Boolean => s"$columnName = ?"
-        case _: Number => s"$columnName = ?"
-        case qParam: QueryParam => qParam.paramType match {
-          case Query.ParamType.IN =>
-            val placeholders: String = qParam.values.toList.map {_ => "?"}.mkString(", ")
-            s"$columnName IN ($placeholders)"
-          case Query.ParamType.EQ => s"$columnName = ?"
+    val elements = query.params.map {
+      el: (String, Any) =>
+        val (columnName, value) = el
+        value match {
+          case _: String => s"$columnName = ?"
+          case _: Boolean => s"$columnName = ?"
+          case _: Number => s"$columnName = ?"
+          case qParam: QueryParam =>
+            qParam.paramType match {
+              case Query.ParamType.IN =>
+                val placeholders: String = qParam.values.toList.map(_ => "?").mkString(", ")
+                s"$columnName IN ($placeholders)"
+              case Query.ParamType.EQ => s"$columnName = ?"
 
-          case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: ${qParam.paramType}")
+              case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: ${qParam.paramType}")
+            }
+          case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
         }
-        case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
-      }
     }.toList
 
-    val bindVals = query.params.foldLeft(List[Any]()) { (res, el: (String, Any)) =>
-      val value = el._2
-      value match {
-        // string, integer or boolean values as is
-        case _: String => res :+ value
-        case _: Number => res :+ value
-        case _: Boolean => res :+ value
-        // extract all values from qParam
-        case qParam: QueryParam => res ::: qParam.values.toList
-        case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
-      }
+    val bindVals = query.params.foldLeft(List[Any]()) {
+      (res, el: (String, Any)) =>
+        val value = el._2
+        value match {
+          // string, integer or boolean values as is
+          case _: String => res :+ value
+          case _: Number => res :+ value
+          case _: Boolean => res :+ value
+          // extract all values from qParam
+          case qParam: QueryParam => res ::: qParam.values.toList
+          case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: $value")
+        }
     }
 
     ClauseComponents(elements, bindVals)

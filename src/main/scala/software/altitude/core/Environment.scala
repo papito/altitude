@@ -1,12 +1,11 @@
 package software.altitude.core
 
+import java.io.File
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import java.io.File
-
 object Environment extends Enumeration {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   type Environment = String
 

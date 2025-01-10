@@ -1,13 +1,14 @@
 package software.altitude.core.models
 
+import java.time.LocalDateTime
 import org.opencv.core.Mat
 import org.opencv.core.MatOfFloat
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
-import software.altitude.core.util.ImageUtil.matFromBytes
+import play.api.libs.json.JsonNaming.SnakeCase
 
-import java.time.LocalDateTime
 import scala.language.implicitConversions
+
+import software.altitude.core.util.ImageUtil.matFromBytes
 
 object Face {
   implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
@@ -18,22 +19,21 @@ object Face {
   implicit val faceOrdering: Ordering[Face] = Ordering.by(-_.detectionScore)
 }
 
-case class Face(id: Option[String] = None,
-                x1: Int,
-                y1: Int,
-                width: Int,
-                height: Int,
-                assetId: Option[String] = None,
-                personId: Option[String] = None,
-                personLabel: Option[Int] = None,
-                detectionScore: Double,
-                embeddings: Array[Float],
-                features: Array[Float],
-                image: Array[Byte],
-                displayImage: Array[Byte],
-                alignedImage: Array[Byte],
-                alignedImageGs: Array[Byte]
-               ) extends BaseModel {
+case class Face(
+    id: Option[String] = None,
+    x1: Int,
+    y1: Int,
+    width: Int,
+    height: Int,
+    assetId: Option[String] = None,
+    personId: Option[String] = None,
+    personLabel: Option[Int] = None,
+    detectionScore: Double,
+    checksum: Int,
+    embeddings: Array[Float],
+    features: Array[Float],
+    alignedImageGs: Array[Byte] = Array.emptyByteArray)
+  extends BaseModel {
 
   override val createdAt: Option[LocalDateTime] = None
   override val updatedAt: Option[LocalDateTime] = None
@@ -54,7 +54,7 @@ case class Face(id: Option[String] = None,
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Face]
 
   override def equals(that: Any): Boolean = that match {
-    case that: Face if !that.canEqual( this) => false
+    case that: Face if !that.canEqual(this) => false
     case that: Face => that.id == this.id
     case _ => false
   }

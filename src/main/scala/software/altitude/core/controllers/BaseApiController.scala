@@ -1,9 +1,12 @@
 package software.altitude.core.controllers
 
+import java.lang.System.currentTimeMillis
 import org.scalatra._
 import play.api.libs.json.JsNull
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
+import software.altitude.core.{ Const => C }
 import software.altitude.core.Api
 import software.altitude.core.DataScrubber
 import software.altitude.core.NotFoundException
@@ -11,9 +14,6 @@ import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.util.Util
-import software.altitude.core.{Const => C}
-
-import java.lang.System.currentTimeMillis
 
 class BaseApiController extends BaseController {
   val OK: ActionResult = Ok("{}")
@@ -28,11 +28,11 @@ class BaseApiController extends BaseController {
     contentType = "application/json; charset=UTF-8"
 
     // verify that requests with request body are not empty
-     checkPayload()
+    checkPayload()
   }
 
   override def logRequestStart(): Unit = logger.info(
-      s"API ${request.getRequestURI} ${requestMethod.toUpperCase}, Body {${request.body}} Args: ${request.getParameterMap}"
+    s"API ${request.getRequestURI} ${requestMethod.toUpperCase}, Body {${request.body}} Args: ${request.getParameterMap}"
   )
 
   override def logRequestEnd(): Unit = {
@@ -54,8 +54,7 @@ class BaseApiController extends BaseController {
     }
   }
 
-  def scrubAndValidatedJson(scrubber: DataScrubber = DataScrubber(),
-                            validator: ApiRequestValidator): JsObject = {
+  def scrubAndValidatedJson(scrubber: DataScrubber = DataScrubber(), validator: ApiRequestValidator): JsObject = {
     val scrubbedJson = scrubber.scrub(unscrubbedReqJson.get)
     validator.validate(scrubbedJson)
     scrubbedJson
@@ -63,22 +62,27 @@ class BaseApiController extends BaseController {
 
   error {
     case ex: ValidationException =>
-      val jsonErrors = ex.errors.keys.foldLeft(Json.obj()) {(res, field) => {
-        val key = field
-        res ++ Json.obj(key -> ex.errors(key))}
+      val jsonErrors = ex.errors.keys.foldLeft(Json.obj()) {
+        (res, field) =>
+          {
+            val key = field
+            res ++ Json.obj(key -> ex.errors(key))
+          }
       }
 
-      BadRequest(Json.obj(
-        Api.Field.VALIDATION_ERROR -> ex.message,
-        Api.Field.VALIDATION_ERRORS -> (if (ex.errors.isEmpty) JsNull else jsonErrors)
-      ))
+      BadRequest(
+        Json.obj(
+          Api.Field.VALIDATION_ERROR -> ex.message,
+          Api.Field.VALIDATION_ERRORS -> (if (ex.errors.isEmpty) JsNull else jsonErrors)
+        ))
     case _: NotFoundException =>
       NotFound(Json.obj())
     case ex: Exception =>
       val strStacktrace = Util.logStacktrace(ex)
 
-      InternalServerError(Json.obj(
-        Api.Field.ERROR -> (if (ex.getMessage!= null) ex.getMessage else ex.getClass.getName),
-        Api.Field.STACKTRACE -> strStacktrace))
+      InternalServerError(
+        Json.obj(
+          Api.Field.ERROR -> (if (ex.getMessage != null) ex.getMessage else ex.getClass.getName),
+          Api.Field.STACKTRACE -> strStacktrace))
   }
 }

@@ -2,6 +2,7 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import play.api.libs.json.Json
+
 import software.altitude.core.Api
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
@@ -13,18 +14,20 @@ class FolderController extends BaseApiController {
   get() {
     val folders = app.service.folder.hierarchy()
 
-    Ok(Json.obj(
-      Api.Field.Folder.HIERARCHY -> folders.map(_.toJson)
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Folder.HIERARCHY -> folders.map(_.toJson)
+      ))
   }
 
   get("/:id") {
     val id = realId(params.get(Api.Field.ID).get)
     val folder: Folder = app.service.folder.getById(id)
 
-    Ok(Json.obj(
-      Api.Field.Folder.FOLDER -> folder.toJson
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Folder.FOLDER -> folder.toJson
+      ))
   }
 
   get(s"/:${Api.Field.Folder.PARENT_ID}/children") {
@@ -33,10 +36,11 @@ class FolderController extends BaseApiController {
     val folders = app.service.folder.immediateChildren(parentId, allRepoFolders = allRepoFolders)
     val path = app.service.folder.pathComponents(parentId)
 
-    Ok(Json.obj(
-      Api.Field.Folder.PATH -> path.map(_.toJson),
-      Api.Field.Folder.FOLDERS -> folders.map(_.toJson),
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Folder.PATH -> path.map(_.toJson),
+        Api.Field.Folder.FOLDERS -> folders.map(_.toJson)
+      ))
   }
 
   post("/") {

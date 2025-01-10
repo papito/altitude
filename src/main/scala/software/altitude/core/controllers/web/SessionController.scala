@@ -5,14 +5,15 @@ import org.scalatra.ScalatraServlet
 import org.scalatra.UrlGeneratorSupport
 import org.scalatra.scalate.ScalateSupport
 import org.scalatra.scalate.ScalateUrlGeneratorSupport
+
 import software.altitude.core.auth.AuthenticationSupport
 
 class SessionController
   extends ScalatraServlet
-    with UrlGeneratorSupport
-    with ScalateUrlGeneratorSupport
-    with ScalateSupport
-    with AuthenticationSupport {
+  with UrlGeneratorSupport
+  with ScalateUrlGeneratorSupport
+  with ScalateSupport
+  with AuthenticationSupport {
 
   before("/new") {
     logger.info("SessionsController: checking whether to run RememberMeStrategy: " + !isAuthenticated)
@@ -22,9 +23,7 @@ class SessionController
     }
   }
 
-  /**
-   * WARNING: hard-coded in AuthenticationSupport
-   */
+  /** WARNING: hard-coded in AuthenticationSupport */
   val newSession: Route = get("/new") {
     if (isAuthenticated) redirect("/")
 

@@ -1,37 +1,22 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.sql.PreparedStatement
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
-import software.altitude.core.util.MurmurHash
-
-import java.sql.PreparedStatement
 
 abstract class FaceDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FaceDao {
 
-  override final val tableName = "face"
+  final override val tableName = "face"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
-    val liteModel = makeLiteModel(rec)
-
-    // the lite model, used for caching in memory, does not have image data by default
-    val model = liteModel ++ Json.obj(
-      FieldConst.Face.IMAGE -> rec(FieldConst.Face.IMAGE).asInstanceOf[Array[Byte]],
-      FieldConst.Face.DISPLAY_IMAGE -> rec(FieldConst.Face.DISPLAY_IMAGE).asInstanceOf[Array[Byte]],
-      FieldConst.Face.ALIGNED_IMAGE -> rec(FieldConst.Face.ALIGNED_IMAGE).asInstanceOf[Array[Byte]],
-      FieldConst.Face.ALIGNED_IMAGE_GS -> rec(FieldConst.Face.ALIGNED_IMAGE_GS).asInstanceOf[Array[Byte]]
-    )
-
-    model
-  }
-
-  private def makeLiteModel(rec: Map[String, AnyRef]): JsObject = {
     val embeddingsArray = getFloatListByJsonKey(rec(FieldConst.Face.EMBEDDINGS).asInstanceOf[String], FieldConst.Face.EMBEDDINGS)
     val featuresArray = getFloatListByJsonKey(rec(FieldConst.Face.FEATURES).asInstanceOf[String], FieldConst.Face.FEATURES)
 
@@ -50,10 +35,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
       detectionScore = rec(FieldConst.Face.DETECTION_SCORE).asInstanceOf[Double],
       embeddings = embeddingsArray.toArray,
       features = featuresArray.toArray,
-      image = new Array[Byte](0),
-      displayImage = new Array[Byte](0),
-      alignedImage = new Array[Byte](0),
-      alignedImageGs = new Array[Byte](0)
+      checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int]
     )
 
     model
@@ -68,30 +50,28 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
       s"""
         INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
                                 ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.Face.DETECTION_SCORE},
-                                ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.IMAGE}, ${FieldConst.Face.DISPLAY_IMAGE},
-                                ${FieldConst.Face.ALIGNED_IMAGE}, ${FieldConst.Face.ALIGNED_IMAGE_GS}, ${FieldConst.Face.CHECKSUM})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     val conn = RequestContext.getConn
 
     /**
-     * Embeddings and Features are an array of floats, and even though Postgres supports float array natively,
-     * there is really no value in creating a separate DAO hierarchy just for that.
+     * Embeddings and Features are an array of floats, and even though Postgres supports float array natively, there is really no
+     * value in creating a separate DAO hierarchy just for that.
+     *
      * Both DBs store this data as JSON in a TEXT field - faces are preloaded into memory anyway.
      *
-     * Why not as a CSV? Casting floats into Strings and back is a pain, and JSON is more pliable for this, without
-     * worrying about messing with precision. This just works.
+     * Why not as a CSV? Casting floats into Strings and back is a pain, and JSON is more pliable for this, without worrying about
+     * messing with precision. This just works.
      */
     val embeddingsArrayJson = Json.obj(
-      FieldConst.Face.EMBEDDINGS -> Json.toJson(face.embeddings),
+      FieldConst.Face.EMBEDDINGS -> Json.toJson(face.embeddings)
     )
 
     val featuresArrayJson = Json.obj(
-      FieldConst.Face.FEATURES -> Json.toJson(face.features),
+      FieldConst.Face.FEATURES -> Json.toJson(face.features)
     )
-
-    val checksum = MurmurHash.hash32(face.image)
 
     val preparedStatement: PreparedStatement = conn.prepareStatement(sql)
     preparedStatement.setString(1, id)
@@ -106,30 +86,37 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
     preparedStatement.setDouble(10, face.detectionScore)
     preparedStatement.setString(11, embeddingsArrayJson.toString())
     preparedStatement.setString(12, featuresArrayJson.toString())
-    preparedStatement.setBytes(13, face.image)
-    preparedStatement.setBytes(14, face.displayImage)
-    preparedStatement.setBytes(15, face.alignedImage)
-    preparedStatement.setBytes(16, face.alignedImageGs)
-    preparedStatement.setInt(17, checksum)
+    preparedStatement.setInt(13, face.checksum)
     preparedStatement.execute()
 
     jsonIn ++ Json.obj(
       FieldConst.ID -> id,
       FieldConst.Face.ASSET_ID -> asset.id.get,
       FieldConst.Face.PERSON_ID -> person.id.get,
-      FieldConst.Face.PERSON_LABEL -> person.label,
+      FieldConst.Face.PERSON_LABEL -> person.label
     )
   }
 
   /**
-   * Get faces for all people in this repo, but only the top X faces per person.
-   * We use those to brute-force compare a new face, if there is no machine-learned hit,
-   * and to verify ML hits as well.
+   * Get faces for all people in this repo, but only the top X faces per person. We use those to brute-force compare a new face,
+   * if there is no machine-learned hit, and to verify ML hits as well.
    */
   def getAllForCache: List[Face] = {
-    val selectColumns = List(FieldConst.ID, FieldConst.REPO_ID, FieldConst.Face.X1, FieldConst.Face.Y1, FieldConst.Face.WIDTH, FieldConst.Face.HEIGHT,
-      FieldConst.Face.ASSET_ID, FieldConst.Face.PERSON_ID, FieldConst.Face.PERSON_LABEL, FieldConst.Face.DETECTION_SCORE, FieldConst.Face.EMBEDDINGS,
-      FieldConst.Face.FEATURES)
+    val selectColumns = List(
+      FieldConst.ID,
+      FieldConst.REPO_ID,
+      FieldConst.Face.X1,
+      FieldConst.Face.Y1,
+      FieldConst.Face.WIDTH,
+      FieldConst.Face.HEIGHT,
+      FieldConst.Face.ASSET_ID,
+      FieldConst.Face.PERSON_ID,
+      FieldConst.Face.PERSON_LABEL,
+      FieldConst.Face.DETECTION_SCORE,
+      FieldConst.Face.EMBEDDINGS,
+      FieldConst.Face.FEATURES,
+      FieldConst.Face.CHECKSUM
+    )
 
     val sql = s"""
        SELECT ${selectColumns.mkString(", ")}
@@ -144,11 +131,41 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
         """
 
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(
-      sql, List(
+      sql,
+      List(
         RequestContext.getRepository.persistedId,
         RequestContext.getRepository.persistedId,
         FaceRecognitionService.MAX_COMPARISONS_PER_PERSON))
 
-    recs.map(makeLiteModel)
+    recs.map(makeModel)
+  }
+
+  def getAllForTraining: List[Face] = {
+    val sql = s"""
+        SELECT ${FieldConst.ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.REPO_ID}
+          FROM $tableName
+         WHERE repository_id = ?
+      """
+
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
+
+    recs.map(
+      rec => {
+        Face(
+          id = Some(rec(FieldConst.ID).asInstanceOf[String]),
+          personLabel = rec(FieldConst.Face.PERSON_LABEL).getClass match {
+            case c if c == classOf[java.lang.Integer] => Some(rec(FieldConst.Face.PERSON_LABEL).asInstanceOf[Int])
+            case c if c == classOf[java.lang.Long] => Some(rec(FieldConst.Face.PERSON_LABEL).asInstanceOf[Long].toInt)
+          },
+          checksum = 0,
+          detectionScore = 0,
+          embeddings = Array.emptyFloatArray,
+          features = Array.emptyFloatArray,
+          x1 = 0,
+          y1 = 0,
+          width = 0,
+          height = 0
+        )
+      })
   }
 }

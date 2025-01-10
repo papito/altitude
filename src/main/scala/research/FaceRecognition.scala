@@ -1,31 +1,31 @@
 package research
 
-
-import org.apache.commons.io.FileUtils
+import java.io.File
+import java.util
 import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.face.LBPHFaceRecognizer
 import org.opencv.imgcodecs.Imgcodecs
-import software.altitude.core.service.FaceDetectionService
-import software.altitude.core.service.FaceRecognitionService
-import software.altitude.core.util.ImageUtil.matFromBytes
 
-import java.io.File
-import java.util
 import scala.collection.mutable
 import scala.util.control.Breaks.break
 import scala.util.control.Breaks.breakable
 
-class Face(val path: String,
-           val idx: Int,
-           val detectionScore: Float,
-           val image: Mat,
-           val alignedFaceImage: Mat,
-           val alignedFaceImageGraySc: Mat,
-           val embedding: Array[Float],
-           val features: Mat) {
+import software.altitude.core.service.FaceDetectionService
+import software.altitude.core.service.FaceRecognitionService
+import software.altitude.core.util.ImageUtil.matFromBytes
 
+class Face(
+    val path: String,
+    val idx: Int,
+    val detectionScore: Float,
+    val image: Mat,
+    val alignedFaceImage: Mat,
+    val alignedFaceImageGraySc: Mat,
+    val embedding: Array[Float],
+    val features: Mat) {
 
   def name: String = {
     val f = new File(path)
@@ -34,10 +34,10 @@ class Face(val path: String,
 }
 
 object PersonFace {
+
   /**
-   * Automatically sort a person's faces by detection score, best score on top,
-   * so when we compare people, we compare the "best" faces first, hopefully
-   * knowing one way or the other quickly.
+   * Automatically sort a person's faces by detection score, best score on top, so when we compare people, we compare the "best"
+   * faces first, hopefully knowing one way or the other quickly.
    */
   implicit val faceOrdering: Ordering[PersonFace] = Ordering.by(-_.face.detectionScore)
 }
@@ -72,7 +72,6 @@ class Person(val label: Int) {
     s"PERSON $name. Label: $label. Faces: ${faces.size}"
 }
 
-
 object DB {
   var LAST_LABEL = 1
 
@@ -105,35 +104,36 @@ object FaceRecognition extends SandboxApp {
 
     val results: List[Mat] = altitude.service.faceDetection.detectFacesWithYunet(image)
 
-    results.indices.foreach { idx =>
-      val res = results(idx)
-      val rect = FaceDetectionService.faceDetectToRect(res)
+    results.indices.foreach {
+      idx =>
+        val res = results(idx)
+        val rect = FaceDetectionService.faceDetectToRect(res)
 
-      val alignedFaceImage = altitude.service.faceDetection.alignCropFaceFromDetection(image, res)
+        val alignedFaceImage = altitude.service.faceDetection.alignCropFaceFromDetection(image, res)
 
-      // LBPHFaceRecognizer requires grayscale images
-      val alignedFaceImageGr = altitude.service.faceDetection.getHistEqualizedGrayScImage(alignedFaceImage)
-      // writeResult(file, alignedFaceImage, idx)
+        // LBPHFaceRecognizer requires grayscale images
+        val alignedFaceImageGr = altitude.service.faceDetection.getHistEqualizedGrayScImage(alignedFaceImage)
+        // writeResult(file, alignedFaceImage, idx)
 
-      val features = altitude.service.faceDetection.getFacialFeatures(alignedFaceImage)
-      val embedding = altitude.service.faceDetection.getEmbeddings(alignedFaceImage)
+        val features = altitude.service.faceDetection.getFacialFeatures(alignedFaceImage)
+        val embedding = altitude.service.faceDetection.getEmbeddings(alignedFaceImage)
 
-      val faceImage = image.submat(rect)
-      val face = new Face(
-        path = path,
-        idx = idx,
-        detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
-        image = faceImage.clone(),
-        alignedFaceImage = alignedFaceImage.clone(),
-        alignedFaceImageGraySc = alignedFaceImageGr.clone(),
-        embedding = embedding.clone(),
-        features = features.clone())
+        val faceImage = image.submat(rect)
+        val face = new Face(
+          path = path,
+          idx = idx,
+          detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
+          image = faceImage.clone(),
+          alignedFaceImage = alignedFaceImage.clone(),
+          alignedFaceImageGraySc = alignedFaceImageGr.clone(),
+          embedding = embedding.clone(),
+          features = features.clone())
 
-      srcFaces.add(face)
+        srcFaces.add(face)
 
-      faceImage.release()
-      alignedFaceImage.release()
-      features.release()
+        faceImage.release()
+        alignedFaceImage.release()
+        features.release()
     }
   }
 
@@ -162,58 +162,61 @@ object FaceRecognition extends SandboxApp {
     process(path)
   }
 
-  srcFaces.forEach(thisFace => {
-    breakable {
+  srcFaces.forEach(
+    thisFace => {
+      breakable {
 
-      println("\n--------------------\n" + thisFace.path + "\n")
+        println("\n--------------------\n" + thisFace.path + "\n")
 
-      // try to predict the label of the face
-      val predLabelArr = new Array[Int](1)
-      val confidenceArr = new Array[Double](1)
-      recognizer.predict(thisFace.alignedFaceImageGraySc, predLabelArr, confidenceArr)
+        // try to predict the label of the face
+        val predLabelArr = new Array[Int](1)
+        val confidenceArr = new Array[Double](1)
+        recognizer.predict(thisFace.alignedFaceImageGraySc, predLabelArr, confidenceArr)
 
-      val predLabel = predLabelArr.head
-      val confidence = confidenceArr.head
-      println("Predicted label: " + predLabel + " with confidence: " + confidence + " for " + thisFace.name)
+        val predLabel = predLabelArr.head
+        val confidence = confidenceArr.head
+        println("Predicted label: " + predLabel + " with confidence: " + confidence + " for " + thisFace.name)
 
-      val personMlMatch: Option[Person] = DB.db.get(predLabel)
+        val personMlMatch: Option[Person] = DB.db.get(predLabel)
 
-      if (personMlMatch.isDefined) {
-        val simScore = altitude.service.faceDetection.getFeatureSimilarityScore(
-          thisFace.features, personMlMatch.get.allFaces().head.face.features)
-        println("Similarity score: " + simScore)
+        if (personMlMatch.isDefined) {
+          val simScore =
+            altitude.service.faceDetection
+              .getFeatureSimilarityScore(thisFace.features, personMlMatch.get.allFaces().head.face.features)
+          println("Similarity score: " + simScore)
 
-        if (simScore >= FaceRecognitionService.PESSIMISTIC_COSINE_DISTANCE_THRESHOLD) {
-          println("MATCHED. Persisting face")
-          personMlMatch.get.addFace(thisFace)
-          modelHitCount += 1
-          break()
+          if (simScore >= FaceRecognitionService.PESSIMISTIC_COSINE_DISTANCE_THRESHOLD) {
+            println("MATCHED. Persisting face")
+            personMlMatch.get.addFace(thisFace)
+            modelHitCount += 1
+            break()
+          }
         }
+
+        println("BRUTE FORCE")
+
+        // No match, brute force through all people (matching with only the top-ranking face)
+        val bestPersonFaceMatch: Option[PersonFace] = getPersonFaceMatches(thisFace)
+
+        // this is a new person
+        if (bestPersonFaceMatch.isEmpty) {
+          addNewPerson(thisFace)
+        } else {
+          val matchedPerson = DB.db(bestPersonFaceMatch.get.personLabel)
+          val newPersonFace = matchedPerson.addFace(thisFace)
+          updateModelWithFace(newPersonFace)
+          println("Faces in DB: " + DB.allFaces().size)
+        }
+
+        //      writeFrHit(predLabel = predLabel(0), confidence = confidence(0), face = thisFace)
       }
+    })
 
-      println("BRUTE FORCE")
-
-      // No match, brute force through all people (matching with only the top-ranking face)
-      val bestPersonFaceMatch: Option[PersonFace] = getPersonFaceMatches(thisFace)
-
-      // this is a new person
-      if (bestPersonFaceMatch.isEmpty) {
-        addNewPerson(thisFace)
-      } else {
-        val matchedPerson = DB.db(bestPersonFaceMatch.get.personLabel)
-        val newPersonFace = matchedPerson.addFace(thisFace)
-        updateModelWithFace(newPersonFace)
-        println("Faces in DB: " + DB.allFaces().size)
-      }
-
-      //      writeFrHit(predLabel = predLabel(0), confidence = confidence(0), face = thisFace)
-    }
-  })
-
-  DB.allPersons().foreach { person =>
-    println(person.name + " faces: \n" +  person.allFaces())
-    println()
-    writePerson(person)
+  DB.allPersons().foreach {
+    person =>
+      println(person.name + " faces: \n" + person.allFaces())
+      println()
+      writePerson(person)
   }
 
   private def addNewPerson(face: Face): Unit = {
@@ -237,25 +240,29 @@ object FaceRecognition extends SandboxApp {
   }
 
   private def getPersonFaceMatches(thisFace: Face): Option[PersonFace] = {
-    val faceSimilarityScores: List[(Double, PersonFace)] = DB.allPersons().flatMap { person =>
-      // these are already sorted by detection score, best first
-      val bestFaces = person.allFaces().take(FaceRecognitionService.MAX_COMPARISONS_PER_PERSON)
+    val faceSimilarityScores: List[(Double, PersonFace)] = DB.allPersons().flatMap {
+      person =>
+        // these are already sorted by detection score, best first
+        val bestFaces = person.allFaces().take(FaceRecognitionService.MAX_COMPARISONS_PER_PERSON)
 
-      val faceScores: List[(Double, PersonFace)] = bestFaces.map { bestFace =>
-        comparisonOpCount += 1
-        println(s"Comparing ${thisFace.name} Q:${thisFace.detectionScore} with ${bestFace.face.name} Q:${bestFace.face.detectionScore}")
-        val similarityScore = altitude.service.faceDetection.getFeatureSimilarityScore(
-          thisFace.features, bestFace.face.features)
-        println(" -> " + similarityScore)
-        (similarityScore, bestFace)
-      }
+        val faceScores: List[(Double, PersonFace)] = bestFaces.map {
+          bestFace =>
+            comparisonOpCount += 1
+            println(
+              s"Comparing ${thisFace.name} Q:${thisFace.detectionScore} with ${bestFace.face.name} Q:${bestFace.face.detectionScore}")
+            val similarityScore =
+              altitude.service.faceDetection.getFeatureSimilarityScore(thisFace.features, bestFace.face.features)
+            println(" -> " + similarityScore)
+            (similarityScore, bestFace)
+        }
 
-      faceScores
+        faceScores
     }
 
     // get the top one
     val sortedMatchingSimilarityWeights = faceSimilarityScores.sortBy(_._1)
-    val highestSimilarityWeights = sortedMatchingSimilarityWeights.filter(_._1 >= FaceRecognitionService.PESSIMISTIC_COSINE_DISTANCE_THRESHOLD)
+    val highestSimilarityWeights =
+      sortedMatchingSimilarityWeights.filter(_._1 >= FaceRecognitionService.PESSIMISTIC_COSINE_DISTANCE_THRESHOLD)
 
     highestSimilarityWeights.headOption match {
       case None => None
@@ -282,18 +289,19 @@ object FaceRecognition extends SandboxApp {
   private def writePerson(person: Person): Unit = {
     val personPrefix = "person-" + person.label
 
-    person.allFaces().indices.foreach { idx =>
-      val dbFace = person.allFaces()(idx)
-      val ogFile = new File(dbFace.face.path)
-      val indexedFileName = personPrefix + "-" + idx + 1 + "." + FilenameUtils.getExtension(ogFile.getName)
-      val outputPath = FilenameUtils.concat(outputDirPath, indexedFileName)
-      println("Writing " + outputPath)
-      Imgcodecs.imwrite(outputPath, dbFace.face.alignedFaceImage)
+    person.allFaces().indices.foreach {
+      idx =>
+        val dbFace = person.allFaces()(idx)
+        val ogFile = new File(dbFace.face.path)
+        val indexedFileName = personPrefix + "-" + idx + 1 + "." + FilenameUtils.getExtension(ogFile.getName)
+        val outputPath = FilenameUtils.concat(outputDirPath, indexedFileName)
+        println("Writing " + outputPath)
+        Imgcodecs.imwrite(outputPath, dbFace.face.alignedFaceImage)
     }
   }
 
   private def writeFrHit(predLabel: Int, confidence: Double, face: Face): Unit = {
-    println(s"Predicted label: ${predLabel} with confidence: ${confidence} for " + face.name)
+    println(s"Predicted label: $predLabel with confidence: $confidence for " + face.name)
     val ogFile = new File(face.path)
     val indexedFileName = "hit-" + "lbl_" + predLabel + "-conf_" + confidence.toInt + "-" + face.idx + "_" + ogFile.getName
     val outputPath = FilenameUtils.concat(outputDirPath, indexedFileName)

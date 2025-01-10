@@ -1,4 +1,7 @@
 package software.altitude.core.controllers
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.lang.System.currentTimeMillis
 import org.scalatra.ContentEncodingSupport
 import org.scalatra.InternalServerError
 import org.scalatra.MatchedRoute
@@ -6,6 +9,7 @@ import org.scalatra.ScalatraServlet
 import org.scalatra.UrlGeneratorSupport
 import org.scalatra.scalate.ScalateUrlGeneratorSupport
 import org.slf4j.MDC
+
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Api
 import software.altitude.core.Const
@@ -13,26 +17,21 @@ import software.altitude.core.RequestContext
 import software.altitude.core.auth.AuthenticationSupport
 import software.altitude.core.util.Util
 
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.lang.System.currentTimeMillis
-
 abstract class BaseController
   extends ScalatraServlet
-    with ContentEncodingSupport
-    with UrlGeneratorSupport
-    with ScalateUrlGeneratorSupport
-    with AuthenticationSupport
-    with AltitudeServletContext {
+  with ContentEncodingSupport
+  with UrlGeneratorSupport
+  with ScalateUrlGeneratorSupport
+  with AuthenticationSupport
+  with AltitudeServletContext {
 
   /**
-   * The "before()" block does not have HTTP params set yet, so this is the workaround
-   * for us to set repo context for each request
+   * The "before()" block does not have HTTP params set yet, so this is the workaround for us to set repo context for each request
    *
    * https://stackoverflow.com/a/19671423/53687
    */
   override def invoke(matchedRoute: MatchedRoute): Option[Any] = {
-    withRouteMultiParams(Some(matchedRoute)){
+    withRouteMultiParams(Some(matchedRoute)) {
       val repoId: Option[String] = params.get(Api.Field.REPO_ID)
       app.service.repository.setContextFromRequest(repoId)
       BaseController.super.invoke(matchedRoute)
@@ -74,13 +73,12 @@ abstract class BaseController
     }
   }
 
-  private def isAssetRequest =  request.pathInfo.startsWith("/css") ||
+  private def isAssetRequest = request.pathInfo.startsWith("/css") ||
     request.pathInfo.startsWith("/js") ||
     request.pathInfo.startsWith("/webfonts") ||
     request.pathInfo.startsWith("/images") ||
     request.pathInfo.contains(s"/${Const.DataStore.PREVIEW}/") ||
     request.pathInfo.contains(s"/${Const.DataStore.CONTENT}/")
-
 
   error {
     case ex: Throwable =>

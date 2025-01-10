@@ -2,6 +2,7 @@ package software.altitude.core.dao.sqlite
 
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
@@ -19,14 +20,11 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
               VALUES (?, ?, ?)
        """
 
-    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]()) { (res, m) =>
-      res ++ m._2.map(_.value)
-    }
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
 
     val body = metadataValues.mkString(" ")
 
-    val sqlVals: List[Any] = List(
-      RequestContext.getRepository.persistedId, asset.persistedId, body)
+    val sqlVals: List[Any] = List(RequestContext.getRepository.persistedId, asset.persistedId, body)
 
     addRecord(asset, docSql, sqlVals)
   }
@@ -42,14 +40,11 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
             AND ${FieldConst.SearchToken.ASSET_ID} = ?
        """
 
-    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]()) { (res, m) =>
-      res ++ m._2.map(_.value)
-    }
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
 
     val body = metadataValues.mkString(" ")
 
-    val sqlVals: List[Any] = List(
-      body, RequestContext.getRepository.persistedId, asset.persistedId)
+    val sqlVals: List[Any] = List(body, RequestContext.getRepository.persistedId, asset.persistedId)
 
     addRecord(asset, docSql, sqlVals)
 
@@ -77,7 +72,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
     }
 
     SearchResult(
-      records = recs.map{makeModel},
+      records = recs.map(makeModel),
       total = total,
       rpp = searchQuery.rpp,
       page = searchQuery.page,

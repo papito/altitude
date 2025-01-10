@@ -10,7 +10,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Add asset") {
     val importAsset = getImportAsset("images/1.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
   }
 }

@@ -1,8 +1,9 @@
 package software.altitude.core.controllers.web
 import org.scalatra.NotFound
+
+import software.altitude.core.{ Const => C }
 import software.altitude.core.controllers.BaseWebController
 import software.altitude.core.models.MimedPreviewData
-import software.altitude.core.{Const => C}
 
 class ContentViewController extends BaseWebController {
 
@@ -22,7 +23,7 @@ class ContentViewController extends BaseWebController {
     if (dataType == C.DataStore.PREVIEW) {
 
       val preview: MimedPreviewData = app.service.fileStore.getPreviewById(itemId)
-      contentType =preview.mimeType
+      contentType = preview.mimeType
       response.getOutputStream.write(preview.data)
       halt(200)
     }

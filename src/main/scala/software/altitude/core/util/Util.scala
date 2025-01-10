@@ -1,16 +1,18 @@
 package software.altitude.core.util
 
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.sql.SQLException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import org.mindrot.jbcrypt.BCrypt
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import software.altitude.core.DuplicateException
 
 object Util {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def logStacktrace(e: Exception): String = {
     e.printStackTrace()
@@ -48,5 +50,13 @@ object Util {
 
   def checkPassword(password: String, hashedPassword: String): Boolean = {
     BCrypt.checkpw(password, hashedPassword)
+  }
+
+  def getDuplicateExceptionOrSame(e: SQLException, message: Option[String] = None): Exception = {
+    if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
+      DuplicateException(message = message)
+    } else {
+      e
+    }
   }
 }

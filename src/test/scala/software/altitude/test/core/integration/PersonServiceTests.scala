@@ -20,7 +20,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Can save and retrieve a face object") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     val faces = testApp.service.faceDetection.extractFaces(importAsset.data)
     faces.size should be(2)
@@ -36,11 +36,11 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Faces are added to a person") {
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
-    testApp.service.assetImport.importAsset(importAsset1).get
+    testApp.service.library.addImportAsset(importAsset1)
 
     // Add another face to the same person
     val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
-    val importedAsset2: Asset = testApp.service.assetImport.importAsset(importAsset2).get
+    val importedAsset2: Asset = testApp.service.library.addImportAsset(importAsset2)
 
     val people = testApp.service.person.getPeople(importedAsset2.persistedId)
     people.size should be(1)
@@ -49,7 +49,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Person has cover face assigned") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val people = testApp.service.person.getPeople(importedAsset.persistedId)
     val faces = testApp.service.person.getAssetFaces(importedAsset.persistedId)
 

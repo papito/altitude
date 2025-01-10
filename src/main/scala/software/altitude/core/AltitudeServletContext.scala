@@ -1,9 +1,11 @@
 package software.altitude.core
 
+import javax.servlet.ServletContext
 import org.scalatra.ScalatraServlet
 import org.scalatra.servlet.ServletApiImplicits._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.controllers.htmx.AlbumActionController
 import software.altitude.core.controllers.htmx.AssetActionController
 import software.altitude.core.controllers.htmx.FolderActionController
@@ -17,10 +19,8 @@ import software.altitude.core.controllers.web.SessionController
 import software.altitude.core.models.Repository
 import software.altitude.core.models.User
 
-import javax.servlet.ServletContext
-
 object AltitudeServletContext {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   logger.info("Initializing application context... ")
 
   val app: Altitude = new Altitude
@@ -31,7 +31,7 @@ object AltitudeServletContext {
   var usersByEmail: Map[String, User] = Map[String, User]()
   // email -> password hash
   var usersPasswordHashByEmail: Map[String, String] = Map[String, String]()
-    // token -> user
+  // token -> user
   var usersByToken: Map[String, User] = Map[String, User]()
   // id -> repository
   var repositoriesById: Map[String, Repository] = Map[String, Repository]()
@@ -47,7 +47,6 @@ object AltitudeServletContext {
   val endpoints: Seq[(ScalatraServlet, String)] = List(
     (new IndexController, "/"),
     (new ImportController, "/import/*"),
-
     (new SessionController, "/sessions/*"),
     (new ContentViewController, "/content/*"),
     (new FolderActionController, "/htmx/folder/*"),
@@ -55,8 +54,7 @@ object AltitudeServletContext {
     (new AlbumActionController, "/htmx/album/*"),
     (new PeopleActionController, "/htmx/people/*"),
     (new SearchResultsController, "/htmx/search/*"),
-
-    (new SetupController, "/htmx/admin/setup/*"),
+    (new SetupController, "/htmx/admin/setup/*")
 
     // (new admin.MetadataController, "/api/v1/admin/metadata/*"),
     // (new FileSystemBrowserController, "/navigate/*"),
@@ -64,8 +62,9 @@ object AltitudeServletContext {
   )
 
   def mountEndpoints(context: ServletContext): Unit = {
-    endpoints.foreach { case (servlet, path) =>
-      context.mount(servlet, path)
+    endpoints.foreach {
+      case (servlet, path) =>
+        context.mount(servlet, path)
     }
   }
 }

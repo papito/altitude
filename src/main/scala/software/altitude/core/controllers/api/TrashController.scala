@@ -2,6 +2,7 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import play.api.libs.json.Json
+
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.FieldConst
@@ -24,7 +25,7 @@ class TrashController extends BaseApiController {
     logger.info("Deleting assets")
 
     val validator = ApiRequestValidator(
-      required=List(Api.Field.Folder.ASSET_IDS)
+      required = List(Api.Field.Folder.ASSET_IDS)
     )
 
     validator.validate(unscrubbedReqJson.get)
@@ -52,7 +53,7 @@ class TrashController extends BaseApiController {
     logger.info(s"Moving recycled assets to $folderId")
 
     val validator = ApiRequestValidator(
-      required=List(Api.Field.Trash.ASSET_IDS)
+      required = List(Api.Field.Trash.ASSET_IDS)
     )
 
     validator.validate(unscrubbedReqJson.get)
@@ -78,7 +79,7 @@ class TrashController extends BaseApiController {
     logger.info("Restoring multiple assets")
 
     val validator = ApiRequestValidator(
-      required=List(Api.Field.Trash.ASSET_IDS)
+      required = List(Api.Field.Trash.ASSET_IDS)
     )
 
     validator.validate(unscrubbedReqJson.get)
@@ -100,15 +101,17 @@ class TrashController extends BaseApiController {
 
     val results = app.service.library.queryRecycled(q)
 
-    Ok(Json.obj(
-      Api.Field.Search.ASSETS -> results.records.map { x =>
-        val asset = x: Asset
-        asset.userMetadata.toJson
-      },
-      Api.Field.TOTAL_RECORDS -> results.total,
-      Api.Field.CURRENT_PAGE -> q.page,
-      Api.Field.TOTAL_PAGES -> results.totalPages,
-      Api.Field.RESULTS_PER_PAGE -> q.rpp
-    ))
+    Ok(
+      Json.obj(
+        Api.Field.Search.ASSETS -> results.records.map {
+          x =>
+            val asset = x: Asset
+            asset.userMetadata.toJson
+        },
+        Api.Field.TOTAL_RECORDS -> results.total,
+        Api.Field.CURRENT_PAGE -> q.page,
+        Api.Field.TOTAL_PAGES -> results.totalPages,
+        Api.Field.RESULTS_PER_PAGE -> q.rpp
+      ))
   }
 }

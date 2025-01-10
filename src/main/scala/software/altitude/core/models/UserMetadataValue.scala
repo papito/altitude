@@ -1,9 +1,9 @@
 package software.altitude.core.models
 
-import play.api.libs.json.JsonNaming.SnakeCase
-import play.api.libs.json._
-
 import java.util.Base64
+import play.api.libs.json._
+import play.api.libs.json.JsonNaming.SnakeCase
+
 import scala.language.implicitConversions
 
 object UserMetadataValue {
@@ -12,8 +12,7 @@ object UserMetadataValue {
   implicit def fromJson(json: JsValue): UserMetadataField = Json.fromJson[UserMetadataField](json).get
 }
 
-case class UserMetadataValue(id: Option[String] = None,
-                             value: String) extends BaseModel with NoDates {
+case class UserMetadataValue(id: Option[String] = None, value: String) extends BaseModel with NoDates {
   private val md = java.security.MessageDigest.getInstance("SHA-1")
   val checksum: String = Base64.getEncoder.encodeToString(
     md.digest(
@@ -25,8 +24,8 @@ case class UserMetadataValue(id: Option[String] = None,
 
   final def nonEmpty: Boolean = value.nonEmpty
 
-  override def equals( that: Any): Boolean = that match {
-    case that: UserMetadataValue if !that.canEqual( this) => false
+  override def equals(that: Any): Boolean = that match {
+    case that: UserMetadataValue if !that.canEqual(this) => false
     case that: UserMetadataValue => this.checksum == that.checksum
     case _ => false
   }

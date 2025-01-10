@@ -2,6 +2,7 @@ package software.altitude.core.service
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Altitude
 import software.altitude.core.dao.StatDao
 import software.altitude.core.models.Asset
@@ -11,7 +12,7 @@ import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 
 class StatsService(val app: Altitude) {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val dao: StatDao = app.DAO.stats
   protected val txManager: TransactionManager = app.txManager
 
@@ -51,18 +52,20 @@ class StatsService(val app: Altitude) {
   def addAsset(asset: Asset): Unit = {
     logger.debug(s"Adding asset [${asset.id}]")
 
-    if (asset.isTriaged) {
-      logger.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
-      app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
-      app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    } else {
-      logger.debug(s"Asset [${asset.id}] moving TO sorted. Incrementing SORTED")
+    txManager.withTransaction {
+      if (asset.isTriaged) {
+        logger.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
+        app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
+        app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
+      } else {
+        logger.debug(s"Asset [${asset.id}] moving TO sorted. Incrementing SORTED")
 
-      app.service.stats.incrementStat(Stats.SORTED_ASSETS)
-      app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
+        app.service.stats.incrementStat(Stats.SORTED_ASSETS)
+        app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
 
-      logger.debug(s"Incrementing folder counter for asset [${asset.id}]")
-      app.service.folder.incrAssetCount(asset.folderId)
+        logger.debug(s"Incrementing folder counter for asset [${asset.id}]")
+        app.service.folder.incrAssetCount(asset.folderId)
+      }
     }
   }
 

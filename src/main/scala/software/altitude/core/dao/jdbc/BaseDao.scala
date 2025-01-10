@@ -1,12 +1,18 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.time.LocalDateTime
+import java.util.UUID
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsValue.jsValueToJsLookup
 import play.api.libs.json._
+import play.api.libs.json.JsValue.jsValueToJsLookup
+
+import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
+
 import software.altitude.core.ConstraintException
 import software.altitude.core.FieldConst
 import software.altitude.core.NotFoundException
@@ -16,11 +22,6 @@ import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-
-import java.time.LocalDateTime
-import java.util.UUID
-import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
 
 object BaseDao {
   final def genId: String = UUID.randomUUID.toString
@@ -36,7 +37,7 @@ object BaseDao {
 }
 
 abstract class BaseDao {
-  protected final val logger: Logger = LoggerFactory.getLogger(getClass)
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   val config: Config
   protected def txManager: TransactionManager = TransactionManager(config)
@@ -118,8 +119,7 @@ abstract class BaseDao {
 
     logger.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
     val runner = queryRunner
-    val numDeleted = runner.update(
-      RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object]): _*)
+    val numDeleted = runner.update(RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object]): _*)
     logger.debug(s"Deleted records: $numDeleted")
     numDeleted
   }
@@ -138,7 +138,7 @@ abstract class BaseDao {
 //    if (recs.nonEmpty) {
 //      logger.debug(recs.map(_.toString()).mkString("\n"))
 //    }
-    QueryResult(records = recs.map{makeModel}, total = total, rpp = query.rpp, sort = query.sort)
+    QueryResult(records = recs.map(makeModel), total = total, rpp = query.rpp, sort = query.sort)
   }
 
   protected def addRecord(jsonIn: JsObject, sql: String, values: List[Any]): Unit = {
@@ -153,12 +153,10 @@ abstract class BaseDao {
 
     logger.debug(s"SELECT SQL: $sql with values: $values")
 
-    val res = queryRunner.query(
-      RequestContext.getConn,
-      sql, new MapListHandler(),
-      values.map(_.asInstanceOf[Object]): _*).asScala.toList
+    val res =
+      queryRunner.query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object]): _*).asScala.toList
 
-    res.map{_.asScala.toMap[String, AnyRef]}
+    res.map(_.asScala.toMap[String, AnyRef])
   }
 
   protected def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] = {
@@ -179,15 +177,12 @@ abstract class BaseDao {
 
     val runner: QueryRunner = new QueryRunner()
 
-    val res = runner.query(
-      RequestContext.getConn,
-      sqlQuery.sqlAsString,
-      new MapListHandler(),
-      sqlQuery.bindValues:_*).asScala.toList
+    val res =
+      runner.query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(), sqlQuery.bindValues: _*).asScala.toList
 
     logger.debug(s"Found ${res.length} records")
-    val recs = res.map{_.asScala.toMap[String, AnyRef]}
-    recs.map{makeModel}
+    val recs = res.map(_.asScala.toMap[String, AnyRef])
+    recs.map(makeModel)
   }
 
   def updateByQuery(q: Query, data: Map[String, Any]): Int = {
@@ -198,7 +193,7 @@ abstract class BaseDao {
 
     val runner = queryRunner
 
-    val numUpdated = runner.update(RequestContext.getConn, sqlQuery.sqlAsString, sqlQuery.bindValues:_*)
+    val numUpdated = runner.update(RequestContext.getConn, sqlQuery.sqlAsString, sqlQuery.bindValues: _*)
     logger.debug("Updated records: " + numUpdated)
     numUpdated
   }
@@ -219,7 +214,7 @@ abstract class BaseDao {
     values.map(_.toString).mkString(",")
   }
 
-  def loadCsv[T:ClassTag](csv: String): List[T] = {
+  def loadCsv[T: ClassTag](csv: String): List[T] = {
     if (csv == null || csv.isEmpty) {
       return List()
     }
@@ -245,10 +240,9 @@ abstract class BaseDao {
   }
 
   /**
-   * Implementations should define this method, which returns an optional
-   * JSON object which is guaranteed to serialize into a valid model backing this class.
-   * JSON can be constructed directly, but best to create a model instance first
-   * and return it, triggering implicit conversion.
+   * Implementations should define this method, which returns an optional JSON object which is guaranteed to serialize into a
+   * valid model backing this class. JSON can be constructed directly, but best to create a model instance first and return it,
+   * triggering implicit conversion.
    */
   protected def makeModel(rec: Map[String, AnyRef]): JsObject
 

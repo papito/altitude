@@ -1,9 +1,11 @@
 package software.altitude.core.service
+import java.time.LocalDateTime
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
+import software.altitude.core._
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.FieldConst
-import software.altitude.core._
 import software.altitude.core.dao.UserDao
 import software.altitude.core.dao.UserTokenDao
 import software.altitude.core.models.User
@@ -11,8 +13,6 @@ import software.altitude.core.models.UserToken
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.Util
-
-import java.time.LocalDateTime
 
 class UserService(val app: Altitude) extends BaseService[User] {
   protected val dao: UserDao = app.DAO.user
@@ -52,9 +52,11 @@ class UserService(val app: Altitude) extends BaseService[User] {
     throw new NotImplementedError("Use the alternate add() method with password")
 
   def add(objIn: User, password: String): JsObject = {
-    // password and hash are not stored in the model and are not passed around outside of login flow
-    val passwordHash = Util.hashPassword(password)
-    dao.add(objIn.toJson ++ Json.obj(FieldConst.User.PASSWORD_HASH -> passwordHash))
+    txManager.withTransaction {
+      // password and hash are not stored in the model and are not passed around outside of login flow
+      val passwordHash = Util.hashPassword(password)
+      dao.add(objIn.toJson ++ Json.obj(FieldConst.User.PASSWORD_HASH -> passwordHash))
+    }
   }
 
   private def getPasswordHashByEmail(email: String): String = {
@@ -77,11 +79,12 @@ class UserService(val app: Altitude) extends BaseService[User] {
   }
 
   def getByToken(token: String): Option[User] = {
-    if (AltitudeServletContext.usersByToken.contains(token)) {
-      return Some(AltitudeServletContext.usersByToken(token))
+    txManager.asReadOnly[Option[User]] {
+      if (AltitudeServletContext.usersByToken.contains(token)) {
+        return Some(AltitudeServletContext.usersByToken(token))
+      }
+      None
     }
-
-    None
   }
 
   def deleteToken(token: String): Unit = {
@@ -119,9 +122,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
 
   def setLastActiveRepoId(user: User, repoId: String): Unit = {
     txManager.withTransaction {
-      dao.updateById(
-        user.persistedId,
-        Map(FieldConst.User.LAST_ACTIVE_REPO_ID -> repoId))
+      dao.updateById(user.persistedId, Map(FieldConst.User.LAST_ACTIVE_REPO_ID -> repoId))
     }
   }
 

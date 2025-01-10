@@ -1,6 +1,7 @@
 package software.altitude.core.service
 
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Altitude
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.FieldConst
@@ -26,7 +27,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       name = name,
       ownerAccountId = owner.persistedId,
       rootFolderId = BaseDao.genId,
-      fileStoreType = fileStoreType,
+      fileStoreType = fileStoreType
     )
 
     txManager.withTransaction[JsObject] {
@@ -40,7 +41,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       val rootFolder = Folder(
         id = Some(contextRepo.rootFolderId),
         parentId = contextRepo.rootFolderId,
-        name = FieldConst.Folder.Name.ROOT,
+        name = FieldConst.Folder.Name.ROOT
       )
 
       app.service.folder.add(rootFolder)

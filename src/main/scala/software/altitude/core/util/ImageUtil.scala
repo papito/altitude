@@ -3,12 +3,6 @@ package software.altitude.core.util
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.exif.ExifDirectoryBase
 import com.drew.metadata.exif.ExifIFD0Directory
-import org.opencv.core.Mat
-import org.opencv.core.MatOfByte
-import org.opencv.core.Size
-import org.opencv.imgcodecs.Imgcodecs
-import org.opencv.imgproc.Imgproc
-
 import java.awt.AlphaComposite
 import java.awt.Color
 import java.awt.Graphics2D
@@ -18,6 +12,11 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
+import org.opencv.core.Mat
+import org.opencv.core.MatOfByte
+import org.opencv.core.Size
+import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 
 object ImageUtil {
   // Get OPENCV image Mat from a byte array
@@ -37,11 +36,12 @@ object ImageUtil {
       val exifDirectory = mt.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
       // val jpegDirectory = mt.getFirstDirectoryOfType(classOf[JpegDirectory])
 
-      val orientation: Int = try {
-        exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
-      } catch {
-        case _: Exception => 1
-      }
+      val orientation: Int =
+        try {
+          exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
+        } catch {
+          case _: Exception => 1
+        }
 
       /**
        * Rotate the image if necessary

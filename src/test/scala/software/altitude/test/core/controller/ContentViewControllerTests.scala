@@ -11,7 +11,7 @@ import software.altitude.test.core.ControllerTestCore
 
 @DoNotDiscover class ContentViewControllerTests(override val testApp: Altitude) extends ControllerTestCore {
 
-  // FIXME: This works alone but fails within the context of the suite - what state is being shared?
+  // FIXME: This works alone but fails within the context of the suite - what state is being shared across these tests?
   test("Access to thumbnail image denied for not logged in users") {
     // no need to persist the repository or import an asset - should never get to that point
 //    get(s"/content/preview/lol") {
@@ -24,7 +24,7 @@ import software.altitude.test.core.ControllerTestCore
     val repoId = testContext.repository.persistedId
 
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     get(s"/${C.DataStore.CONTENT}/r/$repoId/${C.DataStore.PREVIEW}/${importedAsset.persistedId}", headers=testAuthHeaders()) {
       status should equal(200)
@@ -37,7 +37,7 @@ import software.altitude.test.core.ControllerTestCore
     val repoId = testContext.repository.persistedId
 
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     get(s"/${C.DataStore.CONTENT}/r/$repoId/${C.DataStore.FILE}/${importedAsset.persistedId}", headers=testAuthHeaders()) {
       response.getContentType() should startWith("application/octet-stream")
@@ -51,7 +51,7 @@ import software.altitude.test.core.ControllerTestCore
     val repoId = testContext.repository.persistedId
 
     val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
-    val importedAsset: Asset = testApp.service.assetImport.importAsset(importAsset).get
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     val faces = testApp.service.person.getAssetFaces(importedAsset.persistedId)
     val face: Face = faces.head

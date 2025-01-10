@@ -2,15 +2,16 @@ package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
+
+import scala.collection.mutable
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Person
 
-import scala.collection.mutable
-
 abstract class PersonDao(override val config: Config) extends BaseDao with software.altitude.core.dao.PersonDao {
 
-  override final val tableName = "person"
+  final override val tableName = "person"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val mergedIntoLabel = rec(FieldConst.Person.MERGED_INTO_LABEL)
@@ -29,9 +30,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
       // If mergedIntoLabel is there, it's an Int or a Long, depending on DB
       mergedIntoLabel = if (mergedIntoLabel != null) {
         Some(mergedIntoLabel.getClass match {
-        case c if c == classOf[java.lang.Integer] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Int]
-        case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Long].toInt
-      })
+          case c if c == classOf[java.lang.Integer] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Int]
+          case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Long].toInt
+        })
       } else {
         None
       },
@@ -67,9 +68,10 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
 
     val lookup: mutable.Map[String, Person] = mutable.Map()
 
-    recs.foreach { rec =>
-      val person: Person = makeModel(rec)
-      lookup += (person.persistedId -> person)
+    recs.foreach {
+      rec =>
+        val person: Person = makeModel(rec)
+        lookup += (person.persistedId -> person)
     }
 
     lookup.toMap

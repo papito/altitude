@@ -12,16 +12,16 @@ import software.altitude.test.core.IntegrationTestCore
 @DoNotDiscover class MetadataParserTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Detect asset type JPEG") {
-    val importAsset =IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
-    val assetType: AssetType = testApp.service.assetImport.detectAssetType(importAsset)
+    val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val assetType: AssetType = testApp.service.metadataExtractor.detectAssetType(importAsset.data)
     assetType.mediaType should be("image")
     assetType.mediaSubtype should be("jpeg")
     assetType.mime should be("image/jpeg")
   }
 
   test("Detect asset type PNG") {
-    val importAsset =IntegrationTestUtil.getImportAsset("images/3.PNG")
-    val assetType: AssetType = testApp.service.assetImport.detectAssetType(importAsset)
+    val importAsset = IntegrationTestUtil.getImportAsset("images/3.PNG")
+    val assetType: AssetType = testApp.service.metadataExtractor.detectAssetType(importAsset.data)
     assetType.mediaType should be("image")
     assetType.mediaSubtype should be("png")
     assetType.mime should be("image/png")

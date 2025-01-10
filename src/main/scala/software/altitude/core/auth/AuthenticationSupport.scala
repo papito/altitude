@@ -1,15 +1,15 @@
 package software.altitude.core.auth
 
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
 import org.scalatra.ScalatraBase
 import org.scalatra.auth.ScentryConfig
 import org.scalatra.auth.ScentrySupport
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.models.User
-
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 object AuthenticationSupport {
   val loginUrl = "/sessions/new"
@@ -24,9 +24,7 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
       altitude.service.user.getById(id)
   }
 
-  protected def toSession: PartialFunction[User, String] = {
-    case usr: User => usr.persistedId
-  }
+  protected def toSession: PartialFunction[User, String] = { case usr: User => usr.persistedId }
 
   protected val scentryConfig: ScentryConfiguration = (new ScentryConfig {
     override val login: String = AuthenticationSupport.loginUrl
@@ -58,15 +56,20 @@ trait AuthenticationSupport extends ScalatraBase with ScentrySupport[User] {
   }
 
   /**
-   * Register auth strategies with Scentry. Any controller with this trait mixed in will attempt to progressively use all registered
-   * strategies to log the user in, falling back if necessary.
+   * Register auth strategies with Scentry. Any controller with this trait mixed in will attempt to progressively use all
+   * registered strategies to log the user in, falling back if necessary.
    */
   override protected def registerAuthStrategies(): Unit = {
-    AltitudeServletContext.app.scentryStrategies.foreach { case (strategyName, strategyClass) =>
-      scentry.register(strategyName, app => {
-        val constructor = strategyClass.getConstructor(classOf[ScalatraBase], classOf[HttpServletRequest], classOf[HttpServletResponse])
-        constructor.newInstance(app, request, response)
-      })
+    AltitudeServletContext.app.scentryStrategies.foreach {
+      case (strategyName, strategyClass) =>
+        scentry.register(
+          strategyName,
+          app => {
+            val constructor =
+              strategyClass.getConstructor(classOf[ScalatraBase], classOf[HttpServletRequest], classOf[HttpServletResponse])
+            constructor.newInstance(app, request, response)
+          }
+        )
     }
   }
 }

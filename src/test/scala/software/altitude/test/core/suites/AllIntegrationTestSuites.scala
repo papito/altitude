@@ -3,12 +3,10 @@ package software.altitude.test.core.suites
 import org.scalatest.Suites
 import software.altitude.core.Altitude
 import software.altitude.test.core.integration._
-import software.altitude.test.core.unit._
 
 abstract class AllIntegrationTestSuites(val testApp: Altitude) extends Suites (
   new SystemServiceTests(testApp),
   new AssetQueryTests(testApp),
-  new SearchQueryModelTests,
   new AssetServiceTests(testApp),
   new MetadataParserTests(testApp),
   new SearchServiceTests(testApp),
@@ -23,4 +21,5 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude) extends Suites (
   new FaceDetectionTests(testApp),
   new PersonServiceTests(testApp),
   new FaceRecognitionServiceTests(testApp),
+  new ImportPipelineServiceTests(testApp),
 )

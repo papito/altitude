@@ -12,8 +12,7 @@ import software.altitude.test.core.IntegrationTestCore
 @DoNotDiscover class SystemServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Initialize system") {
-    // ditch the usual setup and start with a clean slate
-    reset()
+    RequestContext.clear()
 
     // control shot
     RequestContext.account.value should be(None)
@@ -31,10 +30,15 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.isInitialized should be(true)
 
     val repos = testApp.service.repository.query(new Query())
-    repos.records.size should be(1)
-
     val users = testApp.service.user.query(new Query())
-    users.records.size should be(1)
+
+    /** !!!! NOTE that since the common test setup creates a repository and an admin user,
+     * we should have 2 records in each table - the one we created in the test setup
+     * and the one created by the system initialization test.
+     *
+     */
+    repos.records.size should be(2)
+    users.records.size should be(2)
 
     val adminUser = RequestContext.account.value
     adminUser.get.email should be (userModel.email)
