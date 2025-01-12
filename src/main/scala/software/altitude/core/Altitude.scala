@@ -217,19 +217,8 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     }
   }
 
-  private val actorSystemConfig: Config = ConfigFactory.parseString("""
-    single-thread-dispatcher {
-      type = Dispatcher
-      executor = "thread-pool-executor"
-      thread-pool-executor {
-        fixed-pool-size = 1
-      }
-      throughput = 1
-    }
-  """)
-
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
-    ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system", actorSystemConfig)
+    ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
 
   object service {
     val migrationService: MigrationService = dataSourceType match {

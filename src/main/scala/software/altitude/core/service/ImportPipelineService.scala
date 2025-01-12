@@ -26,7 +26,7 @@ import software.altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
 import software.altitude.core.pipeline.flows.AddPreviewFlow
 import software.altitude.core.pipeline.flows.AssignIdFlow
 import software.altitude.core.pipeline.flows.CheckDuplicateFlow
-import software.altitude.core.pipeline.flows.CheckMetadataFlow
+import software.altitude.core.pipeline.flows.CheckMediaTypeFlow
 import software.altitude.core.pipeline.flows.ExtractMetadataFlow
 import software.altitude.core.pipeline.flows.FacialRecognitionFlow
 import software.altitude.core.pipeline.flows.FileStoreFlow
@@ -41,7 +41,7 @@ class ImportPipelineService(app: Altitude) {
 
   implicit val system: ActorSystem[AltitudeActorSystem.Command] = app.actorSystem
 
-  private val checkMediaTypeFlow = CheckMetadataFlow(app)
+  private val checkMediaTypeFlow = CheckMediaTypeFlow(app)
   private val assignIdFlow = AssignIdFlow(app)
   private val persistAndIndexFlow = PersistAndIndexAssetFlow(app)
   private val facialRecognitionFlow = FacialRecognitionFlow(app)
@@ -64,18 +64,13 @@ class ImportPipelineService(app: Altitude) {
       .via(extractMetadataFlow)
       .via(persistAndIndexFlow)
       .async
-      // Face rec should be sequential, per repo, as it's using the state in the model and saves it
-      // periodically (we don't want to run it in parallel)
       .via(facialRecognitionFlow)
-      .withAttributes(ActorAttributes.dispatcher("single-thread-dispatcher"))
       .async
       .via(fileStoreFlow)
       .async
       .via(addPreviewFlow)
       .via(stripBinaryDataFlow)
       .via(markAsCompleteFlow)
-      // Will save the model for this substream (a repo) every X minutes or Y elements
-      // whichever comes first
       .mergeSubstreams
       .alsoTo(wsNotificationSink)
       .alsoTo(errorLoggingSink)
@@ -120,7 +115,7 @@ class ImportPipelineService(app: Altitude) {
       .offer(asset)
       .map {
         case QueueOfferResult.Enqueued =>
-          logger.debug(s"Added asset to the import queue: ${asset._1.asset.fileName}")
+          logger.info(s"Added asset to the import queue: ${asset._1.asset.fileName}")
         case QueueOfferResult.Dropped =>
           logger.warn(s"Asset dropped from the import queue: ${asset._1.asset.fileName}}")
         case QueueOfferResult.Failure(ex) =>

@@ -2,7 +2,7 @@ package software.altitude.core.pipeline.flows
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
-
+import org.slf4j.{Logger, LoggerFactory}
 import software.altitude.core.Altitude
 import software.altitude.core.UnsupportedMediaTypeException
 import software.altitude.core.models.AssetWithData
@@ -12,7 +12,9 @@ import software.altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithCont
 import software.altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
 import software.altitude.core.pipeline.PipelineUtils.debugInfo
 
-object CheckMetadataFlow {
+object CheckMediaTypeFlow {
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
+
   def apply(app: Altitude): Flow[TDataAssetWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     Flow[(AssetWithData, PipelineContext)].map {
       case (dataAsset, ctx) =>
@@ -23,6 +25,7 @@ object CheckMetadataFlow {
           (Left(dataAsset), ctx)
         } catch {
           case e: UnsupportedMediaTypeException =>
+            logger.error(s"Unsupported media type \"${dataAsset.asset.assetType.mediaType}\" for asset ${dataAsset.asset.fileName}")
             (Right(InvalidAsset(dataAsset.asset, Some(e))), ctx)
         }
     }

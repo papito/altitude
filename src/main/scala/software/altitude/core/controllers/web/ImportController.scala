@@ -89,7 +89,6 @@ class ImportController
     logger.info(s"Uploading selected files. Upload ID: $uploadId")
 
     val servletFileUpload = new ServletFileUpload()
-    servletFileUpload.setFileSizeMax(fileSizeLimitGB * 1024 * 1024)
 
     if (!ServletFileUpload.isMultipartContent(request)) {
       logger.error("Not a multipart upload")
