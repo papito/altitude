@@ -9,8 +9,8 @@ The **only** thing needed is a Java runtime on the target system, and Altitude w
 of the rest. You don't need to know what Postgres or microservices are, or how to clear the cache state 
 from Redis if something is broken (there are no microservices and there is no Redis).
 
-Altitude will use Sqlite by default, so nothing else needs to be done. The database cannot be changed
-after the fact, so if you want to use Postgres, 
+## Running under Postgres
+Altitude will use Sqlite by default. The database cannot be changed after the fact, so if you would like to use Postgres, 
 move `application-dev.conf.postgres` into `application-dev.conf` before running the app for the first time
 in setup mode.
 
@@ -42,7 +42,7 @@ Missing features:
 * No support for video files yet.
 * No location editing or display.
 * No metadata view (but it IS being extracted and saved).
-* Facial recognition works at a basic level but most management features are still to be done.
+* Facial recognition works at a basic level but most management features and tuning is yet to be done.
 
 ## Development setup
 
