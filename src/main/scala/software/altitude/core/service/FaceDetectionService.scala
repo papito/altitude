@@ -1,9 +1,7 @@
 package software.altitude.core.service
 
-import java.io.File
-import java.nio.file.Paths
-import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
+import org.apache.commons.io.FilenameUtils
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.opencv.core.CvType
@@ -23,8 +21,6 @@ import org.opencv.objdetect.FaceDetectorYN
 import org.opencv.objdetect.FaceRecognizerSF
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import software.altitude.core.Altitude
 import software.altitude.core.Environment
 import software.altitude.core.models.Face
 import software.altitude.core.models.FaceImages
@@ -32,6 +28,9 @@ import software.altitude.core.util.ImageUtil.determineImageScale
 import software.altitude.core.util.ImageUtil.makeImageThumbnail
 import software.altitude.core.util.ImageUtil.matFromBytes
 import software.altitude.core.util.MurmurHash
+
+import java.io.File
+import java.nio.file.Paths
 
 object FaceDetectionService {
   private val dnnInWidth = 300
@@ -78,7 +77,7 @@ object FaceDetectionService {
   }
 }
 
-class FaceDetectionService(app: Altitude) {
+class FaceDetectionService() {
 
   /**
    * OpenCV for Java has two competing APIs, which is confusing enough (org.opencv, org.bytedeco), every example under the sun

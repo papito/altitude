@@ -1,5 +1,5 @@
 CREATE TABLE system (
-  id INT NOT NULL DEFAULT 1,
+  id INT NOT NULL DEFAULT 1 CHECK (id = 1), -- this is the ONLY ID in the system table
   version INT NOT NULL,
   is_initialized TINYINT NOT NULL DEFAULT FALSE
 );

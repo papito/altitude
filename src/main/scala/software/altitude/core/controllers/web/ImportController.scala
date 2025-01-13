@@ -15,14 +15,9 @@ import org.scalatra.atmosphere.Disconnected
 import org.scalatra.atmosphere.Error
 import org.scalatra.atmosphere.JsonMessage
 import org.scalatra.atmosphere.TextMessage
-import org.scalatra.json.JacksonJsonSupport
 import org.scalatra.json.JValueResult
+import org.scalatra.json.JacksonJsonSupport
 import org.scalatra.servlet.SizeConstraintExceededException
-
-import scala.collection.concurrent.TrieMap
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
-
 import software.altitude.core.Api
 import software.altitude.core.RequestContext
 import software.altitude.core.actors.ImportStatusWsActor
@@ -31,6 +26,10 @@ import software.altitude.core.controllers.web.ImportController.isCancelled
 import software.altitude.core.models.ImportAsset
 import software.altitude.core.models.UserMetadata
 import software.altitude.core.pipeline.PipelineTypes.PipelineContext
+
+import scala.collection.concurrent.TrieMap
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 object ImportController {
   private val uploadCancelRequest = TrieMap[String, Boolean]()

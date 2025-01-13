@@ -2,7 +2,8 @@ package software.altitude.core.pipeline.flows
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import software.altitude.core.Altitude
 import software.altitude.core.UnsupportedMediaTypeException
 import software.altitude.core.models.AssetWithData
@@ -25,7 +26,8 @@ object CheckMediaTypeFlow {
           (Left(dataAsset), ctx)
         } catch {
           case e: UnsupportedMediaTypeException =>
-            logger.error(s"Unsupported media type \"${dataAsset.asset.assetType.mediaType}\" for asset ${dataAsset.asset.fileName}")
+            logger.error(
+              s"Unsupported media type \"${dataAsset.asset.assetType.mediaType}\" for asset ${dataAsset.asset.fileName}")
             (Right(InvalidAsset(dataAsset.asset, Some(e))), ctx)
         }
     }

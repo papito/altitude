@@ -1,15 +1,15 @@
 package software.altitude.core.transactions
 
 import com.typesafe.config.Config
-import java.sql.Connection
-import java.sql.DriverManager
-import java.util.Properties
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
-
-import software.altitude.core.{ Const => C }
 import software.altitude.core.RequestContext
+import software.altitude.core.{ Const => C }
+
+import java.sql.Connection
+import java.sql.DriverManager
+import java.util.Properties
 
 object TransactionManager {
   def apply(config: Config): TransactionManager = new TransactionManager(config)
@@ -53,12 +53,13 @@ class TransactionManager(val config: Config) {
         } else {
           val writeConnection = DriverManager.getConnection(url, sqliteConfig.toProperties)
 
-          // enable write-ahead logging and set synchronous to NORMAL for concurrent operations
           val statement = writeConnection.createStatement()
+          // enable write-ahead logging and set synchronous to NORMAL for concurrent operations
           statement.execute("PRAGMA journal_mode=WAL;")
           statement.execute("PRAGMA synchronous=NORMAL;")
           statement.execute("PRAGMA isolation_level=IMMEDIATE;")
-          statement.execute("PRAGMA busy_timeout=10000;") // 10s BUSY_TIMEOUT
+          // 10s BUSY_TIMEOUT
+          statement.execute("PRAGMA busy_timeout=10000;")
           statement.execute("PRAGMA foreign_keys=ON;")
           statement.execute("PRAGMA temp_store=MEMORY;")
           statement.execute("PRAGMA wal_autocheckpoint=500;")
@@ -69,8 +70,6 @@ class TransactionManager(val config: Config) {
 
           writeConnection
         }
-
-        // println(s"NEW CONNECTION ${System.identityHashCode(conn)}")
 
         conn
     }
@@ -115,21 +114,11 @@ class TransactionManager(val config: Config) {
     }
   }
 
-  def rollback(): Unit = {
-    /* If there are savepoints, rollback to the last one, NOT the entire transaction */
-    if (RequestContext.savepoints.value.nonEmpty) {
-      rollbackSavepoint()
-      return
-    }
-
-    // println(s"ROLLBACK ${System.identityHashCode(RequestContext.conn.value.get)}\n")
+  private def rollback(): Unit = {
     RequestContext.conn.value.get.rollback()
-    RequestContext.savepoints.value.clear()
   }
 
   def close(): Unit = {
-    // println(s"CLOSE ${System.identityHashCode(RequestContext.conn.value.get)}\n")
-
     if (RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed) {
       logger.warn("Connection already closed")
       return
@@ -137,27 +126,9 @@ class TransactionManager(val config: Config) {
 
     RequestContext.conn.value.get.close()
     RequestContext.conn.value = None
-    RequestContext.savepoints.value.clear()
-  }
-
-  private def rollbackSavepoint(): Unit = {
-    if (RequestContext.savepoints.value.isEmpty) {
-      return
-    }
-
-    // println("PARTIAL ROLLBACK")
-    val savepoint = RequestContext.savepoints.value.pop()
-    RequestContext.conn.value.get.rollback(savepoint)
-  }
-
-  def savepoint(): Unit = {
-    val savepoint = RequestContext.conn.value.get.setSavepoint()
-    RequestContext.savepoints.value.push(savepoint)
   }
 
   def commit(): Unit = {
-    // println(s"COMMIT ${System.identityHashCode(RequestContext.conn.value.get)}")
     RequestContext.conn.value.get.commit()
-    RequestContext.savepoints.value.clear()
   }
 }
