@@ -1,5 +1,6 @@
 package lab
 
+import java.io.File
 import org.apache.commons.io.FileUtils
 import org.bytedeco.javacpp.Loader
 import org.opencv.core.Mat
@@ -8,9 +9,8 @@ import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
 import org.opencv.objdetect.CascadeClassifier
-import software.altitude.core.util.ImageUtil.matFromBytes
 
-import java.io.File
+import software.altitude.core.util.ImageUtil.matFromBytes
 
 object HaarFaceDetection extends SandboxApp {
 
