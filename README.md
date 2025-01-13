@@ -1,4 +1,4 @@
-# Altitude #
+# Altitude DAM #
 
 A self-hosted web-based digital asset manager (DAM) that is meant to be simple, resilient, and fast.
 
@@ -9,12 +9,12 @@ The **only** thing needed is a Java runtime on the target system, and Altitude w
 of the rest. You don't need to know what Postgres or microservices are, or how to clear the cache state 
 from Redis if something is broken (there are no microservices and there is no Redis).
 
-## Running under Postgres
+### Running under Postgres
 Altitude will use Sqlite by default. The database cannot be changed after the fact, so if you would like to use Postgres, 
 move `application-dev.conf.postgres` into `application-dev.conf` before running the app for the first time
 in setup mode.
 
-## Technology Stack
+### Technology Stack
 
 * Scala & Scalatra
 * Postgres OR Sqlite
@@ -46,13 +46,13 @@ Missing features:
 
 ## Development setup
 
-### Core system requirements
+You will need:
 
 * Java 11+
-* Docker
+* Docker (for the Postgres container only)
 * NPM
 
-## Build & Run
+### Build & Run
 
 ```sh
 # Bring up the Postgres database (dev and test at once)
@@ -66,64 +66,63 @@ make watch
 Run `npm install` to install dev-time dependencies (these are just formatters and linters)
 in order to have the `make lint` command work.
 
-**See the Makefile for all the available commands.**
+[See the Makefile](https://github.com/papito/altitude/blob/trunk/Makefile) for all the available commands.
 
-## Design decisions and other resources
 
-These are covered in the [WIKI](https://github.com/papito/altitude/wiki)
-
-## Databases
-
-* SQL schema needs to be updated for *both* Postgres and SQLite. The schemas are in `src/main/resources/migrations/`
-* In development, the type of database running is configured in `core.Configuration` class.
-
-### PRE-COMMIT HOOK SETUP
-
-In `.git/hooks/pre-commit `:
-
-    #!/bin/sh
-
-    make lint
-
-## Logging
+### Logging
 
 See `logback.xml` for configuration.
 
-## Style and formatting
+### Style and formatting
 
 Linting configurations are in:
 
-    * .scalafmt.conf
-    * .scalafix.conf
-    * .prettierignore
-    * .prettierrc
-    * .eslintrc
-
-## Running a tagged test(s):
+* `.scalafmt.conf`
+* `.scalafix.conf`
+* `.prettierrc`
+* `.eslintrc`
+* `.prettierignore`
+ 
+### Running a tagged test(s):
 Update your test as such:
 
 ```
 test("work in progress", Focused) {
 }
 ```
+
+Then:
+
+    make test-focused
+
+For integration tests, **this will run more than once, against all database types**.
+
+To run with better accuracy, use one of the following Make targets:
+
     make test-focused-sqlite
     make test-focused-psql
     make test-focused-controller
     make test-focused-unit
 
-## Running tests against a particular database:
+### Running all tests against a particular database:
 
     make test-sqlite
     make test-psql
     
-## Running controller and unit tests separately
+### Running controller and unit tests separately
+
     make test-controller
     make test-unit
     
-## Packaging
+### Packaging (make a fat jar)
 
     make publish
 
 The jar will be in `target/`. The jar can be run with:
 
     java -jar [jar name]
+
+## Design decisions and other resources
+
+These are covered in the [WIKI](https://github.com/papito/altitude/wiki)
+
