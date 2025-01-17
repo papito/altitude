@@ -6,7 +6,9 @@ There are plenty of media managers in existence at this point, but they often re
 skills to just get up and running. Altitude is meant to be easy-to-use and easy-to-deploy.
 
 The **only** thing needed is a Java runtime on the target system, and Altitude will take care 
-of the rest. You don't need to know what Postgres or microservices are, or how to clear the cache state 
+of the rest (Dockerized runner will come later, when it makes more sense). 
+
+You don't need to know what Postgres or microservices are, or how to clear the cache state 
 from Redis if something is broken (there are no microservices and there is no Redis).
 
 ### Running under Postgres
