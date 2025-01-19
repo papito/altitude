@@ -128,3 +128,5 @@ The jar will be in `target/`. The jar can be run with:
 
 These are covered in the [WIKI](https://github.com/papito/altitude/wiki)
 
+## Contacting the author
+If you have any questions about this project, please use [this form](https://renegadeotter.com/contact.html) to drop a line.
