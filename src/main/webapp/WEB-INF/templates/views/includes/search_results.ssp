@@ -47,6 +47,8 @@
 
   selectTab("explorer", "foldersTab")
 
+  const contentElement = document.getElementById("content");
+  contentElement.scrollTo({ top: 0, behavior: 'smooth' });
   /**
    * Observe every new cell element in the grid for lazy loading/unloading
    */
