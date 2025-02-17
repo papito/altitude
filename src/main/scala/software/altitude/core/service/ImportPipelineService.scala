@@ -89,8 +89,10 @@ class ImportPipelineService(app: Altitude) {
     logger.info("Starting the import queue pipeline")
 
     val (queue, source) = Source
-      .queue[TDataAssetWithContext](parallelism * 2, OverflowStrategy.backpressure, maxConcurrentOffers = parallelism)
-      .preMaterialize()
+      .queue[TDataAssetWithContext](
+        bufferSize = parallelism * 2,
+        overflowStrategy = OverflowStrategy.backpressure,
+        maxConcurrentOffers = parallelism).preMaterialize()
 
     val res = source
       .merge(Source.never) // Keep the queue open and never complete

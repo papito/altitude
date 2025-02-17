@@ -200,7 +200,7 @@ class FaceRecognitionService(val app: Altitude) {
     }
   }
 
-  def indexFace(face: Face, personLabel: Int, repositoryId: String = RequestContext.getRepository.persistedId): Unit = {
+  private def indexFace(face: Face, personLabel: Int, repositoryId: String = RequestContext.getRepository.persistedId): Unit = {
     app.actorSystem ! FaceRecManagerActor.AddFace(repositoryId, face, personLabel)
   }
 

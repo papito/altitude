@@ -76,11 +76,13 @@ class TransactionManager(val config: Config) {
   }
 
   def withTransaction[A](f: => A): A = {
+    println("!!!! TX CONN 1 " + RequestContext.conn.value)
     if (RequestContext.conn.value.isDefined) {
       return f
     }
 
     RequestContext.conn.value = Some(connection(readOnly = false))
+    println("!!!! TX CONN 2 " + RequestContext.conn.value)
 
     try {
       // actual function call

@@ -2,9 +2,6 @@ import { Const } from "../constants.js"
 import { context } from "../context.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
 
-/**
- * A folder is dragon dropped in UI BUT not yet removed on the server-side
- */
 document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
     const mergeSourceId = event.detail["mergeSourceId"]
     const mergeDestId = event.detail["mergeDestId"]
@@ -39,8 +36,13 @@ document.body.addEventListener(Const.events.personMerged, (event) => {
 document.body.addEventListener(Const.events.personNameEdited, (event) => {
     const personId = event.detail["personId"]
     const newPersonName = event.detail["newPersonName"]
-
     console.debug(`Person ${personId} name changed to ${newPersonName}`)
-
     htmx.find("#person-" + personId + " .name a").textContent = newPersonName
+})
+
+document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {
+    const personId = event.detail["personId"]
+    const faceId = event.detail["faceId"]
+    console.debug(`Person ${personId} updated with face ${faceId}`)
+    htmx.find("#person-" + personId + " .image img").src = `/content/r/${context.getRepoId()}/face/${faceId}`
 })

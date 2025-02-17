@@ -128,7 +128,7 @@ CREATE TABLE face (
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX face_01 ON face(repository_id, checksum);
-CREATE INDEX face_02 ON face (person_id);
+CREATE INDEX face_02 ON face (person_id, detection_score);
 
 
 CREATE TABLE metadata_field (

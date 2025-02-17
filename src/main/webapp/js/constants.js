@@ -8,6 +8,7 @@ export const Const = {
         personMerged: "PERSON_MERGED_EVENT",
         confirmPersonMerge: "CONFIRM_PERSON_MERGE_EVENT",
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
+        personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
     },
 
     /**
@@ -27,6 +28,7 @@ export const Const = {
         originalWidth: "alt-og-width",
         dataSrc: "alt-data-src",
         personId: "alt-person-id",
+        faceId: "alt-face-id",
     },
 
     context: {

@@ -1,0 +1,88 @@
+<% import software.altitude.core.Const %>
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.models.Person %>
+<% import software.altitude.core.models.Face %>
+<% import software.altitude.core.Api %>
+
+<%@ val person: Person %>
+<%@ val faces: List[Face] %>
+
+<style>
+    #faceSelector {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        row-gap: var(--control-vertical-space);
+    }
+
+    #faceSelector .info {
+        display: grid;
+        font-size: 1.1em;
+        color: var(--font-color-dim);
+        font-weight: 500;
+        letter-spacing: 1px;
+        place-items: center;
+    }
+
+    #faceSelector .faces {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(6, 1fr);
+        gap: var(--control-vertical-space)
+    }
+
+    #faceSelector .faces img {
+        border-radius: 25%;
+    }
+
+    #faceSelector .faces img:hover {
+        border: 1px solid var(--warning-font-color)
+        cursor: pointer;
+    }
+</style>
+
+<div id="faceSelector">
+    <div class="info">
+        <div>
+            Best faces for <strong>${person.name}</strong>
+        </div>
+    </div>
+
+    <div class="faces">
+        #for (face <- faces)
+          <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${face.persistedId}"
+               alt-face-id="${face.persistedId}"
+               hx-swap="innerHTML"
+               hx-target="#person"
+               hx-put='${ url(setCoverImage, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'
+               hx-vals='{"${Api.Field.FACE_ID}": "${face.persistedId}"}'
+               hx-trigger="click"
+          >
+        #end
+    </div>
+
+</div>
+
+<%@ val minWidth: Int %>
+<%@ val title: String %>
+
+<script type="module">
+    import { showModal, closeModal } from "../../../../js/common/modal.js"
+    import { Const } from "../../../../js/constants.js"
+
+    showModal({ minWidthPx: "${minWidth}", title: "${title}" })
+
+    htmx.find("#faceSelector").addEventListener("htmx:afterRequest", function (evt) {
+        if (evt.detail.successful === true) {
+            const faceId = evt.target.getAttribute(Const.attributes.faceId)
+            const personCoverImageSet = new CustomEvent(Const.events.personCoverFaceSet, {
+                detail: {
+                    "<%= Api.Field.FACE_ID %>": faceId,
+                    "<%= Api.Field.PERSON_ID %>": "<%= person.persistedId %>"
+                },
+            })
+            document.body.dispatchEvent(personCoverImageSet)
+
+            closeModal()
+        }
+    })
+</script>

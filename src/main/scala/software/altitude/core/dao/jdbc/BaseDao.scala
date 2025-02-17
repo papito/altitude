@@ -43,6 +43,7 @@ abstract class BaseDao {
 
   val tableName: String
   protected def columnsForSelect: List[String] = List("*")
+  protected def columnsForSelectPrefixed: Seq[String] = columnsForSelect.map(s"$tableName." + _)
 
   val sqlQueryBuilder: SqlQueryBuilder[Query] = new SqlQueryBuilder[Query](columnsForSelect, tableName)
 
@@ -134,9 +135,6 @@ abstract class BaseDao {
 
     logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
 
-//    if (recs.nonEmpty) {
-//      logger.debug(recs.map(_.toString()).mkString("\n"))
-//    }
     QueryResult(records = recs.map(makeModel), total = total, rpp = query.rpp, sort = query.sort)
   }
 

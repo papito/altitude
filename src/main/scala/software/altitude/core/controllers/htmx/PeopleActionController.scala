@@ -5,7 +5,7 @@ import play.api.libs.json.JsObject
 import software.altitude.core.{Api, DataScrubber, DuplicateException, RequestContext, ValidationException, Const => C}
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseHtmxController
-import software.altitude.core.models.Person
+import software.altitude.core.models.{Face, Person}
 
 /** @ /htmx/people/ */
 class PeopleActionController extends BaseHtmxController {
@@ -18,6 +18,36 @@ class PeopleActionController extends BaseHtmxController {
     val people: List[Person] = app.service.person.getAllAboveThreshold
 
     ssp("htmx/people", Api.Field.Person.PEOPLE -> people)
+  }
+
+  val showChoosePersonCoverFaceModal: Route = get("/r/:repoId/modals/choose-person-cover-face") {
+    val personId: String = params.get(Api.Field.PERSON_ID).get
+    val person: Person = app.service.person.getById(personId)
+    val topFaces = app.service.person.getPersonFaces(person.persistedId, limit = 24)
+
+    ssp(
+      "htmx/choose_person_cover_face_modal",
+      Api.Modal.MIN_WIDTH -> C.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH,
+      Api.Modal.TITLE -> C.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_TITLE,
+      Api.Field.Person.PERSON -> person,
+      Api.Field.Person.FACES -> topFaces
+    )
+  }
+
+  val setCoverImage: Route = put("/r/:repoId/p/:personId/cover-image") {
+    val personId: String = params.get(Api.Field.PERSON_ID).get
+    val person: Person = app.service.person.getById(personId)
+
+    val faceId: String = params.get(Api.Field.FACE_ID).get
+    val face: Face = app.service.person.getFaceById(faceId)
+
+    logger.info(s"Setting cover image for person $personId to face $faceId")
+    val updatedPerson = app.service.person.setFaceAsCover(person, face)
+
+    ssp(
+      "htmx/person_inner",
+      Api.Field.Search.PERSON  -> updatedPerson,
+    )
   }
 
   val showEditPersonName: Route = get("/r/:repoId/p/:personId/name/edit") {

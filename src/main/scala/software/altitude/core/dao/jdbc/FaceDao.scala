@@ -16,6 +16,22 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
 
   final override val tableName = "face"
 
+  override def columnsForSelect: List[String] = List(
+    FieldConst.ID,
+    FieldConst.REPO_ID,
+    FieldConst.Face.X1,
+    FieldConst.Face.Y1,
+    FieldConst.Face.WIDTH,
+    FieldConst.Face.HEIGHT,
+    FieldConst.Face.ASSET_ID,
+    FieldConst.Face.PERSON_ID,
+    FieldConst.Face.PERSON_LABEL,
+    FieldConst.Face.DETECTION_SCORE,
+    FieldConst.Face.EMBEDDINGS,
+    FieldConst.Face.FEATURES,
+    FieldConst.Face.CHECKSUM
+  )
+
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val embeddingsArray = getFloatListByJsonKey(rec(FieldConst.Face.EMBEDDINGS).asInstanceOf[String], FieldConst.Face.EMBEDDINGS)
     val featuresArray = getFloatListByJsonKey(rec(FieldConst.Face.FEATURES).asInstanceOf[String], FieldConst.Face.FEATURES)
@@ -99,7 +115,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
 
   def getAssetFaces(assetId: String): List[Face] = {
     val sql = s"""
-        SELECT face.*
+        SELECT ${columnsForSelectPrefixed.mkString(", ")}
           FROM face, person
          WHERE face.repository_id = ?
            AND face.asset_id = ?
@@ -118,28 +134,12 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
    * if there is no machine-learned hit, and to verify ML hits as well.
    */
   def getAllForCache: List[Face] = {
-    val selectColumns = List(
-      FieldConst.ID,
-      FieldConst.REPO_ID,
-      FieldConst.Face.X1,
-      FieldConst.Face.Y1,
-      FieldConst.Face.WIDTH,
-      FieldConst.Face.HEIGHT,
-      FieldConst.Face.ASSET_ID,
-      FieldConst.Face.PERSON_ID,
-      FieldConst.Face.PERSON_LABEL,
-      FieldConst.Face.DETECTION_SCORE,
-      FieldConst.Face.EMBEDDINGS,
-      FieldConst.Face.FEATURES,
-      FieldConst.Face.CHECKSUM
-    )
-
     val sql = s"""
-       SELECT ${selectColumns.mkString(", ")}
+       SELECT ${columnsForSelectPrefixed.mkString(", ")}
          FROM (
                SELECT ROW_NUMBER()
                  OVER (PARTITION BY person_label ORDER BY detection_score DESC)
-                   AS r_num, ${selectColumns.map("sub_face." + _).mkString(", ")}
+                   AS r_num, ${columnsForSelect.map("sub_face." + _).mkString(", ")}
                  FROM face AS sub_face
                  WHERE repository_id = ?) face
          WHERE repository_id =?

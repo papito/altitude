@@ -32,6 +32,7 @@ object Api {
     val REPO_ID = "repoId"
     val FOLDER_ID = "folderId"
     val PERSON_ID = "personId"
+    val FACE_ID = "faceId"
     val ERROR = "error"
     val STACKTRACE = "stacktrace"
     val VALIDATION_ERROR = "validationError"
@@ -94,6 +95,7 @@ object Api {
 
     object Person {
       val PERSON = "person"
+      val FACES = "faces"
       val PEOPLE = "people"
       val NAME = "name"
       val NEW_NAME = "newName"
@@ -101,6 +103,7 @@ object Api {
       val MERGE_DEST_ID = "mergeDestId"
       val MERGE_SOURCE_PERSON = "mergeSourcePerson"
       val MERGE_DEST_PERSON = "mergeDestPerson"
+      // do not delete - used in templates but not references in Scala code
       val SRC_PERSON_ID = "srcPersonId"
       val DEST_PERSON_ID = "destPersonId"
     }

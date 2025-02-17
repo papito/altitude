@@ -4,15 +4,19 @@
 <% import software.altitude.core.models.Person %>
 <%@ val person: Person %>
 
-<div class="visual " alt-person-id="${person.persistedId}">
+<!-- The style for this is in person.ssp -->
+
+<div class="visual" alt-person-id="${person.persistedId}">
     <div class="cover drag-drop" alt-person-id="${person.persistedId}">
         <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}"
+             hx-get='${ url(showChoosePersonCoverFaceModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+             hx-target="#modalContent"
+             hx-vals='{"${Api.Modal.MIN_WIDTH}": ${Const.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH}, "personId": "${person.persistedId}"}'
+             hx-trigger="click"
              draggable="false">
     </div>
-    <div class="edit-cover">
-        <a href="#">Choose cover</a>
-    </div>
 </div>
+
 <div class="meta">
     <div class="name">
         ${ include("view_person_name.ssp") }

@@ -214,7 +214,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
     }
   }
 
-  private def setFaceAsCover(person: Person, face: Face): Person = {
+  def setFaceAsCover(person: Person, face: Face): Person = {
     txManager.withTransaction {
       val personForUpdate = person.copy(coverFaceId = Some(face.persistedId))
 
