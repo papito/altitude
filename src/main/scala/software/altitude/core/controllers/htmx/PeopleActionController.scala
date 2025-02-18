@@ -99,6 +99,11 @@ class PeopleActionController extends BaseHtmxController {
 
     val newName = (jsonIn \ Api.Field.Person.NAME).as[String]
 
+    if (newName.toLowerCase == person.name.get.toLowerCase) {
+      logger.info("Name has not changed")
+      halt(200, ssp("htmx/view_person_name", Api.Field.Person.PERSON -> person))
+    }
+
     try {
       app.service.person.updateName(person, newName = newName)
     } catch {
@@ -109,6 +114,12 @@ class PeopleActionController extends BaseHtmxController {
 
     val updatedPerson: Person = app.service.person.getById(personId)
     ssp("htmx/view_person_name", Api.Field.Person.PERSON -> updatedPerson)
+  }
+
+  val viewPersonName: Route = get("/r/:repoId/p/:personId/name") {
+    val personId = params.get(Api.Field.PERSON_ID).get
+    val person: Person = app.service.person.getById(personId)
+    ssp("htmx/view_person_name", Api.Field.Person.PERSON -> person)
   }
 
   val showMergePeopleModal: Route = get("/r/:repoId/modals/merge") {

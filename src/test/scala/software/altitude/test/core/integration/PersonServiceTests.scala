@@ -292,6 +292,25 @@ import software.altitude.test.core.IntegrationTestCore
     // testApp.service.faceCache.dump()
   }
 
+  test("Merged named person does not cause naming conflicts", Focused) {
+    val mergedIntoName = "Della"
+    val personA: Person = testApp.service.person.addPerson(Person(name=Some(mergedIntoName)))
+    testContext.addTestFacesAndAssets(personA)
+
+    val mergedFromName = "Tessa"
+    val personB: Person = testApp.service.person.addPerson(Person(name=Some(mergedFromName)))
+    testContext.addTestFacesAndAssets(personB)
+
+    testApp.service.person.merge(dest=personA, source=personB)
+
+    val updatedPersonA: Person = testApp.service.person.getById(personA.persistedId)
+    updatedPersonA.name.get should be(mergedIntoName)
+
+    // at this point mergedFromName should be available for use
+    val personC: Person = testApp.service.person.addPerson(Person(name=Some(mergedFromName)))
+    personC.name.get should be(mergedFromName)
+  }
+
 
   test("Same person can appear in the same image more than once") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/twins.png")

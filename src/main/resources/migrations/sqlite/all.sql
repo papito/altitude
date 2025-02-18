@@ -105,8 +105,10 @@ CREATE TABLE person (
   FOREIGN KEY(merged_into_id) REFERENCES person(id) ON DELETE CASCADE,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX person_01 ON person(repository_id, name);
+CREATE UNIQUE INDEX person_01 ON person(repository_id, name) WHERE merged_into_id IS NULL;
 CREATE UNIQUE INDEX person_02 ON person(cover_face_id);
+CREATE INDEX person_03 ON person(repository_id, num_of_faces, is_hidden, is_named, name_for_sort);
+
 
 CREATE TABLE face (
   id CHAR(36) PRIMARY KEY,

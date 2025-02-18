@@ -112,7 +112,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                    WHERE repository_id = ?
                      AND num_of_faces >= ?
                      AND is_hidden = FALSE
-                ORDER BY name_for_sort
+                ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD))

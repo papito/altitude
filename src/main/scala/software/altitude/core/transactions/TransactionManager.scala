@@ -97,7 +97,7 @@ class TransactionManager(val config: Config) {
   }
 
   def asReadOnly[A](f: => A): A = {
-    if (RequestContext.conn.value.isDefined) {
+    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
       return f
     }
 

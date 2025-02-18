@@ -9,6 +9,7 @@ export const Const = {
         confirmPersonMerge: "CONFIRM_PERSON_MERGE_EVENT",
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
+        escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
     },
 
     /**

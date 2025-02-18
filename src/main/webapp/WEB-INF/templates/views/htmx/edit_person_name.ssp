@@ -67,4 +67,14 @@
             document.body.dispatchEvent(personNameEditedEvent)
         },
     )
+
+    htmx.find("#editPersonName").addEventListener(Const.events.escapeKeyPressed, function (evt) {
+        console.log("THIS DOES NOT WORK")
+
+        htmx.ajax("GET",
+            "<%= url(viewPersonName, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) %>", {
+            swap: "innerHTML",
+            target: "#personName",
+        })
+    })
 </script>
