@@ -38,6 +38,7 @@ document.body.addEventListener(Const.events.personNameEdited, (event) => {
     const newPersonName = event.detail["newPersonName"]
     console.debug(`Person ${personId} name changed to ${newPersonName}`)
     htmx.find("#person-" + personId + " .name a").textContent = newPersonName
+    htmx.find("#person-" + personId + " .name a").classList.remove("unknown")
 })
 
 document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {

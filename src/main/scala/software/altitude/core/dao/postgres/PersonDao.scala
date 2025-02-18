@@ -27,13 +27,16 @@ class PersonDao(override val config: Config) extends software.altitude.core.dao.
                 ${FieldConst.REPO_ID},
                 ${FieldConst.Person.LABEL},
                 ${FieldConst.Person.NAME},
-                ${FieldConst.Person.NAME_FOR_SORT})
-              VALUES (?, ?, ?, ?, ?)
+                ${FieldConst.Person.NAME_FOR_SORT},
+                ${FieldConst.Person.IS_NAMED})
+              VALUES (?, ?, ?, ?, ?, ?)
     """
 
     val person: Person = jsonIn: Person
     val personName = getPersonName(person, personSeqNum)
     val personSortName = getPersonSortName(person, personSeqNum)
+    val isNamed = person.name.nonEmpty
+
     val id = BaseDao.genId
 
     val sqlVals: List[Any] = List(
@@ -41,11 +44,16 @@ class PersonDao(override val config: Config) extends software.altitude.core.dao.
       RequestContext.getRepository.persistedId,
       label,
       personName,
-      personSortName
+      personSortName,
+      isNamed
     )
 
     addRecord(jsonIn, sql, sqlVals)
 
-    jsonIn ++ Json.obj(FieldConst.ID -> id, FieldConst.Person.LABEL -> label, FieldConst.Person.NAME -> Some(personName))
+    jsonIn ++ Json.obj(
+      FieldConst.ID -> id,
+      FieldConst.Person.LABEL -> label,
+      FieldConst.Person.NAME -> Some(personName),
+      FieldConst.Person.IS_NAMED -> isNamed)
   }
 }

@@ -61,6 +61,7 @@ object FieldConst {
     val MERGED_INTO_ID = "merged_into_id"
     val MERGED_INTO_LABEL = "merged_into_label"
     val IS_HIDDEN = "is_hidden"
+    val IS_NAMED = "is_named"
     val FACES = "faces"
   }
 

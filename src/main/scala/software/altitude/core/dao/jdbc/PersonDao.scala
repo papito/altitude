@@ -26,6 +26,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
         case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.LABEL).asInstanceOf[Long].toInt
       },
       isHidden = getBooleanField(rec(FieldConst.Person.IS_HIDDEN)),
+      isNamed = getBooleanField(rec(FieldConst.Person.IS_NAMED)),
       name = Option(rec(FieldConst.Person.NAME).asInstanceOf[String]),
       coverFaceId = Option(rec(FieldConst.Person.COVER_FACE_ID).asInstanceOf[String]),
       numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int],

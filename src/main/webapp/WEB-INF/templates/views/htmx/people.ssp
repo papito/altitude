@@ -8,6 +8,7 @@
 <style>
     #people .cell {
         margin: 3px;
+        padding-top: 3px;
         border: var(--result-border);
         border-radius: 5px;
         display: grid;
@@ -15,12 +16,12 @@
         height: <%= software.altitude.core.service.FaceDetectionService.faceDetectionBoxPx + 40 %>px;
         place-items: center;
         touch-action: none;
-        row-gap: var(--control-vertical-space);
+        row-gap: 5px;
     }
 
     #people .cell img {
         display: block;
-        border-radius: 4px;
+        border-radius: 20%;
     }
 
     #people .grid {
@@ -31,10 +32,24 @@
         justify-content: center;
     }
 
-    #people .cell a {
-        color: #FFFFFF;
-        text-decoration: none;
+    #people .name {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        place-items: center;
+        background-color: var(--background-tertiary-color);
+    }
 
+    #people .cell a {
+        text-decoration: none;
+        font-size: .9em;
+        color: #FFFFFF;
+        font-family: -apple-system, "system-ui", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        letter-spacing: 1px;
+    }
+
+    #people .cell a.unknown {
+        color: #fdda63;
     }
 </style>
 
@@ -55,13 +70,18 @@
                     </a>
                 </div>
                 <div class="name">
-                    <a href="#"
-                       hx-target="#content"
-                       hx-trigger="click"
-                       hx-swap="innerHTML"
-                       hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PEOPLE_IDS}=${person.persistedId}'>
-                        ${person.name.get}
-                    </a>
+                    <span>
+                        <a href="#"
+                           #if (!person.isNamed)
+                           class="unknown"
+                           #end
+                           hx-target="#content"
+                           hx-trigger="click"
+                           hx-swap="innerHTML"
+                           hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PEOPLE_IDS}=${person.persistedId}'>
+                            ${person.name.get}
+                        </a>
+                    </span>
                 </div>
             </div>
             #end

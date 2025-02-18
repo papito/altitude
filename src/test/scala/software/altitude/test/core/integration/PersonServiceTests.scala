@@ -35,9 +35,23 @@ import software.altitude.test.core.IntegrationTestCore
     people.last.numOfFaces should be(1)
   }
 
+  test("An unknown person is marked as known edit") {
+    val person = testApp.service.person.addPerson(Person())
+    person.isNamed should be(false)
+
+    val persistedPerson: Person = testApp.service.person.getById(person.persistedId)
+    persistedPerson.isNamed should be(false)
+
+    testApp.service.person.updateName(person, "Ben")
+
+    val updatedPerson: Person = testApp.service.person.getById(person.persistedId)
+    updatedPerson.isNamed should be(true)
+  }
+
   test("Update person's name") {
     val name = "Ben"
-    val person = testApp.service.person.addPerson(Person(name=Some(name)))
+    val person: Person = testApp.service.person.addPerson(Person(name=Some(name)))
+    person.isNamed should be(true)
 
     val personQuery = "select * from person where id = ?"
 
@@ -81,7 +95,7 @@ import software.altitude.test.core.IntegrationTestCore
     updatedPerson.isAboveThreshold should be(true)
   }
 
-  test("Person has cover face assigned", Focused) {
+  test("Person has cover face assigned") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
