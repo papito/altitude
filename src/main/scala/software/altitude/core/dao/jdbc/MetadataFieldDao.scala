@@ -27,7 +27,7 @@ abstract class MetadataFieldDao(override val config: Config)
     val metadataField = jsonIn: UserMetadataField
 
     val sql = s"""
-        INSERT INTO $tableName (
+        INSERT INTO metadata_field (
              ${FieldConst.ID},
              ${FieldConst.REPO_ID},
              ${FieldConst.MetadataField.NAME},

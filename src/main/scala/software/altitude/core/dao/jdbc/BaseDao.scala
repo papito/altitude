@@ -43,7 +43,6 @@ abstract class BaseDao {
 
   val tableName: String
   protected def columnsForSelect: List[String] = List("*")
-  protected def columnsForSelectPrefixed: Seq[String] = columnsForSelect.map(s"$tableName." + _)
 
   val sqlQueryBuilder: SqlQueryBuilder[Query] = new SqlQueryBuilder[Query](columnsForSelect, tableName)
 

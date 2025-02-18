@@ -76,7 +76,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
 
     val sql =
       s"""
-            UPDATE $tableName
+            UPDATE person
                SET ${FieldConst.Person.MERGED_WITH_IDS} = ?
              WHERE ${FieldConst.ID} = ?
       """
@@ -86,7 +86,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAll: Map[String, Person] = {
-    val sql = s"""SELECT * FROM $tableName
+    val sql = s"""SELECT *
+                    FROM person
                    WHERE merged_into_id is NULL
                      AND repository_id = ?
                """
@@ -105,7 +106,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAllAboveThreshold: List[Person] = {
-    val sql = s"""SELECT * FROM $tableName
+    val sql = s"""SELECT *
+                    FROM person
                    WHERE repository_id = ?
                      AND num_of_faces >= ?
                      AND is_hidden = FALSE

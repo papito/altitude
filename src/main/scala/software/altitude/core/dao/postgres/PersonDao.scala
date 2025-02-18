@@ -22,7 +22,7 @@ class PersonDao(override val config: Config) extends software.altitude.core.dao.
 
     val sql =
       s"""
-        INSERT INTO $tableName (
+        INSERT INTO person (
                 ${FieldConst.ID},
                 ${FieldConst.REPO_ID},
                 ${FieldConst.Person.LABEL},

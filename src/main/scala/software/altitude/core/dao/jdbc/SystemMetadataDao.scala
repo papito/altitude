@@ -20,7 +20,7 @@ abstract class SystemMetadataDao(override val config: Config) extends BaseDao wi
   def updateVersion(toVersion: Int): Unit = {
     val runner: QueryRunner = new QueryRunner()
 
-    val sql = s"UPDATE $tableName SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
+    val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
 
     runner.update(RequestContext.getConn, sql, toVersion, software.altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
   }
@@ -28,7 +28,7 @@ abstract class SystemMetadataDao(override val config: Config) extends BaseDao wi
   def setInitialized(): Unit = {
     val runner: QueryRunner = new QueryRunner()
 
-    val sql = s"UPDATE $tableName SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
+    val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
 
     runner.update(RequestContext.getConn, sql, true, software.altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
   }
@@ -37,7 +37,7 @@ abstract class SystemMetadataDao(override val config: Config) extends BaseDao wi
   override def getById(id: String): JsObject = {
     val sql: String = s"""
       SELECT *
-        FROM $tableName
+        FROM system
        WHERE id = ?
      """
 

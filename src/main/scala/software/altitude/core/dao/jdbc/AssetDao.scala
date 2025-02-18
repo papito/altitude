@@ -60,7 +60,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
   override def getUserMetadata(assetId: String): Option[UserMetadata] = {
     val sql = s"""
       SELECT ${FieldConst.Asset.USER_METADATA}
-         FROM $tableName
+         FROM asset
        WHERE ${FieldConst.ID} = ?
       """
 
@@ -74,7 +74,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     val asset = jsonIn: Asset
 
     val sql = s"""
-        INSERT INTO $tableName (
+        INSERT INTO asset (
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
@@ -115,7 +115,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     val metadataWithIds = UserMetadata.withIds(userMetadata)
 
     val sql = s"""
-      UPDATE $tableName
+      UPDATE asset
          SET ${FieldConst.Asset.USER_METADATA} = $jsonFunc
        WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
       """

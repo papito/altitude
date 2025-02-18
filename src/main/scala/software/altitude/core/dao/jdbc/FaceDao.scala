@@ -48,9 +48,9 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
 
     val sql =
       s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
-                                ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.Face.DETECTION_SCORE},
-                                ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
+        INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
+                          ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.Face.DETECTION_SCORE},
+                          ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
@@ -143,7 +143,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
   def getAllForTraining: List[Face] = {
     val sql = s"""
         SELECT ${FieldConst.ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.REPO_ID}
-          FROM $tableName
+          FROM face
          WHERE repository_id = ?
       """
 

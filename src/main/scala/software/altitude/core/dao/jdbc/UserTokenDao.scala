@@ -22,7 +22,9 @@ abstract class UserTokenDao(override val config: Config) extends BaseDao with so
 
   override def add(jsonIn: JsObject): JsObject = {
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.UserToken.ACCOUNT_ID}, ${FieldConst.UserToken.TOKEN}, ${FieldConst.UserToken.EXPIRES_AT})
+        INSERT INTO user_token (${FieldConst.UserToken.ACCOUNT_ID},
+                                ${FieldConst.UserToken.TOKEN},
+                                ${FieldConst.UserToken.EXPIRES_AT})
              VALUES (?, ?, ?)
     """
 
