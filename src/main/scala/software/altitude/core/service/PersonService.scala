@@ -256,4 +256,16 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       dao.getAllAboveThreshold
     }
   }
+
+  def getAllBelowThreshold: List[Person] = {
+    txManager.asReadOnly {
+      dao.getAllBelowThreshold
+    }
+  }
+
+  def getAllHidden: List[Person] = {
+      txManager.asReadOnly {
+      dao.getAllHidden
+      }
+  }
 }

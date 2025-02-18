@@ -119,4 +119,33 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
 
     recs.map(makeModel)
   }
+
+  def getAllBelowThreshold: List[Person] = {
+    val sql = s"""SELECT *
+                    FROM person
+                   WHERE repository_id = ?
+                     AND num_of_faces > 0
+                     AND num_of_faces < ?
+                     AND is_hidden = FALSE
+                ORDER BY is_named DESC, name_for_sort
+               """
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD))
+
+    recs.map(makeModel)
+  }
+
+  def getAllHidden: List[Person] = {
+    val sql = s"""SELECT *
+                    FROM person
+                   WHERE repository_id = ?
+                     AND is_hidden = TRUE
+                     AND num_of_faces > 0
+                ORDER BY is_named DESC, name_for_sort
+               """
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
+
+    recs.map(makeModel)
+  }
 }

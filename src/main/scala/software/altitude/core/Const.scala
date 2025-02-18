@@ -51,6 +51,13 @@ object Const {
     val MODELS = "models"
   }
 
+  object PeopleTypeFilter {
+    val ALL = "all"
+    val HIDDEN = "hidden"
+    val COMPLETE = "complete"
+    val INCOMPLETE = "incomplete"
+  }
+
   /** MESSAGES */
   object Msg {
 

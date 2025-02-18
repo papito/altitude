@@ -4,6 +4,7 @@
 <% import software.altitude.core.Api %>
 
 <%@ val people: List[Person] %>
+<%@ val typeFilter: String %>
 
 <style>
     #people .cell {
@@ -40,6 +41,11 @@
         background-color: var(--background-tertiary-color);
     }
 
+    #people .name span {
+        color: var(--font-color-dim);
+        font-size: .9em;
+    }
+
     #people .cell a {
         text-decoration: none;
         font-size: .9em;
@@ -51,7 +57,92 @@
     #people .cell a.unknown {
         color: #fdda63;
     }
+
+    #peopleTypeFilter .radio-group {
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
+    }
+
+    #peopleTypeFilter .radio-group label {
+        display: flex;
+        align-items: center;
+    }
+
+    #peopleTypeFilter .radio-group input[type="radio"] {
+        margin-right: 5px;
+    }
+
+    #peopleTypeFilter {
+        padding-top: var(--control-vertical-space);
+        padding-bottom: var(--control-vertical-space);
+    }
 </style>
+
+<div id="peopleTypeFilter">
+    <div class="radio-group">
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.COMPLETE)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.COMPLETE}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.COMPLETE}"}'
+            >
+            Verified
+        </label>
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.HIDDEN)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.HIDDEN}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.HIDDEN}"}'
+            >
+            Hidden
+        </label>
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.INCOMPLETE)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.INCOMPLETE}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.INCOMPLETE}"}'
+            >
+            Unverified
+        </label>
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.ALL)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.ALL}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.ALL}"}'
+            >
+            All
+        </label>
+    </div>
+</div>
 
 <div id="peopleList">
     <div id="people">
@@ -79,7 +170,7 @@
                            hx-trigger="click"
                            hx-swap="innerHTML"
                            hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PEOPLE_IDS}=${person.persistedId}'>
-                            ${person.name.get}
+                            ${person.name.get} <span>(${person.numOfFaces})</span>
                         </a>
                     </span>
                 </div>

@@ -108,6 +108,10 @@ object Api {
       val DEST_PERSON_ID = "destPersonId"
     }
 
+    object People {
+      val TYPE_FILTER = "typeFilter"
+    }
+
     object Search {
       val ASSETS = "assets"
       val PERSON = "person"

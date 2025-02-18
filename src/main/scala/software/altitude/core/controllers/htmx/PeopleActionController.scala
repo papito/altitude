@@ -6,7 +6,7 @@ import software.altitude.core.{Api, DataScrubber, DuplicateException, RequestCon
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.{Face, Person}
-
+import software.altitude.core.Const
 /** @ /htmx/people/ */
 class PeopleActionController extends BaseHtmxController {
 
@@ -15,9 +15,18 @@ class PeopleActionController extends BaseHtmxController {
   }
 
   val showPeopleTab: Route = get("/r/:repoId/tab") {
-    val people: List[Person] = app.service.person.getAllAboveThreshold
+    val typeFilter: String = params.getOrElse(Api.Field.People.TYPE_FILTER, Const.PeopleTypeFilter.COMPLETE)
+    val people: List[Person] = typeFilter match {
+        case Const.PeopleTypeFilter.ALL => app.service.person.getAll
+        case Const.PeopleTypeFilter.HIDDEN => app.service.person.getAllHidden
+        case Const.PeopleTypeFilter.COMPLETE => app.service.person.getAllAboveThreshold
+        case Const.PeopleTypeFilter.INCOMPLETE => app.service.person.getAllBelowThreshold
+    }
 
-    ssp("htmx/people", Api.Field.Person.PEOPLE -> people)
+    ssp(
+      "htmx/people",
+      Api.Field.Person.PEOPLE -> people,
+      Api.Field.People.TYPE_FILTER -> typeFilter)
   }
 
   val showChoosePersonCoverFaceModal: Route = get("/r/:repoId/modals/choose-person-cover-face") {
