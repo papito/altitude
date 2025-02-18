@@ -118,7 +118,7 @@ CREATE TABLE face (
   checksum INT NOT NULL
 ) INHERITS (_core);
 CREATE UNIQUE INDEX face_01 ON face(repository_id, checksum);
-CREATE INDEX face_02 ON face (person_id);
+CREATE INDEX face_02 ON face (person_id, detection_score);
 
 
 CREATE TABLE metadata_field (
