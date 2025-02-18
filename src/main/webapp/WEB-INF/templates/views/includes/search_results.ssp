@@ -41,11 +41,8 @@
 </div>
 
 <script type="module">
-  import { selectTab } from "../../../../js/common/navigation.js"
   import { context } from "../../../../js/context.js"
   import { initInfiniteScroll, initLazyLoad } from "../../../../js/search-results/infinite-scroll.js"
-
-  selectTab("explorer", "foldersTab")
 
   // this container template is loaded on new search, so scroll to top
   const contentElement = document.getElementById("content");

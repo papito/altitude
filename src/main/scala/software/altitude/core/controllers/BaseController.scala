@@ -78,6 +78,7 @@ abstract class BaseController
     request.pathInfo.startsWith("/webfonts") ||
     request.pathInfo.startsWith("/images") ||
     request.pathInfo.contains(s"/${Const.DataStore.PREVIEW}/") ||
+    request.pathInfo.contains(s"/${Const.DataStore.FACE}/") ||
     request.pathInfo.contains(s"/${Const.DataStore.CONTENT}/")
 
   error {

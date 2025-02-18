@@ -85,6 +85,7 @@ class SearchResultsController extends BaseHtmxController {
       if (personIds.size == 1) {
         personOpt = Some(app.service.person.getById(personIds.head))
         val personViewUrl = app.service.urlService.getUrlForPersonView(request, personOpt.get.persistedId)
+        println(s"Person view URL: $personViewUrl")
         response.addHeader("HX-Replace-Url", personViewUrl)
       }
 

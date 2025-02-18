@@ -143,16 +143,18 @@
 <script type="module">
   import { context } from "../../../js/context.js"
 
+  context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+
   function loadView() {
       // if there is no fragment, we default to folder views
       const fragment = window.location.hash || "#folders"
 
       const tabLink = document.querySelector('a[href="' + fragment + '"]')
+
       if (tabLink) {
           tabLink.click()
       }
 
-      context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
       const urlParams = new URLSearchParams(window.location.search)
       const view = urlParams.get("view")
 
@@ -165,14 +167,13 @@
 
           }
       } else {
-        searchUrl = "/htmx/search/r/" + context.getRepoId()
+        searchUrl = "/htmx/search/r/" + context.getRepoId() + fragment
       }
 
     htmx.ajax("get", searchUrl, {
       swap: "innerHTML",
       target: "#content",
     })
-
   }
 
   document.addEventListener("DOMContentLoaded", loadView)
