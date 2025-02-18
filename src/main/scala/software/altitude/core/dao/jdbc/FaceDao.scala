@@ -16,22 +16,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
 
   final override val tableName = "face"
 
-  override def columnsForSelect: List[String] = List(
-    FieldConst.ID,
-    FieldConst.REPO_ID,
-    FieldConst.Face.X1,
-    FieldConst.Face.Y1,
-    FieldConst.Face.WIDTH,
-    FieldConst.Face.HEIGHT,
-    FieldConst.Face.ASSET_ID,
-    FieldConst.Face.PERSON_ID,
-    FieldConst.Face.PERSON_LABEL,
-    FieldConst.Face.DETECTION_SCORE,
-    FieldConst.Face.EMBEDDINGS,
-    FieldConst.Face.FEATURES,
-    FieldConst.Face.CHECKSUM
-  )
-
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
     val embeddingsArray = getFloatListByJsonKey(rec(FieldConst.Face.EMBEDDINGS).asInstanceOf[String], FieldConst.Face.EMBEDDINGS)
     val featuresArray = getFloatListByJsonKey(rec(FieldConst.Face.FEATURES).asInstanceOf[String], FieldConst.Face.FEATURES)
@@ -115,7 +99,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
 
   def getAssetFaces(assetId: String): List[Face] = {
     val sql = s"""
-        SELECT ${columnsForSelectPrefixed.mkString(", ")}
+        SELECT face.*
           FROM face, person
          WHERE face.repository_id = ?
            AND face.asset_id = ?
@@ -135,11 +119,11 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
    */
   def getAllForCache: List[Face] = {
     val sql = s"""
-       SELECT ${columnsForSelectPrefixed.mkString(", ")}
+       SELECT face.*
          FROM (
                SELECT ROW_NUMBER()
                  OVER (PARTITION BY person_label ORDER BY detection_score DESC)
-                   AS r_num, ${columnsForSelect.map("sub_face." + _).mkString(", ")}
+                   AS r_num, sub_face.*
                  FROM face AS sub_face
                  WHERE repository_id = ?) face
          WHERE repository_id =?
