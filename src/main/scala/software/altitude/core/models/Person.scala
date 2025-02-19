@@ -19,6 +19,7 @@ case class Person(
     name: Option[String] = None,
     isHidden: Boolean = false,
     isNamed: Boolean = false,
+    isBadMatch: Boolean = false,
     coverFaceId: Option[String] = None,
     mergedWithIds: List[String] = List(),
     mergedIntoId: Option[String] = None,

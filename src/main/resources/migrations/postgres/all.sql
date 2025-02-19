@@ -96,8 +96,9 @@ CREATE TABLE person (
   merged_into_id CHAR(36) DEFAULT NULL REFERENCES person(id) ON DELETE CASCADE,
   merged_into_label BIGINT DEFAULT NULL,
   num_of_faces INT NOT NULL DEFAULT 0,
+  is_named BOOLEAN NOT NULL DEFAULT FALSE,
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
-  is_named BOOLEAN NOT NULL DEFAULT FALSE
+  is_bad_match BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
 CREATE UNIQUE INDEX person_01 ON person(repository_id, name) WHERE merged_into_id IS NULL;
 CREATE UNIQUE INDEX person_02 ON person(cover_face_id);

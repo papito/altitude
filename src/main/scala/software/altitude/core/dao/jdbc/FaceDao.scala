@@ -105,6 +105,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
            AND face.asset_id = ?
            AND face.person_id = person.id
            AND person.is_hidden = FALSE
+           AND person.is_bad_match = FALSE
       """
 
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(

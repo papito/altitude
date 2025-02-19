@@ -26,6 +26,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
         case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.LABEL).asInstanceOf[Long].toInt
       },
       isHidden = getBooleanField(rec(FieldConst.Person.IS_HIDDEN)),
+      isBadMatch = getBooleanField(rec(FieldConst.Person.IS_BAD_MATCH)),
       isNamed = getBooleanField(rec(FieldConst.Person.IS_NAMED)),
       name = Option(rec(FieldConst.Person.NAME).asInstanceOf[String]),
       coverFaceId = Option(rec(FieldConst.Person.COVER_FACE_ID).asInstanceOf[String]),
@@ -106,12 +107,34 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
     lookup.toMap
   }
 
+  def getAllNotDiscarded: Map[String, Person] = {
+    val sql = s"""SELECT *
+                    FROM person
+                   WHERE merged_into_id is NULL
+                     AND repository_id = ?
+                     AND is_bad_match = FALSE
+               """
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
+
+    val lookup: mutable.Map[String, Person] = mutable.Map()
+
+    recs.foreach {
+      rec =>
+        val person: Person = makeModel(rec)
+        lookup += (person.persistedId -> person)
+    }
+
+    lookup.toMap
+  }
+
   def getAllAboveThreshold: List[Person] = {
     val sql = s"""SELECT *
                     FROM person
                    WHERE repository_id = ?
                      AND num_of_faces >= ?
                      AND is_hidden = FALSE
+                     AND is_bad_match = FALSE
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
@@ -126,7 +149,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                    WHERE repository_id = ?
                      AND num_of_faces > 0
                      AND num_of_faces < ?
-                     AND is_hidden = FALSE
+                     AND is_bad_match = FALSE
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
@@ -140,6 +163,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                     FROM person
                    WHERE repository_id = ?
                      AND is_hidden = TRUE
+                     AND is_bad_match = FALSE
                      AND num_of_faces > 0
                 ORDER BY is_named DESC, name_for_sort
                """

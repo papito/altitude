@@ -245,9 +245,22 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
     }
   }
 
+  def markAsBadMatch(person: Person): Person = {
+    txManager.withTransaction {
+      updateById(person.persistedId, Map(FieldConst.Person.IS_BAD_MATCH -> true))
+      person.copy(isBadMatch = true)
+    }
+  }
+
   def getAll: List[Person] = {
     txManager.asReadOnly {
       dao.getAll.values.toList
+    }
+  }
+
+  def getAllNotDiscarded: List[Person] = {
+    txManager.asReadOnly {
+      dao.getAllNotDiscarded.values.toList
     }
   }
 

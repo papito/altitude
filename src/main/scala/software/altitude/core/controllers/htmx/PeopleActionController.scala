@@ -17,7 +17,7 @@ class PeopleActionController extends BaseHtmxController {
   val showPeopleTab: Route = get("/r/:repoId/tab") {
     val typeFilter: String = params.getOrElse(Api.Field.People.TYPE_FILTER, Const.PeopleTypeFilter.COMPLETE)
     val people: List[Person] = typeFilter match {
-        case Const.PeopleTypeFilter.ALL => app.service.person.getAll
+        case Const.PeopleTypeFilter.ALL => app.service.person.getAllNotDiscarded
         case Const.PeopleTypeFilter.HIDDEN => app.service.person.getAllHidden
         case Const.PeopleTypeFilter.COMPLETE => app.service.person.getAllAboveThreshold
         case Const.PeopleTypeFilter.INCOMPLETE => app.service.person.getAllBelowThreshold
@@ -172,6 +172,19 @@ class PeopleActionController extends BaseHtmxController {
     logger.info(s"Hiding person: $personId")
 
     val updatedPerson = app.service.person.setVisibility(person, isHidden = true)
+
+    ssp(
+      "htmx/person_inner",
+      Api.Field.Search.PERSON  -> updatedPerson,
+    )
+  }
+
+  val discardPersonAsBadMatch: Route = delete("/r/:repoId/p/:personId") {
+    val personId: String = params.get("personId").get
+    val person: Person = app.service.person.getById(personId)
+    logger.info(s"Discarding person: $personId")
+
+    val updatedPerson = app.service.person.markAsBadMatch(person)
 
     ssp(
       "htmx/person_inner",

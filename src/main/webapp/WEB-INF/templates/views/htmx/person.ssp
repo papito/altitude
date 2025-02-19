@@ -59,6 +59,11 @@
         text-decoration: none;
     }
 
+    #person .mark-discarded, #person .mark-discarded i, #person .mark-discarded a {
+        color: var(--error-font-color);
+        text-decoration: none;
+    }
+
     #person .visibility-controls i {
         padding-right: 5px;
     }
