@@ -292,7 +292,7 @@ import software.altitude.test.core.IntegrationTestCore
     // testApp.service.faceCache.dump()
   }
 
-  test("Merged named person does not cause naming conflicts", Focused) {
+  test("Merged named person does not cause naming conflicts") {
     val mergedIntoName = "Della"
     val personA: Person = testApp.service.person.addPerson(Person(name=Some(mergedIntoName)))
     testContext.addTestFacesAndAssets(personA)

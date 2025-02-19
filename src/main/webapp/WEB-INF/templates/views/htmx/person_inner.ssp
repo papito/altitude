@@ -49,7 +49,9 @@
     #end
 
     #if (person.numOfFaces < FaceRecognition.MIN_FACES_THRESHOLD && person.isBadMatch == false)
-        <div class="mark-discarded">
+        <div id="markAsBadMatch"
+             alt-person-id="${person.persistedId}"
+             class="mark-discarded">
             <a href="#"
                hx-trigger="click"
                hx-delete="${ url(discardPersonAsBadMatch, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }"

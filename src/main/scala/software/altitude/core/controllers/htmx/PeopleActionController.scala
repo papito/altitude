@@ -2,11 +2,18 @@ package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
 import play.api.libs.json.JsObject
-import software.altitude.core.{Api, DataScrubber, DuplicateException, RequestContext, ValidationException, Const => C}
+import software.altitude.core.Api
+import software.altitude.core.Const
+import software.altitude.core.DataScrubber
+import software.altitude.core.DuplicateException
+import software.altitude.core.RequestContext
+import software.altitude.core.ValidationException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseHtmxController
-import software.altitude.core.models.{Face, Person}
-import software.altitude.core.Const
+import software.altitude.core.models.Face
+import software.altitude.core.models.Person
+import software.altitude.core.{Const => C}
+
 /** @ /htmx/people/ */
 class PeopleActionController extends BaseHtmxController {
 
@@ -17,16 +24,13 @@ class PeopleActionController extends BaseHtmxController {
   val showPeopleTab: Route = get("/r/:repoId/tab") {
     val typeFilter: String = params.getOrElse(Api.Field.People.TYPE_FILTER, Const.PeopleTypeFilter.COMPLETE)
     val people: List[Person] = typeFilter match {
-        case Const.PeopleTypeFilter.ALL => app.service.person.getAllNotDiscarded
-        case Const.PeopleTypeFilter.HIDDEN => app.service.person.getAllHidden
-        case Const.PeopleTypeFilter.COMPLETE => app.service.person.getAllAboveThreshold
-        case Const.PeopleTypeFilter.INCOMPLETE => app.service.person.getAllBelowThreshold
+      case Const.PeopleTypeFilter.ALL => app.service.person.getAllNotDiscarded
+      case Const.PeopleTypeFilter.HIDDEN => app.service.person.getAllHidden
+      case Const.PeopleTypeFilter.COMPLETE => app.service.person.getAllAboveThreshold
+      case Const.PeopleTypeFilter.INCOMPLETE => app.service.person.getAllBelowThreshold
     }
 
-    ssp(
-      "htmx/people",
-      Api.Field.Person.PEOPLE -> people,
-      Api.Field.People.TYPE_FILTER -> typeFilter)
+    ssp("htmx/people", Api.Field.Person.PEOPLE -> people, Api.Field.People.TYPE_FILTER -> typeFilter)
   }
 
   val showChoosePersonCoverFaceModal: Route = get("/r/:repoId/modals/choose-person-cover-face") {
@@ -55,7 +59,7 @@ class PeopleActionController extends BaseHtmxController {
 
     ssp(
       "htmx/person_inner",
-      Api.Field.Search.PERSON  -> updatedPerson,
+      Api.Field.Search.PERSON -> updatedPerson
     )
   }
 
@@ -163,7 +167,7 @@ class PeopleActionController extends BaseHtmxController {
     logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     app.service.person.merge(dest = destPerson, source = srcPerson)
-    redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PEOPLE_IDS}=${destPersonId}")
+    redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PEOPLE_IDS}=$destPersonId")
   }
 
   val hidePerson: Route = put("/r/:repoId/p/:personId/hide") {
@@ -175,7 +179,7 @@ class PeopleActionController extends BaseHtmxController {
 
     ssp(
       "htmx/person_inner",
-      Api.Field.Search.PERSON  -> updatedPerson,
+      Api.Field.Search.PERSON -> updatedPerson
     )
   }
 
@@ -188,7 +192,7 @@ class PeopleActionController extends BaseHtmxController {
 
     ssp(
       "htmx/person_inner",
-      Api.Field.Search.PERSON  -> updatedPerson,
+      Api.Field.Search.PERSON -> updatedPerson
     )
   }
 
@@ -201,7 +205,7 @@ class PeopleActionController extends BaseHtmxController {
 
     ssp(
       "htmx/person_inner",
-      Api.Field.Search.PERSON  -> updatedPerson,
+      Api.Field.Search.PERSON -> updatedPerson
     )
   }
 }

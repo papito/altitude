@@ -37,13 +37,28 @@ document.body.addEventListener(Const.events.personNameEdited, (event) => {
     const personId = event.detail["personId"]
     const newPersonName = event.detail["newPersonName"]
     console.debug(`Person ${personId} name changed to ${newPersonName}`)
-    htmx.find("#person-" + personId + " .name a").textContent = newPersonName
-    htmx.find("#person-" + personId + " .name a").classList.remove("unknown")
+    const el = htmx.find("#person-" + personId + " .name a")
+
+    if (el) {
+        el.textContent = newPersonName
+        el.classList.remove("unknown")
+    }
 })
 
 document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {
     const personId = event.detail["personId"]
     const faceId = event.detail["faceId"]
     console.debug(`Person ${personId} updated with face ${faceId}`)
-    htmx.find("#person-" + personId + " .image img").src = `/content/r/${context.getRepoId()}/face/${faceId}`
+    htmx.find("#person-" + personId + " .image img").src =
+        `/content/r/${context.getRepoId()}/face/${faceId}`
+})
+
+document.body.addEventListener(Const.events.personMarkedAsBadMatch, (event) => {
+    const personId = event.detail["personId"]
+    console.debug(`Person ${personId} marked as bad match`)
+    const el = htmx.find("#person-" + personId)
+
+    if (el) {
+        el.remove()
+    }
 })

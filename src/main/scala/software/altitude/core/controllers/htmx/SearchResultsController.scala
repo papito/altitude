@@ -69,8 +69,8 @@ class SearchResultsController extends BaseHtmxController {
     }
 
     /**
-     * If this is not a continuous scroll request and a person view,
-     * render the larger results template with auxiliary person view.
+     * If this is not a continuous scroll request and a person view, render the larger results template with auxiliary person
+     * view.
      */
     if (isContinuousScroll) {
       ssp(
@@ -80,13 +80,12 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> true
       )
     } else {
-      var personOpt: Option[Person] =  None
+      var personOpt: Option[Person] = None
 
       if (personIds.size == 1) {
         personOpt = Some(app.service.person.getById(personIds.head))
         val personViewUrl = app.service.urlService.getUrlForPersonView(request, personOpt.get.persistedId)
         println(s"Person view URL: $personViewUrl")
-        response.addHeader("HX-Replace-Url", personViewUrl)
       }
 
       ssp(

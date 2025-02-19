@@ -1,7 +1,4 @@
 package software.altitude.core.controllers
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.lang.System.currentTimeMillis
 import org.scalatra.ContentEncodingSupport
 import org.scalatra.InternalServerError
 import org.scalatra.MatchedRoute
@@ -9,13 +6,16 @@ import org.scalatra.ScalatraServlet
 import org.scalatra.UrlGeneratorSupport
 import org.scalatra.scalate.ScalateUrlGeneratorSupport
 import org.slf4j.MDC
-
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.RequestContext
 import software.altitude.core.auth.AuthenticationSupport
 import software.altitude.core.util.Util
+
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.lang.System.currentTimeMillis
 
 abstract class BaseController
   extends ScalatraServlet

@@ -49,15 +49,15 @@
 
     <div class="faces">
         #for (face <- faces)
-          <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${face.persistedId}"
-               alt-face-id="${face.persistedId}"
-               hx-swap="innerHTML"
-               hx-target="#person"
-               hx-put='${ url(setCoverImage, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'
-               hx-vals='{"${Api.Field.FACE_ID}": "${face.persistedId}"}'
-               hx-trigger="click"
-          >
-        #end
+        <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${face.persistedId}"
+             alt-face-id="${face.persistedId}"
+             hx-swap="innerHTML"
+             hx-target="#person"
+             hx-put='${ url(setCoverImage, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'
+             hx-vals='{"${Api.Field.FACE_ID}": "${face.persistedId}"}'
+             hx-trigger="click"
+        >
+    #end
     </div>
 
 </div>
@@ -71,18 +71,25 @@
 
     showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
-    htmx.find("#faceSelector").addEventListener("htmx:afterRequest", function (evt) {
-        if (evt.detail.successful === true) {
-            const faceId = evt.target.getAttribute(Const.attributes.faceId)
-            const personCoverImageSet = new CustomEvent(Const.events.personCoverFaceSet, {
-                detail: {
-                    "<%= Api.Field.FACE_ID %>": faceId,
-                    "<%= Api.Field.PERSON_ID %>": "<%= person.persistedId %>"
-                },
-            })
-            document.body.dispatchEvent(personCoverImageSet)
+    htmx.find("#faceSelector").addEventListener(
+        "htmx:afterRequest",
+        function (evt) {
+            if (evt.detail.successful === true) {
+                const faceId = evt.target.getAttribute(Const.attributes.faceId)
+                const personCoverImageSet = new CustomEvent(
+                    Const.events.personCoverFaceSet,
+                    {
+                        detail: {
+                            "<%= Api.Field.FACE_ID %>": faceId,
+                            "<%= Api.Field.PERSON_ID %>":
+                                "<%= person.persistedId %>",
+                        },
+                    },
+                )
+                document.body.dispatchEvent(personCoverImageSet)
 
-            closeModal()
-        }
-    })
+                closeModal()
+            }
+        },
+    )
 </script>

@@ -1,15 +1,15 @@
 package software.altitude.core.util
 
+import org.mindrot.jbcrypt.BCrypt
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import software.altitude.core.DuplicateException
+
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.sql.SQLException
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import org.mindrot.jbcrypt.BCrypt
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
-import software.altitude.core.DuplicateException
 
 object Util {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

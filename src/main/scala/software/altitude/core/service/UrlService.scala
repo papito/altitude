@@ -1,8 +1,8 @@
 package software.altitude.core.service
 
-import javax.servlet.http.HttpServletRequest
-
 import software.altitude.core.RequestContext
+
+import javax.servlet.http.HttpServletRequest
 
 class UrlService {
   def getUrlForPersonView(request: HttpServletRequest, personId: String): String = {

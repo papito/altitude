@@ -158,22 +158,25 @@
       const urlParams = new URLSearchParams(window.location.search)
       const view = urlParams.get("view")
 
-      let searchUrl =  null
+      let searchUrl = null
 
       if (view === "person") {
           const personId = urlParams.get("personId")
           if (personId) {
-            searchUrl = "/htmx/search/r/" + context.getRepoId() + "?personIds=" + personId
-
+              searchUrl =
+                  "/htmx/search/r/" +
+                  context.getRepoId() +
+                  "?personIds=" +
+                  personId
           }
       } else {
-        searchUrl = "/htmx/search/r/" + context.getRepoId() + fragment
+          searchUrl = "/htmx/search/r/" + context.getRepoId() + fragment
       }
 
-    htmx.ajax("get", searchUrl, {
-      swap: "innerHTML",
-      target: "#content",
-    })
+      htmx.ajax("get", searchUrl, {
+          swap: "innerHTML",
+          target: "#content",
+      })
   }
 
   document.addEventListener("DOMContentLoaded", loadView)

@@ -1,16 +1,16 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.sql.PreparedStatement
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
+
+import java.sql.PreparedStatement
 
 abstract class FaceDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FaceDao {
 
@@ -98,7 +98,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
   }
 
   def getAssetFaces(assetId: String): List[Face] = {
-    val sql = s"""
+    val sql = """
         SELECT face.*
           FROM face, person
          WHERE face.repository_id = ?
@@ -108,8 +108,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
            AND person.is_bad_match = FALSE
       """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(
-      sql, List(RequestContext.getRepository.persistedId, assetId))
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
 
     recs.map(makeModel)
   }
@@ -119,7 +118,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
    * if there is no machine-learned hit, and to verify ML hits as well.
    */
   def getAllForCache: List[Face] = {
-    val sql = s"""
+    val sql = """
        SELECT face.*
          FROM (
                SELECT ROW_NUMBER()

@@ -3,15 +3,12 @@ package software.altitude.core
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
-import java.io.File
-import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
+import org.apache.commons.io.FilenameUtils
 import org.apache.pekko.actor.typed.ActorSystem
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import software.altitude.core.{ Const => C }
 import software.altitude.core.auth.strategies.LocalDevRememberMeStrategy
 import software.altitude.core.auth.strategies.RememberMeStrategy
 import software.altitude.core.auth.strategies.TestRememberMeStrategy
@@ -22,6 +19,9 @@ import software.altitude.core.service._
 import software.altitude.core.service.filestore.FileStoreService
 import software.altitude.core.service.filestore.FileSystemStoreService
 import software.altitude.core.transactions._
+import software.altitude.core.{ Const => C }
+
+import java.io.File
 
 class Altitude(val dbEngineOverride: Option[String] = None) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

@@ -42,14 +42,17 @@
 
 <script type="module">
   import { context } from "../../../../js/context.js"
-  import { initInfiniteScroll, initLazyLoad } from "../../../../js/search-results/infinite-scroll.js"
+  import {
+      initInfiniteScroll,
+      initLazyLoad,
+} from "../../../../js/search-results/infinite-scroll.js"
 
   // this container template is loaded on new search, so scroll to top
-  const contentElement = document.getElementById("content");
-  contentElement.scrollTo({ top: 0, behavior: 'auto' });
+  const contentElement = document.getElementById("content")
+contentElement.scrollTo({ top: 0, behavior: "auto" })
 
-   initLazyLoad()
-   initInfiniteScroll()
+  initLazyLoad()
+  initInfiniteScroll()
 
   context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>

@@ -1,14 +1,14 @@
 package software.altitude.core.controllers
 
-import java.lang.System.currentTimeMillis
 import org.scalatra._
 import org.scalatra.scalate.ScalateSupport
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
-import software.altitude.core.{ Const => C }
 import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
+import software.altitude.core.{ Const => C }
+
+import java.lang.System.currentTimeMillis
 
 class BaseHtmxController extends BaseController with ScalateSupport {
   val OK: ActionResult = Ok("{}")

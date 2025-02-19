@@ -1,7 +1,6 @@
 package software.altitude.core.dao
 
 import play.api.libs.json.JsObject
-
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Face

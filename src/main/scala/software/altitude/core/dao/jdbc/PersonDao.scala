@@ -2,14 +2,13 @@ package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
-
-import scala.collection.mutable
-
 import software.altitude.core.Const.FaceRecognition
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Person
 import software.altitude.core.service.PersonService
+
+import scala.collection.mutable
 
 abstract class PersonDao(override val config: Config) extends BaseDao with software.altitude.core.dao.PersonDao {
 
@@ -88,7 +87,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAll: Map[String, Person] = {
-    val sql = s"""SELECT *
+    val sql = """SELECT *
                     FROM person
                    WHERE merged_into_id is NULL
                      AND repository_id = ?
@@ -108,11 +107,11 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAllNotDiscarded: Map[String, Person] = {
-    val sql = s"""SELECT *
+    val sql = """SELECT *
                     FROM person
-                   WHERE merged_into_id is NULL
-                     AND repository_id = ?
+                   WHERE repository_id = ?
                      AND is_bad_match = FALSE
+                     AND merged_into_id is NULL
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
@@ -129,12 +128,13 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAllAboveThreshold: List[Person] = {
-    val sql = s"""SELECT *
+    val sql = """SELECT *
                     FROM person
                    WHERE repository_id = ?
+                     AND is_bad_match = FALSE
                      AND num_of_faces >= ?
                      AND is_hidden = FALSE
-                     AND is_bad_match = FALSE
+                     AND merged_into_id is NULL
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
@@ -144,12 +144,13 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAllBelowThreshold: List[Person] = {
-    val sql = s"""SELECT *
+    val sql = """SELECT *
                     FROM person
                    WHERE repository_id = ?
+                     AND is_bad_match = FALSE
                      AND num_of_faces > 0
                      AND num_of_faces < ?
-                     AND is_bad_match = FALSE
+                     AND merged_into_id is NULL
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
@@ -159,12 +160,13 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   }
 
   def getAllHidden: List[Person] = {
-    val sql = s"""SELECT *
+    val sql = """SELECT *
                     FROM person
                    WHERE repository_id = ?
-                     AND is_hidden = TRUE
                      AND is_bad_match = FALSE
                      AND num_of_faces > 0
+                     AND is_hidden = TRUE
+                     AND merged_into_id is NULL
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =

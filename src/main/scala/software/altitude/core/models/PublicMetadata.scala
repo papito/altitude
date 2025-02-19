@@ -1,7 +1,7 @@
 package software.altitude.core.models
 
-import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
+import play.api.libs.json._
 
 import scala.language.implicitConversions
 

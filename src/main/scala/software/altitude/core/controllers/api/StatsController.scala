@@ -4,7 +4,6 @@ import org.scalatra.Ok
 import play.api.libs.json.JsNumber
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.Api
 import software.altitude.core.FieldConst
 import software.altitude.core.controllers.BaseApiController

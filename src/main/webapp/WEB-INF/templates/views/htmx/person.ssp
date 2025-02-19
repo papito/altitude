@@ -73,4 +73,28 @@
     <% include("person_inner.ssp") %>
 </div>
 
+<script type="module">
+    import { Const } from "../../../../js/constants.js"
+
+    const badMatchEl = htmx.find("#markAsBadMatch")
+
+    if (badMatchEl) {
+        badMatchEl.addEventListener("htmx:afterRequest", function (evt) {
+            if (evt.detail.successful === false) {
+                return
+            }
+
+            const personMarkedAsBadMatchEvent = new CustomEvent(
+                Const.events.personMarkedAsBadMatch,
+                {
+                    detail: {
+                        "<%= Api.Field.PERSON_ID %>": "<%= person.persistedId %>",
+                    },
+                },
+            )
+            document.body.dispatchEvent(personMarkedAsBadMatchEvent)
+        })
+    }
+</script>
+
 <script type="module" src="/js/person/dragon-drop.js"></script>

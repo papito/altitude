@@ -1,9 +1,9 @@
 package software.altitude.core.models
 
-import java.util.Base64
-import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
+import play.api.libs.json._
 
+import java.util.Base64
 import scala.language.implicitConversions
 
 object UserMetadataValue {

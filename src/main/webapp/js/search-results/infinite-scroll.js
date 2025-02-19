@@ -72,9 +72,10 @@ export function initLazyLoad() {
 
                 if (entry.target.hasAttribute(Const.attributes.dataSrc)) {
                     // console.debug("Loading: %s", entry.target.src)
-                    entry.target.src = entry.target.getAttribute(Const.attributes.dataSrc)
+                    entry.target.src = entry.target.getAttribute(
+                        Const.attributes.dataSrc,
+                    )
                 }
-
             } else {
                 if (entry.target.getAttribute("src") === placeholderImageData) {
                     return
@@ -96,5 +97,4 @@ export function initLazyLoad() {
                 observer.observe(imgEl)
             }
         })
-
 }

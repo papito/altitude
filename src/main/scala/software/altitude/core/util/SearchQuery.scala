@@ -2,7 +2,6 @@ package software.altitude.core.util
 
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.Api
 import software.altitude.core.models.UserMetadataField
 

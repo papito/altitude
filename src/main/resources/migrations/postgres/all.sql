@@ -100,9 +100,12 @@ CREATE TABLE person (
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
   is_bad_match BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
-CREATE UNIQUE INDEX person_01 ON person(repository_id, name) WHERE merged_into_id IS NULL;
-CREATE UNIQUE INDEX person_02 ON person(cover_face_id);
-CREATE INDEX person_03 ON person(repository_id, num_of_faces, is_hidden, is_named, name_for_sort);
+CREATE UNIQUE INDEX person_01 ON person(repository_id, name)
+    WHERE merged_into_id IS NULL;
+CREATE UNIQUE INDEX person_02 ON person(cover_face_id)
+    WHERE merged_into_id IS NULL;
+CREATE INDEX person_03 ON person(repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
+    WHERE merged_into_id IS NULL;
 
 
 CREATE TABLE face (

@@ -18,9 +18,10 @@ document.onkeydown = function (evt) {
         closeModal()
 
         const escapeKeyPressed = new CustomEvent(
-            Const.events.escapeKeyPressed, {
+            Const.events.escapeKeyPressed,
+            {
                 bubbles: true,
-            }
+            },
         )
         document.body.dispatchEvent(escapeKeyPressed)
     }

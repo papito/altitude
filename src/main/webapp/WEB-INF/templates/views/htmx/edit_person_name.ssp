@@ -22,16 +22,16 @@
         <div class="error">${ fieldErrors( Api.Field.Folder.NAME) }</div>
     #end
 
-<input type="text"
-       id="field-${ Api.Field.Person.NAME }"
-       name="${ Api.Field.Person.NAME }"
-       value="${person.name}"
-    #if (newName.isDefined)
-       value="${ newName.get }"
-    #else
-       value="${ person.name }"
-    #end
->
+    <input type="text"
+           id="field-${ Api.Field.Person.NAME }"
+           name="${ Api.Field.Person.NAME }"
+           value="${person.name}"
+        #if (newName.isDefined)
+           value="${ newName.get }"
+        #else
+           value="${ person.name }"
+        #end
+    >
     <input type="hidden" name="${ Api.Field.ID }" value="${ person.persistedId }">
 
 </form>
@@ -68,13 +68,19 @@
         },
     )
 
-    htmx.find("#editPersonName").addEventListener(Const.events.escapeKeyPressed, function (evt) {
-        console.log("THIS DOES NOT WORK")
+    htmx.find("#editPersonName").addEventListener(
+        Const.events.escapeKeyPressed,
+        function (evt) {
+            console.log("THIS DOES NOT WORK")
 
-        htmx.ajax("GET",
-            "<%= url(viewPersonName, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) %>", {
-            swap: "innerHTML",
-            target: "#personName",
-        })
-    })
+            htmx.ajax(
+                "GET",
+                "<%= url(viewPersonName, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) %>",
+                {
+                    swap: "innerHTML",
+                    target: "#personName",
+                },
+            )
+        },
+    )
 </script>
