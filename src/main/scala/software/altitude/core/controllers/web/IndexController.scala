@@ -1,14 +1,10 @@
 package software.altitude.core.controllers.web
 
 import org.scalatra.Route
-
 import software.altitude.core.Api
-import software.altitude.core.Const
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
 import software.altitude.core.models.User
-import software.altitude.core.util.SearchQuery
-import software.altitude.core.util.SearchResult
 
 class IndexController extends BaseWebController {
 
@@ -16,16 +12,8 @@ class IndexController extends BaseWebController {
     requireLogin()
     contentType = "text/html"
 
-    val q = new SearchQuery(
-      rpp = Const.Search.DEFAULT_RPP
-    )
-
-    val results: SearchResult = app.service.library.search(q)
-
     layoutTemplate(
-      "/WEB-INF/templates/views/index.ssp",
-      "results" -> results,
-      "isServerSideLoad" -> true
+      "/WEB-INF/templates/views/index.ssp"
     )
   }
 

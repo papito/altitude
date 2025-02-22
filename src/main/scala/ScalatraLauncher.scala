@@ -2,7 +2,6 @@ import org.eclipse.jetty.server._
 import org.eclipse.jetty.servlet.DefaultServlet
 import org.eclipse.jetty.webapp.WebAppContext
 import org.scalatra.servlet.ScalatraListener
-
 import software.altitude.core.AltitudeServletContext
 
 object ScalatraLauncher extends App with AltitudeServletContext {

@@ -4,7 +4,6 @@ import org.scalatra.ActionResult
 import org.scalatra.Ok
 import play.api.libs.json.JsNull
 import play.api.libs.json.Json
-
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.RequestContext
@@ -18,7 +17,7 @@ class SearchController extends BaseApiController {
 
   get("/r/:repoId/") {
     val repo: Repository = RequestContext.getRepository
-    val foldersQuery = params.getOrElse(Api.Field.Search.FOLDERS, "")
+    val foldersQuery = params.getOrElse(Api.Field.Search.FOLDER_IDS, "")
 
     val folderId = if (foldersQuery.isEmpty) repo.rootFolderId else foldersQuery
 
@@ -44,7 +43,7 @@ class SearchController extends BaseApiController {
       List()
     }
 
-    val foldersQuery = params.getOrElse(Api.Field.Search.FOLDERS, "")
+    val foldersQuery = params.getOrElse(Api.Field.Search.FOLDER_IDS, "")
     val folderIdsArg = if (foldersQuery.isEmpty) repo.rootFolderId else foldersQuery
 
     val q = new SearchQuery(

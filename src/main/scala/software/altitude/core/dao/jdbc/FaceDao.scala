@@ -1,16 +1,16 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.sql.PreparedStatement
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
+
+import java.sql.PreparedStatement
 
 abstract class FaceDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FaceDao {
 
@@ -48,9 +48,9 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
 
     val sql =
       s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
-                                ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.Face.DETECTION_SCORE},
-                                ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
+        INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
+                          ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.Face.DETECTION_SCORE},
+                          ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
@@ -97,33 +97,33 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
     )
   }
 
+  def getAssetFaces(assetId: String): List[Face] = {
+    val sql = """
+        SELECT face.*
+          FROM face, person
+         WHERE face.repository_id = ?
+           AND face.asset_id = ?
+           AND face.person_id = person.id
+           AND person.is_hidden = FALSE
+           AND person.is_bad_match = FALSE
+      """
+
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
+
+    recs.map(makeModel)
+  }
+
   /**
    * Get faces for all people in this repo, but only the top X faces per person. We use those to brute-force compare a new face,
    * if there is no machine-learned hit, and to verify ML hits as well.
    */
   def getAllForCache: List[Face] = {
-    val selectColumns = List(
-      FieldConst.ID,
-      FieldConst.REPO_ID,
-      FieldConst.Face.X1,
-      FieldConst.Face.Y1,
-      FieldConst.Face.WIDTH,
-      FieldConst.Face.HEIGHT,
-      FieldConst.Face.ASSET_ID,
-      FieldConst.Face.PERSON_ID,
-      FieldConst.Face.PERSON_LABEL,
-      FieldConst.Face.DETECTION_SCORE,
-      FieldConst.Face.EMBEDDINGS,
-      FieldConst.Face.FEATURES,
-      FieldConst.Face.CHECKSUM
-    )
-
-    val sql = s"""
-       SELECT ${selectColumns.mkString(", ")}
+    val sql = """
+       SELECT face.*
          FROM (
                SELECT ROW_NUMBER()
                  OVER (PARTITION BY person_label ORDER BY detection_score DESC)
-                   AS r_num, ${selectColumns.map("sub_face." + _).mkString(", ")}
+                   AS r_num, sub_face.*
                  FROM face AS sub_face
                  WHERE repository_id = ?) face
          WHERE repository_id =?
@@ -143,7 +143,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with softwar
   def getAllForTraining: List[Face] = {
     val sql = s"""
         SELECT ${FieldConst.ID}, ${FieldConst.Face.PERSON_LABEL}, ${FieldConst.REPO_ID}
-          FROM $tableName
+          FROM face
          WHERE repository_id = ?
       """
 

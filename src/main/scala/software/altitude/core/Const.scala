@@ -14,6 +14,11 @@ object Const {
     val POSTGRES_URL = "db.postgres.url"
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
+    val PERSON_MIN_FACES_THRESHOLD = "face.threshold"
+  }
+
+  object FaceRecognition {
+    val MIN_FACES_THRESHOLD = 3
   }
 
   object DbEngineName extends Enumeration {
@@ -44,6 +49,13 @@ object Const {
     val FACES = "faces"
     val REPOSITORIES = "repositories"
     val MODELS = "models"
+  }
+
+  object PeopleTypeFilter {
+    val ALL = "all"
+    val HIDDEN = "hidden"
+    val COMPLETE = "complete"
+    val INCOMPLETE = "incomplete"
   }
 
   /** MESSAGES */
@@ -80,5 +92,8 @@ object Const {
 
     val MERGE_PEOPLE_MODAL_TITLE = "Merge people"
     val MERGE_PEOPLE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
+
+    val CHANGE_PERSON_COVER_IMAGE_MODAL_TITLE = "Change cover image"
+    val CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
   }
 }

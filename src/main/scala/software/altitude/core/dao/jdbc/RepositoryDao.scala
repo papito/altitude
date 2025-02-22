@@ -3,7 +3,6 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.FieldConst
 import software.altitude.core.models.Repository
 
@@ -37,7 +36,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with s
     val repo = jsonIn: Repository
 
     val sql = s"""
-        INSERT INTO $tableName (
+        INSERT INTO repository (
              ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.OWNER_ACCOUNT_ID}, ${FieldConst.Repository.FILE_STORE_TYPE},
              ${FieldConst.Repository.ROOT_FOLDER_ID},
              ${FieldConst.Repository.FILES_STORE_CONFIG})
@@ -61,7 +60,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with s
   }
 
   def getAll: List[Repository] = {
-    val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM $tableName"
+    val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM repository"
     val recs = manyBySqlQuery(sql)
     recs.map(makeModel)
   }

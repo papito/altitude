@@ -1,7 +1,6 @@
 package software.altitude.core.dao.postgres
 
 import com.typesafe.config.Config
-
 import software.altitude.core.FieldConst
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.UserMetadata
@@ -21,7 +20,7 @@ class AssetDao(override val config: Config) extends software.altitude.core.dao.j
   override def getUserMetadata(assetId: String): Option[UserMetadata] = {
     val sql = s"""
       SELECT (${FieldConst.Asset.USER_METADATA}#>>'{}')::text AS ${FieldConst.Asset.USER_METADATA}
-         FROM $tableName
+         FROM asset
        WHERE ${FieldConst.ID} = ?
       """
 

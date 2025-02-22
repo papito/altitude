@@ -62,22 +62,4 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
       asset.copy(isPipelineProcessed = true)
     }
   }
-
-  def markAllAsPersistedInFaceRecModel: Int = {
-    txManager.withTransaction {
-      val updateData = Map(
-        FieldConst.Asset.IS_IN_FACE_REC_MODEL -> true
-      )
-      val assetQuery = new Query(Map(FieldConst.Asset.IS_IN_FACE_REC_MODEL -> false))
-
-      updateByQuery(assetQuery, updateData)
-    }
-  }
-
-  def getAllNotPersistedInFaceRecModel: List[Asset] = {
-    txManager.asReadOnly {
-      val assetQuery = new Query(Map(FieldConst.Asset.IS_IN_FACE_REC_MODEL -> false))
-      dao.queryAll(assetQuery).records.map(Asset.fromJson(_))
-    }
-  }
 }

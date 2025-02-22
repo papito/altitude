@@ -3,13 +3,11 @@ package software.altitude.core.dao.sqlite
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
-import software.altitude.core.service.PersonService
 
 class PersonDao(override val config: Config) extends software.altitude.core.dao.jdbc.PersonDao(config) with SqliteOverrides {
 
@@ -22,23 +20,37 @@ class PersonDao(override val config: Config) extends software.altitude.core.dao.
 
     val sql =
       s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Person.LABEL}, ${FieldConst.Person.NAME})
-             VALUES (?, ?, ?, ?)
-    """
+        INSERT INTO person (${FieldConst.ID},
+                            ${FieldConst.REPO_ID},
+                            ${FieldConst.Person.LABEL},
+                            ${FieldConst.Person.NAME},
+                            ${FieldConst.Person.NAME_FOR_SORT},
+                            ${FieldConst.Person.IS_NAMED})
+              VALUES (?, ?, ?, ?, ?, ?)
+   """
 
     val person: Person = jsonIn: Person
-    val personName = person.name.getOrElse(s"${PersonService.UNKNOWN_NAME_PREFIX} $personSeqNum")
+    val personName = getPersonName(person, personSeqNum)
+    val personSortName = getPersonSortName(person, personSeqNum)
+    val isNamed = person.name.nonEmpty
+
     val id = BaseDao.genId
 
     val sqlVals: List[Any] = List(
       id,
       RequestContext.getRepository.persistedId,
       label,
-      personName
+      personName,
+      personSortName,
+      isNamed
     )
 
     addRecord(jsonIn, sql, sqlVals)
 
-    jsonIn ++ Json.obj(FieldConst.ID -> id, FieldConst.Person.LABEL -> label, FieldConst.Person.NAME -> Some(personName))
+    jsonIn ++ Json.obj(
+      FieldConst.ID -> id,
+      FieldConst.Person.LABEL -> label,
+      FieldConst.Person.NAME -> Some(personName),
+      FieldConst.Person.IS_NAMED -> isNamed)
   }
 }

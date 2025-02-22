@@ -3,7 +3,6 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.FieldType
@@ -27,7 +26,7 @@ abstract class MetadataFieldDao(override val config: Config)
     val metadataField = jsonIn: UserMetadataField
 
     val sql = s"""
-        INSERT INTO $tableName (
+        INSERT INTO metadata_field (
              ${FieldConst.ID},
              ${FieldConst.REPO_ID},
              ${FieldConst.MetadataField.NAME},

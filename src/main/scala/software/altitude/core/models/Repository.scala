@@ -1,8 +1,8 @@
 package software.altitude.core.models
-import java.time.LocalDateTime
-import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
+import play.api.libs.json._
 
+import java.time.LocalDateTime
 import scala.language.implicitConversions
 
 object Repository {

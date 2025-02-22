@@ -1,7 +1,6 @@
 package software.altitude.core.service
 
 import play.api.libs.json.JsObject
-
 import software.altitude.core.Altitude
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.FieldConst

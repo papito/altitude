@@ -3,7 +3,6 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.FieldConst
 import software.altitude.core.models.AccountType
 import software.altitude.core.models.User
@@ -23,7 +22,7 @@ abstract class UserDao(override val config: Config) extends BaseDao with softwar
 
   override def add(jsonIn: JsObject): JsObject = {
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.User.EMAIL}, ${FieldConst.User.NAME},
+        INSERT INTO account (${FieldConst.ID}, ${FieldConst.User.EMAIL}, ${FieldConst.User.NAME},
                                 ${FieldConst.User.ACCOUNT_TYPE}, ${FieldConst.User.PASSWORD_HASH},
                                 ${FieldConst.User.LAST_ACTIVE_REPO_ID})
              VALUES (?, ?, ?, ?, ?, ?)

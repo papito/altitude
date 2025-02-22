@@ -2,15 +2,17 @@ package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
 import play.api.libs.json.JsObject
-
-import software.altitude.core.{ Const => C }
 import software.altitude.core.Api
+import software.altitude.core.Const
 import software.altitude.core.DataScrubber
 import software.altitude.core.DuplicateException
+import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
 import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseHtmxController
+import software.altitude.core.models.Face
 import software.altitude.core.models.Person
+import software.altitude.core.{Const => C}
 
 /** @ /htmx/people/ */
 class PeopleActionController extends BaseHtmxController {
@@ -20,14 +22,45 @@ class PeopleActionController extends BaseHtmxController {
   }
 
   val showPeopleTab: Route = get("/r/:repoId/tab") {
-    val people: List[Person] = app.service.person.getAll
+    val typeFilter: String = params.getOrElse(Api.Field.People.TYPE_FILTER, Const.PeopleTypeFilter.COMPLETE)
+    val people: List[Person] = typeFilter match {
+      case Const.PeopleTypeFilter.ALL => app.service.person.getAllNotDiscarded
+      case Const.PeopleTypeFilter.HIDDEN => app.service.person.getAllHidden
+      case Const.PeopleTypeFilter.COMPLETE => app.service.person.getAllAboveThreshold
+      case Const.PeopleTypeFilter.INCOMPLETE => app.service.person.getAllBelowThreshold
+    }
 
-    ssp("htmx/people", Api.Field.Person.PEOPLE -> people)
+    ssp("htmx/people", Api.Field.Person.PEOPLE -> people, Api.Field.People.TYPE_FILTER -> typeFilter)
   }
 
-  val searchPerson: Route = get("/r/:repoId/p/:personId/search") {
-    val personId: String = params.get("personId").get
-    searchPerson(personId = personId)
+  val showChoosePersonCoverFaceModal: Route = get("/r/:repoId/modals/choose-person-cover-face") {
+    val personId: String = params.get(Api.Field.PERSON_ID).get
+    val person: Person = app.service.person.getById(personId)
+    val topFaces = app.service.person.getPersonFaces(person.persistedId, limit = 24)
+
+    ssp(
+      "htmx/choose_person_cover_face_modal",
+      Api.Modal.MIN_WIDTH -> C.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH,
+      Api.Modal.TITLE -> C.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_TITLE,
+      Api.Field.Person.PERSON -> person,
+      Api.Field.Person.FACES -> topFaces
+    )
+  }
+
+  val setCoverImage: Route = put("/r/:repoId/p/:personId/cover-image") {
+    val personId: String = params.get(Api.Field.PERSON_ID).get
+    val person: Person = app.service.person.getById(personId)
+
+    val faceId: String = params.get(Api.Field.FACE_ID).get
+    val face: Face = app.service.person.getFaceById(faceId)
+
+    logger.info(s"Setting cover image for person $personId to face $faceId")
+    val updatedPerson = app.service.person.setFaceAsCover(person, face)
+
+    ssp(
+      "htmx/person_inner",
+      Api.Field.Search.PERSON -> updatedPerson
+    )
   }
 
   val showEditPersonName: Route = get("/r/:repoId/p/:personId/name/edit") {
@@ -79,6 +112,11 @@ class PeopleActionController extends BaseHtmxController {
 
     val newName = (jsonIn \ Api.Field.Person.NAME).as[String]
 
+    if (newName.toLowerCase == person.name.get.toLowerCase) {
+      logger.info("Name has not changed")
+      halt(200, ssp("htmx/view_person_name", Api.Field.Person.PERSON -> person))
+    }
+
     try {
       app.service.person.updateName(person, newName = newName)
     } catch {
@@ -89,6 +127,12 @@ class PeopleActionController extends BaseHtmxController {
 
     val updatedPerson: Person = app.service.person.getById(personId)
     ssp("htmx/view_person_name", Api.Field.Person.PERSON -> updatedPerson)
+  }
+
+  val viewPersonName: Route = get("/r/:repoId/p/:personId/name") {
+    val personId = params.get(Api.Field.PERSON_ID).get
+    val person: Person = app.service.person.getById(personId)
+    ssp("htmx/view_person_name", Api.Field.Person.PERSON -> person)
   }
 
   val showMergePeopleModal: Route = get("/r/:repoId/modals/merge") {
@@ -123,12 +167,45 @@ class PeopleActionController extends BaseHtmxController {
     logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     app.service.person.merge(dest = destPerson, source = srcPerson)
-    searchPerson(personId = destPersonId)
+    redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PEOPLE_IDS}=$destPersonId")
   }
 
-  private def searchPerson(personId: String): String = {
+  val hidePerson: Route = put("/r/:repoId/p/:personId/hide") {
+    val personId: String = params.get("personId").get
+    val person: Person = app.service.person.getById(personId)
+    logger.info(s"Hiding person: $personId")
+
+    val updatedPerson = app.service.person.setVisibility(person, isHidden = true)
+
+    ssp(
+      "htmx/person_inner",
+      Api.Field.Search.PERSON -> updatedPerson
+    )
+  }
+
+  val discardPersonAsBadMatch: Route = delete("/r/:repoId/p/:personId") {
+    val personId: String = params.get("personId").get
+    val person: Person = app.service.person.getById(personId)
+    logger.info(s"Discarding person: $personId")
+
+    val updatedPerson = app.service.person.markAsBadMatch(person)
+
+    ssp(
+      "htmx/person_inner",
+      Api.Field.Search.PERSON -> updatedPerson
+    )
+  }
+
+  val showPerson: Route = put("/r/:repoId/p/:personId/show") {
+    val personId: String = params.get("personId").get
+    logger.info(s"Showing person: $personId")
     val person: Person = app.service.person.getById(personId)
 
-    ssp("htmx/person", Api.Field.Person.PERSON -> person)
+    val updatedPerson = app.service.person.setVisibility(person, isHidden = false)
+
+    ssp(
+      "htmx/person_inner",
+      Api.Field.Search.PERSON -> updatedPerson
+    )
   }
 }

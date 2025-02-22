@@ -1,7 +1,8 @@
 package software.altitude.core.models
 
-import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
+import play.api.libs.json._
+import software.altitude.core.Const.FaceRecognition
 
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -15,15 +16,19 @@ object Person {
 case class Person(
     id: Option[String] = None,
     name: Option[String] = None,
+    isHidden: Boolean = false,
+    isNamed: Boolean = false,
+    isBadMatch: Boolean = false,
     coverFaceId: Option[String] = None,
     mergedWithIds: List[String] = List(),
     mergedIntoId: Option[String] = None,
     mergedIntoLabel: Option[Int] = None,
     label: Int = -1,
-    numOfFaces: Int = 0,
-    isHidden: Boolean = false)
+    numOfFaces: Int = 0)
   extends BaseModel
   with NoDates {
+
+  def isAboveThreshold: Boolean = numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD
 
   lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 
@@ -58,14 +63,12 @@ case class Person(
 
   def wasMergedFrom: Boolean = mergedIntoId.nonEmpty
 
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[Face]
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[Person]
 
-  override def equals(that: Any): Boolean = that match {
-    case that: Person if !that.canEqual(this) => false
-    case that: Person => that.persistedId == this.persistedId
+  override def equals(other: Any): Boolean = other match {
+    case that: Person => (that.canEqual(this)) && this.id == that.id
     case _ => false
   }
-
   override def hashCode: Int = super.hashCode
 
   override def toString: String =

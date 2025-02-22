@@ -2,15 +2,14 @@ package software.altitude.core.models
 
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 import play.api.libs.json.JsSuccess
 import play.api.libs.json.JsValue
+import play.api.libs.json.Json
 import play.api.libs.json.OWrites
 import play.api.libs.json.Reads
+import software.altitude.core.FieldConst
 
 import scala.language.implicitConversions
-
-import software.altitude.core.FieldConst
 
 object MimedAssetData {
   implicit val reads: Reads[MimedAssetData] = (json: JsValue) => {

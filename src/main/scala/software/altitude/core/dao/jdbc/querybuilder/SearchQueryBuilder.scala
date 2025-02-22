@@ -89,12 +89,13 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       isPipelineProcessedFilter +
       folderFilter(searchQuery) +
       fieldFilter(searchQuery) +
+      personFilter(searchQuery) +
       searchDocumentJoin(searchQuery) +
       searchParameterJoin(searchQuery)
   }
 
   /** Generates a SQL "IN" clause for folder IDs */
-  protected def folderFilter(searchQuery: SearchQuery): ClauseComponents = {
+  private def folderFilter(searchQuery: SearchQuery): ClauseComponents = {
     if (searchQuery.folderIds.isEmpty) return ClauseComponents()
 
     // get ? placeholders equal to the number of folder ids
@@ -103,6 +104,27 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     ClauseComponents(
       elements = List(s"${FieldConst.Asset.FOLDER_ID} IN ($folderIdPlaceholders)"),
       bindVals = searchQuery.folderIds.toList
+    )
+  }
+
+  /** Generates a SQL "IN" clause for people IDs */
+  private def personFilter(searchQuery: SearchQuery): ClauseComponents = {
+    if (searchQuery.personIds.isEmpty) return ClauseComponents()
+
+    // get ? placeholders equal to the number of person ids
+    val peopleIdPlaceholders: String = List.fill(searchQuery.personIds.size)("?").mkString(", ")
+
+    ClauseComponents(
+      elements = List(
+        s"""
+          asset.id IN (
+            SELECT DISTINCT(face.asset_id)
+              FROM face, person
+             WHERE face.person_id = person.id
+               AND person.id IN ($peopleIdPlaceholders))
+        """
+      ),
+      bindVals = searchQuery.personIds.toList
     )
   }
 
