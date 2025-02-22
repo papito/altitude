@@ -10,7 +10,6 @@ import software.altitude.core.dao.RepositoryDao
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Repository
-import software.altitude.core.models.Stats
 import software.altitude.core.models.User
 import software.altitude.core.transactions.TransactionManager
 
@@ -47,12 +46,6 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       app.service.folder.add(rootFolder)
 
       logger.info(s"Setting up repository [${RequestContext.getRepository.name}] statistics")
-      app.service.stats.createStat(Stats.SORTED_ASSETS)
-      app.service.stats.createStat(Stats.SORTED_BYTES)
-      app.service.stats.createStat(Stats.TRIAGE_ASSETS)
-      app.service.stats.createStat(Stats.TRIAGE_BYTES)
-      app.service.stats.createStat(Stats.RECYCLED_ASSETS)
-      app.service.stats.createStat(Stats.RECYCLED_BYTES)
 
       logger.info(s"Created repository [$repo]")
 

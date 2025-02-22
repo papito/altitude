@@ -380,6 +380,7 @@ import software.altitude.test.core.IntegrationTestCore
     }
   }
 
+/*
   test("Folders child count should be correct after addition") {
     /*
       folder1
@@ -464,4 +465,5 @@ import software.altitude.test.core.IntegrationTestCore
     folder1.numOfChildren shouldBe 2
     rootFolder.numOfChildren shouldBe 3
   }
+*/
 }

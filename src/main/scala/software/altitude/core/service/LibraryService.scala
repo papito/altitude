@@ -113,8 +113,6 @@ class LibraryService(val app: Altitude) {
         return
       }
 
-      app.service.stats.moveAsset(asset, destFolderId)
-
       /* Point the asset to the new folder.
          It may or may not be recycled or triaged, so we update it as neither unconditionally
          (saves us a separate update query)
@@ -229,8 +227,6 @@ class LibraryService(val app: Altitude) {
       val folder = Folder(name = name.trim, parentId = _parentId)
       val addedFolder: Folder = app.service.folder.add(folder)
 
-      app.service.folder.incrChildCount(_parentId)
-
       addedFolder
     }
   }
@@ -299,8 +295,6 @@ class LibraryService(val app: Altitude) {
 
           treeAssetCount // accumulates total asset count for the next step in the fold
       }
-
-      app.service.folder.decrChildCount(folder.parentId)
     }
   }
 
@@ -350,7 +344,6 @@ class LibraryService(val app: Altitude) {
             }
 
             val restoredAsset: Asset = getById(assetId)
-            app.service.stats.restoreAsset(restoredAsset)
           }
         }
     }
@@ -369,7 +362,6 @@ class LibraryService(val app: Altitude) {
         txManager.withTransaction {
           val asset: Asset = getById(assetId)
           app.service.asset.setRecycledProp(asset, isRecycled = true)
-          app.service.stats.recycleAsset(asset.copy(isRecycled = true))
         }
     }
   }

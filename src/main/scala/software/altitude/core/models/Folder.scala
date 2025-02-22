@@ -18,9 +18,7 @@ case class Folder(
     parentId: String,
     name: String,
     children: List[Folder] = List(),
-    isRecycled: Boolean = false,
-    numOfAssets: Int = 0,
-    numOfChildren: Int = 0)
+    isRecycled: Boolean = false)
   extends BaseModel
   with NoDates {
 

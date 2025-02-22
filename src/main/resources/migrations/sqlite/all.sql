@@ -157,11 +157,8 @@ CREATE TABLE folder (
   repository_id CHAR(36) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
+  path TEXT,
   parent_id CHAR(36) NOT NULL,
-    -- non-recursively calculated
-  num_of_assets INTEGER NOT NULL DEFAULT 0 CHECK (num_of_assets >= 0),
-    -- non-recursively calculated
-  num_of_children INTEGER NOT NULL DEFAULT 0 CHECK(num_of_children >= 0),
   is_recycled TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,

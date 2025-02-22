@@ -16,68 +16,6 @@ import software.altitude.test.core.IntegrationTestCore
 
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  test("Folder counts should check out") {
-    /*
-    folder1
-    folder2
-      folder2_1
-      folder2_2
-        folder2_2_1
-        folder2_2_2
-    */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
-
-    val folder2_1: Folder = testApp.service.library.addFolder(
-      name = "folder2_1", parentId = folder2.id)
-
-    val folder2_2: Folder = testApp.service.library.addFolder(
-      name = "folder2_2", parentId = folder2.id)
-
-    val folder2_2_1: Folder = testApp.service.library.addFolder(
-      name = "folder2_2_1", parentId = folder2_2.id)
-
-    val folder2_2_2: Folder = testApp.service.library.addFolder(
-      name = "folder2_2_2", parentId = folder2_2.id)
-
-    // fill up the hierarchy with assets x times over
-    1 to 2 foreach {_ =>
-      testContext.persistAsset()
-      testContext.persistAsset(folder = Some(folder1))
-      testContext.persistAsset(folder = Some(folder2))
-      testContext.persistAsset(folder = Some(folder2_1))
-      testContext.persistAsset(folder = Some(folder2_2))
-      testContext.persistAsset(folder = Some(folder2_2_1))
-      testContext.persistAsset(folder = Some(folder2_2_2))
-    }
-
-    // prefetch all folders for speed
-    val all = testApp.service.folder.repositoryFolders()
-
-    // test counts for individual folders
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder1.persistedId, all): Folder).numOfAssets shouldBe 2
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder2_2_1.persistedId, all): Folder).numOfAssets shouldBe 2
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder2_2_2.persistedId, all): Folder).numOfAssets shouldBe 2
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder2_2.persistedId, all): Folder).numOfAssets shouldBe 6
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder2_1.persistedId, all): Folder).numOfAssets shouldBe 2
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder2.persistedId, all): Folder).numOfAssets shouldBe 10
-
-    // test counts for immediate children
-    val rootChildren = testApp.service.folder.immediateChildren(RequestContext.getRepository.rootFolderId, all)
-    rootChildren.head.numOfAssets shouldBe 2
-    rootChildren.last.numOfAssets shouldBe 10
-
-    val rootChildren2 = testApp.service.folder.immediateChildren(RequestContext.getRepository.rootFolderId)
-    rootChildren2.head.numOfAssets shouldBe 2
-    rootChildren2.last.numOfAssets shouldBe 10
-
-    // test counts for hierarchy
-    val hierarchy = testApp.service.folder.hierarchy()
-    hierarchy.head.numOfAssets shouldBe 2
-    hierarchy.last.numOfAssets shouldBe 10
-  }
-
   test("Rename asset and attempt to rename a recycled asset") {
     var asset: Asset = testContext.persistAsset()
     var updatedAsset: Asset = testApp.service.library.renameAsset(asset.persistedId, "newName")
@@ -111,10 +49,6 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.query(
       new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 1
-
-    val all = testApp.service.folder.repositoryFolders()
-
-    (testApp.service.folder.getByIdWithChildAssetCounts(folder1.persistedId, all): Folder).numOfAssets shouldBe 1
   }
 
   test("Search by folder hierarchy should return assets in sub-folders") {
