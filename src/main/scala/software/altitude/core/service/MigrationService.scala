@@ -2,13 +2,14 @@ package software.altitude.core.service
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.io.Source
+
 import software.altitude.core.Altitude
 import software.altitude.core.Const
 import software.altitude.core.Environment
 import software.altitude.core.RequestContext
 import software.altitude.core.transactions.TransactionManager
-
-import scala.io.Source
 
 abstract class MigrationService(val app: Altitude) {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)

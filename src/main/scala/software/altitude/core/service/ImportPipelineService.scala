@@ -9,6 +9,14 @@ import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.util.Failure
+import scala.util.Success
+
 import software.altitude.core.Altitude
 import software.altitude.core.AltitudeActorSystem
 import software.altitude.core.pipeline.PipelineConstants.parallelism
@@ -26,13 +34,6 @@ import software.altitude.core.pipeline.flows.PersistAndIndexAssetFlow
 import software.altitude.core.pipeline.flows.StripBinaryDataFlow
 import software.altitude.core.pipeline.sinks.AssetErrorLoggingSink
 import software.altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
-
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-import scala.util.Failure
-import scala.util.Success
 
 class ImportPipelineService(app: Altitude) {
   val logger: Logger = LoggerFactory.getLogger(getClass)

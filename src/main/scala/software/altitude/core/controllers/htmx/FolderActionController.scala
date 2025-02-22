@@ -189,7 +189,7 @@ class FolderActionController extends BaseHtmxController {
     ssp("htmx/folder_children", Api.Field.Folder.FOLDERS -> childFolders)
   }
 
-  val htmxMoveFolder: Route = post("/r/:repoId/move") {
+  val htmxMoveFolder: Route = put("/r/:repoId/move") {
     val movedFolderId = request.getParameter(Api.Field.Folder.MOVED_FOLDER_ID)
     val newParentId = request.getParameter(Api.Field.Folder.NEW_PARENT_ID)
 

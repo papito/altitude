@@ -1,8 +1,11 @@
 package software.altitude.core.service
 
+import java.sql.Connection
+import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Altitude
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
@@ -12,9 +15,6 @@ import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.util.Util.getDuplicateExceptionOrSame
-
-import java.sql.Connection
-import java.sql.SQLException
 
 abstract class BaseService[Model <: BaseModel] {
   protected val app: Altitude

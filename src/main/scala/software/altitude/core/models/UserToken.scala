@@ -1,16 +1,17 @@
 package software.altitude.core.models
 
+import java.time.LocalDateTime
 import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 import play.api.libs.json.JsSuccess
 import play.api.libs.json.JsValue
-import play.api.libs.json.Json
 import play.api.libs.json.OWrites
 import play.api.libs.json.Reads
+
+import scala.language.implicitConversions
+
 import software.altitude.core.FieldConst
 import software.altitude.core.util.Util
-
-import java.time.LocalDateTime
-import scala.language.implicitConversions
 
 object UserToken {
   implicit val reads: Reads[UserToken] = (json: JsValue) => {

@@ -2,6 +2,7 @@ package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
+
 import software.altitude.core.FieldConst
 import software.altitude.core.models.UserToken
 import software.altitude.core.util.Util

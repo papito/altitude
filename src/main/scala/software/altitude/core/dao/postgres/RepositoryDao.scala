@@ -1,6 +1,7 @@
 package software.altitude.core.dao.postgres
 
 import com.typesafe.config.Config
+
 import software.altitude.core.FieldConst
 import software.altitude.core.dao.jdbc
 

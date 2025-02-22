@@ -10,14 +10,15 @@ import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.util.Timeout
 import org.slf4j.Logger
-import software.altitude.core.actors.FaceRecManagerActor
-import software.altitude.core.actors.FaceRecManagerActor.Initialize
-import software.altitude.core.actors.ImportStatusWsActor
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
+
+import software.altitude.core.actors.FaceRecManagerActor
+import software.altitude.core.actors.FaceRecManagerActor.Initialize
+import software.altitude.core.actors.ImportStatusWsActor
 
 object AltitudeActorSystem {
   trait Command

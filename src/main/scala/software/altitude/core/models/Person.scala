@@ -1,11 +1,12 @@
 package software.altitude.core.models
 
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
-import software.altitude.core.Const.FaceRecognition
+import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.collection.mutable
 import scala.language.implicitConversions
+
+import software.altitude.core.Const.FaceRecognition
 
 object Person {
   implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)

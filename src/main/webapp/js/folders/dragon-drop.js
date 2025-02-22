@@ -67,8 +67,8 @@ interact("#rootFolderList .dropzone").dropzone({
             console.debug(`Moved asset ${movedAssetId} to ${newParentFolderId}`)
             const movedAssetEvent = new CustomEvent(Const.events.assetMoved, {
                 detail: {
-                    movedAssetId: movedAssetId,
-                    newParentId: newParentFolderId,
+                    assetId: movedAssetId,
+                    folderId: newParentFolderId,
                 },
             })
 

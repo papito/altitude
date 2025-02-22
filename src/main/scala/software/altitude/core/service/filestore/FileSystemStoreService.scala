@@ -1,9 +1,12 @@
 package software.altitude.core.service.filestore
 
-import org.apache.commons.io.FileUtils
+import java.io._
 import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import software.altitude.core.{ Const => C }
 import software.altitude.core.Altitude
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
@@ -14,9 +17,6 @@ import software.altitude.core.models.FaceImages
 import software.altitude.core.models.MimedAssetData
 import software.altitude.core.models.MimedFaceData
 import software.altitude.core.models.MimedPreviewData
-import software.altitude.core.{ Const => C }
-
-import java.io._
 
 class FileSystemStoreService(app: Altitude) extends FileStoreService {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

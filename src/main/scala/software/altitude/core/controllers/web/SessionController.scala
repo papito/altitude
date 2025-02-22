@@ -5,6 +5,7 @@ import org.scalatra.ScalatraServlet
 import org.scalatra.UrlGeneratorSupport
 import org.scalatra.scalate.ScalateSupport
 import org.scalatra.scalate.ScalateUrlGeneratorSupport
+
 import software.altitude.core.auth.AuthenticationSupport
 
 class SessionController

@@ -1,9 +1,11 @@
 package software.altitude.core
 
+import javax.servlet.ServletContext
 import org.scalatra.ScalatraServlet
 import org.scalatra.servlet.ServletApiImplicits._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.controllers.htmx.AlbumActionController
 import software.altitude.core.controllers.htmx.AssetActionController
 import software.altitude.core.controllers.htmx.FolderActionController
@@ -16,8 +18,6 @@ import software.altitude.core.controllers.web.IndexController
 import software.altitude.core.controllers.web.SessionController
 import software.altitude.core.models.Repository
 import software.altitude.core.models.User
-
-import javax.servlet.ServletContext
 
 object AltitudeServletContext {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

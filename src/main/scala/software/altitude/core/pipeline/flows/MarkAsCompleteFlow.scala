@@ -2,13 +2,14 @@ package software.altitude.core.pipeline.flows
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
+
+import scala.concurrent.Future
+
 import software.altitude.core.Altitude
 import software.altitude.core.pipeline.PipelineConstants.parallelism
 import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import software.altitude.core.pipeline.PipelineUtils.debugInfo
 import software.altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
-
-import scala.concurrent.Future
 
 object MarkAsCompleteFlow {
   def apply(app: Altitude): Flow[TAssetOrInvalidWithContext, TAssetOrInvalidWithContext, NotUsed] =

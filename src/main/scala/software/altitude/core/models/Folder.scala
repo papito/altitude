@@ -1,10 +1,11 @@
 package software.altitude.core.models
 
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
-import software.altitude.core.ValidationException
+import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.language.implicitConversions
+
+import software.altitude.core.ValidationException
 
 object Folder {
   implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
