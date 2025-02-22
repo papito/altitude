@@ -1,10 +1,10 @@
+import javax.servlet.ServletContext
 import org.scalatra._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Environment
-
-import javax.servlet.ServletContext
 
 class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
   val logger: Logger = LoggerFactory.getLogger(getClass)

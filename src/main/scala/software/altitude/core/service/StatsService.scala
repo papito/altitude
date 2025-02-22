@@ -2,6 +2,7 @@ package software.altitude.core.service
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Altitude
 import software.altitude.core.dao.StatDao
 import software.altitude.core.models.Asset

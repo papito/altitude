@@ -58,3 +58,4 @@ contentElement.scrollTo({ top: 0, behavior: "auto" })
 </script>
 
 <script type="module" src="/js/search-results/dragon-drop.js"></script>
+<script type="module" src="/js/search-results/event_handlers.js"></script>

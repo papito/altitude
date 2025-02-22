@@ -152,10 +152,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       Await.result(pipelineResFuture, Duration.Inf)
 
       // faces from source are moved to the new person and ML model label
-      faceDao.updateByQuery(
-        query, Map(
-          FieldConst.Face.PERSON_ID -> dest.persistedId,
-          FieldConst.Face.PERSON_LABEL -> dest.label))
+      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> dest.persistedId, FieldConst.Face.PERSON_LABEL -> dest.label))
 
       val updatedSource: Person = persistedSource.copy(mergedIntoId = Some(dest.persistedId), mergedIntoLabel = Some(dest.label))
 
@@ -178,18 +175,20 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       }
 
       /**
-       * Note that this has to be done AFTER the source is updated as "merged",
-       * in order to avoid clawing with the unique name constraint across non-merged people
+       * Note that this has to be done AFTER the source is updated as "merged", in order to avoid clawing with the unique name
+       * constraint across non-merged people
        */
       val updatedDest = mergedDest.copy(
         numOfFaces = persistedDest.numOfFaces + persistedSource.numOfFaces,
         name = Some(mergedPersonName)
       )
 
-      updateById(dest.persistedId, Map(
-        FieldConst.Person.NUM_OF_FACES -> updatedDest.numOfFaces,
-        FieldConst.Person.NAME -> mergedPersonName,
-      ))
+      updateById(
+        dest.persistedId,
+        Map(
+          FieldConst.Person.NUM_OF_FACES -> updatedDest.numOfFaces,
+          FieldConst.Person.NAME -> mergedPersonName
+        ))
 
       val destFaces = getPersonFaces(dest.persistedId, FaceRecognitionService.MAX_COMPARISONS_PER_PERSON)
       updatedDest.setFaces(destFaces)

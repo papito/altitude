@@ -2,6 +2,7 @@ package software.altitude.core.dao.jdbc.querybuilder
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam

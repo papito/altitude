@@ -1,17 +1,17 @@
 package software.altitude.core.auth.strategies
 
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
 import org.scalatra.CookieOptions
 import org.scalatra.ScalatraBase
 import org.scalatra.auth.ScentryStrategy
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.Const
 import software.altitude.core.models.User
 import software.altitude.core.util.Util
-
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 class RememberMeStrategy(protected val app: ScalatraBase)(implicit request: HttpServletRequest, response: HttpServletResponse)
   extends ScentryStrategy[User] {

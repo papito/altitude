@@ -1,8 +1,8 @@
 package software.altitude.core
 
-import software.altitude.core.models.Asset
-
 import scala.collection.mutable
+
+import software.altitude.core.models.Asset
 
 case class ValidationException(message: String = "") extends Exception {
   final def isEmpty: Boolean = message.isEmpty && errors.isEmpty

@@ -1,5 +1,6 @@
 package software.altitude.core.service
 import play.api.libs.json._
+
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
 import software.altitude.core.FieldConst

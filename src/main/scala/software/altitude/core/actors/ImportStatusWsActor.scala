@@ -6,13 +6,14 @@ import org.apache.pekko.actor.typed.scaladsl.ActorContext
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.scalatra.atmosphere.AtmosphereClient
 import org.scalatra.atmosphere.TextMessage
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
 import software.altitude.core.AltitudeActorSystem
 import software.altitude.core.DuplicateException
 import software.altitude.core.StorageException
 import software.altitude.core.UnsupportedMediaTypeException
 import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalid
-
-import scala.concurrent.ExecutionContext.Implicits.global
 
 object ImportStatusWsActor {
   sealed trait Command

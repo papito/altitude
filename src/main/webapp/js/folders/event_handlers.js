@@ -65,7 +65,7 @@ document.body.addEventListener(Const.events.folderMoved, (event) => {
         }
     }
 
-    htmx.ajax("post", `/htmx/folder/r/${context.getRepoId()}/move`, {
+    htmx.ajax("put", `/htmx/folder/r/${context.getRepoId()}/move`, {
         swap: "none",
         values: { ...event.detail },
         handler: handler,

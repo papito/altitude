@@ -1,7 +1,7 @@
 package software.altitude.core.dao.postgres
-import software.altitude.core.dao.jdbc.BaseDao
-
 import java.time.LocalDateTime
+
+import software.altitude.core.dao.jdbc.BaseDao
 
 trait PostgresOverrides { this: BaseDao =>
   override protected def jsonFunc = "CAST(? as jsonb)"

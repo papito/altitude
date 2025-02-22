@@ -1,10 +1,10 @@
 package software.altitude.core.dao.sqlite
 
-import software.altitude.core.dao.jdbc.BaseDao
-
 import java.text.SimpleDateFormat
 import java.time.LocalDateTime
 import java.time.ZoneId
+
+import software.altitude.core.dao.jdbc.BaseDao
 
 trait SqliteOverrides { this: BaseDao =>
 

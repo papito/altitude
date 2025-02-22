@@ -1,7 +1,8 @@
 package lab
 
-import org.apache.commons.io.FileUtils
+import java.io.File
 import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
 import org.apache.commons.io.filefilter.IOFileFilter
 import org.apache.commons.io.filefilter.SuffixFileFilter
 import org.apache.commons.io.filefilter.TrueFileFilter
@@ -9,9 +10,8 @@ import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.opencv.core.Mat
 import org.opencv.imgcodecs.Imgcodecs
-import software.altitude.core.Altitude
 
-import java.io.File
+import software.altitude.core.Altitude
 
 abstract class SandboxApp extends App {
   Loader.load(classOf[opencv_java])

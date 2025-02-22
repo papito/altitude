@@ -26,9 +26,10 @@ Regard this code as for reference use only in the meantime.
 package software.altitude.core.models
 
 import play.api.libs.json._
-import software.altitude.core.dao.jdbc.BaseDao
 
 import scala.language.implicitConversions
+
+import software.altitude.core.dao.jdbc.BaseDao
 
 object UserMetadata {
   implicit val reads: Reads[UserMetadata] = (json: JsValue) => {

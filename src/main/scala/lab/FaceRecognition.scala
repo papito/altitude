@@ -1,20 +1,21 @@
 package lab
 
-import org.apache.commons.io.FileUtils
+import java.io.File
+import java.util
 import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.face.LBPHFaceRecognizer
 import org.opencv.imgcodecs.Imgcodecs
-import software.altitude.core.service.FaceDetectionService
-import software.altitude.core.service.FaceRecognitionService
-import software.altitude.core.util.ImageUtil.matFromBytes
 
-import java.io.File
-import java.util
 import scala.collection.mutable
 import scala.util.control.Breaks.break
 import scala.util.control.Breaks.breakable
+
+import software.altitude.core.service.FaceDetectionService
+import software.altitude.core.service.FaceRecognitionService
+import software.altitude.core.util.ImageUtil.matFromBytes
 
 class Face(
     val path: String,

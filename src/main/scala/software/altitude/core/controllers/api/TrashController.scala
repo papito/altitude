@@ -2,6 +2,7 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Ok
 import play.api.libs.json.Json
+
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.FieldConst

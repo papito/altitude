@@ -12,7 +12,7 @@ import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
-import software.altitude.core.{Const => C}
+import software.altitude.core.{ Const => C }
 
 /** @ /htmx/people/ */
 class PeopleActionController extends BaseHtmxController {

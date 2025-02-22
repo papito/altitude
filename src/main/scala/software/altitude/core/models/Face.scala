@@ -1,13 +1,14 @@
 package software.altitude.core.models
 
+import java.time.LocalDateTime
 import org.opencv.core.Mat
 import org.opencv.core.MatOfFloat
-import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
-import software.altitude.core.util.ImageUtil.matFromBytes
+import play.api.libs.json.JsonNaming.SnakeCase
 
-import java.time.LocalDateTime
 import scala.language.implicitConversions
+
+import software.altitude.core.util.ImageUtil.matFromBytes
 
 object Face {
   implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
