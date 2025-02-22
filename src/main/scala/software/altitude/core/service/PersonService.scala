@@ -117,7 +117,6 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
     txManager.withTransaction[Person] {
       if (source.mergedWithIds.nonEmpty) {
-
         logger.info(s"Source person ${source.name} was merged with other people before. IDs: ${source.mergedWithIds}")
         logger.info("Updating the old merge sources with the new destination info")
         val oldMergeSourcesQ = new Query().add(FieldConst.ID -> Query.IN(source.mergedWithIds.toSet))
@@ -137,9 +136,6 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       val persistedSource: Person = dao.getById(source.persistedId)
 
       val mergedDest: Person = dao.updateMergedWithIds(dest, source.persistedId)
-      val updatedDest = mergedDest.copy(numOfFaces = persistedDest.numOfFaces + persistedSource.numOfFaces)
-
-      updateById(dest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> updatedDest.numOfFaces))
 
       logger.debug(s"Moving faces from ${source.name.get} to ${dest.name.get}")
       val query = new Query().add(FieldConst.Face.PERSON_ID -> source.persistedId)
@@ -156,7 +152,10 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       Await.result(pipelineResFuture, Duration.Inf)
 
       // faces from source are moved to the new person and ML model label
-      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> dest.persistedId, FieldConst.Face.PERSON_LABEL -> dest.label))
+      faceDao.updateByQuery(
+        query, Map(
+          FieldConst.Face.PERSON_ID -> dest.persistedId,
+          FieldConst.Face.PERSON_LABEL -> dest.label))
 
       val updatedSource: Person = persistedSource.copy(mergedIntoId = Some(dest.persistedId), mergedIntoLabel = Some(dest.label))
 
@@ -170,6 +169,27 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
           FieldConst.Person.NUM_OF_FACES -> 0
         )
       )
+
+      // if destination is NOT named and the source IS named, use the source name
+      val mergedPersonName = if (!dest.isNamed && source.isNamed) {
+        source.name.get
+      } else {
+        dest.name.get
+      }
+
+      /**
+       * Note that this has to be done AFTER the source is updated as "merged",
+       * in order to avoid clawing with the unique name constraint across non-merged people
+       */
+      val updatedDest = mergedDest.copy(
+        numOfFaces = persistedDest.numOfFaces + persistedSource.numOfFaces,
+        name = Some(mergedPersonName)
+      )
+
+      updateById(dest.persistedId, Map(
+        FieldConst.Person.NUM_OF_FACES -> updatedDest.numOfFaces,
+        FieldConst.Person.NAME -> mergedPersonName,
+      ))
 
       val destFaces = getPersonFaces(dest.persistedId, FaceRecognitionService.MAX_COMPARISONS_PER_PERSON)
       updatedDest.setFaces(destFaces)
