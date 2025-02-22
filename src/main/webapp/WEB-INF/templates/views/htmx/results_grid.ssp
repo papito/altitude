@@ -4,31 +4,22 @@
 <% import software.altitude.core.models.Asset %>
 <% import software.altitude.core.util.SearchResult %>
 <% import software.altitude.core.Api %>
+<%@ val isContinuousScroll: Boolean = false %>
 
-
-<%@ val page: Int = 1 %>
-<%@ val nextPage: Int = page + 1 %>
+<%@ val p: Int %>
+<%@ val nextPage: Int = p + 1 %>
 <%@ val results: SearchResult %>
-<%@ val isServerSideLoad: Boolean = false %>
-
-<%--
-
-SEE: results_grid.ssp for the plumbing comments of infinite scroll and lazy-loading.
-
-NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad" is here for.
-      Those images do not have a "data-src" attribute and are NOT watched by the intersection observer
-      (first batch is not lazy loaded or unloaded, they are static).
---%>
 
 #for (idx <- 0 to results.records.length - 1)
-
     <% val asset: Asset = results.records(idx) %>
+    <% val imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
+
     #if (idx == results.records.length - 1 && results.hasMoreResults)
 
         <%-- Last cell is special because it tells HTMX to load the next page --%>
         <div class="cell last-cell"
              hx-trigger="intersect"
-             hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}'
+             hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}&${Api.Field.Search.IS_CONTINUOUS_SCROLL}=true'
              hx-swap="afterend">
     #else
         <div class="cell">
@@ -37,22 +28,19 @@ NOTE: The FIRST set of results is server-loaded, this is what "isServerSideLoad"
         <div class="inner-cell drag-drop"
              alt-asset-id="${asset.persistedId}">
 
-            <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
             <img id="asset-${asset.persistedId}"
                  alt-asset-id="${asset.persistedId}"
                  draggable="false"
                  hx-trigger="click"
                  hx-target="#imageDetailModalContent"
                  hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
-
-                 #if (isServerSideLoad) <%-- First page is rendered by server not via infinite scroll --%>
-                 src="${imgUrl}"
-                 #else
-                 alt-data-src="${imgUrl}"
-                 #end
-
-                 alt="${ asset.fileName }"
-                 class="responsive-image">
+                #if (isContinuousScroll)
+                   alt-data-src="${imgUrl}"
+                #else
+                   src="${imgUrl}"
+                #end
+                alt="${ asset.fileName }"
+                class="responsive-image">
 
       </div><%-- /inner cell --%>
     </div><%-- /cell --%>

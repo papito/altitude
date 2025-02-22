@@ -63,14 +63,11 @@ CREATE TABLE asset (
   size_bytes INT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
-  is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
-  is_in_face_rec_model BOOLEAN NOT NULL DEFAULT FALSE
+  is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE
 
 ) INHERITS (_core);
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
-CREATE INDEX asset_02 on asset(is_pipeline_processed);
-CREATE INDEX asset_03 on asset(is_in_face_rec_model);
-
+CREATE INDEX asset_02 ON asset(repository_id, is_recycled, is_pipeline_processed);
 
 CREATE SEQUENCE person_label;
 
@@ -93,15 +90,22 @@ CREATE TABLE person (
   -- this is taken from the person_label table, where its primary key is a sequence
   label BIGINT NOT NULL,
   name TEXT NOT NULL,
+  name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36),
   merged_with_ids TEXT,
   merged_into_id CHAR(36) DEFAULT NULL REFERENCES person(id) ON DELETE CASCADE,
   merged_into_label BIGINT DEFAULT NULL,
   num_of_faces INT NOT NULL DEFAULT 0,
-  is_hidden BOOLEAN NOT NULL DEFAULT FALSE
+  is_named BOOLEAN NOT NULL DEFAULT FALSE,
+  is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+  is_bad_match BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
-CREATE UNIQUE INDEX person_01 ON person(repository_id, name);
-CREATE UNIQUE INDEX person_02 ON person(cover_face_id);
+CREATE UNIQUE INDEX person_01 ON person(repository_id, name)
+    WHERE merged_into_id IS NULL AND is_bad_match = FALSE;
+CREATE UNIQUE INDEX person_02 ON person(cover_face_id)
+    WHERE merged_into_id IS NULL;
+CREATE INDEX person_03 ON person(repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
+    WHERE merged_into_id IS NULL;
 
 
 CREATE TABLE face (
@@ -119,8 +123,8 @@ CREATE TABLE face (
   features TEXT NOT NULL,
   checksum INT NOT NULL
 ) INHERITS (_core);
-CREATE UNIQUE INDEX face_01 ON face(person_id, asset_id);
-CREATE UNIQUE INDEX face_02 ON face(repository_id, checksum);
+CREATE UNIQUE INDEX face_01 ON face(repository_id, checksum);
+CREATE INDEX face_02 ON face (person_id, detection_score);
 
 
 CREATE TABLE metadata_field (

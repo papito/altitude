@@ -31,9 +31,8 @@
         font-size: 1.2em;
     }
 
-    #statusTicker {
-    }
 
+    /* These elements are served by the server via websocket */
     #statusText {
         display: none;
         color: var(--success-font-color);
@@ -55,7 +54,7 @@
 <%@ val uploadId: String = Util.randomStr() %>
 
 <form id="uploadForm"
-      hx-post='${ url(uploadFilesForm, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.Upload.UPLOAD_ID -> uploadId) }'
+      hx-post="${ url(uploadFilesForm, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.Upload.UPLOAD_ID -> uploadId) }"
       hx-encoding="multipart/form-data">
     <div>
         <input type="file" name="files" id="files" multiple>
@@ -92,27 +91,42 @@
         const elFiles = htmx.find("#files")
         const elProgressTextCtrl = htmx.find("#progressTextControl")
 
-        htmx.on("#uploadForm", "htmx:xhr:progress", function (evt) {
-            const percentLoaded = parseInt((evt.detail.loaded / evt.detail.total) * 100)
+        function setIdle() {
+            elStartUploadButton.removeAttribute("hidden")
+            elProgressBarCtrl.setAttribute("hidden", "true")
+            elStayOnPage.setAttribute("hidden", "true")
+            elAbortButton.setAttribute("hidden", "true")
+            elFiles.removeAttribute("disabled")
+            elProgressTextCtrl.setAttribute("hidden", "true")
+        }
+
+        function setBusy(percentLoaded) {
             elAbortButton.removeAttribute("hidden")
             elProgressBarCtrl.removeAttribute("hidden")
             elStayOnPage.removeAttribute("hidden")
             elProgressBar.setAttribute("value", percentLoaded)
             elStartUploadButton.setAttribute("hidden", "true")
             elFiles.setAttribute("disabled", "true")
-
             elProgressTextCtrl.removeAttribute("hidden")
-
             elProgressTextCtrl.innerText = percentLoaded.toString() + "%"
+        }
+
+        htmx.on("#uploadForm", "htmx:xhr:progress", function (evt) {
+            const percentLoaded = parseInt((evt.detail.loaded / evt.detail.total) * 100)
+            setBusy(percentLoaded)
 
             if (percentLoaded === 100) {
-                elStartUploadButton.removeAttribute("hidden")
-                elProgressBarCtrl.setAttribute("hidden", "true")
-                elStayOnPage.setAttribute("hidden", "true")
-                elAbortButton.setAttribute("hidden", "true")
-                elFiles.removeAttribute("disabled")
-                elProgressTextCtrl.setAttribute("hidden", "true")
+                setIdle()
             }
+        })
+
+        const url =
+    "<%= url(cancelUpload, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.Upload.UPLOAD_ID -> uploadId) %>"
+        htmx.on("#uploadForm", "htmx:abort", function () {
+    htmx.ajax("post", url, {
+                swap: "none",
+                handler: setIdle,
+            })
         })
     </script>
 </form>

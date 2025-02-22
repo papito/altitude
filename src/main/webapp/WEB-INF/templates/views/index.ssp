@@ -96,16 +96,16 @@
         <div role="tablist">
           <button type="button" id="foldersTab" role="tab"
                   data-tab-container-no-tabstop>
-            <a href="#"
+            <a href="#folders"
                hx-target="#explorerPanelContent"
                hx-swap="innerHTML"
-               hx-trigger="load, click"
+               hx-trigger="click"
                hx-get='${ url(showFoldersTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'>Folders</a>
           </button>
 
           <button type="button" id="albumsTab" role="tab"
                   data-tab-container-no-tabstop>
-            <a href="#"
+            <a href="#albums"
                hx-target="#explorerPanelContent"
                hx-trigger="click"
                hx-swap="innerHTML"
@@ -114,7 +114,7 @@
 
           <button type="button" id="peopleTab" role="tab"
                   data-tab-container-no-tabstop>
-            <a href="#"
+            <a href="#people"
                hx-target="#explorerPanelContent"
                hx-trigger="click"
                hx-swap="innerHTML"
@@ -133,13 +133,54 @@
   </div>
 
   <div id="content" class="split content split-horizontal">
-    <% include("includes/search_results.ssp") %>
   </div>
 </main>
 
 <footer>
   <%= RequestContext.account.value.get.name %>
 </footer>
+
+<script type="module">
+  import { context } from "../../../js/context.js"
+
+  context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+
+  function loadView() {
+      // if there is no fragment, we default to folder views
+      const fragment = window.location.hash || "#folders"
+
+      const tabLink = document.querySelector('a[href="' + fragment + '"]')
+
+      if (tabLink) {
+          tabLink.click()
+      }
+
+      const urlParams = new URLSearchParams(window.location.search)
+      const view = urlParams.get("view")
+
+      let searchUrl = null
+
+      if (view === "person") {
+          const personId = urlParams.get("personId")
+          if (personId) {
+              searchUrl =
+                  "/htmx/search/r/" +
+                  context.getRepoId() +
+                  "?personIds=" +
+                  personId
+          }
+      } else {
+          searchUrl = "/htmx/search/r/" + context.getRepoId() + fragment
+      }
+
+      htmx.ajax("get", searchUrl, {
+          swap: "innerHTML",
+          target: "#content",
+      })
+  }
+
+  document.addEventListener("DOMContentLoaded", loadView)
+</script>
 
 </body>
 </html>

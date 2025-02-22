@@ -4,10 +4,12 @@
 <% import software.altitude.core.Api %>
 
 <%@ val people: List[Person] %>
+<%@ val typeFilter: String %>
 
 <style>
     #people .cell {
         margin: 3px;
+        padding-top: 3px;
         border: var(--result-border);
         border-radius: 5px;
         display: grid;
@@ -15,12 +17,12 @@
         height: <%= software.altitude.core.service.FaceDetectionService.faceDetectionBoxPx + 40 %>px;
         place-items: center;
         touch-action: none;
-        row-gap: var(--control-vertical-space);
+        row-gap: 5px;
     }
 
     #people .cell img {
         display: block;
-        border-radius: 4px;
+        border-radius: 20%;
     }
 
     #people .grid {
@@ -31,28 +33,116 @@
         justify-content: center;
     }
 
+    #people .name {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        place-items: center;
+        background-color: var(--background-tertiary-color);
+    }
+
+    #people .name span {
+        color: var(--font-color-dim);
+        font-size: .9em;
+    }
+
     #people .cell a {
-        color: #FFFFFF;
         text-decoration: none;
-
+        font-size: .9em;
+        color: #FFFFFF;
+        font-family: -apple-system, "system-ui", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        letter-spacing: 1px;
     }
 
-    #people .draggable {
-        cursor: move;
+    #people .cell a.unknown {
+        color: #fdda63;
     }
 
-    #people .drop-target {
-        border-radius: 6px;
-        background-color: var(--dnd-drop-target-color);
+    #peopleTypeFilter .radio-group {
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
     }
 
-    #people .can-drop {
-        padding-left: 4px;
-        border: var(--dnd-draggable-border);
-        border-radius: 4px;
-        background-color: var(--dnd-can-drop-color);
+    #peopleTypeFilter .radio-group label {
+        display: flex;
+        align-items: center;
+    }
+
+    #peopleTypeFilter .radio-group input[type="radio"] {
+        margin-right: 5px;
+    }
+
+    #peopleTypeFilter {
+        padding-top: var(--control-vertical-space);
+        padding-bottom: var(--control-vertical-space);
     }
 </style>
+
+<div id="peopleTypeFilter">
+    <div class="radio-group">
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.COMPLETE)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.COMPLETE}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.COMPLETE}"}'
+            >
+            Verified
+        </label>
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.HIDDEN)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.HIDDEN}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.HIDDEN}"}'
+            >
+            Hidden
+        </label>
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.INCOMPLETE)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.INCOMPLETE}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.INCOMPLETE}"}'
+            >
+            Unverified
+        </label>
+        <label>
+            <input type="radio"
+                   #if (typeFilter == Const.PeopleTypeFilter.ALL)
+                     checked
+                   #end
+                   name="peopleTypeFilter"
+                   value="${Const.PeopleTypeFilter.ALL}"
+                   hx-target="#explorerPanelContent"
+                   hx-trigger="change"
+                   hx-swap="innerHTML"
+                   hx-get="${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                   hx-vals='{"${Api.Field.People.TYPE_FILTER}": "${Const.PeopleTypeFilter.ALL}"}'
+            >
+            All
+        </label>
+    </div>
+</div>
 
 <div id="peopleList">
     <div id="people">
@@ -60,24 +150,29 @@
             #for (person <- people)
             <div id="person-${person.persistedId}"
                  class="cell drag-drop dropzone"
-                 person-id="${person.persistedId}">
-                <div>
+                 alt-person-id="${person.persistedId}">
+                <div class="image">
                     <a href="#"
                        hx-target="#content"
                        hx-trigger="click"
                        hx-swap="innerHTML"
-                       hx-get='${ url(searchPerson, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'>
+                       hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PEOPLE_IDS}=${person.persistedId}'>
                     <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}">
                     </a>
                 </div>
-                <div>
-                    <a href="#"
-                       hx-target="#content"
-                       hx-trigger="click"
-                       hx-swap="innerHTML"
-                       hx-get='${ url(searchPerson, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) }'>
-                        ${person.name.get}
-                    </a>
+                <div class="name">
+                    <span>
+                        <a href="#"
+                           #if (!person.isNamed)
+                           class="unknown"
+                           #end
+                           hx-target="#content"
+                           hx-trigger="click"
+                           hx-swap="innerHTML"
+                           hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PEOPLE_IDS}=${person.persistedId}'>
+                            ${person.name.get} <span>(${person.numOfFaces})</span>
+                        </a>
+                    </span>
                 </div>
             </div>
             #end

@@ -2,9 +2,6 @@ package software.altitude.core.pipeline.flows
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
-
-import scala.concurrent.Future
-
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
 import software.altitude.core.SamePersonDetectedTwiceException
@@ -13,6 +10,8 @@ import software.altitude.core.pipeline.PipelineTypes.InvalidAsset
 import software.altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import software.altitude.core.pipeline.PipelineUtils.debugInfo
 import software.altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+
+import scala.concurrent.Future
 
 object FacialRecognitionFlow {
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =

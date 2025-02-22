@@ -1,4 +1,6 @@
 package software.altitude.test.core
+import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.handlers.MapListHandler
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 import org.apache.pekko.util.Timeout
@@ -18,6 +20,7 @@ import software.altitude.test.core.integration.TestContext
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters._
 import scala.language.implicitConversions
 
 abstract class IntegrationTestCore
@@ -33,6 +36,13 @@ abstract class IntegrationTestCore
 
   implicit val scheduler: Scheduler = testApp.actorSystem.scheduler
   implicit val timeout: Timeout = 3.seconds
+
+  def query(sql: String, values: Any*): List[Map[String, AnyRef]] = {
+    val res =
+      new QueryRunner().query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object]): _*).asScala.toList
+
+    res.map(_.asScala.toMap[String, AnyRef])
+  }
 
   override def beforeEach(): Unit = {
     AltitudeServletContext.clearState()

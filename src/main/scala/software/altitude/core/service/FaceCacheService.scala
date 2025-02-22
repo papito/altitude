@@ -2,9 +2,6 @@ package software.altitude.core.service
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import scala.collection.concurrent.TrieMap
-
 import software.altitude.core.Altitude
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.FaceDao
@@ -13,6 +10,8 @@ import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.models.Repository
 import software.altitude.core.transactions.TransactionManager
+
+import scala.collection.concurrent.TrieMap
 
 class FaceCacheService(app: Altitude) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -120,7 +119,7 @@ class FaceCacheService(app: Altitude) {
           faceCount += 1
       }
 
-      // faces added, now cache the peeps whole
+      // faces added, now cache the people
       personLookup.foreach {
         case (_, person) =>
           putPerson(person)

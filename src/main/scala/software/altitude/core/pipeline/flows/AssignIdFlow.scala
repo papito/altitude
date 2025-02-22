@@ -2,7 +2,6 @@ package software.altitude.core.pipeline.flows
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
-
 import software.altitude.core.Altitude
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.models.Asset

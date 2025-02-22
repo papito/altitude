@@ -2,7 +2,6 @@ package software.altitude.core.util
 
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core.Api
 import software.altitude.core.models.UserMetadataField
 
@@ -17,6 +16,7 @@ class SearchQuery(
     val text: Option[String] = None,
     params: Map[String, Any] = Map(),
     val folderIds: Set[String] = Set(),
+    val personIds: Set[String] = Set(),
     rpp: Int = 0,
     page: Int = 1,
     val searchSort: List[SearchSort] = List())
@@ -38,6 +38,7 @@ class SearchQuery(
     new SearchQuery(
       text = text,
       folderIds = folderIds,
+      personIds = personIds,
       params = params ++ _params,
       rpp = rpp,
       page = page,

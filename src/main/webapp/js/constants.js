@@ -7,6 +7,10 @@ export const Const = {
         folderCollapsed: "FOLDER_COLLAPSED_EVENT",
         personMerged: "PERSON_MERGED_EVENT",
         confirmPersonMerge: "CONFIRM_PERSON_MERGE_EVENT",
+        personNameEdited: "PERSON_NAME_EDITED_EVENT",
+        personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
+        personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
+        escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
     },
 
     /**
@@ -25,6 +29,8 @@ export const Const = {
         assetId: "alt-asset-id",
         originalWidth: "alt-og-width",
         dataSrc: "alt-data-src",
+        personId: "alt-person-id",
+        faceId: "alt-face-id",
     },
 
     context: {

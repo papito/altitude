@@ -3,7 +3,6 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
-
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Stat
@@ -17,7 +16,7 @@ abstract class StatDao(override val config: Config) extends BaseDao with softwar
 
   override def add(jsonIn: JsObject): JsObject = {
     val sql: String = s"""
-      INSERT INTO $tableName (${FieldConst.REPO_ID}, ${FieldConst.Stat.DIMENSION})
+      INSERT INTO stats(${FieldConst.REPO_ID}, ${FieldConst.Stat.DIMENSION})
            VALUES (? ,?)"""
 
     val stat: Stat = jsonIn
@@ -47,7 +46,7 @@ abstract class StatDao(override val config: Config) extends BaseDao with softwar
     BaseDao.incrWriteQueryCount()
 
     val sql = s"""
-      UPDATE $tableName
+      UPDATE stats
          SET ${FieldConst.Stat.DIM_VAL} = ${FieldConst.Stat.DIM_VAL} + $count
        WHERE ${FieldConst.REPO_ID} = ? and ${FieldConst.Stat.DIMENSION} = ?
       """

@@ -48,22 +48,21 @@ object FieldConst {
     val DETECTION_SCORE = "detection_score"
     val EMBEDDINGS = "embeddings"
     val FEATURES = "features"
-    val IMAGE = "image"
-    val DISPLAY_IMAGE = "display_image"
-    val ALIGNED_IMAGE = "aligned_image"
-    val ALIGNED_IMAGE_GS = "aligned_image_gs"
     val CHECKSUM = "checksum"
   }
 
   object Person {
     val LABEL = "label"
     val NAME = "name"
+    val NAME_FOR_SORT = "name_for_sort"
     val COVER_FACE_ID = "cover_face_id"
     val MERGED_WITH_IDS = "merged_with_ids"
     val NUM_OF_FACES = "num_of_faces"
     val MERGED_INTO_ID = "merged_into_id"
     val MERGED_INTO_LABEL = "merged_into_label"
     val IS_HIDDEN = "is_hidden"
+    val IS_BAD_MATCH = "is_bad_match"
+    val IS_NAMED = "is_named"
     val FACES = "faces"
   }
 
@@ -79,7 +78,6 @@ object FieldConst {
     val IS_RECYCLED = "is_recycled"
     val IS_TRIAGED = "is_triaged"
     val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
-    val IS_IN_FACE_REC_MODEL = "is_in_face_rec_model"
   }
 
   object PublicMetadata {

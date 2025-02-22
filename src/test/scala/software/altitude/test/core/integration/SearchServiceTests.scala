@@ -10,6 +10,8 @@ import software.altitude.core.models._
 import software.altitude.core.util._
 import software.altitude.test.core.IntegrationTestCore
 
+import scala.language.reflectiveCalls
+
 @DoNotDiscover class SearchServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Index and search by term") {
@@ -78,7 +80,7 @@ import software.altitude.test.core.IntegrationTestCore
     results.total shouldBe 2
   }
 
-  test("Narrow down search to a folder") {
+  test("Filter by folder") {
     val field1 = testApp.service.metadata.addField(
       UserMetadataField(
         name = "keywords",
@@ -114,6 +116,34 @@ import software.altitude.test.core.IntegrationTestCore
     results = testApp.service.library.search(qAllFolders)
     results.total shouldBe 6
 
+  }
+
+  def fixtureForPersonFilter: Object {val assetsPerPersonCount: Int; val people: Seq[Person]} = new {
+    val peopleCount =  3
+    val assetsPerPersonCount = 3
+
+    val people: Seq[Person] = 1 to peopleCount map { _ =>
+      val person = testApp.service.person.addPerson(Person())
+      1 to assetsPerPersonCount foreach { _ =>
+        testContext.addTestFacesAndAssets(person)
+      }
+
+      person
+    }
+  }
+
+  test("Filter by one person") {
+    val f = fixtureForPersonFilter
+    val q = new SearchQuery(personIds = Set(f.people.head.persistedId))
+    val results = testApp.service.library.search(q)
+    results.total shouldBe f.assetsPerPersonCount
+  }
+
+  test("Filter by more than one person") {
+    val f = fixtureForPersonFilter
+    val q = new SearchQuery(personIds = f.people.map(_.persistedId).toSet)
+    val results = testApp.service.library.search(q)
+    results.total shouldBe f.assetsPerPersonCount * f.people.length
   }
 
   test("Recycled assets should not be in the search index") {

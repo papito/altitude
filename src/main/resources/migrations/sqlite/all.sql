@@ -63,12 +63,12 @@ CREATE TABLE asset  (
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
   is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
-  is_in_face_rec_model TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
+CREATE INDEX asset_02 ON asset(repository_id, is_recycled, is_pipeline_processed);
 
 CREATE TABLE person_label (
   id INTEGER PRIMARY KEY AUTOINCREMENT
@@ -92,19 +92,27 @@ CREATE TABLE person (
   -- this is taken from the person_label table, where its primary key is a sequence
   label INT NOT NULL,
   name TEXT NOT NULL,
+  name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36),
   merged_with_ids TEXT,
   merged_into_id CHAR(36) DEFAULT NULL,
   merged_into_label INT DEFAULT NULL,
   num_of_faces INT NOT NULL DEFAULT 0,
+  is_named TINYINT NOT NULL DEFAULT 0,
   is_hidden TINYINT NOT NULL DEFAULT 0,
+  is_bad_match TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY(merged_into_id) REFERENCES person(id) ON DELETE CASCADE,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX person_01 ON person(repository_id, name);
-CREATE UNIQUE INDEX person_02 ON person(cover_face_id);
+CREATE UNIQUE INDEX person_01 ON person(repository_id, name)
+    WHERE merged_into_id IS NULL AND is_bad_match = FALSE;
+CREATE UNIQUE INDEX person_02 ON person(cover_face_id)
+    WHERE merged_into_id IS NULL;
+CREATE INDEX person_03 ON person(repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
+    WHERE merged_into_id IS NULL;
+
 
 CREATE TABLE face (
   id CHAR(36) PRIMARY KEY,
@@ -126,8 +134,9 @@ CREATE TABLE face (
   FOREIGN KEY(asset_id) REFERENCES asset(id) ON DELETE CASCADE,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX face_01 ON face(person_id, asset_id);
-CREATE UNIQUE INDEX face_02 ON face(repository_id, checksum);
+CREATE UNIQUE INDEX face_01 ON face(repository_id, checksum);
+CREATE INDEX face_02 ON face (person_id, detection_score);
+
 
 CREATE TABLE metadata_field (
   id CHAR(36) PRIMARY KEY,

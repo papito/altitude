@@ -1,18 +1,12 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.LocalDateTime
-import java.util.UUID
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json._
 import play.api.libs.json.JsValue.jsValueToJsLookup
-
-import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
-
+import play.api.libs.json._
 import software.altitude.core.ConstraintException
 import software.altitude.core.FieldConst
 import software.altitude.core.NotFoundException
@@ -22,6 +16,11 @@ import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
+
+import java.time.LocalDateTime
+import java.util.UUID
+import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 object BaseDao {
   final def genId: String = UUID.randomUUID.toString
@@ -135,9 +134,6 @@ abstract class BaseDao {
 
     logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
 
-//    if (recs.nonEmpty) {
-//      logger.debug(recs.map(_.toString()).mkString("\n"))
-//    }
     QueryResult(records = recs.map(makeModel), total = total, rpp = query.rpp, sort = query.sort)
   }
 

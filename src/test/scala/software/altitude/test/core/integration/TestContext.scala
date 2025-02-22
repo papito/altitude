@@ -166,7 +166,7 @@ class TestContext(val testApp: Altitude) {
     persistedAsset
   }
 
-  def addTestFaces(person: Person, count: Int = 1): Unit = {
+  def addTestFacesAndAssets(person: Person, count: Int = 1): Unit = {
     require(person.id.nonEmpty, "Person must have an ID for a mock face to be added")
 
     val randomGrImage = generateRandomImagBytesGray()

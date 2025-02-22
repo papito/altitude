@@ -14,7 +14,7 @@ interact("#rootFolderList .drag-drop").draggable({
 
 // enable a draggable to be dropped into this
 interact("#rootFolderList .dropzone").dropzone({
-    accept: ".drag-drop",
+    accept: "#rootFolderList .drag-drop, #assets .drag-drop",
     overlap: 0.5,
 
     ondropactivate: function (event) {

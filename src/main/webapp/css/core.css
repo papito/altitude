@@ -189,9 +189,31 @@ form input.error, form input.error:focus {
 }
 
 
-/*
-       MODAL
-*/
+/*             */
+/* DRAGON DROP */
+/*             */
+
+.can-drop {
+    padding-left: 4px;
+    border: var(--dnd-draggable-border);
+    border-radius: 4px;
+    background-color: var(--dnd-can-drop-color);
+}
+
+.drop-target {
+    border-radius: 6px;
+    background-color: var(--dnd-drop-target-color);
+}
+
+.draggable {
+    cursor: move;
+}
+
+
+/*       */
+/* MODAL */
+/*       */
+
 #modalContainer {
     display: none;
     position: fixed;

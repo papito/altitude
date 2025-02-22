@@ -1,4 +1,5 @@
 <% import software.altitude.core.Const %>
+<% import software.altitude.core.Api %>
 <% import software.altitude.core.RequestContext %>
 <% import software.altitude.core.models.Person %>
 <%@ val person: Person %>
@@ -8,48 +9,30 @@
         display: grid;
         margin: 5px;
         padding: 5px;
-        border-bottom: 2px solid var(--background-tertiary-color);
-        grid-template-columns: 100px 300px auto;
-        column-gap: var(--control-horizontal-space);
+        border-bottom: 1px solid var(--background-tertiary-color);
+        grid-template-columns: 100px 300px 1fr;
     }
 
     #person img {
-        border-radius: 50%;
+        border-radius: 25%;
     }
 
     #person .visual {
         display: grid;
         grid-auto-rows: auto;
-        row-gap: var(--control-vertical-space);
+    }
+
+    #person .visual .cover {
+        cursor: pointer;
     }
 
     #person .meta {
         display: grid;
-        grid-template-rows: auto 20px;
-        row-gap: var(--control-vertical-space);
         align-self: center;
     }
 
     #person .meta .name {
         font-size: 1.1em;
-    }
-
-    #person .cover, #person .edit-cover {
-        display: grid;
-        place-items: center;
-    }
-
-    #person .edit-cover a {
-        font-size: .9em;
-    }
-
-    #person .name, #person .num-of-instances{
-        display: grid;
-        align-items: center;
-    }
-
-    #person .num-of-instances {
-        color: var(--font-color-dim);
     }
 
     #person .name span  {
@@ -59,23 +42,59 @@
     #person .name span i {
         padding-left: 10px;
     }
+
+    #person .visibility-controls {
+        display: grid;
+        grid-template-rows: 1fr;
+        place-items: center;
+    }
+
+    #person .mark-hidden a, #person .mark-hidden i {
+        color: var(--warning-font-color);
+        text-decoration: none;
+    }
+
+    #person .mark-visible a, #person .mark-visible i {
+        color: var(--success-font-color);
+        text-decoration: none;
+    }
+
+    #person .mark-discarded, #person .mark-discarded i, #person .mark-discarded a {
+        color: var(--error-font-color);
+        text-decoration: none;
+    }
+
+    #person .visibility-controls i {
+        padding-right: 5px;
+    }
 </style>
 
-<div id="person">
-    <div class="visual">
-        <div class="cover">
-            <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}">
-        </div>
-        <div class="edit-cover">
-            <a href="#">Choose cover</a>
-        </div>
-    </div>
-    <div class="meta">
-        <div class="name">
-            ${ include("view_person_name.ssp") }
-        </div>
-        <div class="num-of-instances">
-            (${person.numOfFaces} occurrences)
-        </div>
-    </div>
+<div id="person" class="dropzone" alt-person-id="${person.persistedId}">
+    <% include("person_inner.ssp") %>
 </div>
+
+<script type="module">
+    import { Const } from "../../../../js/constants.js"
+
+    const badMatchEl = htmx.find("#markAsBadMatch")
+
+    if (badMatchEl) {
+        badMatchEl.addEventListener("htmx:afterRequest", function (evt) {
+            if (evt.detail.successful === false) {
+                return
+            }
+
+            const personMarkedAsBadMatchEvent = new CustomEvent(
+                Const.events.personMarkedAsBadMatch,
+                {
+                    detail: {
+                        "<%= Api.Field.PERSON_ID %>": "<%= person.persistedId %>",
+                    },
+                },
+            )
+            document.body.dispatchEvent(personMarkedAsBadMatchEvent)
+        })
+    }
+</script>
+
+<script type="module" src="/js/person/dragon-drop.js"></script>

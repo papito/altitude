@@ -22,21 +22,65 @@
         <div class="error">${ fieldErrors( Api.Field.Folder.NAME) }</div>
     #end
 
-<input type="text"
-       id="field-${ Api.Field.Person.NAME }"
-       name="${ Api.Field.Person.NAME }"
-       value="${person.name}"
-    #if (newName.isDefined)
-       value="${ newName.get }"
-    #else
-       value="${ person.name }"
-    #end
->
+    <input type="text"
+           id="field-${ Api.Field.Person.NAME }"
+           name="${ Api.Field.Person.NAME }"
+           value="${person.name}"
+        #if (newName.isDefined)
+           value="${ newName.get }"
+        #else
+           value="${ person.name }"
+        #end
+    >
     <input type="hidden" name="${ Api.Field.ID }" value="${ person.persistedId }">
 
 </form>
 
 <script type="module">
-    htmx.find("#field-<%= Api.Field.Person.NAME %>").focus()
-    htmx.find("#field-<%= Api.Field.Person.NAME %>").select()
+    import { Const } from "../../../../js/constants.js"
+
+    const elPersonNameInputCtrl = htmx.find("#field-<%= Api.Field.Person.NAME %>")
+    elPersonNameInputCtrl.focus()
+    elPersonNameInputCtrl.select()
+
+    htmx.find("#editPersonName").addEventListener(
+        "htmx:afterRequest",
+        function (evt) {
+            if (evt.detail.successful === false) {
+                return
+            }
+
+            const personId = htmx
+                .find("#person")
+                .getAttribute(Const.attributes.personId)
+            const personName = htmx.find("#person .name span").innerText.trim()
+
+            const personNameEditedEvent = new CustomEvent(
+                Const.events.personNameEdited,
+                {
+                    detail: {
+                        personId: personId,
+                        newPersonName: personName,
+                    },
+                },
+            )
+            document.body.dispatchEvent(personNameEditedEvent)
+        },
+    )
+
+    htmx.find("#editPersonName").addEventListener(
+        Const.events.escapeKeyPressed,
+        function (evt) {
+            console.log("THIS DOES NOT WORK")
+
+            htmx.ajax(
+                "GET",
+                "<%= url(viewPersonName, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId, Api.Field.PERSON_ID -> person.persistedId) %>",
+                {
+                    swap: "innerHTML",
+                    target: "#personName",
+                },
+            )
+        },
+    )
 </script>

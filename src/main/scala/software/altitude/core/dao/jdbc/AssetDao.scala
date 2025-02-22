@@ -3,7 +3,6 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json._
-
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
@@ -40,7 +39,6 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),
-      isInFaceRecModel = getBooleanField(rec(FieldConst.Asset.IS_IN_FACE_REC_MODEL)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
@@ -61,7 +59,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
   override def getUserMetadata(assetId: String): Option[UserMetadata] = {
     val sql = s"""
       SELECT ${FieldConst.Asset.USER_METADATA}
-         FROM $tableName
+         FROM asset
        WHERE ${FieldConst.ID} = ?
       """
 
@@ -75,7 +73,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     val asset = jsonIn: Asset
 
     val sql = s"""
-        INSERT INTO $tableName (
+        INSERT INTO asset (
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
@@ -116,7 +114,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     val metadataWithIds = UserMetadata.withIds(userMetadata)
 
     val sql = s"""
-      UPDATE $tableName
+      UPDATE asset
          SET ${FieldConst.Asset.USER_METADATA} = $jsonFunc
        WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
       """
