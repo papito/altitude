@@ -2,6 +2,7 @@ package software.altitude.core.models
 
 import play.api.libs.json.JsonNaming.SnakeCase
 import play.api.libs.json._
+import software.altitude.core.util.MurmurHash
 
 import java.util.Base64
 import scala.language.implicitConversions
@@ -13,12 +14,7 @@ object UserMetadataValue {
 }
 
 case class UserMetadataValue(id: Option[String] = None, value: String) extends BaseModel with NoDates {
-  private val md = java.security.MessageDigest.getInstance("SHA-1")
-  val checksum: String = Base64.getEncoder.encodeToString(
-    md.digest(
-      value.toLowerCase.getBytes("UTF-8")
-    )
-  )
+  val checksum: Int = MurmurHash.hash32(value.toLowerCase.getBytes("UTF-8"))
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[UserMetadataValue]
 
