@@ -4,14 +4,13 @@ import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import software.altitude.core.dao.jdbc
-import software.altitude.core.{FieldConst, RequestContext, dao, Const => C}
+import software.altitude.core.{FieldConst, NotFoundException, RequestContext, dao, Const => C}
 import software.altitude.core.models.Folder
 
 abstract class FolderDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FolderDao {
   final override val tableName = "folder"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
-
     Folder(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.Folder.NAME).asInstanceOf[String],
@@ -24,6 +23,34 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
         case _ => throw new IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
       },
     )
+  }
+
+  override def getById(id: String): JsObject = {
+    /**
+     * The wrinkle here is that we need to return the number of children for the folder,
+     * but if the folder is a root folder, we need to subtract 1 from the count, because the root
+     * folder is not a child of itself.
+     */
+    val sql = s"""
+      SELECT f.*, (
+          CASE
+            WHEN f.id = f.parent_id THEN (
+              (SELECT COUNT(*) FROM folder sub
+               WHERE sub.is_recycled = ?
+                 AND sub.parent_id = f.id) - 1
+            )
+            ELSE (
+              SELECT COUNT(*) FROM folder sub
+               WHERE sub.is_recycled = ?
+                 AND sub.parent_id = f.id
+            )
+          END
+      ) AS num_of_children
+      FROM folder f
+      WHERE f.id = ?
+   """
+
+    getOneBySql(sql, List(nativeBool(false), nativeBool(false), id))
   }
 
   override def add(jsonIn: JsObject): JsObject = {

@@ -145,7 +145,7 @@ import scala.language.reflectiveCalls
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
   }
 
-  test("Can traverse the folder hierarchy", Focused) {
+  test("Can traverse the folder hierarchy") {
     /*
     folder1
       folder1_1
@@ -213,6 +213,24 @@ import scala.language.reflectiveCalls
       folder1_1.persistedId,
       folder1_1_1.persistedId,
       folder1_1_1_1.persistedId)
+  }
+
+  test("Folder counts should be accurate") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+
+    val rootFolderChildren = testApp.service.folder.getChildren(RequestContext.getRepository.rootFolderId)
+    rootFolderChildren.size shouldEqual 2
+
+    val rootFolder: Folder = testApp.service.folder.getById(RequestContext.getRepository.rootFolderId)
+    rootFolder.numOfChildren shouldEqual 2
+
+    val folder1Children = testApp.service.folder.getChildren(f.folder1.persistedId)
+    folder1Children.size shouldEqual 2
+    // the first subfolder should have 1 child
+    folder1Children.head.numOfChildren shouldEqual 1
+    // the second subfolder should have no children
+    folder1Children.last.numOfChildren shouldEqual 0
   }
 
   test("Illegal folder move actions should throw") {
