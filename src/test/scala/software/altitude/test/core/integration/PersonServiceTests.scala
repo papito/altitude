@@ -311,7 +311,7 @@ import software.altitude.test.core.IntegrationTestCore
     personC.name.get should be(mergedFromName)
   }
 
-  test("Known person keeps the same when merged into Unknown", Focused) {
+  test("Known person keeps the same when merged into Unknown") {
     // destination merge person is not named
     val personA: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personA)

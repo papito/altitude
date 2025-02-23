@@ -142,7 +142,6 @@ CREATE TABLE folder (
   repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
-  path TEXT,
   parent_id CHAR(36) NOT NULL,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);

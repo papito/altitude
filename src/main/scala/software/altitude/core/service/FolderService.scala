@@ -44,56 +44,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     }
   }
 
-  /** Get the folder hierarchy, with an arbitrary folder ID as the root ID to start with. */
-  def hierarchy(rootId: Option[String] = None, allRepoFolders: List[JsObject] = List()): List[Folder] = {
-
-    val _rootId = if (rootId.isDefined) rootId.get else contextRepo.rootFolderId
-
-    txManager.asReadOnly {
-      val repoFolders = repositoryFolders(allRepoFolders)
-
-      val rootEl = repoFolders.find(json => (json \ FieldConst.ID).as[String] == _rootId)
-
-      if (isRootFolder(_rootId) || rootEl.isDefined) {
-        children(_rootId, repoFolders)
-      } else {
-        throw NotFoundException(s"Cannot get hierarchy. Root folder $rootId does not exist")
-      }
-    }
-  }
-
-  /** Folder ancestry as a list, top->bottom = root->this folder. */
-  def pathComponents(folderId: String): List[Folder] = {
-    // short-circuit for root folder
-    if (isRootFolder(folderId)) {
-      return List[Folder]()
-    }
-
-    txManager.asReadOnly[List[Folder]] {
-      val repoFolders = repositoryFolders()
-
-      val folderEl = repoFolders.find(json => (json \ FieldConst.ID).as[String] == folderId)
-      val folder: Folder = if (folderEl.isDefined) {
-        Folder.fromJson(folderEl.get)
-      } else {
-        throw NotFoundException(s"Folder with ID '$folderId' not found")
-      }
-
-      val parents = findParents(folderId = folderId, allRepoFolders = repoFolders)
-
-      val rootFolder = Folder(
-        id = Some(contextRepo.rootFolderId),
-        parentId = contextRepo.rootFolderId,
-        name = FieldConst.Folder.Name.ROOT
-      )
-
-      List(rootFolder) ::: (folder :: parents).reverse
-    }
-  }
-
-  /** Get children for the root given, but only a single level - non-recursive */
+  /** Get children for the parent given, but only a single level - non-recursive */
   def immediateChildren(rootId: String, allRepoFolders: List[JsObject] = List()): List[Folder] = {
-
     txManager.asReadOnly[List[Folder]] {
       val repoFolders = repositoryFolders(allRepoFolders)
 
@@ -114,45 +66,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   override def deleteByQuery(query: Query): Int = {
     throw new NotImplementedError("Cannot delete folders by query")
-  }
-
-  /**
-   * Returns a nested list of children for a given folder. Not a flat list! Subsequent children are in each folders' "children"
-   * element.
-   */
-  private def children(parentId: String, allRepoFolders: List[JsObject]): List[Folder] = {
-    val repoFolders = repositoryFolders(allRepoFolders)
-    val immediateChildren = this.immediateChildren(parentId, repoFolders)
-
-    val folders = for (folder <- immediateChildren.map(_.toJson)) yield {
-      val id: String = (folder \ FieldConst.ID).as[String]
-      val name = (folder \ FieldConst.Folder.NAME).as[String]
-
-      Folder(id = Some(id), name = name, parentId = parentId, children = this.children(id, repoFolders))
-    }
-
-    folders.sortBy(_.nameLowercase)
-  }
-
-  /** Returns a list of parents for a given folder ID. The list goes from closest parent to farthest. */
-  private def findParents(folderId: String, allRepoFolders: List[JsObject]): List[Folder] = {
-    val repoFolders = repositoryFolders(allRepoFolders)
-    val folderEl = repoFolders.find(json => (json \ FieldConst.ID).as[String] == folderId)
-
-    val parentId = if (folderEl.isDefined) {
-      (folderEl.get \ FieldConst.Folder.PARENT_ID).as[String]
-    } else {
-      throw NotFoundException(s"Folder with ID '$folderId' not found")
-    }
-
-    val parentElements = repoFolders.filter(json => (json \ FieldConst.ID).as[String] == parentId)
-
-    if (parentElements.nonEmpty) {
-      val folder = Folder.fromJson(parentElements.head)
-      List(folder) ++ findParents(folderId = folder.persistedId, repoFolders)
-    } else {
-      List()
-    }
   }
 
   /**
