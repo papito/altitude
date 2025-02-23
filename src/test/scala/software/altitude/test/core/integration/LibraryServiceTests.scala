@@ -51,7 +51,6 @@ import software.altitude.test.core.IntegrationTestCore
     ).records.length shouldBe 1
   }
 
-/*
   test("Folder filtering") {
     /*
     folder1
@@ -84,7 +83,6 @@ import software.altitude.test.core.IntegrationTestCore
       new Query(Map(FieldConst.Asset.FOLDER_ID -> folder2.persistedId))
     ).records.length shouldBe 4
   }
-*/
 
   test("Move asset to a different folder") {
     /*
@@ -209,15 +207,6 @@ import software.altitude.test.core.IntegrationTestCore
     asset3.isRecycled shouldBe true
   }
 
-  test("Recycle non-existent folder") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-
-    intercept[NotFoundException] {
-      testApp.service.library.deleteFolderById(folder1.persistedId)
-    }
-  }
-
   test("Restore an asset that was imported again") {
     val folder1: Folder = testApp.service.library.addFolder("folder1")
 
@@ -233,61 +222,6 @@ import software.altitude.test.core.IntegrationTestCore
     // now restore the previously deleted copy into itself
     intercept[DuplicateException] {
       testApp.service.library.restoreRecycledAsset(persistedAsset.persistedId)
-    }
-  }
-
-  test("Deleting a folder recycles all assets and marks folder as recycled") {
-    val folder1: Folder = testApp.service.library.addFolder(
-      "folder")
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      "folder1_1", parentId = folder1.id)
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
-      "folder1_1_1", parentId = folder1_1.id)
-
-    testContext.persistAsset(folder=Some(folder1))
-    testContext.persistAsset(folder=Some(folder1_1))
-
-    // delete the parent folder
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-
-    // Folder 1 should stay as recycled, as it has an asset
-    (testApp.service.folder.getById(folder1.persistedId): Folder).isRecycled shouldBe  true
-
-    // Folder 1_1 should stay as recycled, as it has an asset
-    (testApp.service.folder.getById(folder1_1.persistedId): Folder).isRecycled shouldBe  true
-
-    // Folder 1_1_1 should be gone, as it had no assets in it, recycled or otherwise
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_1_1.persistedId)
-    }
-  }
-
-  test("Deleting a folder referenced by recycled assets marks folder as recycled") {
-    val folder1: Folder = testApp.service.library.addFolder(
-      "folder")
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      "folder1_1", parentId = folder1.id)
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
-      "folder1_1_1", parentId = folder1_1.id)
-
-    val asset1: Asset = testContext.persistAsset(folder=Some(folder1))
-    val asset2: Asset = testContext.persistAsset(folder=Some(folder1_1))
-
-    testApp.service.library.recycleAsset(asset1.persistedId)
-    testApp.service.library.recycleAsset(asset2.persistedId)
-
-    // delete the parent folder
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-
-    // Folder 1 should stay as recycled, as it has an asset
-    (testApp.service.folder.getById(folder1.persistedId): Folder).isRecycled shouldBe  true
-
-    // Folder 1_1 should stay as recycled, as it has an asset
-    (testApp.service.folder.getById(folder1_1.persistedId): Folder).isRecycled shouldBe  true
-
-    // Folder 1_1_1 should be gone, as it had no assets in it, recycled or otherwise
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_1_1.persistedId)
     }
   }
 

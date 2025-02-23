@@ -32,18 +32,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
 
-  def repositoryFolders(allRepoFolders: List[JsObject] = List()): List[JsObject] = {
-    txManager.asReadOnly[List[JsObject]] {
-      val _all = if (allRepoFolders.isEmpty) getAll else allRepoFolders
-
-      _all.filter(
-        json => {
-          val id = (json \ FieldConst.ID).asOpt[String]
-          !isRootFolder(id.get)
-        })
-    }
-  }
-
   /** Get children for the parent given, but only a single level - non-recursive */
   def getChildren(rootId: String): List[Folder] = {
     txManager.asReadOnly[List[Folder]] {
@@ -69,26 +57,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   override def deleteByQuery(query: Query): Int = {
     throw new NotImplementedError("Cannot delete folders by query")
-  }
-
-  /**
-   * Return all folders, with their depths, as a flat list, for a given parent folder. Specifically, returns a flat list of
-   * tuples, where the first element is the depth, relative to parent folder, and the second element is the folder ID.
-   */
-  def flatChildrenIdsWithDepths(
-      parentId: String,
-      allRepoFolders: List[JsObject] = List(),
-      depth: Int = 0): List[(Int, String)] = {
-    val repoFolders = repositoryFolders(allRepoFolders)
-
-    val childElements = repoFolders.filter(j => (j \ FieldConst.Folder.PARENT_ID).asOpt[String].contains(parentId))
-
-    // recursively combine with the result of deeper child levels + this one (depth-first)
-    (depth, parentId) :: childElements.foldLeft(List[(Int, String)]()) {
-      (res, json) =>
-        val folderId = (json \ FieldConst.ID).as[String]
-        res ++ flatChildrenIdsWithDepths(folderId, repoFolders, depth + 1)
-    }
   }
 
   /** Move a folder from one parent to another */

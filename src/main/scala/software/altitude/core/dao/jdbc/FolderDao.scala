@@ -11,11 +11,18 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
   final override val tableName = "folder"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject = {
+
     Folder(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.Folder.NAME).asInstanceOf[String],
       parentId = rec(FieldConst.Folder.PARENT_ID).asInstanceOf[String],
-      isRecycled = getBooleanField(rec(FieldConst.Folder.IS_RECYCLED))
+      isRecycled = getBooleanField(rec(FieldConst.Folder.IS_RECYCLED)),
+
+      numOfChildren = rec.getOrElse(FieldConst.Folder.NUM_OF_CHILDREN, 0L) match {
+        case i: java.lang.Integer => i
+        case l: java.lang.Long => l.toInt
+        case _ => throw new IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
+      },
     )
   }
 

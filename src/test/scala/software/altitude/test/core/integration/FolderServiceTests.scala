@@ -12,7 +12,54 @@ import software.altitude.core.ValidationException
 import software.altitude.core.models.Folder
 import software.altitude.test.core.IntegrationTestCore
 
+import scala.language.reflectiveCalls
+
 @DoNotDiscover class FolderServiceTests (override val testApp: Altitude) extends IntegrationTestCore {
+
+  /**
+   * Standard set of folders to start with, can be used by many tests here
+   */
+  def folderHierarchyFixture: Object {
+    val folder1: Folder
+    val folder1_1: Folder
+    val folder1_1_1: Folder
+    val folder1_1_1_1: Folder
+    val folder1_1_1_2: Folder
+    val folder1_2: Folder
+    val folder2: Folder
+    val folder2_1: Folder
+  } = new {
+    /*
+    folder1
+      folder1_1
+        folder1_1_1
+          folder1_1_1_1
+          folder1_1_1_2
+      folder1_2
+    folder2
+      folder2_1
+     */
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
+
+    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder2_1: Folder = testApp.service.library.addFolder(
+      "folder2_1", parentId = folder2.id)
+
+    val folder1_1: Folder = testApp.service.library.addFolder(
+      name = "folder1_1", parentId = folder1.id)
+
+    val folder1_1_1: Folder = testApp.service.library.addFolder(
+      name = "folder1_1_1", parentId = folder1_1.id)
+
+    val folder1_1_1_1: Folder = testApp.service.library.addFolder(
+      name = "folder1_1_1_1", parentId = folder1_1_1.id)
+
+    val folder1_1_1_2: Folder = testApp.service.library.addFolder(
+      name = "folder1_1_1_2", parentId = folder1_1_1.id)
+
+    val folder1_2: Folder = testApp.service.library.addFolder(
+      name = "folder1_2", parentId = folder1.id)
+  }
 
   test("Invalid folder names should fail") {
     intercept[ValidationException] {
@@ -38,55 +85,20 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Deleting a folder should also remove all children") {
-    /*
-  folder1
-    folder1_1
-      folder1_1_1
-        folder1_1_1_1
-        folder1_1_1_2
-    folder1_2
-  */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
 
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
+    testApp.service.library.deleteFolderById(f.folder1.persistedId)
 
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1", parentId = folder1_1.id)
-
-    val folder1_1_1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1_1", parentId = folder1_1_1.id)
-
-    val folder1_1_1_2: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1_2", parentId = folder1_1_1.id)
-
-    val folder1_2: Folder = testApp.service.library.addFolder(
-      name = "folder1_2", parentId = folder1.id)
-
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1.persistedId)
-    }
-
-    // children should be removed as well
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_1.persistedId)
-    }
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_1_1.persistedId)
-    }
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_1_1_1.persistedId)
-    }
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_1_1_2.persistedId)
-    }
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1_2.persistedId)
-    }
-    intercept[NotFoundException] {
-      testApp.service.folder.getById(folder1.persistedId)
+    List(
+      f.folder1.persistedId,
+      f.folder1_1.persistedId,
+      f.folder1_1_1.persistedId,
+      f.folder1_1_1_1.persistedId,
+      f.folder1_1_1_2.persistedId,
+      f.folder1_2.persistedId).foreach { id =>
+        val recycledFolder: Folder = testApp.service.folder.getById(id)
+        recycledFolder.isRecycled shouldBe true
     }
   }
 
@@ -103,63 +115,33 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Moving a folder to another folder should work") {
-    /*
-    folder1
-      folder1_1
-        folder1_1_1
-      folder1_2
-    folder2
-    */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
-
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1", parentId = folder1_1.id)
-
-    testApp.service.library.addFolder(
-      name = "folder1_2", parentId = folder1.id)
-
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
 
     // assert initial state
     // target
-    testApp.app.service.folder.getChildren(rootId = folder2.persistedId).length shouldBe 0
+    testApp.app.service.folder.getChildren(rootId = f.folder2.persistedId).length shouldBe 1
     // source
-    testApp.app.service.folder.getChildren(rootId = folder1_1.persistedId).length shouldBe 1
+    testApp.app.service.folder.getChildren(rootId = f.folder1_1.persistedId).length shouldBe 1
 
     // move folder1_1_1 to folder2
-    testApp.service.library.moveFolder(folder1_1_1.persistedId, folder2.persistedId)
+    testApp.service.library.moveFolder(f.folder1_1_1.persistedId, f.folder2.persistedId)
     // target
-    testApp.app.service.folder.getChildren(rootId = folder2.persistedId).length shouldBe 1
+    testApp.app.service.folder.getChildren(rootId = f.folder2.persistedId).length shouldBe 2
     // source
-    testApp.app.service.folder.getChildren(rootId = folder1_1.persistedId).length shouldBe 0
+    testApp.app.service.folder.getChildren(rootId = f.folder1_1.persistedId).length shouldBe 0
   }
 
   test("Moving a folder to repository root should work") {
-    /*
-  folder1
-    folder1_1
-      folder1_1_1
-  folder2
-  */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
-
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1", parentId = folder1_1.id)
-
-    testApp.service.library.addFolder("folder2")
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
 
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
 
-    testApp.service.library.moveFolder(folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
+    testApp.service.library.moveFolder(f.folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 3
 
-    testApp.service.library.moveFolder(folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
+    testApp.service.library.moveFolder(f.folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
   }
 
@@ -234,48 +216,28 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Illegal folder move actions should throw") {
-    /*
-    folder1
-      folder1_1
-        folder1_1_1
-    folder2
-        folder1_1_1
-    folder3
-        FOLDER1_1_1
-    */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
 
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
-
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1", parentId = folder1_1.id)
-
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    testApp.service.library.addFolder("folder3")
 
     // create folder1_1_1 as a duplicate under a different parent
     testApp.service.library.addFolder(
-      name = "folder1_1_1", parentId = folder2.id)
-
-    val folder3: Folder = testApp.service.library.addFolder("folder3")
-
-    // create folder1_1_1 as a duplicate under a different parent
-    testApp.service.library.addFolder(
-      name = "FOLDER1_1_1", parentId = folder3.id)
+      name = "folder1_1_1", parentId = f.folder2.id)
 
     // move into itself
     intercept[IllegalOperationException] {
-      testApp.service.library.moveFolder(folder1.persistedId, folder1.persistedId)
+      testApp.service.library.moveFolder(f.folder1.persistedId, f.folder1.persistedId)
     }
 
     // move into a child
     intercept[DuplicateException] {
-      testApp.service.library.moveFolder(folder1.persistedId, folder1_1_1.persistedId)
+      testApp.service.library.moveFolder(f.folder1.persistedId, f.folder1_1_1.persistedId)
     }
 
     // move into a parent with the same immediate child name
     intercept[DuplicateException] {
-      testApp.service.library.moveFolder(folder1_1_1.persistedId, folder2.persistedId)
+      testApp.service.library.moveFolder(f.folder1_1_1.persistedId, f.folder2.persistedId)
     }
   }
 
@@ -345,91 +307,4 @@ import software.altitude.test.core.IntegrationTestCore
       testApp.service.library.renameFolder(RequestContext.getRepository.rootFolderId, folder1.name)
     }
   }
-
-/*
-  test("Folders child count should be correct after addition") {
-    /*
-      folder1
-        folder1_1
-        folder1_2
-      */
-
-    var folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
-
-    val folder1_2: Folder = testApp.service.library.addFolder(
-      name = "folder1_2", parentId = folder1.id)
-
-    folder1 = testApp.service.folder.getById(folder1.persistedId)
-    folder1.numOfChildren shouldBe 2
-
-    testApp.service.library.deleteFolderById(folder1_1.persistedId)
-    testApp.service.library.deleteFolderById(folder1_2.persistedId)
-
-    folder1 = testApp.service.folder.getById(folder1.persistedId)
-    folder1.numOfChildren shouldBe 0
-  }
-
-  test("Folders child count should be correct after moving") {
-    /*
-    folder1
-      folder1_1
-        folder1_1_1
-      folder1_2
-    folder2
-    */
-    var folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    var folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
-
-    var folder1_1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1_1", parentId = folder1_1.id)
-
-    testApp.service.library.addFolder(
-      name = "folder1_2", parentId = folder1.id)
-
-    var folder2: Folder = testApp.service.library.addFolder("folder2")
-
-    // before any actions, check the baseline
-    folder1 = testApp.service.folder.getById(folder1.persistedId)
-    folder1.numOfChildren shouldBe 2
-    var rootFolder: Folder = testApp.service.folder.getById(testContext.repository.rootFolderId)
-    rootFolder.numOfChildren shouldBe 2
-
-    folder1_1 = testApp.service.folder.getById(folder1_1.persistedId)
-    folder1_1.numOfChildren shouldBe 1
-
-    //
-    // move folder1_1_1 to folder1
-    //
-    testApp.service.library.moveFolder(folder1_1_1.persistedId, folder1.persistedId)
-
-    // target
-    folder1 = testApp.service.folder.getById(folder1.persistedId)
-    // source
-    folder1_1 = testApp.service.folder.getById(folder1_1.persistedId)
-
-    folder1.numOfChildren shouldBe 3
-    folder1_1.numOfChildren shouldBe 0
-
-    rootFolder = testApp.service.folder.getById(testContext.repository.rootFolderId)
-    rootFolder.numOfChildren shouldBe 2
-
-    //
-    // move folder1_1 to root
-    //
-    testApp.service.library.moveFolder(folder1_1.persistedId, testContext.repository.rootFolderId)
-
-    // target
-    rootFolder = testApp.service.folder.getById(testContext.repository.rootFolderId)
-    // source
-    folder1 = testApp.service.folder.getById(folder1.persistedId)
-
-    folder1.numOfChildren shouldBe 2
-    rootFolder.numOfChildren shouldBe 3
-  }
-*/
 }
