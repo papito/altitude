@@ -10,7 +10,7 @@ trait SqliteOverrides { this: BaseDao =>
 
   override protected def jsonFunc = "?"
 
-  override protected def nativeBool(value: Boolean): String = {
+  override protected def nativeBool(value: Boolean): Any = {
     if (value) "1" else "0"
   }
 

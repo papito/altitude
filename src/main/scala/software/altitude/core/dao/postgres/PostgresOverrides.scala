@@ -6,8 +6,8 @@ import software.altitude.core.dao.jdbc.BaseDao
 trait PostgresOverrides { this: BaseDao =>
   override protected def jsonFunc = "CAST(? as jsonb)"
 
-  override protected def nativeBool(value: Boolean): String = {
-    if (value) "true" else "false"
+  override protected def nativeBool(value: Boolean): Any = {
+    if (value) true else false
   }
 
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] = {

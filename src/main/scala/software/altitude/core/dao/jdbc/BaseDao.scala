@@ -52,7 +52,7 @@ abstract class BaseDao {
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
 
-  protected def nativeBool(value: Boolean): String
+  protected def nativeBool(value: Boolean): Any
 
   protected def getBooleanField(value: AnyRef): Boolean
 

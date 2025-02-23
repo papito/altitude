@@ -3,9 +3,8 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
-import software.altitude.core.FieldConst
-import software.altitude.core.RequestContext
+import software.altitude.core.dao.jdbc
+import software.altitude.core.{FieldConst, RequestContext, dao, Const => C}
 import software.altitude.core.models.Folder
 
 abstract class FolderDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FolderDao {
@@ -43,38 +42,54 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
   }
 
   def getChildren(parentId: String): List[Folder] = {
+    /**
+     * Postgres does not allow ORDER BY during recursion, but it's not needed -
+     * the order is correct via the final orderby clause.
+     *
+     * SQLite DOES allow ORDER BY during recursion, and it IS needed to get the correct order.
+     *
+     * While normally we create an override function for each engine if a query is different,
+     * the query here is complex and effectively the same, except for one line of SQL, so we are
+     * going to break the rules and do the engine-specific logic in the query itself.
+     *
+     * This kind of shenanigan is normally not recommended.
+     */
+    val dataSourceType = config.getString(C.Conf.DB_ENGINE)
+    val recursiveOrderByClause = dataSourceType match {
+      case C.DbEngineName.POSTGRES => ""
+      case C.DbEngineName.SQLITE => "ORDER BY f.name_lc"
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
     val sql = s"""
-      WITH RECURSIVE children AS (
-          -- start with the provided folder id
-          SELECT *,
-                 0 AS level
-          FROM folder
-          WHERE id = ?
+        WITH RECURSIVE children AS (
+            -- start with the provided folder id
+            SELECT *, 0 AS level
+            FROM folder
+            WHERE id = ?
 
-          UNION ALL
+            UNION ALL
 
-          -- get only immediate children (level = 1)
-          SELECT f.*,
-                 c.level + 1
-          FROM folder f, children c
-          WHERE f.parent_id = c.id
-            AND f.parent_id <> f.id
-            AND f.is_recycled = ?
-            AND c.level < 1
-          ORDER BY f.name_lc
-      )
-      SELECT f.*,
-          (
-              SELECT COUNT(*) FROM folder sub
-              WHERE sub.parent_id = f.id
-          ) AS num_of_children
-      FROM children f
-      WHERE f.level = 1;
-      AND f.id <> f.parent_id
-      ORDER BY f.name_lc;
+            -- get only immediate children (level = 1)
+            SELECT f.*,c.level + 1
+            FROM folder f, children c
+            WHERE f.parent_id = c.id
+              AND f.is_recycled = false
+              AND c.level < 1
+              $recursiveOrderByClause
+        )
+        SELECT f.*,
+            (
+                SELECT COUNT(*) FROM folder sub
+                WHERE sub.parent_id = f.id
+            ) AS num_of_children
+        FROM children f
+        WHERE f.level = 1
+        AND f.id <> f.parent_id
+        ORDER BY f.name_lc
     """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, nativeBool(false)))
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId))
     recs.map(makeModel)
   }
 

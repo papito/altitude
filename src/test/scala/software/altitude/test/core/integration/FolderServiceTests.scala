@@ -163,7 +163,7 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
   }
 
-  test("Can traverse the folder hierarchy") {
+  test("Can traverse the folder hierarchy", Focused) {
     /*
     folder1
       folder1_1
