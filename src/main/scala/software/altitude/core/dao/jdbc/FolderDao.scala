@@ -41,4 +41,94 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
     addRecord(jsonIn, sql, sqlVals)
     jsonIn ++ Json.obj(FieldConst.ID -> id)
   }
+
+  def getChildren(parentId: String): List[Folder] = {
+    val sql = s"""
+      WITH RECURSIVE children AS (
+          -- start with the provided folder id
+          SELECT *,
+                 0 AS level
+          FROM folder
+          WHERE id = ?
+
+          UNION ALL
+
+          -- get only immediate children (level = 1)
+          SELECT f.*,
+                 c.level + 1
+          FROM folder f, children c
+          WHERE f.parent_id = c.id
+            AND f.parent_id <> f.id
+            AND f.is_recycled = ?
+            AND c.level < 1
+          ORDER BY f.name_lc
+      )
+      SELECT f.*,
+          (
+              SELECT COUNT(*) FROM folder sub
+              WHERE sub.parent_id = f.id
+          ) AS num_of_children
+      FROM children f
+      WHERE f.level = 1;
+      AND f.id <> f.parent_id
+      ORDER BY f.name_lc;
+    """
+
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, nativeBool(false)))
+    recs.map(makeModel)
+  }
+
+  def getAncestors(folderId: String): List[Folder] = {
+    val sql =
+      """
+        WITH RECURSIVE ancestors AS (
+            SELECT *, 0 AS level
+            FROM folder
+            WHERE id = ?
+
+            UNION ALL
+
+            SELECT f.*, a.level + 1 AS level
+            FROM folder f
+            JOIN ancestors a
+              ON f.id = a.parent_id
+           WHERE f.id <> f.parent_id
+        )
+
+        SELECT *
+        FROM ancestors
+        WHERE level > 0;
+      """
+
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId))
+    recs.map(makeModel)
+  }
+
+  // this does NOT return the child counts
+  def getChildrenRecursive(parentId: String): List[Folder] = {
+    val sql =
+      """
+        WITH RECURSIVE children AS (
+            SELECT *
+            FROM folder
+            WHERE parent_id = ?
+              AND is_recycled = ?
+
+            UNION
+
+            SELECT f.*
+            FROM folder f
+             INNER JOIN children c
+                     ON f.parent_id = c.id
+            WHERE f.is_recycled = ?
+              AND f.id <> f.parent_id
+        )
+        SELECT *
+          FROM children;
+      """
+
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, nativeBool(false), nativeBool(false)))
+
+    recs.map(makeModel)
+  }
 }

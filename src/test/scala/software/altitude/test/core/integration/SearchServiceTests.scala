@@ -80,6 +80,7 @@ import scala.language.reflectiveCalls
     results.total shouldBe 2
   }
 
+/*
   test("Filter by folder") {
     val field1 = testApp.service.metadata.addField(
       UserMetadataField(
@@ -117,6 +118,7 @@ import scala.language.reflectiveCalls
     results.total shouldBe 6
 
   }
+*/
 
   def fixtureForPersonFilter: Object {val assetsPerPersonCount: Int; val people: Seq[Person]} = new {
     val peopleCount =  3

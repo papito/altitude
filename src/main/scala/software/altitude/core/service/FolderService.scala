@@ -45,18 +45,21 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   }
 
   /** Get children for the parent given, but only a single level - non-recursive */
-  def immediateChildren(rootId: String, allRepoFolders: List[JsObject] = List()): List[Folder] = {
+  def getChildren(rootId: String): List[Folder] = {
     txManager.asReadOnly[List[Folder]] {
-      val repoFolders = repositoryFolders(allRepoFolders)
+      dao.getChildren(rootId)
+    }
+  }
 
-      repoFolders
-        .filter(
-          json => {
-            val parentId = (json \ FieldConst.Folder.PARENT_ID).as[String]
-            parentId == rootId
-          })
-        .map(json => Folder.fromJson(json))
-        .sortBy(_.nameLowercase)
+  def getChildrenRecursive(rootId: String): List[Folder] = {
+    txManager.asReadOnly[List[Folder]] {
+      dao.getChildrenRecursive(rootId)
+    }
+  }
+
+  def getAncestors(folderId: String): List[Folder] = {
+    txManager.asReadOnly[List[Folder]] {
+      dao.getAncestors(folderId)
     }
   }
 
@@ -88,21 +91,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
     }
   }
 
-  /**
-   * Returns a unique set of folder IDs for one OR more folder ids. The difference between the other method is that folder depths
-   * are not returned. It's a "raw" list of folder ids.
-   */
-  def flatChildrenIds(parentIds: Set[String], allRepoFolders: List[JsObject] = List()): Set[String] =
-    parentIds.foldLeft(Set[String]()) {
-      (s, id) =>
-        {
-          s ++ app.service.folder.flatChildrenIdsWithDepths(parentId = id, allRepoFolders = allRepoFolders).map(_._2).toSet
-        }
-    }
-
   /** Move a folder from one parent to another */
   def move(folderBeingMovedId: String, destFolderId: String): (Folder, Folder) = {
-
     if (isRootFolder(folderBeingMovedId)) {
       throw IllegalOperationException("Cannot move the root folder")
     }
@@ -116,7 +106,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
     txManager.withTransaction {
       // cannot move into own child
-      if (flatChildrenIdsWithDepths(folderBeingMovedId, repositoryFolders()).map(_._2).contains(destFolderId)) {
+      if (getAncestors(destFolderId).map(_.persistedId).contains(folderBeingMovedId)) {
         throw DuplicateException(Some("Cannot move parent folder into a child node"))
       }
 

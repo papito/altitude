@@ -122,7 +122,7 @@ class FolderActionController extends BaseHtmxController {
         haltWithValidationErrors(Map(Api.Field.Folder.NAME -> message), parentId = parentId)
     }
 
-    val childFolders: List[Folder] = app.service.folder.immediateChildren(parentId)
+    val childFolders: List[Folder] = app.service.folder.getChildren(parentId)
 
     halt(200, ssp("htmx/folder_children.ssp", Api.Field.Folder.FOLDERS -> childFolders))
   }
@@ -184,7 +184,7 @@ class FolderActionController extends BaseHtmxController {
 
   val htmxFolderChildren: Route = get("/r/:repoId/children") {
     val parentId: String = params.get(Api.Field.Folder.PARENT_ID).get
-    val childFolders: List[Folder] = app.service.folder.immediateChildren(parentId)
+    val childFolders: List[Folder] = app.service.folder.getChildren(parentId)
 
     ssp("htmx/folder_children", Api.Field.Folder.FOLDERS -> childFolders)
   }

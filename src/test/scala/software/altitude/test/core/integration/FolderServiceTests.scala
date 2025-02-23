@@ -2,8 +2,6 @@ package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
-import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
@@ -127,16 +125,16 @@ import software.altitude.test.core.IntegrationTestCore
 
     // assert initial state
     // target
-    testApp.app.service.folder.immediateChildren(rootId = folder2.persistedId).length shouldBe 0
+    testApp.app.service.folder.getChildren(rootId = folder2.persistedId).length shouldBe 0
     // source
-    testApp.app.service.folder.immediateChildren(rootId = folder1_1.persistedId).length shouldBe 1
+    testApp.app.service.folder.getChildren(rootId = folder1_1.persistedId).length shouldBe 1
 
     // move folder1_1_1 to folder2
     testApp.service.library.moveFolder(folder1_1_1.persistedId, folder2.persistedId)
     // target
-    testApp.app.service.folder.immediateChildren(rootId = folder2.persistedId).length shouldBe 1
+    testApp.app.service.folder.getChildren(rootId = folder2.persistedId).length shouldBe 1
     // source
-    testApp.app.service.folder.immediateChildren(rootId = folder1_1.persistedId).length shouldBe 0
+    testApp.app.service.folder.getChildren(rootId = folder1_1.persistedId).length shouldBe 0
   }
 
   test("Moving a folder to repository root should work") {
@@ -156,14 +154,83 @@ import software.altitude.test.core.IntegrationTestCore
 
     testApp.service.library.addFolder("folder2")
 
-    // assert initial state
-    testApp.app.service.folder.immediateChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
+    testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
 
     testApp.service.library.moveFolder(folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
-    testApp.app.service.folder.immediateChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 3
+    testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 3
 
     testApp.service.library.moveFolder(folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
-    testApp.app.service.folder.immediateChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
+    testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
+  }
+
+  test("Can traverse the folder hierarchy") {
+    /*
+    folder1
+      folder1_1
+        folder1_1_1
+          folder1_1_1_1
+    folder2
+        folder2_1
+        folder2_2
+        folder2_3
+        folder2_4
+    folder3
+        folder_3_1
+    */
+
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
+
+    val folder1_1: Folder = testApp.service.library.addFolder(
+      name = "folder1_1", parentId = folder1.id)
+
+    val folder1_1_1: Folder = testApp.service.library.addFolder(
+      name = "folder1_1_1", parentId = folder1_1.id)
+
+    val folder1_1_1_1: Folder = testApp.service.library.addFolder(
+      name = "folder1_1_1", parentId = folder1_1_1.id)
+
+    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder2_4: Folder = testApp.service.library.addFolder("folder2_4", parentId = folder2.id)
+    val folder2_3: Folder = testApp.service.library.addFolder("folder2_3", parentId = folder2.id)
+    val folder2_2: Folder = testApp.service.library.addFolder("folder2_2", parentId = folder2.id)
+    val folder2_1: Folder = testApp.service.library.addFolder("folder2_1", parentId = folder2.id)
+
+    val folder3: Folder = testApp.service.library.addFolder("folder3")
+    testApp.service.library.addFolder("folder3_1", parentId = folder3.id)
+
+    // getting immediate children of root should not include the root folder itself
+    val childrenOfRoot = testApp.service.folder.getChildren(RequestContext.getRepository.rootFolderId)
+    childrenOfRoot.size shouldEqual 3
+    childrenOfRoot.map(_.persistedId) shouldNot contain(RequestContext.getRepository.rootFolderId)
+
+    val childrenOf1: List[Folder] = testApp.service.folder.getChildren(folder1.persistedId)
+    childrenOf1.size shouldEqual 1
+    childrenOf1.head.name shouldEqual folder1_1.name
+
+    val childrenOf2: List[Folder] = testApp.service.folder.getChildren(folder2.persistedId)
+    childrenOf2.size shouldEqual 4
+
+    childrenOf2.map(_.persistedId) shouldEqual List(
+      folder2_1.persistedId,
+      folder2_2.persistedId,
+      folder2_3.persistedId,
+      folder2_4.persistedId)
+
+    val ancestorsOf1_1_1_1: List[Folder] = testApp.service.folder.getAncestors(folder1_1_1_1.persistedId)
+    ancestorsOf1_1_1_1.size shouldEqual 3
+    ancestorsOf1_1_1_1.map(_.persistedId) should contain allOf (
+      folder1.persistedId,
+      folder1_1.persistedId,
+      folder1_1_1.persistedId)
+
+    val allChildrenOf1: List[Folder] = testApp.service.folder.getChildrenRecursive(folder1.persistedId)
+    allChildrenOf1.size shouldEqual(3)
+    val allChildrenOf1Ids = allChildrenOf1.map(_.persistedId)
+
+    allChildrenOf1Ids should contain allOf (
+      folder1_1.persistedId,
+      folder1_1_1.persistedId,
+      folder1_1_1_1.persistedId)
   }
 
   test("Illegal folder move actions should throw") {

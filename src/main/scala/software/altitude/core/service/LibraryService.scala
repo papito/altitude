@@ -188,7 +188,9 @@ class LibraryService(val app: Altitude) {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
 
       val _query: Query = if (folderId.isDefined) {
-        val allFolderIds = app.service.folder.flatChildrenIds(parentIds = Set(folderId.get))
+        val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId.get)
+        val allFolderIds = (folderId.get :: allFolders.map(_.persistedId)).toSet
+
         query.add(FieldConst.Asset.FOLDER_ID -> Query.IN(allFolderIds.asInstanceOf[Set[Any]]))
       } else {
         query
@@ -201,8 +203,12 @@ class LibraryService(val app: Altitude) {
   def search(query: SearchQuery): SearchResult = {
     txManager.asReadOnly[SearchResult] {
       val _query: SearchQuery = if (query.folderIds.nonEmpty) {
-        // create a new query, with the new folder set
-        val allFolderIds = app.service.folder.flatChildrenIds(parentIds = query.folderIds)
+        if (query.folderIds.size > 1) {
+          throw IllegalOperationException("Currently cannot search in multiple folders at once")
+        }
+
+        val allFolders = app.service.folder.getChildrenRecursive(rootId = query.folderIds.head)
+        val allFolderIds = (query.folderIds.head :: allFolders.map(_.persistedId)).toSet
 
         new SearchQuery(text = query.text, folderIds = allFolderIds, params = query.params, rpp = query.rpp, page = query.page)
       } else {

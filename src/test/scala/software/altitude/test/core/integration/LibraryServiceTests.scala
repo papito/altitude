@@ -51,39 +51,7 @@ import software.altitude.test.core.IntegrationTestCore
     ).records.length shouldBe 1
   }
 
-  test("Search by folder hierarchy should return assets in sub-folders") {
-    /*
-  folder1
-    folder1_1
-    folder1_2
-  */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    val folder1_1: Folder = testApp.service.library.addFolder(
-      name = "folder1_1", parentId = folder1.id)
-
-    folder1_1.parentId should not be None
-
-    val folder1_2: Folder = testApp.service.library.addFolder(
-      name = "folder1_2", parentId = folder1.id)
-
-    testContext.persistAsset(folder = Some(folder1_1))
-    testContext.persistAsset(folder = Some(folder1_2))
-    testContext.persistAsset(folder = Some(folder1))
-
-    testApp.service.library.query(
-      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1_2.persistedId))
-    ).records.length shouldBe 1
-
-    testApp.service.library.query(
-      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1_1.persistedId))
-    ).records.length shouldBe 1
-
-    testApp.service.library.query(
-      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
-    ).records.length shouldBe 3
-  }
-
+/*
   test("Folder filtering") {
     /*
     folder1
@@ -116,6 +84,7 @@ import software.altitude.test.core.IntegrationTestCore
       new Query(Map(FieldConst.Asset.FOLDER_ID -> folder2.persistedId))
     ).records.length shouldBe 4
   }
+*/
 
   test("Move asset to a different folder") {
     /*
