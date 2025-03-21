@@ -28,7 +28,7 @@ in setup mode.
 
 This project is still in its "technology preview" stage. At this point it features:
 
-* Web-based setup on the first run
+* Web-based setup
 * Streams-based fast import pipeline
 * Facial detection and recognition
 * Default result display with lazy loading and infinite scrolling
@@ -44,7 +44,6 @@ Missing features:
 * No support for video files yet.
 * No location editing or display.
 * No metadata view (but it IS being extracted and saved).
-* Facial recognition works at a basic level but most management features and tuning is yet to be done.
 
 ## Development setup
 
