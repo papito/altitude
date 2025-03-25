@@ -142,11 +142,15 @@
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
     import { context } from "../../../../js/context.js"
+    import {
+        setupDragAndDrop,
+    } from "../../../../js/folders/htmx_event_handlers.js"
 
     selectTab("explorer", "foldersTab")
     context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+
+    setupDragAndDrop()
 </script>
 
-<script type="module" src="/js/folders/htmx_event_handlers.js"></script>
 <script type="module" src="/js/folders/event_handlers.js"></script>
 <script type="module" src="/js/folders/dragon-drop.js"></script>

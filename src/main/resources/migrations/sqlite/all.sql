@@ -158,10 +158,6 @@ CREATE TABLE folder (
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
   parent_id CHAR(36) NOT NULL,
-    -- non-recursively calculated
-  num_of_assets INTEGER NOT NULL DEFAULT 0 CHECK (num_of_assets >= 0),
-    -- non-recursively calculated
-  num_of_children INTEGER NOT NULL DEFAULT 0 CHECK(num_of_children >= 0),
   is_recycled TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
@@ -169,6 +165,7 @@ CREATE TABLE folder (
 );
 CREATE INDEX folder_01 ON folder(repository_id, parent_id);
 CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
+CREATE INDEX folder_03 ON folder(is_recycled, parent_id);
 
 CREATE TABLE search_parameter (
   repository_id CHAR(36) NOT NULL,

@@ -14,7 +14,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude) extends Suites (
   new AssetImportServiceTests(testApp),
   new FolderServiceTests(testApp),
   new FileStoreServiceTests(testApp),
-  new StatsServiceTests(testApp),
+  // new StatsServiceTests(testApp),
   new UserServiceTests(testApp),
   new LibraryServiceTests(testApp),
   new UserMetadataServiceTests(testApp),

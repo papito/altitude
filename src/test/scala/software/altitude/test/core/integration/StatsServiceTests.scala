@@ -1,14 +1,19 @@
 package software.altitude.test.core.integration
 
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import org.scalatest.{DoNotDiscover}
 import software.altitude.core.Altitude
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Folder
-import software.altitude.core.models.Stats
 import software.altitude.core.util.Query
 import software.altitude.test.core.IntegrationTestCore
 
+/**
+ * Stats service has been deep sixed. This is here for reference as in the future the live
+ * statistics would have to pass the same types of tests.
+ *
+ * When resurrected, uncomment this suite in the integration super-suite
+ */
+/*
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   val ASSET_SIZE = 652084 // size of our "test_asset.png" file.
@@ -22,7 +27,7 @@ import software.altitude.test.core.IntegrationTestCore
     // create a triaged asset
     val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
     val triagedAsset: Asset = testContext.persistAsset(Some(triagedAssetModel))
-    testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
+//    testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
 
     // create an asset and delete it
     val assetToDelete1: Asset = testContext.persistAsset(folder = Some(folder1))
@@ -191,3 +196,4 @@ import software.altitude.test.core.IntegrationTestCore
       stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
   }
 }
+*/
