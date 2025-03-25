@@ -1,6 +1,7 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+
 import java.time.LocalDateTime
 import java.util.UUID
 import org.apache.commons.dbutils.QueryRunner
@@ -12,11 +13,7 @@ import play.api.libs.json.JsValue.jsValueToJsLookup
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
-
-import software.altitude.core.ConstraintException
-import software.altitude.core.FieldConst
-import software.altitude.core.NotFoundException
-import software.altitude.core.RequestContext
+import software.altitude.core.{ConstraintException, FieldConst, NotFoundException, RequestContext, Const => C}
 import software.altitude.core.dao.jdbc.querybuilder.SqlQuery
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.transactions.TransactionManager
@@ -52,9 +49,13 @@ abstract class BaseDao {
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
 
+  protected def nativeBool(value: Boolean): Any
+
   protected def getBooleanField(value: AnyRef): Boolean
 
   private def queryRunner = new QueryRunner()
+
+  protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)
 
   def add(jsonIn: JsObject): JsObject = throw new NotImplementedError("add method must be implemented")
 

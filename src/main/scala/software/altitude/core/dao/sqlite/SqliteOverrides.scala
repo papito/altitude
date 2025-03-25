@@ -10,6 +10,10 @@ trait SqliteOverrides { this: BaseDao =>
 
   override protected def jsonFunc = "?"
 
+  override protected def nativeBool(value: Boolean): Any = {
+    if (value) "1" else "0"
+  }
+
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] = {
     if (value.isEmpty || value.get == null) {
       return None
