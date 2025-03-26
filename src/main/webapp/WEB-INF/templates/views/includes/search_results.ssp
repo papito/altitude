@@ -1,10 +1,31 @@
 <% import software.altitude.core.Const %>
 <% import software.altitude.core.AltitudeServletContext %>
 <% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.util.SearchResult %>
 <% import software.altitude.core.models.Person %>
+<%@ val results: SearchResult %>
 <%@ val person: Person = null %>
 
 <style>
+  #searchControl {
+    margin: var(--control-vertical-space);
+    padding: 5px;
+    background-color: var(--background-secondary-color);
+    border: 1px solid var(--background-tertiary-color);
+    border-radius: 5px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  #searchControl div {
+    display: grid;
+    place-items: center;
+  }
+
+  #searchControl .total {
+    color: var(--faded-font-color);
+  }
+
   #assets .cell {
     margin: 3px;
     border: var(--result-border);
@@ -17,7 +38,7 @@
   }
 
   #assets {
-    margin: 10px;
+    padding: 0 10px 10px 10px;
     display: flex;
     flex-wrap: wrap;
     flex-direction: row;
@@ -35,6 +56,18 @@
 #if (person != null)
 <% include("../htmx/person.ssp") %>
 #end
+
+<div id="searchControl">
+  <div class="total">
+    ${results.total} items
+  </div>
+  <div>
+    size
+  </div>
+  <div>
+    sort
+  </div>
+</div>
 
 <div id="assets">
   <% include("../htmx/results_grid.ssp") %>

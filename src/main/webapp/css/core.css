@@ -26,6 +26,8 @@
     --control-vertical-space: 15px;
     --control-horizontal-space: 25px;
 
+    /* font colors */
+    --faded-font-color: #b0acac;
     --success-font-color: #82da5f;
     --success-background-color: #377a1c;
     --warning-font-color: #dca051;

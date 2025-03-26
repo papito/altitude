@@ -113,7 +113,6 @@ object Api {
     }
 
     object Search {
-      val ASSETS = "assets"
       val PERSON = "person"
       val QUERY_TEXT = "q"
       val RESULTS_PER_PAGE = "rpp"
