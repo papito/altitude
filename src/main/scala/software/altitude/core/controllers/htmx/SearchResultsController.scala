@@ -1,13 +1,11 @@
 package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
-
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Person
-import software.altitude.core.util.SearchQuery
-import software.altitude.core.util.SearchSort
+import software.altitude.core.util.{SearchQuery, SearchSort, SortDirection}
 
 class SearchResultsController extends BaseHtmxController {
 
@@ -27,7 +25,7 @@ class SearchResultsController extends BaseHtmxController {
     val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = params.getOrElse(Api.Field.Search.PAGE, "1").toInt
     val queryText = params.get(Api.Field.Search.QUERY_TEXT)
-    val sortArg = params.get(Api.Field.Search.SORT)
+    val sortArg = params.getOrElse(Api.Field.Search.SORT, s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}|${SortDirection.DESC.id}")
     val isContinuousScroll = params.getOrElse(Api.Field.Search.IS_CONTINUOUS_SCROLL, "false").toBoolean
     val folderIdsCsv = params.get(Api.Field.Search.FOLDER_IDS)
     val personIdsCsv = params.get(Api.Field.Search.PEOPLE_IDS)
@@ -44,15 +42,10 @@ class SearchResultsController extends BaseHtmxController {
       Set()
     }
 
-    logger.debug(s"QUERY: rpp: $rpp, page: $page, queryText: $queryText, folderIds: $folderIds, personIds: $personIds")
-
-    val sort: List[SearchSort] = if (sortArg.isDefined) {
-      val fieldId :: directionInt :: _ = sortArg.get.split("\\|").toList
-      logger.info(s"Sort field ID: $fieldId, direction: $directionInt")
-      List()
-    } else {
-      List()
-    }
+    val field :: directionInt :: _ = sortArg.split("\\|").toList
+    val sortDirection = SortDirection(directionInt.toInt)
+    val sort = SearchSort(field=field, direction=sortDirection)
+    logger.debug(s"QUERY: rpp: $rpp, page: $page, sort: $field|$sortDirection, queryText: $queryText, folderIds: $folderIds, personIds: $personIds")
 
     val q = new SearchQuery(
       text = queryText,
@@ -60,7 +53,7 @@ class SearchResultsController extends BaseHtmxController {
       folderIds = folderIds,
       personIds = personIds,
       page = page,
-      searchSort = sort
+      searchSort = List(sort)
     )
 
     val results = app.service.library.search(q)

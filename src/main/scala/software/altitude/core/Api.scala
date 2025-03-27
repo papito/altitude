@@ -127,6 +127,10 @@ object Api {
     object SearchSort {
       val DIRECTION = "direction"
       val FIELD = "field"
+
+      val BY_ASSET_CREATED_AT = "created_at"
+      val BY_MEDIA_CREATED_AT = "mediaCreationDate"
+      val BY_FILENAME = "filename"
     }
 
     object Setup {

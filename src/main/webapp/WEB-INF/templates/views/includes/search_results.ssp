@@ -10,7 +10,6 @@
   #searchControl {
     margin: var(--control-vertical-space);
     padding: 5px;
-    background-color: var(--background-secondary-color);
     border: 1px solid var(--background-tertiary-color);
     border-radius: 5px;
     display: grid;
@@ -51,6 +50,36 @@
     height:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
     place-items: center;
   }
+
+  .sort-dropdown {
+    padding: 5px 25px 5px 5px;
+    background-color: var(--background-secondary-color);
+    color: var(--faded-font-color);
+    border: 1px solid var(--background-tertiary-color);
+    border-radius: 5px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: smaller;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+  }
+
+  .sort-dropdown:hover {
+    background-color: var(--background-tertiary-color);
+  }
+
+  .sort-dropdown:focus {
+    box-shadow: 0 0 2px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .sort-dropdown span {
+    font-size: 1.2em;
+  }
+
 </style>
 
 #if (person != null)
@@ -64,8 +93,20 @@
   <div>
     size
   </div>
-  <div>
-    sort
+  <div class="sort">
+    <select id="sortOptions"
+            class="sort-dropdown"
+            hx-get="change.html"
+            hx-trigger="change">
+      <option value="date-added-desc">Date Added (newest first)</option>
+      <option value="date-added-asc">Date Added (oldest first)</option>
+      <option value="date-created-desc">Date Created (newest first)</option>
+      <option value="date-created-asc">Date Created (oldest first)</option>
+      <option value="filename-asc">File Name (A-Z)</option>
+      <option value="filename-desc">File Name (Z-A)</option>
+      <option value="dimensions-desc">Dimensions (largest first)</option>
+      <option value="dimensions-asc">Dimensions (smallest first)</option>
+    </select>
   </div>
 </div>
 
