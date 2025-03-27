@@ -6,10 +6,8 @@ import org.scalatest.{DoNotDiscover, funsuite}
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.service.UrlService
 import software.altitude.test.core.TestFocus
-import software.altitude.core.Api
 
 import javax.servlet.http.HttpServletRequest
-import scala.jdk.CollectionConverters.MapHasAsJava
 
 @DoNotDiscover class UrlServiceTests extends funsuite.AnyFunSuite with TestFocus {
   val urlService = new UrlService
@@ -17,35 +15,19 @@ import scala.jdk.CollectionConverters.MapHasAsJava
   val personId: String = BaseDao.genId
   val repoId = "1"
 
-  test("Searching a person should return correct view URL") {
+  test("HTMX person search with sort URL should correctly translate to browser view URL") {
     val request = mock(classOf[HttpServletRequest])
 
+    val tabSelected = "albums"
     // user is on a page with PEOPLE tab chosen
-    when(request.getHeader("HX-Current-URL")).thenReturn(s"http://localhost:8080/r/$repoId#people")
-    // user selects a person to view
-    when(request.getParameterMap).thenReturn(Map(Api.Field.Search.PEOPLE_IDS -> Array(personId)).asJava)
+    when(request.getHeader("HX-Current-URL")).thenReturn(s"http://localhost:8080/r/$repoId#$tabSelected")
+
+    val queryParams = "personId=$personId&sort=sort_field"
+    when(request.getQueryString).thenReturn(queryParams)
 
     val url = urlService.getBrowserViewUrl(request)
 
-    // the system forces person view URL and the PEOPLE tab is still chosen
-    url shouldEqual s"/r/$repoId?view=person&personId=$personId#people"
+    // the system forces person view URL with SORT and the PEOPLE tab is still chosen
+    url shouldEqual s"/r/$repoId?$queryParams#$tabSelected"
   }
-
-  test("Sorting should return correct view URL", Focused) {
-    val request = mock(classOf[HttpServletRequest])
-
-    // user is on a page with PEOPLE tab chosen
-    when(request.getHeader("HX-Current-URL")).thenReturn(s"http://localhost:8080/r/$repoId#people")
-    // user selects a person to view
-    when(request.getParameterMap).thenReturn(Map(
-      Api.Field.Search.PEOPLE_IDS -> Array(personId),
-      Api.Field.Search.SORT -> Array("sort_field|1")
-    ).asJava)
-
-    val url = urlService.getBrowserViewUrl(request)
-
-    // the system forces person view URL and the PEOPLE tab is still chosen
-    url shouldEqual s"/r/$repoId?view=person&personId=$personId&sort=sort_field|1#people"
-  }
-
 }

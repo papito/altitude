@@ -12,9 +12,8 @@ class IndexController extends BaseWebController {
     requireLogin()
     contentType = "text/html"
 
-    layoutTemplate(
-      "/WEB-INF/templates/views/index.ssp"
-    )
+    ssp(
+      "/WEB-INF/templates/views/index.ssp")
   }
 
   get("/") {

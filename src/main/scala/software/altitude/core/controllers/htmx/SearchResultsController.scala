@@ -27,31 +27,19 @@ class SearchResultsController extends BaseHtmxController {
     val queryText = params.get(Api.Field.Search.QUERY_TEXT)
     val sortArg = params.getOrElse(Api.Field.Search.SORT, s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}|${SortDirection.DESC.id}")
     val isContinuousScroll = params.getOrElse(Api.Field.Search.IS_CONTINUOUS_SCROLL, "false").toBoolean
-    val folderIdsCsv = params.get(Api.Field.Search.FOLDER_IDS)
-    val personIdsCsv = params.get(Api.Field.Search.PEOPLE_IDS)
-
-    val folderIds: Set[String] = if (folderIdsCsv.isDefined) {
-      folderIdsCsv.get.split(",").toSet
-    } else {
-      Set()
-    }
-
-    val personIds: Set[String] = if (personIdsCsv.isDefined) {
-      personIdsCsv.get.split(",").toSet
-    } else {
-      Set()
-    }
+    val folderId = params.get(Api.Field.Search.FOLDER_ID)
+    val personId = params.get(Api.Field.Search.PERSON_ID)
 
     val field :: directionInt :: _ = sortArg.split("\\|").toList
     val sortDirection = SortDirection(directionInt.toInt)
     val sort = SearchSort(field=field, direction=sortDirection)
-    logger.debug(s"QUERY: rpp: $rpp, page: $page, sort: $field|$sortDirection, queryText: $queryText, folderIds: $folderIds, personIds: $personIds")
+    logger.debug(s"QUERY: rpp: $rpp, page: $page, sort: $field|$sortDirection, queryText: $queryText, folderIds: $folderId, personIds: $personId")
 
     val q = new SearchQuery(
       text = queryText,
       rpp = rpp,
-      folderIds = folderIds,
-      personIds = personIds,
+      folderIds = folderId.toSet,
+      personIds = personId.toSet,
       page = page,
       searchSort = List(sort)
     )
@@ -62,11 +50,10 @@ class SearchResultsController extends BaseHtmxController {
       halt(204)
     }
 
-    /**
-     * If this is not a continuous scroll request and a person view, render the larger results template with auxiliary person
-     * view.
-     */
     if (isContinuousScroll) {
+      /**
+       * This is a request for another page of search results for continuous scroll.
+       */
       ssp(
         "/htmx/results_grid",
         Api.Field.Search.RESULTS -> results,
@@ -74,20 +61,24 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> true
       )
     } else {
-      var personOpt: Option[Person] = None
+      /**
+       * This is a new request (first page) for search results.
+       *
+       * We may need to add more entities, depending on what is needed, for example
+       * if it's a person view.
+       */
 
-      if (personIds.size == 1) {
-        personOpt = Some(app.service.person.getById(personIds.head))
-        val personViewUrl = app.service.urlService.getBrowserViewUrl(request)
-        // replace the current browser URL with the person view URL
-        response.addHeader("HX-Replace-Url", personViewUrl)
-      }
+      // Replace the current browser URL with user-friendly URL that can be bookmarked or shared
+      // (what we have now is the internal HTMX URL)
+      response.addHeader("HX-Replace-Url", app.service.urlService.getBrowserViewUrl(request))
+
+      val maybePerson: Option[Person] = personId.map(app.service.person.getById).map(Person.fromJson)
 
       ssp(
         "/includes/search_results",
         Api.Field.Search.RESULTS -> results,
         Api.Field.Search.PAGE -> page,
-        Api.Field.Search.PERSON -> personOpt.orNull,
+        Api.Field.Search.PERSON -> maybePerson.orNull,
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> false
       )
     }
