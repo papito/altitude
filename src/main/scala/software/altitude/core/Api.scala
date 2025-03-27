@@ -120,7 +120,10 @@ object Api {
       val PAGE = "p"
       val FOLDER_IDS = "folderIds"
       val PEOPLE_IDS = "personIds"
+      val PERSON_ID = "personId"
+      val VIEW = "view"
       val SORT = "sort"
+      val PREVIEW_SIZE = "previewSize"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
     }
 
