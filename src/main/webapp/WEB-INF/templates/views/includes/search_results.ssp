@@ -103,21 +103,21 @@
             hx-target="#content"
             hx-get="/htmx/search/r/${RequestContext.getRepository.persistedId}"
             hx-trigger="change">
-      <option value="created_at|1"
+      <option value="created_at1"
         #if (sort.field == "created_at" && sort.direction.id == 1)
               selected
         #end>Date Added (newest first)</option>
-      <option value="created_at|0"
+      <option value="created_at0"
         #if (sort.field == "created_at" && sort.direction.id == 0)
               selected
         #end>Date Added (oldest first)</option>
       <option value="date-created-desc">Date Created (newest first)</option>
       <option value="date-created-asc">Date Created (oldest first)</option>
-      <option value="filename|0"
+      <option value="filename0"
         #if (sort.field == "filename" && sort.direction.id == 0)
               selected
         #end>File Name (A-Z)</option>
-      <option value="filename|1"
+      <option value="filename1"
         #if (sort.field == "filename" && sort.direction.id == 1)
               selected
         #end>File Name (Z-A)</option>

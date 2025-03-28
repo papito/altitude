@@ -7,6 +7,9 @@ import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Person
 import software.altitude.core.util.{SearchQuery, SearchSort, SortDirection}
 
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+
 class SearchResultsController extends BaseHtmxController {
 
   before() {
@@ -22,17 +25,37 @@ class SearchResultsController extends BaseHtmxController {
   }
 
   private def search() = {
-    val rpp = params.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
-    val page = params.getOrElse(Api.Field.Search.PAGE, "1").toInt
-    val queryText = params.get(Api.Field.Search.QUERY_TEXT)
-    val sortArg = params.getOrElse(Api.Field.Search.SORT, s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}|${SortDirection.DESC.id}")
-    val isContinuousScroll = params.getOrElse(Api.Field.Search.IS_CONTINUOUS_SCROLL, "false").toBoolean
-    val folderId = params.get(Api.Field.Search.FOLDER_ID)
-    val personId = params.get(Api.Field.Search.PERSON_ID)
+    val requestQuery = URLDecoder.decode(
+      Option(request.getQueryString).getOrElse(""),
+      StandardCharsets.UTF_8.toString)
+    println("REQ QUERY:", requestQuery)
 
-    val field :: directionInt :: _ = sortArg.split("\\|").toList
-    val sortDirection = SortDirection(directionInt.toInt)
-    val sort = SearchSort(field=field, direction=sortDirection)
+    val browserUrl = request.getHeader("HX-Current-URL")
+    println("BROWSER URL:", browserUrl)
+    val browserQuery = new java.net.URI(browserUrl).getQuery
+    println("BROWSER QUERY:", browserQuery)
+
+    val htmxQueryParams = app.service.urlService.getUrlParams(requestQuery)
+    val browserQueryParams = app.service.urlService.getUrlParams(browserQuery)
+
+    val urlParams = browserQueryParams ++ htmxQueryParams
+
+    println("HTMX URL PARAMS:", htmxQueryParams)
+    println("BROWSER URL PARAMS:", browserQueryParams)
+    println("URL PARAMS:", urlParams)
+
+    val rpp = urlParams.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
+    val page = urlParams.getOrElse(Api.Field.Search.PAGE, "1").toInt
+    val queryText = urlParams.get(Api.Field.Search.QUERY_TEXT)
+    val sortArg = urlParams.getOrElse(Api.Field.Search.SORT, s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
+    val isContinuousScroll = urlParams.getOrElse(Api.Field.Search.IS_CONTINUOUS_SCROLL, "false").toBoolean
+    val folderId = urlParams.get(Api.Field.Search.FOLDER_ID)
+    val personId = urlParams.get(Api.Field.Search.PERSON_ID)
+
+    val sortField = sortArg.slice(0, sortArg.length - 1)
+    val sortDirectionInt = sortArg.takeRight(1).toInt
+    val sortDirection = SortDirection(sortDirectionInt)
+    val sort = SearchSort(field=sortField, direction=sortDirection)
 
     val q = new SearchQuery(
       text = queryText,
@@ -70,7 +93,8 @@ class SearchResultsController extends BaseHtmxController {
 
       // Replace the current browser URL with user-friendly URL that can be bookmarked or shared
       // (what we have now is the internal HTMX URL)
-      response.addHeader("HX-Replace-Url", app.service.urlService.getBrowserViewUrl(request))
+      response.addHeader("HX-Replace-Url", app.service.urlService.getBrowserViewUrl(
+        combinedQueryParams = urlParams, browserUrl=browserUrl))
 
       val maybePerson: Option[Person] = personId.map(app.service.person.getById).map(Person.fromJson)
 
