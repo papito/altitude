@@ -25,24 +25,36 @@ class SearchResultsController extends BaseHtmxController {
   }
 
   private def search() = {
+    /**
+     * The search controller combines the query parameters from the browser URL and the HTMX request.
+     *
+     * The browser URL is used to get the current state of the search, and the HTMX request is used to
+     * get the new search parameters.
+     *
+     * For example, if the user is viewing a specific person, the browser URL will contain the person ID,
+     * but when the user selection an option in, say, the sorting widget, the sorting widget is not
+     * aware of the other query parameters, so it will only send the sorting parameter.
+     *
+     * Combining the two allows us to get the full set of query parameters.
+     *
+     * Note that the new HTMX parameters will override the same URL parameters. So when
+     * the browser URL says "ascending sort" and the HTMX request says "descending sort",
+     * the HTMX request will take precedence.
+     *
+     * When this method is done, it will force the new user-friendly browser URL via
+     * a special HTMX header.
+     */
     val requestQuery = URLDecoder.decode(
       Option(request.getQueryString).getOrElse(""),
       StandardCharsets.UTF_8.toString)
-    println("REQ QUERY:", requestQuery)
 
     val browserUrl = request.getHeader("HX-Current-URL")
-    println("BROWSER URL:", browserUrl)
     val browserQuery = new java.net.URI(browserUrl).getQuery
-    println("BROWSER QUERY:", browserQuery)
 
     val htmxQueryParams = app.service.urlService.getUrlParams(requestQuery)
     val browserQueryParams = app.service.urlService.getUrlParams(browserQuery)
 
     val urlParams = browserQueryParams ++ htmxQueryParams
-
-    println("HTMX URL PARAMS:", htmxQueryParams)
-    println("BROWSER URL PARAMS:", browserQueryParams)
-    println("URL PARAMS:", urlParams)
 
     val rpp = urlParams.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = urlParams.getOrElse(Api.Field.Search.PAGE, "1").toInt
@@ -91,8 +103,7 @@ class SearchResultsController extends BaseHtmxController {
        * if it's a person view.
        */
 
-      // Replace the current browser URL with user-friendly URL that can be bookmarked or shared
-      // (what we have now is the internal HTMX URL)
+      // Replace the current browser URL with user-friendly search URL that can be bookmarked or shared
       response.addHeader("HX-Replace-Url", app.service.urlService.getBrowserViewUrl(
         combinedQueryParams = urlParams, browserUrl=browserUrl))
 
@@ -106,7 +117,5 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> false
       )
     }
-
   }
-
 }

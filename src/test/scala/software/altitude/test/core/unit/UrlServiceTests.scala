@@ -1,13 +1,11 @@
 package software.altitude.test.core.unit
 
-import org.mockito.Mockito.{mock, when}
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import org.scalatest.{DoNotDiscover, funsuite}
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.service.UrlService
 import software.altitude.test.core.TestFocus
-
-import javax.servlet.http.HttpServletRequest
+import software.altitude.core.Api
 
 @DoNotDiscover class UrlServiceTests extends funsuite.AnyFunSuite with TestFocus {
   val urlService = new UrlService
@@ -15,19 +13,15 @@ import javax.servlet.http.HttpServletRequest
   val personId: String = BaseDao.genId
   val repoId = "1"
 
-  test("HTMX person search with sort URL should correctly translate to browser view URL") {
-    val request = mock(classOf[HttpServletRequest])
-
+  test("Browser view URL has the combined query string and the fragment", Focused) {
     val tabSelected = "albums"
-    // user is on a page with PEOPLE tab chosen
-    when(request.getHeader("HX-Current-URL")).thenReturn(s"http://localhost:8080/r/$repoId#$tabSelected")
+    val sortValue = "sort_field0"
+    val url = urlService.getBrowserViewUrl(
+      combinedQueryParams=Map(
+        Api.Field.Search.PERSON_ID -> personId,
+        Api.Field.Search.SORT -> sortValue
+      ), s"http://localhost:8080/r/$repoId?#$tabSelected")
 
-    val queryParams = "personId=$personId&sort=sort_field"
-    when(request.getQueryString).thenReturn(queryParams)
-
-    val url = urlService.getBrowserViewUrl(request)
-
-    // the system forces person view URL with SORT and the PEOPLE tab is still chosen
-    url shouldEqual s"/r/$repoId?$queryParams#$tabSelected"
+    url shouldEqual s"/r/$repoId?personId=$personId&sort=$sortValue#$tabSelected"
   }
 }
