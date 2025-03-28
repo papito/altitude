@@ -11,6 +11,8 @@ case class SearchSort(field: String, direction: SortDirection.Value) {
     Api.Field.SearchSort.DIRECTION -> direction.toString,
     Api.Field.SearchSort.FIELD -> field
   )
+
+  override def toString: String = s"SearchSort(field=$field, direction=${direction.id})"
 }
 
 class SearchQuery(
@@ -34,6 +36,8 @@ class SearchQuery(
   val isParameterized: Boolean = params.nonEmpty
   val isText: Boolean = text.nonEmpty
   override val isSorted: Boolean = searchSort.nonEmpty
+
+  override def toString: String = s"SearchQuery(text=$text, params=$params, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page, searchSort=${searchSort.headOption})"
 
   override def add(_params: (String, Any)*): SearchQuery =
     new SearchQuery(

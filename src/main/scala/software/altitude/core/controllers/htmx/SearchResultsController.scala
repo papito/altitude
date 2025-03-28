@@ -33,7 +33,6 @@ class SearchResultsController extends BaseHtmxController {
     val field :: directionInt :: _ = sortArg.split("\\|").toList
     val sortDirection = SortDirection(directionInt.toInt)
     val sort = SearchSort(field=field, direction=sortDirection)
-    logger.debug(s"QUERY: rpp: $rpp, page: $page, sort: $field|$sortDirection, queryText: $queryText, folderIds: $folderId, personIds: $personId")
 
     val q = new SearchQuery(
       text = queryText,
@@ -43,6 +42,7 @@ class SearchResultsController extends BaseHtmxController {
       page = page,
       searchSort = List(sort)
     )
+    logger.info(s"QUERY: ${q.toString}")
 
     val results = app.service.library.search(q)
 
