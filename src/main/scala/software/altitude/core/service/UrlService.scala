@@ -2,7 +2,7 @@ package software.altitude.core.service
 
 import javax.servlet.http.HttpServletRequest
 import software.altitude.core.RequestContext
-``
+
 class UrlService {
   def getBrowserViewUrl(request: HttpServletRequest): String =
     s"/r/${RequestContext.getRepository.persistedId}?${request.getQueryString}" + gerFragment(request)
