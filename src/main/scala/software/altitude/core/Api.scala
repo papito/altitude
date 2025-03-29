@@ -133,6 +133,8 @@ object Api {
       val BY_ASSET_CREATED_AT = "created_at"
       val BY_MEDIA_CREATED_AT = "original_created_at"
       val BY_FILENAME = "filename"
+      val BY_AREA_SIZE = "area_size"
+      val BY_FILE_SIZE = "size_bytes"
     }
 
     object Setup {

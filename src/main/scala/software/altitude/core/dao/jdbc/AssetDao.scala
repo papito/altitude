@@ -33,6 +33,8 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       fileName = rec(FieldConst.Asset.FILENAME).asInstanceOf[String],
       checksum = rec(FieldConst.Asset.CHECKSUM).asInstanceOf[Int],
       assetType = assetType,
+      width = rec(FieldConst.Asset.WIDTH).asInstanceOf[Int],
+      height = rec(FieldConst.Asset.HEIGHT).asInstanceOf[Int],
       sizeBytes = rec(FieldConst.Asset.SIZE_BYTES).asInstanceOf[Int],
       extractedMetadata = getJsonFromColumn(rec(FieldConst.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
@@ -81,8 +83,9 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
              ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED},  ${FieldConst.Asset.ORIGINAL_CREATED_AT},
+            ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match {
@@ -126,6 +129,9 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       asset.folderId,
       asset.isTriaged,
       sqlOriginalDateTime.orNull,
+      asset.width,
+      asset.height,
+      asset.width * asset.height,
       UserMetadata.withIds(asset.userMetadata).toJson.toString,
       asset.extractedMetadata.toJson.toString,
       asset.publicMetadata.toJson.toString

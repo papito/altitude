@@ -105,16 +105,6 @@
             hx-target="#content"
             hx-get="/htmx/search/r/${RequestContext.getRepository.persistedId}"
             hx-trigger="change">
-      <option value="created_at1"
-        #if (sort.field == "created_at" && sort.direction.id == 1)
-              selected
-        #end>Date Added (newest first)
-      </option>
-      <option value="created_at0"
-        #if (sort.field == "created_at" && sort.direction.id == 0)
-              selected
-        #end>Date Added (oldest first)
-      </option>
 
       <option value="original_created_at1"
         #if (sort.field == "original_created_at" && sort.direction.id == 1)
@@ -127,6 +117,17 @@
         #end>Date Created (oldest first)
       </option>
 
+      <option value="created_at1"
+        #if (sort.field == "created_at" && sort.direction.id == 1)
+              selected
+        #end>Date Imported (newest first)
+      </option>
+      <option value="created_at0"
+        #if (sort.field == "created_at" && sort.direction.id == 0)
+              selected
+        #end>Date Imported (oldest first)
+      </option>
+
       <option value="filename0"
         #if (sort.field == "filename" && sort.direction.id == 0)
               selected
@@ -137,8 +138,29 @@
               selected
         #end>File Name (Z-A)
       </option>
-      <option value="dimensions-desc">Dimensions (largest first)</option>
-      <option value="dimensions-asc">Dimensions (smallest first)</option>
+
+      <option value="size_bytes0"
+        #if (sort.field == "size_bytes" && sort.direction.id == 0)
+              selected
+        #end>File Size (smallest first)
+      </option>
+      <option value="size_bytes1"
+        #if (sort.field == "size_bytes" && sort.direction.id == 1)
+              selected
+        #end>File Size (largest first)
+      </option>
+
+      <option value="area_size0"
+        #if (sort.field == "area_size" && sort.direction.id == 0)
+              selected
+        #end>Dimensions (smallest first)
+      </option>
+      <option value="area_size1"
+        #if (sort.field == "area_size" && sort.direction.id == 1)
+              selected
+        #end>Dimensions (largest first)
+      </option>
+
     </select>
   </div>
 </div>

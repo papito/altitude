@@ -54,6 +54,10 @@ CREATE TABLE asset  (
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
   mime_type VARCHAR(64) NOT NULL,
+  width INT NOT NULL DEFAULT 0,
+  height INT NOT NULL DEFAULT 0,
+    -- area size of the image in pixels (width * height)
+  area_size INT NOT NULL,
   extracted_metadata TEXT,
   public_metadata TEXT,
   user_metadata TEXT,

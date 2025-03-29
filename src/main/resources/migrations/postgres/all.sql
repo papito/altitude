@@ -55,6 +55,10 @@ CREATE TABLE asset (
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
   mime_type VARCHAR(64) NOT NULL,
+  width INT NOT NULL DEFAULT 0,
+  height INT NOT NULL DEFAULT 0,
+    -- area size of the image in pixels (width * height)
+  area_size INT NOT NULL,
   user_metadata jsonb,
   public_metadata jsonb,
   extracted_metadata jsonb,
@@ -64,9 +68,8 @@ CREATE TABLE asset (
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
   is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
-    -- EXIF DateTimeOriginal, defaults to Now() if none
+    -- area size of the image in pixels (width * height)
   original_created_at TIMESTAMP WITH TIME ZONE NOT NULL
-
 ) INHERITS (_core);
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);
 CREATE INDEX asset_02 ON asset(repository_id, is_recycled, is_pipeline_processed);
