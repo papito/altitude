@@ -63,7 +63,9 @@ CREATE TABLE asset (
   size_bytes INT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
-  is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE
+  is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
+    -- EXIF DateTimeOriginal, defaults to Now() if none
+  original_created_at TIMESTAMP WITH TIME ZONE NOT NULL
 
 ) INHERITS (_core);
 CREATE UNIQUE INDEX asset_01 ON asset(repository_id, checksum, is_recycled);

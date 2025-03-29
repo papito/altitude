@@ -13,7 +13,7 @@ import software.altitude.core.Api
   val personId: String = BaseDao.genId
   val repoId = "1"
 
-  test("Browser view URL has the combined query string and the fragment", Focused) {
+  test("Browser view URL has the combined query string and the fragment") {
     val tabSelected = "albums"
     val sortValue = "sort_field0"
     val url = urlService.getBrowserViewUrl(

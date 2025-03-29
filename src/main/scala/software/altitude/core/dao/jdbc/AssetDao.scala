@@ -3,9 +3,7 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json._
-
-import software.altitude.core.FieldConst
-import software.altitude.core.RequestContext
+import software.altitude.core.{FieldConst, RequestContext, Const => C}
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.Asset
 import software.altitude.core.models.AssetType
@@ -14,6 +12,9 @@ import software.altitude.core.models.PublicMetadata
 import software.altitude.core.models.UserMetadata
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
+
+import java.time.LocalDateTime
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
 
 abstract class AssetDao(val config: Config) extends BaseDao with software.altitude.core.dao.AssetDao {
   final override val tableName = "asset"
@@ -40,6 +41,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),
+      originalCreatedAt = getDateTimeField(rec.get(FieldConst.Asset.ORIGINAL_CREATED_AT)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
@@ -78,14 +80,37 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
-             ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.USER_METADATA},
-             ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+             ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED},  ${FieldConst.Asset.ORIGINAL_CREATED_AT},
+             ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match {
       case Some(id) => id
       case None => BaseDao.genId
+    }
+
+    val originalDateTime: LocalDateTime = asset.publicMetadata.dateTimeOriginal match {
+      case Some(dateTime) =>
+        try {
+          val originalDt = LocalDateTime.parse(dateTime, exifDateTimeFormatterPattern)
+          originalDt
+        } catch {
+          case _: DateTimeParseException =>
+            logger.warn(s"DateTimeParseException. Failed to parse dateTimeOriginal [$dateTime] for asset with id [$id]")
+            LocalDateTime.now()
+          case _: Exception =>
+            logger.error(s"Unknown exception. ailed to parse dateTimeOriginal [$dateTime] for asset with id [$id]")
+            LocalDateTime.now()
+        }
+      case None => LocalDateTime.now()
+    }
+
+    val sqlOriginalDateTime = getDataSourceType match {
+        case C.DbEngineName.POSTGRES =>
+          Some(originalDateTime)
+        case C.DbEngineName.SQLITE =>
+          Some(originalDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
     }
 
     val sqlVals: List[Any] = List(
@@ -100,6 +125,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
       asset.assetType.mime,
       asset.folderId,
       asset.isTriaged,
+      sqlOriginalDateTime.orNull,
       UserMetadata.withIds(asset.userMetadata).toJson.toString,
       asset.extractedMetadata.toJson.toString,
       asset.publicMetadata.toJson.toString

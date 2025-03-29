@@ -44,6 +44,7 @@ case class Asset(
     isRecycled: Boolean = false,
     isPipelineProcessed: Boolean = false,
     isInFaceRecModel: Boolean = false,
+    originalCreatedAt: Option[LocalDateTime] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel {

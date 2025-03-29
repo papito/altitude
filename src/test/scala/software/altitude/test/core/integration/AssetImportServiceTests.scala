@@ -65,4 +65,17 @@ import software.altitude.test.core.IntegrationTestCore
     asset.isTriaged should be(true)
   }
 
+  test("Imported asset with metadata has media creation date set", Focused) {
+    val importAsset = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    asset.originalCreatedAt should not be None
+  }
+
+  test("Imported asset without metadata has media creation date set", Focused) {
+    val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    asset.originalCreatedAt should not be None
+  }
 }

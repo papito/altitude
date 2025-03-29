@@ -23,10 +23,10 @@ import org.opencv.objdetect.FaceDetectorYN
 import org.opencv.objdetect.FaceRecognizerSF
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import software.altitude.core.Environment
 import software.altitude.core.models.Face
 import software.altitude.core.models.FaceImages
+import software.altitude.core.service.FaceDetectionService.minFaceSize
 import software.altitude.core.util.ImageUtil.determineImageScale
 import software.altitude.core.util.ImageUtil.makeImageThumbnail
 import software.altitude.core.util.ImageUtil.matFromBytes
@@ -200,6 +200,11 @@ class FaceDetectionService() {
   def detectFacesWithYunet(image: Mat): List[Mat] = {
     if (image.empty) {
       logger.warn("No data in image")
+      return List()
+    }
+
+    if (Math.min(image.size().width, image.size().height).toInt < minFaceSize) {
+      logger.warn("Image too small")
       return List()
     }
 

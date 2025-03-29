@@ -131,7 +131,7 @@ object Api {
       val FIELD = "field"
 
       val BY_ASSET_CREATED_AT = "created_at"
-      val BY_MEDIA_CREATED_AT = "mediaCreationDate"
+      val BY_MEDIA_CREATED_AT = "original_created_at"
       val BY_FILENAME = "filename"
     }
 
