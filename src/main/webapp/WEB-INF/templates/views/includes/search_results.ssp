@@ -53,8 +53,8 @@
 
   #assets .cell {
     display: grid;
-    width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
-    height:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
+    width:<%= Const.AssetView.PREVIEW_BOX_PIXELS + 10 %>px;
+    height:<%= Const.AssetView.PREVIEW_BOX_PIXELS + 10 %>px;
     place-items: center;
   }
 

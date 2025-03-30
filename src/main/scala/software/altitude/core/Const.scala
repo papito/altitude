@@ -7,7 +7,6 @@ object Const {
     val TEST_DIR = "test.dir"
     val FS_DATA_DIR = "fs.data.dir"
     val DEFAULT_STORAGE_ENGINE = "storage.engine.default"
-    val PREVIEW_BOX_PIXELS = "preview.box.pixels"
     val DB_ENGINE = "db.engine"
     val POSTGRES_USER = "db.postgres.user"
     val POSTGRES_PASSWORD = "db.postgres.password"
@@ -19,6 +18,10 @@ object Const {
 
   object FaceRecognition {
     val MIN_FACES_THRESHOLD = 3
+  }
+
+  object AssetView {
+    val PREVIEW_BOX_PIXELS = 200
   }
 
   object DbEngineName extends Enumeration {

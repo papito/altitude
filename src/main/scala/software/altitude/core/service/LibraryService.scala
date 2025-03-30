@@ -40,8 +40,6 @@ class LibraryService(val app: Altitude) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val txManager: TransactionManager = app.txManager
 
-  private val previewBoxSize: Int = app.config.getInt(C.Conf.PREVIEW_BOX_PIXELS)
-
   def checkMediaType(asset: Asset): Unit = {
     if (!LibraryService.SUPPORTED_MEDIA_TYPES.contains(asset.assetType.mediaType)) {
       throw UnsupportedMediaTypeException(asset)
@@ -163,7 +161,7 @@ class LibraryService(val app: Altitude) {
   private def genPreviewData(dataAsset: AssetWithData): Array[Byte] = {
     dataAsset.asset.assetType.mediaType match {
       case "image" =>
-        makeImageThumbnail(dataAsset.data, previewBoxSize)
+        makeImageThumbnail(dataAsset.data, C.AssetView.PREVIEW_BOX_PIXELS)
       case _ => new Array[Byte](0)
     }
   }
