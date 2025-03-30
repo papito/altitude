@@ -16,7 +16,7 @@
     border: 1px solid var(--background-tertiary-color);
     border-radius: 5px;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: .5fr 1fr 1fr;
   }
 
   #searchControl div {
@@ -26,6 +26,10 @@
 
   #searchControl .total {
     color: var(--faded-font-color);
+  }
+
+  #searchControl .total div {
+    display: block;
   }
 
   #assets .cell {
@@ -91,7 +95,9 @@
 
 <div id="searchControl">
   <div class="total">
-    ${results.total} items
+    <div>
+      <strong>Total:</strong> ${results.total}
+    </div>
   </div>
   <div>
     size
