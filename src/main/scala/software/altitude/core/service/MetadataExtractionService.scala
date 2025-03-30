@@ -30,7 +30,10 @@ class MetadataExtractionService {
         // println(directory.getName)
         for (tag <- directory.getTags.asScala) {
           // println(s"\t${tag.getTagName} : ${tag.getTagType} -> ${tag.getDescription}")
-          extractedMetadata.addValue(directory.getName, tag.getTagName, tag.getDescription)
+          extractedMetadata.addValue(
+            directory.getName,
+            tag.getTagName,
+            sanitizeString(tag.getDescription))
         }
       }
 
@@ -40,6 +43,17 @@ class MetadataExtractionService {
         logger.error("Error extracting metadata", e)
         ExtractedMetadata()
     }
+  }
+
+  /**
+   * Sanitizes a string by removing null characters.
+   * This is useful to ensure that metadata does not contain any null characters which can cause issues in processing.
+   *
+   * Postgres, for example, is not a fan of null unicode characters in strings
+   */
+  private def sanitizeString(input: String): String = {
+    if (input == null) return null
+    input.replace("\u0000", "")
   }
 
   def detectAssetType(data: Array[Byte]): AssetType = {
