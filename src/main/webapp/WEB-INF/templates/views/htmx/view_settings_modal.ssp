@@ -43,6 +43,19 @@
     <input type="checkbox" id="dimensions" value="dimensions">
     <label for="dimensions">Media Dimensions</label>
   </div>
+
+<!--
+  <div>
+    <input type="checkbox" id="people" value="people">
+    <label for="people">People</label>
+  </div>
+
+  <div>
+    <input type="checkbox" id="folder" value="folder">
+    <label for="folder">Folder</label>
+  </div>
+-->
+
 </form>
 
 <script type="module">
