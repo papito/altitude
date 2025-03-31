@@ -1,0 +1,53 @@
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.RequestContext %>
+<% import play.api.libs.json.Json %>
+<% import play.api.libs.json.JsObject %>
+
+<%@ val minWidth: Int %>
+<%@ val title: String %>
+
+<style>
+  #viewSettingsModalForm {
+    display: grid;
+    grid-auto-rows: auto;
+    row-gap: var(--control-vertical-space);
+  }
+
+  #viewSettingsModalForm input[type="checkbox"] {
+    vertical-align: middle;
+  }
+</style>
+
+<form id="viewSettingsModalForm">
+  <div>
+    <input type="checkbox" id="fileName" value="fileName">
+    <label for="fileName">File Name</label>
+  </div>
+
+  <div>
+    <input type="checkbox" id="datetimeCreated" value="datetimeCreated">
+    <label for="datetimeCreated">Date/Time Created</label>
+  </div>
+
+  <div>
+    <input type="checkbox" id="datetimeImported" value="datetimeImported">
+    <label for="datetimeImported">Date/Time Imported</label>
+  </div>
+
+  <div>
+    <input type="checkbox" id="fileSize" value="fileSize">
+    <label for="fileSize">File Size</label>
+  </div>
+
+  <div>
+    <input type="checkbox" id="dimensions" value="dimensions">
+    <label for="dimensions">Media Dimensions</label>
+  </div>
+</form>
+
+<script type="module">
+  import { showModal } from "../../../../js/common/modal.js"
+
+  showModal({ minWidthPx: "${minWidth}", title: "${title}" })
+
+</script>

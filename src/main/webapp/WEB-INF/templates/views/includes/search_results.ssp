@@ -98,8 +98,12 @@
     </div>
   </div>
   <div>
-    <button class="action-button small">
-      <i class="fas fa-cog"></i><span>View</span>
+    <button class="action-button small"
+            hx-get='${ url(showUpdateViewSettingsModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+            hx-target="#modalContent"
+            hx-trigger="click">
+      <i class="fas fa-cog"></i>
+      <span>View</span>
     </button>
   </div>
 
