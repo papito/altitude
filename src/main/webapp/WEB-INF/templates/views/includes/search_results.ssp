@@ -24,10 +24,6 @@
     place-items: center;
   }
 
-  #searchControl .total {
-    color: var(--faded-font-color);
-  }
-
   #searchControl .total div {
     display: block;
   }
@@ -61,12 +57,10 @@
   .sort-dropdown {
     padding: 5px 25px 5px 5px;
     background-color: var(--background-secondary-color);
-    color: var(--faded-font-color);
     border: 1px solid var(--background-tertiary-color);
     border-radius: 5px;
     cursor: pointer;
     letter-spacing: 1px;
-    text-transform: uppercase;
     font-size: smaller;
     outline: none;
     appearance: none;
@@ -75,16 +69,20 @@
     background-position: right 5px center;
   }
 
-  .sort-dropdown:hover {
+  #searchControl .sort-dropdown:hover {
     background-color: var(--background-tertiary-color);
   }
 
-  .sort-dropdown:focus {
+  #searchControl .sort-dropdown:focus {
     box-shadow: 0 0 2px 2px rgba(0, 0, 0, 0.1);
   }
 
-  .sort-dropdown span {
+  #searchControl .sort-dropdown span {
     font-size: 1.2em;
+  }
+
+  #searchControl .total strong {
+    color: var(--faded-font-color);
   }
 
 </style>
@@ -100,7 +98,9 @@
     </div>
   </div>
   <div>
-    size
+    <button class="action-button small">
+      <i class="fas fa-cog"></i><span>View</span>
+    </button>
   </div>
 
   <div class="sort">
@@ -126,12 +126,12 @@
       <option value="created_at1"
         #if (sort.field == "created_at" && sort.direction.id == 1)
               selected
-        #end>Date Imported (newest first)
+        #end>Date Imported (Newest)
       </option>
       <option value="created_at0"
         #if (sort.field == "created_at" && sort.direction.id == 0)
               selected
-        #end>Date Imported (oldest first)
+        #end>Date Imported (Oldest)
       </option>
 
       <option value="filename0"
@@ -148,23 +148,23 @@
       <option value="size_bytes0"
         #if (sort.field == "size_bytes" && sort.direction.id == 0)
               selected
-        #end>File Size (smallest first)
+        #end>File Size (Smallest)
       </option>
       <option value="size_bytes1"
         #if (sort.field == "size_bytes" && sort.direction.id == 1)
               selected
-        #end>File Size (largest first)
+        #end>File Size (Largest)
       </option>
 
       <option value="area_size0"
         #if (sort.field == "area_size" && sort.direction.id == 0)
               selected
-        #end>Dimensions (smallest first)
+        #end>Dimensions (Smallest)
       </option>
       <option value="area_size1"
         #if (sort.field == "area_size" && sort.direction.id == 1)
               selected
-        #end>Dimensions (largest first)
+        #end>Dimensions (Largest)
       </option>
 
     </select>
