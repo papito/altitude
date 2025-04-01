@@ -53,7 +53,7 @@
   }
 
   #assets .cell .metadata div {
-    display: inline-block;
+    display: none;
     padding: 0 5px 0 5px;
     white-space: nowrap;
     overflow: hidden;

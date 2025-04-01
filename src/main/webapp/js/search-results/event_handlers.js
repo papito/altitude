@@ -34,3 +34,18 @@ document.body.addEventListener(Const.events.assetMoved, (event) => {
         handler: handler,
     })
 })
+
+document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
+    const fieldName = event.detail["fieldName"]
+    const checked = event.detail["checked"]
+
+    document.querySelectorAll('.metadata > div.' + fieldName).forEach(div =>
+        div.style.display = checked ? "inline-block": "none"
+    );
+
+    if (checked) {
+        context.addGridMetadataField(fieldName)
+    } else {
+        context.removeGridMetadataField(fieldName)
+    }
+})

@@ -18,49 +18,88 @@
   }
 </style>
 
+<!-- NOTE: The "value" here mirrors the ones in the search results grid, so these are
+     the classes we show/hide in the grid. -->
+
 <form id="viewSettingsModalForm">
   <div>
-    <input type="checkbox" id="fileName" value="fileName">
-    <label for="fileName">File Name</label>
+    <input type="checkbox"
+           id="fileNameCheckbox"
+           value="fileName"
+           onchange="setFieldVisibility(event)">
+    <label for="fileNameCheckbox">File Name</label>
   </div>
 
   <div>
-    <input type="checkbox" id="datetimeCreated" value="datetimeCreated">
-    <label for="datetimeCreated">Date/Time Created</label>
+    <input type="checkbox"
+           id="originalCreatedAtCheckbox"
+           value="originalCreatedAt"
+           onchange="setFieldVisibility(event)">
+    <label for="originalCreatedAtCheckbox">Date/Time Created</label>
   </div>
 
   <div>
-    <input type="checkbox" id="datetimeImported" value="datetimeImported">
-    <label for="datetimeImported">Date/Time Imported</label>
+    <input type="checkbox"
+           id="importedAtCheckbox"
+           value="importedAt"
+           onchange="setFieldVisibility(event)">
+    <label for="importedAtCheckbox">Date/Time Imported</label>
   </div>
 
   <div>
-    <input type="checkbox" id="fileSize" value="fileSize">
-    <label for="fileSize">File Size</label>
+    <input type="checkbox"
+           id="dimensionsCheckbox"
+           value="dimensions"
+           onchange="setFieldVisibility(event)">
+    <label for="dimensionsCheckbox">Media Dimensions</label>
   </div>
 
   <div>
-    <input type="checkbox" id="dimensions" value="dimensions">
-    <label for="dimensions">Media Dimensions</label>
+    <input type="checkbox"
+           id="fileSizeCheckbox"
+           value="fileSize"
+           onchange="setFieldVisibility(event)">
+    <label for="fileSizeCheckbox">File Size</label>
   </div>
-
-<!--
-  <div>
-    <input type="checkbox" id="people" value="people">
-    <label for="people">People</label>
-  </div>
-
-  <div>
-    <input type="checkbox" id="folder" value="folder">
-    <label for="folder">Folder</label>
-  </div>
--->
-
 </form>
 
 <script type="module">
   import { showModal } from "../../../../js/common/modal.js"
+  import { Const } from "../../../../js/constants.js"
+  import { context } from "../../../../js/context.js"
 
   showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
+  const showFields = context.getGridMetadataFields()
+
+  if (showFields.size) {
+    const checkboxSelectorStr = Array.from(showFields)
+            .map((fieldName) => '#viewSettingsModalForm input[value="' + fieldName + '"]')
+            .join(", ")
+
+    document.querySelectorAll(checkboxSelectorStr).forEach(el =>
+            el.checked = true
+    );
+  }
+
+  window.setFieldVisibility = function(event) {
+    const fieldName = event.target.value;
+    const isChecked = event.target.checked;
+
+    if (isChecked) {
+      context.addGridMetadataField(fieldName)
+    } else {
+      context.removeGridMetadataField(fieldName)
+    }
+
+    const customEvent = new CustomEvent(Const.events.viewSettingChanged, {
+      detail: {
+        fieldName: fieldName,
+        checked: isChecked
+      },
+      bubbles: true,
+    });
+
+    document.body.dispatchEvent(customEvent);
+  }
 </script>

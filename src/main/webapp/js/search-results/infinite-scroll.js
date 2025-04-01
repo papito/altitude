@@ -1,4 +1,5 @@
 import { Const } from "../constants.js"
+import { context } from "../context.js"
 
 /**
  * INFINITE SCROLL
@@ -92,9 +93,30 @@ export function initLazyLoad() {
     document
         .querySelector("#assets")
         .addEventListener("htmx:load", function (evt) {
+            /**
+             * Observe the image element for viewport intersection, to lazy load/unload
+             */
             const imgEl = evt.target.querySelector("img")
             if (imgEl !== null) {
                 observer.observe(imgEl)
+            }
+
+            /**
+             * See which metadata fields the user wants to display
+             */
+            const showFields = context.getGridMetadataFields()
+
+            const toShowFieldsSelectorStr = Array.from(showFields)
+                .map((fieldName) => '.metadata > div.' + fieldName)
+                .join(", ")
+
+            if (toShowFieldsSelectorStr.length) {
+                evt.target.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
+                    div.style.display = "inline-block"
+                })
+                evt.target.querySelector('.metadata').style.display = "grid"
+            } else {
+                evt.target.querySelector('.metadata').style.display = "none"
             }
         })
 }

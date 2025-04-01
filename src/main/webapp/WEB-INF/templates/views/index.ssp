@@ -142,10 +142,13 @@
 
 <script type="module">
   import { context } from "../../../js/context.js"
+  import { init } from "../../../js/index/init.js"
 
   context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 
   function loadView() {
+      init()
+
       // if there is no fragment, we default to folder views
       const fragment = window.location.hash || "#folders"
 
