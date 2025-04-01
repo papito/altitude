@@ -109,7 +109,7 @@ export function initLazyLoad() {
      * The metadata fields are painted when HTMX loads more data into #assets,
      * but initial load triggers the load event on #content, not #assets.
      */
-    document.querySelectorAll("#assets").forEach((el) => {
+    document.querySelectorAll("#assets .cell").forEach((el) => {
         showOrHideAssetGridMetadata(el)
     })
 }

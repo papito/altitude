@@ -48,4 +48,21 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
     } else {
         context.removeGridMetadataField(fieldName)
     }
+
+    const showFields = context.getGridMetadataFields()
+
+    // No metadata fields selected? Hide the metadata container
+    if (showFields.size === 0) {
+        document.querySelectorAll('#assets .metadata').forEach(div =>
+            div.style.display = "none"
+        );
+    }
+
+    // If there is ONE metadata field selected, show the metadata container
+    // (if there is more than one field selected, the metadata container is already shown)
+    if (showFields.size === 1) {
+        document.querySelectorAll('#assets .metadata').forEach(div =>
+            div.style.display = "inline-block"
+        );
+    }
 })
