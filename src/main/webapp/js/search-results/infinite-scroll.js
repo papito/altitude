@@ -101,22 +101,33 @@ export function initLazyLoad() {
                 observer.observe(imgEl)
             }
 
-            /**
-             * See which metadata fields the user wants to display
-             */
-            const showFields = context.getGridMetadataFields()
-
-            const toShowFieldsSelectorStr = Array.from(showFields)
-                .map((fieldName) => '.metadata > div.' + fieldName)
-                .join(", ")
-
-            if (toShowFieldsSelectorStr.length) {
-                evt.target.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
-                    div.style.display = "inline-block"
-                })
-                evt.target.querySelector('.metadata').style.display = "grid"
-            } else {
-                evt.target.querySelector('.metadata').style.display = "none"
-            }
+            showOrHideAssetGridMetadata(evt.target)
         })
+
+    /**
+     * IMPORTANT: We need to trigger this manually for the initial load.
+     * The metadata fields are painted when HTMX loads more data into #assets,
+     * but initial load triggers the load event on #content, not #assets.
+     */
+    document.querySelectorAll("#assets").forEach((el) => {
+        showOrHideAssetGridMetadata(el)
+    })
+}
+
+function showOrHideAssetGridMetadata(el) {
+    const showFields = context.getGridMetadataFields()
+
+    const toShowFieldsSelectorStr = Array.from(showFields)
+        .map((fieldName) => '.metadata > div.' + fieldName)
+        .join(", ")
+
+    if (toShowFieldsSelectorStr.length) {
+        el.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
+            div.style.display = "inline-block"
+        })
+        el.querySelector('.metadata').style.display = "grid"
+    } else {
+        el.querySelector('.metadata').style.display = "none"
+    }
+
 }

@@ -214,7 +214,7 @@
 
   // this container template is loaded on new search, so scroll to top
   const contentElement = document.getElementById("content")
-contentElement.scrollTo({ top: 0, behavior: "auto" })
+  contentElement.scrollTo({ top: 0, behavior: "auto" })
 
   initLazyLoad()
   initInfiniteScroll()
