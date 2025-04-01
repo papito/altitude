@@ -24,6 +24,7 @@ export const context = {
     },
 
     loadMetadataFieldViewSettingsFromStore: function() {
+        // localStorage stores the grid-visible metadata fields as a comma-separated list
         const savedGridMetadataFields = localStorage.getItem(Const.localStore.gridMetadataFields)
         if (!savedGridMetadataFields || savedGridMetadataFields.length === 0) {
             return

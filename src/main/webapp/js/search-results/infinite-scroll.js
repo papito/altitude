@@ -123,7 +123,7 @@ function showOrHideAssetGridMetadata(el) {
 
     if (toShowFieldsSelectorStr.length) {
         el.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
-            div.style.display = "inline-block"
+            div.style.display = "block"
         })
         el.querySelector('.metadata').style.display = "grid"
     } else {

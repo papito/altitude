@@ -39,16 +39,19 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
     const fieldName = event.detail["fieldName"]
     const checked = event.detail["checked"]
 
+    // show/hide this metadata field in the grid
     document.querySelectorAll('.metadata > div.' + fieldName).forEach(div =>
-        div.style.display = checked ? "inline-block": "none"
+        div.style.display = checked ? "block": "none"
     );
 
+    // update the context state
     if (checked) {
         context.addGridMetadataField(fieldName)
     } else {
         context.removeGridMetadataField(fieldName)
     }
 
+    // show/hide the metadata container, depending on the number of fields selected
     const showFields = context.getGridMetadataFields()
 
     // No metadata fields selected? Hide the metadata container
@@ -62,7 +65,7 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
     // (if there is more than one field selected, the metadata container is already shown)
     if (showFields.size === 1) {
         document.querySelectorAll('#assets .metadata').forEach(div =>
-            div.style.display = "inline-block"
-        );
+            div.style.display = "grid"
+        )
     }
 })

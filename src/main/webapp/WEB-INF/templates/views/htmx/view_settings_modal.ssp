@@ -70,6 +70,9 @@
 
   showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
+  /**
+   * Populate the checkboxes with the current field visibility settings (for this browser)
+   */
   const showFields = context.getGridMetadataFields()
 
   if (showFields.size) {
@@ -92,6 +95,7 @@
       context.removeGridMetadataField(fieldName)
     }
 
+    // Fire the change event so that the grid can reconfigure itself
     const customEvent = new CustomEvent(Const.events.viewSettingChanged, {
       detail: {
         fieldName: fieldName,
