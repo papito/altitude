@@ -4,7 +4,6 @@ import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 
 import software.altitude.core.Api
-import software.altitude.core.models.UserMetadataField
 
 case class SearchSort(field: String, direction: SortDirection.Value) {
   def toJson: JsObject = Json.obj(
@@ -37,7 +36,8 @@ class SearchQuery(
   val isText: Boolean = text.nonEmpty
   override val isSorted: Boolean = searchSort.nonEmpty
 
-  override def toString: String = s"SearchQuery(text=$text, params=$params, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page, searchSort=${searchSort.headOption})"
+  override def toString: String =
+    s"SearchQuery(text=$text, params=$params, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page, searchSort=${searchSort.headOption})"
 
   override def add(_params: (String, Any)*): SearchQuery =
     new SearchQuery(

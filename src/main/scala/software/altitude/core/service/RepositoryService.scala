@@ -40,7 +40,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       val rootFolder = Folder(
         id = Some(contextRepo.rootFolderId),
         parentId = contextRepo.rootFolderId,
-        name = FieldConst.Folder.Name.ROOT,
+        name = FieldConst.Folder.Name.ROOT
       )
 
       app.service.folder.add(rootFolder)

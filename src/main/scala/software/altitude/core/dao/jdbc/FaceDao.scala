@@ -1,16 +1,16 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.sql.PreparedStatement
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
-
-import java.sql.PreparedStatement
 
 abstract class FaceDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FaceDao {
 

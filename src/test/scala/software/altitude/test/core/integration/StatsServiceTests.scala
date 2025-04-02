@@ -1,11 +1,5 @@
 package software.altitude.test.core.integration
 
-import org.scalatest.{DoNotDiscover}
-import software.altitude.core.Altitude
-import software.altitude.core.models.Asset
-import software.altitude.core.models.Folder
-import software.altitude.core.util.Query
-import software.altitude.test.core.IntegrationTestCore
 
 /**
  * Stats service has been deep sixed. This is here for reference as in the future the live

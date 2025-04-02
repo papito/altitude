@@ -7,9 +7,7 @@ import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.dao.postgres.querybuilder.{AssetSearchQueryBuilder => PostgresAssetSearchQueryBuilder}
 import software.altitude.core.dao.sqlite.querybuilder.{AssetSearchQueryBuilder => SqliteAssetSearchQueryBuilder}
-import software.altitude.core.models.FieldType
 import software.altitude.core.models.Repository
-import software.altitude.core.models.UserMetadataField
 import software.altitude.core.util._
 import software.altitude.core.{Const => C}
 import software.altitude.test.core.TestFocus

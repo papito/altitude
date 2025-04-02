@@ -3,7 +3,10 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-import software.altitude.core.{FieldConst, RequestContext, Const => C}
+
+import software.altitude.core.{ Const => C }
+import software.altitude.core.FieldConst
+import software.altitude.core.RequestContext
 import software.altitude.core.models.Folder
 
 abstract class FolderDao(override val config: Config) extends BaseDao with software.altitude.core.dao.FolderDao {
@@ -15,22 +18,22 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
       name = rec(FieldConst.Folder.NAME).asInstanceOf[String],
       parentId = rec(FieldConst.Folder.PARENT_ID).asInstanceOf[String],
       isRecycled = getBooleanField(rec(FieldConst.Folder.IS_RECYCLED)),
-
       numOfChildren = rec.getOrElse(FieldConst.Folder.NUM_OF_CHILDREN, 0L) match {
         case i: java.lang.Integer => i
         case l: java.lang.Long => l.toInt
-        case _ => throw new IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
-      },
+        case _ =>
+          throw new IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
+      }
     )
   }
 
   override def getById(id: String): JsObject = {
+
     /**
-     * The wrinkle here is that we need to return the number of children for the folder,
-     * but if the folder is a root folder, we need to subtract 1 from the count, because the root
-     * folder is its own parent, introducing a one-off error.
+     * The wrinkle here is that we need to return the number of children for the folder, but if the folder is a root folder, we
+     * need to subtract 1 from the count, because the root folder is its own parent, introducing a one-off error.
      */
-    val sql = s"""
+    val sql = """
       SELECT f.*, (
         CASE
           WHEN f.id = f.parent_id THEN (
@@ -75,15 +78,16 @@ abstract class FolderDao(override val config: Config) extends BaseDao with softw
   }
 
   def getChildren(parentId: String): List[Folder] = {
+
     /**
-     * Postgres does not allow ORDER BY inside a recursion, but it's not needed -
-     * the order is correct via the final "order by" clause.
+     * Postgres does not allow ORDER BY inside a recursion, but it's not needed - the order is correct via the final "order by"
+     * clause.
      *
      * SQLite DOES allow ORDER BY during recursion, and it IS needed to get the correct order.
      *
-     * While normally we create an override function for each engine if a query is different,
-     * the query here is complex and effectively the same, except for one line of SQL, so we are
-     * going to break the rules and do the engine-specific logic in the query itself.
+     * While normally we create an override function for each engine if a query is different, the query here is complex and
+     * effectively the same, except for one line of SQL, so we are going to break the rules and do the engine-specific logic in
+     * the query itself.
      *
      * This kind of shenanigan is normally not recommended.
      */

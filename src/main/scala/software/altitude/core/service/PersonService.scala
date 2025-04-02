@@ -1,8 +1,14 @@
 package software.altitude.core.service
 
+import java.sql.SQLException
 import org.apache.pekko.Done
 import org.apache.pekko.stream.scaladsl.Source
 import play.api.libs.json.JsObject
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+
 import software.altitude.core.Altitude
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
@@ -18,11 +24,6 @@ import software.altitude.core.util.QueryResult
 import software.altitude.core.util.Sort
 import software.altitude.core.util.SortDirection
 import software.altitude.core.util.Util.getDuplicateExceptionOrSame
-
-import java.sql.SQLException
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 
 object PersonService {
   val UNKNOWN_NAME_PREFIX = "Unknown"

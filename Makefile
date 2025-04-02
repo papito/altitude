@@ -42,8 +42,8 @@ test-unit:
 lint:
 	npm run format
 	npm run lint:fix
-	sbt scalafmt
 	sbt scalafixAll
+	sbt scalafmt
 
 clean:
 	rm -rf data/*

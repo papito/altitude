@@ -23,6 +23,7 @@ import org.opencv.objdetect.FaceDetectorYN
 import org.opencv.objdetect.FaceRecognizerSF
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.Environment
 import software.altitude.core.models.Face
 import software.altitude.core.models.FaceImages

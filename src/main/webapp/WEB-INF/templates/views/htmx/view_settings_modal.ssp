@@ -76,34 +76,37 @@
   const showFields = context.getGridMetadataFields()
 
   if (showFields.size) {
-    const checkboxSelectorStr = Array.from(showFields)
-            .map((fieldName) => '#viewSettingsModalForm input[value="' + fieldName + '"]')
-            .join(", ")
+      const checkboxSelectorStr = Array.from(showFields)
+          .map(
+              (fieldName) =>
+                  '#viewSettingsModalForm input[value="' + fieldName + '"]',
+          )
+          .join(", ")
 
-    document.querySelectorAll(checkboxSelectorStr).forEach(el =>
-            el.checked = true
-    );
+      document
+          .querySelectorAll(checkboxSelectorStr)
+          .forEach((el) => (el.checked = true))
   }
 
-  window.setFieldVisibility = function(event) {
-    const fieldName = event.target.value;
-    const isChecked = event.target.checked;
+  window.setFieldVisibility = function (event) {
+      const fieldName = event.target.value
+      const isChecked = event.target.checked
 
-    if (isChecked) {
-      context.addGridMetadataField(fieldName)
-    } else {
-      context.removeGridMetadataField(fieldName)
-    }
+      if (isChecked) {
+          context.addGridMetadataField(fieldName)
+      } else {
+          context.removeGridMetadataField(fieldName)
+      }
 
-    // Fire the change event so that the grid can reconfigure itself
-    const customEvent = new CustomEvent(Const.events.viewSettingChanged, {
-      detail: {
-        fieldName: fieldName,
-        checked: isChecked
-      },
-      bubbles: true,
-    });
+      // Fire the change event so that the grid can reconfigure itself
+      const customEvent = new CustomEvent(Const.events.viewSettingChanged, {
+          detail: {
+              fieldName: fieldName,
+              checked: isChecked,
+          },
+          bubbles: true,
+      })
 
-    document.body.dispatchEvent(customEvent);
+      document.body.dispatchEvent(customEvent)
   }
 </script>

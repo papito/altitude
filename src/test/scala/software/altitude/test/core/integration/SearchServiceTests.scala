@@ -5,11 +5,11 @@ import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
+import software.altitude.core.Api
 import software.altitude.core.FieldConst
 import software.altitude.core.models._
 import software.altitude.core.util._
 import software.altitude.test.core.IntegrationTestCore
-import software.altitude.core.Api
 
 import scala.language.reflectiveCalls
 import scala.math.Ordered.orderingToOrdered

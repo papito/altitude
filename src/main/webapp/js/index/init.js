@@ -18,7 +18,9 @@ export function init() {
     /**
      * Split the screen according to last preferences
      */
-    const savedHorizontalSplitSizes = localStorage.getItem(Const.localStore.horizontalSplitSizes)
+    const savedHorizontalSplitSizes = localStorage.getItem(
+        Const.localStore.horizontalSplitSizes,
+    )
     let horizontalSplitSizes = [25, 75]
 
     if (savedHorizontalSplitSizes) {
@@ -36,7 +38,9 @@ export function init() {
         },
     })
 
-    const savedVerticalSplitSizes = localStorage.getItem(Const.localStore.verticalSplitSizes)
+    const savedVerticalSplitSizes = localStorage.getItem(
+        Const.localStore.verticalSplitSizes,
+    )
     let verticalSplitSizes = [65, 35]
 
     if (savedVerticalSplitSizes) {
