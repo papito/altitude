@@ -54,7 +54,6 @@ abstract class BaseService[Model <: BaseModel] {
       } catch {
         case e: SQLException => throw getDuplicateExceptionOrSame(e)
         case ex: Exception =>
-          println(ex.toString)
           throw ex
       }
     }

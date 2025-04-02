@@ -19,7 +19,6 @@ object PersistAndIndexAssetFlow {
       case (Left(dataAsset), ctx) =>
         setThreadLocalRequestContext(ctx)
 
-        println("!!!", dataAsset.asset.width)
         app.txManager.withTransaction {
           try {
             debugInfo(s"\tPersisting asset ${dataAsset.asset.fileName}")

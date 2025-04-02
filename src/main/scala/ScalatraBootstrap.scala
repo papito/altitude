@@ -32,6 +32,5 @@ class ScalatraBootstrap extends LifeCycle with AltitudeServletContext {
   override def destroy(context: ServletContext): Unit = {
     logger.warn("Shutting down application")
     AltitudeServletContext.app.cleanup()
-    println("Akka system shut down.")
   }
 }
