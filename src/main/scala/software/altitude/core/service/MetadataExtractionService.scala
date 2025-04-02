@@ -30,10 +30,7 @@ class MetadataExtractionService {
         // println(directory.getName)
         for (tag <- directory.getTags.asScala) {
           // println(s"\t${tag.getTagName} : ${tag.getTagType} -> ${tag.getDescription}")
-          extractedMetadata.addValue(
-            directory.getName,
-            tag.getTagName,
-            sanitizeString(tag.getDescription))
+          extractedMetadata.addValue(directory.getName, tag.getTagName, sanitizeString(tag.getDescription))
         }
       }
 
@@ -46,8 +43,8 @@ class MetadataExtractionService {
   }
 
   /**
-   * Sanitizes a string by removing null characters.
-   * This is useful to ensure that metadata does not contain any null characters which can cause issues in processing.
+   * Sanitizes a string by removing null characters. This is useful to ensure that metadata does not contain any null characters
+   * which can cause issues in processing.
    *
    * Postgres, for example, is not a fan of null unicode characters in strings
    */

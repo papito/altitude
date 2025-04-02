@@ -118,16 +118,15 @@ function showOrHideAssetGridMetadata(el) {
     const showFields = context.getGridMetadataFields()
 
     const toShowFieldsSelectorStr = Array.from(showFields)
-        .map((fieldName) => '.metadata > div.' + fieldName)
+        .map((fieldName) => ".metadata > div." + fieldName)
         .join(", ")
 
     if (toShowFieldsSelectorStr.length) {
         el.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
             div.style.display = "block"
         })
-        el.querySelector('.metadata').style.display = "grid"
+        el.querySelector(".metadata").style.display = "grid"
     } else {
-        el.querySelector('.metadata').style.display = "none"
+        el.querySelector(".metadata").style.display = "none"
     }
-
 }

@@ -43,5 +43,5 @@ export const Const = {
         gridMetadataFields: "gridMetadataFields",
         verticalSplitSizes: "verticalSplitSizes",
         horizontalSplitSizes: "horizontalSplitSizes",
-    }
+    },
 }

@@ -1,7 +1,6 @@
 package software.altitude.core.dao.jdbc.querybuilder
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
-import software.altitude.core.models.FieldType
 import software.altitude.core.util.Query
 import software.altitude.core.util.Query.QueryParam
 import software.altitude.core.util.SearchQuery

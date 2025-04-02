@@ -2,6 +2,8 @@ package software.altitude.core.controllers.htmx
 
 import org.scalatra.Route
 import play.api.libs.json.JsObject
+
+import software.altitude.core.{ Const => C }
 import software.altitude.core.Api
 import software.altitude.core.Const
 import software.altitude.core.DataScrubber
@@ -12,7 +14,6 @@ import software.altitude.core.Validators.ApiRequestValidator
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
-import software.altitude.core.{ Const => C }
 
 /** @ /htmx/people/ */
 class PeopleActionController extends BaseHtmxController {

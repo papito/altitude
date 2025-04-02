@@ -1,8 +1,8 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
@@ -13,14 +13,17 @@ import play.api.libs.json.JsValue.jsValueToJsLookup
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
-import software.altitude.core.{ConstraintException, FieldConst, NotFoundException, RequestContext, Const => C}
+
+import software.altitude.core.{ Const => C }
+import software.altitude.core.ConstraintException
+import software.altitude.core.FieldConst
+import software.altitude.core.NotFoundException
+import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQuery
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-
-import java.time.format.DateTimeFormatter
 
 object BaseDao {
   final def genId: String = UUID.randomUUID.toString
@@ -52,7 +55,6 @@ abstract class BaseDao {
   protected def jsonFunc: String
 
   protected val exifDateTimeFormatterPattern: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
-
 
   protected def nativeBool(value: Boolean): Any
 

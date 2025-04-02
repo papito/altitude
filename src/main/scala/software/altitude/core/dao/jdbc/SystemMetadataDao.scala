@@ -3,6 +3,7 @@ package software.altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
+
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.SystemMetadata

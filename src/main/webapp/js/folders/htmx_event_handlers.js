@@ -100,7 +100,8 @@ export function setupDragAndDrop() {
 
             // on successful context menu request, show the menu
             if (
-                requestPath === `/htmx/folder/r/${context.getRepoId()}/context-menu`
+                requestPath ===
+                `/htmx/folder/r/${context.getRepoId()}/context-menu`
             ) {
                 console.debug("Context menu request successful")
 
@@ -117,7 +118,8 @@ export function setupDragAndDrop() {
 
             // on successful folder children request or child added request, expand the folder
             if (
-                requestPath === `/htmx/folder/r/${context.getRepoId()}/children` ||
+                requestPath ===
+                    `/htmx/folder/r/${context.getRepoId()}/children` ||
                 requestPath === `/htmx/folder/r/${context.getRepoId()}/add`
             ) {
                 const folder = new Folder(
@@ -127,5 +129,4 @@ export function setupDragAndDrop() {
             }
         },
     )
-
 }

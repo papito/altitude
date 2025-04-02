@@ -1,9 +1,15 @@
 package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json._
-import software.altitude.core.{FieldConst, RequestContext, Const => C}
+
+import software.altitude.core.{ Const => C }
+import software.altitude.core.FieldConst
+import software.altitude.core.RequestContext
 import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import software.altitude.core.models.Asset
 import software.altitude.core.models.AssetType
@@ -12,9 +18,6 @@ import software.altitude.core.models.PublicMetadata
 import software.altitude.core.models.UserMetadata
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-
-import java.time.LocalDateTime
-import java.time.format.{DateTimeFormatter, DateTimeParseException}
 
 abstract class AssetDao(val config: Config) extends BaseDao with software.altitude.core.dao.AssetDao {
   final override val tableName = "asset"
@@ -110,10 +113,10 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     }
 
     val sqlOriginalDateTime = getDataSourceType match {
-        case C.DbEngineName.POSTGRES =>
-          Some(originalDateTime)
-        case C.DbEngineName.SQLITE =>
-          Some(originalDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
+      case C.DbEngineName.POSTGRES =>
+        Some(originalDateTime)
+      case C.DbEngineName.SQLITE =>
+        Some(originalDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
     }
 
     val sqlVals: List[Any] = List(

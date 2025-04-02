@@ -1,6 +1,7 @@
 package software.altitude.core.controllers.web
 
 import org.scalatra.Route
+
 import software.altitude.core.Api
 import software.altitude.core.RequestContext
 import software.altitude.core.controllers.BaseWebController
@@ -12,8 +13,7 @@ class IndexController extends BaseWebController {
     requireLogin()
     contentType = "text/html"
 
-    ssp(
-      "/WEB-INF/templates/views/index.ssp")
+    ssp("/WEB-INF/templates/views/index.ssp")
   }
 
   get("/") {

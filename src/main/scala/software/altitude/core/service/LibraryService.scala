@@ -1,4 +1,7 @@
 package software.altitude.core.service
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
@@ -8,7 +11,8 @@ import play.api.libs.json.JsObject
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import software.altitude.core.{Const => C, _}
+
+import software.altitude.core.{ Const => C, _ }
 import software.altitude.core.Altitude
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
@@ -24,10 +28,6 @@ import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
-
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 
 object LibraryService {
   private val SUPPORTED_MEDIA_TYPES: Set[String] = Set(
@@ -249,9 +249,7 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  /**
-   * Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders.
-   */
+  /** Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. */
   def deleteFolderById(id: String): Unit = {
     if (app.service.folder.isRootFolder(id)) {
       throw IllegalOperationException("Cannot delete the root folder")

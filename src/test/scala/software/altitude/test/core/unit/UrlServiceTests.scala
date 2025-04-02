@@ -1,11 +1,12 @@
 package software.altitude.test.core.unit
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import org.scalatest.{DoNotDiscover, funsuite}
+import software.altitude.core.Api
 import software.altitude.core.dao.jdbc.BaseDao
 import software.altitude.core.service.UrlService
 import software.altitude.test.core.TestFocus
-import software.altitude.core.Api
 
 @DoNotDiscover class UrlServiceTests extends funsuite.AnyFunSuite with TestFocus {
   val urlService = new UrlService

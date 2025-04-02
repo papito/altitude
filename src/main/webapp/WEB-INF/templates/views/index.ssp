@@ -158,7 +158,11 @@
           tabLink.click()
       }
 
-      let searchUrl = "/htmx/search/r/" + context.getRepoId() + (window.location.search || "") + fragment
+      let searchUrl =
+          "/htmx/search/r/" +
+          context.getRepoId() +
+          (window.location.search || "") +
+          fragment
 
       htmx.ajax("get", searchUrl, {
           swap: "innerHTML",
