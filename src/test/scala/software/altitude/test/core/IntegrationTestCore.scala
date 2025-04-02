@@ -44,6 +44,18 @@ abstract class IntegrationTestCore
     res.map(_.asScala.toMap[String, AnyRef])
   }
 
+  def update(sql: String, values: Any*): Unit = {
+    new QueryRunner().update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object]): _*)
+  }
+
+  def getSqlDateTime(t: java.sql.Timestamp): Any = {
+    testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES => t
+      case  Const.DbEngineName.SQLITE => t.toString
+      case _ => throw new IllegalArgumentException("Unsupported data source type")
+    }
+  }
+
   override def beforeEach(): Unit = {
     AltitudeServletContext.clearState()
     AltitudeServletContext.app.isInitialized = false

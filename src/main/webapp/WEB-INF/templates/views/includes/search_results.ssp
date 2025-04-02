@@ -1,10 +1,33 @@
 <% import software.altitude.core.Const %>
+<% import software.altitude.core.Api %>
 <% import software.altitude.core.AltitudeServletContext %>
 <% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.util.SearchResult %>
+<% import software.altitude.core.util.SearchSort %>
 <% import software.altitude.core.models.Person %>
+<%@ val results: SearchResult %>
+<%@ val sort: SearchSort = results.sort.head %>
 <%@ val person: Person = null %>
 
 <style>
+  #searchControl {
+    margin: var(--control-vertical-space);
+    padding: 5px;
+    border: 1px solid var(--background-tertiary-color);
+    border-radius: 5px;
+    display: grid;
+    grid-template-columns: .5fr 1fr 1fr;
+  }
+
+  #searchControl div {
+    display: grid;
+    place-items: center;
+  }
+
+  #searchControl .total div {
+    display: block;
+  }
+
   #assets .cell {
     margin: 3px;
     border: var(--result-border);
@@ -16,8 +39,34 @@
     cursor: pointer;
   }
 
+  #assets .cell .metadata {
+    display: grid;
+    width: 100%;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    grid-auto-rows: auto;
+    row-gap: 3px;
+    margin-top: 3px;
+    font-size: 11px;
+    color: white;
+    box-shadow: 0 -2px 2px 0 rgba(44, 43, 43, 0.75);
+  }
+
+  #assets .cell .metadata div {
+    display: none;
+    padding: 0 5px 0 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: none;
+  }
+
+  #assets .cell .metadata span {
+    color: var(--faded-font-color);
+  }
+
   #assets {
-    margin: 10px;
+    padding: 0 10px 10px 10px;
     display: flex;
     flex-wrap: wrap;
     flex-direction: row;
@@ -26,15 +75,131 @@
 
   #assets .cell {
     display: grid;
-    width:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
-    height:<%= software.altitude.core.AltitudeServletContext.app.config.getInt(Const.Conf.PREVIEW_BOX_PIXELS).toInt + 20 %>px;
+    width:<%= Const.AssetView.PREVIEW_BOX_PIXELS + 10 %>px;
     place-items: center;
+    grid-template-rows: <%= Const.AssetView.PREVIEW_BOX_PIXELS + 10 %>px auto;
   }
+
+  .sort-dropdown {
+    padding: 5px 25px 5px 5px;
+    background-color: var(--background-secondary-color);
+    border: 1px solid var(--background-tertiary-color);
+    border-radius: 5px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    font-size: smaller;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+  }
+
+  #searchControl .sort-dropdown:hover {
+    background-color: var(--background-tertiary-color);
+  }
+
+  #searchControl .sort-dropdown:focus {
+    box-shadow: 0 0 2px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  #searchControl .sort-dropdown span {
+    font-size: 1.2em;
+  }
+
+  #searchControl .total strong {
+    color: var(--faded-font-color);
+  }
+
 </style>
 
 #if (person != null)
 <% include("../htmx/person.ssp") %>
 #end
+
+<div id="searchControl">
+  <div class="total">
+    <div>
+      <strong>Total:</strong> ${results.total}
+    </div>
+  </div>
+  <div>
+    <button class="action-button small"
+            hx-get='${ url(showUpdateViewSettingsModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+            hx-target="#modalContent"
+            hx-trigger="click">
+      <i class="fas fa-cog"></i>
+      <span>View</span>
+    </button>
+  </div>
+
+  <div class="sort">
+    <select id="sortOptions"
+            name="sort"
+            class="sort-dropdown"
+            hx-swap="innerHTML"
+            hx-target="#content"
+            hx-get="/htmx/search/r/${RequestContext.getRepository.persistedId}"
+            hx-trigger="change">
+
+      <option value="original_created_at1"
+        #if (sort.field == "original_created_at" && sort.direction.id == 1)
+              selected
+        #end>Date Created (Newest)
+      </option>
+      <option value="original_created_at0"
+        #if (sort.field == "original_created_at" && sort.direction.id == 0)
+              selected
+        #end>Date Created (Oldest)
+      </option>
+
+      <option value="created_at1"
+        #if (sort.field == "created_at" && sort.direction.id == 1)
+              selected
+        #end>Date Imported (Newest)
+      </option>
+      <option value="created_at0"
+        #if (sort.field == "created_at" && sort.direction.id == 0)
+              selected
+        #end>Date Imported (Oldest)
+      </option>
+
+      <option value="filename0"
+        #if (sort.field == "filename" && sort.direction.id == 0)
+              selected
+        #end>File Name (A-Z)
+      </option>
+      <option value="filename1"
+        #if (sort.field == "filename" && sort.direction.id == 1)
+              selected
+        #end>File Name (Z-A)
+      </option>
+
+      <option value="size_bytes0"
+        #if (sort.field == "size_bytes" && sort.direction.id == 0)
+              selected
+        #end>File Size (Smallest)
+      </option>
+      <option value="size_bytes1"
+        #if (sort.field == "size_bytes" && sort.direction.id == 1)
+              selected
+        #end>File Size (Largest)
+      </option>
+
+      <option value="area_size0"
+        #if (sort.field == "area_size" && sort.direction.id == 0)
+              selected
+        #end>Dimensions (Smallest)
+      </option>
+      <option value="area_size1"
+        #if (sort.field == "area_size" && sort.direction.id == 1)
+              selected
+        #end>Dimensions (Largest)
+      </option>
+
+    </select>
+  </div>
+</div>
 
 <div id="assets">
   <% include("../htmx/results_grid.ssp") %>
@@ -49,7 +214,7 @@
 
   // this container template is loaded on new search, so scroll to top
   const contentElement = document.getElementById("content")
-contentElement.scrollTo({ top: 0, behavior: "auto" })
+  contentElement.scrollTo({ top: 0, behavior: "auto" })
 
   initLazyLoad()
   initInfiniteScroll()

@@ -11,6 +11,7 @@ export const Const = {
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
+        viewSettingChanged: "VIEW_SETTING_CHANGED_EVENT",
     },
 
     /**
@@ -35,5 +36,12 @@ export const Const = {
 
     context: {
         repoId: "REPO_ID",
+        gridMetadataFields: "GRID_METADATA_FIELDS",
     },
+
+    localStore: {
+        gridMetadataFields: "gridMetadataFields",
+        verticalSplitSizes: "verticalSplitSizes",
+        horizontalSplitSizes: "horizontalSplitSizes",
+    }
 }

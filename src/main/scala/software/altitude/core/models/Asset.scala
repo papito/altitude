@@ -37,6 +37,8 @@ case class Asset(
     checksum: Int,
     sizeBytes: Long,
     folderId: String,
+    width: Int = 0,
+    height: Int = 0,
     userMetadata: UserMetadata = UserMetadata(),
     publicMetadata: PublicMetadata = PublicMetadata(),
     extractedMetadata: ExtractedMetadata = ExtractedMetadata(),
@@ -44,6 +46,7 @@ case class Asset(
     isRecycled: Boolean = false,
     isPipelineProcessed: Boolean = false,
     isInFaceRecModel: Boolean = false,
+    originalCreatedAt: Option[LocalDateTime] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel {

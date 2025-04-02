@@ -198,20 +198,9 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     if (!query.isSorted) return ClauseComponents()
 
     val sort = query.searchSort.head
-    val sortColumn = sort.field.fieldType match {
-      case FieldType.NUMBER => "field_value_num"
-      case FieldType.BOOL => "field_value_bool"
-      case FieldType.KEYWORD => "field_value_kw"
-      case FieldType.DATETIME => "field_value_dt"
-      case _ => throw new IllegalArgumentException(s"This type of sort parameter is not supported: ${sort.field}")
-    }
+    val sql = s" ORDER BY ${sort.field} ${sort.direction}"
 
-    val sql = ", search_parameter AS sort_param WHERE sort_param.repository_id = ? " +
-      "AND sort_param.asset_id = asset.id " +
-      "AND sort_param.field_id = ? " +
-      s"ORDER BY sort_param.$sortColumn ${sort.direction}"
-
-    ClauseComponents(List(sql), List(RequestContext.getRepository.persistedId, sort.field.persistedId))
+    ClauseComponents(List(sql))
   }
 
   override protected def orderByStr(clauseComponents: ClauseComponents): String = {

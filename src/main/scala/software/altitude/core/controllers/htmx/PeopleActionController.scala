@@ -167,7 +167,7 @@ class PeopleActionController extends BaseHtmxController {
     logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     app.service.person.merge(dest = destPerson, source = srcPerson)
-    redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PEOPLE_IDS}=$destPersonId")
+    redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PERSON_ID}=$destPersonId")
   }
 
   val hidePerson: Route = put("/r/:repoId/p/:personId/hide") {

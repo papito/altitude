@@ -59,7 +59,8 @@ object Query {
 }
 
 object SortDirection extends Enumeration {
-  val ASC, DESC = Value
+  val ASC: Value = Value(0)
+  val DESC: Value = Value(1)
 }
 
 case class Sort(param: String, direction: SortDirection.Value)

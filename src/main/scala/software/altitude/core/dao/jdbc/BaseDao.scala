@@ -20,6 +20,8 @@ import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 
+import java.time.format.DateTimeFormatter
+
 object BaseDao {
   final def genId: String = UUID.randomUUID.toString
   val totalRecsWindowFunction: String = "count(*) OVER() AS total"
@@ -48,6 +50,9 @@ abstract class BaseDao {
 
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
+
+  protected val exifDateTimeFormatterPattern: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
+
 
   protected def nativeBool(value: Boolean): Any
 
