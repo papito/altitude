@@ -1,4 +1,5 @@
 <% import software.altitude.core.Const %>
+<% import software.altitude.core.util.Util %>
 <% import software.altitude.core.AltitudeServletContext %>
 <% import software.altitude.core.RequestContext %>
 <% import software.altitude.core.models.Asset %>
@@ -25,7 +26,7 @@
         <div class="cell">
     #end
 
-        <div class="inner-cell drag-drop"
+        <div class="drag-drop"
              alt-asset-id="${asset.persistedId}">
 
             <img id="asset-${asset.persistedId}"
@@ -42,7 +43,33 @@
                 alt="${ asset.fileName }"
                 class="responsive-image">
 
-      </div><%-- /inner cell --%>
+        </div><%-- /inner cell drag droppable --%>
+
+        <div class="metadata">
+            <div class="fileName" title="${ asset.fileName }">
+                <span>File:</span> ${ asset.fileName }
+            </div>
+
+            <% val originalCreatedAt: String = Util.humanReadableDateTime(asset.originalCreatedAt) %>
+            <div class="originalCreatedAt" title="${ originalCreatedAt }">
+                <span>Created:</span> ${ originalCreatedAt }
+            </div>
+
+            <% val createdAt: String = Util.humanReadableDateTime(asset.createdAt) %>
+            <div class="importedAt" title="${ createdAt }">
+                <span>Imported:</span> ${ createdAt }
+            </div>
+
+            <% val dimensions: String = s"${asset.width} x ${asset.height}" %>
+            <div class="dimensions" title="${ dimensions }px">
+                <span>Dimensions:</span> ${ dimensions } px
+            </div>
+
+            <% val fileSize: String = Util.humanReadableByteCount(asset.sizeBytes) %>
+            <div class="fileSize" title="${ fileSize }">
+                <span>Size:</span> ${ fileSize }
+            </div>
+        </div>
     </div><%-- /cell --%>
 
 #end

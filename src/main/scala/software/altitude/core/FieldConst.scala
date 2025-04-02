@@ -70,6 +70,9 @@ object FieldConst {
     val CHECKSUM = "checksum"
     val ASSET_TYPE = "asset_type"
     val FOLDER_ID = "folder_id"
+    val WIDTH = "width"
+    val HEIGHT = "height"
+    val AREA_SIZE = "area_size"
     val SIZE_BYTES = "size_bytes"
     val FILENAME = "filename"
     val EXTRACTED_METADATA = "extracted_metadata"
@@ -78,6 +81,7 @@ object FieldConst {
     val IS_RECYCLED = "is_recycled"
     val IS_TRIAGED = "is_triaged"
     val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
+    val ORIGINAL_CREATED_AT = "original_created_at"
   }
 
   object PublicMetadata {

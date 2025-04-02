@@ -1,4 +1,5 @@
 import { Const } from "../constants.js"
+import { context } from "../context.js"
 
 /**
  * INFINITE SCROLL
@@ -92,9 +93,41 @@ export function initLazyLoad() {
     document
         .querySelector("#assets")
         .addEventListener("htmx:load", function (evt) {
+            /**
+             * Observe the image element for viewport intersection, to lazy load/unload
+             */
             const imgEl = evt.target.querySelector("img")
             if (imgEl !== null) {
                 observer.observe(imgEl)
             }
+
+            showOrHideAssetGridMetadata(evt.target)
         })
+
+    /**
+     * IMPORTANT: We need to trigger this manually for the initial load.
+     * The metadata fields are painted when HTMX loads more data into #assets,
+     * but initial load triggers the load event on #content, not #assets.
+     */
+    document.querySelectorAll("#assets .cell").forEach((el) => {
+        showOrHideAssetGridMetadata(el)
+    })
+}
+
+function showOrHideAssetGridMetadata(el) {
+    const showFields = context.getGridMetadataFields()
+
+    const toShowFieldsSelectorStr = Array.from(showFields)
+        .map((fieldName) => '.metadata > div.' + fieldName)
+        .join(", ")
+
+    if (toShowFieldsSelectorStr.length) {
+        el.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
+            div.style.display = "block"
+        })
+        el.querySelector('.metadata').style.display = "grid"
+    } else {
+        el.querySelector('.metadata').style.display = "none"
+    }
+
 }

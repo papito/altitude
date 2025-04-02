@@ -9,8 +9,10 @@ import software.altitude.core.FieldConst
 import software.altitude.core.models._
 import software.altitude.core.util._
 import software.altitude.test.core.IntegrationTestCore
+import software.altitude.core.Api
 
 import scala.language.reflectiveCalls
+import scala.math.Ordered.orderingToOrdered
 
 @DoNotDiscover class SearchServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -363,88 +365,53 @@ import scala.language.reflectiveCalls
     results.isEmpty shouldBe true
   }
 
-  test("Can sort in ASC and DESC order on a user meta field") {
-    val kwField = testApp.service.metadata.addField(
-      UserMetadataField(
-        name = "keyword field",
-        fieldType = FieldType.KEYWORD))
-    val numField = testApp.service.metadata.addField(
-      UserMetadataField(
-        name = "number field",
-        fieldType = FieldType.NUMBER))
-    val boolField = testApp.service.metadata.addField(
-      UserMetadataField(
-        name = "boolean field",
-        fieldType = FieldType.BOOL))
+  test("Can sort in ASC order by created at date") {
+    val assets = List.fill(4)(testContext.persistAsset())
 
-    val asset1: Asset = testContext.persistAsset()
+    testApp.txManager.withTransaction {
+      assets.zipWithIndex.foreach { case (asset, index) =>
+        val futureTime = new java.sql.Timestamp(System.currentTimeMillis() + (3600000 * (index + 1)))
+        this.update("UPDATE asset SET created_at = ? WHERE id = ?", getSqlDateTime(futureTime), asset.persistedId)
+      }
+    }
 
-    val asset2: Asset = testContext.persistAsset()
+    val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
+    val resultsAsc = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
+    val sortedAssetsAsc: List[Asset] = resultsAsc.records.map(Asset.fromJson)
 
-    val asset3: Asset = testContext.persistAsset()
+    sortedAssetsAsc.sliding(2).forall(
+      assets => assets.head.createdAt.get >= assets.last.createdAt.get)
+  }
 
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = kwField.persistedId, newValue = "c")
-    testApp.service.library.addMetadataValue(asset2.persistedId, fieldId = kwField.persistedId, newValue = "a")
-    testApp.service.library.addMetadataValue(asset3.persistedId, fieldId = kwField.persistedId, newValue = "b")
+  test("Can sort in DESC order by created at date") {
+    val assets = List.fill(4)(testContext.persistAsset())
 
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = numField.persistedId, newValue = 50)
-    testApp.service.library.addMetadataValue(asset2.persistedId, fieldId = numField.persistedId, newValue = 300)
-    testApp.service.library.addMetadataValue(asset3.persistedId, fieldId = numField.persistedId, newValue = 200)
+    testApp.txManager.withTransaction {
+      assets.zipWithIndex.foreach { case (asset, index) =>
+        val futureTime = new java.sql.Timestamp(System.currentTimeMillis() + (3600000 * (index + 1)))
+        this.update("UPDATE asset SET created_at = ? WHERE id = ?", getSqlDateTime(futureTime), asset.persistedId)
+      }
+    }
 
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = boolField.persistedId, newValue = false)
-    testApp.service.library.addMetadataValue(asset2.persistedId, fieldId = boolField.persistedId, newValue = true)
-    testApp.service.library.addMetadataValue(asset3.persistedId, fieldId = boolField.persistedId, newValue = false)
+    val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.DESC)
+    val resultsAsc = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
+    val sortedAssetsAsc: List[Asset] = resultsAsc.records.map(Asset.fromJson)
 
-    // sort by string field
-    var sort = SearchSort(field = kwField, direction = SortDirection.ASC)
-    var results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).userMetadata.get(kwField.persistedId).value.head.value shouldBe "a"
-
-    sort = SearchSort(field = kwField, direction = SortDirection.DESC)
-    results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).userMetadata.get(kwField.persistedId).value.head.value shouldBe "c"
-
-    // sort by number field
-    sort = SearchSort(field = numField, direction = SortDirection.ASC)
-    results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).userMetadata.get(numField.persistedId).value.head.value shouldBe "50"
-
-    sort = SearchSort(field = numField, direction = SortDirection.DESC)
-    results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).userMetadata.get(numField.persistedId).value.head.value shouldBe "300"
-
-    // sort by number field
-    sort = SearchSort(field = boolField, direction = SortDirection.ASC)
-    results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).userMetadata.get(boolField.persistedId).value.head.value shouldBe "false"
-
-    sort = SearchSort(field = boolField, direction = SortDirection.DESC)
-    results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    (results.records.head: Asset).userMetadata.get(boolField.persistedId).value.head.value shouldBe "true"
+    sortedAssetsAsc.sliding(2).forall(
+      assets => assets.head.createdAt.get <= assets.last.createdAt.get)
   }
 
   test("Sort info should be returned with query results") {
-    val kwField = testApp.service.metadata.addField(
-      UserMetadataField(
-        name = "keyword field",
-        fieldType = FieldType.NUMBER
-      ))
-
-    1 to 5 foreach { idx =>
+    1 to 2 foreach { idx =>
       val asset: Asset = testContext.persistAsset()
-      testApp.service.library.addMetadataValue(asset.persistedId, fieldId = kwField.persistedId, newValue = idx)
     }
 
     // try with no sort info at all
-    var results = testApp.service.library.search(new SearchQuery())
-
-    results.sort shouldBe empty
-
-    val sort = SearchSort(field = kwField, direction = SortDirection.ASC)
-    results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
+    val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
+    val results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
     results.sort shouldNot be(empty)
     results.sort.head.direction shouldBe SortDirection.ASC
-    results.sort.head.field.name shouldBe kwField.name
+    results.sort.head.field shouldBe "created_at"
   }
 
   test("Dangling assets should not be searchable") {

@@ -113,21 +113,28 @@ object Api {
     }
 
     object Search {
-      val ASSETS = "assets"
       val PERSON = "person"
       val QUERY_TEXT = "q"
       val RESULTS_PER_PAGE = "rpp"
       val RESULTS = "results"
       val PAGE = "p"
-      val FOLDER_IDS = "folderIds"
-      val PEOPLE_IDS = "personIds"
+      val FOLDER_ID = "folderId"
+      val PERSON_ID = "personId"
+      val VIEW = "view"
       val SORT = "sort"
+      val PREVIEW_SIZE = "previewSize"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
     }
 
     object SearchSort {
       val DIRECTION = "direction"
       val FIELD = "field"
+
+      val BY_ASSET_CREATED_AT = "created_at"
+      val BY_MEDIA_CREATED_AT = "original_created_at"
+      val BY_FILENAME = "filename"
+      val BY_AREA_SIZE = "area_size"
+      val BY_FILE_SIZE = "size_bytes"
     }
 
     object Setup {

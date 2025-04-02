@@ -8,8 +8,7 @@ import play.api.libs.json.JsObject
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-
-import software.altitude.core.{ Const => C, _ }
+import software.altitude.core.{Const => C, _}
 import software.altitude.core.Altitude
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
@@ -26,6 +25,10 @@ import software.altitude.core.util.QueryResult
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
+
 object LibraryService {
   private val SUPPORTED_MEDIA_TYPES: Set[String] = Set(
     "image",
@@ -36,8 +39,6 @@ object LibraryService {
 class LibraryService(val app: Altitude) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val txManager: TransactionManager = app.txManager
-
-  private val previewBoxSize: Int = app.config.getInt(C.Conf.PREVIEW_BOX_PIXELS)
 
   def checkMediaType(asset: Asset): Unit = {
     if (!LibraryService.SUPPORTED_MEDIA_TYPES.contains(asset.assetType.mediaType)) {
@@ -160,8 +161,19 @@ class LibraryService(val app: Altitude) {
   private def genPreviewData(dataAsset: AssetWithData): Array[Byte] = {
     dataAsset.asset.assetType.mediaType match {
       case "image" =>
-        makeImageThumbnail(dataAsset.data, previewBoxSize)
+        makeImageThumbnail(dataAsset.data, C.AssetView.PREVIEW_BOX_PIXELS)
       case _ => new Array[Byte](0)
+    }
+  }
+
+  def getDimensions(dataAsset: AssetWithData): (Int, Int) /* width, height */ = {
+    dataAsset.asset.assetType.mediaType match {
+      case "image" =>
+        val img: BufferedImage = ImageIO.read(new ByteArrayInputStream(dataAsset.data))
+        (img.getWidth, img.getHeight)
+      case _ =>
+        // Default to 0, 0 for unsupported media types
+        (0, 0)
     }
   }
 

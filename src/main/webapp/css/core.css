@@ -26,6 +26,8 @@
     --control-vertical-space: 15px;
     --control-horizontal-space: 25px;
 
+    /* font colors */
+    --faded-font-color: #b0acac;
     --success-font-color: #82da5f;
     --success-background-color: #377a1c;
     --warning-font-color: #dca051;
@@ -133,6 +135,16 @@ form input.error, form input.error:focus {
 
 .action-button.error {
     background: var(--error-background-color);
+}
+
+.action-button.small {
+    font-size: 0.8em;
+    background: var(--background-secondary-color);
+    border: 1px solid var(--background-tertiary-color);
+}
+
+.action-button.small span {
+    margin-left: 5px;
 }
 
 /*          */

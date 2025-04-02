@@ -54,6 +54,10 @@ CREATE TABLE asset  (
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
   mime_type VARCHAR(64) NOT NULL,
+  width INT NOT NULL DEFAULT 0,
+  height INT NOT NULL DEFAULT 0,
+    -- area size of the image in pixels (width * height)
+  area_size INT NOT NULL,
   extracted_metadata TEXT,
   public_metadata TEXT,
   user_metadata TEXT,
@@ -63,6 +67,8 @@ CREATE TABLE asset  (
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
   is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
+    -- EXIF DateTimeOriginal, defaults to Now() if none
+  original_created_at DATETIME NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY(repository_id) REFERENCES repository(id) ON DELETE CASCADE
