@@ -208,6 +208,12 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
       case C.DbEngineName.SQLITE => new jdbc.FaceDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
+
+    val stats: StatDao = dataSourceType match {
+      case C.DbEngineName.POSTGRES => new jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides
+      case C.DbEngineName.SQLITE => new jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
   }
 
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
@@ -236,6 +242,7 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     val search = new SearchService(app)
     val asset = new AssetService(app)
     val folder = new FolderService(app)
+    val stats = new StatsService(app)
     val person = new PersonService(app)
     val faceDetection = new FaceDetectionService()
     val faceRecognition = new FaceRecognitionService(app)
