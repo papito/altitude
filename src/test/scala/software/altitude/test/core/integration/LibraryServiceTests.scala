@@ -182,7 +182,7 @@ import software.altitude.test.core.IntegrationTestCore
     }
   }
 
-  test("Recycle folder assets") {
+  test("Recycle folder assets", Focused) {
     val folder1: Folder = testApp.service.library.addFolder("folder1")
 
     val folder2: Folder = testApp.service.library.addFolder("folder2")

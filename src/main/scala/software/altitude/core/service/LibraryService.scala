@@ -105,7 +105,7 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
+  private def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
 
     def move(asset: Asset): Unit = {
       // Cannot move to the same folder
@@ -124,6 +124,7 @@ class LibraryService(val app: Altitude) {
         FieldConst.Asset.IS_TRIAGED -> false
       )
 
+      app.service.stats.moveAsset(asset)
       app.service.asset.updateById(asset.persistedId, data)
     }
 
@@ -260,15 +261,18 @@ class LibraryService(val app: Altitude) {
       logger.info(s"Deleting folder $folder")
 
       val children = app.service.folder.getChildrenRecursive(id)
-      val allFoldersToDeleteIds = (children.map(_.persistedId) +: folder.persistedId).toSet
+      val allFoldersToDeleteIds = (children.map(_.persistedId) :+ folder.persistedId).toSet[Any]
 
-      val folderQuery = new Query().withRepository()
-      folderQuery.add(FieldConst.ID -> Query.IN(allFoldersToDeleteIds))
+      val folderQuery = new Query().add(FieldConst.ID -> Query.IN(allFoldersToDeleteIds))
       app.service.folder.updateByQuery(folderQuery, Map(FieldConst.Folder.IS_RECYCLED -> true))
 
-      val assetQuery = new Query().withRepository()
-      assetQuery.add(FieldConst.Asset.FOLDER_ID -> Query.IN(allFoldersToDeleteIds))
-      app.service.asset.updateByQuery(assetQuery, Map(FieldConst.Asset.IS_RECYCLED -> true))
+      val assetQuery = new Query().add(FieldConst.Asset.FOLDER_ID -> Query.IN(allFoldersToDeleteIds))
+      val assetsToRecycle = app.service.asset.queryAll(assetQuery)
+
+      // OPTIMIZE: this needs to be done in bulk, and this is true for all stats
+      // OPTIMIZE: this is a massive performance bottleneck !!!
+      val assetIdsToRecycle = assetsToRecycle.records.map(Asset.fromJson).map(_.persistedId).toSet
+      recycleAssets(assetIdsToRecycle)
     }
   }
 
@@ -316,6 +320,9 @@ class LibraryService(val app: Altitude) {
             if (folder.isRecycled) {
               app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
             }
+
+            val restoredAsset: Asset = getById(assetId)
+            app.service.stats.restoreAsset(restoredAsset)
           }
         }
     }
@@ -334,6 +341,7 @@ class LibraryService(val app: Altitude) {
         txManager.withTransaction {
           val asset: Asset = getById(assetId)
           app.service.asset.setRecycledProp(asset, isRecycled = true)
+          app.service.stats.recycleAsset(asset.copy(isRecycled = true))
         }
     }
   }

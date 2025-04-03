@@ -79,7 +79,7 @@ import software.altitude.test.core.IntegrationTestCore
     asset.originalCreatedAt should not be None
   }
 
-  test("Imported image asset has width and height", Focused) {
+  test("Imported image asset has width and height") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.library.getById(importedAsset.persistedId): Asset

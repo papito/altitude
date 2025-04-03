@@ -21,6 +21,10 @@ object MarkAsCompleteFlow {
           debugInfo(s"\tMarking asset as pipeline-complete ${asset.fileName}")
           val updatedAsset = app.service.asset.markAsCompleted(asset)
 
+          // Only add the stats if the asset is at the end of the pipeline
+          // (Incomplete assets are purged at startup)
+          app.service.stats.addAsset(asset)
+
           Future.successful((Left(updatedAsset), ctx))
         }
       case (Right(invalid), ctx) =>
