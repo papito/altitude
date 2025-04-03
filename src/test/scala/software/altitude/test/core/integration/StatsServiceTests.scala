@@ -1,13 +1,14 @@
 package software.altitude.test.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
+import software.altitude.core.Altitude
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Folder
+import software.altitude.core.models.Stats
+import software.altitude.core.util.Query
+import software.altitude.test.core.IntegrationTestCore
 
-/**
- * Stats service has been deep sixed. This is here for reference as in the future the live
- * statistics would have to pass the same types of tests.
- *
- * When resurrected, uncomment this suite in the integration super-suite
- */
-/*
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   val ASSET_SIZE = 652084 // size of our "test_asset.png" file.
@@ -21,7 +22,7 @@ package software.altitude.test.core.integration
     // create a triaged asset
     val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
     val triagedAsset: Asset = testContext.persistAsset(Some(triagedAssetModel))
-//    testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
+    testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
 
     // create an asset and delete it
     val assetToDelete1: Asset = testContext.persistAsset(folder = Some(folder1))
@@ -72,6 +73,62 @@ package software.altitude.test.core.integration
       stats3.getStatValue(Stats.TOTAL_ASSETS) * ASSET_SIZE
   }
 
+  test("Recycle multiple assets") {
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
+
+    1 to 2 foreach { _ =>
+      val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
+      testContext.persistAsset(Some(triagedAssetModel))
+      testContext.persistAsset(folder = Some(folder1))
+    }
+
+    var stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
+    stats.getStatValue(Stats.SORTED_BYTES) shouldBe
+      stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2
+
+    val all: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+
+    testApp.service.library.recycleAssets(all.map(_.persistedId).toSet)
+
+    stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
+    stats.getStatValue(Stats.SORTED_BYTES) shouldBe 0
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 4
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
+      stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
+  }
+
+  test("Recycle a folder") {
+    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder2: Folder = testApp.service.library.addFolder("folder2")
+
+    1 to 2 foreach { _ =>
+      testContext.persistAsset(folder = Some(folder1))
+      testContext.persistAsset(folder = Some(folder2))
+    }
+
+    var stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 4
+
+    testApp.service.library.deleteFolderById(folder1.persistedId)
+
+    stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
+    stats.getStatValue(Stats.SORTED_BYTES) shouldBe
+    stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
+    stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
+  }
+
+
+  /**
+   * Folder counts have been removed - this needs to be re-engineered.
+   * Left here for reference.
+   */
+  /*
   test("Test move recycled asset to new folder") {
     var folder1: Folder = testApp.service.library.addFolder("folder1")
 
@@ -139,55 +196,6 @@ package software.altitude.test.core.integration
     folder1 = testApp.service.folder.getById(folder1.persistedId)
     folder1.numOfAssets shouldBe 1
   }
-
-  test("Recycle multiple assets") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-
-    1 to 2 foreach { _ =>
-      val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
-      testContext.persistAsset(Some(triagedAssetModel))
-      testContext.persistAsset(folder = Some(folder1))
-    }
-
-    var stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
-    stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
-    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2
-
-    val all: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
-
-    testApp.service.library.recycleAssets(all.map(_.persistedId).toSet)
-
-    stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
-    stats.getStatValue(Stats.SORTED_BYTES) shouldBe 0
-    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 4
-    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
-      stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
-  }
-
-  test("Recycle a folder") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
-
-    1 to 2 foreach { _ =>
-      testContext.persistAsset(folder = Some(folder1))
-      testContext.persistAsset(folder = Some(folder2))
-    }
-
-    var stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 4
-
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-
-    stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
-    stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
-    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
-    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
-      stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
-  }
-}
 */
+
+}
