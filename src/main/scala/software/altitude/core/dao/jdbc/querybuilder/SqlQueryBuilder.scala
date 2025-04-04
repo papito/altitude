@@ -17,7 +17,7 @@ protected object SqlQueryBuilder {
   val HAVING = "having"
 }
 
-class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: String) {
+class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], val tableName: String) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private type ClauseGeneratorType = QueryT => ClauseComponents
@@ -116,20 +116,19 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], tableName: 
   }
 
   protected def where(query: QueryT): ClauseComponents = {
-    // FIXME: find a better way to get elements and bind vals in one swoop
     val elements = query.params.map {
       el: (String, Any) =>
         val (columnName, value) = el
         value match {
-          case _: String => s"$columnName = ?"
-          case _: Boolean => s"$columnName = ?"
-          case _: Number => s"$columnName = ?"
+          case _: String => s"$tableName.$columnName = ?"
+          case _: Boolean => s"$tableName.$columnName = ?"
+          case _: Number => s"$tableName.$columnName = ?"
           case qParam: QueryParam =>
             qParam.paramType match {
               case Query.ParamType.IN =>
                 val placeholders: String = qParam.values.toList.map(_ => "?").mkString(", ")
                 s"$columnName IN ($placeholders)"
-              case Query.ParamType.EQ => s"$columnName = ?"
+              case Query.ParamType.EQ => s"$tableName.$columnName = ?"
 
               case _ => throw new IllegalArgumentException(s"This type of parameter is not supported: ${qParam.paramType}")
             }

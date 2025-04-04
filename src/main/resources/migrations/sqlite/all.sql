@@ -173,7 +173,7 @@ CREATE INDEX folder_01 ON folder(repository_id, parent_id);
 CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
 CREATE INDEX folder_03 ON folder(is_recycled, parent_id);
 
-CREATE TABLE search_parameter (
+CREATE TABLE metadata_parameter (
   repository_id CHAR(36) NOT NULL,
   asset_id CHAR(36) NOT NULL,
   field_id CHAR(36) NOT NULL,

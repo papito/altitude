@@ -82,7 +82,6 @@ import scala.math.Ordered.orderingToOrdered
     results.total shouldBe 2
   }
 
-/*
   test("Filter by folder") {
     val field1 = testApp.service.metadata.addField(
       UserMetadataField(
@@ -120,7 +119,6 @@ import scala.math.Ordered.orderingToOrdered
     results.total shouldBe 6
 
   }
-*/
 
   def fixtureForPersonFilter: Object {val assetsPerPersonCount: Int; val people: Seq[Person]} = new {
     val peopleCount =  3
@@ -237,7 +235,7 @@ import scala.math.Ordered.orderingToOrdered
     results.total shouldBe 1
 
     results = testApp.service.library.search(
-      new SearchQuery(params = Map(
+      new SearchQuery(metadataFilters = Map(
         field3.persistedId -> Query.EQUALS(true),
         field2.persistedId -> Query.EQUALS(1)))
     )
@@ -265,7 +263,7 @@ import scala.math.Ordered.orderingToOrdered
     testContext.persistAsset(metadata = UserMetadata(data))
 
    val results = testApp.service.library.search(
-      new SearchQuery(params = Map(
+      new SearchQuery(metadataFilters = Map(
         field1.persistedId -> Query.EQUALS(1)))
     )
     results.total shouldBe 0
@@ -296,7 +294,7 @@ import scala.math.Ordered.orderingToOrdered
 
     val results = testApp.service.library.search(
       new SearchQuery(
-        params = Map(
+        metadataFilters = Map(
           field1.persistedId -> Query.EQUALS("one"),
           field2.persistedId -> Query.EQUALS(1)
         )
@@ -332,7 +330,7 @@ import scala.math.Ordered.orderingToOrdered
     // parametarized search
     results = testApp.service.library.search(
       new SearchQuery(
-        params = Map(
+        metadataFilters = Map(
           field1.persistedId -> "one",
           field2.persistedId -> 3
         )
@@ -349,7 +347,7 @@ import scala.math.Ordered.orderingToOrdered
     // parametarized search
     results = testApp.service.library.search(
       new SearchQuery(
-        params = Map(
+        metadataFilters = Map(
           field1.persistedId -> "newone",
           field2.persistedId -> 3
         )

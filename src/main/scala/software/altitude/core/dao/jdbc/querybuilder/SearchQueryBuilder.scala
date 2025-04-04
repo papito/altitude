@@ -13,14 +13,11 @@ object SearchQueryBuilder {
 abstract class SearchQueryBuilder(selColumnNames: List[String])
   extends SqlQueryBuilder[SearchQuery](selColumnNames, SearchQueryBuilder.ASSET_TABLE_NAME) {
 
-  private val searchParamTable = "search_parameter"
+  private val metadataParamTable = "metadata_parameter"
   protected val searchDocumentTable = "search_document"
 
-  private val notRecycledFilter: ClauseComponents =
-    ClauseComponents(elements = List(s"${FieldConst.Asset.IS_RECYCLED} = ?"), bindVals = List(false))
-
   private val isPipelineProcessedFilter: ClauseComponents =
-    ClauseComponents(elements = List(s"${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?"), bindVals = List(true))
+    ClauseComponents(elements = List(s"$tableName.${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?"), bindVals = List(true))
 
   protected def textSearch(searchQuery: SearchQuery): ClauseComponents
 
@@ -35,7 +32,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   /** If we are joining a table - this will also include its name(s) */
   private def allTableNames(searchQuery: SearchQuery): List[String] = {
     val _tablesNames = List(SearchQueryBuilder.ASSET_TABLE_NAME) ++
-      (if (searchQuery.isParameterized) Set(searchParamTable) else Set()) ++
+      (if (searchQuery.hasMetadataFilters) Set(metadataParamTable) else Set()) ++
       (if (searchQuery.isText) Set(searchDocumentTable) else Set())
 
     _tablesNames
@@ -84,10 +81,10 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
     ClauseComponents(repoIdElements, repoIdBindVals) +
       textSearch(searchQuery) +
-      notRecycledFilter +
+      super.where(searchQuery) +
       isPipelineProcessedFilter +
       folderFilter(searchQuery) +
-      fieldFilter(searchQuery) +
+      metadataFilter(searchQuery) +
       personFilter(searchQuery) +
       searchDocumentJoin(searchQuery) +
       searchParameterJoin(searchQuery)
@@ -127,8 +124,8 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     )
   }
 
-  protected def fieldFilter(searchQuery: SearchQuery): ClauseComponents = {
-    val filters = searchQuery.params.map {
+  private def metadataFilter(searchQuery: SearchQuery): ClauseComponents = {
+    val filters = searchQuery.metadataFilters.map {
       el: (String, Any) =>
         val (_, value) = el
         value match {
@@ -149,7 +146,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
         }
     }.toList
 
-    val bindVals = searchQuery.params.foldLeft(List[Any]()) {
+    val bindVals = searchQuery.metadataFilters.foldLeft(List[Any]()) {
       (res, el) =>
         val (metadataFieldId, value) = el
 
@@ -176,21 +173,21 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   }
 
   protected def searchParameterJoin(searchQuery: SearchQuery): ClauseComponents = {
-    if (searchQuery.isParameterized) {
-      ClauseComponents(elements = List(s"$searchParamTable.asset_id = asset.id"))
+    if (searchQuery.hasMetadataFilters) {
+      ClauseComponents(elements = List(s"$metadataParamTable.asset_id = asset.id"))
     } else {
       ClauseComponents()
     }
   }
 
   override protected def groupBy(searchQuery: SearchQuery): ClauseComponents = {
-    if (!searchQuery.isParameterized) return ClauseComponents()
+    if (!searchQuery.hasMetadataFilters) return ClauseComponents()
     ClauseComponents(elements = List(s"asset.${FieldConst.ID}"))
   }
 
   override protected def having(searchQuery: SearchQuery): ClauseComponents = {
-    if (!searchQuery.isParameterized) return ClauseComponents()
-    ClauseComponents(elements = List(s"count(asset.${FieldConst.ID}) >= ${searchQuery.params.size}"))
+    if (!searchQuery.hasMetadataFilters) return ClauseComponents()
+    ClauseComponents(elements = List(s"count(asset.${FieldConst.ID}) >= ${searchQuery.metadataFilters.size}"))
   }
 
   override protected def orderBy(query: SearchQuery): ClauseComponents = {

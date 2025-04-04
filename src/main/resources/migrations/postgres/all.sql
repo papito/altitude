@@ -155,7 +155,7 @@ CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
 CREATE INDEX folder_03 ON folder(is_recycled, parent_id);
 
 
-CREATE TABLE search_parameter (
+CREATE TABLE metadata_parameter (
   repository_id CHAR(36) REFERENCES repository(id),
   asset_id CHAR(36) REFERENCES asset(id) ON DELETE CASCADE,
   field_id CHAR(36) REFERENCES metadata_field(id) ON DELETE CASCADE,

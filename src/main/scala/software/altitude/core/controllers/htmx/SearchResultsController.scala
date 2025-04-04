@@ -3,9 +3,7 @@ package software.altitude.core.controllers.htmx
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import org.scalatra.Route
-
-import software.altitude.core.Api
-import software.altitude.core.Const
+import software.altitude.core.{Api, Const, FieldConst}
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Person
 import software.altitude.core.util.SearchQuery
@@ -55,6 +53,8 @@ class SearchResultsController extends BaseHtmxController {
 
     val urlParams = browserQueryParams ++ htmxQueryParams
 
+    // Where are we? Triage? Recycle? etc.
+    val view = urlParams.getOrElse(Api.Field.Search.VIEW, Const.Search.View.DEFAULT)
     val rpp = urlParams.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = urlParams.getOrElse(Api.Field.Search.PAGE, "1").toInt
     val queryText = urlParams.get(Api.Field.Search.QUERY_TEXT)
@@ -69,7 +69,14 @@ class SearchResultsController extends BaseHtmxController {
     val sortDirection = SortDirection(sortDirectionInt)
     val sort = SearchSort(field = sortField, direction = sortDirection)
 
+    val queryParams: Map[String, Any] = view match {
+        case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
+        case Const.Search.View.RECYCLED => Map(FieldConst.Asset.IS_RECYCLED -> true)
+        case _ => Map.empty[String, Any]
+    }
+
     val q = new SearchQuery(
+      params = queryParams,
       text = queryText,
       rpp = rpp,
       folderIds = folderId.toSet,
@@ -77,6 +84,7 @@ class SearchResultsController extends BaseHtmxController {
       page = page,
       searchSort = List(sort)
     )
+
     logger.info(s"QUERY: ${q.toString}")
 
     val results = app.service.library.search(q)
