@@ -37,6 +37,12 @@ object Const {
 
   object Search {
     val DEFAULT_RPP = 50
+
+    object View {
+      val DEFAULT = "default"
+      val TRIAGE = "triage"
+      val RECYCLED = "recycled"
+    }
   }
 
   object Security {

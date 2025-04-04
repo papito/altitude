@@ -27,6 +27,12 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     }
   }
 
+  def queryTriaged(q: Query): QueryResult = {
+    txManager.asReadOnly[QueryResult] {
+      dao.queryTriaged(q.withRepository())
+    }
+  }
+
   def queryRecycled(q: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
       dao.queryRecycled(q.withRepository())

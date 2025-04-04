@@ -13,7 +13,9 @@ class IndexController extends BaseWebController {
     requireLogin()
     contentType = "text/html"
 
-    ssp("/WEB-INF/templates/views/index.ssp")
+    ssp(
+      "index.ssp",
+      "stats" -> app.service.stats.getStats)
   }
 
   get("/") {
@@ -26,7 +28,7 @@ class IndexController extends BaseWebController {
     // else, go to the default repo view
     requireLogin()
 
-    // if we the user is not going to a specific repo, redirect to the last active repo
+    // if the user is not going to a specific repo, redirect to the last active repo
     val user: User = RequestContext.getAccount
     require(user.lastActiveRepoId.isDefined, "User has no last active repo")
 
@@ -39,7 +41,7 @@ class IndexController extends BaseWebController {
     if (app.isInitialized) {
       redirect("/")
     } else {
-      layoutTemplate("/WEB-INF/templates/views/setup.ssp")
+      layoutTemplate("setup.ssp")
     }
 
   }

@@ -223,13 +223,17 @@ class LibraryService(val app: Altitude) {
         val allFolders = app.service.folder.getChildrenRecursive(rootId = query.folderIds.head)
         val allFolderIds = (query.folderIds.head :: allFolders.map(_.persistedId)).toSet
 
-        new SearchQuery(text = query.text, folderIds = allFolderIds, params = query.params, rpp = query.rpp, page = query.page)
+        new SearchQuery(text = query.text, folderIds = allFolderIds, metadataFilters = query.params, rpp = query.rpp, page = query.page)
       } else {
         query
       }
 
       app.service.search.search(_query)
     }
+  }
+
+  def queryTriaged(query: Query): QueryResult = {
+    app.service.asset.queryTriaged(query)
   }
 
   def queryRecycled(query: Query): QueryResult = {
