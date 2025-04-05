@@ -11,8 +11,6 @@ import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
 
 class BaseHtmxController extends BaseController with ScalateSupport {
-  val OK: ActionResult = Ok("{}")
-
   def unscrubbedReqJson: Option[JsObject] = {
     if (request.contentType.isDefined && request.contentType.get != "application/json") {
       throw ValidationException(C.Msg.Err.INVALID_CONTENT_TYPE)
@@ -24,12 +22,12 @@ class BaseHtmxController extends BaseController with ScalateSupport {
   private def requestMethod: String = request.getMethod.toLowerCase
 
   override def logRequestStart(): Unit = logger.info(
-    s"API ${request.getRequestURI} ${requestMethod.toUpperCase}, Body {${request.body}} Args: ${request.getParameterMap}"
+    s"HTMX [${requestMethod.toUpperCase}] ${request.getRequestURI}${request.getQueryString}, Body {${request.body}}"
   )
 
   override def logRequestEnd(): Unit = {
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    logger.info(s"HTMX request END (${response.status}): ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
+    logger.info(s"HTMX request END (${response.status}): ${request.getRequestURI}${request.getQueryString} in ${currentTimeMillis - startTime}ms")
 
     if (RequestContext.readQueryCount.value > 0) {
       logger.info(s"HTMX request READ queries: ${RequestContext.readQueryCount.value}")

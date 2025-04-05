@@ -32,12 +32,12 @@ class BaseApiController extends BaseController {
   }
 
   override def logRequestStart(): Unit = logger.info(
-    s"API ${request.getRequestURI} ${requestMethod.toUpperCase}, Body {${request.body}} Args: ${request.getParameterMap}"
+    s"API [${requestMethod.toUpperCase}] ${request.getRequestURI}${request.getQueryString}, Body {${request.body}}"
   )
 
   override def logRequestEnd(): Unit = {
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    logger.info(s"API request END (${response.status}): ${request.getRequestURI} in ${currentTimeMillis - startTime}ms")
+    logger.info(s"API request END (${response.status}): ${request.getRequestURI}${request.getQueryString} in ${currentTimeMillis - startTime}ms")
 
     if (RequestContext.readQueryCount.value > 0) {
       logger.info(s"API request READ queries: ${RequestContext.readQueryCount.value}")
