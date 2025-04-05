@@ -156,7 +156,7 @@
                        hx-target="#content"
                        hx-trigger="click"
                        hx-swap="innerHTML"
-                       hx-get="${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${person.persistedId}">
+                       hx-get="${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PERSON_ID}=${person.persistedId}">
                     <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}">
                     </a>
                 </div>
