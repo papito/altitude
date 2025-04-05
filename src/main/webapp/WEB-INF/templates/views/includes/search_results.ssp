@@ -120,7 +120,7 @@
 <div id="searchControl">
   <div class="total">
     <div>
-      <strong>Total:</strong> ${results.total}
+      <strong>Total:</strong> <span class="results-total">${results.total}</span>
     </div>
   </div>
   <div>

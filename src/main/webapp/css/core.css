@@ -297,3 +297,85 @@ form input.error, form input.error:focus {
 #imageDetailModalContainer .modal-box {
     border: none;
 }
+
+/*            */
+/* NAVIGATION */
+/*            */
+
+nav {
+     display: grid;
+     grid-template-columns: 120px repeat(5, 1fr) 300px;
+     grid-column-gap: 10px;
+     background: var(--background-secondary-color);
+     color: #fff;
+     align-items: center;
+     border-bottom: var(--navbar-border);
+     text-shadow: var(--navbar-text-shadow);
+ }
+
+nav span, nav a {
+    color: #FFF;
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: bold;
+    font-family: var(--font);
+    text-transform: uppercase;
+}
+nav .brand a {
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: #979393;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+nav div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+nav .menu {
+    letter-spacing: .10em;
+    color: #9399b4;
+    cursor: pointer;
+}
+
+nav input {
+    border-radius: 3px;
+    border: 2px groove #5a5855;
+    padding: 5px;
+    background-color: #e8e8e8;
+    width: 90%;
+}
+
+nav input::placeholder {
+    color: #a5a2a2;
+}
+
+nav .menu span {
+    margin-left: .5em;
+}
+
+nav .menu.active {
+    background-color: var(--background-tertiary-color);
+    color: #FFF;
+    border: 2px solid var(--warning-background-color);
+    border-radius: 5px;
+    padding: 6px;
+    font-weight: bold;
+}
+
+nav .menu.triage i, nav .menu.triage span {
+    color: var(--warning-font-color);
+}
+
+nav .menu.triage.empty i,
+nav .menu.triage.empty span,
+nav .menu.trashbin.empty i,
+nav .menu.trashbin.empty span {
+    color: var(--faded-font-color);
+    font-size: 10px;
+    cursor: default;
+}

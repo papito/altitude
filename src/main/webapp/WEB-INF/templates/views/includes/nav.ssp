@@ -5,126 +5,40 @@
 
 <%@ val stats: Stats %>
 
-<style>
-  nav {
-    display: grid;
-    grid-template-columns: 120px repeat(5, 1fr) 300px;
-    grid-column-gap: 10px;
-    background: var(--background-secondary-color);
-    color: #fff;
-    align-items: center;
-    border-bottom: var(--navbar-border);
-    text-shadow: var(--navbar-text-shadow);
-  }
+<div class="brand">
+  <a href="/">Altitude</a>
+</div>
+<div class="menu repository">
+  <a href="/"><i class="fas fa-database"></i><span>${RequestContext.getRepository.name}</span></a>
+</div>
 
-  nav span, nav a {
-    color: #FFF;
-    text-decoration: none;
-    font-size: 10px;
-    font-weight: bold;
-    font-family: var(--font);
-    text-transform: uppercase;
-  }
-  nav .brand a {
-    letter-spacing: .15em;
-    text-transform: uppercase;
-    text-decoration: none;
-    color: #979393;
-    font-weight: bold;
-    font-size: 16px;
-  }
-
-  nav div {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  nav .menu {
-    letter-spacing: .10em;
-    color: #9399b4;
-    cursor: pointer;
-  }
-
-  nav input {
-    border-radius: 3px;
-    border: 2px groove #5a5855;
-    padding: 5px;
-    background-color: #e8e8e8;
-    width: 90%;
-  }
-
-  nav input::placeholder {
-    color: #a5a2a2;
-  }
-
-  nav .menu span {
-    margin-left: .5em;
-  }
-
-  nav .menu.active {
-    background-color: var(--background-tertiary-color);
-    color: #FFF;
-    border: 2px solid var(--warning-background-color);
-    border-radius: 5px;
-    padding: 6px;
-    font-weight: bold;
-  }
-
-  nav .menu.triage i, nav .menu.triage span {
-    color: var(--warning-font-color);
-  }
-
-  nav .menu.triage.empty, nav .menu.triage.empty span {
-    color: var(--faded-font-color);
-    font-size: 10px;
-    cursor: default;
-  }
-
-  nav .menu.trashbin.empty, nav .menu.trashbin.empty span {
-    color: var(--faded-font-color);
-    font-size: 10px;
-    cursor: default;
-  }
-
-</style>
-
-<nav>
-  <div class="brand">
-    <a href="/">Altitude</a>
+#if (stats.getTriageAssetCount > 0)
+  <div class="menu triage">
+    <a href="${ url(indexViewRepo, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${Const.Search.View.TRIAGE}"><i class="fas fa-medkit"></i><span>Triage (${stats.getTriageAssetCount})</span></a>
   </div>
-  <div class="menu repository">
-    <a href="/"><i class="fas fa-database"></i><span>${RequestContext.getRepository.name}</span></a>
+#else
+  <div class="menu triage empty">
+    <i class="fas fa-medkit"></i><span>Triage (0)</span>
   </div>
+#end
 
-  #if (stats.getTriageAssetCount > 0)
-    <div class="menu triage">
-      <a href="${ url(indexViewRepo, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${Const.Search.View.TRIAGE}"><i class="fas fa-medkit"></i><span>Triage (${stats.getTriageAssetCount})</span></a>
-    </div>
-  #else
-    <div class="menu triage empty">
-      <i class="fas fa-medkit"></i><span>Triage (0)</span>
-    </div>
-  #end
+#if (stats.getRecycledAssetCount > 0)
+  <div class="menu trashbin">
+    <a href="${ url(indexViewRepo, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${Const.Search.View.RECYCLED}"><i class="fas fa-trash"></i><span>Recycled (${stats.getRecycledAssetCount})</span></a>
+  </div>
+#else
+  <div class="menu trashbin empty">
+    <i class="fas fa-trash"></i><span>Recycled (0)</span>
+  </div>
+#end
 
-  #if (stats.getRecycledAssetCount > 0)
-    <div class="menu trashbin">
-      <a href="${ url(indexViewRepo, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${Const.Search.View.RECYCLED}"><i class="fas fa-trash"></i><span>Recycled (${stats.getRecycledAssetCount})</span></a>
-    </div>
-  #else
-    <div class="menu trashbin empty">
-      <i class="fas fa-trash"></i><span>Recycled (0)</span>
-    </div>
-  #end
-
-  <div class="menu import">
-    <a href="${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"><i class="fas fa-plus-square"></i><span>Import</span></a>
-  </div>
-  <div class="menu settings">
-    <a href=""><i class="fas fa-cog"></i><span>Settings</span></a>
-  </div>
-  <div class="search">
-    <label for="search"></label>
-    <input id="search" type="text" name="search" placeholder="Search">
-  </div>
-</nav>
+<div class="menu import">
+  <a href="${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"><i class="fas fa-plus-square"></i><span>Import</span></a>
+</div>
+<div class="menu settings">
+  <a href=""><i class="fas fa-cog"></i><span>Settings</span></a>
+</div>
+<div class="search">
+  <label for="search"></label>
+  <input id="search" type="text" name="search" placeholder="Search">
+</div>

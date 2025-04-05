@@ -42,9 +42,9 @@
 
 <body>
 
-<div>
+<nav>
     <% include("includes/nav.ssp") %>
-</div>
+</nav>
 
 <main>
     <div id="importOptions">
