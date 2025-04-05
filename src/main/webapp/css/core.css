@@ -43,7 +43,7 @@
     /* Dragon Drop */
     --dnd-can-drop-color: #377a1c;
     --dnd-drop-target-color: rgb(109, 140, 253);
-    --dnd-draggable-border: 2px solid #b0acac;
+    --dnd-draggable-border: 1px solid #b0acac;
 
 
     /* For messages such as form validation and server response status */
@@ -207,9 +207,10 @@ form input.error, form input.error:focus {
 
 .can-drop {
     padding-left: 4px;
+    padding-right: 4px;
     border: var(--dnd-draggable-border);
     border-radius: 4px;
-    background-color: var(--dnd-can-drop-color);
+    background-color: rgba(129, 128, 128, 0.48);
 }
 
 .drop-target {

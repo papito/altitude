@@ -29,7 +29,7 @@ interact("#assets .drag-drop").draggable({
                     Const.attributes.originalWidth,
                     imgElement.clientWidth,
                 )
-                imgElement.style.width = "40px"
+                imgElement.style.width = "45px"
                 const yOffset = event.clientY - position.top
                 target.style.top = position.top + yOffset + "px"
             }
