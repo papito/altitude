@@ -43,7 +43,7 @@ class SearchResultsController extends BaseHtmxController {
      *
      * When this method is done, it will force the new user-friendly browser URL via a special HTMX header.
      */
-    val requestQuery = URLDecoder.decode(Option(request.getQueryString).getOrElse(""), StandardCharsets.UTF_8.toString)
+    val requestQuery = URLDecoder.decode(queryString, StandardCharsets.UTF_8.toString)
 
     val browserUrl = request.getHeader("HX-Current-URL")
     val browserQuery = new java.net.URI(browserUrl).getQuery

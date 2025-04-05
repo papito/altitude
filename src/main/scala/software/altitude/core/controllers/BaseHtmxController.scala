@@ -22,12 +22,12 @@ class BaseHtmxController extends BaseController with ScalateSupport {
   private def requestMethod: String = request.getMethod.toLowerCase
 
   override def logRequestStart(): Unit = logger.info(
-    s"HTMX [${requestMethod.toUpperCase}] ${request.getRequestURI}${request.getQueryString}, Body {${request.body}}"
+    s"HTMX [${requestMethod.toUpperCase}] ${request.getRequestURI}$queryString, Body {${request.body}}"
   )
 
   override def logRequestEnd(): Unit = {
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    logger.info(s"HTMX request END (${response.status}): ${request.getRequestURI}${request.getQueryString} in ${currentTimeMillis - startTime}ms")
+    logger.info(s"HTMX request END (${response.status}): ${request.getRequestURI}$queryString in ${currentTimeMillis - startTime}ms")
 
     if (RequestContext.readQueryCount.value > 0) {
       logger.info(s"HTMX request READ queries: ${RequestContext.readQueryCount.value}")

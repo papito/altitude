@@ -53,17 +53,19 @@ abstract class BaseController
     RequestContext.clear()
   }
 
+  protected def queryString: String = Option(request.getQueryString).getOrElse("")
+
   protected def logRequestStart(): Unit = {
     if (isAssetRequest) return
 
-    logger.info(s"Request START: ${request.getRequestURI}${request.getQueryString}")
+    logger.info(s"Request START: ${request.getRequestURI}$queryString")
   }
 
   protected def logRequestEnd(): Unit = {
     if (isAssetRequest) return
 
     val startTime: Long = request.getAttribute("startTime").asInstanceOf[Long]
-    logger.info(s"Request END (${response.status}): ${request.getRequestURI}${request.getQueryString} in ${currentTimeMillis - startTime}ms")
+    logger.info(s"Request END (${response.status}): ${request.getRequestURI}$queryString in ${currentTimeMillis - startTime}ms")
 
     if (RequestContext.readQueryCount.value > 0) {
       logger.info(s"Request READ queries: ${RequestContext.readQueryCount.value}")
