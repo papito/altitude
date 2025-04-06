@@ -225,13 +225,12 @@ class LibraryService(val app: Altitude) {
 
         new SearchQuery(
           text = query.text,
-          params = Map(FieldConst.Asset.IS_RECYCLED -> false),
           folderIds = allFolderIds,
           metadataFilters = query.params,
           rpp = query.rpp,
           page = query.page)
       } else {
-        query.add(FieldConst.Asset.IS_RECYCLED -> false)
+        query
       }
 
       app.service.search.search(_query)

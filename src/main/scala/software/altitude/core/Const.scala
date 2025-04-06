@@ -41,7 +41,7 @@ object Const {
     object View {
       val DEFAULT = "default"
       val TRIAGE = "triage"
-      val RECYCLED = "recycled"
+      val TRASHBIN = "trashbin"
     }
   }
 

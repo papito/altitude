@@ -218,6 +218,10 @@ form input.error, form input.error:focus {
     background-color: var(--dnd-drop-target-color);
 }
 
+#trash.drop-target {
+    background-color: #ce7d0a;
+}
+
 .draggable {
     cursor: move;
 }
@@ -339,7 +343,20 @@ nav div {
 nav .menu {
     letter-spacing: .10em;
     color: #9399b4;
+    padding: 6px;
     cursor: pointer;
+}
+
+nav .menu span {
+    margin-left: .5em;
+}
+
+nav .menu.active {
+    background-color: var(--background-tertiary-color);
+    color: #FFF;
+    border: 2px solid var(--warning-background-color);
+    border-radius: 5px;
+    font-weight: bold;
 }
 
 nav input {
@@ -352,19 +369,6 @@ nav input {
 
 nav input::placeholder {
     color: #a5a2a2;
-}
-
-nav .menu span {
-    margin-left: .5em;
-}
-
-nav .menu.active {
-    background-color: var(--background-tertiary-color);
-    color: #FFF;
-    border: 2px solid var(--warning-background-color);
-    border-radius: 5px;
-    padding: 6px;
-    font-weight: bold;
 }
 
 nav .menu.triage i, nav .menu.triage span {

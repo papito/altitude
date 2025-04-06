@@ -148,16 +148,6 @@ import scala.math.Ordered.orderingToOrdered
     results.total shouldBe f.assetsPerPersonCount * f.people.length
   }
 
-  test("Recycled assets should not be in the search index") {
-    val asset: Asset = testContext.persistAsset()
-    testContext.persistAsset()
-
-    testApp.service.library.recycleAsset(asset.persistedId)
-
-    val results = testApp.service.library.search(new SearchQuery)
-    results.total shouldBe 1
-  }
-
   test("Pagination") {
     1 to 6 foreach { n =>
       testContext.persistAsset()

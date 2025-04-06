@@ -7,46 +7,61 @@ import {
 } from "../common/snackbar.js"
 import { context } from "../context.js"
 
-document.body.addEventListener(Const.events.assetMoved, (event) => {
+function removeAssetFromResultSetUtil(event, response, successMessage) {
+    const status = response["htmx-internal-data"].xhr.status
     const assetId = event.detail["assetId"]
+
+    if (status === 200) {
+        // Remove the asset from the DOM
+        htmx.find(`#asset-${assetId}`).remove()
+
+        // Decrement the counter in the search control bar
+        const resultsTotalElement = htmx.find("#searchControl .results-total")
+        const currentTotal = parseInt(resultsTotalElement.textContent)
+        resultsTotalElement.textContent = currentTotal - 1
+
+        showSuccessSnackBar(successMessage)
+
+        // reload the navigation bar - it is sensitive to changes, especially if the user is moving assets around
+        htmx.ajax("GET", `/htmx/nav/r/${context.getRepoId()}`, {
+            swap: "innerHTML",
+            target: "nav",
+        })
+
+    } else if (status === 409) {
+        const message = response["htmx-internal-data"].xhr.responseText
+        showWarningSnackBar(message)
+    } else {
+        showErrorSnackBar(`Error performing operation on ${assetId}: ${status}`)
+    }
+}
+
+document.body.addEventListener(Const.events.assetMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
     const newParentFolder = new Folder(newParentFolderId)
 
     function assetMovedHandler(response) {
-        const status = response["htmx-internal-data"].xhr.status
-
-        if (status === 200) {
-            // Remove the asset from the DOM
-            htmx.find(`#asset-${assetId}`).remove()
-
-            // Decrement the counter in the search control bar
-            const resultsTotalElement = htmx.find("#searchControl .results-total")
-            const currentTotal = parseInt(resultsTotalElement.textContent)
-            resultsTotalElement.textContent = currentTotal - 1
-
-            const message = `Asset moved to folder "${newParentFolder.name()}"`
-            showSuccessSnackBar(message)
-
-            // reload the navigation bar - it is sensitive to changes, especially if the user is moving assets around
-            htmx.ajax("GET", `/htmx/nav/r/${context.getRepoId()}`, {
-                swap: "innerHTML",
-                target: "nav",
-            })
-
-        } else if (status === 409) {
-            const message = response["htmx-internal-data"].xhr.responseText
-            showWarningSnackBar(message)
-        } else {
-            showErrorSnackBar(
-                `Error moving asset ${assetId} into ${newParentFolder.name()}: ${status}`,
-            )
-        }
+        const successMessage = `Asset moved to folder "${newParentFolder.name()}"`
+        removeAssetFromResultSetUtil(event, response, successMessage)
     }
 
     htmx.ajax("PUT", `/htmx/asset/r/${context.getRepoId()}/move`, {
         swap: "none",
         values: { ...event.detail },
         handler: assetMovedHandler,
+    })
+})
+
+document.body.addEventListener(Const.events.assetTrashed, (event) => {
+    function assetTrashedHandler(response) {
+        const successMessage = "Asset moved to the trash bin"
+        removeAssetFromResultSetUtil(event, response, successMessage)
+    }
+
+    htmx.ajax("DELETE", `/htmx/asset/r/${context.getRepoId()}/move`, {
+        swap: "none",
+        values: { ...event.detail },
+        handler: assetTrashedHandler,
     })
 })
 

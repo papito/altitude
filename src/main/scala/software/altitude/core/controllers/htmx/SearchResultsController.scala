@@ -71,8 +71,8 @@ class SearchResultsController extends BaseHtmxController {
 
     val queryParams: Map[String, Any] = view match {
         case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
-        case Const.Search.View.RECYCLED => Map(FieldConst.Asset.IS_RECYCLED -> true)
-        case _ => Map.empty[String, Any]
+        case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true)
+        case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
     }
 
     val q = new SearchQuery(

@@ -37,7 +37,7 @@ class SearchQuery(val text: Option[String] = None,
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
-    s"SearchQuery(text=$text, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page, searchSort=${searchSort.headOption})"
+    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
     new SearchQuery(
