@@ -339,8 +339,14 @@ class LibraryService(val app: Altitude) {
 
   def recycleAsset(assetId: String): Asset = {
     txManager.withTransaction {
-      recycleAssets(Set(assetId))
-      getById(assetId)
+      val asset: Asset = getById(assetId)
+
+      if (asset.isRecycled) {
+        throw DuplicateException(Some(s"Asset [$asset] is already recycled"))
+      }
+
+      recycleAssets(Set(asset.persistedId))
+      asset.copy(isRecycled = true)
     }
   }
 

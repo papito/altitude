@@ -2,7 +2,7 @@ package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import software.altitude.core.Altitude
+import software.altitude.core.{Altitude, DuplicateException}
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Stats
@@ -99,6 +99,45 @@ import software.altitude.test.core.IntegrationTestCore
     stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
       stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
   }
+
+  test("Recycle triaged assets") {
+    val total = 5
+    val triagedAssets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
+      val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
+      val asset = testContext.persistAsset(Some(triagedAssetModel))
+      acc :+ asset
+    }
+
+    var stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe triagedAssets.length
+
+    testApp.service.library.recycleAsset(triagedAssets.head.persistedId)
+
+    stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe triagedAssets.length - 1
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
+  }
+
+  test("Recycle already recycled asset", Focused) {
+    val total = 3
+    val assets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
+      acc :+  testContext.persistAsset()
+    }
+
+    var stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe assets.length
+
+    testApp.service.library.recycleAsset(assets.head.persistedId)
+
+    intercept[DuplicateException] {
+      testApp.service.library.recycleAsset(assets.head.persistedId)
+    }
+
+    stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe assets.length - 1
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
+  }
+
 
   test("Recycle a folder") {
     val folder1: Folder = testApp.service.library.addFolder("folder1")
