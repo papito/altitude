@@ -8,7 +8,10 @@ import { Const } from "../constants.js"
 import { context } from "../context.js"
 
 export function init() {
-    highlightNav("repository")
+    // select the right nav tab
+    const urlParams = new URLSearchParams(window.location.search)
+    const view = urlParams.get("view") || "repository"
+    highlightNav(view)
 
     /**
      * Load which fields to show in the grid

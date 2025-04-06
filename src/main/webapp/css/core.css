@@ -308,7 +308,7 @@ form input.error, form input.error:focus {
 
 nav {
      display: grid;
-     grid-template-columns: 120px repeat(5, 1fr) 300px;
+     grid-template-columns: 120px repeat(5, 1fr) 220px;
      grid-column-gap: 10px;
      background: var(--background-secondary-color);
      color: #fff;

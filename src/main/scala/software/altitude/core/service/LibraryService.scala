@@ -56,7 +56,7 @@ class LibraryService(val app: Altitude) {
       assetType = assetType,
       sizeBytes = importAsset.data.length,
       isTriaged = true,
-      folderId = RequestContext.getRepository.rootFolderId
+      folderId = ""
     )
     AssetWithData(asset, importAsset.data)
   }
