@@ -13,9 +13,7 @@ class IndexController extends BaseWebController {
     requireLogin()
     contentType = "text/html"
 
-    ssp(
-      "index.ssp",
-      "stats" -> app.service.stats.getStats)
+    ssp("index.ssp", "stats" -> app.service.stats.getStats)
   }
 
   get("/") {

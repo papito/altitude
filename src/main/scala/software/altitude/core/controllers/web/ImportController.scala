@@ -60,7 +60,7 @@ class ImportController
 
     layoutTemplate(
       "import.ssp",
-      "stats" ->  app.service.stats.getStats,
+      "stats" -> app.service.stats.getStats
     )
   }
 

@@ -14,14 +14,15 @@ case class SearchSort(field: String, direction: SortDirection.Value) {
   override def toString: String = s"SearchSort(field=$field, direction=${direction.id})"
 }
 
-class SearchQuery(val text: Option[String] = None,
-                  override val params: Map[String, Any] = Map(),
-                  val metadataFilters: Map[String, Any] = Map(),
-                  val folderIds: Set[String] = Set(),
-                  val personIds: Set[String] = Set(),
-                  rpp: Int = 0,
-                  page: Int = 1,
-                  val searchSort: List[SearchSort] = List())
+class SearchQuery(
+    val text: Option[String] = None,
+    override val params: Map[String, Any] = Map(),
+    val metadataFilters: Map[String, Any] = Map(),
+    val folderIds: Set[String] = Set(),
+    val personIds: Set[String] = Set(),
+    rpp: Int = 0,
+    page: Int = 1,
+    val searchSort: List[SearchSort] = List())
   extends Query(params = metadataFilters, rpp = rpp, page = page) {
 
   if (sort.nonEmpty) {

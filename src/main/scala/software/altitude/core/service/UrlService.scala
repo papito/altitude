@@ -1,6 +1,8 @@
 package software.altitude.core.service
 
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import software.altitude.core.RequestContext
 
 class UrlService {
@@ -8,8 +10,7 @@ class UrlService {
 
   def getBrowserViewUrl(combinedQueryParams: Map[String, String], browserUrl: String): String = {
     val queryString = constructQueryString(combinedQueryParams)
-    println(s"Query String: $queryString")
-    println("Sending browser view URL: " + queryString)
+    logger.trace("Sending browser view URL: " + queryString)
     s"/r/${RequestContext.getRepository.persistedId}?$queryString" + gerFragment(browserUrl)
   }
 

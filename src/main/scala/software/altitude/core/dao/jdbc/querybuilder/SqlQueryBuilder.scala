@@ -170,7 +170,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], val tableNa
     if (!query.isSorted) return ClauseComponents()
 
     val sort = query.sort.head
-    ClauseComponents(elements = List(s"${sort.param} ${sort.direction}"))
+    ClauseComponents(elements = List(s"$tableName.${sort.param} ${sort.direction}"))
   }
 
   protected def orderByStr(clauseComponents: ClauseComponents): String = {

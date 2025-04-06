@@ -194,7 +194,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     if (!query.isSorted) return ClauseComponents()
 
     val sort = query.searchSort.head
-    val sql = s" ORDER BY ${sort.field} ${sort.direction}"
+    val sql = s" ORDER BY $tableName.${sort.field} ${sort.direction}"
 
     ClauseComponents(List(sql))
   }

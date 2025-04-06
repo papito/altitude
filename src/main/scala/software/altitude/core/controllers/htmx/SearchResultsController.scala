@@ -3,7 +3,10 @@ package software.altitude.core.controllers.htmx
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import org.scalatra.Route
-import software.altitude.core.{Api, Const, FieldConst}
+
+import software.altitude.core.Api
+import software.altitude.core.Const
+import software.altitude.core.FieldConst
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Person
 import software.altitude.core.util.SearchQuery
@@ -70,9 +73,9 @@ class SearchResultsController extends BaseHtmxController {
     val sort = SearchSort(field = sortField, direction = sortDirection)
 
     val queryParams: Map[String, Any] = view match {
-        case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
-        case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true)
-        case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
+      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
+      case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true)
+      case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
     }
 
     val q = new SearchQuery(

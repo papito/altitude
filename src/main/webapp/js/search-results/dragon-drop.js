@@ -72,25 +72,29 @@ interact("#trash").dropzone({
         )
 
         if (trashedFolderId) {
-            console.debug(
-                `Trashed folder ${trashedFolderId}`,
-            )
-            const trashedFolderEvent = new CustomEvent(Const.events.folderTrashed, {
-                detail: {
-                    trashedFolderId: trashedFolderId,
+            console.debug(`Trashed folder ${trashedFolderId}`)
+            const trashedFolderEvent = new CustomEvent(
+                Const.events.folderTrashed,
+                {
+                    detail: {
+                        trashedFolderId: trashedFolderId,
+                    },
                 },
-            })
+            )
 
             document.body.dispatchEvent(trashedFolderEvent)
         }
 
         if (trashedAssetId) {
             console.debug(`Trashed asset ${trashedAssetId}`)
-            const trashedAssetEvent = new CustomEvent(Const.events.assetTrashed, {
-                detail: {
-                    assetId: trashedAssetId,
+            const trashedAssetEvent = new CustomEvent(
+                Const.events.assetTrashed,
+                {
+                    detail: {
+                        assetId: trashedAssetId,
+                    },
                 },
-            })
+            )
 
             document.body.dispatchEvent(trashedAssetEvent)
         }

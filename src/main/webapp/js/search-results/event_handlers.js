@@ -27,7 +27,6 @@ function removeAssetFromResultSetUtil(event, response, successMessage) {
             swap: "innerHTML",
             target: "nav",
         })
-
     } else if (status === 409) {
         const message = response["htmx-internal-data"].xhr.responseText
         showWarningSnackBar(message)
