@@ -12,6 +12,9 @@ export function init() {
     const urlParams = new URLSearchParams(window.location.search)
     const view = urlParams.get("view") || "repository"
     highlightNav(view)
+    // this switches the background color of the content
+    document.getElementById("content").classList.add(view);
+
 
     /**
      * Load which fields to show in the grid

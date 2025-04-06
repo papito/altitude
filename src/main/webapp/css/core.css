@@ -82,6 +82,19 @@ footer {
     background: var(--background-secondary-color);
 }
 
+/*         */
+/* CONTENT */
+/*         */
+
+#content.triage {
+    background-color: rgba(55, 122, 28, 0.07);
+}
+
+#content.trashbin {
+    background-color: rgba(206, 125, 10, 0.05);
+}
+
+
 /*       */
 /* FORMS */
 /*       */
@@ -372,8 +385,13 @@ nav input::placeholder {
 }
 
 nav .menu.triage i, nav .menu.triage span {
+    color: var(--success-font-color);
+}
+
+nav .menu.trashbin i, nav .menu.trashbin span {
     color: var(--warning-font-color);
 }
+
 
 nav .menu.triage.empty i,
 nav .menu.triage.empty span,
