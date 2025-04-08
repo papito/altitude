@@ -213,8 +213,8 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
   }
 
   /**
-   * When an asset gets recycled, we need to decrement the number of faces for the person
-   * as the recycled assets do not count toward person occurrences in the data set.
+   * When an asset gets recycled, we need to decrement the number of faces for the person as the recycled assets do not count
+   * toward person occurrences in the data set.
    *
    * We don't do anything else, as we remove the actual faces during asset Purge.
    *

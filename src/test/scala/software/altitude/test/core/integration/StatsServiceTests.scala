@@ -2,7 +2,8 @@ package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import software.altitude.core.{Altitude, DuplicateException}
+import software.altitude.core.Altitude
+import software.altitude.core.DuplicateException
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Stats

@@ -96,12 +96,15 @@
 
     // keep refreshing the nav for updated counts
     setInterval(() => {
-        htmx.ajax("GET", "/htmx/nav/r/" + "${RequestContext.getRepository.persistedId}", {
-            swap: "innerHTML",
-            target: "nav",
-        })
-    }, 5000);
-
+        htmx.ajax(
+            "GET",
+            "/htmx/nav/r/" + "${RequestContext.getRepository.persistedId}",
+            {
+                swap: "innerHTML",
+                target: "nav",
+            },
+        )
+    }, 5000)
 </script>
 
 </body>
