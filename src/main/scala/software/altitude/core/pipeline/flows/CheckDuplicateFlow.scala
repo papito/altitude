@@ -22,7 +22,7 @@ object CheckDuplicateFlow {
 
         debugInfo(s"\tChecking for duplicate for ${dataAsset.asset.fileName}")
 
-        val existing: Option[Asset] = app.service.library.getByChecksum(dataAsset.asset.checksum)
+        val existing: Option[Asset] = app.service.asset.getByChecksum(dataAsset.asset.checksum)
 
         if (existing.nonEmpty) {
           Future.successful(Right(InvalidAsset(dataAsset.asset, Some(new DuplicateException))), ctx)

@@ -17,18 +17,18 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Rename asset and attempt to rename a recycled asset") {
     var asset: Asset = testContext.persistAsset()
-    var updatedAsset: Asset = testApp.service.library.renameAsset(asset.persistedId, "newName")
+    var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
     updatedAsset.fileName shouldBe "newName"
 
     // get the asset again to make sure it has been updated
-    updatedAsset = testApp.service.library.getById(asset.persistedId)
+    updatedAsset = testApp.service.asset.getById(asset.persistedId)
     updatedAsset.fileName shouldBe "newName"
 
     // attempt to rename a recycled asset
     asset = testApp.service.library.recycleAsset(asset.persistedId)
 
     intercept[IllegalOperationException] {
-      testApp.service.library.renameAsset(asset.persistedId, "newName2")
+      testApp.service.asset.rename(asset.persistedId, "newName2")
     }
   }
 
@@ -39,7 +39,7 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.recycleAsset(asset.persistedId)
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 1
 
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
@@ -56,11 +56,11 @@ import software.altitude.test.core.IntegrationTestCore
     folder2
       folder2_1
     */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder2: Folder = testApp.service.folder.add("folder2")
 
-    val folder2_1: Folder = testApp.service.library.addFolder(
+    val folder2_1: Folder = testApp.service.folder.add(
       name = "folder2_1", parentId = folder2.id)
 
     // fill up the hierarchy with assets x times over
@@ -88,9 +88,9 @@ import software.altitude.test.core.IntegrationTestCore
     folder1
     folder2
     */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder2: Folder = testApp.service.folder.add("folder2")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
 
@@ -124,7 +124,7 @@ import software.altitude.test.core.IntegrationTestCore
     folder1
     folder2
     */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
 
@@ -183,11 +183,11 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Recycle folder assets") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder2: Folder = testApp.service.folder.add("folder2")
 
-    val folder2_1: Folder = testApp.service.library.addFolder(
+    val folder2_1: Folder = testApp.service.folder.add(
       name = "folder2_1", parentId = folder2.id)
 
     var asset1: Asset = testContext.persistAsset(folder=Some(folder1))
@@ -197,9 +197,9 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.deleteFolderById(folder1.persistedId)
     testApp.service.library.deleteFolderById(folder2.persistedId)
 
-    asset1 = testApp.service.library.getById(asset1.persistedId)
-    asset2 = testApp.service.library.getById(asset2.persistedId)
-    asset3 = testApp.service.library.getById(asset3.persistedId)
+    asset1 = testApp.service.asset.getById(asset1.persistedId)
+    asset2 = testApp.service.asset.getById(asset2.persistedId)
+    asset3 = testApp.service.asset.getById(asset3.persistedId)
 
     asset1.isRecycled shouldBe true
     asset2.isRecycled shouldBe true
@@ -207,7 +207,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Restore an asset that was imported again") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     val dataAsset = testContext.makeAssetWithData(folder=Some(folder1))
     val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
@@ -225,7 +225,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Restoring an asset into a recycled folder should recreate the folder") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
     testApp.service.library.recycleAsset(asset.persistedId)

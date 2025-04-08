@@ -29,6 +29,14 @@ import software.altitude.core.util.QueryResult
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
 
+/**
+ * What is the difference between this and the AssetService?
+ *
+ * The LibraryService is a higher-level service that deals with the library as a whole,
+ * where methods touch multiple sub-services. While it's not a strict separation,
+ * and sub-services can mingle on their own, anything that has to do with high-level
+ * library concepts should be in this service.
+ */
 object LibraryService {
   private val SUPPORTED_MEDIA_TYPES: Set[String] = Set(
     "image",
@@ -80,31 +88,17 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def deleteById(id: String): Unit = {
-    throw new NotImplementedError
-  }
-
-  def getById(id: String): JsObject = {
-    txManager.asReadOnly[JsObject] {
-      app.service.asset.getById(id)
-    }
-  }
-
-  def getByChecksum(checksum: Int): Option[Asset] = {
-    txManager.asReadOnly[Option[Asset]] {
-      val query = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum)).withRepository()
-      val existing = app.service.asset.query(query)
-      if (existing.nonEmpty) Some(existing.records.head: Asset) else None
-    }
-  }
-
   def moveAssetToFolder(assetId: String, folderId: String): Asset = {
     txManager.withTransaction[Asset] {
       moveAssetsToFolder(Set(assetId), folderId)
-      getById(assetId)
+      app.service.asset.getById(assetId)
     }
   }
 
+  /**
+   * Note that this is also how we restore assets from the recycle bin - they
+   * are just moved to the folder where they belonged.
+   */
   private def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
 
     def move(asset: Asset): Unit = {
@@ -119,8 +113,7 @@ class LibraryService(val app: Altitude) {
       app.service.person.restoreFacesForAsset(asset)
 
       /* Point the asset to the new folder.
-         It may or may not be recycled or triaged, so we update it as neither unconditionally
-         (saves us a separate update query)
+         It may or may not be recycled or triaged, so we update it as neither
        */
       val data = Map(
         FieldConst.Asset.FOLDER_ID -> destFolderId,
@@ -138,66 +131,11 @@ class LibraryService(val app: Altitude) {
 
       assetIds.foreach {
         assetId =>
-          val asset: Asset = getById(assetId)
+          val asset: Asset = app.service.asset.getById(assetId)
 
           move(asset)
       }
     }
-  }
-
-  def renameAsset(assetId: String, newFilename: String): Asset = {
-
-    txManager.withTransaction[Asset] {
-      val asset: Asset = getById(assetId)
-
-      if (asset.isRecycled) {
-        throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
-      }
-
-      val data = Map(
-        FieldConst.Asset.FILENAME -> newFilename
-      )
-      app.service.asset.updateById(asset.persistedId, data)
-
-      asset.copy(fileName = newFilename)
-    }
-  }
-
-  private def genPreviewData(dataAsset: AssetWithData): Array[Byte] = {
-    dataAsset.asset.assetType.mediaType match {
-      case "image" =>
-        makeImageThumbnail(dataAsset.data, C.AssetView.PREVIEW_BOX_PIXELS)
-      case _ => new Array[Byte](0)
-    }
-  }
-
-  def getDimensions(dataAsset: AssetWithData): (Int, Int) /* width, height */ = {
-    dataAsset.asset.assetType.mediaType match {
-      case "image" =>
-        val img: BufferedImage = ImageIO.read(new ByteArrayInputStream(dataAsset.data))
-        (img.getWidth, img.getHeight)
-      case _ =>
-        // Default to 0, 0 for unsupported media types
-        (0, 0)
-    }
-  }
-
-  def addPreview(dataAsset: AssetWithData): Option[MimedPreviewData] = {
-    val previewData: Array[Byte] = genPreviewData(dataAsset)
-
-    previewData.length match {
-      case size if size > 0 =>
-        val preview: MimedPreviewData = MimedPreviewData(assetId = dataAsset.asset.persistedId, data = previewData)
-
-        app.service.fileStore.addPreview(preview)
-
-        Some(preview)
-      case _ => None
-    }
-  }
-
-  def getPreview(assetId: String): MimedPreviewData = {
-    app.service.fileStore.getPreviewById(assetId)
   }
 
   def query(query: Query): QueryResult = {
@@ -241,28 +179,6 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def queryTriaged(query: Query): QueryResult = {
-    app.service.asset.queryTriaged(query)
-  }
-
-  def queryRecycled(query: Query): QueryResult = {
-    app.service.asset.queryRecycled(query)
-  }
-
-  def queryAll(query: Query): QueryResult = {
-    app.service.asset.queryAll(query)
-  }
-
-  def addFolder(name: String, parentId: Option[String] = None): Folder = {
-    txManager.withTransaction[JsObject] {
-      val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
-      val folder = Folder(name = name.trim, parentId = _parentId)
-      val addedFolder: Folder = app.service.folder.add(folder)
-
-      addedFolder
-    }
-  }
-
   /** Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. */
   def deleteFolderById(id: String): Unit = {
     if (app.service.folder.isRootFolder(id)) {
@@ -289,36 +205,22 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def renameFolder(folderId: String, newName: String): Folder = {
-    txManager.withTransaction[Folder] {
-      val updatedFolder = app.service.folder.rename(folderId, newName)
-      updatedFolder
-    }
-  }
-
-  def moveFolder(folderBeingMovedId: String, destFolderId: String): Folder = {
-    txManager.withTransaction[Folder] {
-      val (movedFolder, _) = app.service.folder.move(folderBeingMovedId, destFolderId)
-      movedFolder
-    }
-  }
-
   def restoreRecycledAsset(assetId: String): Asset = {
     txManager.withTransaction[Asset] {
       restoreRecycledAssets(Set(assetId))
-      getById(assetId)
+      app.service.asset.getById(assetId)
     }
   }
 
-  def restoreRecycledAssets(assetIds: Set[String]): Unit = {
+  private def restoreRecycledAssets(assetIds: Set[String]): Unit = {
     logger.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
     assetIds.foreach {
       assetId =>
         logger.info(s"Restoring recycled asset [$assetId]")
 
-        val asset: Asset = getById(assetId)
-        val existing = getByChecksum(asset.checksum)
+        val asset: Asset = app.service.asset.getById(assetId)
+        val existing =  app.service.asset.getByChecksum(asset.checksum)
 
         if (existing.isDefined) {
           throw DuplicateException()
@@ -334,7 +236,7 @@ class LibraryService(val app: Altitude) {
               app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
             }
 
-            val restoredAsset: Asset = getById(assetId)
+            val restoredAsset: Asset = app.service.asset.getById(assetId)
             app.service.stats.restoreAsset(restoredAsset)
           }
         }
@@ -343,7 +245,7 @@ class LibraryService(val app: Altitude) {
 
   def recycleAsset(assetId: String): Asset = {
     txManager.withTransaction {
-      val asset: Asset = getById(assetId)
+      val asset: Asset = app.service.asset.getById(assetId)
 
       if (asset.isRecycled) {
         throw DuplicateException(Some(s"Asset [$asset] is already recycled"))
@@ -358,7 +260,7 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       assetIds.foreach {
         assetId =>
-          val asset: Asset = getById(assetId)
+          val asset: Asset = app.service.asset.getById(assetId)
 
           if (!asset.isRecycled) {
             app.service.asset.setRecycledProp(asset, isRecycled = true)
@@ -367,33 +269,6 @@ class LibraryService(val app: Altitude) {
             app.service.person.recycleFacesForAsset(asset)
           }
       }
-    }
-  }
-
-  def addMetadataValue(assetId: String, fieldId: String, newValue: Any): Unit = {
-    txManager.withTransaction {
-      app.service.metadata.addFieldValue(assetId, fieldId, newValue.toString)
-      val field: UserMetadataField = app.service.metadata.getFieldById(fieldId)
-      val asset: Asset = getById(assetId)
-      app.service.search.addMetadataValue(asset, field, newValue.toString)
-    }
-  }
-
-  def deleteMetadataValue(assetId: String, valueId: String): Unit = {
-    txManager.withTransaction {
-      app.service.metadata.deleteFieldValue(assetId, valueId)
-      val asset: Asset = getById(assetId)
-      // OPTIMIZE: store value ID with search to delete in a targeted way
-      app.service.search.reindexAsset(asset)
-    }
-  }
-
-  def updateMetadataValue(assetId: String, valueId: String, newValue: Any): Unit = {
-    txManager.withTransaction {
-      app.service.metadata.updateFieldValue(assetId, valueId, newValue.toString)
-      val asset: Asset = getById(assetId)
-      // OPTIMIZE: store value ID with search to update in a more efficient way
-      app.service.search.reindexAsset(asset)
     }
   }
 

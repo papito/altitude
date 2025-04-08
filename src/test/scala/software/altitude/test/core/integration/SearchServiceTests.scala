@@ -94,9 +94,9 @@ import scala.math.Ordered.orderingToOrdered
 
     val metadata = UserMetadata(data)
 
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1: Folder = testApp.service.folder.add(
       name = "folder1_1", parentId = folder1.id)
 
     1 to 3 foreach {_ =>
@@ -274,13 +274,13 @@ import scala.math.Ordered.orderingToOrdered
     val asset2: Asset = testContext.persistAsset()
     val asset3: Asset = testContext.persistAsset()
 
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
-    testApp.service.library.addMetadataValue(asset2.persistedId, fieldId = field1.persistedId, newValue = "one")
-    testApp.service.library.addMetadataValue(asset3.persistedId, fieldId = field1.persistedId, newValue = "two")
+    testApp.service.metadata.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
+    testApp.service.metadata.addMetadataValue(asset2.persistedId, fieldId = field1.persistedId, newValue = "one")
+    testApp.service.metadata.addMetadataValue(asset3.persistedId, fieldId = field1.persistedId, newValue = "two")
 
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 1)
-    testApp.service.library.addMetadataValue(asset2.persistedId, fieldId = field2.persistedId, newValue = 1)
-    testApp.service.library.addMetadataValue(asset3.persistedId, fieldId = field2.persistedId, newValue = 2)
+    testApp.service.metadata.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 1)
+    testApp.service.metadata.addMetadataValue(asset2.persistedId, fieldId = field2.persistedId, newValue = 1)
+    testApp.service.metadata.addMetadataValue(asset3.persistedId, fieldId = field2.persistedId, newValue = 2)
 
     val results = testApp.service.library.search(
       new SearchQuery(
@@ -306,13 +306,13 @@ import scala.math.Ordered.orderingToOrdered
 
     val asset1: Asset = testContext.persistAsset()
 
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
+    testApp.service.metadata.addMetadataValue(asset1.persistedId, fieldId = field1.persistedId, newValue = "one")
     // it's the only value for this field so get it
     val metadata: UserMetadata = testApp.service.metadata.getMetadata(asset1.persistedId)
     val mdVal = metadata(field1.persistedId).head
 
     // tag a second field for posterity
-    testApp.service.library.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 3)
+    testApp.service.metadata.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 3)
 
     var results = testApp.service.library.search(new SearchQuery(text = Some("one")))
     results.total shouldBe 1
@@ -330,7 +330,7 @@ import scala.math.Ordered.orderingToOrdered
     results.total shouldBe 1
 
     // update the value and search again
-    testApp.service.library.updateMetadataValue(asset1.persistedId, mdVal.persistedId, "newone")
+    testApp.service.metadata.updateMetadataValue(asset1.persistedId, mdVal.persistedId, "newone")
     results = testApp.service.library.search(new SearchQuery(text = Some("newone")))
     results.total shouldBe 1
 
@@ -347,7 +347,7 @@ import scala.math.Ordered.orderingToOrdered
     results.total shouldBe 1
 
     // remove the value and search again
-    testApp.service.library.deleteMetadataValue(assetId = asset1.persistedId, valueId = mdVal.persistedId)
+    testApp.service.metadata.deleteMetadataValue(assetId = asset1.persistedId, valueId = mdVal.persistedId)
 
     results = testApp.service.library.search(new SearchQuery(text = Some("one")))
     results.isEmpty shouldBe true
