@@ -34,7 +34,6 @@ abstract class BaseService[Model <: BaseModel] {
 
   def add(objIn: Model): JsObject = {
     txManager.withTransaction[JsObject] {
-
       try {
         dao.add(objIn)
       } catch {

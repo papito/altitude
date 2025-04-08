@@ -114,6 +114,10 @@ class LibraryService(val app: Altitude) {
         return
       }
 
+      // If this is a recycled asset, we are re-adding the faces as acitve, so must update
+      // occurrences for each person in the asset
+      app.service.person.restoreFacesForAsset(asset)
+
       /* Point the asset to the new folder.
          It may or may not be recycled or triaged, so we update it as neither unconditionally
          (saves us a separate update query)
@@ -351,13 +355,18 @@ class LibraryService(val app: Altitude) {
   }
 
   def recycleAssets(assetIds: Set[String]): Unit = {
-    assetIds.foreach {
-      assetId =>
-        txManager.withTransaction {
+    txManager.withTransaction {
+      assetIds.foreach {
+        assetId =>
           val asset: Asset = getById(assetId)
-          app.service.asset.setRecycledProp(asset, isRecycled = true)
-          app.service.stats.recycleAsset(asset.copy(isRecycled = true))
-        }
+
+          if (!asset.isRecycled) {
+            app.service.asset.setRecycledProp(asset, isRecycled = true)
+            app.service.stats.recycleAsset(asset.copy(isRecycled = true))
+            // remove faces associated with this asset
+            app.service.person.recycleFacesForAsset(asset)
+          }
+      }
     }
   }
 

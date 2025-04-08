@@ -118,7 +118,7 @@ import software.altitude.test.core.IntegrationTestCore
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
   }
 
-  test("Recycle already recycled asset", Focused) {
+  test("Recycle already recycled asset") {
     val total = 3
     val assets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
       acc :+  testContext.persistAsset()
