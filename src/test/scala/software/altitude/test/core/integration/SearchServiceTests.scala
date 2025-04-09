@@ -419,4 +419,9 @@ import scala.math.Ordered.orderingToOrdered
     val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
     testApp.service.library.search(assetSearchQuery).total shouldBe 0
   }
+
+  test("Purging assets should remove them from the search index") {
+    // TODO
+  }
+
 }

@@ -272,6 +272,16 @@ class LibraryService(val app: Altitude) {
     }
   }
 
+  def purgeAssets(assetIds: Set[String]): Unit = {
+    txManager.withTransaction {
+      assetIds.foreach {
+        assetId =>
+          val asset: Asset = app.service.asset.getById(assetId)
+          app.service.asset.deleteById(asset.persistedId)
+      }
+    }
+  }
+
   def pruneDanglingAssets(): Unit = {
     forEachRepository {
       repository =>

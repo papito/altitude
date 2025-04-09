@@ -25,6 +25,10 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     val path = filePath(id)
     val srcFile: File = new File(path)
 
+    if (!srcFile.isFile) {
+      throw NotFoundException(s"Cannot find asset data for [$id]")
+    }
+
     var byteArray: Option[Array[Byte]] = None
 
     try {
@@ -49,15 +53,34 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
   }
 
+  override def purgeAssetById(id: String): Unit = {
+    val srcFile = new File(filePath(id))
+    val previewFile = new File(previewFilePath(id))
+
+    try {
+      if (srcFile.isFile) {
+        srcFile.delete()
+      }
+    } catch {
+      case ex: IOException =>
+        throw StorageException(s"Error deleting source file for asset id [$id]: $ex")
+    }
+
+    try {
+      if (previewFile.isFile) {
+        previewFile.delete()
+      }
+    } catch {
+      case ex: IOException =>
+        throw StorageException(s"Error deleting preview file for asset id [$id]: $ex")
+    }
+  }
+
   override def addPreview(preview: MimedPreviewData): Unit = {
     logger.info(s"Adding preview for asset ${preview.assetId}")
 
     // get the full path to our preview file
     val destFilePath = previewFilePath(preview.assetId)
-    // parse out the dir path
-    val dirPath = FilenameUtils.getFullPath(destFilePath)
-
-//    FileUtils.forceMkdir(new File(dirPath))
 
     try {
       FileUtils.writeByteArrayToFile(new File(destFilePath), preview.data)

@@ -1,6 +1,7 @@
 package software.altitude.test.core.integration
 
 import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
@@ -273,5 +274,54 @@ import software.altitude.test.core.IntegrationTestCore
     // Not tidy but will do for now.
     testApp.service.library.search(assetSearchQuery).total shouldBe 0
   }
+
+/*
+  test("Purging assets should remove recs from DB and file store") {
+    val totalAssets = 3
+    val assets = List.fill(totalAssets)(testContext.persistAsset())
+
+    // recycle some assets
+    val recycleCount = 2
+    val recycledAssets = assets.take(recycleCount) map { asset =>
+      testApp.service.library.recycleAsset(asset.persistedId)
+      asset
+    }
+
+    val purgedAssetIds = recycledAssets.map(_.persistedId)
+    testApp.service.library.purgeAssets(purgedAssetIds.toSet)
+
+    // should be gone from DB
+    val allAssets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+    allAssets.length should be(totalAssets - recycleCount)
+
+    // no longer in the file store
+    purgedAssetIds.foreach{ id =>
+      intercept[NotFoundException] {
+        testApp.service.fileStore.getAssetById(id)
+      }
+    }
+  }
+
+  test("Purging assets should remove them from the file system") {
+    val totalAssets = 3
+    val totalPeople = 3
+    val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
+    testContext.addTestFacesAndAssets(people, assetCount = totalAssets)
+
+    testApp.service.person.getAll.size shouldBe totalPeople
+
+    val allAssets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+
+    val recycleCount = 2
+    val recycledAssets = allAssets.take(recycleCount) map { asset =>
+      testApp.service.library.recycleAsset(asset.persistedId)
+      asset
+    }
+
+    val purgedAssetIds = recycledAssets.map(_.persistedId).toSet
+    testApp.service.library.purgeAssets(purgedAssetIds)
+  }
+*/
+
 
 }
