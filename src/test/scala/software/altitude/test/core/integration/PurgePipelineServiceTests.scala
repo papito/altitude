@@ -96,6 +96,12 @@ object VoidAssetSink {
         intercept[NotFoundException] {
           testApp.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
         }
+        intercept[NotFoundException] {
+          testApp.service.fileStore.getAlignedFaceById(face.persistedId)
+        }
+        intercept[NotFoundException] {
+          testApp.service.fileStore.getDetectedFaceById(face.persistedId)
+        }
       }
     }
   }

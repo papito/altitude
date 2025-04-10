@@ -167,43 +167,19 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   override def getDisplayFaceById(faceId: String): MimedFaceData = {
-    val path = displayFacePath(faceId)
-    val srcFile: File = new File(path)
-
-    if (!srcFile.isFile) {
-      throw NotFoundException(s"Cannot find display face data for [$faceId]")
-    }
-
-    var byteArray: Option[Array[Byte]] = None
-
-    try {
-      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
-    }
-
-    MimedFaceData(data = byteArray.get)
+    getMimedFaceData(displayFacePath(faceId))
   }
 
   override def getAlignedGreyscaleFaceById(faceId: String): MimedFaceData = {
-    val path = alignedGreyscaleFacePath(faceId)
-    val srcFile: File = new File(path)
+    getMimedFaceData(alignedGreyscaleFacePath(faceId))
+  }
 
-    if (!srcFile.isFile) {
-      throw NotFoundException(s"Cannot find aligned grayscale face data for [$faceId]")
-    }
+  override def getDetectedFaceById(faceId: String): MimedFaceData = {
+    getMimedFaceData(detectedFacePath(faceId))
+  }
 
-    var byteArray: Option[Array[Byte]] = None
-
-    try {
-      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
-    }
-
-    MimedFaceData(data = byteArray.get)
+  override def getAlignedFaceById(faceId: String): MimedFaceData ={
+    getMimedFaceData(alignedFacePath(faceId))
   }
 
   override def purgeFaceById(id: String): Unit = {
@@ -227,4 +203,24 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
       }
     }
   }
+
+  private def getMimedFaceData(path: String): MimedFaceData = {
+    val srcFile: File = new File(path)
+
+    if (!srcFile.isFile) {
+      throw NotFoundException(s"Cannot find display face data at $path")
+    }
+
+    var byteArray: Option[Array[Byte]] = None
+
+    try {
+      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
+    } catch {
+      case ex: IOException =>
+        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
+    }
+
+    MimedFaceData(data = byteArray.get)
+  }
+
 }
