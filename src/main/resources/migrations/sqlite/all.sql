@@ -66,6 +66,7 @@ CREATE TABLE asset  (
   size_bytes INT NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
+  is_purged TINYINT NOT NULL DEFAULT 0,
   is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
     -- EXIF DateTimeOriginal, defaults to Now() if none
   original_created_at DATETIME NOT NULL,

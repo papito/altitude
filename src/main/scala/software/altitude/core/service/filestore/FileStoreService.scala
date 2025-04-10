@@ -16,7 +16,8 @@ trait FileStoreService {
   def getPreviewById(assetId: String): MimedPreviewData
 
   def addFace(face: Face, faceImages: FaceImages): Unit
-
   def getDisplayFaceById(faceId: String): MimedFaceData
   def getAlignedGreyscaleFaceById(faceId: String): MimedFaceData
+  def purgeFaceById(id: String): Unit
+
 }

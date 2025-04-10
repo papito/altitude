@@ -67,6 +67,7 @@ CREATE TABLE asset (
   size_bytes INT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
+  is_purged BOOLEAN NOT NULL DEFAULT FALSE,
   is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
     -- area size of the image in pixels (width * height)
   original_created_at TIMESTAMP WITH TIME ZONE NOT NULL

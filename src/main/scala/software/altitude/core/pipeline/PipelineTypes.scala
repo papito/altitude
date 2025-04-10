@@ -15,6 +15,7 @@ object PipelineTypes {
   type TDataAssetOrInvalidWithContext = (TDataAssetOrInvalid, PipelineContext)
   type TDataAssetWithContext = (AssetWithData, PipelineContext)
   type TAssetOrInvalidWithContext = (TAssetOrInvalid, PipelineContext)
+  type TAssetWithContext = (Asset, PipelineContext)
 
   type TFaceWithContext = (Face, PipelineContext)
 }

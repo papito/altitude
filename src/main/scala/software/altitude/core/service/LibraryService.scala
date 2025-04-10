@@ -1,33 +1,27 @@
 package software.altitude.core.service
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsObject
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-
-import software.altitude.core.{ Const => C, _ }
 import software.altitude.core.Altitude
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
-import software.altitude.core.models._
 import software.altitude.core.models.Folder
+import software.altitude.core.models._
 import software.altitude.core.pipeline.PipelineTypes.PipelineContext
 import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
 import software.altitude.core.transactions.TransactionManager
-import software.altitude.core.util.ImageUtil.makeImageThumbnail
 import software.altitude.core.util.MurmurHash
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
+import software.altitude.core.{Const => _, _}
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 
 /**
  * What is the difference between this and the AssetService?

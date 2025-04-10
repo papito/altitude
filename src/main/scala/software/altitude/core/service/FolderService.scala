@@ -1,6 +1,12 @@
 package software.altitude.core.service
 import play.api.libs.json._
-import software.altitude.core.{Altitude, DuplicateException, FieldConst, IllegalOperationException, NotFoundException, RequestContext, ValidationException}
+import software.altitude.core.Altitude
+import software.altitude.core.DuplicateException
+import software.altitude.core.FieldConst
+import software.altitude.core.IllegalOperationException
+import software.altitude.core.NotFoundException
+import software.altitude.core.RequestContext
+import software.altitude.core.ValidationException
 import software.altitude.core.dao.FolderDao
 import software.altitude.core.models.Folder
 import software.altitude.core.util.Query

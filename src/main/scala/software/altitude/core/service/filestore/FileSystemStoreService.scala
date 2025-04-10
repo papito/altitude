@@ -54,25 +54,22 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   override def purgeAssetById(id: String): Unit = {
-    val srcFile = new File(filePath(id))
-    val previewFile = new File(previewFilePath(id))
+    val paths = List(
+      filePath(id),
+      previewFilePath(id)
+    )
 
-    try {
-      if (srcFile.isFile) {
-        srcFile.delete()
-      }
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error deleting source file for asset id [$id]: $ex")
-    }
+    for (path <- paths) {
+      val srcFile = new File(path)
 
-    try {
-      if (previewFile.isFile) {
-        previewFile.delete()
+      try {
+        if (srcFile.isFile) {
+          srcFile.delete()
+        }
+      } catch {
+        case ex: IOException =>
+          logger.error(s"Error deleting file for asset id [$id]: $ex")
       }
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error deleting preview file for asset id [$id]: $ex")
     }
   }
 
@@ -126,6 +123,25 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     FilenameUtils.concat(partitionedFilesPath, assetId)
   }
 
+  override def addFace(face: Face, faceImages: FaceImages): Unit = {
+    logger.debug(s"Creating face [${face.persistedId}] on file system")
+
+    val destDisplayFile = new File(displayFacePath(face.persistedId))
+    val detectedFaceFile = new File(detectedFacePath(face.persistedId))
+    val alignedGreyscaleFile = new File(alignedGreyscaleFacePath(face.persistedId))
+    val alignedFile = new File(alignedFacePath(face.persistedId))
+
+    try {
+      FileUtils.writeByteArrayToFile(destDisplayFile, faceImages.displayImage)
+      FileUtils.writeByteArrayToFile(detectedFaceFile, faceImages.image)
+      FileUtils.writeByteArrayToFile(alignedFile, faceImages.alignedImage)
+      FileUtils.writeByteArrayToFile(alignedGreyscaleFile, faceImages.alignedImageGs)
+    } catch {
+      case ex: IOException =>
+        throw StorageException(s"Error creating [$face] @ [$destDisplayFile]: $ex]")
+    }
+  }
+
   private def displayFacePath(faceId: String): String = {
     val facesPath = FilenameUtils.concat(repositoryDataPath, C.DataStore.FACES)
     val partitionedFacesPath = FilenameUtils.concat(facesPath, faceId.substring(0, 2))
@@ -150,28 +166,13 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     FilenameUtils.concat(partitionedFacesPath, s"$faceId-aligned-gs.png")
   }
 
-  override def addFace(face: Face, faceImages: FaceImages): Unit = {
-    logger.debug(s"Creating face [${face.persistedId}] on file system")
-
-    val destDisplayFile = new File(displayFacePath(face.persistedId))
-    val detectedFaceFile = new File(detectedFacePath(face.persistedId))
-    val alignedGreyscaleFile = new File(alignedGreyscaleFacePath(face.persistedId))
-    val alignedFile = new File(alignedFacePath(face.persistedId))
-
-    try {
-      FileUtils.writeByteArrayToFile(destDisplayFile, faceImages.displayImage)
-      FileUtils.writeByteArrayToFile(detectedFaceFile, faceImages.image)
-      FileUtils.writeByteArrayToFile(alignedFile, faceImages.alignedImage)
-      FileUtils.writeByteArrayToFile(alignedGreyscaleFile, faceImages.alignedImageGs)
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error creating [$face] @ [$destDisplayFile]: $ex]")
-    }
-  }
-
   override def getDisplayFaceById(faceId: String): MimedFaceData = {
     val path = displayFacePath(faceId)
     val srcFile: File = new File(path)
+
+    if (!srcFile.isFile) {
+      throw NotFoundException(s"Cannot find display face data for [$faceId]")
+    }
 
     var byteArray: Option[Array[Byte]] = None
 
@@ -189,6 +190,10 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     val path = alignedGreyscaleFacePath(faceId)
     val srcFile: File = new File(path)
 
+    if (!srcFile.isFile) {
+      throw NotFoundException(s"Cannot find aligned grayscale face data for [$faceId]")
+    }
+
     var byteArray: Option[Array[Byte]] = None
 
     try {
@@ -199,5 +204,27 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     }
 
     MimedFaceData(data = byteArray.get)
+  }
+
+  override def purgeFaceById(id: String): Unit = {
+    val paths = List(
+      detectedFacePath(id),
+      displayFacePath(id),
+      alignedFacePath(id),
+      alignedGreyscaleFacePath(id)
+    )
+
+    for (path <- paths) {
+      val srcFile = new File(path)
+
+      try {
+        if (srcFile.isFile) {
+          srcFile.delete()
+        }
+      } catch {
+        case ex: IOException =>
+          logger.error(s"Error deleting file for face id [$id]: $ex")
+      }
+    }
   }
 }

@@ -3,7 +3,8 @@ package software.altitude.test.core.integration
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-import software.altitude.core.{Altitude, NotFoundException}
+import software.altitude.core.Altitude
+import software.altitude.core.NotFoundException
 import software.altitude.core.models.Asset
 import software.altitude.test.IntegrationTestUtil.getImportAsset
 import software.altitude.test.core.IntegrationTestCore
