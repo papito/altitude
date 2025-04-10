@@ -26,7 +26,7 @@ import scala.concurrent.duration.Duration
 @DoNotDiscover class ImportPipelineServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore {
 
-  test("Void pipeline sink should produce no results") {
+  test("Void pipeline sink should produce no results", Focused) {
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 

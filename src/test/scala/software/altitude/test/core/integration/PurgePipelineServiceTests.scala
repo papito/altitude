@@ -9,19 +9,13 @@ import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.pipeline.PipelineTypes.PipelineContext
 import software.altitude.core.pipeline.PipelineTypes.TAssetWithContext
+import software.altitude.core.pipeline.sinks.VoidAssetSink
 import software.altitude.core.util.Query
 import software.altitude.test.core.IntegrationTestCore
 
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-
-// FIXME: make generic with the default VoidAssetSink
-object VoidAssetSink {
-  def apply(): Sink[TAssetWithContext, Future[Seq[TAssetWithContext]]] =
-    Sink.fold(Seq.empty[TAssetWithContext])((acc, _) => acc)
-}
-
 
 @DoNotDiscover class PurgePipelineServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore {
