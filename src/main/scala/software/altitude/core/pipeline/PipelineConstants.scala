@@ -8,5 +8,5 @@ object PipelineConstants {
    *
    * Useful for understanding the flow of the pipeline and its use of threads when messing with all the knobs.
    */
-  val DEBUG = false
+  val DEBUG = true
 }

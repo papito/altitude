@@ -1,5 +1,4 @@
 package software.altitude.test.core.integration
-import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import software.altitude.core.Altitude
@@ -20,7 +19,7 @@ import scala.concurrent.duration.Duration
 @DoNotDiscover class PurgePipelineServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore {
 
-  test("Purging assets should remove asset data from DB and file store", Focused) {
+  test("Purging assets should remove asset data from DB and file store") {
     val totalAssets = 5
     val assets = List.fill(totalAssets)(testContext.persistAsset())
 
@@ -49,9 +48,11 @@ import scala.concurrent.duration.Duration
         testApp.service.fileStore.getAssetById(asset.persistedId)
       }
     }
+
+    // TODO: check decoy person is still there
   }
 
-  test("Purging assets should remove face data from DB and file store", Focused) {
+  test("Purging assets should remove face data from DB and file store") {
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
@@ -99,4 +100,26 @@ import scala.concurrent.duration.Duration
       }
     }
   }
+
+  test("Purging assets twice should be a NO-OP", Focused) {
+    val assetsPerPerson = 3
+    val totalPeople = 3
+    val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
+    testContext.addTestFacesAndAssets(people, assetCount = assetsPerPerson)
+
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
+
+    val pipelineResFuture1: Future[Seq[TAssetWithContext]]  = testApp.service.purgePipeline.run(source, VoidAssetSink())
+    Await.result(pipelineResFuture1, Duration.Inf)
+
+    val pipelineResFuture2: Future[Seq[TAssetWithContext]]  = testApp.service.purgePipeline.run(source, VoidAssetSink())
+    Await.result(pipelineResFuture2, Duration.Inf)
+
+    // Not testing any conditions - just that this code doesn't throw an exception
+  }
+
 }
