@@ -52,7 +52,7 @@ import scala.concurrent.duration.Duration
     // TODO: check decoy person is still there
   }
 
-  test("Purging assets should remove face data from DB and file store") {
+  test("Purging assets should remove face data from DB and file store", Focused) {
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
@@ -80,8 +80,11 @@ import scala.concurrent.duration.Duration
     for (person <- people) {
       val personFaces = personIdToFaceMap(person.persistedId)
 
-      // check that all faces for the asset are gone in DB and file store
-      for (face <- personFaces) {
+      // cover face was assigned to person record AFTER it had been persisted, so get it from the DB
+      val personCoverFaceId = (testApp.service.person.getById(person.persistedId): Person).coverFaceId.getOrElse("")
+
+      // Check that all faces for the asset are gone in DB and file store.
+      for (face <- personFaces if face.persistedId != personCoverFaceId) {
         intercept[NotFoundException] {
           testApp.service.person.getFaceById(face.persistedId)
         }
@@ -101,14 +104,13 @@ import scala.concurrent.duration.Duration
     }
   }
 
-  test("Purging assets twice should be a NO-OP", Focused) {
+  test("Purging assets twice should be a NO-OP") {
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
     testContext.addTestFacesAndAssets(people, assetCount = assetsPerPerson)
 
     val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
-
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
@@ -120,6 +122,34 @@ import scala.concurrent.duration.Duration
     Await.result(pipelineResFuture2, Duration.Inf)
 
     // Not testing any conditions - just that this code doesn't throw an exception
+  }
+
+  test("Purging an asset does not delete a face asset that is marked as COVER") {
+    val assetsPerPerson = 3
+    val person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, assetCount = assetsPerPerson)
+
+    // this face binary data should NOT be purged
+    val coverFace = testApp.service.person.getPersonFaces(person.persistedId).head
+    testApp.service.person.setFaceAsCover(person, coverFace)
+
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
+
+    val pipelineResFuture: Future[Seq[TAssetWithContext]]  = testApp.service.purgePipeline.run(source, VoidAssetSink())
+    Await.result(pipelineResFuture, Duration.Inf)
+
+    // Face record will be deleted according to cascade rules, but the binary data should still be there
+    intercept[NotFoundException] {
+        testApp.service.person.getFaceById(coverFace.persistedId)
+    }
+
+    testApp.service.fileStore.getDisplayFaceById(coverFace.persistedId)
+    testApp.service.fileStore.getAlignedGreyscaleFaceById(coverFace.persistedId)
+    testApp.service.fileStore.getAlignedFaceById(coverFace.persistedId)
+    testApp.service.fileStore.getDetectedFaceById(coverFace.persistedId)
   }
 
 }

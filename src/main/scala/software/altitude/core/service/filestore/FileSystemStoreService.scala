@@ -115,7 +115,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     getMimedFaceData(detectedFacePath(faceId))
   }
 
-  override def getAlignedFaceById(faceId: String): MimedFaceData ={
+  override def getAlignedFaceById(faceId: String): MimedFaceData = {
     getMimedFaceData(alignedFacePath(faceId))
   }
 

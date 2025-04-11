@@ -26,6 +26,8 @@ object DeletePersonFilesFlow {
               debugInfo(s"\t\tRemoving PERSON face files for ${person.name}")
               app.service.person
                 .getPersonFaces(person.persistedId)
+                // do not take faces marked as "cover"
+                .filterNot(_.persistedId == person.coverFaceId.getOrElse(""))
                 .map(
                   face => {
                     debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")

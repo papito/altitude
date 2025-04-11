@@ -4,6 +4,7 @@ import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import software.altitude.core.Altitude
 import software.altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import software.altitude.core.pipeline.PipelineUtils.debugInfo
@@ -23,8 +24,7 @@ object DeleteAssetFilesFlow {
           app.service.fileStore.purgeAssetById(asset.persistedId)
         } catch {
           case _: Exception =>
-            logger.error(
-              s"Error purging file data for asset ${asset.persistedId}")
+            logger.error(s"Error purging file data for asset ${asset.persistedId}")
         }
         (asset, ctx)
     }

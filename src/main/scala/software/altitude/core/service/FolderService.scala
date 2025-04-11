@@ -1,5 +1,6 @@
 package software.altitude.core.service
 import play.api.libs.json._
+
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
 import software.altitude.core.FieldConst
@@ -26,9 +27,8 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   }
 
   /**
-   * Used in low-level calls when the folder object has more shape,
-   * say, with a predefined ID, like the root folder.
-   * Normally, this method should not be used and the other version of add() should be used instead.
+   * Used in low-level calls when the folder object has more shape, say, with a predefined ID, like the root folder. Normally,
+   * this method should not be used and the other version of add() should be used instead.
    */
   override def add(folder: Folder): JsObject = {
     txManager.withTransaction[JsObject] {

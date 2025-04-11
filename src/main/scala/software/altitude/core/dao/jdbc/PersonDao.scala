@@ -2,13 +2,14 @@ package software.altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
+
+import scala.collection.mutable
+
 import software.altitude.core.Const.FaceRecognition
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
 import software.altitude.core.models.Person
 import software.altitude.core.service.PersonService
-
-import scala.collection.mutable
 
 abstract class PersonDao(override val config: Config) extends BaseDao with software.altitude.core.dao.PersonDao {
 
@@ -139,11 +140,13 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(
-        RequestContext.getRepository.persistedId,
-        FaceRecognition.MIN_FACES_THRESHOLD,
-        nativeBool(true)
-      ))
+      manyBySqlQuery(
+        sql,
+        List(
+          RequestContext.getRepository.persistedId,
+          FaceRecognition.MIN_FACES_THRESHOLD,
+          nativeBool(true)
+        ))
 
     recs.map(makeModel)
   }
@@ -160,10 +163,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(
-        RequestContext.getRepository.persistedId,
-        FaceRecognition.MIN_FACES_THRESHOLD,
-        nativeBool(false)))
+      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD, nativeBool(false)))
 
     recs.map(makeModel)
   }

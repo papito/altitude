@@ -1,4 +1,9 @@
 package software.altitude.core.service
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
+
+import software.altitude.core.{ Const => C }
 import software.altitude.core.Altitude
 import software.altitude.core.FieldConst
 import software.altitude.core.IllegalOperationException
@@ -9,11 +14,6 @@ import software.altitude.core.models.MimedPreviewData
 import software.altitude.core.util.ImageUtil.makeImageThumbnail
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
-import software.altitude.core.{Const => C}
-
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 
 class AssetService(val app: Altitude) extends BaseService[Asset] {
   override protected val dao: AssetDao = app.DAO.asset
@@ -139,6 +139,5 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   def getPreview(assetId: String): MimedPreviewData = {
     app.service.fileStore.getPreviewById(assetId)
   }
-
 
 }

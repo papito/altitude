@@ -29,9 +29,9 @@ class PurgePipelineService(app: Altitude) {
 
   implicit val system: ActorSystem[AltitudeActorSystem.Command] = app.actorSystem
 
+  private val deletePersonFilesFlow = DeletePersonFilesFlow(app)
   private val deleteAssetFilesFlow = DeleteAssetFilesFlow(app)
   private val deletePurgedFromDBFlow = DeletePurgedFromDBFlow(app)
-  private val deletePersonFilesFlow = DeletePersonFilesFlow(app)
 
   private val combinedFlow: Flow[TAssetWithContext, TAssetWithContext, NotUsed] =
     Flow[TAssetWithContext]

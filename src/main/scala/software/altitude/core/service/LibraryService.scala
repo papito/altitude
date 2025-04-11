@@ -3,11 +3,17 @@ import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+
+import software.altitude.core.{ Const => _, _ }
 import software.altitude.core.Altitude
 import software.altitude.core.FieldConst
 import software.altitude.core.RequestContext
-import software.altitude.core.models.Folder
 import software.altitude.core.models._
+import software.altitude.core.models.Folder
 import software.altitude.core.pipeline.PipelineTypes.PipelineContext
 import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
@@ -17,19 +23,13 @@ import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchResult
-import software.altitude.core.{Const => _, _}
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 
 /**
  * What is the difference between this and the AssetService?
  *
- * The LibraryService is a higher-level service that deals with the library as a whole,
- * where methods touch multiple sub-services. While it's not a strict separation,
- * and sub-services can mingle on their own, anything that has to do with high-level
- * library concepts should be in this service.
+ * The LibraryService is a higher-level service that deals with the library as a whole, where methods touch multiple sub-services.
+ * While it's not a strict separation, and sub-services can mingle on their own, anything that has to do with high-level library
+ * concepts should be in this service.
  */
 object LibraryService {
   private val SUPPORTED_MEDIA_TYPES: Set[String] = Set(
@@ -90,8 +90,7 @@ class LibraryService(val app: Altitude) {
   }
 
   /**
-   * Note that this is also how we restore assets from the recycle bin - they
-   * are just moved to the folder where they belonged.
+   * Note that this is also how we restore assets from the recycle bin - they are just moved to the folder where they belonged.
    */
   private def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
 
@@ -214,7 +213,7 @@ class LibraryService(val app: Altitude) {
         logger.info(s"Restoring recycled asset [$assetId]")
 
         val asset: Asset = app.service.asset.getById(assetId)
-        val existing =  app.service.asset.getByChecksum(asset.checksum)
+        val existing = app.service.asset.getByChecksum(asset.checksum)
 
         if (existing.isDefined) {
           throw DuplicateException()
