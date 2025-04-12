@@ -27,7 +27,7 @@ object DeletePersonFilesFlow {
             val personFaces = app.service.person.getPersonFaces(person.persistedId)
 
             personFaces
-              .filterNot(person.coverFaceId.contains) // Exclude cover faces
+              .filterNot(face => person.coverFaceId.contains(face.persistedId))
               .foreach { face =>
                 debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
                 app.service.fileStore.purgeFaceById(face.persistedId)

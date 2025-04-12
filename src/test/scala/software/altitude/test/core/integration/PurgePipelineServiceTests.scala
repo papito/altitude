@@ -52,7 +52,7 @@ import scala.concurrent.duration.Duration
     // TODO: check decoy person is still there
   }
 
-  test("Purging assets should remove face data from DB and file store", Focused) {
+  test("Purging assets should remove face data from DB and file store") {
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
@@ -124,7 +124,7 @@ import scala.concurrent.duration.Duration
     // Not testing any conditions - just that this code doesn't throw an exception
   }
 
-  test("Purging an asset does not delete a face asset that is marked as COVER") {
+  test("Purging an asset does not delete a face asset that is marked as COVER", Focused) {
     val assetsPerPerson = 3
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, assetCount = assetsPerPerson)
