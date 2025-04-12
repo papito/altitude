@@ -21,18 +21,17 @@ object DeletePersonFilesFlow {
         debugInfo(s"\tRemoving PERSON files for asset ${asset.fileName}")
 
         try {
-          app.service.person.getPeopleForAsset(asset.persistedId).foreach {
-            person =>
-              debugInfo(s"\t\tRemoving PERSON face files for ${person.name}")
-              app.service.person
-                .getPersonFaces(person.persistedId)
-                // do not take faces marked as "cover"
-                .filterNot(_.persistedId == person.coverFaceId.getOrElse(""))
-                .map(
-                  face => {
-                    debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
-                    app.service.fileStore.purgeFaceById(face.persistedId)
-                  })
+          val peopleInAsset = app.service.person.getPeopleForAsset(asset.persistedId)
+          peopleInAsset foreach { person =>
+            debugInfo(s"\t\tRemoving PERSON face files for ${person.name}")
+            val personFaces = app.service.person.getPersonFaces(person.persistedId)
+
+            personFaces
+              .filterNot(person.coverFaceId.contains) // Exclude cover faces
+              .foreach { face =>
+                debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
+                app.service.fileStore.purgeFaceById(face.persistedId)
+              }
           }
         } catch {
           case _: Exception =>
