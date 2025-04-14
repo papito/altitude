@@ -16,7 +16,6 @@ object AddPreviewFlow {
     Flow[TDataAssetOrInvalidWithContext].mapAsync(parallelism) {
       case (Left(dataAsset), ctx) =>
         setThreadLocalRequestContext(ctx)
-
         debugInfo(s"\tGenerating preview ${dataAsset.asset.fileName}")
         app.service.asset.addPreview(dataAsset)
         Future.successful((Left(dataAsset), ctx))

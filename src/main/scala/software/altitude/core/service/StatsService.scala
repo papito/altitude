@@ -34,11 +34,11 @@ class StatsService(val app: Altitude) {
     }
   }
 
-  private def incrementStat(statName: String, count: Long = 1): Unit = {
+  def incrementStat(statName: String, count: Long = 1): Unit = {
     dao.incrementStat(statName, count)
   }
 
-  private def decrementStat(statName: String, count: Long = 1): Unit = {
+  def decrementStat(statName: String, count: Long = 1): Unit = {
     dao.decrementStat(statName, count)
   }
 

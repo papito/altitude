@@ -90,8 +90,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   def getAll: Map[String, Person] = {
     val sql = """SELECT *
                     FROM person
-                   WHERE merged_into_id is NULL
-                     AND repository_id = ?
+                   WHERE repository_id = ?
+                     AND num_of_faces > 0
+                     AND merged_into_id is NULL
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))

@@ -2,7 +2,6 @@ package software.altitude.core.service
 import java.time.LocalDateTime
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
 import software.altitude.core._
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.FieldConst
@@ -11,14 +10,23 @@ import software.altitude.core.dao.UserTokenDao
 import software.altitude.core.models.User
 import software.altitude.core.models.UserToken
 import software.altitude.core.transactions.TransactionManager
-import software.altitude.core.util.Query
-import software.altitude.core.util.Util
+import software.altitude.core.util.{Query, QueryResult, Util}
 
 class UserService(val app: Altitude) extends BaseService[User] {
   protected val dao: UserDao = app.DAO.user
   private val tokenDao: UserTokenDao = app.DAO.userToken
 
   override protected val txManager: TransactionManager = app.txManager
+
+  /**
+   * The User model is a model that does not have repository_id.
+   * Other models are scoped by it as no operations are cross-repo (normally).
+   */
+  override def query(query: Query): QueryResult = {
+    txManager.asReadOnly[QueryResult] {
+      dao.query(query)
+    }
+  }
 
   def switchContextToUser(user: User): Unit = {
     RequestContext.account.value = Some(user)

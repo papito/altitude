@@ -18,21 +18,21 @@ object DeletePersonFilesFlow {
       case (asset, ctx) =>
         setThreadLocalRequestContext(ctx)
 
-        debugInfo(s"\tRemoving PERSON files for asset ${asset.fileName}")
+        debugInfo(s"\tRemoving PERSON files for asset ${asset.persistedId}")
 
         try {
           val peopleInAsset = app.service.person.getPeopleForAsset(asset.persistedId)
-          peopleInAsset foreach { person =>
-            debugInfo(s"\t\tRemoving PERSON face files for ${person.name}")
-            val personFaces = app.service.person.getPersonFaces(person.persistedId)
+          val personLookup = peopleInAsset.map(person => person.persistedId -> person).toMap
+          val assetFaces = app.service.person.getAssetFaces(asset.persistedId)
 
-            personFaces
-              .filterNot(face => person.coverFaceId.contains(face.persistedId))
-              .foreach { face =>
+          assetFaces
+            .foreach { face =>
+              val person = personLookup(face.personId.get)
+              if (!person.coverFaceId.contains(face.persistedId)) {
                 debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
                 app.service.fileStore.purgeFaceById(face.persistedId)
               }
-          }
+            }
         } catch {
           case _: Exception =>
             logger.error(s"Error purging PERSON file data for asset ${asset.persistedId}")

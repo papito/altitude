@@ -63,8 +63,11 @@ abstract class BaseService[Model <: BaseModel] {
       throw new RuntimeException("Cannot update [ALL] document with an empty Query")
     }
 
+    // should not update ALL repositories by default
+    val repoScopedQuery = query.withRepository()
+
     txManager.withTransaction[Int] {
-      dao.updateByQuery(query, data)
+      dao.updateByQuery(repoScopedQuery, data)
     }
   }
 
@@ -83,8 +86,10 @@ abstract class BaseService[Model <: BaseModel] {
 
   /** Get multiple documents using a Query */
   def query(query: Query): QueryResult = {
+    val repoScopedQuery = query.withRepository()
+
     txManager.asReadOnly[QueryResult] {
-      dao.query(query)
+      dao.query(repoScopedQuery)
     }
   }
 
@@ -99,8 +104,11 @@ abstract class BaseService[Model <: BaseModel] {
       throw new RuntimeException("Cannot delete [ALL] document with an empty Query")
     }
 
+    // should not delete from ALL repositories by default
+    val repoScopedQuery = query.withRepository()
+
     txManager.withTransaction[Int] {
-      dao.deleteByQuery(query)
+      dao.deleteByQuery(repoScopedQuery)
     }
   }
 

@@ -18,7 +18,7 @@ object DeletePurgedFromDBFlow {
         setThreadLocalRequestContext(ctx)
 
         app.txManager.withTransaction {
-          debugInfo(s"\tDeleting purged asset from the database ${asset.fileName}")
+          debugInfo(s"\tDeleting purged asset from the database ${asset.persistedId}")
           app.service.asset.deleteById(asset.persistedId)
         }
 

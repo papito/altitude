@@ -13,6 +13,7 @@ import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchSort
 import software.altitude.core.util.SortDirection
 
+// /htmx/search/*
 class SearchResultsController extends BaseHtmxController {
 
   before() {
@@ -73,8 +74,13 @@ class SearchResultsController extends BaseHtmxController {
     val sort = SearchSort(field = sortField, direction = sortDirection)
 
     val queryParams: Map[String, Any] = view match {
-      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
-      case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true)
+      case Const.Search.View.TRIAGE => Map(
+        FieldConst.Asset.IS_TRIAGED -> true)
+
+      case Const.Search.View.TRASHBIN => Map(
+        FieldConst.Asset.IS_RECYCLED -> true,
+        FieldConst.Asset.IS_PURGED -> false) // recycled but NOT purged
+
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
     }
 
@@ -97,7 +103,6 @@ class SearchResultsController extends BaseHtmxController {
     }
 
     if (isContinuousScroll) {
-
       /** This is a request for another page of search results for continuous scroll. */
       ssp(
         "/htmx/results_grid",
@@ -106,7 +111,6 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> true
       )
     } else {
-
       /**
        * This is a new request (first page) for search results.
        *
@@ -125,6 +129,7 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.RESULTS -> results,
         Api.Field.Search.PAGE -> page,
         Api.Field.Search.PERSON -> maybePerson.orNull,
+        Api.Field.Search.VIEW -> view,
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> false
       )
     }

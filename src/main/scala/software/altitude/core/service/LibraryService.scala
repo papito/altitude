@@ -265,13 +265,25 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def purgeAssets(assetIds: Set[String]): Unit = {
+  def purgeRecycleBin(): Unit = {
+    val assetsToPurge = txManager.withTransaction {
+      this.markRecycledAssetsForPurging()
+      app.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true))
+    }
+
+    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
+    assetsToPurge.records.map(app.service.purgePipeline.addToQueue(_, pipelineContext))
+  }
+
+  private def markRecycledAssetsForPurging(): Unit = {
     txManager.withTransaction {
-      assetIds.foreach {
-        assetId =>
-          val asset: Asset = app.service.asset.getById(assetId)
-          app.service.asset.deleteById(asset.persistedId)
-      }
+      val assetQuery = new Query().add(FieldConst.Asset.IS_RECYCLED -> true)
+
+      val recycledCount = app.service.asset.updateByQuery(
+        assetQuery,
+        Map(FieldConst.Asset.IS_PURGED -> true))
+      // trashbin should be at zero
+      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, recycledCount)
     }
   }
 
@@ -295,11 +307,11 @@ class LibraryService(val app: Altitude) {
 
       repositories.foreach {
         repository =>
-          {
-            RequestContext.repository.value = Some(repository)
-            operation(repository)
-            RequestContext.repository.value = None
-          }
+        {
+          RequestContext.repository.value = Some(repository)
+          operation(repository)
+          RequestContext.repository.value = None
+        }
       }
     }
   }

@@ -56,6 +56,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
 
   override def addPreview(preview: MimedPreviewData): Unit = {
     val destFilePath = previewFilePath(preview.assetId)
+
     putBinaryData(new File(destFilePath), preview.data)
   }
 

@@ -18,7 +18,7 @@ object DeleteAssetFilesFlow {
       case (asset, ctx) =>
         setThreadLocalRequestContext(ctx)
 
-        debugInfo(s"\tRemoving files for ${asset.fileName}")
+        debugInfo(s"\tRemoving files for ${asset.persistedId}")
 
         try {
           app.service.fileStore.purgeAssetById(asset.persistedId)

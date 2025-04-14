@@ -1,0 +1,12 @@
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.RequestContext %>
+
+<div>
+    <button class="action-button warning"
+            hx-swap="none"
+            hx-confirm="This will PERMANENTLY delete all items in the recycle bin. Are you sure?"
+            hx-delete='${ url(purgeRecycleBin, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+            hx-trigger="click">
+        Purge recycle bin
+    </button>
+</div>
