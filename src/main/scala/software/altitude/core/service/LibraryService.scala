@@ -144,7 +144,7 @@ class LibraryService(val app: Altitude) {
         query
       }
 
-      app.service.asset.query(_query.withRepository())
+      app.service.asset.query(_query)
     }
   }
 

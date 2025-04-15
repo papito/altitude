@@ -32,7 +32,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
 
   def getByChecksum(checksum: Int): Option[Asset] = {
     txManager.asReadOnly[Option[Asset]] {
-      val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum)).withRepository()
+      val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum))
       val existing = query(q)
       if (existing.nonEmpty) Some(existing.records.head: Asset) else None
     }
@@ -57,25 +57,25 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
 
   override def query(q: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
-      dao.queryNotRecycled(q.withRepository())
+      dao.queryNotRecycled(q)
     }
   }
 
   def queryTriaged(q: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
-      dao.queryTriaged(q.withRepository())
+      dao.queryTriaged(q)
     }
   }
 
   def queryRecycled(q: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
-      dao.queryRecycled(q.withRepository())
+      dao.queryRecycled(q)
     }
   }
 
   def queryAll(q: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
-      dao.queryAll(q.withRepository())
+      dao.queryAll(q)
     }
   }
 

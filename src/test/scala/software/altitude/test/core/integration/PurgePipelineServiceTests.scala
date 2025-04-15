@@ -184,7 +184,6 @@ import scala.concurrent.duration.Duration
     // make sure the data for non-recycled assets is still there
     val nonRecycledAssets = assetsWithData.filterNot(_.asset.persistedId == recycledAsset.persistedId).map(_.asset)
 
-    println(nonRecycledAssets.size)
     for (asset <- nonRecycledAssets) {
       val faces = testApp.service.person.getAssetFaces(asset.persistedId)
 
