@@ -196,7 +196,7 @@ import scala.concurrent.duration.Duration
     }
   }
 
-  test("Purging the recycle bin should not affect other assets", Focused) {
+  test("Purging the recycle bin should not affect other assets") {
     val importAssetPaths = List(
       "people/damon.jpg",
       "people/affleck.jpg",
@@ -283,6 +283,4 @@ import scala.concurrent.duration.Duration
     testApp.service.faceCache.clear()
     testApp.service.faceCache.loadCache(testContext.repository)
   }
-
-
 }

@@ -281,4 +281,32 @@ import scala.concurrent.{Await, Future}
     // Not tidy but will do for now.
     testApp.service.library.search(assetSearchQuery).total shouldBe 0
   }
+
+  test("Recycling all assets with one person should not break the face cache preload") {
+    val importAssetPaths = List(
+      "people/meme-ben.jpg",
+      "people/meme-ben2.png",
+      "people/meme-ben3.png",
+    )
+
+    val assetsWithData = importAssetPaths.map { path =>
+      val importAsset = IntegrationTestUtil.getImportAsset(path)
+      val asset = testApp.service.library.addImportAsset(importAsset)
+      AssetWithData(asset, importAsset.data)
+    }
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+
+    val importSource = Source.fromIterator(() => assetsWithData.iterator).map((_, pipelineContext))
+    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = testApp.service.importPipeline.run(importSource, AssetSeqOutputSink())
+    Await.result(pipelineResFuture, Duration.Inf)
+
+    // Recycle all
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
+
+    testApp.service.faceCache.clear()
+    testApp.service.faceCache.loadCache(testContext.repository)
+  }
+
 }
