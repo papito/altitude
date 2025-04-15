@@ -260,7 +260,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
-    val storedAsset: Asset = testApp.service.library.getById(asset.persistedId)
+    val storedAsset: Asset = testApp.service.asset.getById(asset.persistedId)
 
     storedAsset.userMetadata.isEmpty shouldBe false
   }
@@ -287,7 +287,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val asset: Asset = testContext.persistAsset(metadata = metadata)
 
-    val storedAsset: Asset = testApp.service.library.getById(asset.persistedId)
+    val storedAsset: Asset = testApp.service.asset.getById(asset.persistedId)
 
     storedAsset.userMetadata.isEmpty shouldBe false
     storedAsset.userMetadata.data.size shouldBe 1
@@ -308,8 +308,8 @@ import software.altitude.test.core.IntegrationTestCore
     storedMetadata.get(field.persistedId).value.size shouldBe 3
     val values: List[UserMetadataValue] = storedMetadata.get(field.persistedId).value.toList
 
-    testApp.service.library.deleteMetadataValue(asset.persistedId, values.head.persistedId)
-    testApp.service.library.deleteMetadataValue(asset.persistedId, values.last.persistedId)
+    testApp.service.metadata.deleteMetadataValue(asset.persistedId, values.head.persistedId)
+    testApp.service.metadata.deleteMetadataValue(asset.persistedId, values.last.persistedId)
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
 
@@ -340,7 +340,7 @@ import software.altitude.test.core.IntegrationTestCore
     val field_1_valueId = storedMetadata.get(field1.persistedId).get.head.id
     field_1_valueId should not be None
 
-    testApp.service.library.addMetadataValue(asset.persistedId, field2.persistedId, "2")
+    testApp.service.metadata.addMetadataValue(asset.persistedId, field2.persistedId, "2")
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
 
@@ -365,15 +365,15 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     intercept[ValidationException] {
-      testApp.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, "")
+      testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, "")
     }
 
     intercept[ValidationException] {
-      testApp.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, "   ")
+      testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, "   ")
     }
 
     intercept[ValidationException] {
-      testApp.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, "  \t \n ")
+      testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, "  \t \n ")
     }
   }
 
@@ -386,9 +386,9 @@ import software.altitude.test.core.IntegrationTestCore
     val metadataField = testApp.service.metadata.addField(_metadataField)
     val asset: Asset = testContext.persistAsset()
 
-    testApp.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, true)
-    testApp.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, true)
-    testApp.service.library.addMetadataValue(asset.persistedId, metadataField.persistedId, false)
+    testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, true)
+    testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, true)
+    testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, false)
 
     val metadata = testApp.service.metadata.getMetadata(asset.persistedId)
     metadata.get(metadataField.persistedId).get.size shouldBe 1
@@ -404,7 +404,7 @@ import software.altitude.test.core.IntegrationTestCore
     val asset: Asset = testContext.persistAsset()
 
     intercept[ValidationException] {
-      testApp.service.library.addMetadataValue(asset.id.value, field.id.value, "   ")
+      testApp.service.metadata.addMetadataValue(asset.id.value, field.id.value, "   ")
     }
   }
 
@@ -427,7 +427,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val newValue = "Some updated text"
 
-    testApp.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, newValue)
+    testApp.service.metadata.updateMetadataValue(asset.persistedId, storedValue.persistedId, newValue)
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedValue = storedMetadata.get(field.persistedId).get.head
@@ -456,7 +456,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val newValue = oldValue.toUpperCase
 
-    testApp.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, newValue)
+    testApp.service.metadata.updateMetadataValue(asset.persistedId, storedValue.persistedId, newValue)
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedValue = storedMetadata.get(field.persistedId).get.head
@@ -483,7 +483,7 @@ import software.altitude.test.core.IntegrationTestCore
     var storedValue = storedMetadata.get(field.persistedId).get.head
     val oldValueId = storedValue.id
 
-    testApp.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, oldValue)
+    testApp.service.metadata.updateMetadataValue(asset.persistedId, storedValue.persistedId, oldValue)
 
     storedMetadata = testApp.service.metadata.getMetadata(asset.persistedId)
     storedValue = storedMetadata.get(field.persistedId).get.head
@@ -510,7 +510,7 @@ import software.altitude.test.core.IntegrationTestCore
     val storedValue = storedMetadata.get(field.persistedId).get.head
 
     intercept[ValidationException] {
-      testApp.service.library.updateMetadataValue(asset.persistedId, storedValue.persistedId, "  \t  ")
+      testApp.service.metadata.updateMetadataValue(asset.persistedId, storedValue.persistedId, "  \t  ")
     }
   }
 }

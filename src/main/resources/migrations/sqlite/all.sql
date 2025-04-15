@@ -66,6 +66,7 @@ CREATE TABLE asset  (
   size_bytes INT NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
+  is_purged TINYINT NOT NULL DEFAULT 0,
   is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
     -- EXIF DateTimeOriginal, defaults to Now() if none
   original_created_at DATETIME NOT NULL,
@@ -173,7 +174,7 @@ CREATE INDEX folder_01 ON folder(repository_id, parent_id);
 CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
 CREATE INDEX folder_03 ON folder(is_recycled, parent_id);
 
-CREATE TABLE search_parameter (
+CREATE TABLE metadata_parameter (
   repository_id CHAR(36) NOT NULL,
   asset_id CHAR(36) NOT NULL,
   field_id CHAR(36) NOT NULL,

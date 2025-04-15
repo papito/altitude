@@ -56,6 +56,10 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     this.query(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository(), sqlQueryBuilder)
   }
 
+  override def queryTriaged(q: Query): QueryResult = {
+    this.query(q.add(FieldConst.Asset.IS_TRIAGED -> true).withRepository(), sqlQueryBuilder)
+  }
+
   override def queryRecycled(q: Query): QueryResult = {
     this.query(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository(), sqlQueryBuilder)
   }

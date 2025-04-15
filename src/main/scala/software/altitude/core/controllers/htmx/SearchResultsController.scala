@@ -6,12 +6,14 @@ import org.scalatra.Route
 
 import software.altitude.core.Api
 import software.altitude.core.Const
+import software.altitude.core.FieldConst
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Person
 import software.altitude.core.util.SearchQuery
 import software.altitude.core.util.SearchSort
 import software.altitude.core.util.SortDirection
 
+// /htmx/search/*
 class SearchResultsController extends BaseHtmxController {
 
   before() {
@@ -45,7 +47,7 @@ class SearchResultsController extends BaseHtmxController {
      *
      * When this method is done, it will force the new user-friendly browser URL via a special HTMX header.
      */
-    val requestQuery = URLDecoder.decode(Option(request.getQueryString).getOrElse(""), StandardCharsets.UTF_8.toString)
+    val requestQuery = URLDecoder.decode(queryString, StandardCharsets.UTF_8.toString)
 
     val browserUrl = request.getHeader("HX-Current-URL")
     val browserQuery = new java.net.URI(browserUrl).getQuery
@@ -55,6 +57,8 @@ class SearchResultsController extends BaseHtmxController {
 
     val urlParams = browserQueryParams ++ htmxQueryParams
 
+    // Where are we? Triage? Recycle? etc.
+    val view = urlParams.getOrElse(Api.Field.Search.VIEW, Const.Search.View.DEFAULT)
     val rpp = urlParams.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = urlParams.getOrElse(Api.Field.Search.PAGE, "1").toInt
     val queryText = urlParams.get(Api.Field.Search.QUERY_TEXT)
@@ -69,7 +73,17 @@ class SearchResultsController extends BaseHtmxController {
     val sortDirection = SortDirection(sortDirectionInt)
     val sort = SearchSort(field = sortField, direction = sortDirection)
 
+    val queryParams: Map[String, Any] = view match {
+      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
+
+      case Const.Search.View.TRASHBIN =>
+        Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false) // recycled but NOT purged
+
+      case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
+    }
+
     val q = new SearchQuery(
+      params = queryParams,
       text = queryText,
       rpp = rpp,
       folderIds = folderId.toSet,
@@ -77,6 +91,7 @@ class SearchResultsController extends BaseHtmxController {
       page = page,
       searchSort = List(sort)
     )
+
     logger.info(s"QUERY: ${q.toString}")
 
     val results = app.service.library.search(q)
@@ -114,6 +129,7 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.RESULTS -> results,
         Api.Field.Search.PAGE -> page,
         Api.Field.Search.PERSON -> maybePerson.orNull,
+        Api.Field.Search.VIEW -> view,
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> false
       )
     }

@@ -11,6 +11,7 @@ import software.altitude.core.models.Asset
 import software.altitude.core.models.Face
 import software.altitude.core.models.Person
 import software.altitude.core.service.FaceRecognitionService
+import software.altitude.core.util.Query
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
 
@@ -361,4 +362,57 @@ import software.altitude.test.core.IntegrationTestCore
     people.size should be(0)
   }
 
+  test("Recycled asset should not count toward face count") {
+    val totalAssets = 5
+    val people = List.fill(2)(testApp.service.person.addPerson(Person()))
+    var person: Person = people.head
+
+    testContext.addTestFacesAndAssets(people, assetCount = totalAssets)
+
+    person = testApp.service.person.getById(person.persistedId)
+    person.numOfFaces should be(totalAssets)
+
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+
+    // recycle some assets
+    val recycleCount = 2
+    allAssets.take(recycleCount).foreach { asset =>
+      testApp.service.library.recycleAsset(asset.persistedId)
+    }
+
+    person = testApp.service.person.getById(person.persistedId)
+    person.numOfFaces should be(totalAssets - recycleCount)
+    // The faces are still in DB, but they are not counted toward the person,
+    // as they are in the trash bin until being Purged.
+    testApp.service.person.getPersonFaces(person.persistedId).length should be(totalAssets)
+  }
+
+  test("Restored asset should restore person face counts") {
+    val totalAssets = 5
+    val people = List.fill(2)(testApp.service.person.addPerson(Person()))
+    var person: Person = people.head
+    testContext.addTestFacesAndAssets(people, assetCount = totalAssets)
+
+    person = testApp.service.person.getById(person.persistedId)
+    person.numOfFaces should be(totalAssets)
+
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+
+    // recycle some assets
+    val recycleCount = 2
+    allAssets.take(recycleCount).foreach { asset =>
+      testApp.service.library.recycleAsset(asset.persistedId)
+    }
+
+    person = testApp.service.person.getById(person.persistedId)
+    person.numOfFaces should be(totalAssets - recycleCount)
+
+    // restore the assets (move from recycle)
+    allAssets.take(recycleCount).foreach { asset =>
+      testApp.service.library.moveAssetToFolder(asset.persistedId, testContext.repository.rootFolderId)
+    }
+
+    person = testApp.service.person.getById(person.persistedId)
+    person.numOfFaces should be(totalAssets)
+  }
 }

@@ -25,62 +25,39 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     val path = filePath(id)
     val srcFile: File = new File(path)
 
-    var byteArray: Option[Array[Byte]] = None
-
-    try {
-      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
-    }
+    val byteArray = getBinaryData(srcFile)
 
     MimedAssetData(assetId = id, data = byteArray.get, mimeType = "application/octet-stream")
+  }
+  override def getPreviewById(assetId: String): MimedPreviewData = {
+    val f: File = new File(previewFilePath(assetId))
+    val byteArray = getBinaryData(f)
+    MimedPreviewData(assetId = assetId, data = byteArray.get)
   }
 
   override def addAsset(dataAsset: AssetWithData): Unit = {
     val destFile = new File(filePath(dataAsset.asset.persistedId))
-    logger.info(s"Creating asset [$dataAsset.asset] on file system at [$destFile]")
+    putBinaryData(destFile, dataAsset.data)
+  }
 
-    try {
-      FileUtils.writeByteArrayToFile(destFile, dataAsset.data)
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error creating [$dataAsset.asset] @ [$destFile]: $ex]")
-    }
+  override def addFace(face: Face, faceImages: FaceImages): Unit = {
+    logger.debug(s"Creating face [${face.persistedId}] on file system")
+
+    val destDisplayFile = new File(displayFacePath(face.persistedId))
+    val detectedFaceFile = new File(detectedFacePath(face.persistedId))
+    val alignedGreyscaleFile = new File(alignedGreyscaleFacePath(face.persistedId))
+    val alignedFile = new File(alignedFacePath(face.persistedId))
+
+    putBinaryData(destDisplayFile, faceImages.displayImage)
+    putBinaryData(detectedFaceFile, faceImages.image)
+    putBinaryData(alignedFile, faceImages.alignedImage)
+    putBinaryData(alignedGreyscaleFile, faceImages.alignedImageGs)
   }
 
   override def addPreview(preview: MimedPreviewData): Unit = {
-    logger.info(s"Adding preview for asset ${preview.assetId}")
-
-    // get the full path to our preview file
     val destFilePath = previewFilePath(preview.assetId)
-    // parse out the dir path
-    val dirPath = FilenameUtils.getFullPath(destFilePath)
 
-//    FileUtils.forceMkdir(new File(dirPath))
-
-    try {
-      FileUtils.writeByteArrayToFile(new File(destFilePath), preview.data)
-    } catch {
-      case _: IOException => logger.error(s"Could not save preview data to [$destFilePath]")
-    }
-  }
-
-  override def getPreviewById(assetId: String): MimedPreviewData = {
-    val f: File = new File(previewFilePath(assetId))
-
-    if (!f.isFile) {
-      throw NotFoundException(s"Cannot find preview for asset '$assetId'")
-    }
-
-    val byteArray = FileUtils.readFileToByteArray(f)
-    val is: InputStream = new ByteArrayInputStream(byteArray)
-
-    try {
-      MimedPreviewData(assetId = assetId, data = byteArray)
-    } finally {
-      if (is != null) is.close()
-    }
+    putBinaryData(new File(destFilePath), preview.data)
   }
 
   private def previewFilePath(assetId: String): String = {
@@ -127,54 +104,90 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
     FilenameUtils.concat(partitionedFacesPath, s"$faceId-aligned-gs.png")
   }
 
-  override def addFace(face: Face, faceImages: FaceImages): Unit = {
-    logger.debug(s"Creating face [${face.persistedId}] on file system")
-
-    val destDisplayFile = new File(displayFacePath(face.persistedId))
-    val detectedFaceFile = new File(detectedFacePath(face.persistedId))
-    val alignedGreyscaleFile = new File(alignedGreyscaleFacePath(face.persistedId))
-    val alignedFile = new File(alignedFacePath(face.persistedId))
-
-    try {
-      FileUtils.writeByteArrayToFile(destDisplayFile, faceImages.displayImage)
-      FileUtils.writeByteArrayToFile(detectedFaceFile, faceImages.image)
-      FileUtils.writeByteArrayToFile(alignedFile, faceImages.alignedImage)
-      FileUtils.writeByteArrayToFile(alignedGreyscaleFile, faceImages.alignedImageGs)
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error creating [$face] @ [$destDisplayFile]: $ex]")
-    }
-  }
-
   override def getDisplayFaceById(faceId: String): MimedFaceData = {
-    val path = displayFacePath(faceId)
-    val srcFile: File = new File(path)
-
-    var byteArray: Option[Array[Byte]] = None
-
-    try {
-      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
-    } catch {
-      case ex: IOException =>
-        throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
-    }
-
-    MimedFaceData(data = byteArray.get)
+    getMimedFaceData(displayFacePath(faceId))
   }
 
   override def getAlignedGreyscaleFaceById(faceId: String): MimedFaceData = {
-    val path = alignedGreyscaleFacePath(faceId)
-    val srcFile: File = new File(path)
+    getMimedFaceData(alignedGreyscaleFacePath(faceId))
+  }
 
-    var byteArray: Option[Array[Byte]] = None
+  override def getDetectedFaceById(faceId: String): MimedFaceData = {
+    getMimedFaceData(detectedFacePath(faceId))
+  }
+
+  override def getAlignedFaceById(faceId: String): MimedFaceData = {
+    getMimedFaceData(alignedFacePath(faceId))
+  }
+
+  private def getMimedFaceData(path: String): MimedFaceData = {
+    val srcFile: File = new File(path)
+    val byteArray = getBinaryData(srcFile)
+    MimedFaceData(data = byteArray.get)
+  }
+
+  override def purgeAssetById(id: String): Unit = {
+    val paths = List(
+      filePath(id),
+      previewFilePath(id)
+    )
+
+    for (path <- paths) {
+      val srcFile = new File(path)
+
+      try {
+        if (srcFile.isFile) {
+          srcFile.delete()
+        }
+      } catch {
+        case ex: IOException =>
+          logger.error(s"Error deleting file for asset id [$id]: $ex")
+      }
+    }
+  }
+
+  override def purgeFaceById(id: String): Unit = {
+    val paths = List(
+      detectedFacePath(id),
+      displayFacePath(id),
+      alignedFacePath(id),
+      alignedGreyscaleFacePath(id)
+    )
+
+    for (path <- paths) {
+      val srcFile = new File(path)
+
+      try {
+        if (srcFile.isFile) {
+          srcFile.delete()
+        }
+      } catch {
+        case ex: IOException =>
+          logger.error(s"Error deleting file for face id [$id]: $ex")
+      }
+    }
+  }
+
+  private def getBinaryData(srcFile: File): Option[Array[Byte]] = {
+    if (!srcFile.isFile) {
+      throw NotFoundException(s"Cannot find file $srcFile")
+    }
 
     try {
-      byteArray = Some(FileUtils.readFileToByteArray(srcFile))
+      Some(FileUtils.readFileToByteArray(srcFile))
     } catch {
       case ex: IOException =>
         throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
     }
+  }
 
-    MimedFaceData(data = byteArray.get)
+  private def putBinaryData(destFile: File, data: Array[Byte]): Unit = {
+    try {
+      FileUtils.writeByteArrayToFile(destFile, data)
+    } catch {
+      case ex: IOException =>
+        throw StorageException(s"Error writing $destFile: $ex]")
+    }
+
   }
 }

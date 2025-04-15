@@ -12,6 +12,7 @@ import software.altitude.core.models.User
 import software.altitude.core.models.UserToken
 import software.altitude.core.transactions.TransactionManager
 import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
 import software.altitude.core.util.Util
 
 class UserService(val app: Altitude) extends BaseService[User] {
@@ -19,6 +20,16 @@ class UserService(val app: Altitude) extends BaseService[User] {
   private val tokenDao: UserTokenDao = app.DAO.userToken
 
   override protected val txManager: TransactionManager = app.txManager
+
+  /**
+   * The User model is a model that does not have repository_id. Other models are scoped by it as no operations are cross-repo
+   * (normally).
+   */
+  override def query(query: Query): QueryResult = {
+    txManager.asReadOnly[QueryResult] {
+      dao.query(query)
+    }
+  }
 
   def switchContextToUser(user: User): Unit = {
     RequestContext.account.value = Some(user)

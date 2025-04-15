@@ -39,48 +39,48 @@ import scala.language.reflectiveCalls
     folder2
       folder2_1
      */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
-    val folder2_1: Folder = testApp.service.library.addFolder(
+    val folder2: Folder = testApp.service.folder.add("folder2")
+    val folder2_1: Folder = testApp.service.folder.add(
       "folder2_1", parentId = folder2.id)
 
-    val folder1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1: Folder = testApp.service.folder.add(
       name = "folder1_1", parentId = folder1.id)
 
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1_1: Folder = testApp.service.folder.add(
       name = "folder1_1_1", parentId = folder1_1.id)
 
-    val folder1_1_1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1_1_1: Folder = testApp.service.folder.add(
       name = "folder1_1_1_1", parentId = folder1_1_1.id)
 
-    val folder1_1_1_2: Folder = testApp.service.library.addFolder(
+    val folder1_1_1_2: Folder = testApp.service.folder.add(
       name = "folder1_1_1_2", parentId = folder1_1_1.id)
 
-    val folder1_2: Folder = testApp.service.library.addFolder(
+    val folder1_2: Folder = testApp.service.folder.add(
       name = "folder1_2", parentId = folder1.id)
   }
 
   test("Invalid folder names should fail") {
     intercept[ValidationException] {
-      testApp.service.library.addFolder("")
+      testApp.service.folder.add("")
     }
     intercept[ValidationException] {
-      testApp.service.library.addFolder(" ")
+      testApp.service.folder.add(" ")
     }
     intercept[ValidationException] {
-      testApp.service.library.addFolder(" ")
+      testApp.service.folder.add(" ")
     }
     intercept[ValidationException] {
-      testApp.service.library.addFolder("\t \t   ")
+      testApp.service.folder.add("\t \t   ")
     }
   }
 
   test("New folders  should be free of user-entered space characters") {
-    val folder1: Folder = testApp.service.library.addFolder(" folder  ")
+    val folder1: Folder = testApp.service.folder.add(" folder  ")
     folder1.name shouldEqual "folder"
 
-    val folder2:Folder = testApp.service.library.addFolder(" Folder one \n")
+    val folder2:Folder = testApp.service.folder.add(" Folder one \n")
     folder2.name shouldEqual "Folder one"
   }
 
@@ -125,7 +125,7 @@ import scala.language.reflectiveCalls
     testApp.app.service.folder.getChildren(rootId = f.folder1_1.persistedId).length shouldBe 1
 
     // move folder1_1_1 to folder2
-    testApp.service.library.moveFolder(f.folder1_1_1.persistedId, f.folder2.persistedId)
+    testApp.service.folder.move(f.folder1_1_1.persistedId, f.folder2.persistedId)
     // target
     testApp.app.service.folder.getChildren(rootId = f.folder2.persistedId).length shouldBe 2
     // source
@@ -138,10 +138,10 @@ import scala.language.reflectiveCalls
 
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
 
-    testApp.service.library.moveFolder(f.folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
+    testApp.service.folder.move(f.folder1_1_1.persistedId, RequestContext.getRepository.rootFolderId)
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 3
 
-    testApp.service.library.moveFolder(f.folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
+    testApp.service.folder.move(f.folder1_1.persistedId, RequestContext.getRepository.rootFolderId)
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 4
   }
 
@@ -160,25 +160,25 @@ import scala.language.reflectiveCalls
         folder_3_1
     */
 
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1: Folder = testApp.service.folder.add(
       name = "folder1_1", parentId = folder1.id)
 
-    val folder1_1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1_1: Folder = testApp.service.folder.add(
       name = "folder1_1_1", parentId = folder1_1.id)
 
-    val folder1_1_1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1_1_1: Folder = testApp.service.folder.add(
       name = "folder1_1_1", parentId = folder1_1_1.id)
 
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
-    val folder2_4: Folder = testApp.service.library.addFolder("folder2_4", parentId = folder2.id)
-    val folder2_3: Folder = testApp.service.library.addFolder("folder2_3", parentId = folder2.id)
-    val folder2_2: Folder = testApp.service.library.addFolder("folder2_2", parentId = folder2.id)
-    val folder2_1: Folder = testApp.service.library.addFolder("folder2_1", parentId = folder2.id)
+    val folder2: Folder = testApp.service.folder.add("folder2")
+    val folder2_4: Folder = testApp.service.folder.add("folder2_4", parentId = folder2.id)
+    val folder2_3: Folder = testApp.service.folder.add("folder2_3", parentId = folder2.id)
+    val folder2_2: Folder = testApp.service.folder.add("folder2_2", parentId = folder2.id)
+    val folder2_1: Folder = testApp.service.folder.add("folder2_1", parentId = folder2.id)
 
-    val folder3: Folder = testApp.service.library.addFolder("folder3")
-    testApp.service.library.addFolder("folder3_1", parentId = folder3.id)
+    val folder3: Folder = testApp.service.folder.add("folder3")
+    testApp.service.folder.add("folder3_1", parentId = folder3.id)
 
     // getting immediate children of root should not include the root folder itself
     val childrenOfRoot = testApp.service.folder.getChildren(RequestContext.getRepository.rootFolderId)
@@ -237,25 +237,25 @@ import scala.language.reflectiveCalls
     // see folderHierarchyFixture for folder hierarchy breakdown
     val f = folderHierarchyFixture
 
-    testApp.service.library.addFolder("folder3")
+    testApp.service.folder.add("folder3")
 
     // create folder1_1_1 as a duplicate under a different parent
-    testApp.service.library.addFolder(
+    testApp.service.folder.add(
       name = "folder1_1_1", parentId = f.folder2.id)
 
     // move into itself
     intercept[IllegalOperationException] {
-      testApp.service.library.moveFolder(f.folder1.persistedId, f.folder1.persistedId)
+      testApp.service.folder.move(f.folder1.persistedId, f.folder1.persistedId)
     }
 
     // move into a child
     intercept[DuplicateException] {
-      testApp.service.library.moveFolder(f.folder1.persistedId, f.folder1_1_1.persistedId)
+      testApp.service.folder.move(f.folder1.persistedId, f.folder1_1_1.persistedId)
     }
 
     // move into a parent with the same immediate child name
     intercept[DuplicateException] {
-      testApp.service.library.moveFolder(f.folder1_1_1.persistedId, f.folder2.persistedId)
+      testApp.service.folder.move(f.folder1_1_1.persistedId, f.folder2.persistedId)
     }
   }
 
@@ -266,63 +266,63 @@ import scala.language.reflectiveCalls
     folder2
         CHILD
     */
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val folder1_1: Folder = testApp.service.library.addFolder(
+    val folder1_1: Folder = testApp.service.folder.add(
       name = "child", parentId = folder1.id)
 
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder2: Folder = testApp.service.folder.add("folder2")
 
-    testApp.service.library.addFolder(name = "CHILD", parentId = folder2.id)
+    testApp.service.folder.add(name = "CHILD", parentId = folder2.id)
 
     // move into a parent with the same immediate child name (different casing)
     intercept[DuplicateException] {
-      testApp.service.library.moveFolder(folder1_1.persistedId, folder2.persistedId)
+      testApp.service.folder.move(folder1_1.persistedId, folder2.persistedId)
     }
   }
 
   test("Moving into a folder that doe not exist should throw") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     // move into a folder that does not exist
     intercept[ValidationException] {
-      testApp.service.library.moveFolder(folder1.persistedId, "bogus-id")
+      testApp.service.folder.move(folder1.persistedId, "bogus-id")
     }
   }
 
   test("Rename a folder") {
-    val folder1: Folder = testApp.service.library.addFolder("folder")
+    val folder1: Folder = testApp.service.folder.add("folder")
 
-    testApp.service.library.renameFolder(folder1.persistedId, "newName")
+    testApp.service.folder.rename(folder1.persistedId, "newName")
 
     val renamedFolder: Folder = testApp.service.folder.getById(folder1.persistedId)
     renamedFolder.name shouldEqual "newName"
   }
 
   test("Folder name casing can be changed") {
-    val folder1: Folder = testApp.service.library.addFolder("folder")
+    val folder1: Folder = testApp.service.folder.add("folder")
 
-    testApp.service.library.renameFolder(folder1.persistedId, "Folder")
+    testApp.service.folder.rename(folder1.persistedId, "Folder")
 
     val renamedFolder: Folder = testApp.service.folder.getById(folder1.persistedId)
     renamedFolder.name shouldEqual "Folder"
   }
 
   test("Duplicate folder rename actions should thrown") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder1: Folder = testApp.service.folder.add("folder1")
+    val folder2: Folder = testApp.service.folder.add("folder2")
 
     intercept[DuplicateException] {
-      testApp.service.library.renameFolder(folder1.persistedId, folder2.name)
+      testApp.service.folder.rename(folder1.persistedId, folder2.name)
     }
   }
 
   test("Illegal folder rename actions should throw") {
-    val folder1: Folder = testApp.service.library.addFolder("folder")
+    val folder1: Folder = testApp.service.folder.add("folder")
 
     // rename a system folder
     intercept[IllegalOperationException] {
-      testApp.service.library.renameFolder(RequestContext.getRepository.rootFolderId, folder1.name)
+      testApp.service.folder.rename(RequestContext.getRepository.rootFolderId, folder1.name)
     }
   }
 }

@@ -83,9 +83,9 @@
 
 <body>
 
-<div>
+<nav>
   <% include("includes/nav.ssp") %>
-</div>
+</nav>
 
 <main>
   <% include("includes/html_common.ssp") %>

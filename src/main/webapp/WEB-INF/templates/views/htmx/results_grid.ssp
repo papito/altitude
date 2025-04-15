@@ -18,19 +18,19 @@
     #if (idx == results.records.length - 1 && results.hasMoreResults)
 
         <%-- Last cell is special because it tells HTMX to load the next page --%>
-        <div class="cell last-cell"
+        <div id="asset-${asset.persistedId}"
+             class="cell last-cell"
              hx-trigger="intersect"
              hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}&${Api.Field.Search.IS_CONTINUOUS_SCROLL}=true'
              hx-swap="afterend">
     #else
-        <div class="cell">
+        <div class="cell" id="asset-${asset.persistedId}">
     #end
 
         <div class="drag-drop"
              alt-asset-id="${asset.persistedId}">
 
-            <img id="asset-${asset.persistedId}"
-                 alt-asset-id="${asset.persistedId}"
+            <img alt-asset-id="${asset.persistedId}"
                  draggable="false"
                  hx-trigger="click"
                  hx-target="#imageDetailModalContent"

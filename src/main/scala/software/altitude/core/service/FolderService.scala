@@ -6,6 +6,7 @@ import software.altitude.core.DuplicateException
 import software.altitude.core.FieldConst
 import software.altitude.core.IllegalOperationException
 import software.altitude.core.NotFoundException
+import software.altitude.core.RequestContext
 import software.altitude.core.ValidationException
 import software.altitude.core.dao.FolderDao
 import software.altitude.core.models.Folder
@@ -15,7 +16,20 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   override protected val dao: FolderDao = app.DAO.folder
 
-  /** Add a new folder - THIS SHOULD NOT BE USED DIRECTLY. Use <code>addFolder</code> */
+  def add(name: String, parentId: Option[String] = None): Folder = {
+    txManager.withTransaction[JsObject] {
+      val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
+      val folder = Folder(name = name.trim, parentId = _parentId)
+      val addedFolder: Folder = app.service.folder.add(folder)
+
+      addedFolder
+    }
+  }
+
+  /**
+   * Used in low-level calls when the folder object has more shape, say, with a predefined ID, like the root folder. Normally,
+   * this method should not be used and the other version of add() should be used instead.
+   */
   override def add(folder: Folder): JsObject = {
     txManager.withTransaction[JsObject] {
       super.add(folder)
@@ -52,7 +66,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   }
 
   override def deleteById(id: String): Int = {
-    dao.deleteById(id)
+    throw new NotImplementedError("Deleting a folder is handled by the library service")
   }
 
   override def deleteByQuery(query: Query): Int = {
