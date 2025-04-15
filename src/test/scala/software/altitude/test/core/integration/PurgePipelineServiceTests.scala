@@ -1,12 +1,17 @@
 package software.altitude.test.core.integration
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.NotFoundException
-import software.altitude.core.models.{Asset, AssetWithData, Face, Person, Stats}
-import software.altitude.core.pipeline.PipelineTypes.{PipelineContext, TAssetOrInvalidWithContext, TAssetWithContext}
-import software.altitude.core.pipeline.sinks.{AssetSeqOutputSink, VoidAssetSink}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.AssetWithData
+import software.altitude.core.models.Face
+import software.altitude.core.models.Person
+import software.altitude.core.pipeline.PipelineTypes.PipelineContext
+import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import software.altitude.core.pipeline.PipelineTypes.TAssetWithContext
+import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
+import software.altitude.core.pipeline.sinks.VoidAssetSink
 import software.altitude.core.util.Query
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore

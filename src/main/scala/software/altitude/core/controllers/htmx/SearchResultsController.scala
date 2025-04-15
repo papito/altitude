@@ -74,12 +74,10 @@ class SearchResultsController extends BaseHtmxController {
     val sort = SearchSort(field = sortField, direction = sortDirection)
 
     val queryParams: Map[String, Any] = view match {
-      case Const.Search.View.TRIAGE => Map(
-        FieldConst.Asset.IS_TRIAGED -> true)
+      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
 
-      case Const.Search.View.TRASHBIN => Map(
-        FieldConst.Asset.IS_RECYCLED -> true,
-        FieldConst.Asset.IS_PURGED -> false) // recycled but NOT purged
+      case Const.Search.View.TRASHBIN =>
+        Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false) // recycled but NOT purged
 
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
     }
@@ -103,6 +101,7 @@ class SearchResultsController extends BaseHtmxController {
     }
 
     if (isContinuousScroll) {
+
       /** This is a request for another page of search results for continuous scroll. */
       ssp(
         "/htmx/results_grid",
@@ -111,6 +110,7 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.IS_CONTINUOUS_SCROLL -> true
       )
     } else {
+
       /**
        * This is a new request (first page) for search results.
        *

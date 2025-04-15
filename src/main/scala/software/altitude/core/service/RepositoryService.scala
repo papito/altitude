@@ -1,6 +1,7 @@
 package software.altitude.core.service
 
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Altitude
 import software.altitude.core.AltitudeServletContext
 import software.altitude.core.FieldConst
@@ -12,7 +13,8 @@ import software.altitude.core.models.Repository
 import software.altitude.core.models.Stats
 import software.altitude.core.models.User
 import software.altitude.core.transactions.TransactionManager
-import software.altitude.core.util.{Query, QueryResult}
+import software.altitude.core.util.Query
+import software.altitude.core.util.QueryResult
 
 class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   protected val dao: RepositoryDao = app.DAO.repository
@@ -20,8 +22,8 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   override protected val txManager: TransactionManager = app.txManager
 
   /**
-   * The Repository model is a model that does not have repository_id.
-   * Other models are scoped by it as no operations are cross-repo (normally).
+   * The Repository model is a model that does not have repository_id. Other models are scoped by it as no operations are
+   * cross-repo (normally).
    */
   override def query(query: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {

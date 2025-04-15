@@ -5,15 +5,18 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
-import software.altitude.core.models.{Asset, AssetWithData, Folder, Stats}
-import software.altitude.core.pipeline.PipelineTypes.{PipelineContext, TAssetOrInvalidWithContext}
+import software.altitude.core.models.Asset
+import software.altitude.core.models.Folder
+import software.altitude.core.models.Stats
+import software.altitude.core.pipeline.PipelineTypes.PipelineContext
+import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
 import software.altitude.core.util.Query
-import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
 
+import scala.concurrent.Await
+import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

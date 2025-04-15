@@ -80,7 +80,7 @@ object FieldConst {
     val USER_METADATA = "user_metadata"
     val IS_RECYCLED = "is_recycled"
     val IS_TRIAGED = "is_triaged"
-    val IS_PURGED =  "is_purged"
+    val IS_PURGED = "is_purged"
     val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
     val ORIGINAL_CREATED_AT = "original_created_at"
   }

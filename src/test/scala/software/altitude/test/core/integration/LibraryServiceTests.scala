@@ -2,7 +2,6 @@ package software.altitude.test.core.integration
 
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
@@ -11,15 +10,17 @@ import software.altitude.core.IllegalOperationException
 import software.altitude.core.NotFoundException
 import software.altitude.core.RequestContext
 import software.altitude.core.models._
-import software.altitude.core.pipeline.PipelineTypes.{PipelineContext, TAssetOrInvalidWithContext, TAssetWithContext}
-import software.altitude.core.pipeline.sinks.{AssetSeqOutputSink, VoidAssetSink}
+import software.altitude.core.pipeline.PipelineTypes.PipelineContext
+import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
 import software.altitude.core.util.Query
 import software.altitude.core.util.SearchQuery
 import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
 
+import scala.concurrent.Await
+import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

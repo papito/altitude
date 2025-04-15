@@ -26,12 +26,13 @@ object DeletePersonFilesFlow {
           val assetFaces = app.service.person.getAssetFaces(asset.persistedId)
 
           assetFaces
-            .foreach { face =>
-              val person = personLookup(face.personId.get)
-              if (!person.coverFaceId.contains(face.persistedId)) {
-                debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
-                app.service.fileStore.purgeFaceById(face.persistedId)
-              }
+            .foreach {
+              face =>
+                val person = personLookup(face.personId.get)
+                if (!person.coverFaceId.contains(face.persistedId)) {
+                  debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
+                  app.service.fileStore.purgeFaceById(face.persistedId)
+                }
             }
         } catch {
           case _: Exception =>

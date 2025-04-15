@@ -279,9 +279,7 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       val assetQuery = new Query().add(FieldConst.Asset.IS_RECYCLED -> true)
 
-      val recycledCount = app.service.asset.updateByQuery(
-        assetQuery,
-        Map(FieldConst.Asset.IS_PURGED -> true))
+      val recycledCount = app.service.asset.updateByQuery(assetQuery, Map(FieldConst.Asset.IS_PURGED -> true))
 
       // trashbin should be at zero
       val stats = app.service.stats.getStats
@@ -312,11 +310,11 @@ class LibraryService(val app: Altitude) {
 
       repositories.foreach {
         repository =>
-        {
-          RequestContext.repository.value = Some(repository)
-          operation(repository)
-          RequestContext.repository.value = None
-        }
+          {
+            RequestContext.repository.value = Some(repository)
+            operation(repository)
+            RequestContext.repository.value = None
+          }
       }
     }
   }
