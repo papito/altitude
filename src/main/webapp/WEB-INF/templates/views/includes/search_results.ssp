@@ -8,6 +8,7 @@
 <%@ val results: SearchResult %>
 <%@ val sort: SearchSort = results.sort.head %>
 <%@ val person: Person = null %>
+<%@ val view: String %>
 
 <style>
   #searchControl {
@@ -117,10 +118,14 @@
 <% include("../htmx/person.ssp") %>
 #end
 
+#if (view == Const.Search.View.TRASHBIN)
+  <% include("../htmx/trashbin_header.ssp") %>
+#end
+
 <div id="searchControl">
   <div class="total">
     <div>
-      <strong>Total:</strong> ${results.total}
+      <strong>Total:</strong> <span class="results-total">${results.total}</span>
     </div>
   </div>
   <div>

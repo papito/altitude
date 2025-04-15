@@ -83,9 +83,9 @@ class FaceCacheService(app: Altitude) {
     updatedPerson
   }
 
-  def removePerson(label: Label): Unit = {
-    getRepositoryPersonCache.remove(label)
-  }
+//  def removePerson(label: Label): Unit = {
+//    getRepositoryPersonCache.remove(label)
+//  }
 
   def size(): Int = getRepositoryPersonCache.keys.size
 
@@ -109,16 +109,17 @@ class FaceCacheService(app: Altitude) {
       val allTopFaces: List[Face] = faceDao.getAllForCache
       val personLookup: Map[String, Person] = personDao.getAll
 
-      var faceCount = 0
-      allTopFaces.foreach {
-        face: Face =>
-          val person: Person = personLookup(face.personId.get)
-
-          val alignedGreyscaleData = app.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
-          val faceWithImageData = face.copy(alignedImageGs = alignedGreyscaleData.data)
-          person.addFace(faceWithImageData)
-          faceCount += 1
-      }
+      val faceCount = allTopFaces
+        .filter(face => personLookup.contains(face.personId.getOrElse("")))
+        .map {
+          face: Face =>
+            val person: Person = personLookup(face.personId.get)
+            val alignedGreyscaleData = app.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
+            val faceWithImageData = face.copy(alignedImageGs = alignedGreyscaleData.data)
+            person.addFace(faceWithImageData)
+            1
+        }
+        .sum
 
       // faces added, now cache the people
       personLookup.foreach {

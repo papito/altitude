@@ -1,10 +1,16 @@
 package software.altitude.core.service
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import software.altitude.core.RequestContext
 
 class UrlService {
+  private val logger: Logger = LoggerFactory.getLogger(getClass)
+
   def getBrowserViewUrl(combinedQueryParams: Map[String, String], browserUrl: String): String = {
     val queryString = constructQueryString(combinedQueryParams)
+    logger.trace("Sending browser view URL: " + queryString)
     s"/r/${RequestContext.getRepository.persistedId}?$queryString" + gerFragment(browserUrl)
   }
 
@@ -31,7 +37,7 @@ class UrlService {
       .getOrElse(Map.empty[String, String])
   }
 
-  def constructQueryString(params: Map[String, String]): String = {
+  private def constructQueryString(params: Map[String, String]): String = {
     if (params.isEmpty) "" else params.map { case (key, value) => s"$key=$value" }.mkString("&")
   }
 }

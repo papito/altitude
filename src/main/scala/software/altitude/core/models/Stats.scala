@@ -21,4 +21,36 @@ case class Stats(stats: List[Stat]) {
 
     lookup(key).dimVal
   }
+
+  def getTotalAssetCount: Int = {
+    getStatValue(Stats.TOTAL_ASSETS)
+  }
+
+  def getTotalBytes: Int = {
+    getStatValue(Stats.TOTAL_BYTES)
+  }
+
+  def getSortedAssetCount: Int = {
+    getStatValue(Stats.SORTED_ASSETS)
+  }
+
+  def getSortedBytes: Int = {
+    getStatValue(Stats.SORTED_BYTES)
+  }
+
+  def getTriageAssetCount: Int = {
+    getStatValue(Stats.TRIAGE_ASSETS)
+  }
+
+  def getTriageBytes: Int = {
+    getStatValue(Stats.TRIAGE_BYTES)
+  }
+
+  def getRecycledAssetCount: Int = {
+    getStatValue(Stats.RECYCLED_ASSETS)
+  }
+
+  def getRecycledBytes: Int = {
+    getStatValue(Stats.RECYCLED_BYTES)
+  }
 }

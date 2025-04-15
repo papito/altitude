@@ -36,7 +36,7 @@ document.body.addEventListener(Const.events.folderMoved, (event) => {
             newParent.incrementNumOfChildren()
             oldParent.decrementNumOfChildren()
 
-            const message = `Folder ${movedFolder.name()} moved to ${newParent.name()}`
+            const message = `Folder ${movedFolder.name()} moved into "${newParent.name()}"`
             showSuccessSnackBar(message)
 
             if (newParent.isExpanded()) {

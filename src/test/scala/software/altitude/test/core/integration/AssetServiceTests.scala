@@ -13,13 +13,13 @@ import software.altitude.test.core.IntegrationTestCore
 @DoNotDiscover class AssetServiceTests (override val testApp: Altitude) extends IntegrationTestCore {
   test("Getting asset by invalid ID should raise NotFoundException") {
     intercept[NotFoundException] {
-      testApp.service.library.getById("invalid")
+      testApp.service.asset.getById("invalid")
     }
   }
 
   test("Getting preview by invalid asset ID should raise NotFoundException") {
     intercept[NotFoundException] {
-      testApp.service.library.getPreview("invalid")
+      testApp.service.asset.getPreview("invalid")
     }
   }
 
@@ -31,7 +31,7 @@ import software.altitude.test.core.IntegrationTestCore
       asset.persistedId,
       Map(FieldConst.Asset.IS_RECYCLED -> true))
 
-    (testApp.service.library.getById(asset.persistedId): Asset).isRecycled shouldBe true
+    (testApp.service.asset.getById(asset.persistedId): Asset).isRecycled shouldBe true
   }
 
   test("Should be able to query by the recycled property") {

@@ -29,11 +29,79 @@ interact("#assets .drag-drop").draggable({
                     Const.attributes.originalWidth,
                     imgElement.clientWidth,
                 )
-                imgElement.style.width = "40px"
+                imgElement.style.width = "45px"
                 const yOffset = event.clientY - position.top
                 target.style.top = position.top + yOffset + "px"
             }
         },
         end: dragged,
+    },
+})
+
+interact("#trash").dropzone({
+    accept: "#assets .drag-drop",
+    overlap: 0.2,
+
+    ondropactivate: function (event) {
+        event.target.classList.add("drop-active")
+    },
+    ondragenter: function (event) {
+        const draggableElement = event.relatedTarget
+        const dropzoneElement = event.target
+
+        dropzoneElement.classList.add("drop-target")
+        draggableElement.classList.add("can-drop")
+    },
+    ondragleave: function (event) {
+        event.target.classList.remove("drop-target")
+        event.relatedTarget.classList.remove("can-drop")
+    },
+    ondrop: function (event) {
+        const draggableElement = event.relatedTarget
+        const dropzoneElement = event.target
+
+        dropzoneElement.classList.remove("drop-active")
+        dropzoneElement.classList.remove("drop-target")
+        draggableElement.classList.remove("can-drop")
+
+        const trashedFolderId = draggableElement.getAttribute(
+            Const.attributes.folderId,
+        )
+        const trashedAssetId = draggableElement.getAttribute(
+            Const.attributes.assetId,
+        )
+
+        if (trashedFolderId) {
+            console.debug(`Trashed folder ${trashedFolderId}`)
+            const trashedFolderEvent = new CustomEvent(
+                Const.events.folderTrashed,
+                {
+                    detail: {
+                        trashedFolderId: trashedFolderId,
+                    },
+                },
+            )
+
+            document.body.dispatchEvent(trashedFolderEvent)
+        }
+
+        if (trashedAssetId) {
+            console.debug(`Trashed asset ${trashedAssetId}`)
+            const trashedAssetEvent = new CustomEvent(
+                Const.events.assetTrashed,
+                {
+                    detail: {
+                        assetId: trashedAssetId,
+                    },
+                },
+            )
+
+            document.body.dispatchEvent(trashedAssetEvent)
+        }
+    },
+
+    ondropdeactivate: function (event) {
+        event.target.classList.remove("drop-active")
+        event.target.classList.remove("drop-target")
     },
 })

@@ -30,7 +30,7 @@ import software.altitude.test.core.TestFocus
     val builder = new SqlQueryBuilder[Query](List("*"), "table1")
     val q = new Query(params = Map("searchValue" -> 3), rpp = 10, page = 2)
     val sqlQuery = builder.buildSelectSql(q.withRepository())
-    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM table1 WHERE searchValue = ? AND repository_id = ? LIMIT 10 OFFSET 10"
+    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM table1 WHERE table1.searchValue = ? AND table1.repository_id = ? LIMIT 10 OFFSET 10"
     sqlQuery.bindValues.size shouldBe 2
   }
 
@@ -42,6 +42,6 @@ import software.altitude.test.core.TestFocus
       sort = List(Sort("column", SortDirection.ASC))
     )
     val sqlQuery = builder.buildSelectSql(q.withRepository())
-    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM table1 WHERE repository_id = ? ORDER BY column ASC LIMIT 10 OFFSET 10"
+    sqlQuery.sqlAsStringCompact shouldBe s"SELECT *, ${BaseDao.totalRecsWindowFunction} FROM table1 WHERE table1.repository_id = ? ORDER BY table1.column ASC LIMIT 10 OFFSET 10"
   }
 }

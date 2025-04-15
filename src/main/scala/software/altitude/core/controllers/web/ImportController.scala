@@ -57,7 +57,11 @@ class ImportController
 
   val importView: Route = get("/r/:repoId") {
     contentType = "text/html"
-    layoutTemplate("/WEB-INF/templates/views/import.ssp")
+
+    layoutTemplate(
+      "import.ssp",
+      "stats" -> app.service.stats.getStats
+    )
   }
 
   atmosphere("/status") {

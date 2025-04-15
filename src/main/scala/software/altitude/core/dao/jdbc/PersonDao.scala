@@ -90,8 +90,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
   def getAll: Map[String, Person] = {
     val sql = """SELECT *
                     FROM person
-                   WHERE merged_into_id is NULL
-                     AND repository_id = ?
+                   WHERE repository_id = ?
+                     AND num_of_faces > 0
+                     AND merged_into_id is NULL
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
@@ -112,6 +113,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                     FROM person
                    WHERE repository_id = ?
                      AND is_bad_match = FALSE
+                     AND num_of_faces > 0
                      AND merged_into_id is NULL
                """
     val recs: List[Map[String, AnyRef]] =
@@ -133,13 +135,19 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                     FROM person
                    WHERE repository_id = ?
                      AND is_bad_match = FALSE
-                     AND num_of_faces >= ?
+                     AND (num_of_faces >= ? OR is_named = ?)
                      AND is_hidden = FALSE
                      AND merged_into_id is NULL
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD))
+      manyBySqlQuery(
+        sql,
+        List(
+          RequestContext.getRepository.persistedId,
+          FaceRecognition.MIN_FACES_THRESHOLD,
+          nativeBool(true)
+        ))
 
     recs.map(makeModel)
   }
@@ -151,11 +159,12 @@ abstract class PersonDao(override val config: Config) extends BaseDao with softw
                      AND is_bad_match = FALSE
                      AND num_of_faces > 0
                      AND num_of_faces < ?
+                     AND is_named = ?
                      AND merged_into_id is NULL
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD))
+      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD, nativeBool(false)))
 
     recs.map(makeModel)
   }

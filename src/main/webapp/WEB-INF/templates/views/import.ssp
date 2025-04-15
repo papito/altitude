@@ -1,4 +1,7 @@
+
 <!DOCTYPE html>
+<% import software.altitude.core.RequestContext %>
+
 <html lang="en">
 <head>
     <title>ALTITUDE</title>
@@ -42,9 +45,9 @@
 
 <body>
 
-<div>
+<nav>
     <% include("includes/nav.ssp") %>
-</div>
+</nav>
 
 <main>
     <div id="importOptions">
@@ -68,7 +71,6 @@
 
 <script type="module">
     import { highlightNav } from "../../../js/common/navigation.js"
-
     highlightNav("import")
 </script>
 
@@ -91,6 +93,18 @@
             statusTextEl.style.display = "none"
         }, 3000)
     })
+
+    // keep refreshing the nav for updated counts
+    setInterval(() => {
+        htmx.ajax(
+            "GET",
+            "/htmx/nav/r/" + "${RequestContext.getRepository.persistedId}",
+            {
+                swap: "innerHTML",
+                target: "nav",
+            },
+        )
+    }, 5000)
 </script>
 
 </body>

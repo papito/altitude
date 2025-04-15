@@ -33,7 +33,7 @@ import software.altitude.test.core.IntegrationTestCore
     importedAsset.assetType should equal(importedAsset.assetType)
     importedAsset.checksum should not be 0
 
-    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.assetType should equal(importedAsset.assetType)
     asset.checksum should not be 0
     asset.sizeBytes should not be 0
@@ -51,8 +51,8 @@ import software.altitude.test.core.IntegrationTestCore
   test("Imported image should have a preview") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
-    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
-    val preview: MimedPreviewData = testApp.service.library.getPreview(asset.persistedId)
+    val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
+    val preview: MimedPreviewData = testApp.service.asset.getPreview(asset.persistedId)
 
     preview.mimeType should equal(MimedPreviewData.MIME_TYPE)
     preview.data.length should not be 0
@@ -61,28 +61,28 @@ import software.altitude.test.core.IntegrationTestCore
   test("Imported image is triaged") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
-    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.isTriaged should be(true)
   }
 
   test("Imported asset with metadata has media creation date set") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
-    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.originalCreatedAt should not be None
   }
 
   test("Imported asset without metadata has media creation date set") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
-    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.originalCreatedAt should not be None
   }
 
   test("Imported image asset has width and height") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
-    val asset = testApp.service.library.getById(importedAsset.persistedId): Asset
+    val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.width should be > 0
     asset.height should be > 0
   }

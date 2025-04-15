@@ -38,4 +38,20 @@ class AssetActionController extends BaseHtmxController {
 
     halt(200)
   }
+
+  val htmxMoveAssetToTrash: Route = delete("/r/:repoId/move") {
+    val trashedAssetId = request.getParameter(Api.Field.ASSET_ID)
+
+    logger.info(s"Moving asset $trashedAssetId to the Trash Bin")
+
+    // Call the Sanitation
+    try {
+      app.service.library.recycleAsset(trashedAssetId)
+    } catch {
+      case _: DuplicateException =>
+        halt(409, "Asset is already in the trash bin")
+    }
+
+    halt(200)
+  }
 }

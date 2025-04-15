@@ -116,7 +116,7 @@ class FolderActionController extends BaseHtmxController {
     val parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String]
 
     try {
-      app.service.library.addFolder(folderName, parentId = Some(parentId))
+      app.service.folder.add(folderName, parentId = Some(parentId))
     } catch {
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
@@ -173,7 +173,7 @@ class FolderActionController extends BaseHtmxController {
     val folderId = (jsonIn \ Api.Field.ID).as[String]
 
     try {
-      app.service.library.renameFolder(folderId = folderId, newName = newName)
+      app.service.folder.rename(folderId = folderId, newName = newName)
     } catch {
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")

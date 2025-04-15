@@ -212,6 +212,56 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
     }
   }
 
+  /**
+   * When an asset gets recycled, we need to decrement the number of faces for the person as the recycled assets do not count
+   * toward person occurrences in the data set.
+   *
+   * We don't do anything else, as we remove the actual faces during asset Purge.
+   *
+   * If an asset is restored, we just do the reverse of this and everyone is happy.
+   */
+  def recycleFacesForAsset(asset: Asset): Unit = {
+    if (asset.isRecycled) {
+      logger.warn("The asset is already recycled ")
+      return
+    }
+
+    txManager.withTransaction {
+      val sql = """
+        UPDATE person
+           SET num_of_faces = num_of_faces - 1
+           WHERE EXISTS (
+            SELECT 1
+                FROM asset, face
+                WHERE person.id = face.person_id
+                  AND face.asset_id = asset.id
+                  AND asset.id = ?)
+      """
+      dao.updateByBySql(sql, List(asset.persistedId))
+    }
+  }
+
+  def restoreFacesForAsset(asset: Asset): Unit = {
+    if (!asset.isRecycled) {
+      logger.warn("The asset is already not recycled ")
+      return
+    }
+
+    txManager.withTransaction {
+      val sql = """
+        UPDATE person
+           SET num_of_faces = num_of_faces + 1
+           WHERE EXISTS (
+            SELECT 1
+                FROM asset, face
+                WHERE person.id = face.person_id
+                  AND face.asset_id = asset.id
+                  AND asset.id = ?)
+          """
+      dao.updateByBySql(sql, List(asset.persistedId))
+    }
+  }
+
   def getAssetFaces(assetId: String): List[Face] = {
     txManager.asReadOnly[List[Face]] {
       faceDao.getAssetFaces(assetId)

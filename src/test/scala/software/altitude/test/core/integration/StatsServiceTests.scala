@@ -1,13 +1,22 @@
 package software.altitude.test.core.integration
 
+import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
+import software.altitude.core.DuplicateException
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Stats
+import software.altitude.core.pipeline.PipelineTypes.PipelineContext
+import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
 import software.altitude.core.util.Query
 import software.altitude.test.core.IntegrationTestCore
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -15,7 +24,7 @@ import software.altitude.test.core.IntegrationTestCore
 
   test("Test totals (simple cases)") {
     // create an asset in a folder
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     testContext.persistAsset(folder = Some(folder1))
 
@@ -74,7 +83,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Recycle multiple assets") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
+    val folder1: Folder = testApp.service.folder.add("folder1")
 
     1 to 2 foreach { _ =>
       val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
@@ -100,9 +109,48 @@ import software.altitude.test.core.IntegrationTestCore
       stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
   }
 
+  test("Recycle triaged assets") {
+    val total = 5
+    val triagedAssets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
+      val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
+      val asset = testContext.persistAsset(Some(triagedAssetModel))
+      acc :+ asset
+    }
+
+    var stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe triagedAssets.length
+
+    testApp.service.library.recycleAsset(triagedAssets.head.persistedId)
+
+    stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe triagedAssets.length - 1
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
+  }
+
+  test("Recycle already recycled asset") {
+    val total = 3
+    val assets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
+      acc :+  testContext.persistAsset()
+    }
+
+    var stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe assets.length
+
+    testApp.service.library.recycleAsset(assets.head.persistedId)
+
+    intercept[DuplicateException] {
+      testApp.service.library.recycleAsset(assets.head.persistedId)
+    }
+
+    stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe assets.length - 1
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
+  }
+
+
   test("Recycle a folder") {
-    val folder1: Folder = testApp.service.library.addFolder("folder1")
-    val folder2: Folder = testApp.service.library.addFolder("folder2")
+    val folder1: Folder = testApp.service.folder.add("folder1")
+    val folder2: Folder = testApp.service.folder.add("folder2")
 
     1 to 2 foreach { _ =>
       testContext.persistAsset(folder = Some(folder1))
@@ -123,6 +171,27 @@ import software.altitude.test.core.IntegrationTestCore
     stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
   }
 
+  test("Purging the recycle bin should correctly update the recycle stats (to zero)") {
+    val batchSize = 5
+    val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source = Source.fromIterator(() => dataAssets.iterator).map((_, pipelineContext))
+    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = testApp.service.importPipeline.run(source, AssetSeqOutputSink())
+    val pipelineRes = Await.result(pipelineResFuture, Duration.Inf)
+
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+
+    val allAssetIds = allAssets.map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(allAssetIds)
+
+    // the stats update operation is performed synchronously, so this is fine
+    testApp.service.library.purgeRecycleBin()
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
+  }
 
   /**
    * Folder counts have been removed - this needs to be re-engineered.
@@ -130,7 +199,7 @@ import software.altitude.test.core.IntegrationTestCore
    */
   /*
   test("Test move recycled asset to new folder") {
-    var folder1: Folder = testApp.service.library.addFolder("folder1")
+    var folder1: Folder = testApp.service.folder.add("folder1")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
 
@@ -139,7 +208,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     testApp.service.library.recycleAsset(asset.persistedId)
 
-    var folder2: Folder = testApp.service.library.addFolder("folder2")
+    var folder2: Folder = testApp.service.folder.add("folder2")
 
     testApp.service.library.moveAssetToFolder(asset.persistedId, folder2.persistedId)
 
@@ -158,7 +227,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Test move recycled asset to original folder") {
-    var folder1: Folder = testApp.service.library.addFolder("folder1")
+    var folder1: Folder = testApp.service.folder.add("folder1")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
 
@@ -183,7 +252,7 @@ import software.altitude.test.core.IntegrationTestCore
   }
 
   test("Restore recycled asset to original folder") {
-    var folder1: Folder = testApp.service.library.addFolder("folder1")
+    var folder1: Folder = testApp.service.folder.add("folder1")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
 

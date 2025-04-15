@@ -98,7 +98,34 @@ class UserMetadataService(val app: Altitude) {
     }
   }
 
-  def addFieldValue(assetId: String, fieldId: String, newValue: String): Unit = {
+  def addMetadataValue(assetId: String, fieldId: String, newValue: Any): Unit = {
+    txManager.withTransaction {
+      app.service.metadata.addFieldValue(assetId, fieldId, newValue.toString)
+      val field: UserMetadataField = app.service.metadata.getFieldById(fieldId)
+      val asset: Asset = app.service.asset.getById(assetId)
+      app.service.search.addMetadataValue(asset, field, newValue.toString)
+    }
+  }
+
+  def deleteMetadataValue(assetId: String, valueId: String): Unit = {
+    txManager.withTransaction {
+      app.service.metadata.deleteFieldValue(assetId, valueId)
+      val asset: Asset = app.service.asset.getById(assetId)
+      // OPTIMIZE: store value ID with search to delete in a targeted way
+      app.service.search.reindexAsset(asset)
+    }
+  }
+
+  def updateMetadataValue(assetId: String, valueId: String, newValue: Any): Unit = {
+    txManager.withTransaction {
+      app.service.metadata.updateFieldValue(assetId, valueId, newValue.toString)
+      val asset: Asset = app.service.asset.getById(assetId)
+      // OPTIMIZE: store value ID with search to update in a more efficient way
+      app.service.search.reindexAsset(asset)
+    }
+  }
+
+  private def addFieldValue(assetId: String, fieldId: String, newValue: String): Unit = {
     logger.info(s"Adding value [$newValue] for field [$fieldId] on asset [$assetId] ")
 
     txManager.withTransaction {

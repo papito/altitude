@@ -248,6 +248,7 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     val faceRecognition = new FaceRecognitionService(app)
     val faceCache = new FaceCacheService(app)
     val importPipeline = new ImportPipelineService(app)
+    val purgePipeline = new PurgePipelineService(app)
     val bulkFaceRecTrainingPipelineService = new BulkFaceRecTrainingPipelineService(app)
     val urlService = new UrlService()
 

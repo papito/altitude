@@ -67,6 +67,7 @@ CREATE TABLE asset (
   size_bytes INT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
+  is_purged BOOLEAN NOT NULL DEFAULT FALSE,
   is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
     -- area size of the image in pixels (width * height)
   original_created_at TIMESTAMP WITH TIME ZONE NOT NULL
@@ -155,7 +156,7 @@ CREATE UNIQUE INDEX folder_02 ON folder(repository_id, parent_id, name_lc);
 CREATE INDEX folder_03 ON folder(is_recycled, parent_id);
 
 
-CREATE TABLE search_parameter (
+CREATE TABLE metadata_parameter (
   repository_id CHAR(36) REFERENCES repository(id),
   asset_id CHAR(36) REFERENCES asset(id) ON DELETE CASCADE,
   field_id CHAR(36) REFERENCES metadata_field(id) ON DELETE CASCADE,

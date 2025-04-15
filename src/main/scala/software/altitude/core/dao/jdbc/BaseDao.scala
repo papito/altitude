@@ -203,7 +203,7 @@ abstract class BaseDao {
     numUpdated
   }
 
-  protected def updateByBySql(sql: String, values: List[Any]): Int = {
+  def updateByBySql(sql: String, values: List[Any]): Int = {
     BaseDao.incrWriteQueryCount()
 
     val runner = queryRunner

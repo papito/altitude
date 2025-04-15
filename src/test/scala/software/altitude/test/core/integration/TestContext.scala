@@ -166,37 +166,44 @@ class TestContext(val testApp: Altitude) {
     persistedAsset
   }
 
-  def addTestFacesAndAssets(person: Person, count: Int = 1): Unit = {
-    require(person.id.nonEmpty, "Person must have an ID for a mock face to be added")
+  def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {
+    require(people.count(_.id.isEmpty) == 0, "Person must have an ID for a mock face to be added")
 
     val randomGrImage = generateRandomImagBytesGray()
 
-    for (idx <- 1 to count) {
+    for (idx <- 1 to assetCount) {
       val asset: Asset = persistAsset()
-      val face = Face(id=Some(Util.randomStr(32)),
-        x1 = Random.nextInt(100) + 1,
-        y1 = Random.nextInt(100) + 1,
-        width =Random.nextInt(100) + 1,
-        height = Random.nextInt(100) + 1,
-        assetId = Some(asset.persistedId),
-        personId = Some(person.persistedId),
-        personLabel = Some(idx),
-        detectionScore = Random.nextDouble(),
-        embeddings = Array.fill(128) { Random.nextFloat() },
-        features = Array.fill(128) { Random.nextFloat() },
-        checksum = Random.nextInt(),
-        alignedImageGs = randomGrImage)
 
-      val persistedFace = testApp.service.person.addFace(face, asset, person)
+      people.foreach { person =>
+        val face = Face(id=Some(Util.randomStr(32)),
+          x1 = Random.nextInt(100) + 1,
+          y1 = Random.nextInt(100) + 1,
+          width =Random.nextInt(100) + 1,
+          height = Random.nextInt(100) + 1,
+          assetId = Some(asset.persistedId),
+          personId = Some(person.persistedId),
+          personLabel = Some(idx),
+          detectionScore = Random.nextDouble(),
+          embeddings = Array.fill(128) { Random.nextFloat() },
+          features = Array.fill(128) { Random.nextFloat() },
+          checksum = Random.nextInt(),
+          alignedImageGs = randomGrImage)
 
-      val faceImages = FaceImages(
-        image = generateRandomImagBytesBgr(),
-        alignedImageGs = randomGrImage,
-        alignedImage = generateRandomImagBytesBgr(),
-        displayImage = generateRandomImagBytesBgr()
-      )
-      testApp.service.fileStore.addFace(persistedFace, faceImages)
+        val persistedFace = testApp.service.person.addFace(face, asset, person)
+
+        val faceImages = FaceImages(
+          image = generateRandomImagBytesBgr(),
+          alignedImageGs = randomGrImage,
+          alignedImage = generateRandomImagBytesBgr(),
+          displayImage = generateRandomImagBytesBgr()
+        )
+        testApp.service.fileStore.addFace(persistedFace, faceImages)
+      }
     }
+  }
+
+  def addTestFacesAndAssets(person: Person, assetCount: Int = 1): Unit = {
+    addTestFacesAndAssets(List(person), assetCount)
   }
 
   def user: User = {

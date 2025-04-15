@@ -14,7 +14,7 @@ import software.altitude.core.util.SearchResult
 
 object SearchDao {
   private val VALUE_INSERT_SQL: String = s"""
-            INSERT INTO search_parameter (
+            INSERT INTO metadata_parameter (
                         ${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID},
                         ${FieldConst.SearchToken.FIELD_ID},
                         ${FieldConst.SearchToken.FIELD_VALUE_KW},
@@ -54,7 +54,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
     val sql =
       s"""
-         DELETE FROM search_parameter
+         DELETE FROM metadata_parameter
                WHERE ${FieldConst.REPO_ID} = ?
                  AND ${FieldConst.SearchToken.ASSET_ID} = ?
       """
