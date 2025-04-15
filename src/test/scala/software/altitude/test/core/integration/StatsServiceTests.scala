@@ -1,14 +1,19 @@
 package software.altitude.test.core.integration
 
+import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
 import software.altitude.core.DuplicateException
-import software.altitude.core.models.Asset
-import software.altitude.core.models.Folder
-import software.altitude.core.models.Stats
+import software.altitude.core.models.{Asset, AssetWithData, Folder, Stats}
+import software.altitude.core.pipeline.PipelineTypes.{PipelineContext, TAssetOrInvalidWithContext}
+import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
 import software.altitude.core.util.Query
+import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
+
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -163,6 +168,27 @@ import software.altitude.test.core.IntegrationTestCore
     stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
   }
 
+  test("Purging the recycle bin should correctly update the recycle stats (to zero)") {
+    val batchSize = 5
+    val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source = Source.fromIterator(() => dataAssets.iterator).map((_, pipelineContext))
+    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = testApp.service.importPipeline.run(source, AssetSeqOutputSink())
+    val pipelineRes = Await.result(pipelineResFuture, Duration.Inf)
+
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+
+    val allAssetIds = allAssets.map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(allAssetIds)
+
+    // the stats update operation is performed synchronously, so this is fine
+    testApp.service.library.purgeRecycleBin()
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
+  }
 
   /**
    * Folder counts have been removed - this needs to be re-engineered.

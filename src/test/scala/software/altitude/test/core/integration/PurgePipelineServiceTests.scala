@@ -209,8 +209,6 @@ import scala.concurrent.duration.Duration
       AssetWithData(asset, importAsset.data)
     }
 
-    val totalAssetCount = assetsWithData.length
-
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source = Source.fromIterator(() => assetsWithData.iterator).map((_, pipelineContext))
 
@@ -226,10 +224,6 @@ import scala.concurrent.duration.Duration
     }
 
     testApp.service.library.purgeRecycleBin()
-
-    val stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
-    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe totalAssetCount - recycleCount
 
     val nonRecycledAssets = assetsWithData.filterNot(assetWithData => recycledAssets.contains(assetWithData.asset)).map(_.asset)
 

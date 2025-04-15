@@ -282,8 +282,13 @@ class LibraryService(val app: Altitude) {
       val recycledCount = app.service.asset.updateByQuery(
         assetQuery,
         Map(FieldConst.Asset.IS_PURGED -> true))
+
       // trashbin should be at zero
-      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, recycledCount)
+      val stats = app.service.stats.getStats
+      require(stats.getStatValue(Stats.RECYCLED_ASSETS) == recycledCount, "Recycled assets count mismatch")
+
+      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, stats.getStatValue(Stats.RECYCLED_ASSETS))
+      app.service.stats.decrementStat(Stats.RECYCLED_BYTES, stats.getStatValue(Stats.RECYCLED_BYTES))
     }
   }
 
