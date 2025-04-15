@@ -52,19 +52,4 @@ class AssetActionController extends BaseHtmxController {
 
     halt(200)
   }
-
-  val purgeRecycleBin: Route = delete("/r/:repoId/purge") {
-    logger.info(s"Purging the recycle bin")
-    val repoId = params.get(Api.Field.REPO_ID).get
-    // Call the Sanitation Dept
-    app.service.library.purgeRecycleBin()
-
-    val browserUrl = request.getHeader("HX-Current-URL")
-    val url = app.service.urlService.getBrowserViewUrl(
-      Map(Api.Field.Search.VIEW -> Const.Search.View.TRASHBIN),
-      browserUrl)
-
-    response.addHeader("HX-Redirect", url)
-    halt(200)
-  }
 }

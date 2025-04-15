@@ -1,12 +1,29 @@
 <% import software.altitude.core.Api %>
 <% import software.altitude.core.RequestContext %>
 
-<div>
-    <button class="action-button warning"
-            hx-swap="none"
+<style>
+    #purgeRecycleBin {
+        display: grid;
+        grid-template-columns: 1fr;
+        place-items: center;
+        margin-top: var(--control-vertical-space);
+    }
+</style>
+
+<div id="purgeRecycleBin">
+    <button class="action-button error"
+            hx-swap="#content"
+            hx-target="#content"
             hx-confirm="This will PERMANENTLY delete all items in the recycle bin. Are you sure?"
             hx-delete='${ url(purgeRecycleBin, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
             hx-trigger="click">
         Purge recycle bin
     </button>
 </div>
+
+<script type="module">
+    import { context } from "../../../../js/context.js"
+    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+</script>
+
+<script type="module" src="/js/trash/htmx_event_handlers.js"></script>

@@ -5,15 +5,7 @@ import org.scalatra.ScalatraServlet
 import org.scalatra.servlet.ServletApiImplicits._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import software.altitude.core.controllers.htmx.AlbumActionController
-import software.altitude.core.controllers.htmx.AssetActionController
-import software.altitude.core.controllers.htmx.FolderActionController
-import software.altitude.core.controllers.htmx.NavigationController
-import software.altitude.core.controllers.htmx.PeopleActionController
-import software.altitude.core.controllers.htmx.SearchResultsController
-import software.altitude.core.controllers.htmx.SetupController
-import software.altitude.core.controllers.htmx.ViewSettingsActionController
+import software.altitude.core.controllers.htmx.{AlbumActionController, AssetActionController, FolderActionController, NavigationController, PeopleActionController, SearchResultsController, SetupController, TrashActionController, ViewSettingsActionController}
 import software.altitude.core.controllers.web.ContentViewController
 import software.altitude.core.controllers.web.ImportController
 import software.altitude.core.controllers.web.IndexController
@@ -56,6 +48,7 @@ object AltitudeServletContext {
     (new AlbumActionController, "/htmx/album/*"),
     (new PeopleActionController, "/htmx/people/*"),
     (new SearchResultsController, "/htmx/search/*"),
+    (new TrashActionController, "/htmx/trash/*"),
     (new ViewSettingsActionController, "/htmx/view-settings/*"),
     (new NavigationController, "/htmx/nav/*"),
     (new SetupController, "/htmx/admin/setup/*")

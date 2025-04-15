@@ -123,7 +123,7 @@ class SearchResultsController extends BaseHtmxController {
         app.service.urlService.getBrowserViewUrl(combinedQueryParams = urlParams, browserUrl = browserUrl))
 
       val maybePerson: Option[Person] = personId.map(app.service.person.getById).map(Person.fromJson)
-
+      println("!!!!!!!!!!!!!!")
       ssp(
         "/includes/search_results",
         Api.Field.Search.RESULTS -> results,
