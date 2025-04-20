@@ -10,4 +10,6 @@ trait PersonDao extends BaseDao {
   def getAllAboveThreshold: List[Person]
   def getAllBelowThreshold: List[Person]
   def getAllHidden: List[Person]
+  def recycleFacesForAssets(assetIds: Set[String]): Unit
+  def restoreFacesForAssets(assetIds: Set[String]): Unit
 }
