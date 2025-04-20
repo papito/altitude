@@ -191,8 +191,6 @@ class LibraryService(val app: Altitude) {
       val assetQuery = new Query().add(FieldConst.Asset.FOLDER_ID -> Query.IN(allFoldersToDeleteIds))
       val assetsToRecycle = app.service.asset.queryAll(assetQuery)
 
-      // OPTIMIZE: this needs to be done in bulk, and this is true for all stats
-      // OPTIMIZE: this is a massive performance bottleneck !!!
       val assetIdsToRecycle = assetsToRecycle.records.map(Asset.fromJson).map(_.persistedId).toSet
       recycleAssets(assetIdsToRecycle)
     }
@@ -251,17 +249,36 @@ class LibraryService(val app: Altitude) {
 
   def recycleAssets(assetIds: Set[String]): Unit = {
     txManager.withTransaction {
-      assetIds.foreach {
-        assetId =>
-          val asset: Asset = app.service.asset.getById(assetId)
+      val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
 
-          if (!asset.isRecycled) {
-            app.service.asset.setRecycledProp(asset, isRecycled = true)
-            app.service.stats.recycleAsset(asset.copy(isRecycled = true))
-            // remove faces associated with this asset
-            app.service.person.recycleFacesForAsset(asset)
+      if (assetsToRecycle.isEmpty) {
+        return
+      }
+
+      val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
+
+      app.service.asset.updateByQuery(
+        query = assetQuery,
+        data = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_TRIAGED -> false)
+      )
+
+      val (triagedAssets, triagedBytes, sortedAssets, sortedBytes) = assetsToRecycle.foldLeft((0, 0L, 0, 0L)) {
+        case ((triagedAssetsSum, triagedBytesSum, sortedAssetsSum, sortedBytesSum), asset) =>
+          if (asset.isTriaged) {
+            (triagedAssetsSum + 1, triagedBytesSum + asset.sizeBytes, sortedAssetsSum, sortedBytesSum)
+          } else {
+            (triagedAssetsSum, triagedBytesSum, sortedAssetsSum + 1, sortedBytesSum + asset.sizeBytes)
           }
       }
+
+      app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
+      app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
+      app.service.stats.decrementStat(Stats.SORTED_ASSETS, sortedAssets)
+      app.service.stats.decrementStat(Stats.SORTED_BYTES, sortedBytes)
+      app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, assetIds.size)
+      app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
+
+      app.service.person.recycleFacesForAssets(assetIds)
     }
   }
 

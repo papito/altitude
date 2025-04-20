@@ -1,6 +1,7 @@
 package software.altitude.core.dao
 
 import software.altitude.core.dao.jdbc.BaseDao
+import software.altitude.core.models.Asset
 import software.altitude.core.models.UserMetadata
 import software.altitude.core.util.Query
 import software.altitude.core.util.QueryResult
@@ -40,4 +41,7 @@ trait AssetDao extends BaseDao {
 
     setUserMetadata(assetId, newMetadata)
   }
+
+  def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = throw new NotImplementedError("")
+  def getAssetsToRestore(assetIds: Set[String]): List[Asset] = throw new NotImplementedError("")
 }

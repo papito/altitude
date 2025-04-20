@@ -164,7 +164,7 @@ abstract class BaseDao {
     res.map(_.asScala.toMap[String, AnyRef])
   }
 
-  protected def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] = {
+  def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] = {
     executeAndGetMany(sql, values)
   }
 

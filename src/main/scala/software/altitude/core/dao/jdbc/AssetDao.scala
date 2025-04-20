@@ -165,4 +165,32 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
 
     runner.update(RequestContext.getConn, sql, updateValues: _*)
   }
+
+  override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = {
+    getAssetsByIdAndRecycledFlag(assetIds, isRecycled = false)
+  }
+
+  override def getAssetsToRestore(assetIds: Set[String]): List[Asset] = {
+    getAssetsByIdAndRecycledFlag(assetIds, isRecycled = true)
+  }
+
+  private def getAssetsByIdAndRecycledFlag(assetIds: Set[String], isRecycled: Boolean): List[Asset] = {
+    if (assetIds.isEmpty) {
+      return List.empty[Asset]
+    }
+
+    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
+
+    val sql = s"""
+      SELECT asset.*,
+             NULL AS ${FieldConst.Asset.USER_METADATA},
+             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
+        FROM asset
+       WHERE id IN ($placeHolders)
+         AND is_recycled = ?
+    """
+
+    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(this.nativeBool(isRecycled)))
+    res.map(makeModel)
+  }
 }

@@ -24,6 +24,33 @@ import scala.concurrent.duration.Duration
 
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
+  test("Recycle multiple assets") {
+    val assetsToRecycle = 1 to 5 map { _ =>
+      testContext.persistAsset()
+    }
+
+    // not recycled and should stay that way
+    val otherAssets = 1 to 3 map { _ =>
+      testContext.persistAsset()
+    }
+
+    val idsToRecycle = assetsToRecycle.map(_.persistedId).toSet
+    // recycle all assets
+    testApp.service.library.recycleAssets(idsToRecycle)
+    // recycling again should be a no-op
+    testApp.service.library.recycleAssets(idsToRecycle)
+
+    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe assetsToRecycle.size
+    testApp.service.asset.query(new Query()).records.length shouldBe otherAssets.size
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe assetsToRecycle.size
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe assetsToRecycle.map(_.sizeBytes).sum
+
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe otherAssets.size
+    stats.getStatValue(Stats.SORTED_BYTES) shouldBe otherAssets.map(_.sizeBytes).sum
+  }
+
   test("Rename asset and attempt to rename a recycled asset") {
     var asset: Asset = testContext.persistAsset()
     var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
