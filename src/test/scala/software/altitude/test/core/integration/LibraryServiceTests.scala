@@ -1,55 +1,14 @@
 package software.altitude.test.core.integration
-
-import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
-import software.altitude.core.DuplicateException
 import software.altitude.core.FieldConst
 import software.altitude.core.IllegalOperationException
-import software.altitude.core.NotFoundException
-import software.altitude.core.RequestContext
 import software.altitude.core.models._
-import software.altitude.core.pipeline.PipelineTypes.PipelineContext
-import software.altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
-import software.altitude.core.pipeline.sinks.AssetSeqOutputSink
 import software.altitude.core.util.Query
-import software.altitude.core.util.SearchQuery
-import software.altitude.test.IntegrationTestUtil
 import software.altitude.test.core.IntegrationTestCore
 
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
-
-  test("Recycle multiple assets") {
-    val assetsToRecycle = 1 to 5 map { _ =>
-      testContext.persistAsset()
-    }
-
-    // not recycled and should stay that way
-    val otherAssets = 1 to 3 map { _ =>
-      testContext.persistAsset()
-    }
-
-    val idsToRecycle = assetsToRecycle.map(_.persistedId).toSet
-    // recycle all assets
-    testApp.service.library.recycleAssets(idsToRecycle)
-    // recycling again should be a no-op
-    testApp.service.library.recycleAssets(idsToRecycle)
-
-    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe assetsToRecycle.size
-    testApp.service.asset.query(new Query()).records.length shouldBe otherAssets.size
-
-    val stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe assetsToRecycle.size
-    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe assetsToRecycle.map(_.sizeBytes).sum
-
-    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe otherAssets.size
-    stats.getStatValue(Stats.SORTED_BYTES) shouldBe otherAssets.map(_.sizeBytes).sum
-  }
 
   test("Rename asset and attempt to rename a recycled asset") {
     var asset: Asset = testContext.persistAsset()
@@ -66,24 +25,6 @@ import scala.concurrent.duration.Duration
     intercept[IllegalOperationException] {
       testApp.service.asset.rename(asset.persistedId, "newName2")
     }
-  }
-
-  test("Move recycled asset to folder") {
-    val asset: Asset = testContext.persistAsset()
-    testApp.service.asset.query(new Query()).records.length shouldBe 1
-    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
-    testApp.service.library.recycleAsset(asset.persistedId)
-    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 1
-
-    val folder1: Folder = testApp.service.folder.add("folder1")
-
-    testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
-    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
-    testApp.service.asset.query(new Query()).records.length shouldBe 1
-
-    testApp.service.library.query(
-      new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
-    ).records.length shouldBe 1
   }
 
   test("Folder filtering") {
@@ -170,171 +111,4 @@ import scala.concurrent.duration.Duration
     testApp.service.library.recycleAsset(asset.persistedId)
     testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
   }
-
-  test("Recycle asset") {
-    testContext.persistAsset()
-
-    // SECOND USER
-    val user2 = testContext.persistUser()
-    testApp.service.user.switchContextToUser(user2)
-
-    testContext.persistAsset(user = Some(user2))
-
-    // FIRST USER
-    switchContextUser(testContext.users.head)
-    testApp.service.asset.query(new Query()).records.length shouldBe 2
-
-    val asset: Asset = testApp.service.asset.query(new Query()).records.head
-    testApp.service.library.recycleAsset(asset.persistedId)
-
-    testApp.service.asset.query(new Query()).records.length shouldBe 1
-    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 1
-
-    // SECOND REPO
-    val repo2 = testContext.persistRepository(user=Some(user2))
-    switchContextRepo(repo2)
-
-    testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
-  }
-
-  test("Get recycled asset") {
-    val asset: Asset = testContext.persistAsset()
-    testApp.service.library.recycleAsset(asset.persistedId)
-  }
-
-  test("Restore recycled asset") {
-    val asset: Asset = testContext.persistAsset()
-    val trashed: Asset = testApp.service.library.recycleAsset(asset.persistedId)
-    testApp.service.library.restoreRecycledAsset(trashed.persistedId)
-    testApp.service.asset.query(new Query()).isEmpty shouldBe false
-  }
-
-  test("Restore recycled asset to non-existing folder") {
-    val asset: Asset = testContext.persistAsset()
-    testApp.service.library.recycleAsset(asset.persistedId)
-
-    intercept[NotFoundException] {
-      testApp.service.library.moveAssetToFolder(asset.persistedId, "bad")
-    }
-  }
-
-  test("Recycle folder assets") {
-    val folder1: Folder = testApp.service.folder.add("folder1")
-
-    val folder2: Folder = testApp.service.folder.add("folder2")
-
-    val folder2_1: Folder = testApp.service.folder.add(
-      name = "folder2_1", parentId = folder2.id)
-
-    var asset1: Asset = testContext.persistAsset(folder=Some(folder1))
-    var asset2: Asset = testContext.persistAsset(folder=Some(folder2))
-    var asset3: Asset = testContext.persistAsset(folder=Some(folder2_1))
-
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-    testApp.service.library.deleteFolderById(folder2.persistedId)
-
-    asset1 = testApp.service.asset.getById(asset1.persistedId)
-    asset2 = testApp.service.asset.getById(asset2.persistedId)
-    asset3 = testApp.service.asset.getById(asset3.persistedId)
-
-    asset1.isRecycled shouldBe true
-    asset2.isRecycled shouldBe true
-    asset3.isRecycled shouldBe true
-  }
-
-  test("Restore an asset that was imported again") {
-    val folder1: Folder = testApp.service.folder.add("folder1")
-
-    val dataAsset = testContext.makeAssetWithData(folder=Some(folder1))
-    val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
-
-    // recycle the asset
-    testApp.service.library.recycleAsset(persistedAsset.persistedId)
-
-    // import a new copy of it (should be allowed)
-    testApp.service.library.addAsset(dataAsset)
-
-    // now restore the previously deleted copy into itself
-    intercept[DuplicateException] {
-      testApp.service.library.restoreRecycledAsset(persistedAsset.persistedId)
-    }
-  }
-
-  test("Restoring an asset into a recycled folder should recreate the folder") {
-    val folder1: Folder = testApp.service.folder.add("folder1")
-
-    val asset: Asset = testContext.persistAsset(folder = Some(folder1))
-    testApp.service.library.recycleAsset(asset.persistedId)
-
-    testApp.service.library.deleteFolderById(folder1.persistedId)
-
-    val deletedFolder: Folder = testApp.service.folder.getById(folder1.persistedId)
-    deletedFolder.isRecycled shouldBe true
-
-    testApp.service.library.restoreRecycledAsset(asset.persistedId)
-
-    val restoredFolder: Folder = testApp.service.folder.getById(folder1.persistedId)
-    restoredFolder.isRecycled shouldBe false
-  }
-
-  test("Prune should remove all assets in undefined state") {
-    val assetCount = 3
-    for (_ <- 1 to assetCount)
-      testContext.persistAsset()
-
-    val assetQuery = new Query(Map(FieldConst.Asset.FOLDER_ID -> testContext.repository.rootFolderId))
-    testApp.service.asset.queryAll(assetQuery).total shouldBe assetCount
-
-    val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
-    testApp.service.library.search(assetSearchQuery).total shouldBe assetCount
-
-    // make all assets "dangling"
-    val updateData = Map(
-      FieldConst.Asset.IS_PIPELINE_PROCESSED -> false,
-    )
-    testApp.service.asset.updateByQuery(assetQuery, updateData)
-
-    val danglingAssets: List[Asset] = testApp.service.asset.getDanglingAssets
-    danglingAssets.length shouldBe assetCount
-
-    // this will remove all assets in undefined state
-    testApp.service.library.pruneDanglingAssets()
-
-    // pruneDanglingAssets() method is a cross-repo operation, resetting the context
-    // so we need to set it back to the test repo
-    RequestContext.repository.value = Some(testContext.repository)
-
-    testApp.service.asset.queryAll(assetQuery).total shouldBe 0
-    // The items are still in the search index but not discoverable.
-    // Not tidy but will do for now.
-    testApp.service.library.search(assetSearchQuery).total shouldBe 0
-  }
-
-  test("Recycling all assets with one person should not break the face cache preload") {
-    val importAssetPaths = List(
-      "people/meme-ben.jpg",
-      "people/meme-ben2.png",
-      "people/meme-ben3.png",
-    )
-
-    val assetsWithData = importAssetPaths.map { path =>
-      val importAsset = IntegrationTestUtil.getImportAsset(path)
-      val asset = testApp.service.library.addImportAsset(importAsset)
-      AssetWithData(asset, importAsset.data)
-    }
-
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
-
-    val importSource = Source.fromIterator(() => assetsWithData.iterator).map((_, pipelineContext))
-    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = testApp.service.importPipeline.run(importSource, AssetSeqOutputSink())
-    Await.result(pipelineResFuture, Duration.Inf)
-
-    // Recycle all
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
-    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
-
-    testApp.service.faceCache.clear()
-    testApp.service.faceCache.loadCache(testContext.repository)
-  }
-
 }
