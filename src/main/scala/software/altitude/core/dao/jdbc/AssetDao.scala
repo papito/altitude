@@ -174,6 +174,26 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     getAssetsByIdAndRecycledFlag(assetIds, isRecycled = true)
   }
 
+  override def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = {
+    if (assetIds.isEmpty) {
+      return List.empty[Asset]
+    }
+
+    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
+
+    val sql = s"""
+      SELECT asset.*,
+             NULL AS ${FieldConst.Asset.USER_METADATA},
+             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
+        FROM asset
+       WHERE id IN ($placeHolders)
+         AND folder_id != ?
+    """
+
+    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(folderId))
+    res.map(makeModel)
+  }
+
   private def getAssetsByIdAndRecycledFlag(assetIds: Set[String], isRecycled: Boolean): List[Asset] = {
     if (assetIds.isEmpty) {
       return List.empty[Asset]
@@ -192,5 +212,25 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
 
     val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(this.nativeBool(isRecycled)))
     res.map(makeModel)
+  }
+
+  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit = {
+
+    /**
+     * Pedestrian version of this just overwrites fields for old metadata and re-sets it on the asset. A better implementation -
+     * for advanced engines - updates only the metadata fields of interest.
+     */
+    // OPTIMIZE
+    val existingMetadata = getUserMetadata(assetId) match {
+      case Some(m) => m
+      case None => UserMetadata()
+    }
+
+    logger.debug(s"Updating $existingMetadata with $metadata")
+    val newData = (existingMetadata.data ++ metadata.data).filterNot(m => deletedFields.contains(m._1))
+    val newMetadata = new UserMetadata(newData)
+    logger.debug(s"New metadata -> $newMetadata")
+
+    setUserMetadata(assetId, newMetadata)
   }
 }

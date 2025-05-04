@@ -101,7 +101,7 @@ class LibraryService(val app: Altitude) {
         return
       }
 
-      // If this is a recycled asset, we are re-adding the faces as acitve, so must update
+      // If this is a recycled asset, we are re-adding the faces as active, so must update
       // occurrences for each person in the asset
       app.service.person.restoreFacesForAsset(asset)
 

@@ -151,4 +151,10 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
       dao.getAssetsToRestore(assetIds)
     }
   }
+
+  def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = {
+    txManager.asReadOnly[List[Asset]] {
+      dao.getAssetsToMove(assetIds, folderId)
+    }
+  }
 }
