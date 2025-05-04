@@ -4,12 +4,12 @@
       <entry path="$PROJECT_DIR$/lib" />
     </classpathModifications>
     <envs>
-      <env name="OUTPUT" value="~/altitude/output" />
-      <env name="SOURCE" value="~/altitude/source" />
+      <env name="OUTPUT" value="$USER_HOME$/altitude/output" />
+      <env name="SOURCE" value="$USER_HOME$/altitude/input" />
     </envs>
     <option name="INCLUDE_PROVIDED_SCOPE" value="true" />
     <option name="MAIN_CLASS_NAME" value="lab.DeepNetFaceDetection" />
-    <module name="altitude" />
+    <module name="altitude.main" />
     <option name="PASS_PARENT_ENVS" value="false" />
     <extension name="net.ashald.envfile">
       <option name="IS_ENABLED" value="false" />
