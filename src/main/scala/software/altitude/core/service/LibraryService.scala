@@ -196,14 +196,7 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def restoreRecycledAsset(assetId: String): Asset = {
-    txManager.withTransaction[Asset] {
-      restoreRecycledAssets(Set(assetId))
-      app.service.asset.getById(assetId)
-    }
-  }
-
-  private def restoreRecycledAssets(assetIds: Set[String]): Unit = {
+  def restoreRecycledAssets(assetIds: Set[String]): Unit = {
     logger.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
     assetIds.foreach {
@@ -231,19 +224,6 @@ class LibraryService(val app: Altitude) {
             app.service.stats.restoreAsset(restoredAsset)
           }
         }
-    }
-  }
-
-  def recycleAsset(assetId: String): Asset = {
-    txManager.withTransaction {
-      val asset: Asset = app.service.asset.getById(assetId)
-
-      if (asset.isRecycled) {
-        throw DuplicateException(Some(s"Asset [$asset] is already recycled"))
-      }
-
-      recycleAssets(Set(asset.persistedId))
-      asset.copy(isRecycled = true)
     }
   }
 

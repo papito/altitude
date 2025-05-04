@@ -35,10 +35,10 @@ import scala.concurrent.duration.Duration
 
     // create an asset and delete it
     val assetToDelete1: Asset = testContext.persistAsset(folder = Some(folder1))
-    testApp.service.library.recycleAsset(assetToDelete1.persistedId)
+    testApp.service.library.recycleAssets(Set(assetToDelete1.persistedId))
     // ditto
     val assetToDelete2: Asset = testContext.persistAsset()
-    testApp.service.library.recycleAsset(assetToDelete2.persistedId)
+    testApp.service.library.recycleAssets(Set(assetToDelete2.persistedId))
 
     val stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 1
@@ -120,14 +120,14 @@ import scala.concurrent.duration.Duration
     var stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe triagedAssets.length
 
-    testApp.service.library.recycleAsset(triagedAssets.head.persistedId)
+    testApp.service.library.recycleAssets(Set(triagedAssets.head.persistedId))
 
     stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe triagedAssets.length - 1
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
   }
 
-  test("Recycle already recycled asset") {
+  test("Recycling already recycled asset should do nothing") {
     val total = 3
     val assets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
       acc :+  testContext.persistAsset()
@@ -136,10 +136,8 @@ import scala.concurrent.duration.Duration
     var stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe assets.length
 
-    testApp.service.library.recycleAsset(assets.head.persistedId)
-
-    intercept[DuplicateException] {
-      testApp.service.library.recycleAsset(assets.head.persistedId)
+    1 to 2 foreach { _ =>
+      testApp.service.library.recycleAssets(Set(assets.head.persistedId))
     }
 
     stats = testApp.service.stats.getStats
@@ -260,7 +258,7 @@ import scala.concurrent.duration.Duration
     folder1 = testApp.service.folder.getById(folder1.persistedId)
     folder1.numOfAssets shouldBe 0
 
-    testApp.service.library.restoreRecycledAsset(trashed.persistedId)
+    testApp.service.library.restoreRecycledAssets(Set(trashed.persistedId))
 
     folder1 = testApp.service.folder.getById(folder1.persistedId)
     folder1.numOfAssets shouldBe 1

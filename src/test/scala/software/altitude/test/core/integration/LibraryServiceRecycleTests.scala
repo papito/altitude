@@ -54,7 +54,7 @@ import scala.concurrent.duration.Duration
     updatedAsset.fileName shouldBe "newName"
 
     // attempt to rename a recycled asset
-    asset = testApp.service.library.recycleAsset(asset.persistedId)
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
 
     intercept[IllegalOperationException] {
       testApp.service.asset.rename(asset.persistedId, "newName2")
@@ -75,7 +75,7 @@ import scala.concurrent.duration.Duration
     testApp.service.asset.query(new Query()).records.length shouldBe 2
 
     val asset: Asset = testApp.service.asset.query(new Query()).records.head
-    testApp.service.library.recycleAsset(asset.persistedId)
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
 
     testApp.service.asset.query(new Query()).records.length shouldBe 1
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 1
@@ -89,7 +89,7 @@ import scala.concurrent.duration.Duration
 
   test("Get recycled asset") {
     val asset: Asset = testContext.persistAsset()
-    testApp.service.library.recycleAsset(asset.persistedId)
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
   }
 
   test("Recycle folder assets") {

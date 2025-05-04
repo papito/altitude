@@ -20,7 +20,7 @@ import software.altitude.test.core.IntegrationTestCore
     updatedAsset.fileName shouldBe "newName"
 
     // attempt to rename a recycled asset
-    asset = testApp.service.library.recycleAsset(asset.persistedId)
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
 
     intercept[IllegalOperationException] {
       testApp.service.asset.rename(asset.persistedId, "newName2")
@@ -108,7 +108,7 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
 
     // same but recycled
-    testApp.service.library.recycleAsset(asset.persistedId)
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
     testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
   }
 }
