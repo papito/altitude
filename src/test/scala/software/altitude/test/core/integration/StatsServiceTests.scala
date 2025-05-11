@@ -48,7 +48,7 @@ import scala.concurrent.duration.Duration
     stats.getStatValue(Stats.TOTAL_BYTES) shouldBe
       stats.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
 
-    testApp.service.library.moveAssetToFolder(triagedAsset.persistedId, folder1.persistedId)
+    testApp.service.library.moveAssetsToFolder(Set(triagedAsset.persistedId), folder1.persistedId)
 
     val stats2 = testApp.service.stats.getStats
     stats2.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
@@ -104,7 +104,7 @@ import scala.concurrent.duration.Duration
       stats.getStatValue(Stats.RECYCLED_ASSETS) * TestContext.ASSET_SIZE
   }
 
-  test("Recycle triaged assets", Focused) {
+  test("Recycle triaged assets") {
     val total = 5
     val triagedAssets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
       val asset = testContext.persistAsset(isTriaged = true)

@@ -82,17 +82,10 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def moveAssetToFolder(assetId: String, folderId: String): Asset = {
-    txManager.withTransaction[Asset] {
-      moveAssetsToFolder(Set(assetId), folderId)
-      app.service.asset.getById(assetId)
-    }
-  }
-
   /**
    * Note that this is also how we restore assets from the recycle bin - they are just moved to the folder where they belonged.
    */
-  private def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
+  def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
 
     def move(asset: Asset): Unit = {
       // Cannot move to the same folder

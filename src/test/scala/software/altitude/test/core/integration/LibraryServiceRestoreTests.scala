@@ -17,7 +17,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     val folder1: Folder = testApp.service.folder.add("folder1")
 
-    testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
+    testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), folder1.persistedId)
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
     testApp.service.asset.query(new Query()).records.length shouldBe 1
 
@@ -38,7 +38,7 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.library.recycleAssets(Set(asset.persistedId))
 
     intercept[NotFoundException] {
-      testApp.service.library.moveAssetToFolder(asset.persistedId, "bad")
+      testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), "bad")
     }
   }
 

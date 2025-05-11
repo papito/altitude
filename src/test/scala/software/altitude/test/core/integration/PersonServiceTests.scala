@@ -409,7 +409,7 @@ import software.altitude.test.core.IntegrationTestCore
 
     // restore the assets (move from recycle)
     allAssets.take(recycleCount).foreach { asset =>
-      testApp.service.library.moveAssetToFolder(asset.persistedId, testContext.repository.rootFolderId)
+      testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), testContext.repository.rootFolderId)
     }
 
     person = testApp.service.person.getById(person.persistedId)

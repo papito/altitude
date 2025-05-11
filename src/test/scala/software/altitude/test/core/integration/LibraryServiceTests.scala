@@ -60,11 +60,28 @@ import software.altitude.test.core.IntegrationTestCore
     ).records.length shouldBe 4
   }
 
+  test("Move assets between folders", Focused) {
+    /**
+     * Scenario:
+     *
+     * Three folders - there are assets in all three, but we are moving
+     * ALL of the assets into just one folder.
+     */
+    val folders = 1 to 3 map {n =>
+      testApp.service.folder.add(s"folder$n")
+    }
+
+    val assets = (folders flatMap  { folder =>
+      1 to 3 map {_ =>
+        testContext.persistAsset(folder = Some(folder))
+      }
+    }).toList
+
+    testApp.service.library.moveAssetsToFolder(assets.map(_.persistedId).toSet, folders.last.persistedId)
+
+  }
+
   test("Move asset to a different folder") {
-    /*
-    folder1
-    folder2
-    */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     val folder2: Folder = testApp.service.folder.add("folder2")
@@ -75,7 +92,7 @@ import software.altitude.test.core.IntegrationTestCore
       new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
     ).records.length shouldBe 1
 
-    testApp.service.library.moveAssetToFolder(asset.persistedId, folder2.persistedId)
+    testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), folder2.persistedId)
 
     testApp.service.library.query(
       new Query(Map(FieldConst.Asset.FOLDER_ID -> folder1.persistedId))
@@ -96,19 +113,4 @@ import software.altitude.test.core.IntegrationTestCore
     ).isEmpty shouldBe true
   }
 
-  test("Move asset to same folder") {
-    /*
-    folder1
-    folder2
-    */
-    val folder1: Folder = testApp.service.folder.add("folder1")
-
-    val asset: Asset = testContext.persistAsset(folder = Some(folder1))
-
-    testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
-
-    // same but recycled
-    testApp.service.library.recycleAssets(Set(asset.persistedId))
-    testApp.service.library.moveAssetToFolder(asset.persistedId, folder1.persistedId)
-  }
 }

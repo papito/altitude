@@ -28,13 +28,7 @@ class AssetActionController extends BaseHtmxController {
 
     logger.info(s"Moving asset $movedAssetId to $newParentId")
 
-    // Call the movers
-    try {
-      app.service.library.moveAssetToFolder(movedAssetId, newParentId)
-    } catch {
-      case ex: DuplicateException =>
-        halt(409, ex.message.getOrElse("Asset is already in the folder"))
-    }
+    app.service.library.moveAssetsToFolder(Set(movedAssetId), newParentId)
 
     halt(200)
   }
