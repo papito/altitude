@@ -26,7 +26,7 @@ import software.altitude.test.core.IntegrationTestCore
     ).records.length shouldBe 1
   }
 
-  test("Restore recycled assets", Focused) {
+  test("Restore recycled assets") {
     val asset: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))
     testApp.service.library.restoreRecycledAssets(Set(asset.persistedId))
@@ -45,7 +45,8 @@ import software.altitude.test.core.IntegrationTestCore
   test("Restore an asset that was imported again") {
     val folder1: Folder = testApp.service.folder.add("folder1")
 
-    val dataAsset = testContext.makeAssetWithData(folder = Some(folder1))
+    val assetWithFolder = testContext.makeAsset().copy(folderId=folder1.persistedId)
+    val dataAsset = testContext.makeAssetWithData(asset=Some(assetWithFolder))
     val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
 
     // recycle the asset

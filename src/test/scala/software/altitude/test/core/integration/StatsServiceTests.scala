@@ -4,7 +4,6 @@ import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 import software.altitude.core.Altitude
-import software.altitude.core.DuplicateException
 import software.altitude.core.models.Asset
 import software.altitude.core.models.Folder
 import software.altitude.core.models.Stats
@@ -20,8 +19,6 @@ import scala.concurrent.duration.Duration
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  val ASSET_SIZE = 652084 // size of our "test_asset.png" file.
-
   test("Test totals (simple cases)") {
     // create an asset in a folder
     val folder1: Folder = testApp.service.folder.add("folder1")
@@ -29,8 +26,7 @@ import scala.concurrent.duration.Duration
     testContext.persistAsset(folder = Some(folder1))
 
     // create a triaged asset
-    val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
-    val triagedAsset: Asset = testContext.persistAsset(Some(triagedAssetModel))
+    val triagedAsset: Asset = testContext.persistAsset(isTriaged = true)
     testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
 
     // create an asset and delete it
@@ -43,27 +39,27 @@ import scala.concurrent.duration.Duration
     val stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 1
     stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
     stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
-      stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.RECYCLED_ASSETS) * TestContext.ASSET_SIZE
     stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
     stats.getStatValue(Stats.TOTAL_ASSETS) shouldBe 4
     stats.getStatValue(Stats.TOTAL_BYTES) shouldBe
-      stats.getStatValue(Stats.TOTAL_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
 
     testApp.service.library.moveAssetToFolder(triagedAsset.persistedId, folder1.persistedId)
 
     val stats2 = testApp.service.stats.getStats
     stats2.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
     stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats2.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 0
     stats.getStatValue(Stats.TRIAGE_BYTES) shouldBe
-      stats.getStatValue(Stats.TRIAGE_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.TRIAGE_ASSETS) * TestContext.ASSET_SIZE
     stats2.getStatValue(Stats.TOTAL_ASSETS) shouldBe 4
     stats.getStatValue(Stats.TOTAL_BYTES) shouldBe
-      stats.getStatValue(Stats.TOTAL_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
 
     // SECOND REPO
     val repo2 = testContext.persistRepository()
@@ -73,28 +69,27 @@ import scala.concurrent.duration.Duration
 
     stats3.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
     stats3.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats3.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+      stats3.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats2.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 0
     stats3.getStatValue(Stats.TRIAGE_BYTES) shouldBe
-      stats3.getStatValue(Stats.TRIAGE_ASSETS) * ASSET_SIZE
+      stats3.getStatValue(Stats.TRIAGE_ASSETS) * TestContext.ASSET_SIZE
     stats3.getStatValue(Stats.TOTAL_ASSETS) shouldBe 0
     stats3.getStatValue(Stats.TOTAL_BYTES) shouldBe
-      stats3.getStatValue(Stats.TOTAL_ASSETS) * ASSET_SIZE
+      stats3.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
   }
 
   test("Recycle multiple assets") {
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     1 to 2 foreach { _ =>
-      val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
-      testContext.persistAsset(Some(triagedAssetModel))
+      testContext.persistAsset(isTriaged = true)
       testContext.persistAsset(folder = Some(folder1))
     }
 
     var stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
     stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2
 
     val all: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
@@ -106,14 +101,13 @@ import scala.concurrent.duration.Duration
     stats.getStatValue(Stats.SORTED_BYTES) shouldBe 0
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 4
     stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
-      stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
+      stats.getStatValue(Stats.RECYCLED_ASSETS) * TestContext.ASSET_SIZE
   }
 
-  test("Recycle triaged assets") {
+  test("Recycle triaged assets", Focused) {
     val total = 5
     val triagedAssets = (1 to total).foldLeft(List[Asset]()) { (acc, _) =>
-      val triagedAssetModel = testContext.makeAsset().copy(isTriaged = true)
-      val asset = testContext.persistAsset(Some(triagedAssetModel))
+      val asset = testContext.persistAsset(isTriaged = true)
       acc :+ asset
     }
 
@@ -163,10 +157,10 @@ import scala.concurrent.duration.Duration
     stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
     stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-    stats.getStatValue(Stats.SORTED_ASSETS) * ASSET_SIZE
+    stats.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
     stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe
-    stats.getStatValue(Stats.RECYCLED_ASSETS) * ASSET_SIZE
+    stats.getStatValue(Stats.RECYCLED_ASSETS) * TestContext.ASSET_SIZE
   }
 
   test("Purging the recycle bin should correctly update the recycle stats (to zero)") {

@@ -51,9 +51,9 @@ object IntegrationTestUtil {
     fileImportAsset
   }
 
-  def generateRandomImagBytesBgr(): Array[Byte] = {
-    val w = 50
-    val h = 50
+  def generateRandomImagBytesBgr(dimensions: Int = 50): Array[Byte] = {
+    val w = dimensions
+    val h = dimensions
     val bufferedImage = new BufferedImage(w, h, BufferedImage.TYPE_4BYTE_ABGR)
 
     var y = 0
