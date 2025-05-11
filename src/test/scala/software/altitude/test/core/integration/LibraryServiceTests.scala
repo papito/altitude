@@ -60,7 +60,7 @@ import software.altitude.test.core.IntegrationTestCore
     ).records.length shouldBe 4
   }
 
-  test("Move assets between folders", Focused) {
+  test("Move assets between folders") {
     /**
      * Scenario:
      *
@@ -78,7 +78,6 @@ import software.altitude.test.core.IntegrationTestCore
     }).toList
 
     testApp.service.library.moveAssetsToFolder(assets.map(_.persistedId).toSet, folders.last.persistedId)
-
   }
 
   test("Move asset to a different folder") {

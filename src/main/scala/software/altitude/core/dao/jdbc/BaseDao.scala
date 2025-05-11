@@ -64,6 +64,8 @@ abstract class BaseDao {
 
   protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)
 
+  protected val forUpdate: String
+
   def add(jsonIn: JsObject): JsObject = throw new NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): JsObject = {

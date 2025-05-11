@@ -170,10 +170,6 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
     getAssetsByIdAndRecycledFlag(assetIds, isRecycled = false)
   }
 
-  override def getAssetsToRestore(assetIds: Set[String]): List[Asset] = {
-    getAssetsByIdAndRecycledFlag(assetIds, isRecycled = true)
-  }
-
   override def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = {
     if (assetIds.isEmpty) {
       return List.empty[Asset]
@@ -187,10 +183,10 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
              NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
         FROM asset
        WHERE id IN ($placeHolders)
-         AND folder_id != ?
+         $forUpdate
     """
 
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(folderId))
+    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList)
     res.map(makeModel)
   }
 
@@ -208,6 +204,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with software.altitu
         FROM asset
        WHERE id IN ($placeHolders)
          AND is_recycled = ?
+         $forUpdate
     """
 
     val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(this.nativeBool(isRecycled)))

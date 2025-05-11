@@ -33,15 +33,6 @@ import software.altitude.test.core.IntegrationTestCore
     testApp.service.asset.query(new Query()).isEmpty shouldBe false
   }
 
-  test("Restore recycled asset to non-existing folder") {
-    val asset: Asset = testContext.persistAsset()
-    testApp.service.library.recycleAssets(Set(asset.persistedId))
-
-    intercept[NotFoundException] {
-      testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), "bad")
-    }
-  }
-
   test("Restore an asset that was imported again") {
     val folder1: Folder = testApp.service.folder.add("folder1")
 

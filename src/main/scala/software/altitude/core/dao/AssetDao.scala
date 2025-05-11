@@ -24,8 +24,6 @@ trait AssetDao extends BaseDao {
 
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = throw new NotImplementedError("")
 
-  def getAssetsToRestore(assetIds: Set[String]): List[Asset] = throw new NotImplementedError("")
-
   def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = throw new NotImplementedError("")
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit

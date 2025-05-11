@@ -19,7 +19,7 @@ import scala.concurrent.duration.Duration
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  test("Test totals (simple cases)") {
+  test("Test totals") {
     // create an asset in a folder
     val folder1: Folder = testApp.service.folder.add("folder1")
 

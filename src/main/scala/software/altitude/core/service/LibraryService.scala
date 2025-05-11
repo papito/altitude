@@ -82,48 +82,6 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  /**
-   * Note that this is also how we restore assets from the recycle bin - they are just moved to the folder where they belonged.
-   */
-  def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
-
-    def move(asset: Asset): Unit = {
-      // Cannot move to the same folder
-      // Note that a recycled asset CAN be restored to its original folder
-      if (!asset.isRecycled && asset.folderId == destFolderId) {
-        return
-      }
-
-      // If this is a recycled asset, we are re-adding the faces as active, so must update
-      // occurrences for each person in the asset
-      app.service.person.restoreFacesForAsset(asset)
-
-      /* Point the asset to the new folder.
-         It may or may not be recycled or triaged, so we update it as neither
-       */
-      val data = Map(
-        FieldConst.Asset.FOLDER_ID -> destFolderId,
-        FieldConst.Asset.IS_RECYCLED -> false,
-        FieldConst.Asset.IS_TRIAGED -> false
-      )
-
-      app.service.stats.moveAsset(asset)
-      app.service.asset.updateById(asset.persistedId, data)
-    }
-
-    txManager.withTransaction {
-      // ensure the folder exists
-      app.service.folder.getById(destFolderId)
-
-      assetIds.foreach {
-        assetId =>
-          val asset: Asset = app.service.asset.getById(assetId)
-
-          move(asset)
-      }
-    }
-  }
-
   def query(query: Query): QueryResult = {
     txManager.asReadOnly[QueryResult] {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
@@ -220,6 +178,65 @@ class LibraryService(val app: Altitude) {
     }
   }
 
+  /** Note that this is also how we restore assets from the recycle bin or move them from triage. */
+  def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit = {
+    txManager.withTransaction {
+      val assetsToMove = app.service.asset.getAssetsToMove(assetIds, destFolderId)
+
+      if (assetsToMove.isEmpty) {
+        return
+      }
+
+      val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
+
+      app.service.asset.updateByQuery(
+        query = assetQuery,
+        data = Map(
+          FieldConst.Asset.FOLDER_ID -> destFolderId,
+          FieldConst.Asset.IS_RECYCLED -> false,
+          FieldConst.Asset.IS_TRIAGED -> false)
+      )
+
+      // update the stats in one pass
+      val (triagedAssets, triagedBytes, recycledAssets, recycledAssetsBytes, sortedAssets, sortedBytes) =
+        assetsToMove.foldLeft((0, 0L, 0, 0L, 0, 0L)) {
+          case (
+                (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum),
+                asset) =>
+            if (asset.isTriaged) {
+              (
+                triagedAssetsSum + 1,
+                triagedBytesSum + asset.sizeBytes,
+                recycledAssetsSum,
+                recycledAssetsBytesSum,
+                sortedAssetsSum + 1,
+                sortedBytesSum + asset.sizeBytes)
+            } else if (asset.isRecycled) {
+              (
+                triagedAssetsSum,
+                triagedBytesSum,
+                recycledAssetsSum + 1,
+                recycledAssetsBytesSum + asset.sizeBytes,
+                sortedAssetsSum + 1,
+                sortedBytesSum + asset.sizeBytes)
+            } else {
+              // asset, not in a special state, being movied from one folder to another - no global stats change
+              (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum)
+            }
+        }
+
+      app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
+      app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
+      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, recycledAssets)
+      app.service.stats.decrementStat(Stats.RECYCLED_BYTES, recycledAssetsBytes)
+
+      app.service.stats.incrementStat(Stats.SORTED_ASSETS, sortedAssets)
+      app.service.stats.incrementStat(Stats.SORTED_BYTES, sortedBytes)
+
+      app.service.person.restoreFacesForAssets(assetIds)
+    }
+  }
+
   def recycleAssets(assetIds: Set[String]): Unit = {
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
@@ -235,6 +252,7 @@ class LibraryService(val app: Altitude) {
         data = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_TRIAGED -> false)
       )
 
+      // update the stats in one pass
       val (triagedAssets, triagedBytes, sortedAssets, sortedBytes) = assetsToRecycle.foldLeft((0, 0L, 0, 0L)) {
         case ((triagedAssetsSum, triagedBytesSum, sortedAssetsSum, sortedBytesSum), asset) =>
           if (asset.isTriaged) {
@@ -248,6 +266,7 @@ class LibraryService(val app: Altitude) {
       app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
       app.service.stats.decrementStat(Stats.SORTED_ASSETS, sortedAssets)
       app.service.stats.decrementStat(Stats.SORTED_BYTES, sortedBytes)
+
       app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, assetIds.size)
       app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
 

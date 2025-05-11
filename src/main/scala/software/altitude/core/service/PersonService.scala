@@ -228,28 +228,6 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
     dao.restoreFacesForAssets(assetIds)
   }
 
-  // FIXME: This is deprecated and should be removed once recycleFacesForAssets() is wired in
-  def restoreFacesForAsset(asset: Asset): Unit = {
-    if (!asset.isRecycled) {
-      logger.warn("The asset is already not recycled ")
-      return
-    }
-
-    txManager.withTransaction {
-      val sql = """
-        UPDATE person
-           SET num_of_faces = num_of_faces + 1
-           WHERE EXISTS (
-            SELECT 1
-                FROM asset, face
-                WHERE person.id = face.person_id
-                  AND face.asset_id = asset.id
-                  AND asset.id = ?)
-          """
-      dao.updateByBySql(sql, List(asset.persistedId))
-    }
-  }
-
   def getAssetFaces(assetId: String): List[Face] = {
     txManager.asReadOnly[List[Face]] {
       faceDao.getAssetFaces(assetId)

@@ -3,7 +3,6 @@ package software.altitude.core.controllers.htmx
 import org.scalatra.Route
 
 import software.altitude.core.Api
-import software.altitude.core.DuplicateException
 import software.altitude.core.controllers.BaseHtmxController
 import software.altitude.core.models.Asset
 
