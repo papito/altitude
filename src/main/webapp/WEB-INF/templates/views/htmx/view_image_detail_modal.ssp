@@ -8,11 +8,14 @@
     #imageDetailView {
         display: grid;
         place-items: center;
+        max-width: calc(100vw - 10px);
+        max-height: calc(100vh - 40px);
     }
 
     #imageDetailView img {
-        max-width:100%;
-        height:auto
+        width: auto;
+        height: auto;
+        object-fit: contain;
     }
 </style>
 
