@@ -14,7 +14,7 @@
   <style>
     body {
       display: grid;
-      grid-template-rows: auto 1fr 40px;
+      grid-template-rows: auto 1fr 35px;
       height: 100vh;
       margin: 0;
     }

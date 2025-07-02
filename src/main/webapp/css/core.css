@@ -67,19 +67,20 @@ body {
     display: grid;
     grid-template-rows: [header]  auto
                         [content] 1fr
-                        [footer]  40px;
+                        [footer]  35px; /* Note this is duplicated in the index template */
     min-height: 100vh;
 }
 
 footer {
     padding: 5px;
-    background: var(--background-secondary-color);
     color: #fff;
     bottom: 0;
     display: grid;
     font-size: .9em;
     align-items: center;
     background: var(--background-secondary-color);
+    border-top: var(--navbar-border);
+    box-shadow: var(--box-shadow);
 }
 
 /*         */
