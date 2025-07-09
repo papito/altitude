@@ -30,6 +30,9 @@
         <div class="drag-drop"
              alt-asset-id="${asset.persistedId}">
 
+            <div class="checkmark">
+            </div>
+
             <img alt-asset-id="${asset.persistedId}"
                  draggable="false"
                  hx-trigger="click"
