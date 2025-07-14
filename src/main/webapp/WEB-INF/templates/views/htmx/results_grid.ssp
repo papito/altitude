@@ -27,10 +27,12 @@
         <div class="cell" id="asset-${asset.persistedId}">
     #end
 
-        <div class="drag-drop"
-             alt-asset-id="${asset.persistedId}">
+        <div alt-asset-id="${asset.persistedId}"
+             x-data="selectable"
+             :class="{ 'drag-drop': true, 'selected': selected }">
 
-            <div class="checkmark">
+            <div class="checkmark"
+                 @click="select">
             </div>
 
             <img alt-asset-id="${asset.persistedId}"

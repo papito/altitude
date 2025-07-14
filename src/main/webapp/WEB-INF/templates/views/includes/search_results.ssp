@@ -58,7 +58,7 @@
     cursor: pointer;
   }
 
-  #assets .cell .drag-drop.checked .checkmark::before {
+  #assets .cell .drag-drop.selected .checkmark::before {
     content: '';
     position: absolute;
     top: 8px;
@@ -78,14 +78,14 @@
   #assets .cell .drag-drop:not(.selected):hover .checkmark::before {
       content: '';
       position: absolute;
-      top: 12px;  /* Adjusted position */
-      right: 12px; /* Adjusted position */
-      width: 30px;   /* Updated width */
-      height: 30px;  /* Updated height */
+      top: 12px;
+      right: 12px;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
       background-color: #4a4f56;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-      background-size: 22px 22px; /* Adjusted size for the icon */
+      background-size: 22px 22px;
       background-position: center;
       background-repeat: no-repeat;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -282,3 +282,27 @@
 
 <script type="module" src="/js/search-results/dragon-drop.js"></script>
 <script type="module" src="/js/search-results/event_handlers.js"></script>
+
+<script>
+    const ASSET_ID_SET_NAME = "selectedAssetIds"
+    Alpine.store(ASSET_ID_SET_NAME, {
+      ids: new Set()
+    })
+
+    Alpine.data('selectable', () => ({
+      selected: false,
+      select(){
+        const assetId = this.$el.parentElement.getAttribute('alt-asset-id')
+
+        if (this.selected) {
+          Alpine.store(ASSET_ID_SET_NAME).ids.delete(assetId)
+        } else {
+          Alpine.store(ASSET_ID_SET_NAME).ids.add(assetId)
+        }
+
+        this.selected = !this.selected
+
+        console.debug("Selected", Alpine.store(ASSET_ID_SET_NAME).ids.size, "assets")
+      }
+    }))
+</script>
