@@ -73,13 +73,6 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
         .querySelectorAll(".metadata > div." + fieldName)
         .forEach((div) => (div.style.display = checked ? "block" : "none"))
 
-    // update the context state
-    if (checked) {
-        context.addGridMetadataField(fieldName)
-    } else {
-        context.removeGridMetadataField(fieldName)
-    }
-
     // show/hide the metadata container, depending on the number of fields selected
     const showFields = context.getGridMetadataFields()
 
