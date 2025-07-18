@@ -14,7 +14,7 @@
   <style>
     body {
       display: grid;
-      grid-template-rows: auto 1fr 35px;
+      grid-template-rows: auto 1fr var(--footer-height);
       height: 100vh;
       margin: 0;
     }
@@ -32,15 +32,9 @@
     }
 
     #explorerViews {
-      box-shadow: var(--box-shadow);
       text-shadow: rgba(0,0,0,0.75) 0 1px;
     }
 
-    #infoPanel {
-      border-top: 1px solid var(--panel-border-color);
-      box-shadow: var(--box-shadow);
-      text-shadow: rgba(0,0,0,0.75) 0 1px;
-    }
 
     #content {
       border-left: 1px solid var(--panel-border-color);
@@ -91,7 +85,7 @@
   <% include("includes/html_common.ssp") %>
 
   <div id="explorer" class="split content split-horizontal">
-    <div id="explorerViews" class="split content">
+    <div id="explorerViews" class="content">
       <tab-container>
         <div role="tablist">
           <button type="button" id="foldersTab" role="tab"
@@ -126,9 +120,6 @@
         </div>
 
       </tab-container>
-    </div>
-
-    <div id="infoPanel" class="split content">
     </div>
   </div>
 

@@ -42,24 +42,4 @@ export function init() {
             )
         },
     })
-
-    const savedVerticalSplitSizes = localStorage.getItem(
-        Const.localStore.verticalSplitSizes,
-    )
-    let verticalSplitSizes = [65, 35]
-
-    if (savedVerticalSplitSizes) {
-        verticalSplitSizes = JSON.parse(savedVerticalSplitSizes)
-    }
-
-    Split(["#explorerViews", "#infoPanel"], {
-        sizes: verticalSplitSizes,
-        direction: "vertical",
-        onDragEnd: function (verticalSplitSizes) {
-            localStorage.setItem(
-                Const.localStore.verticalSplitSizes,
-                JSON.stringify(verticalSplitSizes),
-            )
-        },
-    })
 }

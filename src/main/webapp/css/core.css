@@ -26,6 +26,8 @@
     --control-vertical-space: 15px;
     --control-horizontal-space: 25px;
 
+    --footer-height: 40px;
+
     /* font colors */
     --faded-font-color: #b0acac;
     --success-font-color: #82da5f;
@@ -67,7 +69,7 @@ body {
     display: grid;
     grid-template-rows: [header]  auto
                         [content] 1fr
-                        [footer]  35px; /* Note this is duplicated in the index template */
+                        [footer]  var(--footer-height);
     min-height: 100vh;
 }
 
