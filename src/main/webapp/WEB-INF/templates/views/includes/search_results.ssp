@@ -282,27 +282,3 @@
 
 <script type="module" src="/js/search-results/dragon-drop.js"></script>
 <script type="module" src="/js/search-results/event_handlers.js"></script>
-
-<script>
-    const ASSET_ID_SET_NAME = "selectedAssetIds"
-    Alpine.store(ASSET_ID_SET_NAME, {
-      ids: new Set()
-    })
-
-    Alpine.data('selectable', () => ({
-      selected: false,
-      select(){
-        const assetId = this.$el.parentElement.getAttribute('alt-asset-id')
-
-        if (this.selected) {
-          Alpine.store(ASSET_ID_SET_NAME).ids.delete(assetId)
-        } else {
-          Alpine.store(ASSET_ID_SET_NAME).ids.add(assetId)
-        }
-
-        this.selected = !this.selected
-
-        console.debug("Selected", Alpine.store(ASSET_ID_SET_NAME).ids.size, "assets")
-      }
-    }))
-</script>

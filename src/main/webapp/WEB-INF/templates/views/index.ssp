@@ -127,13 +127,21 @@
   </div>
 </main>
 
-<footer>
-  <%= RequestContext.account.value.get.name %>
+<footer x-data>
+  <span x-text="$store.selectedAssets.isEmpty"></span>
 </footer>
 
 <script type="module">
   import { context } from "../../../js/context.js"
   import { init } from "../../../js/index/init.js"
+  import { Alpine } from "../../../js/lib/alpine.esm.min.js"
+  import { initSelectable } from "../../../js/selectable.js"
+
+  window.Alpine = Alpine;
+
+  initSelectable()
+
+  Alpine.start();
 
   context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 

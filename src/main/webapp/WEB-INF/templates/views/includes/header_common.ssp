@@ -4,7 +4,6 @@
 <link rel="stylesheet" href="/css/core.css">
 <link rel="stylesheet" href="/css/font-awesome.min.css">
 <link rel="stylesheet" href="/css/tabs.css">
-<script defer src='https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.10.2/cdn.js'></script>
 <script src="/js/lib/htmx.min.js"></script>
 <script src="/js/lib/json-enc.js"></script>
 <script type="module" src="/js/global.js"></script>
