@@ -1,5 +1,5 @@
 import { Const } from "../constants.js"
-import { context } from "../context.js"
+import { context } from "../alpine/context.js"
 
 /**
  * INFINITE SCROLL

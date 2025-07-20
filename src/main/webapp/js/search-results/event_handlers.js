@@ -1,11 +1,11 @@
 import { Const } from "../constants.js"
-import { Folder } from "../models.js"
+import { Folder } from "../models/folder.js"
 import {
     showErrorSnackBar,
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
-import { context } from "../context.js"
+import { context } from "../alpine/context.js"
 
 function removeAssetFromResultSetUtil(event, response, successMessage) {
     const status = response["htmx-internal-data"].xhr.status

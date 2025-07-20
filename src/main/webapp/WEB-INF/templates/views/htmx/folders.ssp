@@ -126,7 +126,7 @@
 
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
-    import { context } from "../../../../js/context.js"
+    import { context } from "../../../../js/alpine/context.js"
     import { setupDragAndDrop } from "../../../../js/folders/htmx_event_handlers.js"
 
     selectTab("explorer", "foldersTab")

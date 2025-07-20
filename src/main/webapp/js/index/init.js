@@ -5,7 +5,7 @@ import Split from "../lib/split.es.js"
 
 import { highlightNav } from "../common/navigation.js"
 import { Const } from "../constants.js"
-import { context } from "../context.js"
+import { context } from "../alpine/context.js"
 
 export function init() {
     // select the right nav tab

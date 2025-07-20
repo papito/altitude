@@ -56,7 +56,7 @@
 </form>
 
 <script type="module">
-  import { Folder } from "../../../../js/models.js"
+  import { Folder } from "../../../../js/models/folder.js"
   import { showModal, closeModal } from "../../../../js/common/modal.js"
 
   showModal({ minWidthPx: "${minWidth}", title: "${title}" })

@@ -132,10 +132,10 @@
 </footer>
 
 <script type="module">
-  import { context } from "../../../js/context.js"
+  import { context } from "../../../js/alpine/context.js"
   import { init } from "../../../js/index/init.js"
   import { Alpine } from "../../../js/lib/alpine.esm.min.js"
-  import { initSelectable } from "../../../js/selectable.js"
+  import { initSelectable } from "../../../js/alpine/selectable.js"
 
   window.Alpine = Alpine;
 
