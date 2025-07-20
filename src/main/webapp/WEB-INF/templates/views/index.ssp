@@ -9,8 +9,6 @@
 
   <% include("includes/header_common.ssp") %>
 
-  <script type="module" src="/js/index/init.js"></script>
-
   <style>
     body {
       display: grid;
@@ -132,34 +130,43 @@
 </footer>
 
 <script type="module">
+  "use strict";
+
   /**
    * @see: https://github.com/nathancahill/split/
    */
   import Split from "../../../js/lib/split.es.js"
   import { context } from "../../../js/alpine/context.js"
   import { Alpine } from "../../../js/lib/alpine.esm.min.js"
-  import { initSelectable } from "../../../js/alpine/selectable.js"
   import { highlightNav } from "../../../js/common/navigation.js"
   import { Const } from "../../../js/constants.js"
 
   window.Alpine = Alpine;
 
+  import "../../../js/alpine/components/index.js"
+
   function loadView() {
+    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+
     /**
-     * Initialize the Selectable component - keeps track of selected assets
+     * Initialize the Selectable engine - keeps track of selected assets
      * for batch operations like delete, move, etc.
      */
-    initSelectable()
+    Alpine.store(Const.selectedAssets, {
+      ids: new Set(),
+
+      get isEmpty() {
+        return this.ids.size === 0;
+      },
+    })
 
     /**
      * Initialize Alpine.js - parse the DOM and set up reactivity
      */
     Alpine.start();
 
-    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
-
     /**
-     * Highlight the correct navigation tab
+     * Highlight the correct tab
      */
     const urlParams = new URLSearchParams(window.location.search)
     const view = urlParams.get("view") || "repository"

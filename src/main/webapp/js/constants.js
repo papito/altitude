@@ -41,6 +41,8 @@ export const Const = {
         gridMetadataFields: "GRID_METADATA_FIELDS",
     },
 
+    selectedAssets: "selectedAssets",
+
     localStore: {
         gridMetadataFields: "gridMetadataFields",
         verticalSplitSizes: "verticalSplitSizes",
