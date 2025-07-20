@@ -1,10 +1,9 @@
 import { Const } from "../constants.js"
 
 /**
- * This module is used to store the context of the current user/request.
+ * This module is used to store the context of the current user request.
  *
- * If a module requires the context (for URL generation, etc.), the parent SPP template can set the context
- * as shown below:
+ * he parent template can set the context as shown below:
  *
  * <script type="module">
  *     import {context} from "../context.js"

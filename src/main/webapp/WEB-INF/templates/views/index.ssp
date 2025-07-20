@@ -132,41 +132,94 @@
 </footer>
 
 <script type="module">
+  /**
+   * @see: https://github.com/nathancahill/split/
+   */
+  import Split from "../../../js/lib/split.es.js"
   import { context } from "../../../js/alpine/context.js"
-  import { init } from "../../../js/index/init.js"
   import { Alpine } from "../../../js/lib/alpine.esm.min.js"
   import { initSelectable } from "../../../js/alpine/selectable.js"
+  import { highlightNav } from "../../../js/common/navigation.js"
+  import { Const } from "../../../js/constants.js"
 
   window.Alpine = Alpine;
 
-  initSelectable()
-
-  Alpine.start();
-
-  context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
-
   function loadView() {
-      init()
+    /**
+     * Initialize the Selectable component - keeps track of selected assets
+     * for batch operations like delete, move, etc.
+     */
+    initSelectable()
 
-      // if there is no fragment, we default to folder views
-      const fragment = window.location.hash || "#folders"
+    /**
+     * Initialize Alpine.js - parse the DOM and set up reactivity
+     */
+    Alpine.start();
 
-      const tabLink = document.querySelector('a[href="' + fragment + '"]')
+    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 
-      if (tabLink) {
-          tabLink.click()
-      }
+    /**
+     * Highlight the correct navigation tab
+     */
+    const urlParams = new URLSearchParams(window.location.search)
+    const view = urlParams.get("view") || "repository"
+    highlightNav(view)
 
-      let searchUrl =
-          "/htmx/search/r/" +
-          context.getRepoId() +
-          (window.location.search || "") +
-          fragment
+    /**
+     * This switches the background color of the content area (triage, trash, etc.)
+     */
+    document.getElementById("content").classList.add(view)
 
-      htmx.ajax("get", searchUrl, {
-          swap: "innerHTML",
-          target: "#content",
-      })
+    /**
+     * Load which fields to show in the grid
+     */
+    context.loadMetadataFieldViewSettingsFromStore()
+
+    /**
+     * Load user UI config from local storage (specific to browser)
+     */
+    const savedHorizontalSplitSizes = localStorage.getItem(
+            Const.localStore.horizontalSplitSizes,
+    )
+    let horizontalSplitSizes = [25, 75]
+
+    if (savedHorizontalSplitSizes) {
+      horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
+    }
+
+    Split(["#explorer", "#content"], {
+      sizes: horizontalSplitSizes,
+      minSize: [100, 300],
+      onDragEnd: function (horizontalSplitSizes) {
+        localStorage.setItem(
+                Const.localStore.horizontalSplitSizes,
+                JSON.stringify(horizontalSplitSizes),
+        )
+      },
+    })
+
+    // if there is no URL fragment, we default to folder views
+    const fragment = window.location.hash || "#folders"
+
+    const tabLink = document.querySelector('a[href="' + fragment + '"]')
+
+    if (tabLink) {
+      tabLink.click()
+    }
+
+    /**
+     * Perform search on load - default one or the one specified in the URL
+     */
+    let searchUrl =
+            "/htmx/search/r/" +
+            context.getRepoId() +
+            (window.location.search || "") +
+            fragment
+
+    htmx.ajax("get", searchUrl, {
+      swap: "innerHTML",
+      target: "#content",
+    })
   }
 
   document.addEventListener("DOMContentLoaded", loadView)
