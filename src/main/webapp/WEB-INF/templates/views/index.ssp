@@ -136,34 +136,14 @@
    * @see: https://github.com/nathancahill/split/
    */
   import Split from "../../../js/lib/split.es.js"
-  import { context } from "../../../js/alpine/context.js"
-  import { Alpine } from "../../../js/lib/alpine.esm.min.js"
   import { highlightNav } from "../../../js/common/navigation.js"
   import { Const } from "../../../js/constants.js"
-
-  window.Alpine = Alpine;
-
-  import "../../../js/alpine/components/index.js"
+  import { initApp} from "../../../js/app.js"
 
   function loadView() {
-    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+    initApp()
 
-    /**
-     * Initialize the Selectable engine - keeps track of selected assets
-     * for batch operations like delete, move, etc.
-     */
-    Alpine.store(Const.selectedAssets, {
-      ids: new Set(),
-
-      get isEmpty() {
-        return this.ids.size === 0;
-      },
-    })
-
-    /**
-     * Initialize Alpine.js - parse the DOM and set up reactivity
-     */
-    Alpine.start();
+    window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 
     /**
      * Highlight the correct tab
@@ -180,7 +160,7 @@
     /**
      * Load which fields to show in the grid
      */
-    context.loadMetadataFieldViewSettingsFromStore()
+    window.ctx.loadMetadataFieldViewSettingsFromStore()
 
     /**
      * Load user UI config from local storage (specific to browser)
@@ -219,7 +199,7 @@
      */
     let searchUrl =
             "/htmx/search/r/" +
-            context.getRepoId() +
+            window.ctx.getRepoId() +
             (window.location.search || "") +
             fragment
 

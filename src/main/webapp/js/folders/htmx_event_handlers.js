@@ -9,7 +9,7 @@
  * but others do not (close menu, collapse folders).
  */
 
-import { context } from "../alpine/context.js"
+import { context } from "../context.js"
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { showErrorSnackBar } from "../common/snackbar.js"

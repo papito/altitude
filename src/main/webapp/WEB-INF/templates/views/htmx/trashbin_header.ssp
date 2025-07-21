@@ -22,7 +22,7 @@
 </div>
 
 <script type="module">
-    import { context } from "../../../../js/alpine/context.js"
+    import { context } from "../../../../js/context.js"
     context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>
 

@@ -1,5 +1,5 @@
 import { showErrorSnackBar } from "../common/snackbar.js"
-import { context } from "../alpine/context.js"
+import { context } from "../context.js"
 
 htmx.find("#purgeRecycleBin").addEventListener(
     "htmx:afterRequest",

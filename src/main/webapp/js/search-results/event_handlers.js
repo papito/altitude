@@ -5,7 +5,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
-import { context } from "../alpine/context.js"
+import { context } from "../context.js"
 
 function removeAssetFromResultSetUtil(event, response, successMessage) {
     const status = response["htmx-internal-data"].xhr.status
