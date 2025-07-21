@@ -9,7 +9,6 @@
  * but others do not (close menu, collapse folders).
  */
 
-import { context } from "../context.js"
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
@@ -24,7 +23,7 @@ export function setupDragAndDrop() {
              */
             if (
                 evt.detail.pathInfo.requestPath ===
-                `/htmx/folder/r/${context.getRepoId()}/context-menu`
+                `/htmx/folder/r/${window.ctx.getRepoId()}/context-menu`
             ) {
                 const folderId = evt.detail.target.getAttribute(
                     Const.attributes.folderId,
@@ -55,7 +54,7 @@ export function setupDragAndDrop() {
              */
             if (
                 evt.detail.pathInfo.requestPath ===
-                `/htmx/folder/r/${context.getRepoId()}/children`
+                `/htmx/folder/r/${window.ctx.getRepoId()}/children`
             ) {
                 // I don't JavaScript good - how do you get a param from a relative URL?
                 const url = new URL(
@@ -101,7 +100,7 @@ export function setupDragAndDrop() {
             // on successful context menu request, show the menu
             if (
                 requestPath ===
-                `/htmx/folder/r/${context.getRepoId()}/context-menu`
+                `/htmx/folder/r/${window.ctx.getRepoId()}/context-menu`
             ) {
                 console.debug("Context menu request successful")
 
@@ -119,8 +118,8 @@ export function setupDragAndDrop() {
             // on successful folder children request or child added request, expand the folder
             if (
                 requestPath ===
-                    `/htmx/folder/r/${context.getRepoId()}/children` ||
-                requestPath === `/htmx/folder/r/${context.getRepoId()}/add`
+                    `/htmx/folder/r/${window.ctx.getRepoId()}/children` ||
+                requestPath === `/htmx/folder/r/${window.ctx.getRepoId()}/add`
             ) {
                 const folder = new Folder(
                     evt.target.getAttribute(Const.attributes.folderId),

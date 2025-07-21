@@ -1,5 +1,4 @@
 import { Const } from "../constants.js"
-import { context } from "../context.js"
 
 /**
  * INFINITE SCROLL
@@ -115,7 +114,7 @@ export function initLazyLoad() {
 }
 
 function showOrHideAssetGridMetadata(el) {
-    const showFields = context.getGridMetadataFields()
+    const showFields = window.ctx.getGridMetadataFields()
 
     const toShowFieldsSelectorStr = Array.from(showFields)
         .map((fieldName) => ".metadata > div." + fieldName)

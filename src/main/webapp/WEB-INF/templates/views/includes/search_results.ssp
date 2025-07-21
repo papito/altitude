@@ -264,7 +264,6 @@
 </div>
 
 <script type="module">
-  import { context } from "../../../../js/context.js"
   import {
       initInfiniteScroll,
       initLazyLoad,
@@ -277,7 +276,7 @@
   initLazyLoad()
   initInfiniteScroll()
 
-  context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+  window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>
 
 <script type="module" src="/js/search-results/dragon-drop.js"></script>

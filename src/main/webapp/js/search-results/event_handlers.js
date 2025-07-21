@@ -5,7 +5,6 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
-import { context } from "../context.js"
 
 function removeAssetFromResultSetUtil(event, response, successMessage) {
     const status = response["htmx-internal-data"].xhr.status
@@ -23,7 +22,7 @@ function removeAssetFromResultSetUtil(event, response, successMessage) {
         showSuccessSnackBar(successMessage)
 
         // reload the navigation bar - it is sensitive to changes, especially if the user is moving assets around
-        htmx.ajax("GET", `/htmx/nav/r/${context.getRepoId()}`, {
+        htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, {
             swap: "innerHTML",
             target: "nav",
         })
@@ -44,7 +43,7 @@ document.body.addEventListener(Const.events.assetMoved, (event) => {
         removeAssetFromResultSetUtil(event, response, successMessage)
     }
 
-    htmx.ajax("PUT", `/htmx/asset/r/${context.getRepoId()}/move`, {
+    htmx.ajax("PUT", `/htmx/asset/r/${window.ctx.getRepoId()}/move`, {
         swap: "none",
         values: { ...event.detail },
         handler: assetMovedHandler,
@@ -57,7 +56,7 @@ document.body.addEventListener(Const.events.assetTrashed, (event) => {
         removeAssetFromResultSetUtil(event, response, successMessage)
     }
 
-    htmx.ajax("DELETE", `/htmx/asset/r/${context.getRepoId()}/move`, {
+    htmx.ajax("DELETE", `/htmx/asset/r/${window.ctx.getRepoId()}/move`, {
         swap: "none",
         values: { ...event.detail },
         handler: assetTrashedHandler,
@@ -74,7 +73,7 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
         .forEach((div) => (div.style.display = checked ? "block" : "none"))
 
     // show/hide the metadata container, depending on the number of fields selected
-    const showFields = context.getGridMetadataFields()
+    const showFields = window.ctx.getGridMetadataFields()
 
     // No metadata fields selected? Hide the metadata container
     if (showFields.size === 0) {

@@ -6,9 +6,7 @@ import { Const } from "./constants.js"
  * he parent template can set the context as shown below:
  *
  * <script type="module">
- *     import {context} from "../context.js"
- *
- *      context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+ *      window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
  * </script>
  */
 export const context = {

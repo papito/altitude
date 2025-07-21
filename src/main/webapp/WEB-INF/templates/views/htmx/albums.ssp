@@ -10,8 +10,7 @@
 
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
-    import { context } from "../../../../js/context.js"
 
     selectTab("explorer", "albumsTab")
-    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+    window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>

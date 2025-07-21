@@ -66,14 +66,13 @@
 <script type="module">
   import { showModal } from "../../../../js/common/modal.js"
   import { Const } from "../../../../js/constants.js"
-  import { context } from "../../../../js/context.js"
 
   showModal({ minWidthPx: "${minWidth}", title: "${title}" })
 
   /**
    * Populate the checkboxes with the current field visibility settings (for this browser)
    */
-  const showFields = context.getGridMetadataFields()
+  const showFields = window.ctx.getGridMetadataFields()
 
   if (showFields.size) {
       const checkboxSelectorStr = Array.from(showFields)
@@ -93,9 +92,9 @@
       const isChecked = event.target.checked
 
       if (isChecked) {
-          context.addGridMetadataField(fieldName)
+          window.ctx.addGridMetadataField(fieldName)
       } else {
-          context.removeGridMetadataField(fieldName)
+          window.ctx.removeGridMetadataField(fieldName)
       }
 
       // Fire the change event so that the grid can reconfigure itself

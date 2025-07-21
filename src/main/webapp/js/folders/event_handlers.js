@@ -1,6 +1,5 @@
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
-import { context } from "../context.js"
 import {
     showErrorSnackBar,
     showSuccessSnackBar,
@@ -65,7 +64,7 @@ document.body.addEventListener(Const.events.folderMoved, (event) => {
         }
     }
 
-    htmx.ajax("put", `/htmx/folder/r/${context.getRepoId()}/move`, {
+    htmx.ajax("put", `/htmx/folder/r/${window.ctx.getRepoId()}/move`, {
         swap: "none",
         values: { ...event.detail },
         handler: handler,
