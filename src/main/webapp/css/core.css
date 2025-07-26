@@ -26,7 +26,7 @@
     --control-vertical-space: 15px;
     --control-horizontal-space: 25px;
 
-    --footer-height: 40px;
+    --footer-height: 44px;
 
     /* font colors */
     --faded-font-color: #b0acac;
@@ -130,7 +130,7 @@ form input.error, form input.error:focus {
 /*         */
 
 .action-button {
-    background: var(--success-background-color);
+    background: rgb(76, 75, 75);
     font-weight: bold;
     color: white;
     border: 2px solid #bdbbbb;
@@ -141,8 +141,13 @@ form input.error, form input.error:focus {
     text-shadow: rgba(72, 70, 70, 0.55) 4px 4px 4px;
     font-size: 1em;
 }
+
 .action-button:hover, .action-button:focus {
     box-shadow: var(--box-shadow);
+}
+
+.action-button.success {
+    background: var(--success-background-color);
 }
 
 .action-button.warning {

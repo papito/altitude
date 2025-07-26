@@ -28,11 +28,11 @@
     #end
 
         <div alt-asset-id="${asset.persistedId}"
-             x-data="initSelectable()"
+             x-data="initSelectable('${asset.persistedId}')"
              :class="{ 'drag-drop': true, 'selected': selected }">
 
             <div class="checkmark"
-                 @click="select">
+                 @click="toggle">
             </div>
 
             <img alt-asset-id="${asset.persistedId}"

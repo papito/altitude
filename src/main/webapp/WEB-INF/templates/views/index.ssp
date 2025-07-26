@@ -125,8 +125,8 @@
   </div>
 </main>
 
-<footer x-data>
-  <span x-text="$store.selectedAssets.isEmpty"></span>
+<footer class x-data>
+  <% include("includes/batch_selector.ssp") %>
 </footer>
 
 <script type="module">
@@ -151,6 +151,7 @@
     const urlParams = new URLSearchParams(window.location.search)
     const view = urlParams.get("view") || "repository"
     highlightNav(view)
+    Alpine.store(Const.state.currentView).setViewName(view)
 
     /**
      * This switches the background color of the content area (triage, trash, etc.)

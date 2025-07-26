@@ -90,3 +90,11 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
             .forEach((div) => (div.style.display = "grid"))
     }
 })
+
+document.body.addEventListener(Const.events.deselectAll, () => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+    selectedAssetsStore.items.forEach((asset) => {
+        asset.deselect()
+    })
+    selectedAssetsStore.items.clear()
+});

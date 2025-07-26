@@ -1,18 +1,27 @@
 import { Const } from "../../constants.js"
 
-export function initSelectable() {
+export function initSelectable(id) {
     return {
+        id: id,
         selected: false,
-        select(){
-            const assetId = this.$el.parentElement.getAttribute('alt-asset-id')
 
+        init() {
+        },
+        toggle(){
             if (this.selected) {
-                Alpine.store(Const.selectedAssets).ids.delete(assetId)
+                Alpine.store(Const.state.selectedAssets).items.delete(id)
             } else {
-                Alpine.store(Const.selectedAssets).ids.add(assetId)
+                Alpine.store(Const.state.selectedAssets).items.set(id, this)
             }
 
             this.selected = !this.selected
+        },
+        deselect(){
+            if (this.selected) {
+                this.selected = false
+                Alpine.store(Const.state.selectedAssets).items.delete(id)
+            }
         }
+
     }
 }

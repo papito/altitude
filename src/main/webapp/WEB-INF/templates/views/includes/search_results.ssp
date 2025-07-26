@@ -259,7 +259,7 @@
   </div>
 </div>
 
-<div id="assets">
+<div id="assets" x-data>
   <% include("../htmx/results_grid.ssp") %>
 </div>
 

@@ -1,4 +1,9 @@
-export const Const = {
+export let Const = {
+    views: {
+      repository: "repository",
+      triage: "triage",
+      trashbin: "trashbin",
+    },
     events: {
         folderMoved: "FOLDER_MOVED_EVENT",
         folderTrashed: "FOLDER_TRASHED_EVENT",
@@ -14,6 +19,7 @@ export const Const = {
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         viewSettingChanged: "VIEW_SETTING_CHANGED_EVENT",
+        deselectAll: "DESELECT_ALL",
     },
 
     /**
@@ -41,7 +47,10 @@ export const Const = {
         gridMetadataFields: "GRID_METADATA_FIELDS",
     },
 
-    selectedAssets: "selectedAssets",
+    state: {
+        selectedAssets: "selectedAssets",
+        currentView: "currentView",
+    },
 
     localStore: {
         gridMetadataFields: "gridMetadataFields",
@@ -49,3 +58,5 @@ export const Const = {
         horizontalSplitSizes: "horizontalSplitSizes",
     },
 }
+
+window.Const = Const
