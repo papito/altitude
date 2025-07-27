@@ -37,7 +37,7 @@
 
             <img alt-asset-id="${asset.persistedId}"
                  draggable="false"
-                 @click.shift.stop="toggle"
+                 @click.shift="toggleViaAsset($event)"
                  hx-trigger="click[!event.shiftKey]"
                  hx-target="#imageDetailModalContent"
                  hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"

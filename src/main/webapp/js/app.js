@@ -47,3 +47,8 @@ export function initApp() {
 
     Alpine.start();
 }
+
+export function getAlpineProxyObj(el) {
+    // https://github.com/alpinejs/alpine/discussions/2375
+    return Alpine.mergeProxies(el._x_dataStack)
+}

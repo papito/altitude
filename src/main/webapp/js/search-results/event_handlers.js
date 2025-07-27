@@ -5,6 +5,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
+import { getAlpineProxyObj } from "../app.js"
 
 function removeAssetFromResultSetUtil(event, response, successMessage) {
     const status = response["htmx-internal-data"].xhr.status
@@ -97,8 +98,4 @@ document.body.addEventListener(Const.events.deselectAll, () => {
         asset.deselect()
     })
     selectedAssetsStore.items.clear()
-})
-
-document.body.addEventListener(Const.events.toggleAsset, () => {
-    console.log("toggleAsset event received")
 })
