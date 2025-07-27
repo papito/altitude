@@ -183,6 +183,11 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       val assetsToMove = app.service.asset.getAssetsToMove(assetIds, destFolderId)
 
+      if (destFolderId == null) {
+        throw IllegalOperationException("Destination folder ID cannot be null")
+      }
+
+      logger.info(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
       if (assetsToMove.isEmpty) {
         return
       }

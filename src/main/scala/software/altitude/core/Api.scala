@@ -29,6 +29,7 @@ object Api {
   object Field {
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
+    val ASSET_IDS = "assetIds"
     val REPO_ID = "repoId"
     val FOLDER_ID = "folderId"
     val PERSON_ID = "personId"

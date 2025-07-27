@@ -52,10 +52,39 @@ document.body.addEventListener(Const.events.assetMoved, (event) => {
 
 document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
+    const newParentFolder = new Folder(newParentFolderId)
+
     const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
     console.debug(`Batch moving ${selectedAssetsStore.size} assets to folder ${newParentFolderId}`)
-    selectedAssetsStore.reset()
-})
+
+    function assetsMovedHandler(response) {
+        const successMessage = `Asset moved to folder "${newParentFolder.name()}"`
+        // removeAssetFromResultSetUtil(event, response, successMessage)
+    }
+
+    const payload = {
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
+        folderId: newParentFolderId
+    }
+
+    fetch(`/htmx/asset/r/${window.ctx.getRepoId()}/move`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok ' + response.statusText);
+            }
+            console.log(response.status)
+            const successMessage = `${payload.assetIds.length} assets moved to folder "${newParentFolder.name()}"`
+            showSuccessSnackBar(successMessage)
+            // removeAssetFromResultSetUtil(event, response, successMessage)
+        })
+        .catch((response) => {
+            showErrorSnackBar(`Error moving  assets: ${response.status}, ${response.statusText}`)
+        })}
+)
 
 
 document.body.addEventListener(Const.events.assetTrashed, (event) => {

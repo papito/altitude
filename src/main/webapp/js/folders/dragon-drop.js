@@ -91,7 +91,6 @@ interact("#rootFolderList .dropzone").dropzone({
                 Const.events.batchAssetsMoved,
                 {
                     detail: {
-                        // assetIds: Array.from(selectedAssetsStore.items.keys()),
                         folderId: newParentFolderId,
                     },
                 },
