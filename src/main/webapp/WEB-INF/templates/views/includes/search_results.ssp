@@ -42,9 +42,10 @@
 
   #assets .cell .metadata {
     display: grid;
+    background-color: var(--background-tertiary-color);
     width: 100%;
-    padding-top: 4px;
-    padding-bottom: 4px;
+    padding-top: 6px;
+    padding-bottom: 6px;
     grid-auto-rows: auto;
     row-gap: 3px;
     margin-top: 3px;
@@ -83,26 +84,12 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    background-color: #4a4f56;
+    background-color: var(--background-secondary-color);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
     background-size: 22px 22px;
     background-position: center;
     background-repeat: no-repeat;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  }
-
-  @keyframes pop-in {
-    0% {
-      transform: scale(0);
-      opacity: 0;
-    }
-    60% {
-      transform: scale(1.1);
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
   }
 
   #assets .cell .metadata div {
@@ -112,10 +99,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow: none;
+    text-shadow: none;
   }
 
   #assets .cell .metadata span {
     color: var(--faded-font-color);
+    letter-spacing: 1px;
   }
 
   #assets {
@@ -253,7 +242,7 @@
               selected
         #end>Dimensions (Largest)
       </option>
-
+F
     </select>
   </div>
 </div>
@@ -274,6 +263,17 @@
 
   initLazyLoad()
   initInfiniteScroll()
+
+  /**
+   * Reset the selected assets store.
+   * This means any selection is cleared when a new search is performed.
+   * This may be suboptimal if the user wants to select assets across multiple searches,
+   * but this is the simplest approach for now.
+   *
+   * A more advanced approach requires more thinking through. Perhaps a sort of...
+   * scratch pads and selection stashes.
+   */
+  Alpine.store(Const.state.selectedAssets).reset()
 
   window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>

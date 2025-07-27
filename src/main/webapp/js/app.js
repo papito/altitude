@@ -22,6 +22,10 @@ export function initApp() {
         get size() {
             return this.items.size
         },
+        reset() {
+            console.debug("Resetting selected assets store")
+            return this.items.clear()
+        }
     })
 
     Alpine.store(Const.state.currentView, {
@@ -48,6 +52,10 @@ export function initApp() {
     Alpine.start();
 }
 
+/**
+ * Not used for now, but might be useful in the future.
+ * Get us the Alpine proxy object for the given element.
+ */
 export function getAlpineProxyObj(el) {
     // https://github.com/alpinejs/alpine/discussions/2375
     return Alpine.mergeProxies(el._x_dataStack)

@@ -19,7 +19,7 @@ export function initSelectable(id) {
         },
 
         /**
-         * This is technically called from @click.shift, but as of Alpine 3.13.10,
+         * This is technically called from @click.shift, but in Alpine 3.13.10,
          * this does not seem work - the regular click still fires.
          *
          * The shift modifier can be retrieved from the original event, which we do here.
