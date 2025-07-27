@@ -58,38 +58,44 @@
     cursor: pointer;
   }
 
-  #assets .cell .drag-drop.selected .checkmark::before {
+  #assets .cell .drag-drop .checkmark::before {
     content: '';
     position: absolute;
+    border-radius: 50%;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    opacity: 0;
+    transform: scale(0.8);
+    transition: opacity 150ms ease-out,
+    transform 150ms ease-in-out;
+    transition-delay: 300ms;
+  }
+
+  #assets .cell .drag-drop.selected .checkmark::before {
     top: 8px;
     right: 8px;
     width: 20px;
     height: 20px;
-    border-radius: 50%;
     background-color: #4CAF50;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
     background-size: 16px 16px;
-    background-position: center;
-    background-repeat: no-repeat;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    opacity: 1;
+    transform: scale(1);
+    animation: pop-in 150ms ease-out;
   }
 
-
   #assets .cell .drag-drop:not(.selected):hover .checkmark::before {
-      content: '';
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      background-color: #4a4f56;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-      background-size: 22px 22px;
-      background-position: center;
-      background-repeat: no-repeat;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      animation: pop-in 150ms ease-out;
+    top: 12px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    background-color: #4a4f56;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+    background-size: 22px 22px;
+    opacity: 1;
+    transform: scale(1);
+    transition-delay: 300ms;
   }
 
   @keyframes pop-in {

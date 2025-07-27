@@ -37,7 +37,8 @@
 
             <img alt-asset-id="${asset.persistedId}"
                  draggable="false"
-                 hx-trigger="click"
+                 @click.shift.stop="toggle"
+                 hx-trigger="click[!event.shiftKey]"
                  hx-target="#imageDetailModalContent"
                  hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
                 #if (isContinuousScroll)

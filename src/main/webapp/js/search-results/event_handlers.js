@@ -97,4 +97,8 @@ document.body.addEventListener(Const.events.deselectAll, () => {
         asset.deselect()
     })
     selectedAssetsStore.items.clear()
-});
+})
+
+document.body.addEventListener(Const.events.toggleAsset, () => {
+    console.log("toggleAsset event received")
+})

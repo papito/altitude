@@ -19,7 +19,8 @@ export let Const = {
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         viewSettingChanged: "VIEW_SETTING_CHANGED_EVENT",
-        deselectAll: "DESELECT_ALL",
+        deselectAll: "DESELECT_ALL_EVENT",
+        toggleAsset: "TOGGLE_ASSET_EVENT",
     },
 
     /**
