@@ -23,7 +23,6 @@ export function initApp() {
             return this.items.size
         },
         reset() {
-            console.debug("Resetting selected assets store")
             return this.items.clear()
         }
     })

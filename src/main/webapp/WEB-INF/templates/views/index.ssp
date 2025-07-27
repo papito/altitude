@@ -126,7 +126,7 @@
 </main>
 
 <footer class x-data>
-  <% include("includes/batch_selector.ssp") %>
+  <% include("includes/batch_ops.ssp") %>
 </footer>
 
 <script type="module">

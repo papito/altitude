@@ -50,6 +50,14 @@ document.body.addEventListener(Const.events.assetMoved, (event) => {
     })
 })
 
+document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
+    const newParentFolderId = event.detail["folderId"]
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+    console.debug(`Batch moving ${selectedAssetsStore.size} assets to folder ${newParentFolderId}`)
+    selectedAssetsStore.reset()
+})
+
+
 document.body.addEventListener(Const.events.assetTrashed, (event) => {
     function assetTrashedHandler(response) {
         const successMessage = "Asset moved to the trash bin"

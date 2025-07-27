@@ -1,10 +1,10 @@
 <style>
-    #batchSelector {
+    #batchOps {
         display: grid;
         grid-template-columns: 2fr 2fr;
     }
 
-    #batchSelector .container {
+    #batchOps .container {
         display: flex;
         grid-column-start: 2;
         flex-direction: row;
@@ -15,30 +15,32 @@
         box-sizing: border-box;
     }
 
-    #batchSelector .action-button {
+    #batchOps .action-button {
         border-width: 1px;
         border-color: #222121;
         font-weight:  normal;
+        touch-action: none;
     }
 
-    #batchSelector i {
+    #batchOps i {
         margin-right: 10px;
     }
 
-    #batchSelector .batch-mover button {
+    #batchOps .batch-mover button {
         cursor: move;
     }
 
-    #batchSelector .control button:hover {
+    #batchOps .control button:hover {
         border-color: var(--warning-background-color);
     }
 
 </style>
 
-<div id="batchSelector" x-show="!$store.selectedAssets.isEmpty">
+
+<div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
     <div class="container">
         <div class="control batch-mover">
-            <button class="action-button success"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+            <button class="action-button success drag-drop"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
         </div>
         <div class="control">
             <button class="action-button success"><i class="fas fa-tools"></i>Actions</button>
@@ -48,3 +50,5 @@
         </div>
     </div>
 </div>
+
+<script type="module" src="/js/batch-ops/dragon-drop.js"></script>
