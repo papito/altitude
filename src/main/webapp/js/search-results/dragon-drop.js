@@ -39,7 +39,7 @@ interact("#assets .drag-drop").draggable({
 })
 
 interact("#trash").dropzone({
-    accept: "#assets .drag-drop",
+    accept: "#assets .drag-drop, #batchOps .drag-drop",
     overlap: 0.2,
 
     ondropactivate: function (event) {
@@ -71,6 +71,10 @@ interact("#trash").dropzone({
             Const.attributes.assetId,
         )
 
+        // Check if this is a batch mover (i.e. multiple selected assets)
+        // If so, this operation uses state store to get the list of selected assets
+        const isBatchMover = draggableElement.parentNode.classList.contains("batch-mover")
+
         if (trashedFolderId) {
             console.debug(`Trashed folder ${trashedFolderId}`)
             const trashedFolderEvent = new CustomEvent(
@@ -97,6 +101,14 @@ interact("#trash").dropzone({
             )
 
             document.body.dispatchEvent(trashedAssetEvent)
+        }
+
+        if (isBatchMover) {
+            console.debug(`Batch recycling assets`)
+            const batchTrashedEvent = new CustomEvent(
+                Const.events.batchAssetsTrashed,
+            )
+            document.body.dispatchEvent(batchTrashedEvent)
         }
     },
 

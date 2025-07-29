@@ -49,7 +49,7 @@ interact("#rootFolderList .dropzone").dropzone({
         )
 
         // Check if this is a batch mover (i.e. multiple selected assets)
-        // If so, this operation uses Alpine's selectedAssets store to get the list of selected assets
+        // If so, this operation uses state store to get the list of selected assets
         const isBatchMover = draggableElement.parentNode.classList.contains("batch-mover")
 
         // Get the folderId of the dropzone (the new parent folder)

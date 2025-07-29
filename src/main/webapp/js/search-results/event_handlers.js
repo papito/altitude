@@ -5,6 +5,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
+import assetService from "../service/assetService.js"
 
 function removeAssetFromResultSetUtil(event, response, successMessage) {
     const status = response["htmx-internal-data"].xhr.status
@@ -36,67 +37,32 @@ function removeAssetFromResultSetUtil(event, response, successMessage) {
 
 document.body.addEventListener(Const.events.assetMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
-    const newParentFolder = new Folder(newParentFolderId)
-
-    function assetMovedHandler(response) {
-        const successMessage = `Asset moved to folder "${newParentFolder.name()}"`
-        removeAssetFromResultSetUtil(event, response, successMessage)
-    }
-
-    htmx.ajax("PUT", `/htmx/asset/r/${window.ctx.getRepoId()}/move`, {
-        swap: "none",
-        values: { ...event.detail },
-        handler: assetMovedHandler,
-    })
+    assetService.moveAssets({folderId: newParentFolderId, assetIds: [event.detail["assetId"]]})
 })
 
 document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
-    const newParentFolder = new Folder(newParentFolderId)
-
     const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
     console.debug(`Batch moving ${selectedAssetsStore.size} assets to folder ${newParentFolderId}`)
 
-    function assetsMovedHandler(response) {
-        const successMessage = `Asset moved to folder "${newParentFolder.name()}"`
-        // removeAssetFromResultSetUtil(event, response, successMessage)
-    }
-
-    const payload = {
-        assetIds: Array.from(selectedAssetsStore.items.keys()),
-        folderId: newParentFolderId
-    }
-
-    fetch(`/htmx/asset/r/${window.ctx.getRepoId()}/move`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    assetService.moveAssets({
+        folderId: newParentFolderId,
+        assetIds: Array.from(selectedAssetsStore.items.keys())
     })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok ' + response.statusText);
-            }
-            console.log(response.status)
-            const successMessage = `${payload.assetIds.length} assets moved to folder "${newParentFolder.name()}"`
-            showSuccessSnackBar(successMessage)
-            // removeAssetFromResultSetUtil(event, response, successMessage)
-        })
-        .catch((response) => {
-            showErrorSnackBar(`Error moving  assets: ${response.status}, ${response.statusText}`)
-        })}
-)
-
+})
 
 document.body.addEventListener(Const.events.assetTrashed, (event) => {
-    function assetTrashedHandler(response) {
-        const successMessage = "Asset moved to the trash bin"
-        removeAssetFromResultSetUtil(event, response, successMessage)
-    }
+    assetService.recycleAssets({assetIds: [event.detail["assetId"]]})
+})
 
-    htmx.ajax("DELETE", `/htmx/asset/r/${window.ctx.getRepoId()}/move`, {
-        swap: "none",
-        values: { ...event.detail },
-        handler: assetTrashedHandler,
+document.body.addEventListener(Const.events.batchAssetsTrashed, (event) => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+    console.debug(`Batch recycling ${selectedAssetsStore.size} assets`)
+
+    assetService.recycleAssets({
+        assetIds: Array.from(selectedAssetsStore.items.keys())
     })
 })
 
