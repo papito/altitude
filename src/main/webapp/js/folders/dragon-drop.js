@@ -50,7 +50,8 @@ interact("#rootFolderList .dropzone").dropzone({
 
         // Check if this is a batch mover (i.e. multiple selected assets)
         // If so, this operation uses state store to get the list of selected assets
-        const isBatchMover = draggableElement.parentNode.classList.contains("batch-mover")
+        const isBatchMover =
+            draggableElement.parentNode.classList.contains("batch-mover")
 
         // Get the folderId of the dropzone (the new parent folder)
         const newParentFolderId = dropzoneElement.getAttribute(
@@ -84,9 +85,7 @@ interact("#rootFolderList .dropzone").dropzone({
         }
 
         if (isBatchMover) {
-            console.debug(
-                `Batch moving assets to folder ${newParentFolderId}`,
-            )
+            console.debug(`Batch moving assets to folder ${newParentFolderId}`)
             const batchMovedEvent = new CustomEvent(
                 Const.events.batchAssetsMoved,
                 {

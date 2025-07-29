@@ -2,7 +2,7 @@ import { Alpine } from "./lib/alpine.esm.min.js"
 import { Const } from "./constants.js"
 import { context } from "./context.js"
 
-window.Alpine = Alpine;
+window.Alpine = Alpine
 window.ctx = context
 
 import "./alpine/components/index.js"
@@ -24,7 +24,7 @@ export function initApp() {
         },
         reset() {
             return this.items.clear()
-        }
+        },
     })
 
     Alpine.store(Const.state.currentView, {
@@ -44,11 +44,10 @@ export function initApp() {
 
         isTrashBinView() {
             return this.view === Const.views.trashbin
-        }
+        },
     })
 
-
-    Alpine.start();
+    Alpine.start()
 }
 
 /**

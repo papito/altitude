@@ -5,10 +5,9 @@ export function initSelectable(id) {
         id: id,
         selected: false,
 
-        init() {
-        },
+        init() {},
 
-        toggle(){
+        toggle() {
             if (this.selected) {
                 Alpine.store(Const.state.selectedAssets).items.delete(id)
             } else {
@@ -33,12 +32,11 @@ export function initSelectable(id) {
             }
         },
 
-        deselect(){
+        deselect() {
             if (this.selected) {
                 this.selected = false
                 Alpine.store(Const.state.selectedAssets).items.delete(id)
             }
-        }
-
+        },
     }
 }

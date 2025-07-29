@@ -7,24 +7,26 @@ class AssetService {
 
         const payload = {
             assetIds: assetIds,
-            folderId: folderId
+            folderId: folderId,
         }
 
         fetch(`/api/asset/r/${window.ctx.getRepoId()}/move`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
         })
-            .then(response => {
+            .then((response) => {
                 if (!response.ok) {
                     showErrorSnackBar(`Error  + ${response.statusText}`)
                 }
-                const successMessage = `${assetIds.size > 0 ? 'Assets' : 'Asset'} moved to folder "${newParentFolder.name()}"`
+                const successMessage = `${assetIds.size > 0 ? "Assets" : "Asset"} moved to folder "${newParentFolder.name()}"`
                 showSuccessSnackBar(successMessage)
                 // removeAssetFromResultSetUtil(event, response, successMessage)
             })
             .catch((response) => {
-                showErrorSnackBar(`Error moving  asset: ${response.status}, ${response.statusText}`)
+                showErrorSnackBar(
+                    `Error moving  asset: ${response.status}, ${response.statusText}`,
+                )
             })
     }
 
@@ -34,23 +36,25 @@ class AssetService {
         }
 
         fetch(`/api/asset/r/${window.ctx.getRepoId()}/move`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
         })
-            .then(response => {
+            .then((response) => {
                 if (!response.ok) {
                     showErrorSnackBar(`Error  + ${response.statusText}`)
                 }
-                const successMessage = `${assetIds.size > 0 ? 'Assets' : 'Asset'} moved to the trash bin"`
+                const successMessage = `${assetIds.size > 0 ? "Assets" : "Asset"} moved to the trash bin"`
                 showSuccessSnackBar(successMessage)
                 // removeAssetFromResultSetUtil(event, response, successMessage)
             })
             .catch((response) => {
-                showErrorSnackBar(`Error moving  asset: ${response.status}, ${response.statusText}`)
+                showErrorSnackBar(
+                    `Error moving  asset: ${response.status}, ${response.statusText}`,
+                )
             })
     }
 }
 
-const assetService = new AssetService();
-export default assetService;
+const assetService = new AssetService()
+export default assetService

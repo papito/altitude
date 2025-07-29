@@ -2,6 +2,7 @@ package software.altitude.core.controllers.api
 
 import org.scalatra.Route
 import play.api.libs.json.JsObject
+
 import software.altitude.core.Api
 import software.altitude.core.controllers.BaseApiController
 

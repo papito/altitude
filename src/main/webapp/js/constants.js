@@ -1,8 +1,8 @@
 export let Const = {
     views: {
-      repository: "repository",
-      triage: "triage",
-      trashbin: "trashbin",
+        repository: "repository",
+        triage: "triage",
+        trashbin: "trashbin",
     },
     events: {
         folderMoved: "FOLDER_MOVED_EVENT",

@@ -1,5 +1,5 @@
 import { Const } from "../constants.js"
-import { Folder } from "../models/folder.js"
+
 import {
     showErrorSnackBar,
     showSuccessSnackBar,
@@ -37,23 +37,28 @@ function removeAssetFromResultSetUtil(event, response, successMessage) {
 
 document.body.addEventListener(Const.events.assetMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
-    assetService.moveAssets({folderId: newParentFolderId, assetIds: [event.detail["assetId"]]})
+    assetService.moveAssets({
+        folderId: newParentFolderId,
+        assetIds: [event.detail["assetId"]],
+    })
 })
 
 document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
     const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
 
-    console.debug(`Batch moving ${selectedAssetsStore.size} assets to folder ${newParentFolderId}`)
+    console.debug(
+        `Batch moving ${selectedAssetsStore.size} assets to folder ${newParentFolderId}`,
+    )
 
     assetService.moveAssets({
         folderId: newParentFolderId,
-        assetIds: Array.from(selectedAssetsStore.items.keys())
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
     })
 })
 
 document.body.addEventListener(Const.events.assetTrashed, (event) => {
-    assetService.recycleAssets({assetIds: [event.detail["assetId"]]})
+    assetService.recycleAssets({ assetIds: [event.detail["assetId"]] })
 })
 
 document.body.addEventListener(Const.events.batchAssetsTrashed, (event) => {
@@ -62,7 +67,7 @@ document.body.addEventListener(Const.events.batchAssetsTrashed, (event) => {
     console.debug(`Batch recycling ${selectedAssetsStore.size} assets`)
 
     assetService.recycleAssets({
-        assetIds: Array.from(selectedAssetsStore.items.keys())
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
     })
 })
 

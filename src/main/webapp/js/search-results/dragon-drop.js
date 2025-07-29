@@ -73,7 +73,8 @@ interact("#trash").dropzone({
 
         // Check if this is a batch mover (i.e. multiple selected assets)
         // If so, this operation uses state store to get the list of selected assets
-        const isBatchMover = draggableElement.parentNode.classList.contains("batch-mover")
+        const isBatchMover =
+            draggableElement.parentNode.classList.contains("batch-mover")
 
         if (trashedFolderId) {
             console.debug(`Trashed folder ${trashedFolderId}`)

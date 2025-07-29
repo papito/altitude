@@ -1,3 +1,3 @@
-import{ initSelectable} from "./selectable.js"
+import { initSelectable } from "./selectable.js"
 
 window.initSelectable = initSelectable
