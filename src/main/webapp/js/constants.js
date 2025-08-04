@@ -7,6 +7,7 @@ export let Const = {
     events: {
         folderMoved: "FOLDER_MOVED_EVENT",
         batchAssetsMoved: "BATCH_ASSETS_MOVED_EVENT",
+        batchAssetsRecycled: "BATCH_ASSETS_RECYCLED_EVENT",
         folderTrashed: "FOLDER_TRASHED_EVENT",
         assetMoved: "ASSET_MOVED_EVENT",
         assetTrashed: "ASSET_TRASHED_EVENT",

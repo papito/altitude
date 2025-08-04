@@ -1,39 +1,6 @@
 import { Const } from "../constants.js"
 
-import {
-    showErrorSnackBar,
-    showSuccessSnackBar,
-    showWarningSnackBar,
-} from "../common/snackbar.js"
 import assetService from "../service/assetService.js"
-
-function removeAssetFromResultSetUtil(event, response, successMessage) {
-    const status = response["htmx-internal-data"].xhr.status
-    const assetId = event.detail["assetId"]
-
-    if (status === 200) {
-        // Remove the asset from the DOM
-        htmx.find(`#asset-${assetId}`).remove()
-
-        // Decrement the counter in the search control bar
-        const resultsTotalElement = htmx.find("#searchControl .results-total")
-        const currentTotal = parseInt(resultsTotalElement.textContent)
-        resultsTotalElement.textContent = currentTotal - 1
-
-        showSuccessSnackBar(successMessage)
-
-        // reload the navigation bar - it is sensitive to changes, especially if the user is moving assets around
-        htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, {
-            swap: "innerHTML",
-            target: "nav",
-        })
-    } else if (status === 409) {
-        const message = response["htmx-internal-data"].xhr.responseText
-        showWarningSnackBar(message)
-    } else {
-        showErrorSnackBar(`Error performing operation on ${assetId}: ${status}`)
-    }
-}
 
 document.body.addEventListener(Const.events.assetMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
@@ -53,6 +20,18 @@ document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
 
     assetService.moveAssets({
         folderId: newParentFolderId,
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
+    })
+})
+
+document.body.addEventListener(Const.events.batchAssetsRecycled, (event) => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+    console.debug(
+        `Batch recycling ${selectedAssetsStore.size}`,
+    )
+
+    assetService.recycleAssets({
         assetIds: Array.from(selectedAssetsStore.items.keys()),
     })
 })
