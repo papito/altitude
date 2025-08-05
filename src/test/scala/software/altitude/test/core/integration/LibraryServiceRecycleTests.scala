@@ -87,9 +87,13 @@ import scala.concurrent.duration.Duration
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
   }
 
+  /**
+   * Just because an asset is recycled doesn't mean it can't be retrieved
+   */
   test("Get recycled asset") {
     val asset: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))
+    testApp.service.asset.getById(asset.persistedId)
   }
 
   test("Recycle folder assets") {

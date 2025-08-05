@@ -37,13 +37,13 @@ class SearchResultsController extends BaseHtmxController {
      * parameters.
      *
      * For example, if the user is viewing a specific person, the browser URL will contain the person ID, but when the user
-     * selection an option in, say, the sorting widget, the sorting widget is not aware of the other query parameters, so it will
+     * selects an option in, say, the sorting widget, the sorting widget is not aware of the other query parameters, so it will
      * only send the sorting parameter.
      *
-     * Combining the two allows us to get the full set of query parameters.
+     * Combining the two allows us to get the full set of query parameters, both from the URL (current state) and from the HTMX request (new state).
      *
-     * Note that the new HTMX parameters will override the same URL parameters. So when the browser URL says "ascending sort" and
-     * the HTMX request says "descending sort", the HTMX request will take precedence.
+     * Note that the new HTMX parameters will override the same URL parameters. So when the browser URL dictates "ascending sort" and
+     * the HTMX request has "descending sort", the HTMX request will take precedence as the new value
      *
      * When this method is done, it will force the new user-friendly browser URL via a special HTMX header.
      */
@@ -55,12 +55,21 @@ class SearchResultsController extends BaseHtmxController {
     val htmxQueryParams = app.service.urlService.getUrlParams(requestQuery)
     val browserQueryParams = app.service.urlService.getUrlParams(browserQuery)
 
-    val urlParams = browserQueryParams ++ htmxQueryParams
+    val isNewSearch = htmxQueryParams.getOrElse(Api.Field.Search.IS_NEW_SEARCH, "false").toBoolean
+
+    // If this is a new search, we ignore the browser query params and only use the HTMX params
+    val urlParams = if (isNewSearch) {
+      htmxQueryParams
+    } else {
+      browserQueryParams ++ htmxQueryParams
+    }
 
     // Where are we? Triage? Recycle? etc.
     val view = urlParams.getOrElse(Api.Field.Search.VIEW, Const.Search.View.DEFAULT)
+    // result per page
     val rpp = urlParams.getOrElse(Api.Field.Search.RESULTS_PER_PAGE, Const.Search.DEFAULT_RPP.toString).toInt
     val page = urlParams.getOrElse(Api.Field.Search.PAGE, "1").toInt
+
     val queryText = urlParams.get(Api.Field.Search.QUERY_TEXT)
     val sortArg =
       urlParams.getOrElse(Api.Field.Search.SORT, s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
@@ -96,18 +105,18 @@ class SearchResultsController extends BaseHtmxController {
 
     val results = app.service.library.search(q)
 
-    if (page > results.totalPages) {
-      halt(204)
-    }
-
     if (isContinuousScroll) {
+      // no more pages
+      if (page > results.totalPages) {
+        halt(204)
+      }
 
       /** This is a request for another page of search results for continuous scroll. */
       ssp(
         "/htmx/results_grid",
         Api.Field.Search.RESULTS -> results,
         Api.Field.Search.PAGE -> page,
-        Api.Field.Search.IS_CONTINUOUS_SCROLL -> true
+        Api.Field.Search.IS_CONTINUOUS_SCROLL -> true,
       )
     } else {
 
@@ -130,7 +139,7 @@ class SearchResultsController extends BaseHtmxController {
         Api.Field.Search.PAGE -> page,
         Api.Field.Search.PERSON -> maybePerson.orNull,
         Api.Field.Search.VIEW -> view,
-        Api.Field.Search.IS_CONTINUOUS_SCROLL -> false
+        Api.Field.Search.IS_CONTINUOUS_SCROLL -> false,
       )
     }
   }

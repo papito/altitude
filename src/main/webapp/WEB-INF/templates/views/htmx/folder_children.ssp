@@ -43,7 +43,11 @@
             </div>
         </div>
         <span id="folderName-${folder.persistedId}"
-              class="folder-name">${folder.name}</span>
+              class="folder-name"
+              hx-target="#content"
+              hx-trigger="click"
+              hx-swap="innerHTML"
+              hx-get="${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.FOLDER_ID}=${folder.persistedId}&${Api.Field.Search.IS_NEW_SEARCH}=true">${folder.name}</span>
     </div>
 
     <div class="menu"

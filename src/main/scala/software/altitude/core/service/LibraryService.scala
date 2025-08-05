@@ -112,9 +112,11 @@ class LibraryService(val app: Altitude) {
         new SearchQuery(
           text = query.text,
           folderIds = allFolderIds,
-          metadataFilters = query.params,
+          params = query.params,
+          metadataFilters = query.metadataFilters,
           rpp = query.rpp,
-          page = query.page)
+          page = query.page,
+          searchSort = query.searchSort)
       } else {
         query
       }

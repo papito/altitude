@@ -123,8 +123,8 @@ object Api {
       val PERSON_ID = "personId"
       val VIEW = "view"
       val SORT = "sort"
-      val PREVIEW_SIZE = "previewSize"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
+      val IS_NEW_SEARCH = "newSearch"
     }
 
     object SearchSort {
@@ -132,10 +132,6 @@ object Api {
       val FIELD = "field"
 
       val BY_ASSET_CREATED_AT = "created_at"
-      val BY_MEDIA_CREATED_AT = "original_created_at"
-      val BY_FILENAME = "filename"
-      val BY_AREA_SIZE = "area_size"
-      val BY_FILE_SIZE = "size_bytes"
     }
 
     object Setup {
@@ -148,14 +144,6 @@ object Api {
 
     object Sort {
       val DIRECTION = "direction"
-    }
-
-    object Stats {
-      val STATS = "stats"
-    }
-
-    object Trash {
-      val ASSET_IDS = "assetIds"
     }
 
     object Upload {
