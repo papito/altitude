@@ -1,6 +1,3 @@
-import interact from "../lib/@interactjs/interactjs/index.js"
-
-
 import { Const } from "../constants.js"
 import {
     dragged,

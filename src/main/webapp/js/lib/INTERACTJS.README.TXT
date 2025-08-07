@@ -1,2 +1,0 @@
-To get a new version of an NPM module without NPM (as we are not using that)
-download from GitHub and get @interact under "packages".

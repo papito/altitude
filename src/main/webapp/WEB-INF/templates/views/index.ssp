@@ -8,6 +8,7 @@
   <title>ALTITUDE</title>
 
   <% include("includes/header_common.ssp") %>
+  <script src="/js/lib/interact.min.js"></script>
 
   <style>
     body {
