@@ -49,7 +49,8 @@ class AssetService {
                     showErrorSnackBar(`Error  + ${response.statusText}`)
                     return
                 }
-                const successMessage = `${assetIds.size > 0 ? "Assets" : "Asset"} moved to folder "${newParentFolder.name()}"`
+
+                const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} moved to folder "${newParentFolder.name()}"`
                 showSuccessSnackBar(successMessage)
 
                 // reset the selected assets store
