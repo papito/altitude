@@ -9,6 +9,7 @@
 
   <% include("includes/header_common.ssp") %>
   <script src="/js/lib/interact.min.js"></script>
+  <script src="/js/lib/json-enc.js"></script>
 
   <style>
     body {
