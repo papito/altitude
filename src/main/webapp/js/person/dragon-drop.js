@@ -1,4 +1,5 @@
-import interact from "https://cdn.interactjs.io/v1.9.20/interactjs/index.js"
+import interact from "../lib/@interactjs/interactjs/index.js"
+
 import {
     dragged,
     dragMoveListener,
