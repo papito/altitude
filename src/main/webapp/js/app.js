@@ -23,7 +23,7 @@ export function initApp() {
             return this.items.size
         },
         reset() {
-            return this.items.clear()
+            document.body.dispatchEvent(new CustomEvent(Const.events.deselectAll))
         },
     })
 

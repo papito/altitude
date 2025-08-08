@@ -49,7 +49,7 @@
             <button class="action-button warning" @click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
         </div>
         <div class="control">
-            <button class="action-button" @click="$dispatch(window.Const.events.deselectAll)"><i class="fas fa-toggle-off"></i>Deselect All</button>
+            <button class="action-button" @click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
         </div>
     </div>
 </div>
