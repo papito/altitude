@@ -29,7 +29,7 @@
 
         <div alt-asset-id="${asset.persistedId}"
              x-data="initSelectable('${asset.persistedId}')"
-             :class="{ 'drag-drop': true, 'selected': selected }">
+             :class="{ 'drag-drop': true, 'selected': selected, 'masked': dragged }">
 
             <div class="checkmark"
                  @click="toggle">

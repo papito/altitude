@@ -122,6 +122,10 @@
     grid-template-rows: <%= Const.AssetView.PREVIEW_BOX_PIXELS + 10 %>px auto;
   }
 
+  #assets .cell div.selected.masked {
+    opacity: 30%;
+  }
+
   .sort-dropdown {
     padding: 5px 25px 5px 5px;
     background-color: var(--background-secondary-color);

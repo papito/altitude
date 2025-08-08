@@ -4,6 +4,7 @@ export function initSelectable(id) {
     return {
         id: id,
         selected: false,
+        dragged: false,
 
         init() {},
 
@@ -37,6 +38,12 @@ export function initSelectable(id) {
                 this.selected = false
                 Alpine.store(Const.state.selectedAssets).items.delete(id)
             }
+        },
+        drag() {
+            this.dragged = true
+        },
+        drop() {
+            this.dragged = false
         },
     }
 }

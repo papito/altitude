@@ -4,6 +4,7 @@ import {
     setFixedPositionWhileDragging,
 } from "../common/dragon-drop.js"
 import { Const } from "../constants.js"
+import { Alpine } from "../lib/alpine.esm.min.js"
 
 interact("#assets .drag-drop").draggable({
     inertia: true,
@@ -24,16 +25,113 @@ interact("#assets .drag-drop").draggable({
 
             let imgElement = target.querySelector("img")
             if (imgElement) {
-                imgElement.setAttribute(
-                    Const.attributes.originalWidth,
-                    imgElement.clientWidth,
-                )
-                imgElement.style.width = "45px"
+                const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+                const selectedCount = selectedAssetsStore.size
+
+                if (selectedCount > 1) {
+                    selectedAssetsStore.items.forEach((asset) => {
+                        asset.drag()
+                    })
+
+                    // Multiple items selected - show count badge
+                    // Store original width before resizing
+                    imgElement.setAttribute(
+                        Const.attributes.originalWidth,
+                        imgElement.clientWidth,
+                    )
+                    imgElement.style.width = "50px"
+                    imgElement.style.height = "50px"
+                    imgElement.style.objectFit = "cover"
+
+                    // Ensure the target container is positioned relative for absolute positioning of badge
+                    if (target.style.position !== "fixed") {
+                        target.style.position = "relative"
+                    }
+
+                    // Create or update the count badge
+                    let countBadge = target.querySelector(".drag-count-badge")
+                    if (!countBadge) {
+                        countBadge = document.createElement("div")
+                        countBadge.className = "drag-count-badge"
+                        target.appendChild(countBadge)
+                    }
+
+                    // Position the badge to match the image dimensions and position
+                    const imgRect = imgElement.getBoundingClientRect()
+                    const targetRect = target.getBoundingClientRect()
+                    const offsetLeft = imgRect.left - targetRect.left
+                    const offsetTop = imgRect.top - targetRect.top
+
+                    countBadge.style.cssText = `
+                        position: absolute;
+                        top: ${offsetTop}px;
+                        left: ${offsetLeft}px;
+                        width: 50px;
+                        height: 50px;
+                        background: rgba(0, 0, 0, 0.7);
+                        color: white;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 16px;
+                        font-weight: bold;
+                        border-radius: 4px;
+                        pointer-events: none;
+                    `
+                    countBadge.textContent = selectedCount
+                } else {
+                    // Single item - original behavior
+                    imgElement.setAttribute(
+                        Const.attributes.originalWidth,
+                        imgElement.clientWidth,
+                    )
+                    imgElement.style.width = "45px"
+                    // Remove any existing count badge
+                    const countBadge = target.querySelector(".drag-count-badge")
+                    if (countBadge) {
+                        countBadge.remove()
+                    }
+                }
+
                 const yOffset = event.clientY - position.top
                 target.style.top = position.top + yOffset + "px"
             }
         },
-        end: dragged,
+        end: function (event) {
+            // Clean up multiple selection styling before calling the common dragged function
+            const target = event.target
+            const imgElement = target.querySelector("img")
+            const countBadge = target.querySelector(".drag-count-badge")
+
+            if (countBadge) {
+                // Remove the count badge
+                countBadge.remove()
+
+                // Restore original image styling for multiple selections
+                if (imgElement) {
+                    const originalWidth = imgElement.getAttribute(
+                        Const.attributes.originalWidth,
+                    )
+                    if (originalWidth) {
+                        imgElement.style.width = originalWidth + "px"
+                        imgElement.style.height = "auto"
+                        imgElement.style.objectFit = ""
+                        imgElement.removeAttribute(Const.attributes.originalWidth)
+                    }
+                }
+
+                const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+                selectedAssetsStore.items.forEach((asset) => {
+                    asset.drop()
+                })
+
+            }
+
+
+            // Call the common dragged function for final cleanup
+            dragged(event)
+        },
     },
 })
 
