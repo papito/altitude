@@ -11,6 +11,12 @@ import software.altitude.core.models._
 import software.altitude.core.util._
 import software.altitude.test.core.IntegrationTestCore
 
+import org.apache.pekko.stream.scaladsl.Source
+import software.altitude.core.pipeline.PipelineTypes.PipelineContext
+import software.altitude.core.pipeline.sinks.VoidAssetSink
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+
 import scala.language.reflectiveCalls
 import scala.math.Ordered.orderingToOrdered
 
@@ -421,7 +427,29 @@ import scala.math.Ordered.orderingToOrdered
   }
 
   test("Purging assets should remove them from the search index") {
-    // TODO
+    val field = testApp.service.metadata.addField(
+      UserMetadataField(
+        name = "keywords",
+        fieldType = FieldType.KEYWORD))
+
+    val metadata = UserMetadata(Map(field.persistedId -> Set("purge-test")))
+    val assets = List.fill(3)(testContext.persistAsset(metadata = metadata))
+
+    val query = new SearchQuery(text = Some("purge-test"))
+    var results = testApp.service.library.search(query)
+    results.total shouldBe assets.length
+
+    val assetIds = assets.map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(assetIds)
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
+    val pipelineResFuture = testApp.service.purgePipeline.run(source, VoidAssetSink())
+    Await.result(pipelineResFuture, Duration.Inf)
+
+    results = testApp.service.library.search(query)
+    results.total shouldBe 0
+    results.records shouldBe empty
   }
 
 }
