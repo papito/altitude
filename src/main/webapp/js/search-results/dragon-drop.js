@@ -56,16 +56,12 @@ interact("#assets .drag-drop").draggable({
 
                     // Create or update the count badge
                     let countBadge = target.querySelector(".drag-count-badge")
+
                     if (!countBadge) {
                         countBadge = document.createElement("div")
                         countBadge.className = "drag-count-badge"
                         target.appendChild(countBadge)
                     }
-
-                    // this sets the proper CSS
-                    selectedAssetsStore.items.forEach((asset) => {
-                        asset.drag()
-                    })
 
                     // Position the badge to match the image dimensions and position
                     const imgRect = imgElement.getBoundingClientRect()
@@ -77,6 +73,11 @@ interact("#assets .drag-drop").draggable({
                     countBadge.style.left = `${offsetLeft}px`;
                     countBadge.className = "drag-count-badge";
                     countBadge.textContent = selectedCount;
+
+                    // this sets the proper CSS
+                    selectedAssetsStore.items.forEach((asset) => {
+                        asset.drag()
+                    })
                 }
                 const yOffset = event.clientY - position.top
                 target.style.top = position.top + yOffset + "px"
