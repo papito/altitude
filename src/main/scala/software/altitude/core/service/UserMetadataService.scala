@@ -162,7 +162,7 @@ class UserMetadataService(val app: Altitude) {
       }
 
       val newValues = field.fieldType match {
-        // boolean values replaces each other
+        // Boolean values replace existing values.
         case FieldType.BOOL => Set(cleanValue)
         // non-boolean values are appended
         case _ => currentValues + cleanValue
