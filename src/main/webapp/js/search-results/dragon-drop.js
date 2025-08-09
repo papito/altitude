@@ -28,6 +28,20 @@ interact("#assets .drag-drop").draggable({
                 const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
                 const selectedCount = selectedAssetsStore.size
 
+                // Create a clone of the element that maintains original size
+                const clone = target.cloneNode(true)
+                clone.id = "drag-clone"
+                clone.style.position = "fixed"
+                clone.style.zIndex = "1000"
+                clone.style.opacity = "0.8"
+                clone.style.pointerEvents = "none"
+                clone.style.left = `${position.left}px`
+                clone.style.top = `${position.top}px`
+                clone.style.width = `${position.width}px`
+                clone.style.height = `${position.height}px`
+                clone.style.opacity = "30%"
+                document.body.appendChild(clone)
+
                 // Single item - original behavior (but store width for both cases)
                 imgElement.setAttribute(
                     Const.attributes.originalWidth,
@@ -37,11 +51,6 @@ interact("#assets .drag-drop").draggable({
                 imgElement.style.width = "50px"
 
                 if (selectedCount > 1) {
-                    // this sets the proper CSS
-                    selectedAssetsStore.items.forEach((asset) => {
-                        asset.drag()
-                    })
-
                     imgElement.style.height = "50px"
                     imgElement.style.objectFit = "cover"
 
@@ -52,6 +61,11 @@ interact("#assets .drag-drop").draggable({
                         countBadge.className = "drag-count-badge"
                         target.appendChild(countBadge)
                     }
+
+                    // this sets the proper CSS
+                    selectedAssetsStore.items.forEach((asset) => {
+                        asset.drag()
+                    })
 
                     // Position the badge to match the image dimensions and position
                     const imgRect = imgElement.getBoundingClientRect()
@@ -94,6 +108,11 @@ interact("#assets .drag-drop").draggable({
                         imgElement.style.objectFit = ""
                         imgElement.removeAttribute(Const.attributes.originalWidth)
                     }
+                }
+
+                const clone = document.getElementById('drag-clone')
+                if (clone) {
+                    clone.parentNode.removeChild(clone)
                 }
 
                 const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
