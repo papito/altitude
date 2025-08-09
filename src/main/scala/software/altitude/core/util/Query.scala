@@ -70,7 +70,7 @@ class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: In
   if (page < 1) throw new IllegalArgumentException(s"Invalid page value: $page")
 
   if (sort.size > 1) {
-    throw new IllegalArgumentException("Only one sort currently supported'")
+    throw new IllegalArgumentException("Only one sort currently supported")
   }
 
   val isSorted: Boolean = sort.nonEmpty
