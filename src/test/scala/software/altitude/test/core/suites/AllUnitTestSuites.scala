@@ -10,11 +10,13 @@ import software.altitude.test.core.unit.SearchQueryModelTests
 import software.altitude.test.core.unit.SearchSqlQueryTests
 import software.altitude.test.core.unit.SqlQueryTests
 import software.altitude.test.core.unit.UrlServiceTests
+import software.altitude.test.core.unit.DeleteByQueryTests
 
 abstract class AllUnitTestSuites extends Suites (
   new CoreModelTests,
   new FolderModelTests,
   new SqlQueryTests,
+  new DeleteByQueryTests,
   new SearchSqlQueryTests,
   new ApiValidatorTests,
   new DataScrubberTests,

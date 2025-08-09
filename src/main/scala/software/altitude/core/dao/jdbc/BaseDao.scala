@@ -122,7 +122,7 @@ abstract class BaseDao {
     val sql = s"""
       DELETE
         FROM $tableName
-       WHERE ${fieldPlaceholders.mkString(",")}
+       WHERE ${fieldPlaceholders.mkString(" AND ")}
       """
 
     logger.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
