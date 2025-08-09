@@ -30,7 +30,7 @@ class SearchQuery(
   }
 
   if (searchSort.size > 1) {
-    throw new IllegalArgumentException("Only one sort currently supported'")
+    throw new IllegalArgumentException("Only one sort currently supported")
   }
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
