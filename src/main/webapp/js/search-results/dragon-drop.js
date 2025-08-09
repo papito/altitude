@@ -28,25 +28,22 @@ interact("#assets .drag-drop").draggable({
                 const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
                 const selectedCount = selectedAssetsStore.size
 
+                // Single item - original behavior (but store width for both cases)
+                imgElement.setAttribute(
+                    Const.attributes.originalWidth,
+                    imgElement.clientWidth,
+                )
+
+                imgElement.style.width = "50px"
+
                 if (selectedCount > 1) {
+                    // this sets the proper CSS
                     selectedAssetsStore.items.forEach((asset) => {
                         asset.drag()
                     })
 
-                    // Multiple items selected - show count badge
-                    // Store original width before resizing
-                    imgElement.setAttribute(
-                        Const.attributes.originalWidth,
-                        imgElement.clientWidth,
-                    )
-                    imgElement.style.width = "50px"
                     imgElement.style.height = "50px"
                     imgElement.style.objectFit = "cover"
-
-                    // Ensure the target container is positioned relative for absolute positioning of badge
-                    if (target.style.position !== "fixed") {
-                        target.style.position = "relative"
-                    }
 
                     // Create or update the count badge
                     let countBadge = target.querySelector(".drag-count-badge")
@@ -62,37 +59,11 @@ interact("#assets .drag-drop").draggable({
                     const offsetLeft = imgRect.left - targetRect.left
                     const offsetTop = imgRect.top - targetRect.top
 
-                    countBadge.style.cssText = `
-                        position: absolute;
-                        top: ${offsetTop}px;
-                        left: ${offsetLeft}px;
-                        width: 50px;
-                        height: 50px;
-                        background: rgba(0, 0, 0, 0.7);
-                        color: white;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 16px;
-                        font-weight: bold;
-                        border-radius: 4px;
-                        pointer-events: none;
-                    `
-                    countBadge.textContent = selectedCount
-                } else {
-                    // Single item - original behavior
-                    imgElement.setAttribute(
-                        Const.attributes.originalWidth,
-                        imgElement.clientWidth,
-                    )
-                    imgElement.style.width = "45px"
-                    // Remove any existing count badge
-                    const countBadge = target.querySelector(".drag-count-badge")
-                    if (countBadge) {
-                        countBadge.remove()
-                    }
+                    countBadge.style.top = `${offsetTop}px`;
+                    countBadge.style.left = `${offsetLeft}px`;
+                    countBadge.className = "drag-count-badge";
+                    countBadge.textContent = selectedCount;
                 }
-
                 const yOffset = event.clientY - position.top
                 target.style.top = position.top + yOffset + "px"
             }
@@ -103,8 +74,13 @@ interact("#assets .drag-drop").draggable({
             const imgElement = target.querySelector("img")
             const countBadge = target.querySelector(".drag-count-badge")
 
+            // Remove the grid placeholder if it exists
+            const placeholder = target.parentNode.querySelector(".drag-grid-placeholder")
+            if (placeholder) {
+                placeholder.remove()
+            }
+
             if (countBadge) {
-                // Remove the count badge
                 countBadge.remove()
 
                 // Restore original image styling for multiple selections
