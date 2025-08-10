@@ -226,7 +226,12 @@ form input.error, form input.error:focus {
 /* DRAGON DROP */
 /*             */
 
-.can-drop {
+.dragging {
+    padding-left: 4px;
+    padding-right: 4px;
+    border: var(--dnd-draggable-border);
+    border-radius: 4px;
+    background-color: rgba(129, 128, 128, 0.48);
 }
 
 .drop-target {

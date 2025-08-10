@@ -12,11 +12,6 @@ interact("#assets .drag-drop").draggable({
 
     listeners: {
         move: dragMoveListener,
-        /**
-         * This a custom function that, in addition to setting the display as "fixed",
-         * makes the image smaller while dragging, for better UX.
-         * Normally, we would just use the common setFixedPositionWhileDragging() function.
-         */
         start: function (event) {
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
             const selectedCount = selectedAssetsStore.size
@@ -57,6 +52,7 @@ interact("#assets .drag-drop").draggable({
             const yOffset = event.clientY - position.top
             target.style.top = position.top + yOffset + "px"
             target.style.left = (position.left + offsetX) + "px"
+            target.classList.add("dragging")
 
             if (selectedCount > 1) {
                 const checkmark = target.querySelector(".checkmark")
@@ -132,6 +128,8 @@ interact("#assets .drag-drop").draggable({
             selectedAssetsStore.items.forEach((asset) => {
                 asset.drop()
             })
+
+            target.classList.remove("dragging")
 
             // Call the common dragged function for final cleanup
             dragged(event)
