@@ -227,11 +227,6 @@ form input.error, form input.error:focus {
 /*             */
 
 .can-drop {
-    padding-left: 4px;
-    padding-right: 4px;
-    border: var(--dnd-draggable-border);
-    border-radius: 4px;
-    background-color: rgba(129, 128, 128, 0.48);
 }
 
 .drop-target {
@@ -248,11 +243,8 @@ form input.error, form input.error:focus {
 }
 
 .drag-count-badge {
-    position: absolute;
-    width: 50px;
-    height: 50px;
-    color: white;
     display: flex;
+    position: absolute;
     align-items: center;
     justify-content: center;
     font-size: 16px;

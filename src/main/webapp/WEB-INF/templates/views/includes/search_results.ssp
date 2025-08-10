@@ -75,23 +75,6 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
 
-
-  #assets .cell .drag-drop:not(.selected):hover .checkmark::before {
-    content: '';
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background-color: var(--background-secondary-color);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-    background-size: 22px 22px;
-    background-position: center;
-    background-repeat: no-repeat;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  }
-
   #assets .cell .metadata div {
     display: none;
     padding: 0 5px 0 5px;

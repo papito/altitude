@@ -18,76 +18,76 @@ interact("#assets .drag-drop").draggable({
          * Normally, we would just use the common setFixedPositionWhileDragging() function.
          */
         start: function (event) {
+            const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+            const selectedCount = selectedAssetsStore.size
+
             setFixedPositionWhileDragging(event)
 
             let target = event.target
             let position = target.getBoundingClientRect()
+            const imgElement = target.querySelector("img")
 
-            let imgElement = target.querySelector("img")
-            if (imgElement) {
-                const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
-                const selectedCount = selectedAssetsStore.size
+            // Create a clone of the element that maintains original size
+            const clone = target.cloneNode(true)
+            clone.id = "dragCloneStandIn"
+            clone.style.position = "fixed"
+            clone.style.pointerEvents = "none"
+            clone.style.left = `${position.left}px`
+            clone.style.top = `${position.top}px`
+            clone.style.width = `${position.width}px`
+            clone.style.height = `${position.height}px`
+            clone.style.opacity = "30%"
+            document.body.appendChild(clone)
 
-                // Create a clone of the element that maintains original size
-                const clone = target.cloneNode(true)
-                clone.id = "drag-clone"
-                clone.style.position = "fixed"
-                clone.style.zIndex = "1000"
-                clone.style.opacity = "0.8"
-                clone.style.pointerEvents = "none"
-                clone.style.left = `${position.left}px`
-                clone.style.top = `${position.top}px`
-                clone.style.width = `${position.width}px`
-                clone.style.height = `${position.height}px`
-                clone.style.opacity = "30%"
-                document.body.appendChild(clone)
+            // remember the original width so we can restore it later
+            imgElement.setAttribute(
+                Const.attributes.originalWidth,
+                imgElement.clientWidth,
+            )
 
-                // Single item - original behavior (but store width for both cases)
-                imgElement.setAttribute(
-                    Const.attributes.originalWidth,
-                    imgElement.clientWidth,
-                )
+            imgElement.style.width = "45px"
 
-                imgElement.style.width = "50px"
+            if (selectedCount > 1) {
+                const checkmark = target.querySelector(".checkmark")
 
-                if (selectedCount > 1) {
-                    imgElement.style.height = "50px"
-                    imgElement.style.objectFit = "cover"
-
-                    // Create or update the count badge
-                    let countBadge = target.querySelector(".drag-count-badge")
-
-                    if (!countBadge) {
-                        countBadge = document.createElement("div")
-                        countBadge.className = "drag-count-badge"
-                        target.appendChild(countBadge)
-                    }
-
-                    // Position the badge to match the image dimensions and position
-                    const imgRect = imgElement.getBoundingClientRect()
-                    const targetRect = target.getBoundingClientRect()
-                    const offsetLeft = imgRect.left - targetRect.left
-                    const offsetTop = imgRect.top - targetRect.top
-
-                    countBadge.style.top = `${offsetTop}px`;
-                    countBadge.style.left = `${offsetLeft}px`;
-                    countBadge.className = "drag-count-badge";
-                    countBadge.textContent = selectedCount;
-
-                    // this sets the proper CSS
-                    selectedAssetsStore.items.forEach((asset) => {
-                        asset.drag()
-                    })
+                if (checkmark) {
+                    checkmark.style.display = "none"
                 }
-                const yOffset = event.clientY - position.top
-                target.style.top = position.top + yOffset + "px"
+
+                // Create or update the count badge
+                const countBadge = document.createElement("div")
+                target.appendChild(countBadge)
+
+                // Position the badge to match the image dimensions and position
+                const imgRect = imgElement.getBoundingClientRect()
+                const targetRect = target.getBoundingClientRect()
+                const offsetLeft = imgRect.left - targetRect.left
+                const offsetTop = imgRect.top - targetRect.top
+
+                countBadge.style.top = `${offsetTop}px`;
+                countBadge.style.left = `${offsetLeft}px`;
+                countBadge.style.width = `${imgRect.width}px`;
+                countBadge.style.height = `${imgRect.height}px`;
+                countBadge.className = "drag-count-badge";
+                countBadge.textContent = selectedCount;
+
+                console.dir(countBadge)
+                // this sets the proper CSS
+                selectedAssetsStore.items.forEach((asset) => {
+                    asset.drag()
+                })
+
+                target.style.opacity = "1"
+                imgElement.style.opacity = "40%"
             }
+
+            const yOffset = event.clientY - position.top
+            target.style.top = position.top + yOffset + "px"
         },
         end: function (event) {
             // Clean up multiple selection styling before calling the common dragged function
             const target = event.target
             const imgElement = target.querySelector("img")
-            const countBadge = target.querySelector(".drag-count-badge")
 
             // Remove the grid placeholder if it exists
             const placeholder = target.parentNode.querySelector(".drag-grid-placeholder")
@@ -95,35 +95,34 @@ interact("#assets .drag-drop").draggable({
                 placeholder.remove()
             }
 
+            const countBadge = target.querySelector(".drag-count-badge")
             if (countBadge) {
                 countBadge.remove()
-
-                // Restore original image styling for multiple selections
-                if (imgElement) {
-                    const originalWidth = imgElement.getAttribute(
-                        Const.attributes.originalWidth,
-                    )
-                    if (originalWidth) {
-                        imgElement.style.width = originalWidth + "px"
-                        imgElement.style.height = "auto"
-                        imgElement.style.objectFit = ""
-                        imgElement.removeAttribute(Const.attributes.originalWidth)
-                    }
-                }
-
-                const clone = document.getElementById('drag-clone')
-                if (clone) {
-                    clone.parentNode.removeChild(clone)
-                }
-
-                const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
-
-                selectedAssetsStore.items.forEach((asset) => {
-                    asset.drop()
-                })
-
             }
 
+            const clone = document.getElementById('dragCloneStandIn')
+            if (clone) {
+                clone.parentNode.removeChild(clone)
+            }
+
+            const originalWidth = imgElement.getAttribute(
+                Const.attributes.originalWidth,
+            )
+
+            imgElement.style.width = originalWidth + "px"
+            imgElement.style.height = "auto"
+            imgElement.removeAttribute(Const.attributes.originalWidth)
+
+            const checkmark = target.querySelector(".checkmark")
+            if (checkmark) {
+                checkmark.style.display = "block"
+            }
+
+            const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+            selectedAssetsStore.items.forEach((asset) => {
+                asset.drop()
+            })
 
             // Call the common dragged function for final cleanup
             dragged(event)
