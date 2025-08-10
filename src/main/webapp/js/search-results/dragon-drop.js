@@ -40,12 +40,23 @@ interact("#assets .drag-drop").draggable({
             document.body.appendChild(clone)
 
             // remember the original width so we can restore it later
+            const originalWidth = imgElement.clientWidth
             imgElement.setAttribute(
                 Const.attributes.originalWidth,
-                imgElement.clientWidth,
+                originalWidth,
             )
 
-            imgElement.style.width = "45px"
+            // Calculate the offset needed to center the resized image at cursor
+            const newWidth = 45
+            const widthDifference = originalWidth - newWidth
+            const offsetX = widthDifference / 2
+
+            imgElement.style.width = newWidth + "px"
+
+            // Adjust the target position to center the resized image at cursor
+            const yOffset = event.clientY - position.top
+            target.style.top = position.top + yOffset + "px"
+            target.style.left = (position.left + offsetX) + "px"
 
             if (selectedCount > 1) {
                 const checkmark = target.querySelector(".checkmark")
@@ -80,14 +91,12 @@ interact("#assets .drag-drop").draggable({
                 target.style.opacity = "1"
                 imgElement.style.opacity = "40%"
             }
-
-            const yOffset = event.clientY - position.top
-            target.style.top = position.top + yOffset + "px"
-        },
-        end: function (event) {
+        },        end: function (event) {
             // Clean up multiple selection styling before calling the common dragged function
             const target = event.target
             const imgElement = target.querySelector("img")
+
+            imgElement.style.opacity = "1"
 
             // Remove the grid placeholder if it exists
             const placeholder = target.parentNode.querySelector(".drag-grid-placeholder")
