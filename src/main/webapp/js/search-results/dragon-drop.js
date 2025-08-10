@@ -22,7 +22,6 @@ interact("#assets .drag-drop").draggable({
             let position = target.getBoundingClientRect()
             const imgElement = target.querySelector("img")
 
-            // Create a clone of the element that maintains original size
             const clone = target.cloneNode(true)
             clone.id = "dragCloneStandIn"
             clone.style.position = "fixed"
@@ -189,7 +188,7 @@ interact("#trash").dropzone({
             document.body.dispatchEvent(trashedFolderEvent)
         }
 
-        if (trashedAssetId) {
+        if (trashedAssetId && Alpine.store(Const.state.selectedAssets).isEmpty) {
             console.debug(`Trashed asset ${trashedAssetId}`)
             const trashedAssetEvent = new CustomEvent(
                 Const.events.assetTrashed,
@@ -203,7 +202,7 @@ interact("#trash").dropzone({
             document.body.dispatchEvent(trashedAssetEvent)
         }
 
-        if (isBatchMover) {
+        if (isBatchMover || (trashedAssetId && !Alpine.store(Const.state.selectedAssets).isEmpty)) {
             console.debug(`Batch recycling assets`)
             const batchTrashedEvent = new CustomEvent(
                 Const.events.batchAssetsTrashed,

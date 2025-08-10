@@ -71,7 +71,7 @@ interact("#rootFolderList .dropzone").dropzone({
             document.body.dispatchEvent(movedFolderEvent)
         }
 
-        if (movedAssetId) {
+        if (movedAssetId && Alpine.store(Const.state.selectedAssets).isEmpty) {
             console.debug(`Moved asset ${movedAssetId} to ${newParentFolderId}`)
             const movedAssetEvent = new CustomEvent(Const.events.assetMoved, {
                 detail: {
@@ -83,7 +83,10 @@ interact("#rootFolderList .dropzone").dropzone({
             document.body.dispatchEvent(movedAssetEvent)
         }
 
-        if (isBatchMover) {
+        /**
+         * If this is a batch mover, or if the moved asset is part of a selection of multiple assets
+         */
+        if (isBatchMover || (movedAssetId && !Alpine.store(Const.state.selectedAssets).isEmpty)) {
             console.debug(`Batch moving assets to folder ${newParentFolderId}`)
             const batchMovedEvent = new CustomEvent(
                 Const.events.batchAssetsMoved,
