@@ -30,7 +30,7 @@ import scala.concurrent.duration.Duration
     // recycle some assets
     val recycleCount = 3
     val recycledAssets = assets.take(recycleCount) map { asset =>
-      testApp.service.library.recycleAsset(asset.persistedId)
+      testApp.service.library.recycleAssets(Set(asset.persistedId))
       asset
     }
 
@@ -224,7 +224,7 @@ import scala.concurrent.duration.Duration
     // recycle some assets
     val recycleCount = 2
     val recycledAssets = assetsWithData.take(recycleCount) map {assetWithData =>
-      testApp.service.library.recycleAsset(assetWithData.asset.persistedId)
+      testApp.service.library.recycleAssets(Set(assetWithData.asset.persistedId))
       assetWithData.asset
     }
 

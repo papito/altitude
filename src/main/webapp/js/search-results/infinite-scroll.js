@@ -1,5 +1,4 @@
 import { Const } from "../constants.js"
-import { context } from "../context.js"
 
 /**
  * INFINITE SCROLL
@@ -115,18 +114,24 @@ export function initLazyLoad() {
 }
 
 function showOrHideAssetGridMetadata(el) {
-    const showFields = context.getGridMetadataFields()
+    const showFields = window.ctx.getGridMetadataFields()
 
     const toShowFieldsSelectorStr = Array.from(showFields)
         .map((fieldName) => ".metadata > div." + fieldName)
         .join(", ")
 
+    let metadataDisplay = "gird"
+
     if (toShowFieldsSelectorStr.length) {
         el.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
             div.style.display = "block"
         })
-        el.querySelector(".metadata").style.display = "grid"
     } else {
-        el.querySelector(".metadata").style.display = "none"
+        metadataDisplay = "none"
+    }
+
+    const metadata = el.querySelector(".metadata")
+    if (metadata) {
+        metadata.style.display = metadataDisplay
     }
 }

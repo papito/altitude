@@ -57,6 +57,7 @@ class SearchDao(override val config: Config) extends software.altitude.core.dao.
     val sqlQueryBuilder = new AssetSearchQueryBuilder(sqlColsForSelect = columnsForSelect)
 
     val sqlQuery = sqlQueryBuilder.buildSelectSql(query = searchQuery)
+    // println(s"Search SQL: ${sqlQuery.sqlAsString} with values: ${sqlQuery.bindValues.mkString(",")}")
     val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
     val total: Int = count(recs)
 

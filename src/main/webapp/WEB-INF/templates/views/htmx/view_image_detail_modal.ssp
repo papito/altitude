@@ -11,20 +11,20 @@
     }
 
     #imageDetailView img {
-        max-width:100%;
-        height:auto
+        max-width: calc(100vw - 10px);
+        max-height: calc(100vh - 40px);
+        width: auto;
+        height: auto;
+        object-fit: contain;
     }
 </style>
 
 <div id="imageDetailView">
     <% var imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }" %>
-    <img id="imageDetailView"
-         src="${imgUrl}"
-         alt="${ asset.fileName }">
+    <img src="${imgUrl}" alt="${ asset.fileName }">
 
     <script type="module">
         import { showAssetDetailModal } from "../../../../js/common/modal.js"
-
         showAssetDetailModal({ title: "<%= asset.fileName %>" })
     </script>
 </div>

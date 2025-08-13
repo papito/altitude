@@ -26,6 +26,8 @@
     --control-vertical-space: 15px;
     --control-horizontal-space: 25px;
 
+    --footer-height: 44px;
+
     /* font colors */
     --faded-font-color: #b0acac;
     --success-font-color: #82da5f;
@@ -67,19 +69,20 @@ body {
     display: grid;
     grid-template-rows: [header]  auto
                         [content] 1fr
-                        [footer]  40px;
+                        [footer]  var(--footer-height);
     min-height: 100vh;
 }
 
 footer {
     padding: 5px;
-    background: var(--background-secondary-color);
     color: #fff;
     bottom: 0;
     display: grid;
     font-size: .9em;
     align-items: center;
     background: var(--background-secondary-color);
+    border-top: var(--navbar-border);
+    box-shadow: var(--box-shadow);
 }
 
 /*         */
@@ -127,7 +130,7 @@ form input.error, form input.error:focus {
 /*         */
 
 .action-button {
-    background: var(--success-background-color);
+    background: rgb(76, 75, 75);
     font-weight: bold;
     color: white;
     border: 2px solid #bdbbbb;
@@ -138,8 +141,13 @@ form input.error, form input.error:focus {
     text-shadow: rgba(72, 70, 70, 0.55) 4px 4px 4px;
     font-size: 1em;
 }
+
 .action-button:hover, .action-button:focus {
     box-shadow: var(--box-shadow);
+}
+
+.action-button.success {
+    background: var(--success-background-color);
 }
 
 .action-button.warning {
@@ -218,7 +226,7 @@ form input.error, form input.error:focus {
 /* DRAGON DROP */
 /*             */
 
-.can-drop {
+.dragging {
     padding-left: 4px;
     padding-right: 4px;
     border: var(--dnd-draggable-border);
@@ -239,6 +247,16 @@ form input.error, form input.error:focus {
     cursor: move;
 }
 
+.drag-count-badge {
+    display: flex;
+    position: absolute;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 4px;
+    pointer-events: none;
+}
 
 /*       */
 /* MODAL */

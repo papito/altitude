@@ -64,6 +64,8 @@ abstract class BaseDao {
 
   protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)
 
+  protected val forUpdate: String
+
   def add(jsonIn: JsObject): JsObject = throw new NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): JsObject = {
@@ -164,7 +166,7 @@ abstract class BaseDao {
     res.map(_.asScala.toMap[String, AnyRef])
   }
 
-  protected def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] = {
+  def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] = {
     executeAndGetMany(sql, values)
   }
 

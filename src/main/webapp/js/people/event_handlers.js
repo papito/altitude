@@ -1,5 +1,4 @@
 import { Const } from "../constants.js"
-import { context } from "../context.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
 
 document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
@@ -14,7 +13,7 @@ document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
         return
     }
 
-    htmx.ajax("GET", `/htmx/people/r/${context.getRepoId()}/modals/merge`, {
+    htmx.ajax("GET", `/htmx/people/r/${window.ctx.getRepoId()}/modals/merge`, {
         swap: "innerHTML",
         target: "#modalContent",
         values: { ...event.detail },
@@ -50,7 +49,7 @@ document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {
     const faceId = event.detail["faceId"]
     console.debug(`Person ${personId} updated with face ${faceId}`)
     htmx.find("#person-" + personId + " .image img").src =
-        `/content/r/${context.getRepoId()}/face/${faceId}`
+        `/content/r/${window.ctx.getRepoId()}/face/${faceId}`
 })
 
 document.body.addEventListener(Const.events.personMarkedAsBadMatch, (event) => {

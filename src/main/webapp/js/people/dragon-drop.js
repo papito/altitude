@@ -1,5 +1,3 @@
-import interact from "https://cdn.interactjs.io/v1.9.20/interactjs/index.js"
-
 import { Const } from "../constants.js"
 import {
     dragged,

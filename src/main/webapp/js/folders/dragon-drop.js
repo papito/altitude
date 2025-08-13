@@ -1,4 +1,3 @@
-import interact from "https://cdn.interactjs.io/v1.9.20/interactjs/index.js"
 import { dragged, dragMoveListener } from "../common/dragon-drop.js"
 import { Const } from "../constants.js"
 
@@ -14,7 +13,7 @@ interact("#rootFolderList .drag-drop").draggable({
 
 // enable a draggable to be dropped into this
 interact("#rootFolderList .dropzone").dropzone({
-    accept: "#rootFolderList .drag-drop, #assets .drag-drop",
+    accept: "#rootFolderList .drag-drop, #assets .drag-drop, #batchOps .drag-drop",
     overlap: 0.2,
 
     ondropactivate: function (event) {
@@ -39,12 +38,21 @@ interact("#rootFolderList .dropzone").dropzone({
         dropzoneElement.classList.remove("drop-target")
         draggableElement.classList.remove("can-drop")
 
+        // If available, get the folderId of the moved element
         const movedFolderId = draggableElement.getAttribute(
             Const.attributes.folderId,
         )
+        // If available, get the assetId of the moved element
         const movedAssetId = draggableElement.getAttribute(
             Const.attributes.assetId,
         )
+
+        // Check if this is a batch mover (i.e. multiple selected assets)
+        // If so, this operation uses state store to get the list of selected assets
+        const isBatchMover =
+            draggableElement.parentNode.classList.contains("batch-mover")
+
+        // Get the folderId of the dropzone (the new parent folder)
         const newParentFolderId = dropzoneElement.getAttribute(
             Const.attributes.folderId,
         )
@@ -73,6 +81,23 @@ interact("#rootFolderList .dropzone").dropzone({
             })
 
             document.body.dispatchEvent(movedAssetEvent)
+        }
+
+        /**
+         * If this is a batch mover, or if the moved asset is part of a selection of multiple assets
+         */
+        if (isBatchMover) {
+            console.debug(`Batch moving assets to folder ${newParentFolderId}`)
+            const batchMovedEvent = new CustomEvent(
+                Const.events.batchAssetsMoved,
+                {
+                    detail: {
+                        folderId: newParentFolderId,
+                    },
+                },
+            )
+
+            document.body.dispatchEvent(batchMovedEvent)
         }
     },
 

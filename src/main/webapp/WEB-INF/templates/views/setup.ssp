@@ -4,6 +4,7 @@
     <title>ALTITUDE SETUP</title>
 
     <% include("includes/header_common.ssp") %>
+    <script src="/js/lib/json-enc.js"></script>
 
     <style>
         body {

@@ -79,6 +79,10 @@
         font-size: .9em;
     }
 
+    #rootFolderList .folder-name {
+        cursor: pointer;
+    }
+
 </style>
 
 <div id="rootFolderList" class="folder-list">
@@ -103,7 +107,12 @@
                    hx-vals='{"folderId": "${rootFolder.persistedId}"}'
                    hx-trigger="click">&#10247;</a>
             </div>
-            <span id="folderName-${rootFolder.persistedId}" class="folder-name">/ Root</span>
+            <span id="folderName-${rootFolder.persistedId}"
+                  class="folder-name"
+                  hx-target="#content"
+                  hx-trigger="click"
+                  hx-swap="innerHTML"
+                  hx-get="${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.FOLDER_ID}=${rootFolder.persistedId}&${Api.Field.Search.IS_NEW_SEARCH}=true">/ Root</span>
         </div>
 
         <div class="menu"
@@ -126,11 +135,10 @@
 
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
-    import { context } from "../../../../js/context.js"
     import { setupDragAndDrop } from "../../../../js/folders/htmx_event_handlers.js"
 
     selectTab("explorer", "foldersTab")
-    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+    window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 
     setupDragAndDrop()
 </script>

@@ -27,12 +27,18 @@
         <div class="cell" id="asset-${asset.persistedId}">
     #end
 
-        <div class="drag-drop"
-             alt-asset-id="${asset.persistedId}">
+        <div alt-asset-id="${asset.persistedId}"
+             x-data="initSelectable('${asset.persistedId}')"
+             :class="{ 'drag-drop': true, 'selected': selected, 'masked': dragged }">
+
+            <div class="checkmark"
+                 @click="toggle">
+            </div>
 
             <img alt-asset-id="${asset.persistedId}"
                  draggable="false"
-                 hx-trigger="click"
+                 @click.shift="toggleViaAsset($event)"
+                 hx-trigger="click[!event.shiftKey]"
                  hx-target="#imageDetailModalContent"
                  hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
                 #if (isContinuousScroll)

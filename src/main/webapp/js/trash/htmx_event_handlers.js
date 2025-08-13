@@ -1,5 +1,4 @@
 import { showErrorSnackBar } from "../common/snackbar.js"
-import { context } from "../context.js"
 
 htmx.find("#purgeRecycleBin").addEventListener(
     "htmx:afterRequest",
@@ -15,7 +14,7 @@ htmx.find("#purgeRecycleBin").addEventListener(
             return
         }
 
-        htmx.ajax("GET", `/htmx/nav/r/${context.getRepoId()}`, {
+        htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, {
             swap: "innerHTML",
             target: "nav",
         })

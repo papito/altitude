@@ -99,7 +99,7 @@ import scala.concurrent.duration.Duration
   test("Pipeline should complete on unsupported media type errors") {
     val badMediaType = AssetType("bad", "type", "mime")
     val assetWithBadMediaType = testContext.makeAsset().copy(assetType = badMediaType)
-    val assetWithData = testContext.makeAssetWithData().copy(asset = assetWithBadMediaType)
+    val assetWithData = testContext.makeAssetWithData(asset=Some(assetWithBadMediaType))
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source.single(assetWithData, pipelineContext)
