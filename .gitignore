@@ -5,6 +5,8 @@ application.conf
 application-dev.conf
 
 node_modules
+out
+.bsp
 
 *.log
 log
