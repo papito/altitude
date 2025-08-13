@@ -8,13 +8,13 @@
   <title>ALTITUDE</title>
 
   <% include("includes/header_common.ssp") %>
-
-  <script type="module" src="/js/index/init.js"></script>
+  <script src="/js/lib/interact.min.js"></script>
+  <script src="/js/lib/json-enc.js"></script>
 
   <style>
     body {
       display: grid;
-      grid-template-rows: auto 1fr 40px;
+      grid-template-rows: auto 1fr var(--footer-height);
       height: 100vh;
       margin: 0;
     }
@@ -32,15 +32,9 @@
     }
 
     #explorerViews {
-      box-shadow: var(--box-shadow);
       text-shadow: rgba(0,0,0,0.75) 0 1px;
     }
 
-    #infoPanel {
-      border-top: 1px solid var(--panel-border-color);
-      box-shadow: var(--box-shadow);
-      text-shadow: rgba(0,0,0,0.75) 0 1px;
-    }
 
     #content {
       border-left: 1px solid var(--panel-border-color);
@@ -91,7 +85,7 @@
   <% include("includes/html_common.ssp") %>
 
   <div id="explorer" class="split content split-horizontal">
-    <div id="explorerViews" class="split content">
+    <div id="explorerViews" class="content">
       <tab-container>
         <div role="tablist">
           <button type="button" id="foldersTab" role="tab"
@@ -127,29 +121,74 @@
 
       </tab-container>
     </div>
-
-    <div id="infoPanel" class="split content">
-    </div>
   </div>
 
   <div id="content" class="split content split-horizontal">
   </div>
 </main>
 
-<footer>
-  <%= RequestContext.account.value.get.name %>
+<footer class x-data>
+  <% include("includes/batch_ops.ssp") %>
 </footer>
 
 <script type="module">
-  import { context } from "../../../js/context.js"
-  import { init } from "../../../js/index/init.js"
+  "use strict"
 
-  context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+/**
+ * @see: https://github.com/nathancahill/split/
+ */
+import Split from "../../../js/lib/split.es.js"
+  import { highlightNav } from "../../../js/common/navigation.js"
+  import { Const } from "../../../js/constants.js"
+  import { initApp } from "../../../js/app.js"
 
   function loadView() {
-      init()
+      initApp()
 
-      // if there is no fragment, we default to folder views
+      window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+
+      /**
+       * Highlight the correct tab
+       */
+      const urlParams = new URLSearchParams(window.location.search)
+      const view = urlParams.get("view") || "repository"
+      highlightNav(view)
+      Alpine.store(Const.state.currentView).setViewName(view)
+
+      /**
+       * This switches the background color of the content area (triage, trash, etc.)
+       */
+      document.getElementById("content").classList.add(view)
+
+      /**
+       * Load which fields to show in the grid
+       */
+      window.ctx.loadMetadataFieldViewSettingsFromStore()
+
+      /**
+       * Load user UI config from local storage (specific to browser)
+       */
+      const savedHorizontalSplitSizes = localStorage.getItem(
+          Const.localStore.horizontalSplitSizes,
+      )
+      let horizontalSplitSizes = [25, 75]
+
+      if (savedHorizontalSplitSizes) {
+          horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
+      }
+
+      Split(["#explorer", "#content"], {
+          sizes: horizontalSplitSizes,
+          minSize: [100, 300],
+          onDragEnd: function (horizontalSplitSizes) {
+              localStorage.setItem(
+                  Const.localStore.horizontalSplitSizes,
+                  JSON.stringify(horizontalSplitSizes),
+              )
+          },
+      })
+
+      // if there is no URL fragment, we default to folder views
       const fragment = window.location.hash || "#folders"
 
       const tabLink = document.querySelector('a[href="' + fragment + '"]')
@@ -158,9 +197,12 @@
           tabLink.click()
       }
 
+      /**
+       * Perform search on load - default one or the one specified in the URL
+       */
       let searchUrl =
           "/htmx/search/r/" +
-          context.getRepoId() +
+          window.ctx.getRepoId() +
           (window.location.search || "") +
           fragment
 

@@ -1,6 +1,4 @@
 package software.altitude.test.core.integration
-
-import org.apache.commons.io.FileUtils
 import software.altitude.core.Altitude
 import software.altitude.core.models.AccountType
 import software.altitude.core.models.Asset
@@ -18,8 +16,11 @@ import software.altitude.core.{Const => C}
 import software.altitude.test.IntegrationTestUtil.generateRandomImagBytesBgr
 import software.altitude.test.IntegrationTestUtil.generateRandomImagBytesGray
 
-import java.io.File
 import scala.util.Random
+
+object TestContext {
+  val ASSET_SIZE = 652084
+}
 
 class TestContext(val testApp: Altitude) {
   var users: List[User] = List()
@@ -84,10 +85,11 @@ class TestContext(val testApp: Altitude) {
 
   def makeAsset(repository: Option[Repository] = None,
                 filename: String = Util.randomStr(50),
-                resourcePath: Option[String] = None,
                 user: Option[User] = None,
                 folder: Option[Folder] = None,
-                userMetadata: UserMetadata = UserMetadata()): Asset ={
+                userMetadata: UserMetadata = UserMetadata(),
+                isTriaged: Boolean = false,
+                isRecycled: Boolean = false): Asset ={
     if (repository.isEmpty && repositories.isEmpty) {
       throw new RuntimeException("Cannot make an asset without a repository previously created")
     }
@@ -102,41 +104,32 @@ class TestContext(val testApp: Altitude) {
 
     val currentUser = user.getOrElse(this.user)
 
-    val path = getClass.getResource(resourcePath.getOrElse("/import/images/test_asset.png")).getPath
-    val file  = new File(path)
-    val data = FileUtils.readFileToByteArray(file)
-
     Asset(
       userId = currentUser.persistedId,
       folderId = folderId,
       assetType = new AssetType(
-        mediaType = "x-none",
-        mediaSubtype = "unknown",
-        mime = "x-none/unknown"),
+        mediaType = "image",
+        mediaSubtype = "png",
+        mime = "image/png"),
       fileName = filename,
       checksum = Random.nextInt(500000),
       userMetadata = userMetadata,
-      sizeBytes = data.length)
+      sizeBytes = TestContext.ASSET_SIZE,
+      isTriaged = isTriaged,
+      isRecycled = isRecycled)
   }
 
-  def makeAssetWithData(repository: Option[Repository] = None,
-                        filename: String = Util.randomStr(50),
-                        resourcePath: Option[String] = None,
-                        user: Option[User] = None,
-                        folder: Option[Folder] = None,
-                        metadata: UserMetadata = UserMetadata()): AssetWithData = {
+  def makeAssetWithData(asset: Option[Asset] = None): AssetWithData = AssetWithData(
+      asset = asset.getOrElse(makeAsset()),
+      data = generateRandomImagBytesBgr(dimensions = 150)
+  )
 
-    val asset = makeAsset(repository, filename, resourcePath, user, folder, metadata)
-    val data = Random.nextBytes(100)
-    AssetWithData(asset, data)
-  }
-
-  def persistAsset(asset: Option[Asset] = None,
-                   repository: Option[Repository] = None,
-                   resourcePath: Option[String] = None,
+  def persistAsset(repository: Option[Repository] = None,
                    user: Option[User] = None,
                    folder: Option[Folder] = None,
-                   metadata: UserMetadata = UserMetadata()): Asset = {
+                   metadata: UserMetadata = UserMetadata(),
+                   isTriaged: Boolean = false,
+                   isRecycled: Boolean = false): Asset = {
 
     if (repository.isEmpty && repositories.length > 1) {
       throw new RuntimeException(
@@ -147,17 +140,17 @@ class TestContext(val testApp: Altitude) {
       repositories.headOption.getOrElse(
         persistRepository(user=user)))
 
-    val assetModel = asset.getOrElse(
-      makeAsset(
-        repository=Some(persistedRepository),
-        folder=folder,
-        resourcePath=resourcePath,
-        userMetadata=metadata,
-        user=user))
+    val asset = makeAsset(
+      repository=Some(persistedRepository),
+      filename=Util.randomStr(50),
+      user=user,
+      folder=folder,
+      userMetadata=metadata,
+      isTriaged=isTriaged,
+      isRecycled=isRecycled
+    )
 
-    val dataAsset = AssetWithData(
-      asset = assetModel,
-      data = Random.nextBytes(100))
+    val dataAsset = makeAssetWithData(Some(asset))
 
     val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
 

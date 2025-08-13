@@ -1,66 +1,70 @@
 import { Const } from "../constants.js"
-import { Folder } from "../models.js"
-import {
-    showErrorSnackBar,
-    showSuccessSnackBar,
-    showWarningSnackBar,
-} from "../common/snackbar.js"
-import { context } from "../context.js"
 
-function removeAssetFromResultSetUtil(event, response, successMessage) {
-    const status = response["htmx-internal-data"].xhr.status
-    const assetId = event.detail["assetId"]
-
-    if (status === 200) {
-        // Remove the asset from the DOM
-        htmx.find(`#asset-${assetId}`).remove()
-
-        // Decrement the counter in the search control bar
-        const resultsTotalElement = htmx.find("#searchControl .results-total")
-        const currentTotal = parseInt(resultsTotalElement.textContent)
-        resultsTotalElement.textContent = currentTotal - 1
-
-        showSuccessSnackBar(successMessage)
-
-        // reload the navigation bar - it is sensitive to changes, especially if the user is moving assets around
-        htmx.ajax("GET", `/htmx/nav/r/${context.getRepoId()}`, {
-            swap: "innerHTML",
-            target: "nav",
-        })
-    } else if (status === 409) {
-        const message = response["htmx-internal-data"].xhr.responseText
-        showWarningSnackBar(message)
-    } else {
-        showErrorSnackBar(`Error performing operation on ${assetId}: ${status}`)
-    }
-}
+import assetService from "../service/assetService.js"
 
 document.body.addEventListener(Const.events.assetMoved, (event) => {
+    const assetId = event.detail["assetId"]
     const newParentFolderId = event.detail["folderId"]
-    const newParentFolder = new Folder(newParentFolderId)
 
-    function assetMovedHandler(response) {
-        const successMessage = `Asset moved to folder "${newParentFolder.name()}"`
-        removeAssetFromResultSetUtil(event, response, successMessage)
+    // if we dragged one asset, and there are multiple selected assets, we need to do a batch move
+    if (!Alpine.store(Const.state.selectedAssets).isEmpty
+        && Alpine.store(Const.state.selectedAssets).contains(assetId)) {
+        const batchMovedEvent = new CustomEvent(
+            Const.events.batchAssetsMoved,
+            {
+                detail: {
+                    folderId: newParentFolderId,
+                },
+            },
+        )
+
+        document.body.dispatchEvent(batchMovedEvent)
+        return
     }
 
-    htmx.ajax("PUT", `/htmx/asset/r/${context.getRepoId()}/move`, {
-        swap: "none",
-        values: { ...event.detail },
-        handler: assetMovedHandler,
+    assetService.moveAssets({
+        folderId: newParentFolderId,
+        assetIds: [assetId],
+    })
+})
+
+document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
+    const newParentFolderId = event.detail["folderId"]
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+    console.debug(
+        `Batch moving ${selectedAssetsStore.size} assets to folder ${newParentFolderId}`,
+    )
+
+    assetService.moveAssets({
+        folderId: newParentFolderId,
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
     })
 })
 
 document.body.addEventListener(Const.events.assetTrashed, (event) => {
-    function assetTrashedHandler(response) {
-        const successMessage = "Asset moved to the trash bin"
-        removeAssetFromResultSetUtil(event, response, successMessage)
+    const assetId = event.detail["assetId"]
+
+    // if we dragged one asset, and there are multiple selected assets, we need to do a batch move
+    if (!Alpine.store(Const.state.selectedAssets).isEmpty
+        && Alpine.store(Const.state.selectedAssets).contains(assetId)) {
+        const batchMovedEvent = new CustomEvent(
+            Const.events.batchAssetsRecycled,
+        )
+        document.body.dispatchEvent(batchMovedEvent)
+        return
     }
 
-    htmx.ajax("DELETE", `/htmx/asset/r/${context.getRepoId()}/move`, {
-        swap: "none",
-        values: { ...event.detail },
-        handler: assetTrashedHandler,
+    assetService.recycleAssets({ assetIds: [assetId] })
+})
+
+document.body.addEventListener(Const.events.batchAssetsRecycled, (event) => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+    console.debug(`Batch recycling ${selectedAssetsStore.size} assets`)
+
+    assetService.recycleAssets({
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
     })
 })
 
@@ -73,15 +77,8 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
         .querySelectorAll(".metadata > div." + fieldName)
         .forEach((div) => (div.style.display = checked ? "block" : "none"))
 
-    // update the context state
-    if (checked) {
-        context.addGridMetadataField(fieldName)
-    } else {
-        context.removeGridMetadataField(fieldName)
-    }
-
     // show/hide the metadata container, depending on the number of fields selected
-    const showFields = context.getGridMetadataFields()
+    const showFields = window.ctx.getGridMetadataFields()
 
     // No metadata fields selected? Hide the metadata container
     if (showFields.size === 0) {
@@ -97,4 +94,12 @@ document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
             .querySelectorAll("#assets .metadata")
             .forEach((div) => (div.style.display = "grid"))
     }
+})
+
+document.body.addEventListener(Const.events.deselectAll, () => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+    selectedAssetsStore.items.forEach((asset) => {
+        asset.deselect()
+    })
+    selectedAssetsStore.items.clear()
 })

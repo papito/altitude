@@ -6,6 +6,7 @@ import org.scalatra.servlet.ServletApiImplicits._
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import software.altitude.core.controllers.api.AssetController
 import software.altitude.core.controllers.htmx.AlbumActionController
 import software.altitude.core.controllers.htmx.AssetActionController
 import software.altitude.core.controllers.htmx.FolderActionController
@@ -60,7 +61,8 @@ object AltitudeServletContext {
     (new TrashActionController, "/htmx/trash/*"),
     (new ViewSettingsActionController, "/htmx/view-settings/*"),
     (new NavigationController, "/htmx/nav/*"),
-    (new SetupController, "/htmx/admin/setup/*")
+    (new SetupController, "/htmx/admin/setup/*"),
+    (new AssetController, "/api/asset/*")
   )
 
   def mountEndpoints(context: ServletContext): Unit = {

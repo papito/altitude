@@ -1,8 +1,5 @@
 SHELL=/bin/sh
 
-start:
-	ENV=dev sbt jetty:start
-
 watch:
 	ENV=dev sbt watch
 

@@ -1,5 +1,5 @@
-import { clearInnerNodes } from "./common/nodes.js"
-import { Const } from "./constants.js"
+import { clearInnerNodes } from "../common/nodes.js"
+import { Const } from "../constants.js"
 
 export class Folder {
     constructor(id) {

@@ -23,4 +23,5 @@ trait PostgresOverrides { this: BaseDao =>
 
   override protected def getBooleanField(value: AnyRef): Boolean = value.asInstanceOf[Boolean]
 
+  override val forUpdate: String = "FOR UPDATE"
 }

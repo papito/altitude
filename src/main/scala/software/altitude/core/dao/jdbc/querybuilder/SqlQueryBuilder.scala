@@ -126,7 +126,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], val tableNa
           case qParam: QueryParam =>
             qParam.paramType match {
               case Query.ParamType.IN =>
-                val placeholders: String = qParam.values.toList.map(_ => "?").mkString(", ")
+                val placeholders: String = qParam.values.toList.map(_ => "?").mkString(",")
                 s"$columnName IN ($placeholders)"
               case Query.ParamType.EQ => s"$tableName.$columnName = ?"
 

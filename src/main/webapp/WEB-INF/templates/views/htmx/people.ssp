@@ -156,7 +156,7 @@
                        hx-target="#content"
                        hx-trigger="click"
                        hx-swap="innerHTML"
-                       hx-get="${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PERSON_ID}=${person.persistedId}">
+                       hx-get="${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PERSON_ID}=${person.persistedId}&${Api.Field.Search.IS_NEW_SEARCH}=true">
                     <img src="/content/r/${RequestContext.getRepository.persistedId}/${Const.DataStore.FACE}/${person.coverFaceId}">
                     </a>
                 </div>
@@ -182,10 +182,9 @@
 
 <script type="module">
     import { selectTab } from "../../../../js/common/navigation.js"
-    import { context } from "../../../../js/context.js"
 
     selectTab("explorer", "peopleTab")
-    context.setRepoId("<%= RequestContext.getRepository.persistedId %>")
+    window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
 </script>
 
 <script type="module" src="/js/people/event_handlers.js"></script>

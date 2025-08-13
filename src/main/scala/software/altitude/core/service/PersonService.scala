@@ -220,46 +220,12 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
    *
    * If an asset is restored, we just do the reverse of this and everyone is happy.
    */
-  def recycleFacesForAsset(asset: Asset): Unit = {
-    if (asset.isRecycled) {
-      logger.warn("The asset is already recycled ")
-      return
-    }
-
-    txManager.withTransaction {
-      val sql = """
-        UPDATE person
-           SET num_of_faces = num_of_faces - 1
-           WHERE EXISTS (
-            SELECT 1
-                FROM asset, face
-                WHERE person.id = face.person_id
-                  AND face.asset_id = asset.id
-                  AND asset.id = ?)
-      """
-      dao.updateByBySql(sql, List(asset.persistedId))
-    }
+  def recycleFacesForAssets(assetIds: Set[String]): Unit = {
+    dao.recycleFacesForAssets(assetIds)
   }
 
-  def restoreFacesForAsset(asset: Asset): Unit = {
-    if (!asset.isRecycled) {
-      logger.warn("The asset is already not recycled ")
-      return
-    }
-
-    txManager.withTransaction {
-      val sql = """
-        UPDATE person
-           SET num_of_faces = num_of_faces + 1
-           WHERE EXISTS (
-            SELECT 1
-                FROM asset, face
-                WHERE person.id = face.person_id
-                  AND face.asset_id = asset.id
-                  AND asset.id = ?)
-          """
-      dao.updateByBySql(sql, List(asset.persistedId))
-    }
+  def restoreFacesForAssets(assetIds: Set[String]): Unit = {
+    dao.restoreFacesForAssets(assetIds)
   }
 
   def getAssetFaces(assetId: String): List[Face] = {

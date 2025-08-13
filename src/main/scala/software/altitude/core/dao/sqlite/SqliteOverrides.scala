@@ -36,4 +36,6 @@ trait SqliteOverrides { this: BaseDao =>
     case 0 => false
     case 1 => true
   }
+
+  override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for FOR UPDATE"
 }
