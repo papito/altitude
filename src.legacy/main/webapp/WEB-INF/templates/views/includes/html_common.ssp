@@ -1,0 +1,26 @@
+<div id="snackbar"></div>
+
+<!-- The wiring for closing the modal is in the modal.js file -->
+
+<div id="modalContainer">
+    <div class="modal-box">
+        <div class="modal-toolbar">
+            <div class="modal-title">Title!</div>
+            <div class="close-modal"
+            >&times;</div>
+        </div>
+        <div id="modalContent">
+        </div>
+    </div>
+</div>
+
+<div id="imageDetailModalContainer">
+    <div class="modal-box">
+        <div class="modal-toolbar">
+            <div class="modal-title">Title!</div>
+            <div class="close-modal">&times;</div>
+        </div>
+        <div id="imageDetailModalContent">
+        </div>
+    </div>
+</div>

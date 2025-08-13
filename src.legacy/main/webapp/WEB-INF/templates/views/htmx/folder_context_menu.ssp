@@ -1,0 +1,28 @@
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.Const %>
+
+<% val rootFolderId = RequestContext.getRepository.rootFolderId %>
+<%@ val folderId: String %>
+
+<span hx-get='${ url(showAddFolderModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+      hx-target="#modalContent"
+      hx-vals='{"${Api.Modal.MIN_WIDTH}": ${Const.UI.ADD_FOLDER_MODAL_MIN_WIDTH}, "parentId": "${folderId}"}'
+      hx-trigger="click">
+    Add folder
+</span>
+
+#if (folderId != rootFolderId)
+    <span hx-get='${ url(showRenameFolderModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+          hx-target="#modalContent"
+          hx-vals='{"${Api.Modal.MIN_WIDTH}": ${Const.UI.RENAME_FOLDER_MODAL_MIN_WIDTH}, "id": "${folderId}"}'
+          hx-trigger="click">
+        Rename
+    </span>
+    <span hx-get='${ url(showDeleteFolderModal, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+      hx-target="#modalContent"
+      hx-vals='{"${Api.Modal.MIN_WIDTH}": ${Const.UI.DELETE_FOLDER_MODAL_MIN_WIDTH}, "id": "${folderId}"}'
+      hx-trigger="click">
+        Delete
+    </span>
+#end

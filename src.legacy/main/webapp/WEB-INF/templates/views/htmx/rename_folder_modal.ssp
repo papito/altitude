@@ -1,0 +1,77 @@
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.RequestContext %>
+<% import play.api.libs.json.Json %>
+<% import play.api.libs.json.JsObject %>
+
+<%@ val minWidth: Int %>
+<%@ val title: String %>
+
+<%@ val fieldErrors: Map[String, String] = Map.empty %>
+<%@ val formJson: JsObject = Json.obj() %>
+<%@ val id: String %>
+<%@ val existingName: Option[String] = None %>
+<% val name: Option[String] = (formJson \ Api.Field.Folder.NAME).asOpt[String] %>
+
+<style>
+  #renameFolder input {
+    width: 100%;
+  }
+</style>
+
+<form action="#"
+      id="renameFolder"
+      hx-swap="innerHTML"
+      hx-put='${ url(htmxRenameFolder, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+      hx-trigger="submit"
+      hx-target="#folderName-${id}"
+      hx-ext="json-enc">
+
+  <% if (fieldErrors.contains(Api.Field.Folder.NAME)) { %>
+  <div class="error">${ fieldErrors(Api.Field.Folder.NAME) }</div>
+  <% } %>
+
+  <div>
+    <label for="${ Api.Field.Folder.NAME }"></label>
+    <input type="text"
+           id="field-${ Api.Field.Folder.NAME }"
+           name="${ Api.Field.Folder.NAME }"
+           autocomplete="off"
+
+    <% if (fieldErrors.contains(Api.Field.Folder.NAME)) { %>
+    class="error"
+    <% } %>
+
+    <% if (name.isDefined) { %>
+    value="${ name.get }"
+    <% } else { %>
+    value="${ existingName.getOrElse("") }"
+    <% } %>
+
+    placeholder="New folder name"
+    maxlength="${ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+    minlength="${ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
+
+    <input type="hidden" name="${ Api.Field.ID }" value="${ id }">
+  </div>
+</form>
+
+<script type="module">
+  import { Folder } from "../../../../js/models/folder.js"
+  import { showModal, closeModal } from "../../../../js/common/modal.js"
+
+  showModal({ minWidthPx: "${minWidth}", title: "${title}" })
+  htmx.find("#field-${ Api.Field.Folder.NAME }").focus()
+  htmx.find("#field-${ Api.Field.Folder.NAME }").select()
+
+  htmx.find("#renameFolder").addEventListener(
+      "htmx:afterRequest",
+      function (evt) {
+          if (evt.detail.successful === true) {
+              const folder = new Folder("${id}")
+              folder.closeContextMenu()
+
+              closeModal()
+          }
+      },
+  )
+</script>

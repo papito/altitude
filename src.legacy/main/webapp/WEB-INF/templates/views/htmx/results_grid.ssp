@@ -1,0 +1,81 @@
+<% import software.altitude.core.Const %>
+<% import software.altitude.core.util.Util %>
+<% import software.altitude.core.AltitudeServletContext %>
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.models.Asset %>
+<% import software.altitude.core.util.SearchResult %>
+<% import software.altitude.core.Api %>
+<%@ val isContinuousScroll: Boolean = false %>
+
+<%@ val p: Int %>
+<%@ val nextPage: Int = p + 1 %>
+<%@ val results: SearchResult %>
+
+#for (idx <- 0 to results.records.length - 1)
+    <% val asset: Asset = results.records(idx) %>
+    <% val imgUrl = s"/${ Const.DataStore.CONTENT }/r/${software.altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }" %>
+
+    #if (idx == results.records.length - 1 && results.hasMoreResults)
+
+        <%-- Last cell is special because it tells HTMX to load the next page --%>
+        <div id="asset-${asset.persistedId}"
+             class="cell last-cell"
+             hx-trigger="intersect"
+             hx-get='${ url(htmxSearchResults, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.PAGE}=${nextPage}&${Api.Field.Search.IS_CONTINUOUS_SCROLL}=true'
+             hx-swap="afterend">
+    #else
+        <div class="cell" id="asset-${asset.persistedId}">
+    #end
+
+        <div alt-asset-id="${asset.persistedId}"
+             x-data="initSelectable('${asset.persistedId}')"
+             :class="{ 'drag-drop': true, 'selected': selected, 'masked': dragged }">
+
+            <div class="checkmark"
+                 @click="toggle">
+            </div>
+
+            <img alt-asset-id="${asset.persistedId}"
+                 draggable="false"
+                 @click.shift="toggleViaAsset($event)"
+                 hx-trigger="click[!event.shiftKey]"
+                 hx-target="#imageDetailModalContent"
+                 hx-get="${ url(showAssetDetailModal, Api.Field.ASSET_ID -> asset.persistedId, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"
+                #if (isContinuousScroll)
+                   alt-data-src="${imgUrl}"
+                #else
+                   src="${imgUrl}"
+                #end
+                alt="${ asset.fileName }"
+                class="responsive-image">
+
+        </div><%-- /inner cell drag droppable --%>
+
+        <div class="metadata">
+            <div class="fileName" title="${ asset.fileName }">
+                <span>File:</span> ${ asset.fileName }
+            </div>
+
+            <% val originalCreatedAt: String = Util.humanReadableDateTime(asset.originalCreatedAt) %>
+            <div class="originalCreatedAt" title="${ originalCreatedAt }">
+                <span>Created:</span> ${ originalCreatedAt }
+            </div>
+
+            <% val createdAt: String = Util.humanReadableDateTime(asset.createdAt) %>
+            <div class="importedAt" title="${ createdAt }">
+                <span>Imported:</span> ${ createdAt }
+            </div>
+
+            <% val dimensions: String = s"${asset.width} x ${asset.height}" %>
+            <div class="dimensions" title="${ dimensions }px">
+                <span>Dimensions:</span> ${ dimensions } px
+            </div>
+
+            <% val fileSize: String = Util.humanReadableByteCount(asset.sizeBytes) %>
+            <div class="fileSize" title="${ fileSize }">
+                <span>Size:</span> ${ fileSize }
+            </div>
+        </div>
+    </div><%-- /cell --%>
+
+#end

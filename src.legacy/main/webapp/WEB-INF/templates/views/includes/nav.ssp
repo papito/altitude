@@ -1,0 +1,45 @@
+<% import software.altitude.core.Api %>
+<% import software.altitude.core.Const %>
+<% import software.altitude.core.RequestContext %>
+<% import software.altitude.core.models.Stats %>
+
+<%@ val stats: Stats %>
+
+<div class="brand">
+  <a href="/">Altitude</a>
+</div>
+<div class="menu repository">
+  <a href="/"><i class="fas fa-database"></i><span>${RequestContext.getRepository.name}</span></a>
+</div>
+
+#if (stats.getTriageAssetCount > 0)
+  <div class="menu triage">
+    <a href="${ url(indexViewRepo, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${Const.Search.View.TRIAGE}"><i class="fas fa-medkit"></i><span>Triage (${stats.getTriageAssetCount})</span></a>
+  </div>
+#else
+  <div class="menu triage empty">
+    <i class="fas fa-medkit"></i><span>Triage (0)</span>
+  </div>
+#end
+
+#if (stats.getRecycledAssetCount > 0)
+  <div id="trash" class="menu trashbin">
+    <a href="${ url(indexViewRepo, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }?${Api.Field.Search.VIEW}=${Const.Search.View.TRASHBIN}">
+      <i class="fas fa-trash"></i><span>Trash (${stats.getRecycledAssetCount})</span></a>
+  </div>
+#else
+  <div id="trash" class="menu trashbin empty">
+    <i class="fas fa-trash"></i><span>Trash (0)</span>
+  </div>
+#end
+
+<div class="menu import">
+  <a href="${ url(importView, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }"><i class="fas fa-plus-square"></i><span>Import</span></a>
+</div>
+<div class="menu settings">
+  <a href=""><i class="fas fa-cog"></i><span>Settings</span></a>
+</div>
+<div class="search">
+  <label for="search"></label>
+  <input id="search" type="text" name="search" placeholder="Search">
+</div>
