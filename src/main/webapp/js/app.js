@@ -25,6 +25,9 @@ export function initApp() {
         reset() {
             document.body.dispatchEvent(new CustomEvent(Const.events.deselectAll))
         },
+        contains(id) {
+            return this.items.has(id)
+        },
     })
 
     Alpine.store(Const.state.currentView, {

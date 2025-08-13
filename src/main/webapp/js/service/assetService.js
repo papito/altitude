@@ -53,8 +53,10 @@ class AssetService {
                 const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} moved to folder "${newParentFolder.name()}"`
                 showSuccessSnackBar(successMessage)
 
-                // reset the selected assets store
-                Alpine.store(Const.state.selectedAssets).reset()
+                // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection
+                if (assetIds.length > 1 || (assetIds.length === 1 && Alpine.store(Const.state.selectedAssets).contains(assetIds[0]))) {
+                    Alpine.store(Const.state.selectedAssets).reset()
+                }
 
                 // removeAssetFromResultSetUtil(event, response, successMessage)
             })
@@ -83,8 +85,10 @@ class AssetService {
                 const successMessage = `${assetIds.size > 0 ? "Assets" : "Asset"} moved to the trash bin"`
                 showSuccessSnackBar(successMessage)
 
-                // reset the selected assets store
-                Alpine.store(Const.state.selectedAssets).reset()
+                // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection
+                if (assetIds.length > 1 || (assetIds.length === 1 && Alpine.store(Const.state.selectedAssets).contains(assetIds[0]))) {
+                    Alpine.store(Const.state.selectedAssets).reset()
+                }
 
                 // removeAssetFromResultSetUtil(event, response, successMessage)
             })

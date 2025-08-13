@@ -3,10 +3,28 @@ import { Const } from "../constants.js"
 import assetService from "../service/assetService.js"
 
 document.body.addEventListener(Const.events.assetMoved, (event) => {
+    const assetId = event.detail["assetId"]
     const newParentFolderId = event.detail["folderId"]
+
+    // if we dragged one asset, and there are multiple selected assets, we need to do a batch move
+    if (!Alpine.store(Const.state.selectedAssets).isEmpty
+        && Alpine.store(Const.state.selectedAssets).contains(assetId)) {
+        const batchMovedEvent = new CustomEvent(
+            Const.events.batchAssetsMoved,
+            {
+                detail: {
+                    folderId: newParentFolderId,
+                },
+            },
+        )
+
+        document.body.dispatchEvent(batchMovedEvent)
+        return
+    }
+
     assetService.moveAssets({
         folderId: newParentFolderId,
-        assetIds: [event.detail["assetId"]],
+        assetIds: [assetId],
     })
 })
 
@@ -24,23 +42,23 @@ document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
     })
 })
 
-document.body.addEventListener(Const.events.batchAssetsRecycled, (event) => {
-    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
-
-    console.debug(
-        `Batch recycling ${selectedAssetsStore.size}`,
-    )
-
-    assetService.recycleAssets({
-        assetIds: Array.from(selectedAssetsStore.items.keys()),
-    })
-})
-
 document.body.addEventListener(Const.events.assetTrashed, (event) => {
-    assetService.recycleAssets({ assetIds: [event.detail["assetId"]] })
+    const assetId = event.detail["assetId"]
+
+    // if we dragged one asset, and there are multiple selected assets, we need to do a batch move
+    if (!Alpine.store(Const.state.selectedAssets).isEmpty
+        && Alpine.store(Const.state.selectedAssets).contains(assetId)) {
+        const batchMovedEvent = new CustomEvent(
+            Const.events.batchAssetsRecycled,
+        )
+        document.body.dispatchEvent(batchMovedEvent)
+        return
+    }
+
+    assetService.recycleAssets({ assetIds: [assetId] })
 })
 
-document.body.addEventListener(Const.events.batchAssetsTrashed, (event) => {
+document.body.addEventListener(Const.events.batchAssetsRecycled, (event) => {
     const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
 
     console.debug(`Batch recycling ${selectedAssetsStore.size} assets`)

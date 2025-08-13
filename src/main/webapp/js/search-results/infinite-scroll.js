@@ -120,12 +120,18 @@ function showOrHideAssetGridMetadata(el) {
         .map((fieldName) => ".metadata > div." + fieldName)
         .join(", ")
 
+    let metadataDisplay = "gird"
+
     if (toShowFieldsSelectorStr.length) {
         el.querySelectorAll(toShowFieldsSelectorStr).forEach((div) => {
             div.style.display = "block"
         })
-        el.querySelector(".metadata").style.display = "grid"
     } else {
-        el.querySelector(".metadata").style.display = "none"
+        metadataDisplay = "none"
+    }
+
+    const metadata = el.querySelector(".metadata")
+    if (metadata) {
+        metadata.style.display = metadataDisplay
     }
 }

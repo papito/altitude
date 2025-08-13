@@ -11,7 +11,6 @@ export let Const = {
         folderTrashed: "FOLDER_TRASHED_EVENT",
         assetMoved: "ASSET_MOVED_EVENT",
         assetTrashed: "ASSET_TRASHED_EVENT",
-        batchAssetsTrashed: "BATCH_ASSETS_TRASHED_EVENT",
         folderDeleted: "FOLDER_DELETED_EVENT",
         folderAdded: "FOLDER_ADDED_EVENT",
         folderCollapsed: "FOLDER_COLLAPSED_EVENT",

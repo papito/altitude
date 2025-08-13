@@ -13,8 +13,11 @@ interact("#assets .drag-drop").draggable({
     listeners: {
         move: dragMoveListener,
         start: function (event) {
+            const assetId = event.target.getAttribute(
+                Const.attributes.assetId,
+            )
+
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
-            const selectedCount = selectedAssetsStore.size
 
             setFixedPositionWhileDragging(event)
 
@@ -53,11 +56,13 @@ interact("#assets .drag-drop").draggable({
             target.style.left = (position.left + offsetX) + "px"
             target.classList.add("dragging")
 
-            if (selectedCount > 1) {
+            if (!selectedAssetsStore.isEmpty && selectedAssetsStore.contains(assetId)) {
                 const checkmark = target.querySelector(".checkmark")
 
                 if (checkmark) {
                     checkmark.style.display = "none"
+                    const cloneCheckmark = clone.querySelector(".checkmark")
+                    cloneCheckmark.style.display = "flex"
                 }
 
                 // Create or update the count badge
@@ -75,10 +80,9 @@ interact("#assets .drag-drop").draggable({
                 countBadge.style.width = `${imgRect.width}px`;
                 countBadge.style.height = `${imgRect.height}px`;
                 countBadge.className = "drag-count-badge";
-                countBadge.textContent = selectedCount;
+                countBadge.textContent = selectedAssetsStore.size;
 
-                console.dir(countBadge)
-                // this sets the proper CSS
+                // Mark affected assets as being dragged
                 selectedAssetsStore.items.forEach((asset) => {
                     asset.drag()
                 })
@@ -86,9 +90,14 @@ interact("#assets .drag-drop").draggable({
                 target.style.opacity = "1"
                 imgElement.style.opacity = "40%"
             }
-        },        end: function (event) {
+        },
+        end: function (event) {
             // Clean up multiple selection styling before calling the common dragged function
             const target = event.target
+
+            const assetId = event.target.getAttribute(
+                Const.attributes.assetId,
+            )
             const imgElement = target.querySelector("img")
 
             imgElement.style.opacity = "1"
@@ -124,9 +133,12 @@ interact("#assets .drag-drop").draggable({
 
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
 
-            selectedAssetsStore.items.forEach((asset) => {
-                asset.drop()
-            })
+            if (!selectedAssetsStore.isEmpty && selectedAssetsStore.contains(assetId)) {
+                // Unmark affected assets as being dragged
+                selectedAssetsStore.items.forEach((asset) => {
+                    asset.drop()
+                })
+            }
 
             target.classList.remove("dragging")
 
@@ -188,7 +200,7 @@ interact("#trash").dropzone({
             document.body.dispatchEvent(trashedFolderEvent)
         }
 
-        if (trashedAssetId && Alpine.store(Const.state.selectedAssets).isEmpty) {
+        if (trashedAssetId) {
             console.debug(`Trashed asset ${trashedAssetId}`)
             const trashedAssetEvent = new CustomEvent(
                 Const.events.assetTrashed,
@@ -202,10 +214,10 @@ interact("#trash").dropzone({
             document.body.dispatchEvent(trashedAssetEvent)
         }
 
-        if (isBatchMover || (trashedAssetId && !Alpine.store(Const.state.selectedAssets).isEmpty)) {
+        if (isBatchMover) {
             console.debug(`Batch recycling assets`)
             const batchTrashedEvent = new CustomEvent(
-                Const.events.batchAssetsTrashed,
+                Const.events.batchAssetsRecycled,
             )
             document.body.dispatchEvent(batchTrashedEvent)
         }
