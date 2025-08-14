@@ -1,6 +1,6 @@
-package app
+package altitude.core
 
-import altitude.Application
+import altitude.core.Altitude
 import io.undertow.Undertow
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +22,7 @@ class ExampleTests extends AnyFlatSpec with Matchers {
   }
 
   "MinimalApplication" should "respond correctly to various HTTP requests" in {
-    withServer(Application) { host =>
+    withServer(Altitude) { host =>
       val success = requests.get(host)
 
       success.statusCode shouldBe 200

@@ -1,5 +1,6 @@
-package altitude
-object Application extends cask.MainRoutes{
+package altitude.core
+
+object Altitude extends cask.MainRoutes{
   @cask.get("/")
   def hello(): String = {
     "This is Altitude DAM"
