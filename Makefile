@@ -9,8 +9,8 @@ watch:
 compile:
 	mill altitude.compile
 
-#test:
-#	ENV=test sbt test
+test:
+	ENV=test mill altitude.test
 #
 #test-focused:
 #	ENV=test sbt testFocused
