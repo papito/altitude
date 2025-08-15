@@ -4,9 +4,12 @@ import mill._, scalalib._, publish._
 
 object altitude extends ScalaModule with PublishModule {
   def scalaVersion = "3.6.3"
-  def jvmVersion = "21"
+  private val caskVersion = "0.9.7"
+  private val twirlVersion = "1.6.2"
+  private val logbackVersion = "1.5.16"
 
   def publishVersion = "0.1.0-SNAPSHOT"
+
   def pomSettings: T[PomSettings] = PomSettings(
     description = "Altitude DAM",
     organization = "altitude-dam",
@@ -17,8 +20,8 @@ object altitude extends ScalaModule with PublishModule {
   )
 
   def mvnDeps: Task.Simple[Seq[Dep]] = Seq(
-    mvn"com.lihaoyi::cask:0.9.7",
-    mvn"ch.qos.logback:logback-classic:1.5.16"
+    mvn"com.lihaoyi::cask:$caskVersion",
+    mvn"ch.qos.logback:logback-classic:$logbackVersion"
   )
 
   object test extends ScalaTests with TestModule.ScalaTest {
