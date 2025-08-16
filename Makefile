@@ -19,8 +19,8 @@ publish:
 lint:
 	#npm run format
 	#npm run lint:fix
-	sbt scalafixAll
-	sbt scalafmt
+	mill altitude.fix
+	mill mill.scalalib.scalafmt/
 
 #test-focused:
 #	ENV=test sbt testFocused
@@ -49,20 +49,9 @@ lint:
 #test-unit:
 #	ENV=test sbt testUnit
 #
-#lint:
-#	npm run format
-#	npm run lint:fix
-#	sbt scalafixAll
-#	sbt scalafmt
-#
+
 #clean:
 #	rm -rf data/*
 #
-#publish:
-#	rm -rf release
-#	sbt assembly
-#	# we don't need this
-#	rm -rf target
-#
-#db:
-#	docker compose -f docker-compose.yml -f docker-compose.test.yml up
+db:
+	docker compose -f docker-compose.yml -f docker-compose.test.yml up
