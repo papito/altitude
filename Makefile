@@ -11,7 +11,17 @@ compile:
 
 test:
 	ENV=test mill altitude.test
-#
+
+publish:
+	mill altitude.assembly
+	mill show altitude.assembly
+
+lint:
+	#npm run format
+	#npm run lint:fix
+	sbt scalafixAll
+	sbt scalafmt
+
 #test-focused:
 #	ENV=test sbt testFocused
 #

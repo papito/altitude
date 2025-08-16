@@ -5,8 +5,8 @@ import altitude.core.routes.web.IndexRoutes
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 
-object Boot extends cask.MainRoutes:
-  /**
+object Boot extends cask.Main:
+  /**cask.MainRoutes
    * Mission-critical code to load the OpenCV native library.
    *
    * OpenCV for Java has two competing APIs, which is confusing enough (org.opencv, org.bytedeco),
@@ -23,5 +23,3 @@ object Boot extends cask.MainRoutes:
     new HealthRoutes,
     new IndexRoutes(),
   )
-
-  initialize()
