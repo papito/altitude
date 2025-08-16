@@ -1,6 +1,5 @@
 package altitude.core
 
-import altitude.core.Altitude
 import io.undertow.Undertow
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
