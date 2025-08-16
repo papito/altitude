@@ -1,18 +1,24 @@
 //| mill-version: 1.0.3
+//| mvnDeps:
+//| - com.goyeau::mill-scalafix::0.6.0
+
 package build
+
+import com.goyeau.mill.scalafix.ScalafixModule
+
 import mill._, scalalib._, publish._
 
-object altitude extends ScalaModule with PublishModule {
+object altitude extends ScalaModule with ScalafixModule with PublishModule {
   def scalaVersion = "3.6.3"
+
   private val caskVersion = "0.9.7"
   private val twirlVersion = "1.6.2"
   private val logbackVersion = "1.5.16"
-  private val  pekkoVersion = "1.1.2"
+  private val pekkoVersion = "1.1.2"
   private val opencvVersion = "1.5.10"
   private val javacppVersion = "1.5.7"
 
   def publishVersion = "0.1.0-SNAPSHOT"
-
 
   def scalacOptions: Task.Simple[Seq[String]] = Seq(
     "-deprecation",
