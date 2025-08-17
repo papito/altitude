@@ -5,6 +5,10 @@ import altitude.core.routes.web.IndexRoutes
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+
 object Boot extends cask.Main:
   /**
    * Mission-critical code to load the OpenCV native library.
@@ -17,6 +21,8 @@ object Boot extends cask.Main:
    * https://stackoverflow.com/a/58064096/53687
    */
   Loader.load(classOf[opencv_java])
+
+  given logger: Logger = LoggerFactory.getLogger(getClass)
 
   override def allRoutes: Seq[cask.Routes] = Seq(
     new HealthRoutes,
