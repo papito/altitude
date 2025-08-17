@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers.{equal, include, should}
 
 @DoNotDiscover class UserModelTests extends funsuite.AnyFunSuite {
 
-  test("User JSON serialization") {
+  test("User model should convert to JSON") {
     val email = "webmaster@altitude-dam.com"
 
     val user = User(
