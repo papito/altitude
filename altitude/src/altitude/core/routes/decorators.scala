@@ -1,4 +1,5 @@
 package altitude.core.routes
+import altitude.core.util.Util
 import cask.model.Response.Raw
 import cask.router.Result
 import org.slf4j.Logger
@@ -6,7 +7,6 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 
 import java.lang.System.currentTimeMillis
-import java.util.concurrent.ThreadLocalRandom
 
 object decorators {
   val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -14,7 +14,7 @@ object decorators {
   class requestResponseLogger extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
       val startTime = currentTimeMillis
-      val requestId = java.lang.Long.toUnsignedString(ThreadLocalRandom.current().nextLong(), 6)
+      val requestId = Util.randomStr(size = 6)
 
       // this is used by logback pattern layout
       MDC.put("REQUEST_ID", requestId)
