@@ -4,7 +4,6 @@ import altitude.core.routes.api.HealthRoutes
 import altitude.core.routes.decorators
 import altitude.core.routes.web.IndexRoutes
 import cask.router.Decorator
-import java.util.concurrent.ThreadLocalRandom
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
@@ -24,9 +23,6 @@ object Boot extends cask.Main:
   Loader.load(classOf[opencv_java])
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
-
-  private def genRequestId(): String =
-    java.lang.Long.toUnsignedString(ThreadLocalRandom.current().nextLong(), 16)
 
   override def mainDecorators: Seq[Decorator[?, ?, ?, ?]] =
     Seq(new cask.decorators.compress(), decorators.requestResponseLogger())
