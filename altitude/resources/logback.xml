@@ -3,10 +3,17 @@
 <configuration>
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%boldWhite(%d{HH:mm:ss.SSS}) %cyan(%X{REQUEST_ID}) %gray(%X{USER}) %highlight(%-5level) %logger{36}:%M:%L - %highlight(%msg) %n</pattern>
         </encoder>
     </appender>
+
     <root level="DEBUG">
-        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="STDOUT" />
     </root>
+
+    <logger name="altitude.core" level="INFO" />
+    <logger name="org.xnio" level="WARN" />
+    <logger name="io.undertow" level="INFO" />
+    <logger name="org.apache.tika.config.TikaConfig" level="ERROR" />
+
 </configuration>
