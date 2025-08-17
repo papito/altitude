@@ -1,10 +1,11 @@
-package altitude.core
+package altitude.core.controller
 
+import altitude.core.Boot
 import io.undertow.Undertow
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
+import org.scalatest.{DoNotDiscover, funsuite}
+import org.scalatest.matchers.should.Matchers.shouldBe
 
-class HealthCheck extends AnyFlatSpec with Matchers {
+@DoNotDiscover class HealthCheckTests extends funsuite.AnyFunSuite {
 
   def withServer[T](example: cask.main.Main)(f: String => T): T = {
     val server = Undertow.builder
@@ -20,7 +21,7 @@ class HealthCheck extends AnyFlatSpec with Matchers {
     res
   }
 
-  "MinimalApplication" should "respond correctly to various HTTP requests" in {
+  test("Health endpoint should return HTTP 200") {
     withServer(Boot) { host =>
       requests.get(s"$host/api/health", check = false).statusCode shouldBe 200
     }
