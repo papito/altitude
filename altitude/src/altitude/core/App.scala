@@ -9,7 +9,7 @@ import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-object Boot extends cask.Main:
+object App extends cask.Main:
   /**
    * Mission-critical code to load the OpenCV native library.
    *
@@ -21,6 +21,8 @@ object Boot extends cask.Main:
    * https://stackoverflow.com/a/58064096/53687
    */
   Loader.load(classOf[opencv_java])
+
+  val app: Altitude = new Altitude()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
 

@@ -1,6 +1,6 @@
 package altitude.core.controller
 
-import altitude.core.Boot
+import altitude.core.App
 import io.undertow.Undertow
 import org.scalatest.{DoNotDiscover, funsuite}
 import org.scalatest.matchers.should.Matchers.shouldBe
@@ -22,7 +22,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
   }
 
   test("Health endpoint should return HTTP 200") {
-    withServer(Boot) { host =>
+    withServer(App) { host =>
       requests.get(s"$host/api/health", check = false).statusCode shouldBe 200
     }
   }
