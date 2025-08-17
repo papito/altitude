@@ -44,6 +44,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule {
 
     mvn"com.typesafe:config:1.4.3",
     mvn"com.lihaoyi::ujson:3.3.1",
+    mvn"com.lihaoyi::upickle:3.3.1",
     mvn"com.typesafe.play::play-json:2.10.6",
 
     mvn"commons-io:commons-io:2.18.0",
