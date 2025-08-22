@@ -1,8 +1,10 @@
 package altitude.core
 
+import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
+
 import java.io.File
 import org.apache.commons.io.FilenameUtils
 import org.slf4j.Logger
@@ -108,4 +110,6 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
 
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
   logger.info(s"File store type: $fileStoreType")
+
+  final val txManager: TransactionManager = new altitude.core.transactions.TransactionManager(app.config)
 }
