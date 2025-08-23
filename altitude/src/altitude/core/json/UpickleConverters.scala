@@ -1,13 +1,10 @@
 package altitude.core.json
 
-
-import upickle.default.ReadWriter
-import upickle.default.ReadWriter.join
-
-import upickle.default.readwriter
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-
+import upickle.default.ReadWriter
+import upickle.default.ReadWriter.join
+import upickle.default.readwriter
 
 object UpickleConverters {
   // Custom ReadWriter for LocalDateTime

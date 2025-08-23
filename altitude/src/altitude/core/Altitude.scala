@@ -4,9 +4,9 @@ import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
-
 import java.io.File
 import org.apache.commons.io.FilenameUtils
+import org.apache.pekko.actor.typed.ActorSystem
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -112,4 +112,8 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
   logger.info(s"File store type: $fileStoreType")
 
   final val txManager: TransactionManager = new altitude.core.transactions.TransactionManager(app.config)
+
+  val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
+    ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
+
 }

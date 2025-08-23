@@ -1,7 +1,9 @@
 package altitude.core.util
 
+import altitude.core.DuplicateException
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.sql.SQLException
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -56,8 +58,8 @@ object Util {
     if (bytes < unit) {
       s"$bytes B"
     } else {
-      val exp = (Math.log(bytes.toDouble) / Math.log(unit)).toInt
-      val pre = "KMGTPE".charAt(exp - 1)
+      val exp = (Math.log(bytes) / Math.log(unit)).toInt
+      val pre = ("KMGTPE").charAt(exp - 1)
       f"${bytes / Math.pow(unit, exp)}%.1f ${pre}B"
     }
   }
@@ -72,11 +74,11 @@ object Util {
     BCrypt.checkpw(password, hashedPassword)
   }
 
-//  def getDuplicateExceptionOrSame(e: SQLException, message: Option[String] = None): Exception = {
-//    if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
-//      DuplicateException(message = message)
-//    } else {
-//      e
-//    }
-//  }
+  def getDuplicateExceptionOrSame(e: SQLException, message: Option[String] = None): Exception = {
+    if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
+      DuplicateException(message = message)
+    } else {
+      e
+    }
+  }
 }
