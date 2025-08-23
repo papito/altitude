@@ -1,11 +1,10 @@
 package altitude.core
 
+import altitude.core.models.Repository
+import altitude.core.models.User
 import java.sql.Connection
 
 import scala.util.DynamicVariable
-
-import altitude.core.models.Repository
-import altitude.core.models.User
 
 object RequestContext {
   val conn: DynamicVariable[Option[Connection]] = new DynamicVariable(None)

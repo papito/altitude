@@ -1,5 +1,7 @@
 package altitude.core.transactions
 
+import altitude.core.Const
+import altitude.core.RequestContext
 import com.typesafe.config.Config
 import java.sql.Connection
 import java.sql.DriverManager
@@ -7,9 +9,6 @@ import java.util.Properties
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
-
-import altitude.core.Const
-import altitude.core.RequestContext
 
 object TransactionManager {
   def apply(config: Config): TransactionManager = new TransactionManager(config)
