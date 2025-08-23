@@ -21,7 +21,7 @@ import org.opencv.imgproc.Imgproc
 object ImageUtil {
   // Get OPENCV image Mat from a byte array
   def matFromBytes(data: Array[Byte]): Mat = {
-    Imgcodecs.imdecode(new MatOfByte(data: _*), Imgcodecs.IMREAD_ANYCOLOR)
+    Imgcodecs.imdecode(new MatOfByte(data*), Imgcodecs.IMREAD_ANYCOLOR)
   }
 
   def determineImageScale(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): Double = {
@@ -49,7 +49,7 @@ object ImageUtil {
        * https://sirv.com/help/articles/rotate-photos-to-be-upright/
        * https://stackoverflow.com/questions/5905868/how-to-rotate-jpeg-images-based-on-the-orientation-metadata
        */
-      val imageMat = Imgcodecs.imdecode(new MatOfByte(data: _*), Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION)
+      val imageMat = Imgcodecs.imdecode(new MatOfByte(data*), Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION)
       val scaleFactor = determineImageScale(imageMat.width(), imageMat.height(), previewBoxSize, previewBoxSize)
 
       val resizedMat = new Mat()

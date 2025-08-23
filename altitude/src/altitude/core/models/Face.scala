@@ -43,7 +43,7 @@ case class Face(
 
   val featuresMat: Mat = {
     val floatMat = new MatOfFloat()
-    floatMat.fromArray(features: _*)
+    floatMat.fromArray(features*)
     floatMat
   }
 
