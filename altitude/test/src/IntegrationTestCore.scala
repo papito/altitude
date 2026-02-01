@@ -1,23 +1,18 @@
-/*
+
 import altitude.core.*
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.apache.pekko.actor.typed.Scheduler
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 import org.apache.pekko.util.Timeout
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.*
 import org.slf4j.{Logger, LoggerFactory}
-//import altitude.core.actors.FaceRecManagerActor
-//import altitude.core.actors.FaceRecModelActor.ModelLabels
-//import altitude.core.actors.FaceRecModelActor.ModelSize
 import altitude.core.models.*
-//import altitude.test.IntegrationTestUtil
-//import altitude.test.core.{TestFocus, testAltitudeApp}
-//import altitude.test.core.integration.TestContext
+import altitude.test.IntegrationTestUtil
+import altitude.test.TestFocus
+import altitude.test.TestContext
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.*
 import scala.language.implicitConversions
@@ -38,13 +33,13 @@ abstract class IntegrationTestCore
 
   def query(sql: String, values: Any*): List[Map[String, AnyRef]] = {
     val res =
-      new QueryRunner().query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object]): _*).asScala.toList
+      new QueryRunner().query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object])*).asScala.toList
 
     res.map(_.asScala.toMap[String, AnyRef])
   }
 
   def update(sql: String, values: Any*): Unit = {
-    new QueryRunner().update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object]): _*)
+    new QueryRunner().update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
   }
 
   def getSqlDateTime(t: java.sql.Timestamp): Any = {
@@ -56,8 +51,8 @@ abstract class IntegrationTestCore
   }
 
   override def beforeEach(): Unit = {
-    AltitudeServletContext.clearState()
-    AltitudeServletContext.app.isInitialized = false
+    testApp.clearState()
+    testApp.isInitialized = false
     testContext = new TestContext(testApp)
 
     // Every integration test has at least one repository and its admin to start with - you can't test anything otherwise.
@@ -66,9 +61,6 @@ abstract class IntegrationTestCore
 
     // Clear the face recognition model before each test
     testApp.service.faceRecognition.initialize()
-
-    // Clear face recognition cache
-    testApp.service.faceCache.clear()
 
     // nuke the data dir tree
     IntegrationTestUtil.createFileStoreDir(testApp)
@@ -103,21 +95,5 @@ abstract class IntegrationTestCore
   implicit def toAnswerWithArguments[T](f: InvocationOnMock => T): Answer[T] = new Answer[T] {
     override def answer(invocation: InvocationOnMock): T = f(invocation)
   }
-
-  /**
- * The number of labels in the model, minus the reserved labels.
- * That is, this reflects purely our trained labels for easier reasoning about the counts.
- */
-  def getNumberOfModelLabels: Int = {
-    val repositoryId = RequestContext.getRepository.persistedId
-    val futureResp: Future[ModelSize] = testApp.actorSystem ? (ref => FaceRecManagerActor.GetModelSize(repositoryId, ref))
-    Await.result(futureResp, timeout.duration).size
-  }
-
-  def getLabels: Seq[Int] = {
-    val repositoryId = RequestContext.getRepository.persistedId
-    val futureResp: Future[ModelLabels] = testApp.actorSystem ? (ref => FaceRecManagerActor.GetModelLabels(repositoryId, ref))
-    Await.result(futureResp, timeout.duration).labels
-  }
 }
- */
+
