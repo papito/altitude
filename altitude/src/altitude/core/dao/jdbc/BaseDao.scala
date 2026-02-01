@@ -1,4 +1,4 @@
-package software.altitude.core.dao.jdbc
+package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import java.time.LocalDateTime
@@ -14,16 +14,16 @@ import play.api.libs.json.JsValue.jsValueToJsLookup
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
-import software.altitude.core.{ Const => C }
-import software.altitude.core.ConstraintException
-import software.altitude.core.FieldConst
-import software.altitude.core.NotFoundException
-import software.altitude.core.RequestContext
-import software.altitude.core.dao.jdbc.querybuilder.SqlQuery
-import software.altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
-import software.altitude.core.transactions.TransactionManager
-import software.altitude.core.util.Query
-import software.altitude.core.util.QueryResult
+import altitude.core.{ Const => C }
+import altitude.core.ConstraintException
+import altitude.core.FieldConst
+import altitude.core.NotFoundException
+import altitude.core.RequestContext
+import altitude.core.dao.jdbc.querybuilder.SqlQuery
+import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
+import altitude.core.transactions.TransactionManager
+import altitude.core.util.Query
+import altitude.core.util.QueryResult
 
 object BaseDao {
   final def genId: String = UUID.randomUUID.toString
@@ -129,7 +129,7 @@ abstract class BaseDao {
 
     logger.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
     val runner = queryRunner
-    val numDeleted = runner.update(RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object]): _*)
+    val numDeleted = runner.update(RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object])*)
     logger.debug(s"Deleted records: $numDeleted")
     numDeleted
   }
@@ -152,7 +152,7 @@ abstract class BaseDao {
     BaseDao.incrWriteQueryCount()
 
     val runner = queryRunner
-    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object]): _*)
+    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
   }
 
   private def executeAndGetMany(sql: String, values: List[Any]): List[Map[String, AnyRef]] = {
@@ -161,7 +161,7 @@ abstract class BaseDao {
     logger.debug(s"SELECT SQL: $sql with values: $values")
 
     val res =
-      queryRunner.query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object]): _*).asScala.toList
+      queryRunner.query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object])*).asScala.toList
 
     res.map(_.asScala.toMap[String, AnyRef])
   }
@@ -185,7 +185,7 @@ abstract class BaseDao {
     val runner: QueryRunner = new QueryRunner()
 
     val res =
-      runner.query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(), sqlQuery.bindValues: _*).asScala.toList
+      runner.query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(), sqlQuery.bindValues*).asScala.toList
 
     logger.debug(s"Found ${res.length} records")
     val recs = res.map(_.asScala.toMap[String, AnyRef])
@@ -200,7 +200,7 @@ abstract class BaseDao {
 
     val runner = queryRunner
 
-    val numUpdated = runner.update(RequestContext.getConn, sqlQuery.sqlAsString, sqlQuery.bindValues: _*)
+    val numUpdated = runner.update(RequestContext.getConn, sqlQuery.sqlAsString, sqlQuery.bindValues*)
     logger.debug("Updated records: " + numUpdated)
     numUpdated
   }
@@ -209,7 +209,7 @@ abstract class BaseDao {
     BaseDao.incrWriteQueryCount()
 
     val runner = queryRunner
-    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object]): _*)
+    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
   }
 
   def getFloatListByJsonKey(jsonStr: String, key: String): List[Float] = {

@@ -1,9 +1,12 @@
 package altitude.core
 
+import altitude.core.dao.jdbc.SystemMetadataDao
+import altitude.core.service.{MigrationService, SystemService}
 import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
+
 import java.io.File
 import org.apache.commons.io.FilenameUtils
 import org.apache.pekko.actor.typed.ActorSystem
@@ -116,11 +119,61 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
 
-    object DAO {
-      val systemMetadata: SystemMetadataDao = dataSourceType match {
-        case Const.DbEngineName.POSTGRES => new jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
-        case Const.DbEngineName.SQLITE => new jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
-        case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
-      }
+  object DAO {
+    val systemMetadata: SystemMetadataDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
+  }
+
+  object service {
+    val migrationService: MigrationService = dataSourceType match {
+      case Const.DbEngineName.SQLITE =>
+        new MigrationService(app) {
+          final override val CURRENT_VERSION = schemaVersion
+          final override val MIGRATIONS_DIR = "/migrations/sqlite"
+        }
+      case Const.DbEngineName.POSTGRES =>
+        new MigrationService(app) {
+          final override val CURRENT_VERSION = schemaVersion
+          final override val MIGRATIONS_DIR = "/migrations/postgres"
+        }
+    }
+
+    val system = new SystemService(app)
+  }
+
+  def setIsInitializedState(): Unit = {
+    this.isInitialized = service.system.readMetadata.isInitialized
+    if (!this.isInitialized) {
+      logger.warn("Instance NOT YET INITIALIZED!")
+    }
+  }
+
+  def runMigrations(): Unit = {
+    if (Environment.CURRENT == Environment.Name.TEST) {
+      return
+    }
+
+    if (service.migrationService.migrationRequired) {
+      logger.warn("Migration is required!")
+      service.migrationService.migrate()
+    }
+  }
+
+  def cleanup(): Unit = {
+    logger.info("Cleaning up resources")
+    // service.importPipeline.shutdown()
+    logger.info("Pipeline system terminated")
+
+    // This is already done by default and will cause a warning
+    // actorSystem.terminate()
+  }
+
+
+  runMigrations()
+
+  logger.info("Altitude Server instance initialized")
+
 }

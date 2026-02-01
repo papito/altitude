@@ -1,14 +1,14 @@
-package software.altitude.core.dao.jdbc
+package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
 
-import software.altitude.core.FieldConst
-import software.altitude.core.RequestContext
-import software.altitude.core.models.SystemMetadata
+import altitude.core.FieldConst
+import altitude.core.RequestContext
+import altitude.core.models.SystemMetadata
 
-abstract class SystemMetadataDao(override val config: Config) extends BaseDao with software.altitude.core.dao.SystemMetadataDao {
+abstract class SystemMetadataDao(override val config: Config) extends BaseDao with altitude.core.dao.SystemMetadataDao {
 
   override val tableName = "system"
 
@@ -22,7 +22,7 @@ abstract class SystemMetadataDao(override val config: Config) extends BaseDao wi
 
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
 
-    runner.update(RequestContext.getConn, sql, toVersion, software.altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
+    runner.update(RequestContext.getConn, sql, toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
   }
 
   def setInitialized(): Unit = {
@@ -30,7 +30,7 @@ abstract class SystemMetadataDao(override val config: Config) extends BaseDao wi
 
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
 
-    runner.update(RequestContext.getConn, sql, true, software.altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
+    runner.update(RequestContext.getConn, sql, true, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
   }
 
   // overriding the base method since there is no repository relation in this model

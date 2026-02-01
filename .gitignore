@@ -14,7 +14,7 @@ logs
 project/project
 project/target
 test-data
-data
+data/db/*.db
 target
 release
 dist
