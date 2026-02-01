@@ -9,6 +9,9 @@ watch:
 compile:
 	mill altitude.compile
 
+clean:
+	mill clean
+
 test:
 	ENV=test mill altitude.test
 
