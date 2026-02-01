@@ -1,14 +1,15 @@
 package altitude.core
 
 import altitude.core.dao.jdbc.SystemMetadataDao
-import altitude.core.service.{MigrationService, SystemService}
+import altitude.core.service.filestore.{FileStoreService, FileSystemStoreService}
+import altitude.core.service.{AssetService, FaceDetectionService, FaceRecognitionService, FolderService, ImportPipelineService, LibraryService, MetadataExtractionService, MigrationService, PersonService, PurgePipelineService, RepositoryService, SearchService, StatsService, SystemService, UrlService, UserMetadataService, UserService}
 import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
 
 import java.io.File
-import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.{FileUtils, FilenameUtils}
 import org.apache.pekko.actor.typed.ActorSystem
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -202,6 +203,35 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     }
 
     val system = new SystemService(app)
+    val user = new UserService(app)
+    val repository = new RepositoryService(app)
+    val metadataExtractor = new MetadataExtractionService
+    val metadata = new UserMetadataService(app)
+    val library = new LibraryService(app)
+    val search = new SearchService(app)
+    val asset = new AssetService(app)
+    val folder = new FolderService(app)
+    val stats = new StatsService(app)
+    val person = new PersonService(app)
+    val faceDetection = new FaceDetectionService()
+    val faceRecognition = new FaceRecognitionService(app)
+    val importPipeline = new ImportPipelineService(app)
+    val purgePipeline = new PurgePipelineService(app)
+    val urlService = new UrlService()
+
+    val fileStore: FileStoreService = fileStoreType match {
+      case Const.StorageEngineName.FS => new FileSystemStoreService(app)
+      // S3-based wants to play as well
+      case _ => throw new NotImplementedError
+    }
+
+    if (dataSourceType == Const.DbEngineName.SQLITE) {
+      val dbFolder = new File(dataPath, "db")
+      if (!dbFolder.exists()) {
+        logger.info("Creating the DB folder for SQLite: " + dbFolder)
+        FileUtils.forceMkdir(dbFolder)
+      }
+    }
   }
 
   def setIsInitializedState(): Unit = {
