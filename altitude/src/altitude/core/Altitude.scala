@@ -1,6 +1,7 @@
 package altitude.core
 
 import altitude.core.dao.jdbc.SystemMetadataDao
+import altitude.core.models.{Repository, User}
 import altitude.core.service.filestore.{FileStoreService, FileSystemStoreService}
 import altitude.core.service.{AssetService, FaceDetectionService, FaceRecognitionService, FolderService, ImportPipelineService, LibraryService, MetadataExtractionService, MigrationService, PersonService, PurgePipelineService, RepositoryService, SearchService, StatsService, SystemService, UrlService, UserMetadataService, UserService}
 import altitude.core.transactions.TransactionManager
@@ -261,6 +262,23 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     // actorSystem.terminate()
   }
 
+  var usersById: Map[String, User] = Map[String, User]()
+  // email -> user
+  var usersByEmail: Map[String, User] = Map[String, User]()
+  // email -> password hash
+  var usersPasswordHashByEmail: Map[String, String] = Map[String, String]()
+  // token -> user
+  var usersByToken: Map[String, User] = Map[String, User]()
+  // id -> repository
+  var repositoriesById: Map[String, Repository] = Map[String, Repository]()
+
+  def clearState(): Unit = {
+    usersById = Map.empty
+    usersByEmail = Map.empty
+    usersByToken = Map.empty
+    usersPasswordHashByEmail = Map.empty
+    repositoriesById = Map.empty
+  }
 
   runMigrations()
 
