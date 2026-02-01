@@ -1,6 +1,6 @@
-package software.altitude.core.dao
+package altitude.core.dao
 
-import software.altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.jdbc.BaseDao
 
 object SystemMetadataDao {
   // we only have one record in the system table at all times
