@@ -1,13 +1,9 @@
 package altitude.core.service
 
 import java.sql.SQLException
-import org.apache.pekko.Done
 import org.apache.pekko.stream.scaladsl.Source
 import play.api.libs.json.JsObject
 
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 
 import altitude.core.Altitude
 import altitude.core.FieldConst
@@ -224,13 +220,13 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       val personIds = faces.map(_.personId.get)
 
       if (personIds.isEmpty) {
-        return List()
+        List()
+      } else {
+        val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
+
+        val qRes: QueryResult = dao.query(q)
+        qRes.records.map(r => r: Person)
       }
-
-      val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
-
-      val qRes: QueryResult = dao.query(q)
-      qRes.records.map(r => r: Person)
     }
   }
 

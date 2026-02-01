@@ -53,13 +53,13 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     asset.userMetadata.data.foreach {
       m =>
         val fieldId = m._1
-        if !metadataFields.contains(fieldId) then
+        if metadataFields.contains(fieldId) then
+          val field = metadataFields(fieldId)
+          val values = m._2
+          logger.debug(s"Processing field [${field.nameLowercase}] with values [$values]")
+          addMetadataValues(asset = asset, field = field, values = values.map(_.value))
+        else
           logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
-          return
-        val field = metadataFields(fieldId)
-        val values = m._2
-        logger.debug(s"Processing field [${field.nameLowercase}] with values [$values]")
-        addMetadataValues(asset = asset, field = field, values = values.map(_.value))
     }
   override def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
     addMetadataValues(asset = asset, field = field, values = Set(value))

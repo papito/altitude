@@ -58,7 +58,7 @@ object Util {
     if (bytes < unit) {
       s"$bytes B"
     } else {
-      val exp = (Math.log(bytes) / Math.log(unit)).toInt
+      val exp = (Math.log(bytes.toDouble) / Math.log(unit)).toInt
       val pre = ("KMGTPE").charAt(exp - 1)
       f"${bytes / Math.pow(unit, exp)}%.1f ${pre}B"
     }

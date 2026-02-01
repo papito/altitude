@@ -191,57 +191,55 @@ class LibraryService(val app: Altitude) {
       }
 
       logger.info(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
-      if (assetsToMove.isEmpty) {
-        return
+      if (assetsToMove.nonEmpty) {
+        val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
+
+        app.service.asset.updateByQuery(
+          query = assetQuery,
+          data = Map(
+            FieldConst.Asset.FOLDER_ID -> destFolderId,
+            FieldConst.Asset.IS_RECYCLED -> false,
+            FieldConst.Asset.IS_TRIAGED -> false)
+        )
+
+        // update the stats in one pass
+        val (triagedAssets, triagedBytes, recycledAssets, recycledAssetsBytes, sortedAssets, sortedBytes) =
+          assetsToMove.foldLeft((0, 0L, 0, 0L, 0, 0L)) {
+            case (
+                  (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum),
+                  asset) =>
+              if (asset.isTriaged) {
+                (
+                  triagedAssetsSum + 1,
+                  triagedBytesSum + asset.sizeBytes,
+                  recycledAssetsSum,
+                  recycledAssetsBytesSum,
+                  sortedAssetsSum + 1,
+                  sortedBytesSum + asset.sizeBytes)
+              } else if (asset.isRecycled) {
+                (
+                  triagedAssetsSum,
+                  triagedBytesSum,
+                  recycledAssetsSum + 1,
+                  recycledAssetsBytesSum + asset.sizeBytes,
+                  sortedAssetsSum + 1,
+                  sortedBytesSum + asset.sizeBytes)
+              } else {
+                // asset, not in a special state, being movied from one folder to another - no global stats change
+                (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum)
+              }
+          }
+
+        app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
+        app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
+        app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, recycledAssets)
+        app.service.stats.decrementStat(Stats.RECYCLED_BYTES, recycledAssetsBytes)
+
+        app.service.stats.incrementStat(Stats.SORTED_ASSETS, sortedAssets)
+        app.service.stats.incrementStat(Stats.SORTED_BYTES, sortedBytes)
+
+        app.service.person.restoreFacesForAssets(assetIds)
       }
-
-      val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
-
-      app.service.asset.updateByQuery(
-        query = assetQuery,
-        data = Map(
-          FieldConst.Asset.FOLDER_ID -> destFolderId,
-          FieldConst.Asset.IS_RECYCLED -> false,
-          FieldConst.Asset.IS_TRIAGED -> false)
-      )
-
-      // update the stats in one pass
-      val (triagedAssets, triagedBytes, recycledAssets, recycledAssetsBytes, sortedAssets, sortedBytes) =
-        assetsToMove.foldLeft((0, 0L, 0, 0L, 0, 0L)) {
-          case (
-                (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum),
-                asset) =>
-            if (asset.isTriaged) {
-              (
-                triagedAssetsSum + 1,
-                triagedBytesSum + asset.sizeBytes,
-                recycledAssetsSum,
-                recycledAssetsBytesSum,
-                sortedAssetsSum + 1,
-                sortedBytesSum + asset.sizeBytes)
-            } else if (asset.isRecycled) {
-              (
-                triagedAssetsSum,
-                triagedBytesSum,
-                recycledAssetsSum + 1,
-                recycledAssetsBytesSum + asset.sizeBytes,
-                sortedAssetsSum + 1,
-                sortedBytesSum + asset.sizeBytes)
-            } else {
-              // asset, not in a special state, being movied from one folder to another - no global stats change
-              (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum)
-            }
-        }
-
-      app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
-      app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
-      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, recycledAssets)
-      app.service.stats.decrementStat(Stats.RECYCLED_BYTES, recycledAssetsBytes)
-
-      app.service.stats.incrementStat(Stats.SORTED_ASSETS, sortedAssets)
-      app.service.stats.incrementStat(Stats.SORTED_BYTES, sortedBytes)
-
-      app.service.person.restoreFacesForAssets(assetIds)
     }
   }
 
@@ -249,36 +247,34 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
 
-      if (assetsToRecycle.isEmpty) {
-        return
+      if (assetsToRecycle.nonEmpty) {
+        val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
+
+        app.service.asset.updateByQuery(
+          query = assetQuery,
+          data = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_TRIAGED -> false)
+        )
+
+        // update the stats in one pass
+        val (triagedAssets, triagedBytes, sortedAssets, sortedBytes) = assetsToRecycle.foldLeft((0, 0L, 0, 0L)) {
+          case ((triagedAssetsSum, triagedBytesSum, sortedAssetsSum, sortedBytesSum), asset) =>
+            if (asset.isTriaged) {
+              (triagedAssetsSum + 1, triagedBytesSum + asset.sizeBytes, sortedAssetsSum, sortedBytesSum)
+            } else {
+              (triagedAssetsSum, triagedBytesSum, sortedAssetsSum + 1, sortedBytesSum + asset.sizeBytes)
+            }
+        }
+
+        app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
+        app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
+        app.service.stats.decrementStat(Stats.SORTED_ASSETS, sortedAssets)
+        app.service.stats.decrementStat(Stats.SORTED_BYTES, sortedBytes)
+
+        app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, assetIds.size)
+        app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
+
+        app.service.person.recycleFacesForAssets(assetIds)
       }
-
-      val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
-
-      app.service.asset.updateByQuery(
-        query = assetQuery,
-        data = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_TRIAGED -> false)
-      )
-
-      // update the stats in one pass
-      val (triagedAssets, triagedBytes, sortedAssets, sortedBytes) = assetsToRecycle.foldLeft((0, 0L, 0, 0L)) {
-        case ((triagedAssetsSum, triagedBytesSum, sortedAssetsSum, sortedBytesSum), asset) =>
-          if (asset.isTriaged) {
-            (triagedAssetsSum + 1, triagedBytesSum + asset.sizeBytes, sortedAssetsSum, sortedBytesSum)
-          } else {
-            (triagedAssetsSum, triagedBytesSum, sortedAssetsSum + 1, sortedBytesSum + asset.sizeBytes)
-          }
-      }
-
-      app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
-      app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
-      app.service.stats.decrementStat(Stats.SORTED_ASSETS, sortedAssets)
-      app.service.stats.decrementStat(Stats.SORTED_BYTES, sortedBytes)
-
-      app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, assetIds.size)
-      app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
-
-      app.service.person.recycleFacesForAssets(assetIds)
     }
   }
 

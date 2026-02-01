@@ -63,6 +63,7 @@ class FaceRecManagerActor(context: ActorContext[FaceRecManagerActor.Command])
           .ask(FaceRecModelActor.Initialize(_))
           .onComplete {
             case Success(response: AltitudeActorSystem.EmptyResponse) => replyTo ! response
+            case Success(_) => logger.warn("Unexpected response from face rec model actor")
             case Failure(exception) => logger.error("Failed to initialize face rec model actor", exception)
           }(ec)
         Behaviors.same
