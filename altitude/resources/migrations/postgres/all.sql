@@ -94,7 +94,6 @@ CREATE TABLE person (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) REFERENCES repository(id) ON DELETE CASCADE,
   -- this is taken from the person_label table, where its primary key is a sequence
-  label BIGINT NOT NULL,
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36),

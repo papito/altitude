@@ -125,6 +125,66 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
       case Const.DbEngineName.SQLITE => new dao.jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
+
+    val user: dao.UserDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val userToken: dao.UserTokenDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.UserTokenDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.UserTokenDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val repository: dao.RepositoryDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.postgres.RepositoryDao(app.config)
+      case Const.DbEngineName.SQLITE => new dao.jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val asset: dao.AssetDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.postgres.AssetDao(app.config)
+      case Const.DbEngineName.SQLITE => new dao.jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val folder: dao.FolderDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val metadataField: dao.UserMetadataFieldDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val search: dao.SearchDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.postgres.SearchDao(app.config)
+      case Const.DbEngineName.SQLITE => new dao.sqlite.SearchDao(app.config)
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val person: dao.PersonDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.postgres.PersonDao(app.config)
+      case Const.DbEngineName.SQLITE => new dao.sqlite.PersonDao(app.config)
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val face: dao.FaceDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.FaceDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.FaceDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val stats: dao.StatDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
   }
 
   object service {

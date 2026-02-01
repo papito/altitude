@@ -1,5 +1,7 @@
 package altitude.core.models
+
 import java.time.LocalDateTime
+import play.api.libs.json.JsObject
 
 abstract class BaseModel {
   val id: Option[String]
@@ -14,6 +16,9 @@ abstract class BaseModel {
       case _ => id.get
     }
   }
+
+  // Required for DAO operations
+  def toJson: JsObject
 
   override def toString: String = s"<${getClass.getSimpleName}> ${id.getOrElse("NO ID")}"
 }
