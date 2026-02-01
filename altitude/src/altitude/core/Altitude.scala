@@ -116,4 +116,11 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
 
+    object DAO {
+      val systemMetadata: SystemMetadataDao = dataSourceType match {
+        case Const.DbEngineName.POSTGRES => new jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
+        case Const.DbEngineName.SQLITE => new jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
+        case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      }
+    }
 }
