@@ -28,7 +28,6 @@ import altitude.core.pipeline.flows.AssignIdFlow
 import altitude.core.pipeline.flows.CheckDuplicateFlow
 import altitude.core.pipeline.flows.CheckMediaTypeFlow
 import altitude.core.pipeline.flows.ExtractMetadataFlow
-import altitude.core.pipeline.flows.FacialRecognitionFlow
 import altitude.core.pipeline.flows.FileStoreFlow
 import altitude.core.pipeline.flows.MarkAsCompleteFlow
 import altitude.core.pipeline.flows.PersistAndIndexAssetFlow

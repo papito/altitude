@@ -40,23 +40,23 @@ class UserService(val app: Altitude) extends BaseService[User] {
       val passwordHash = getPasswordHashByEmail(email)
 
       if (!Util.checkPassword(password, passwordHash)) {
-        return None
+        None
+      } else {
+        val user: User = getByEmail(email)
+
+        // save the token
+        val userToken = UserToken(
+          userId = user.persistedId,
+          token = Util.randomStr(64),
+          expiresAt = LocalDateTime.now.plusDays(Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS))
+
+        tokenDao.add(userToken.toJson)
+        // MIGRATE
+        // AltitudeServletContext.usersByToken += (userToken.token -> user)
+
+        switchContextToUser(user)
+        Some(user)
       }
-
-      val user: User = getByEmail(email)
-
-      // save the token
-      val userToken = UserToken(
-        userId = user.persistedId,
-        token = Util.randomStr(64),
-        expiresAt = LocalDateTime.now.plusDays(Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS))
-
-      tokenDao.add(userToken.toJson)
-      // MIGRATE
-      // AltitudeServletContext.usersByToken += (userToken.token -> user)
-
-      switchContextToUser(user)
-      Some(user)
     }
   }
 

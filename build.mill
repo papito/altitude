@@ -23,6 +23,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule {
   def scalacOptions: Task.Simple[Seq[String]] = Seq(
     "-deprecation",
     "-language:postfixOps",
+    "-language:implicitConversions",
     "-feature",
     "-Wunused:imports",
     "-encoding", "UTF-8",

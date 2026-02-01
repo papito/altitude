@@ -4,8 +4,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 
-import scala.util.control.Breaks._
-
 import altitude.core.{ Const => C, _ }
 import altitude.core.dao.AssetDao
 import altitude.core.dao.UserMetadataFieldDao
@@ -228,33 +226,31 @@ class UserMetadataService(val app: Altitude) {
       require(existingMdVal.nonEmpty)
 
       // bail if the new values is identical to the old one
-      if (existingMdVal.get.value == newMdVal.value) {
-        return
+      if (existingMdVal.get.value != newMdVal.value) {
+        // when checking for existing values, ignore the current ID
+        if (currentMdVals.filterNot(_.id.contains(valueId)).contains(cleamMdVal)) {
+          val ex = ValidationException()
+          ex.errors += (fieldId -> C.Msg.Err.DUPLICATE)
+          ex.trigger()
+        }
+
+        val newData = currentMetadata.data.map {
+          item =>
+            val fId = item._1
+            val mdVals = item._2
+
+            // return all values as is, only replacing the one value we are working on
+            val newMdVals = if (fId == fieldId) {
+              mdVals.map(v => if (v.persistedId == valueId) newMdVal else v)
+            } else {
+              mdVals
+            }
+
+            fId -> newMdVals
+        }
+
+        updateMetadata(assetId, UserMetadata(newData))
       }
-
-      // when checking for existing values, ignore the current ID
-      if (currentMdVals.filterNot(_.id.contains(valueId)).contains(cleamMdVal)) {
-        val ex = ValidationException()
-        ex.errors += (fieldId -> C.Msg.Err.DUPLICATE)
-        ex.trigger()
-      }
-
-      val newData = currentMetadata.data.map {
-        item =>
-          val fId = item._1
-          val mdVals = item._2
-
-          // return all values as is, only replacing the one value we are working on
-          val newMdVals = if (fId == fieldId) {
-            mdVals.map(v => if (v.persistedId == valueId) newMdVal else v)
-          } else {
-            mdVals
-          }
-
-          fId -> newMdVals
-      }
-
-      updateMetadata(assetId, UserMetadata(newData))
     }
   }
 
@@ -300,7 +296,7 @@ class UserMetadataService(val app: Altitude) {
               // and lose the blanks
               .filter(_.nonEmpty)
 
-          case FieldType.NUMBER | FieldType.BOOL =>
+          case FieldType.NUMBER | FieldType.BOOL | FieldType.DATETIME =>
             mdVals
               // trim leading/trailing
               .map(mdVal => UserMetadataValue(mdVal.id, mdVal.value.trim))
@@ -332,13 +328,10 @@ class UserMetadataService(val app: Altitude) {
         val field: UserMetadataField = fields(fieldId)
         val mdVals: Set[UserMetadataValue] = m._2
 
-        breakable {
-          // booleans cannot have multiple values
-          if (field.fieldType == FieldType.BOOL && mdVals.size > 1) {
-            ex.errors += (field.persistedId -> C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name))
-            break()
-          }
-
+        // booleans cannot have multiple values
+        if (field.fieldType == FieldType.BOOL && mdVals.size > 1) {
+          ex.errors += (field.persistedId -> C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name))
+        } else {
           val illegalValues = collectInvalidTypeValues(field.fieldType, mdVals)
 
           // add to the validation exception if any
@@ -451,6 +444,7 @@ class UserMetadataService(val app: Altitude) {
               } else {
                 Some(mdVal.value)
               }
+            case FieldType.DATETIME => None // TODO: Add datetime validation if needed
           }
         // get rid of None's - those are valid values
       }

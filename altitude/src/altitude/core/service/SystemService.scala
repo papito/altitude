@@ -4,11 +4,8 @@ import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import altitude.core.{ Const => C }
 import altitude.core.Altitude
-import altitude.core.RequestContext
 import altitude.core.dao.SystemMetadataDao
-import altitude.core.models.Repository
 import altitude.core.models.SystemMetadata
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager

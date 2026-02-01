@@ -1,6 +1,5 @@
 package altitude.core.service
 
-import org.apache.pekko.Done
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 import org.apache.pekko.stream.scaladsl.Source
@@ -10,7 +9,6 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.Await
 import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
