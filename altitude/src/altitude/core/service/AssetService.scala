@@ -89,7 +89,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   def getDanglingAssets: List[Asset] = {
     txManager.asReadOnly {
       val danglingAssets = dao.queryAll(new Query(Map(FieldConst.Asset.IS_PIPELINE_PROCESSED -> false)))
-      danglingAssets.records.map(Asset.fromJson(_))
+      danglingAssets.records.map(r => r: Asset)
     }
   }
 

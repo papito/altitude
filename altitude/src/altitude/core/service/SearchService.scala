@@ -13,7 +13,7 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
 object SearchService {
-  private val NON_FACETED_FIELD_TYPES: Set[FieldType.Value] = Set(FieldType.TEXT)
+  private val NON_FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.TEXT)
 }
 
 class SearchService(val app: Altitude) {

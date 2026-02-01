@@ -38,7 +38,7 @@ class UserMetadataService(val app: Altitude) {
         throw DuplicateException()
       }
 
-      metadataFieldDao.add(metadataField)
+      metadataFieldDao.add(metadataField.toJson)
     }
   }
 
@@ -264,7 +264,7 @@ class UserMetadataService(val app: Altitude) {
 
     // make sure all metadata field IDs given to us are known
     val existingFieldIds = fields.keys.toSet
-    val suppliedFieldIds = metadata.keys
+    val suppliedFieldIds = metadata.data.keys.toSet
 
     val missing = suppliedFieldIds.diff(existingFieldIds)
 
@@ -430,7 +430,7 @@ class UserMetadataService(val app: Altitude) {
    * @return
    *   All values that FAIL type validation
    */
-  def collectInvalidTypeValues(fieldType: FieldType.Value, values: Set[UserMetadataValue]): Set[String] = {
+  def collectInvalidTypeValues(fieldType: FieldType, values: Set[UserMetadataValue]): Set[String] = {
     // FIXME: foldLeft is better-suited here
     values
       .map {

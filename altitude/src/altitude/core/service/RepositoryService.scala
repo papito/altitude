@@ -67,7 +67,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       app.service.stats.createStat(Stats.RECYCLED_BYTES)
       logger.info(s"Created repository [$repo]")
 
-      repo
+      repo.toJson
     }
   }
   

@@ -59,7 +59,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
       var persistedFace: Option[Face] = None
       try {
-        persistedFace = Some(faceDao.add(face, asset, person))
+        persistedFace = Some(faceDao.add(face.toJson, asset, person))
       } catch {
         case e: SQLException =>
           throw getDuplicateExceptionOrSame(
@@ -87,7 +87,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
         numOfFaces = person.getFaces.size
       )
 
-      dao.add(personForUpdate): Person
+      dao.add(personForUpdate.toJson): Person
     }
   }
 
@@ -130,7 +130,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       logger.debug(s"Moving faces from ${source.name.get} to ${dest.name.get}")
       val query = new Query().add(FieldConst.Face.PERSON_ID -> source.persistedId)
 
-      val allSourceFaces: List[Face] = faceDao.query(query).records.map(Face.fromJson(_))
+      val allSourceFaces: List[Face] = faceDao.query(query).records.map(r => r: Face)
       logger.info(s"Training the ${allSourceFaces.size} faces on the destination label ${dest.label}")
 
       val sourceFacesWithNewDestLabel: List[Face] = allSourceFaces.map(face => face.copy(personLabel = Some(dest.label)))
@@ -192,7 +192,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       val q = new Query(params = Map(FieldConst.Face.PERSON_ID -> personId), sort = List(sort))
 
       val qRes: QueryResult = faceDao.query(q)
-      qRes.records.take(limit).map(Face.fromJson(_))
+      qRes.records.take(limit).map(r => r: Face)
     }
   }
 
@@ -230,7 +230,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
 
       val qRes: QueryResult = dao.query(q)
-      qRes.records.map(Person.fromJson(_))
+      qRes.records.map(r => r: Person)
     }
   }
 
