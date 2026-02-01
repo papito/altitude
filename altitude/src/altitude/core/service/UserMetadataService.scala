@@ -1,17 +1,17 @@
-package software.altitude.core.service
-package software.altitude.core.service
+package altitude.core.service
+
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 
 import scala.util.control.Breaks._
 
-import software.altitude.core.{ Const => C, _ }
-import software.altitude.core.dao.AssetDao
-import software.altitude.core.dao.UserMetadataFieldDao
-import software.altitude.core.models._
-import software.altitude.core.transactions.TransactionManager
-import software.altitude.core.util.Query
+import altitude.core.{ Const => C, _ }
+import altitude.core.dao.AssetDao
+import altitude.core.dao.UserMetadataFieldDao
+import altitude.core.models._
+import altitude.core.transactions.TransactionManager
+import altitude.core.util.Query
 
 object UserMetadataService {
   final private val VALID_BOOLEAN_VALUES: Set[String] = Set("0", "1", "true", "false")
