@@ -1,9 +1,12 @@
 package altitude.core.models
 
-import ujson.Value
-import upickle.default.ReadWriter
-import upickle.default.write
-import upickle.default.writeJs
+import play.api.libs.json.*
+import play.api.libs.json.JsonNaming.SnakeCase
+
+object PublicMetadata:
+  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  given format: OFormat[PublicMetadata] = Json.format[PublicMetadata]
+  given Conversion[JsValue, PublicMetadata] = json => Json.fromJson[PublicMetadata](json).get
 
 case class PublicMetadata(
     deviceModel: Option[String] = None,
@@ -14,8 +17,6 @@ case class PublicMetadata(
     dateTimeOriginal: Option[String] = None)
   extends BaseModel
   with NoId
-  with NoDates
-  derives ReadWriter:
+  with NoDates:
 
-  def toJsonString: String = write(this)
-  def toJson: Value = writeJs(this)
+  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]

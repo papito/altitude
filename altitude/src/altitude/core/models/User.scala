@@ -1,9 +1,12 @@
 package altitude.core.models
 
-import ujson.Value
-import upickle.default.ReadWriter
-import upickle.default.write
-import upickle.default.writeJs
+import play.api.libs.json.*
+import play.api.libs.json.JsonNaming.SnakeCase
+
+object User:
+  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  given format: OFormat[User] = Json.format[User]
+  given Conversion[JsValue, User] = json => Json.fromJson[User](json).get
 
 case class User(
     id: Option[String] = None,
@@ -12,13 +15,10 @@ case class User(
     accountType: AccountType,
     lastActiveRepoId: Option[String] = None)
   extends BaseModel
-  with NoDates
-  derives ReadWriter:
+  with NoDates:
 
   override def toString: String = s"<user> ${id.getOrElse("NO ID")}, email: $email, accountType: $accountType"
-  def toJsonString: String = write(this)
-  def toJson: Value = writeJs(this)
+  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 
-  def forgetMe(): Unit = {
+  def forgetMe(): Unit =
     println("User: this is where you'd invalidate the saved token in you User model")
-  }

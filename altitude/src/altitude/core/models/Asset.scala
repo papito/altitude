@@ -1,11 +1,8 @@
 package altitude.core.models
 
-import altitude.core.json.UpickleConverters._
 import java.time.LocalDateTime
-import ujson.Value
-import upickle.default.ReadWriter
-import upickle.default.write
-import upickle.default.writeJs
+import play.api.libs.json.*
+import play.api.libs.json.JsonNaming.SnakeCase
 
 /**
  * All asset-related metadata.
@@ -13,8 +10,12 @@ import upickle.default.writeJs
  * Since we do not store actual binary data in a DB, the data itself is only passed via AssetWithData. This [underlying] class is
  * for passing around asset metadata.
  */
-object Asset {
-  def getPublicMetadata(extractedMetadata: ExtractedMetadata): PublicMetadata = {
+object Asset:
+  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  given format: OFormat[Asset] = Json.format[Asset]
+  given Conversion[JsValue, Asset] = json => Json.fromJson[Asset](json).get
+
+  def getPublicMetadata(extractedMetadata: ExtractedMetadata): PublicMetadata =
     PublicMetadata(
       deviceModel = extractedMetadata.getFieldValues("Exif IFD0").get("Model"),
       fNumber = extractedMetadata.getFieldValues("Exif SubIFD").get("F-Number"),
@@ -23,8 +24,6 @@ object Asset {
       exposureTime = extractedMetadata.getFieldValues("Exif SubIFD").get("Exposure Time"),
       dateTimeOriginal = extractedMetadata.getFieldValues("Exif SubIFD").get("Date/Time Original")
     )
-  }
-}
 
 case class Asset(
     id: Option[String] = None,
@@ -36,6 +35,7 @@ case class Asset(
     folderId: String,
     width: Int = 0,
     height: Int = 0,
+    userMetadata: UserMetadata = UserMetadata(),
     publicMetadata: PublicMetadata = PublicMetadata(),
     extractedMetadata: ExtractedMetadata = ExtractedMetadata(),
     isTriaged: Boolean = false,
@@ -45,10 +45,9 @@ case class Asset(
     originalCreatedAt: Option[LocalDateTime] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
-  extends BaseModel
-  derives ReadWriter:
-  def toJsonString: String = write(this)
-  def toJson: Value = writeJs(this)
+  extends BaseModel:
+
+  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 
   override def toString: String =
     s"Asset: [$id] [$fileName] Recycled: [$isRecycled] Triaged: [$isTriaged] Type: [${assetType.mediaType}:${assetType.mediaSubtype}]"

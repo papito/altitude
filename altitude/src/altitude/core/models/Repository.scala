@@ -1,12 +1,13 @@
 package altitude.core.models
 
-import altitude.core.json.UpickleConverters._
 import java.time.LocalDateTime
-import ujson.Value
-import upickle.default.ReadWriter
-import upickle.default.ReadWriter.join
-import upickle.default.write
-import upickle.default.writeJs
+import play.api.libs.json.*
+import play.api.libs.json.JsonNaming.SnakeCase
+
+object Repository:
+  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  given format: OFormat[Repository] = Json.format[Repository]
+  given Conversion[JsValue, Repository] = json => Json.fromJson[Repository](json).get
 
 case class Repository(
     id: Option[String] = None,
@@ -17,9 +18,8 @@ case class Repository(
     fileStoreConfig: Map[String, String] = Map(),
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
-  extends BaseModel
-  derives ReadWriter:
-  def toJsonString: String = write(this)
-  def toJson: Value = writeJs(this)
+  extends BaseModel:
+  
+  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 
   override def toString: String = s"<repo> ${id.getOrElse("NO ID")}: $name"
