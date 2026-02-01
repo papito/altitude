@@ -23,7 +23,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       val folder = Folder(name = name.trim, parentId = _parentId)
       val addedFolder: Folder = app.service.folder.add(folder)
 
-      addedFolder
+      addedFolder.toJson
     }
   }
 

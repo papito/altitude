@@ -5,7 +5,6 @@ import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 
 import altitude.core._
-import altitude.core.AltitudeServletContext
 import altitude.core.FieldConst
 import altitude.core.dao.UserDao
 import altitude.core.dao.UserTokenDao
@@ -126,7 +125,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
 
     // MIGRATE
 //    AltitudeServletContext.usersByEmail += (email -> user)
-    user
+    user.toJson
   }
 
   override def getById(id: String): JsObject = {

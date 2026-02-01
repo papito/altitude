@@ -145,7 +145,7 @@ class LibraryService(val app: Altitude) {
       val assetQuery = new Query().add(FieldConst.Asset.FOLDER_ID -> Query.IN(allFoldersToDeleteIds))
       val assetsToRecycle = app.service.asset.queryAll(assetQuery)
 
-      val assetIdsToRecycle = assetsToRecycle.records.map(Asset.fromJson).map(_.persistedId).toSet
+      val assetIdsToRecycle = assetsToRecycle.records.map(r => (r: Asset)).map(_.persistedId).toSet
       recycleAssets(assetIdsToRecycle)
     }
   }
