@@ -2,11 +2,10 @@ package altitude.core.unit
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
-import org.scalatest.matchers.must.Matchers.be
 import play.api.libs.json.Json
 import altitude.core.DataScrubber
 import altitude.test.TestFocus
-import org.scalatest.matchers.should.Matchers.{convertToStringShouldWrapperForVerb, shouldBe}
+import org.scalatest.matchers.should.Matchers.shouldBe
 
 
 @DoNotDiscover class DataScrubberTests extends funsuite.AnyFunSuite with TestFocus {

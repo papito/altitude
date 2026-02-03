@@ -18,6 +18,11 @@ object IntegrationTestUtil {
     if (!testDir.exists()) {
       FileUtils.forceMkdir(testDir)
     }
+
+    val dbDir = new File(testDir, "db")
+    if (!dbDir.exists()) {
+      FileUtils.forceMkdir(dbDir)
+    }
   }
 
   def createFileStoreDir(testApp: Altitude): Unit = {

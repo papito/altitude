@@ -1,7 +1,7 @@
 version: '3'
 services:
   altitude_core_postgres_dev_db:
-    image: postgres:13.0
+    image: postgres:18.0
     ports:
       - "5432:5432"
     networks:
