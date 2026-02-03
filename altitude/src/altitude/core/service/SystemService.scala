@@ -3,11 +3,9 @@ package altitude.core.service
 import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import altitude.core.Altitude
+import altitude.core.{Altitude, Const, RequestContext}
 import altitude.core.dao.SystemMetadataDao
-import altitude.core.models.SystemMetadata
-import altitude.core.models.User
+import altitude.core.models.{Repository, SystemMetadata, User}
 import altitude.core.transactions.TransactionManager
 
 class SystemService(val app: Altitude) {
@@ -54,24 +52,24 @@ class SystemService(val app: Altitude) {
     logger.warn("INITIALIZING SYSTEM")
 
     txManager.withTransaction {
-//      val admin = app.service.user.add(adminModel, password = password)
+      val admin = app.service.user.add(adminModel, password = password)
+
+      val repo: Repository = app.service.repository.addRepository(
+        name = repositoryName,
+        fileStoreType = Const.StorageEngineName.FS, // hard default for now
+        owner = admin)
 //
-//      val repo: Repository = app.service.repository.addRepository(
-//        name = repositoryName,
-//        fileStoreType = C.StorageEngineName.FS, // hard default for now
-//        owner = admin)
-//
-//      // normally done on startup but on the first run, that train has sailed.
-//      RequestContext.repository.value = Some(repo)
+//      // normally done on startup but on the first run still have to do this here.
+      RequestContext.repository.value = Some(repo)
 //      app.service.faceRecognition.initialize()
 //
-//      app.service.user.setLastActiveRepoId(admin, repo.persistedId)
+      app.service.user.setLastActiveRepoId(admin, repo.persistedId)
 
       systemMetadataDao.setInitialized()
 
       app.setIsInitializedState()
 
-//      RequestContext.account.value = Some(admin)
+      RequestContext.account.value = Some(admin)
     }
   }
 }

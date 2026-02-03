@@ -56,9 +56,9 @@ class FaceRecognitionService(val app: Altitude) {
   implicit val scheduler: Scheduler = app.actorSystem.scheduler
 
   def initialize(): Unit = {
-    val result: Future[AltitudeActorSystem.EmptyResponse] =
-      app.actorSystem.ask(ref => FaceRecManagerActor.Initialize(RequestContext.getRepository.persistedId, ref))
-    Await.result(result, timeout.duration)
+//    val result: Future[AltitudeActorSystem.EmptyResponse] =
+//      app.actorSystem.ask(ref => FaceRecManagerActor.Initialize(RequestContext.getRepository.persistedId, ref))
+//    Await.result(result, timeout.duration)
   }
 
   def initializeAll(): Unit =

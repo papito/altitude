@@ -1,5 +1,8 @@
+package altitude.core.integration
 
 import altitude.core.*
+import altitude.core.models.*
+import altitude.test.{IntegrationTestUtil, TestContext, TestFocus}
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.apache.pekko.actor.typed.Scheduler
@@ -8,10 +11,6 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.*
 import org.slf4j.{Logger, LoggerFactory}
-import altitude.core.models.*
-import altitude.test.IntegrationTestUtil
-import altitude.test.TestFocus
-import altitude.test.TestContext
 
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.*
@@ -75,23 +74,23 @@ abstract class IntegrationTestCore
   }
 
   /**
- * Converts a function with no arguments to a Mockito `Answer`.
- * This method is used when creating a Mockito `Answer` that does not require any information from the `InvocationOnMock`.
- *
- * @param f A function that takes no arguments and returns a value of type `T`.
- * @return An `Answer[T]` that, when invoked, calls the provided function `f`.
- */
+   * Converts a function with no arguments to a Mockito `Answer`.
+   * This method is used when creating a Mockito `Answer` that does not require any information from the `InvocationOnMock`.
+   *
+   * @param f A function that takes no arguments and returns a value of type `T`.
+   * @return An `Answer[T]` that, when invoked, calls the provided function `f`.
+   */
   implicit def toAnswer[T](f: () => T): Answer[T] = new Answer[T] {
     override def answer(invocation: InvocationOnMock): T = f()
   }
 
   /**
- * Converts a function with an `InvocationOnMock` argument to a Mockito `Answer`.
- * This method is used when creating a Mockito `Answer` that requires information from the `InvocationOnMock`.
- *
- * @param f A function that takes an `InvocationOnMock` and returns a value of type `T`.
- * @return An `Answer[T]` that, when invoked, calls the provided function `f` with the `InvocationOnMock`.
- */
+   * Converts a function with an `InvocationOnMock` argument to a Mockito `Answer`.
+   * This method is used when creating a Mockito `Answer` that requires information from the `InvocationOnMock`.
+   *
+   * @param f A function that takes an `InvocationOnMock` and returns a value of type `T`.
+   * @return An `Answer[T]` that, when invoked, calls the provided function `f` with the `InvocationOnMock`.
+   */
   implicit def toAnswerWithArguments[T](f: InvocationOnMock => T): Answer[T] = new Answer[T] {
     override def answer(invocation: InvocationOnMock): T = f(invocation)
   }

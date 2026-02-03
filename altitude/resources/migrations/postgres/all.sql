@@ -19,7 +19,7 @@ CREATE TABLE account(
   email TEXT NOT NULL,
   name TEXT NOT NULL,
   account_type TEXT NOT NULL
-               CHECK(account_type IN ('ADMIN','USER','GUEST')),
+               CHECK(account_type IN ('Admin','User','Guest')),
   password_hash TEXT NOT NULL,
   last_active_repo_id CHAR(36)
 ) INHERITS (_core);
