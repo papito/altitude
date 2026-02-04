@@ -194,7 +194,7 @@ import scala.language.reflectiveCalls
       .allOf(folder1.persistedId, folder1_1.persistedId, folder1_1_1.persistedId)
 
     val allChildrenOf1: List[Folder] = testApp.service.folder.getChildrenRecursive(folder1.persistedId)
-    allChildrenOf1.size shouldEqual (3)
+    allChildrenOf1.size shouldEqual 3
     val allChildrenOf1Ids = allChildrenOf1.map(_.persistedId)
 
     (allChildrenOf1Ids should contain).allOf(folder1_1.persistedId, folder1_1_1.persistedId, folder1_1_1_1.persistedId)
