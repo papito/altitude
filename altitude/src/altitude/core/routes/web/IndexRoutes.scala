@@ -3,13 +3,10 @@ package altitude.core.routes.web
 import org.slf4j.Logger
 
 class IndexRoutes(using logger: Logger) extends cask.Routes:
-  private val prefix = ""
-
-  @cask.get(s"/$prefix")
-  def index(): String = {
-    logger.info("Serving index page")
-    "This is Altitude DAM"
-
+  @cask.get(s"/")
+  def index(): cask.Response[String] = {
+    val payload = "<!doctype html>" + html.index()
+    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
   initialize()

@@ -1,6 +1,7 @@
 //| mill-version: 1.0.6
 //| mvnDeps:
 //| - com.goyeau::mill-scalafix::0.6.0
+//| - "com.lihaoyi::mill-contrib-twirllib:$MILL_VERSION"
 
 package build
 
@@ -8,11 +9,12 @@ import com.goyeau.mill.scalafix.ScalafixModule
 
 import mill._, scalalib._, publish._
 
-object altitude extends ScalaModule with ScalafixModule with PublishModule {
+object altitude extends ScalaModule with ScalafixModule with PublishModule with mill.twirllib.TwirlModule {
   def scalaVersion = "3.6.3"
-
+  def twirlVersion = "1.6.8"
+  
   private val caskVersion = "0.9.7"
-  private val twirlVersion = "1.6.2"
+  
   private val logbackVersion = "1.5.16"
   private val pekkoVersion = "1.1.2"
   private val opencvVersion = "1.5.10"
@@ -43,12 +45,13 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule {
 
   private val coreDeps = Seq(
     mvn"com.lihaoyi::cask:$caskVersion",
+    mvn"com.lihaoyi::ujson:3.3.1",
+    mvn"com.lihaoyi::upickle:3.3.1",
     mvn"ch.qos.logback:logback-classic:$logbackVersion",
 
     mvn"com.typesafe:config:1.4.3",
-    mvn"com.lihaoyi::ujson:3.3.1",
-    mvn"com.lihaoyi::upickle:3.3.1",
     mvn"com.typesafe.play::play-json:2.10.6",
+    mvn"com.typesafe.play::twirl-api:1.6.8",
 
     mvn"commons-io:commons-io:2.18.0",
     mvn"commons-codec:commons-codec:1.17.1",
@@ -71,7 +74,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule {
 
   def runMvnDeps: Task.Simple[Seq[Dep]] = Seq(
     mvn"org.slf4j:slf4j-api:2.0.16",
-    mvn"ch.qos.logback:logback-classic:1.5.14"
+    mvn"ch.qos.logback:logback-classic:1.5.14",
   )
 
   // "windows-x86_64", "macosx-x86_64", "linux-x86_64
@@ -106,6 +109,8 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule {
 
   def mvnDeps: Task.Simple[Seq[Dep]] = coreDeps ++ bytedecoPresetLibs
 
+  def generatedSources: T[Seq[PathRef]] = Task { Seq(compileTwirl().classes) }
+  
   object test extends ScalaTests with TestModule.ScalaTest {
     def mvnDeps: Task.Simple[Seq[Dep]] = Seq(
       mvn"org.apache.pekko::pekko-testkit:$pekkoVersion",
