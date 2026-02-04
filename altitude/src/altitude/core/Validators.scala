@@ -1,11 +1,10 @@
 // src/main/scala/software/altitude/core/Validators.scala
 package altitude.core
 
+import altitude.core.{ Const => C }
 import play.api.libs.json.JsObject
 
 import scala.util.matching.Regex
-
-import altitude.core.{ Const => C }
 
 object Validators {
   private val emailRegex: Regex =

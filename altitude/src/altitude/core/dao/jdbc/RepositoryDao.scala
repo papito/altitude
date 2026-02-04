@@ -1,11 +1,10 @@
 package altitude.core.dao.jdbc
 
+import altitude.core.FieldConst
+import altitude.core.models.Repository
 import com.typesafe.config.Config
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
-
-import altitude.core.FieldConst
-import altitude.core.models.Repository
 
 import scala.language.implicitConversions
 
@@ -15,10 +14,9 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
     val fileStoreConfigCol = rec(FieldConst.Repository.FILES_STORE_CONFIG)
-    val fileStoreConfigJsonStr: String = if fileStoreConfigCol == null then
-      "{}"
-    else
-      fileStoreConfigCol.asInstanceOf[String]
+    val fileStoreConfigJsonStr: String =
+      if fileStoreConfigCol == null then "{}"
+      else fileStoreConfigCol.asInstanceOf[String]
 
     val fileStoreConfigJson = Json.parse(fileStoreConfigJsonStr).as[JsObject]
 

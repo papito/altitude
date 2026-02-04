@@ -1,13 +1,5 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json.*
-import scala.language.implicitConversions
-
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -19,6 +11,14 @@ import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import com.typesafe.config.Config
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import org.apache.commons.dbutils.QueryRunner
+import play.api.libs.json._
+
+import scala.language.implicitConversions
 
 abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.dao.AssetDao:
   final override val tableName = "asset"
@@ -29,7 +29,8 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     val assetType = new AssetType(
       mediaType = rec(FieldConst.AssetType.MEDIA_TYPE).asInstanceOf[String],
       mediaSubtype = rec(FieldConst.AssetType.MEDIA_SUBTYPE).asInstanceOf[String],
-      mime = rec(FieldConst.AssetType.MIME_TYPE).asInstanceOf[String])
+      mime = rec(FieldConst.AssetType.MIME_TYPE).asInstanceOf[String]
+    )
 
     Asset(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
@@ -159,8 +160,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     getAssetsByIdAndRecycledFlag(assetIds, isRecycled = false)
 
   override def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
-    if assetIds.isEmpty then
-      return List.empty[Asset]
+    if assetIds.isEmpty then return List.empty[Asset]
 
     val placeHolders = List.fill(assetIds.size)("?").mkString(",")
 
@@ -177,8 +177,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     res.map(makeModel)
 
   private def getAssetsByIdAndRecycledFlag(assetIds: Set[String], isRecycled: Boolean): List[Asset] =
-    if assetIds.isEmpty then
-      return List.empty[Asset]
+    if assetIds.isEmpty then return List.empty[Asset]
 
     val placeHolders = List.fill(assetIds.size)("?").mkString(",")
 

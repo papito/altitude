@@ -25,9 +25,8 @@ Regard this code as for reference use only in the meantime.
  */
 package altitude.core.models
 
-import play.api.libs.json.*
-
 import altitude.core.dao.jdbc.BaseDao
+import play.api.libs.json._
 
 object UserMetadata:
   given reads: Reads[UserMetadata] = (json: JsValue) =>

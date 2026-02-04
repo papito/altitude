@@ -1,7 +1,8 @@
 package altitude.core.models
 
-import java.time.LocalDateTime
 import play.api.libs.json.JsObject
+
+import java.time.LocalDateTime
 
 abstract class BaseModel {
   val id: Option[String]

@@ -1,14 +1,14 @@
 package altitude.core.dao.jdbc
+import altitude.core.FieldConst
+import altitude.core.RequestContext
+import altitude.core.models._
+import altitude.core.util.SearchQuery
+import altitude.core.util.SearchResult
 import com.typesafe.config.Config
 import java.sql.PreparedStatement
 import java.sql.Types
 import org.apache.commons.dbutils.QueryRunner
 import play.api.libs.json.JsObject
-import altitude.core.FieldConst
-import altitude.core.RequestContext
-import altitude.core.models.*
-import altitude.core.util.SearchQuery
-import altitude.core.util.SearchResult
 object SearchDao:
   private val VALUE_INSERT_SQL: String = s"""
             INSERT INTO metadata_parameter (
@@ -58,36 +58,30 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
           val values = m._2
           logger.debug(s"Processing field [${field.nameLowercase}] with values [$values]")
           addMetadataValues(asset = asset, field = field, values = values.map(_.value))
-        else
-          logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
+        else logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
     }
   override def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
     addMetadataValues(asset = asset, field = field, values = Set(value))
   override def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
     logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)
-    values.foreach { valueStr =>
-      preparedStatement.clearParameters()
-      preparedStatement.setString(1, RequestContext.getRepository.persistedId)
-      preparedStatement.setString(2, asset.persistedId)
-      preparedStatement.setString(3, field.persistedId)
-      // keyword
-      if field.fieldType == FieldType.KEYWORD then
-        preparedStatement.setString(4, valueStr.toLowerCase)
-      else
-        preparedStatement.setNull(4, Types.VARCHAR)
-      // number
-      if field.fieldType == FieldType.NUMBER then
-        preparedStatement.setDouble(5, valueStr.toDouble)
-      else
-        preparedStatement.setNull(5, Types.DOUBLE)
-      // boolean
-      if field.fieldType == FieldType.BOOL then
-        preparedStatement.setBoolean(6, valueStr.toBoolean)
-      else
-        preparedStatement.setNull(6, Types.BOOLEAN)
-      BaseDao.incrWriteQueryCount()
-      preparedStatement.execute()
+    values.foreach {
+      valueStr =>
+        preparedStatement.clearParameters()
+        preparedStatement.setString(1, RequestContext.getRepository.persistedId)
+        preparedStatement.setString(2, asset.persistedId)
+        preparedStatement.setString(3, field.persistedId)
+        // keyword
+        if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, valueStr.toLowerCase)
+        else preparedStatement.setNull(4, Types.VARCHAR)
+        // number
+        if field.fieldType == FieldType.NUMBER then preparedStatement.setDouble(5, valueStr.toDouble)
+        else preparedStatement.setNull(5, Types.DOUBLE)
+        // boolean
+        if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, valueStr.toBoolean)
+        else preparedStatement.setNull(6, Types.BOOLEAN)
+        BaseDao.incrWriteQueryCount()
+        preparedStatement.execute()
     }
     replaceSearchDocument(asset)
   override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any]): Unit =

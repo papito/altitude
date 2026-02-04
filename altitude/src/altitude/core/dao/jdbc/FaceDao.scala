@@ -1,15 +1,14 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import java.sql.PreparedStatement
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
+import com.typesafe.config.Config
+import java.sql.PreparedStatement
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 
 import scala.language.implicitConversions
 
@@ -128,10 +127,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
 
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(
       sql,
-      List(
-        RequestContext.getRepository.persistedId,
-        RequestContext.getRepository.persistedId,
-        MAX_COMPARISONS_PER_PERSON))
+      List(RequestContext.getRepository.persistedId, RequestContext.getRepository.persistedId, MAX_COMPARISONS_PER_PERSON))
 
     recs.map(makeModel)
 
@@ -160,8 +156,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
           y1 = 0,
           width = 0,
           height = 0
-        )
-      )
+        ))
 
 // Define the missing constant
 val MAX_COMPARISONS_PER_PERSON = 10

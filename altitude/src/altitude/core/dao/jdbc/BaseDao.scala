@@ -1,20 +1,5 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.UUID
-import org.apache.commons.dbutils.QueryRunner
-import org.apache.commons.dbutils.handlers.MapListHandler
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import play.api.libs.json._
-import play.api.libs.json.JsValue.jsValueToJsLookup
-
-import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
-
-import altitude.core.{ Const => C }
 import altitude.core.ConstraintException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
@@ -24,6 +9,20 @@ import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.{ Const => C }
+import com.typesafe.config.Config
+import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.handlers.MapListHandler
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import play.api.libs.json.JsValue.jsValueToJsLookup
+import play.api.libs.json._
+
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
+import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 object BaseDao {
   final def genId: String = UUID.randomUUID.toString

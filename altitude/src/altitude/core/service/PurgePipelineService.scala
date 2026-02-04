@@ -1,5 +1,10 @@
 package altitude.core.service
 
+import altitude.core.Altitude
+import altitude.core.AltitudeActorSystem
+import altitude.core.pipeline.PipelineConstants.parallelism
+import altitude.core.pipeline.PipelineTypes.TAssetWithContext
+import altitude.core.pipeline.flows._
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.stream.OverflowStrategy
@@ -17,12 +22,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
-
-import altitude.core.Altitude
-import altitude.core.AltitudeActorSystem
-import altitude.core.pipeline.PipelineConstants.parallelism
-import altitude.core.pipeline.PipelineTypes.TAssetWithContext
-import altitude.core.pipeline.flows._
 
 class PurgePipelineService(app: Altitude) {
   val logger: Logger = LoggerFactory.getLogger(getClass)

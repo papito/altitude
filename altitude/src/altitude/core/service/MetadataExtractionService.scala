@@ -1,9 +1,9 @@
 package altitude.core.service
 
+import altitude.core.models.AssetType
+import altitude.core.models.ExtractedMetadata
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.Directory
-import java.io.ByteArrayInputStream
-import java.io.InputStream
 import org.apache.tika.detect.DefaultDetector
 import org.apache.tika.detect.Detector
 import org.apache.tika.io.TikaInputStream
@@ -12,10 +12,9 @@ import org.apache.tika.mime.{ MediaType => TikaMediaType }
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import scala.jdk.CollectionConverters._
-
-import altitude.core.models.AssetType
-import altitude.core.models.ExtractedMetadata
 
 class MetadataExtractionService {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

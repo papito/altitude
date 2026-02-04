@@ -1,14 +1,14 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-import scala.language.implicitConversions
-
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Folder
+import com.typesafe.config.Config
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
+
+import scala.language.implicitConversions
 
 abstract class FolderDao(override val config: Config) extends BaseDao with altitude.core.dao.FolderDao:
   final override val tableName = "folder"

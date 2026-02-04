@@ -1,12 +1,11 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json.JsObject
-
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.SystemMetadata
+import com.typesafe.config.Config
+import org.apache.commons.dbutils.QueryRunner
+import play.api.libs.json.JsObject
 
 abstract class SystemMetadataDao(override val config: Config) extends BaseDao with altitude.core.dao.SystemMetadataDao {
 

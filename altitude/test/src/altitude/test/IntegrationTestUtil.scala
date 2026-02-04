@@ -1,15 +1,14 @@
 package altitude.test
 
-import org.apache.commons.io.FileUtils
+import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.models.ImportAsset
 import altitude.core.models.UserMetadata
-import altitude.core.{Const => C}
-
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.imageio.ImageIO
+import org.apache.commons.io.FileUtils
 
 object IntegrationTestUtil {
   def createTestDir(testApp: Altitude): Unit = {
@@ -30,23 +29,18 @@ object IntegrationTestUtil {
 
     if (dataDir.exists()) {
       FileUtils.cleanDirectory(dataDir)
-    }
-    else {
+    } else {
       FileUtils.forceMkdir(dataDir)
     }
   }
 
-  /**
-   * Convert a file system resource to an import asset (this reads the actual binary content of the file).
-   */
-  def fileToImportAsset(file: File): ImportAsset = new ImportAsset(
-    fileName = file.getName,
-    data = FileUtils.readFileToByteArray(file),
-    metadata = UserMetadata())
+  /** Convert a file system resource to an import asset (this reads the actual binary content of the file). */
+  def fileToImportAsset(file: File): ImportAsset =
+    new ImportAsset(fileName = file.getName, data = FileUtils.readFileToByteArray(file), metadata = UserMetadata())
 
   def getImportAsset(relPath: String): ImportAsset = {
     val path = getClass.getResource(s"/import/$relPath").getPath
-    val file  = new File(path)
+    val file = new File(path)
 
     if (!file.exists()) {
       throw new RuntimeException(s"File not found: $path")
@@ -65,11 +59,11 @@ object IntegrationTestUtil {
     while (y < h) {
       var x = 0
       while (x < w) {
-        val a = (Math.random * 256).toInt //alpha
-        val r = (Math.random * 256).toInt //red
-        val g = (Math.random * 256).toInt //green
-        val b = (Math.random * 256).toInt //blue
-        val p = (a << 24) | (r << 16) | (g << 8) | b //pixel
+        val a = (Math.random * 256).toInt // alpha
+        val r = (Math.random * 256).toInt // red
+        val g = (Math.random * 256).toInt // green
+        val b = (Math.random * 256).toInt // blue
+        val p = (a << 24) | (r << 16) | (g << 8) | b // pixel
         bufferedImage.setRGB(x, y, p)
         x += 1
       }
@@ -90,11 +84,11 @@ object IntegrationTestUtil {
     while (y < h) {
       var x = 0
       while (x < w) {
-        val a = (Math.random * 256).toInt //alpha
-        val r = (Math.random * 256).toInt //red
-        val g = (Math.random * 256).toInt //green
-        val b = (Math.random * 256).toInt //blue
-        val p = (a << 24) | (r << 16) | (g << 8) | b //pixel
+        val a = (Math.random * 256).toInt // alpha
+        val r = (Math.random * 256).toInt // red
+        val g = (Math.random * 256).toInt // green
+        val b = (Math.random * 256).toInt // blue
+        val p = (a << 24) | (r << 16) | (g << 8) | b // pixel
         bufferedImage.setRGB(x, y, p)
         x += 1
       }

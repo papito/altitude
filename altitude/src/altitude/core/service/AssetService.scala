@@ -1,9 +1,5 @@
 package altitude.core.service
 
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
-
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.FieldConst
@@ -15,6 +11,9 @@ import altitude.core.models.MimedPreviewData
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 
 class AssetService(val app: Altitude) extends BaseService[Asset] {
   override protected val dao: AssetDao = app.DAO.asset

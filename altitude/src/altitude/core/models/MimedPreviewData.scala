@@ -1,5 +1,6 @@
 package altitude.core.models
 
+import altitude.core.FieldConst
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
@@ -7,8 +8,6 @@ import play.api.libs.json.JsSuccess
 import play.api.libs.json.JsValue
 import play.api.libs.json.OWrites
 import play.api.libs.json.Reads
-
-import altitude.core.FieldConst
 
 object MimedPreviewData:
   final val MIME_TYPE = "image/png"

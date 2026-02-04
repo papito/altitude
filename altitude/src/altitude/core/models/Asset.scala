@@ -1,7 +1,7 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
-import play.api.libs.json.*
+import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
 
 /**
@@ -11,9 +11,9 @@ import play.api.libs.json.JsonNaming.SnakeCase
  * for passing around asset metadata.
  */
 object Asset:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[Asset] = Json.format[Asset]
-  given Conversion[JsValue, Asset] = json => Json.fromJson[Asset](json).get
+  implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
+  implicit val format: OFormat[Asset] = Json.format[Asset]
+  implicit def fromJson(json: JsValue): Asset = Json.fromJson[Asset](json).get
 
   def getPublicMetadata(extractedMetadata: ExtractedMetadata): PublicMetadata =
     PublicMetadata(

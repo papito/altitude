@@ -1,9 +1,8 @@
 package altitude.core.models
 
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
-
 import altitude.core.ValidationException
+import play.api.libs.json._
+import play.api.libs.json.JsonNaming.SnakeCase
 
 object Folder:
   given config: JsonConfiguration = JsonConfiguration(SnakeCase)
@@ -20,8 +19,7 @@ case class Folder(
   extends BaseModel
   with NoDates:
 
-  if name.isEmpty then
-    throw ValidationException("Folder name cannot be empty")
+  if name.isEmpty then throw ValidationException("Folder name cannot be empty")
 
   val nameLowercase: String = name.toLowerCase
 

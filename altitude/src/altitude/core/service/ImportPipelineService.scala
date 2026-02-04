@@ -1,5 +1,21 @@
 package altitude.core.service
 
+import altitude.core.Altitude
+import altitude.core.AltitudeActorSystem
+import altitude.core.pipeline.PipelineConstants.parallelism
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
+import altitude.core.pipeline.flows.AddPreviewFlow
+import altitude.core.pipeline.flows.AssignIdFlow
+import altitude.core.pipeline.flows.CheckDuplicateFlow
+import altitude.core.pipeline.flows.CheckMediaTypeFlow
+import altitude.core.pipeline.flows.ExtractMetadataFlow
+import altitude.core.pipeline.flows.FileStoreFlow
+import altitude.core.pipeline.flows.MarkAsCompleteFlow
+import altitude.core.pipeline.flows.PersistAndIndexAssetFlow
+import altitude.core.pipeline.flows.StripBinaryDataFlow
+import altitude.core.pipeline.sinks.AssetErrorLoggingSink
+import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.stream.OverflowStrategy
@@ -17,23 +33,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
-
-import altitude.core.Altitude
-import altitude.core.AltitudeActorSystem
-import altitude.core.pipeline.PipelineConstants.parallelism
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
-import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
-import altitude.core.pipeline.flows.AddPreviewFlow
-import altitude.core.pipeline.flows.AssignIdFlow
-import altitude.core.pipeline.flows.CheckDuplicateFlow
-import altitude.core.pipeline.flows.CheckMediaTypeFlow
-import altitude.core.pipeline.flows.ExtractMetadataFlow
-import altitude.core.pipeline.flows.FileStoreFlow
-import altitude.core.pipeline.flows.MarkAsCompleteFlow
-import altitude.core.pipeline.flows.PersistAndIndexAssetFlow
-import altitude.core.pipeline.flows.StripBinaryDataFlow
-import altitude.core.pipeline.sinks.AssetErrorLoggingSink
-import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 
 class ImportPipelineService(app: Altitude) {
   val logger: Logger = LoggerFactory.getLogger(getClass)

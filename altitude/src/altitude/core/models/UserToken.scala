@@ -1,5 +1,7 @@
 package altitude.core.models
 
+import altitude.core.FieldConst
+import altitude.core.util.Util
 import java.time.LocalDateTime
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
@@ -7,9 +9,6 @@ import play.api.libs.json.JsSuccess
 import play.api.libs.json.JsValue
 import play.api.libs.json.OWrites
 import play.api.libs.json.Reads
-
-import altitude.core.FieldConst
-import altitude.core.util.Util
 
 object UserToken:
   given reads: Reads[UserToken] = (json: JsValue) =>

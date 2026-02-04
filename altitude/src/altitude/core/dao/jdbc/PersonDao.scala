@@ -1,16 +1,15 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-
-import scala.collection.mutable
-import scala.language.implicitConversions
-
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
+import com.typesafe.config.Config
+import play.api.libs.json.JsObject
+
+import scala.collection.mutable
+import scala.language.implicitConversions
 
 abstract class PersonDao(override val config: Config) extends BaseDao with altitude.core.dao.PersonDao:
 
@@ -35,29 +34,27 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       mergedWithIds = loadCsv[String](rec(FieldConst.Person.MERGED_WITH_IDS).asInstanceOf[String]),
       mergedIntoId = Option(rec(FieldConst.Person.MERGED_INTO_ID).asInstanceOf[String]),
       // If mergedIntoLabel is there, it's an Int or a Long, depending on DB
-      mergedIntoLabel = if mergedIntoLabel != null then
-        Some(mergedIntoLabel.getClass match
-          case c if c == classOf[java.lang.Integer] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Int]
-          case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Long].toInt
-        )
-      else
-        None
+      mergedIntoLabel =
+        if mergedIntoLabel != null then
+          Some(mergedIntoLabel.getClass match
+            case c if c == classOf[java.lang.Integer] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Int]
+            case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Long].toInt
+          )
+        else None
     ).toJson
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
-    val name = if person.name.nonEmpty then
-      person.name.get
-    else
-      s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
+    val name =
+      if person.name.nonEmpty then person.name.get
+      else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
 
     name
 
   // lowercase name or "unknown_0001" etc
   protected def getPersonSortName(person: Person, sequenceNum: Long): String =
-    val sortName = if person.name.nonEmpty then
-      person.name.get.toLowerCase()
-    else
-      f"${PersonService.UNKNOWN_NAME_PREFIX.toLowerCase()} $sequenceNum%04d"
+    val sortName =
+      if person.name.nonEmpty then person.name.get.toLowerCase()
+      else f"${PersonService.UNKNOWN_NAME_PREFIX.toLowerCase()} $sequenceNum%04d"
 
     sortName
 

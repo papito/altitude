@@ -1,7 +1,5 @@
 package altitude.core.service
 
-import play.api.libs.json.JsObject
-
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -14,6 +12,7 @@ import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import play.api.libs.json.JsObject
 
 class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   protected val dao: RepositoryDao = app.DAO.repository
@@ -70,19 +69,18 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       repo.toJson
     }
   }
-  
-// MIGRATE
-//  override def getById(id: String): JsObject = {
-//    // try cache first
-//    if (AltitudeServletContext.repositoriesById.contains(id)) {
-//      return AltitudeServletContext.repositoriesById(id).toJson
-//    }
-//
-//    val repo = super.getById(id)
-//
-//    AltitudeServletContext.repositoriesById += (id -> repo)
-//    repo
-//  }
+
+  override def getById(id: String): JsObject = {
+    // try cache first
+    if (app.repositoriesById.contains(id)) {
+      return app.repositoriesById(id).toJson
+    }
+
+    val repo = super.getById(id)
+
+    app.repositoriesById += (id -> repo)
+    repo
+  }
 
   def switchContextToRepository(repo: Repository): Unit = {
     RequestContext.repository.value = Some(repo)

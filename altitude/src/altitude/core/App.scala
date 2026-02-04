@@ -1,6 +1,4 @@
 package altitude.core
-
-import altitude.core.models.{Repository, User}
 import altitude.core.routes.api.HealthRoutes
 import altitude.core.routes.decorators
 import altitude.core.routes.web.IndexRoutes

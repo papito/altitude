@@ -1,11 +1,10 @@
 package altitude.core.dao.jdbc.querybuilder
 
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 protected object SqlQueryBuilder {
   val SELECT = "select"

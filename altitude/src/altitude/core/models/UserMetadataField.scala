@@ -1,7 +1,7 @@
 package altitude.core.models
 
-import play.api.libs.json.*
 import play.api.libs.json.JsonNaming.SnakeCase
+import play.api.libs.json._
 
 enum FieldType:
   case KEYWORD, TEXT, NUMBER, BOOL, DATETIME
