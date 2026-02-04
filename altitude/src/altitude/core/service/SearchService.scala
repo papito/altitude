@@ -1,8 +1,5 @@
 package altitude.core.service
 
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
 import altitude.core.Altitude
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
@@ -11,6 +8,8 @@ import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 object SearchService {
   private val NON_FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.TEXT)

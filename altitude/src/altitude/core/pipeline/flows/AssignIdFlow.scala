@@ -1,13 +1,12 @@
 package altitude.core.pipeline.flows
 
-import org.apache.pekko.NotUsed
-import org.apache.pekko.stream.scaladsl.Flow
-
 import altitude.core.Altitude
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.Flow
 
 object AssignIdFlow {
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =

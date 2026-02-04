@@ -1,18 +1,6 @@
 package altitude.core.service
 
-import org.apache.pekko.actor.typed.Scheduler
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
-import org.apache.pekko.stream.scaladsl.Source
-import org.apache.pekko.util.Timeout
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
-
 import altitude.core.Altitude
-import altitude.core.AltitudeActorSystem
 import altitude.core.RequestContext
 import altitude.core.actors.FaceRecManagerActor
 import altitude.core.actors.FaceRecModelActor.FacePrediction
@@ -25,6 +13,16 @@ import altitude.core.models.FaceImages
 import altitude.core.models.Person
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.transactions.TransactionManager
+import org.apache.pekko.actor.typed.Scheduler
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.Timeout
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 object FaceRecognitionService {
   // Number of labels reserved for special cases, and not used for actual people instances

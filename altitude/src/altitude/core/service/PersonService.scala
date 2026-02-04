@@ -1,10 +1,5 @@
 package altitude.core.service
 
-import java.sql.SQLException
-import org.apache.pekko.stream.scaladsl.Source
-import play.api.libs.json.JsObject
-
-
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -20,6 +15,9 @@ import altitude.core.util.QueryResult
 import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 import altitude.core.util.Util.getDuplicateExceptionOrSame
+import java.sql.SQLException
+import org.apache.pekko.stream.scaladsl.Source
+import play.api.libs.json.JsObject
 
 object PersonService {
   val UNKNOWN_NAME_PREFIX = "Unknown"

@@ -1,9 +1,5 @@
 package altitude.core.service
 
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import play.api.libs.json.JsObject
-
 import altitude.core.Altitude
 import altitude.core.dao.StatDao
 import altitude.core.models.Asset
@@ -11,6 +7,9 @@ import altitude.core.models.Stat
 import altitude.core.models.Stats
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import play.api.libs.json.JsObject
 
 class StatsService(val app: Altitude) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

@@ -1,16 +1,15 @@
 package altitude.core.pipeline.flows
 
-import org.apache.pekko.NotUsed
-import org.apache.pekko.stream.scaladsl.Flow
-
-import scala.concurrent.Future
-
 import altitude.core.Altitude
 import altitude.core.models.Asset
 import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.Flow
+
+import scala.concurrent.Future
 
 object ExtractMetadataFlow {
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =

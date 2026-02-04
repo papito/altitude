@@ -1,12 +1,11 @@
 package altitude.core.pipeline.flows
 
-import org.apache.pekko.NotUsed
-import org.apache.pekko.stream.scaladsl.Flow
-
 import altitude.core.Altitude
 import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TFaceWithContext
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.Flow
 
 object AddFaceDataToModelFlow {
   def apply(app: Altitude): Flow[TFaceWithContext, TFaceWithContext, NotUsed] = {

@@ -1,18 +1,16 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-import scala.language.implicitConversions
-
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.FieldType
 import altitude.core.models.UserMetadataField
+import com.typesafe.config.Config
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 
-abstract class MetadataFieldDao(override val config: Config)
-  extends BaseDao
-  with altitude.core.dao.UserMetadataFieldDao:
+import scala.language.implicitConversions
+
+abstract class MetadataFieldDao(override val config: Config) extends BaseDao with altitude.core.dao.UserMetadataFieldDao:
 
   final override val tableName = "metadata_field"
 

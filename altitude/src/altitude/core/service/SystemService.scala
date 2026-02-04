@@ -1,12 +1,16 @@
 package altitude.core.service
 
+import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.RequestContext
+import altitude.core.dao.SystemMetadataDao
+import altitude.core.models.Repository
+import altitude.core.models.SystemMetadata
+import altitude.core.models.User
+import altitude.core.transactions.TransactionManager
 import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import altitude.core.{Altitude, Const, RequestContext}
-import altitude.core.dao.SystemMetadataDao
-import altitude.core.models.{Repository, SystemMetadata, User}
-import altitude.core.transactions.TransactionManager
 
 class SystemService(val app: Altitude) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

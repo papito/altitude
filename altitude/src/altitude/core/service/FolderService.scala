@@ -1,7 +1,5 @@
 package altitude.core.service
 
-import play.api.libs.json._
-
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
@@ -12,6 +10,7 @@ import altitude.core.ValidationException
 import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
 import altitude.core.util.Query
+import play.api.libs.json._
 
 class FolderService(val app: Altitude) extends BaseService[Folder] {
 

@@ -4,13 +4,13 @@ import altitude.core.util.ImageUtil.matFromBytes
 import java.time.LocalDateTime
 import org.opencv.core.Mat
 import org.opencv.core.MatOfFloat
-import play.api.libs.json.*
+import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
 
 object Face:
   // For sorting faces by detection score automatically, highest score first
   given faceOrdering: Ordering[Face] = Ordering.by(-_.detectionScore)
-  
+
   given config: JsonConfiguration = JsonConfiguration(SnakeCase)
   given format: OFormat[Face] = Json.format[Face]
   given Conversion[JsValue, Face] = json => Json.fromJson[Face](json).get

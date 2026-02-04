@@ -1,19 +1,27 @@
 package altitude.core.models
 
-import play.api.libs.json.*
+import play.api.libs.json._
 
 object ExtractedMetadata:
   private type FieldValuesType = Map[String, String]
   private type MetadataType = Map[String, FieldValuesType]
 
   given reads: Reads[ExtractedMetadata] = (json: JsValue) =>
-    val data = json.as[JsObject].fields.map {
-      case (key, value) =>
-        key -> value.as[JsObject].fields.map {
-          case (fieldKey, fieldValue) =>
-            fieldKey -> fieldValue.as[String]
-        }.toMap
-    }.toMap
+    val data = json
+      .as[JsObject]
+      .fields
+      .map {
+        case (key, value) =>
+          key -> value
+            .as[JsObject]
+            .fields
+            .map {
+              case (fieldKey, fieldValue) =>
+                fieldKey -> fieldValue.as[String]
+            }
+            .toMap
+      }
+      .toMap
     JsSuccess(ExtractedMetadata(data))
 
   given writes: OWrites[ExtractedMetadata] = (extractedMetadata: ExtractedMetadata) =>

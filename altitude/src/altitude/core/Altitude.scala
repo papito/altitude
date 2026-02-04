@@ -1,16 +1,34 @@
 package altitude.core
 
 import altitude.core.dao.jdbc.SystemMetadataDao
-import altitude.core.models.{Repository, User}
-import altitude.core.service.filestore.{FileStoreService, FileSystemStoreService}
-import altitude.core.service.{AssetService, FaceDetectionService, FaceRecognitionService, FolderService, ImportPipelineService, LibraryService, MetadataExtractionService, MigrationService, PersonService, PurgePipelineService, RepositoryService, SearchService, StatsService, SystemService, UrlService, UserMetadataService, UserService}
+import altitude.core.models.Repository
+import altitude.core.models.User
+import altitude.core.service.AssetService
+import altitude.core.service.FaceDetectionService
+import altitude.core.service.FaceRecognitionService
+import altitude.core.service.FolderService
+import altitude.core.service.ImportPipelineService
+import altitude.core.service.LibraryService
+import altitude.core.service.MetadataExtractionService
+import altitude.core.service.MigrationService
+import altitude.core.service.PersonService
+import altitude.core.service.PurgePipelineService
+import altitude.core.service.RepositoryService
+import altitude.core.service.SearchService
+import altitude.core.service.StatsService
+import altitude.core.service.SystemService
+import altitude.core.service.UrlService
+import altitude.core.service.UserMetadataService
+import altitude.core.service.UserService
+import altitude.core.service.filestore.FileStoreService
+import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
-
 import java.io.File
-import org.apache.commons.io.{FileUtils, FilenameUtils}
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.typed.ActorSystem
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory

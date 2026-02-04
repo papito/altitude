@@ -1,11 +1,10 @@
 package altitude.core.dao.jdbc
 
-import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-
 import altitude.core.FieldConst
 import altitude.core.models.UserToken
 import altitude.core.util.Util
+import com.typesafe.config.Config
+import play.api.libs.json.JsObject
 
 import scala.language.implicitConversions
 

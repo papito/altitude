@@ -1,8 +1,5 @@
 package altitude.core.dao.sqlite
 
-import com.typesafe.config.Config
-import org.apache.commons.dbutils.QueryRunner
-
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
@@ -10,6 +7,8 @@ import altitude.core.dao.sqlite.querybuilder.AssetSearchQueryBuilder
 import altitude.core.models.Asset
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import com.typesafe.config.Config
+import org.apache.commons.dbutils.QueryRunner
 
 class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.SearchDao(config) with SqliteOverrides:
 
@@ -61,12 +60,10 @@ class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.Sear
 
     logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
 
-    if recs.nonEmpty then
-      logger.debug(recs.map(_.toString()).mkString("\n"))
+    if recs.nonEmpty then logger.debug(recs.map(_.toString()).mkString("\n"))
 
     logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
-    if recs.nonEmpty then
-      logger.debug(recs.map(_.toString()).mkString("\n"))
+    if recs.nonEmpty then logger.debug(recs.map(_.toString()).mkString("\n"))
 
     SearchResult(
       records = recs.map(makeModel),

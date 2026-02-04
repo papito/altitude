@@ -1,11 +1,10 @@
 package altitude.core.models
 
-import play.api.libs.json.*
+import altitude.core.Const.FaceRecognition
+import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.collection.mutable
-
-import altitude.core.Const.FaceRecognition
 
 object Person:
   given config: JsonConfiguration = JsonConfiguration(SnakeCase)
@@ -48,8 +47,7 @@ case class Person(
 
   def getFaces: mutable.TreeSet[Face] =
     // we do not get faces for a person automatically, but "numOfFaces" reflects the actual number in DB
-    if numOfFaces > 0 && _faces.isEmpty then
-      throw new IllegalStateException(s"Faces have not been loaded for person $this")
+    if numOfFaces > 0 && _faces.isEmpty then throw new IllegalStateException(s"Faces have not been loaded for person $this")
 
     _faces
 

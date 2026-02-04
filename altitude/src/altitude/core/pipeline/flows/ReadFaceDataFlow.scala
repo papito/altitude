@@ -1,11 +1,10 @@
 package altitude.core.pipeline.flows
 
-import org.apache.pekko.NotUsed
-import org.apache.pekko.stream.scaladsl.Flow
-
 import altitude.core.Altitude
 import altitude.core.pipeline.PipelineTypes.TFaceWithContext
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.Flow
 
 /** This scoops up aligned grayscale face images from the file store, and moves them downstream. */
 object ReadFaceDataFlow {

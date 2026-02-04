@@ -1,6 +1,7 @@
 package altitude.test
 
 import altitude.core.Altitude
+import altitude.core.Const as C
 import altitude.core.models.AccountType
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -13,9 +14,9 @@ import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
 import altitude.core.util.Util
-import altitude.core.{Const => C}
 import altitude.test.IntegrationTestUtil.generateRandomImagBytesBgr
 import altitude.test.IntegrationTestUtil.generateRandomImagBytesGray
+import java.lang.Thread.sleep
 
 import scala.util.Random
 
@@ -31,13 +32,13 @@ class TestContext(val testApp: Altitude) {
   def makeUser(): User = User(
     email = Util.randomStr(),
     name = Util.randomStr(),
-    accountType = AccountType.User,
+    accountType = AccountType.User
   )
 
   def makeAdminUser(): User = User(
     email = Util.randomStr(),
     name = Util.randomStr(),
-    accountType = AccountType.Admin,
+    accountType = AccountType.Admin
   )
 
   def persistUser(user: Option[User] = None, password: String = "password"): User = {
@@ -84,20 +85,20 @@ class TestContext(val testApp: Altitude) {
     persistedRepo
   }
 
-  def makeAsset(repository: Option[Repository] = None,
-                filename: String = Util.randomStr(50),
-                user: Option[User] = None,
-                folder: Option[Folder] = None,
-                userMetadata: UserMetadata = UserMetadata(),
-                isTriaged: Boolean = false,
-                isRecycled: Boolean = false): Asset ={
+  def makeAsset(
+      repository: Option[Repository] = None,
+      filename: String = Util.randomStr(50),
+      user: Option[User] = None,
+      folder: Option[Folder] = None,
+      userMetadata: UserMetadata = UserMetadata(),
+      isTriaged: Boolean = false,
+      isRecycled: Boolean = false): Asset = {
     if (repository.isEmpty && repositories.isEmpty) {
       throw new RuntimeException("Cannot make an asset without a repository previously created")
     }
 
     if (repository.isEmpty && repositories.length > 1) {
-      throw new RuntimeException(
-        "Cannot make an asset when there are multiple test context repositories. Specify one explicitly")
+      throw new RuntimeException("Cannot make an asset when there are multiple test context repositories. Specify one explicitly")
     }
 
     val currentRepo = repository.getOrElse(repositories.headOption.get)
@@ -108,47 +109,44 @@ class TestContext(val testApp: Altitude) {
     Asset(
       userId = currentUser.persistedId,
       folderId = folderId,
-      assetType = new AssetType(
-        mediaType = "image",
-        mediaSubtype = "png",
-        mime = "image/png"),
+      assetType = new AssetType(mediaType = "image", mediaSubtype = "png", mime = "image/png"),
       fileName = filename,
       checksum = Random.nextInt(500000),
       userMetadata = userMetadata,
       sizeBytes = TestContext.ASSET_SIZE,
       isTriaged = isTriaged,
-      isRecycled = isRecycled)
+      isRecycled = isRecycled
+    )
   }
 
   def makeAssetWithData(asset: Option[Asset] = None): AssetWithData = AssetWithData(
-      asset = asset.getOrElse(makeAsset()),
-      data = generateRandomImagBytesBgr(dimensions = 150)
+    asset = asset.getOrElse(makeAsset()),
+    data = generateRandomImagBytesBgr(dimensions = 150)
   )
 
-  def persistAsset(repository: Option[Repository] = None,
-                   user: Option[User] = None,
-                   folder: Option[Folder] = None,
-                   metadata: UserMetadata = UserMetadata(),
-                   isTriaged: Boolean = false,
-                   isRecycled: Boolean = false): Asset = {
+  def persistAsset(
+      repository: Option[Repository] = None,
+      user: Option[User] = None,
+      folder: Option[Folder] = None,
+      metadata: UserMetadata = UserMetadata(),
+      isTriaged: Boolean = false,
+      isRecycled: Boolean = false): Asset = {
 
     if (repository.isEmpty && repositories.length > 1) {
       throw new RuntimeException(
         "Cannot use existing repository when there are  multiple test context repositories - must supply a repository explicitly")
     }
 
-    val persistedRepository = repository.getOrElse(
-      repositories.headOption.getOrElse(
-        persistRepository(user=user)))
+    val persistedRepository = repository.getOrElse(repositories.headOption.getOrElse(persistRepository(user = user)))
 
     val asset = makeAsset(
-      repository=Some(persistedRepository),
-      filename=Util.randomStr(50),
-      user=user,
-      folder=folder,
-      userMetadata=metadata,
-      isTriaged=isTriaged,
-      isRecycled=isRecycled
+      repository = Some(persistedRepository),
+      filename = Util.randomStr(50),
+      user = user,
+      folder = folder,
+      userMetadata = metadata,
+      isTriaged = isTriaged,
+      isRecycled = isRecycled
     )
 
     val dataAsset = makeAssetWithData(Some(asset))
@@ -168,30 +166,33 @@ class TestContext(val testApp: Altitude) {
     for (idx <- 1 to assetCount) {
       val asset: Asset = persistAsset()
 
-      people.foreach { person =>
-        val face = Face(id=Some(Util.randomStr(32)),
-          x1 = Random.nextInt(100) + 1,
-          y1 = Random.nextInt(100) + 1,
-          width =Random.nextInt(100) + 1,
-          height = Random.nextInt(100) + 1,
-          assetId = Some(asset.persistedId),
-          personId = Some(person.persistedId),
-          personLabel = Some(idx),
-          detectionScore = Random.nextDouble(),
-          embeddings = Array.fill(128) { Random.nextFloat() },
-          features = Array.fill(128) { Random.nextFloat() },
-          checksum = Random.nextInt(),
-          alignedImageGs = randomGrImage)
+      people.foreach {
+        person =>
+          val face = Face(
+            id = Some(Util.randomStr(32)),
+            x1 = Random.nextInt(100) + 1,
+            y1 = Random.nextInt(100) + 1,
+            width = Random.nextInt(100) + 1,
+            height = Random.nextInt(100) + 1,
+            assetId = Some(asset.persistedId),
+            personId = Some(person.persistedId),
+            personLabel = Some(idx),
+            detectionScore = Random.nextDouble(),
+            embeddings = Array.fill(128)(Random.nextFloat()),
+            features = Array.fill(128)(Random.nextFloat()),
+            checksum = Random.nextInt(),
+            alignedImageGs = randomGrImage
+          )
 
-        val persistedFace = testApp.service.person.addFace(face, asset, person)
+          val persistedFace = testApp.service.person.addFace(face, asset, person)
 
-        val faceImages = FaceImages(
-          image = generateRandomImagBytesBgr(),
-          alignedImageGs = randomGrImage,
-          alignedImage = generateRandomImagBytesBgr(),
-          displayImage = generateRandomImagBytesBgr()
-        )
-        testApp.service.fileStore.addFace(persistedFace, faceImages)
+          val faceImages = FaceImages(
+            image = generateRandomImagBytesBgr(),
+            alignedImageGs = randomGrImage,
+            alignedImage = generateRandomImagBytesBgr(),
+            displayImage = generateRandomImagBytesBgr()
+          )
+          testApp.service.fileStore.addFace(persistedFace, faceImages)
       }
     }
   }

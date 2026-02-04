@@ -1,10 +1,9 @@
 package altitude.core.dao.postgres
 
-import com.typesafe.config.Config
-
 import altitude.core.FieldConst
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.UserMetadata
+import com.typesafe.config.Config
 
 object AssetDao:
   val DEFAULT_SQL_COLS_FOR_SELECT: List[String] = List(

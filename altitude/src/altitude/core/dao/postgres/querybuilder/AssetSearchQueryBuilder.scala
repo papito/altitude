@@ -9,5 +9,4 @@ class AssetSearchQueryBuilder(sqlColsForSelect: List[String]) extends SearchQuer
   protected def textSearch(searchQuery: SearchQuery): ClauseComponents =
     if searchQuery.isText then
       ClauseComponents(elements = List(s"$searchDocumentTable.tsv @@ to_tsquery(?)"), bindVals = List(searchQuery.text.get))
-    else
-      ClauseComponents()
+    else ClauseComponents()

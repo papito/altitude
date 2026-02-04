@@ -1,5 +1,13 @@
 package altitude.core.service
 
+import altitude.core.Environment
+import altitude.core.models.Face
+import altitude.core.models.FaceImages
+import altitude.core.service.FaceDetectionService.minFaceSize
+import altitude.core.util.ImageUtil.determineImageScale
+import altitude.core.util.ImageUtil.makeImageThumbnail
+import altitude.core.util.ImageUtil.matFromBytes
+import altitude.core.util.MurmurHash
 import java.io.File
 import java.nio.file.Paths
 import org.apache.commons.io.FilenameUtils
@@ -23,15 +31,6 @@ import org.opencv.objdetect.FaceDetectorYN
 import org.opencv.objdetect.FaceRecognizerSF
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
-import altitude.core.Environment
-import altitude.core.models.Face
-import altitude.core.models.FaceImages
-import altitude.core.service.FaceDetectionService.minFaceSize
-import altitude.core.util.ImageUtil.determineImageScale
-import altitude.core.util.ImageUtil.makeImageThumbnail
-import altitude.core.util.ImageUtil.matFromBytes
-import altitude.core.util.MurmurHash
 
 object FaceDetectionService {
   private val dnnInWidth = 300

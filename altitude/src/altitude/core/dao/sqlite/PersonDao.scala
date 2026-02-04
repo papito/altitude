@@ -1,13 +1,12 @@
 package altitude.core.dao.sqlite
 
-import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Person
+import com.typesafe.config.Config
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 
 import scala.language.implicitConversions
 

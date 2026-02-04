@@ -1,14 +1,5 @@
 package altitude.core.service
 
-import org.apache.pekko.NotUsed
-import org.apache.pekko.stream.scaladsl.Source
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-
 import altitude.core.{ Const => _, _ }
 import altitude.core.Altitude
 import altitude.core.FieldConst
@@ -24,6 +15,14 @@ import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.scaladsl.Source
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 
 /**
  * What is the difference between this and the AssetService?
@@ -117,7 +116,8 @@ class LibraryService(val app: Altitude) {
           metadataFilters = query.metadataFilters,
           rpp = query.rpp,
           page = query.page,
-          searchSort = query.searchSort)
+          searchSort = query.searchSort
+        )
       } else {
         query
       }

@@ -1,6 +1,6 @@
 package altitude.core.models
 
-import play.api.libs.json.*
+import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
 
 object AssetType:
@@ -9,7 +9,7 @@ object AssetType:
   given Conversion[JsValue, AssetType] = json => Json.fromJson[AssetType](json).get
 
 case class AssetType(mediaType: String, mediaSubtype: String, mime: String) extends BaseModel with NoId with NoDates:
-  
+
   lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
 
   override def equals(other: Any): Boolean = other match {

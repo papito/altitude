@@ -30,7 +30,6 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
   // private val userToWsClientLookup = collection.mutable.Map[String, List[AtmosphereClient]]()
 
   override def onMessage(msg: ImportStatusWsActor.Command): Behavior[ImportStatusWsActor.Command] = {
-    println("received message")
     Behaviors.same
 /*
     msg match {
