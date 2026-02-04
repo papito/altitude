@@ -11,8 +11,10 @@ import mill._, scalalib._, publish._
 
 object altitude extends ScalaModule with ScalafixModule with PublishModule with mill.twirllib.TwirlModule {
   def scalaVersion = "3.6.3"
-  def twirlVersion = "1.6.8"
-  
+
+  private val _twirlVersion = "1.6.8"
+  def twirlVersion: T[String] = _twirlVersion
+
   private val caskVersion = "0.9.7"
   
   private val logbackVersion = "1.5.16"
@@ -51,7 +53,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
     mvn"com.typesafe:config:1.4.3",
     mvn"com.typesafe.play::play-json:2.10.6",
-    mvn"com.typesafe.play::twirl-api:1.6.8",
+    mvn"com.typesafe.play::twirl-api:${_twirlVersion}",
 
     mvn"commons-io:commons-io:2.18.0",
     mvn"commons-codec:commons-codec:1.17.1",
