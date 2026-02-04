@@ -70,7 +70,7 @@ object IntegrationTestUtil {
       y += 1
     }
 
-    val byteArrayOutputStream = new ByteArrayOutputStream();
+    val byteArrayOutputStream = new ByteArrayOutputStream()
     ImageIO.write(bufferedImage, "png", byteArrayOutputStream)
     byteArrayOutputStream.toByteArray
   }
@@ -95,7 +95,7 @@ object IntegrationTestUtil {
       y += 1
     }
 
-    val byteArrayOutputStream = new ByteArrayOutputStream();
+    val byteArrayOutputStream = new ByteArrayOutputStream()
     ImageIO.write(bufferedImage, "png", byteArrayOutputStream)
     byteArrayOutputStream.toByteArray
   }

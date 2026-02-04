@@ -58,7 +58,7 @@ case class Person(
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Person]
 
   override def equals(other: Any): Boolean = other match
-    case that: Person => (that.canEqual(this)) && this.id == that.id
+    case that: Person => that.canEqual(this) && this.id == that.id
     case _ => false
 
   override def hashCode: Int = super.hashCode
