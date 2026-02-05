@@ -1,1 +1,77 @@
-Yes
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <title>ALTITUDE</title>
+
+        @includes.html.header_common()
+        <script src="/static/js/lib/interact.min.js"></script>
+        <script src="/static/js/lib/json-enc.js"></script>
+
+        <style>
+        body {
+        display: grid;
+        grid-template-rows: auto 1fr var(--footer-height);
+        height: 100vh;
+        margin: 0;
+        }
+
+        main {
+        height: 100%;
+        overflow: hidden;
+        }
+
+        #explorer {
+        border-right: 1px solid var(--panel-border-color);
+        box-shadow: var(--box-shadow);
+        text-shadow: rgba(0,0,0,0.75) 0 1px;
+        padding-top: var(--panel-padding);
+        }
+
+        #explorerViews {
+        text-shadow: rgba(0,0,0,0.75) 0 1px;
+        }
+
+
+        #content {
+        border-left: 1px solid var(--panel-border-color);
+        box-shadow: var(--box-shadow);
+        text-shadow: rgba(0,0,0,0.75) 0 1px;
+        overflow-y: scroll;
+        max-width: 100%;
+        }
+
+        /* SPLIT */
+        .split.split-horizontal,
+        .gutter.gutter-horizontal {
+        height: 100%;
+        float: left;
+        }
+
+        .gutter {
+        background-color: transparent;
+        background-repeat: no-repeat;
+        background-position: 50%;
+        }
+
+        .gutter.gutter-vertical {
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
+        cursor: ns-resize;
+        }
+
+        .gutter.gutter-horizontal {
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+        cursor: ew-resize;
+        }
+
+        .split {
+        overflow-y: auto;
+        overflow-x: hidden;
+        }
+
+        </style>
+    </head>
+
+    <body>
+    </body>
+</html>

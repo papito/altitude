@@ -9,4 +9,7 @@ class IndexRoutes(using logger: Logger) extends cask.Routes:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
+  @cask.staticFiles("/static/")
+  def staticFileRoutes() = "altitude/static"
+
   initialize()

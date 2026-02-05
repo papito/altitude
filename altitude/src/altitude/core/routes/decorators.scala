@@ -13,6 +13,12 @@ object decorators {
 
   class requestResponseLogger extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
+
+      if (req.exchange.getRequestPath.startsWith("/static/")) {
+        // skip logging for static file requests
+        return delegate(req, Map())
+      }
+
       val startTime = currentTimeMillis
       val requestId = Util.randomStr(size = 6)
 
