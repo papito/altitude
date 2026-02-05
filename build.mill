@@ -33,7 +33,8 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     "-encoding", "UTF-8",
     "-unchecked",
     "-rewrite",
-    "-source", "3.4-migration"
+    "-source", "3.4-migration",
+    "-Wconf:msg=.*E198.*&src=.*/out/altitude/compileTwirl.dest/.*:s"
   )
 
   def pomSettings: T[PomSettings] = PomSettings(
@@ -112,7 +113,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   def mvnDeps: Task.Simple[Seq[Dep]] = coreDeps ++ bytedecoPresetLibs
 
   def generatedSources: T[Seq[PathRef]] = Task { Seq(compileTwirl().classes) }
-  
+
   object test extends ScalaTests with TestModule.ScalaTest {
     def mvnDeps: Task.Simple[Seq[Dep]] = Seq(
       mvn"org.apache.pekko::pekko-testkit:$pekkoVersion",

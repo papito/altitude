@@ -10,10 +10,12 @@ import org.slf4j.LoggerFactory
 
 object App extends cask.Main:
   /**
-   * Mission-critical code to load the OpenCV native library.
+   * Load the OpenCV native library.
    *
    * OpenCV for Java has two competing APIs, which is confusing enough (org.opencv, org.bytedeco), and every example under the sun
-   * directs to do this in order to have native lib linking errors go away: System.loadLibrary(Core.NATIVE_LIBRARY_NAME)
+   * directs to do this in order to have native lib linking errors go away:
+   *
+   * System.loadLibrary(Core.NATIVE_LIBRARY_NAME)
    *
    * But it doesn't work. While we are using the org.opencv API, the native lib is loaded by the org.bytedeco API.
    *
@@ -21,7 +23,7 @@ object App extends cask.Main:
    */
   Loader.load(classOf[opencv_java])
 
-  val app: Altitude = new Altitude()
+  val altitude: Altitude = new Altitude()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
 
