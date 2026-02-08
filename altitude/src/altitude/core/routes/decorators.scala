@@ -1,4 +1,5 @@
 package altitude.core.routes
+import altitude.core.App
 import altitude.core.util.Util
 import cask.model.Response.Raw
 import cask.router.Result
@@ -37,6 +38,18 @@ object decorators {
         case error =>
           logger.error(error.toString)
           error
+      }
+    }
+  }
+
+  class repoContext extends cask.RawDecorator {
+    def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
+      req.remainingPathSegments match {
+        case Seq("r", repoId, _*) =>
+          App.altitude.service.repository.setContextFromRequest(Some(repoId))
+          delegate(req, Map())
+        case _ =>
+          delegate(req, Map())
       }
     }
   }
