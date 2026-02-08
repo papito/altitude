@@ -3,7 +3,7 @@ package altitude.core.routes.web
 import altitude.core.App
 import org.slf4j.Logger
 
-class IndexRoutes(using logger: Logger) extends cask.Routes:
+class WebController(using logger: Logger) extends cask.Routes:
   @cask.staticFiles("/static/")
   def staticFileRoutes() = "altitude/static"
 
