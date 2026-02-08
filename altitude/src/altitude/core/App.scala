@@ -1,7 +1,8 @@
 package altitude.core
-import altitude.core.routes.api.HealthRoutes
+import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
-import altitude.core.routes.web.IndexRoutes
+import altitude.core.routes.web.WebController
+import altitude.core.routes.web.htmx.SetupController
 import cask.router.Decorator
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
@@ -31,6 +32,7 @@ object App extends cask.Main:
     Seq(new cask.decorators.compress(), decorators.requestResponseLogger())
 
   override def allRoutes: Seq[cask.Routes] = Seq(
-    new HealthRoutes,
-    new IndexRoutes()
+    new HealthController,
+    new WebController(),
+    new SetupController()
   )
