@@ -5,11 +5,12 @@ import upickle.default.*
 import altitude.core.{Api, App, DataScrubber, ValidationException, Const as C}
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.{AccountType, User}
+import altitude.core.routes.BaseController
 import cask.model.Response
 import org.slf4j.Logger
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
 
-class SetupController(using logger: Logger) extends cask.Routes:
+class SetupController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
 
   private val dataScrubber = DataScrubber(
@@ -48,10 +49,7 @@ class SetupController(using logger: Logger) extends cask.Routes:
 
   @cask.route(f"/$prefix/setup", methods = Seq("post"))
   def htmxAdminSetup(using request: Request): Response[String] =
-    if (request.httpContentType.isDefined && request.httpContentType.get != "application/json") {
-      throw ValidationException(C.Msg.Err.INVALID_CONTENT_TYPE)
-    }
-    val unscrubbedJson = Some(if (request.text().isEmpty) Json.obj() else Json.parse(request.text()).as[JsObject])
+    val jsonData = unscrubbedJson
 
     if App.altitude.isInitialized then
       val message = "Instance is already initialized."
@@ -62,7 +60,7 @@ class SetupController(using logger: Logger) extends cask.Routes:
       )
     else
       // Parse JSON from request body
-      val jsonIn: JsObject = dataScrubber.scrub(unscrubbedJson.get)
+      val jsonIn: JsObject = dataScrubber.scrub(jsonData.get)
 
       val validationException: ValidationException =
         try
