@@ -1,81 +1,221 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Stats
+
+@(stats: Stats)
+
 <!DOCTYPE html>
 
 <html lang="en">
-    <head>
-        <title>ALTITUDE</title>
+  <head>
+    <title>ALTITUDE</title>
 
-        @includes.html.header_common()
-        <script src="/static/js/lib/interact.min.js"></script>
-        <script src="/static/js/lib/json-enc.js"></script>
+    @includes.html.header_common()
+    <script src="/static/js/lib/interact.min.js"></script>
+    <script src="/static/js/lib/json-enc.js"></script>
 
-        <style>
-        body {
+    <style>
+      body {
         display: grid;
         grid-template-rows: auto 1fr var(--footer-height);
         height: 100vh;
         margin: 0;
-        }
+      }
 
-        main {
+      main {
         height: 100%;
         overflow: hidden;
-        }
+      }
 
-        #explorer {
+      #explorer {
         border-right: 1px solid var(--panel-border-color);
         box-shadow: var(--box-shadow);
-        text-shadow: rgba(0,0,0,0.75) 0 1px;
+        text-shadow: rgba(0, 0, 0, 0.75) 0 1px;
         padding-top: var(--panel-padding);
-        }
+      }
 
-        #explorerViews {
-        text-shadow: rgba(0,0,0,0.75) 0 1px;
-        }
+      #explorerViews {
+        text-shadow: rgba(0, 0, 0, 0.75) 0 1px;
+      }
 
-
-        #content {
+      #content {
         border-left: 1px solid var(--panel-border-color);
         box-shadow: var(--box-shadow);
-        text-shadow: rgba(0,0,0,0.75) 0 1px;
+        text-shadow: rgba(0, 0, 0, 0.75) 0 1px;
         overflow-y: scroll;
         max-width: 100%;
-        }
+      }
 
-        /* SPLIT */
-        .split.split-horizontal,
-        .gutter.gutter-horizontal {
+      /* SPLIT */
+      .split.split-horizontal,
+      .gutter.gutter-horizontal {
         height: 100%;
         float: left;
-        }
+      }
 
-        .gutter {
+      .gutter {
         background-color: transparent;
         background-repeat: no-repeat;
         background-position: 50%;
-        }
+      }
 
-        .gutter.gutter-vertical {
-        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
+      .gutter.gutter-vertical {
+        background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=");
         cursor: ns-resize;
-        }
+      }
 
-        .gutter.gutter-horizontal {
-        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+      .gutter.gutter-horizontal {
+        background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==");
         cursor: ew-resize;
-        }
+      }
 
-        .split {
+      .split {
         overflow-y: auto;
         overflow-x: hidden;
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav>
+      @includes.html.nav(stats = stats)
+    </nav>
+
+    <main>
+      @includes.html.html_common()
+
+      <div id="explorer" class="split content split-horizontal">
+        <div id="explorerViews" class="content">
+          <tab-container>
+            <div role="tablist">
+              <button type="button" id="foldersTab" role="tab" data-tab-container-no-tabstop>
+                <a
+                  href="#folders"
+                  hx-target="#explorerPanelContent"
+                  hx-swap="innerHTML"
+                  hx-trigger="click"
+                  hx-get='${ url(showFoldersTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+                >
+                  Folders
+                </a>
+              </button>
+
+              <button type="button" id="albumsTab" role="tab" data-tab-container-no-tabstop>
+                <a
+                  href="#albums"
+                  hx-target="#explorerPanelContent"
+                  hx-trigger="click"
+                  hx-swap="innerHTML"
+                  hx-get='${ url(showAlbumsTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+                >
+                  Albums
+                </a>
+              </button>
+
+              <button type="button" id="peopleTab" role="tab" data-tab-container-no-tabstop>
+                <a
+                  href="#people"
+                  hx-target="#explorerPanelContent"
+                  hx-trigger="click"
+                  hx-swap="innerHTML"
+                  hx-get='${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+                >
+                  People
+                </a>
+              </button>
+            </div>
+
+            <div id="explorerPanelContent" role="tabpanel" class="tab-content"></div>
+          </tab-container>
+        </div>
+      </div>
+
+      <div id="content" class="split content split-horizontal"></div>
+    </main>
+
+    <footer x-data>
+      @includes.html.batch_ops()
+    </footer>
+
+    <script type="module">
+      "use strict"
+
+      /**
+       * see: https://github.com/nathancahill/split/
+       */
+      import Split from "/static/js/lib/split.es.js"
+      import { highlightNav } from "/static/js/common/navigation.js"
+      import { Const } from "/static/js/constants.js"
+      import { initApp } from "/static/js/app.js"
+
+      function loadView() {
+        initApp()
+
+        window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+
+        /**
+         * Highlight the correct tab
+         */
+        const urlParams = new URLSearchParams(window.location.search)
+        const view = urlParams.get("view") || "repository"
+        highlightNav(view)
+        Alpine.store(Const.state.currentView).setViewName(view)
+
+        /**
+         * This switches the background color of the content area (triage, trash, etc.)
+         */
+        document.getElementById("content").classList.add(view)
+
+        /**
+         * Load which fields to show in the grid
+         */
+        window.ctx.loadMetadataFieldViewSettingsFromStore()
+
+        /**
+         * Load user UI config from local storage (specific to browser)
+         */
+        const savedHorizontalSplitSizes = localStorage.getItem(Const.localStore.horizontalSplitSizes)
+        let horizontalSplitSizes = [25, 75]
+
+        if (savedHorizontalSplitSizes) {
+          horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
         }
 
-        </style>
-    </head>
+        Split(["#explorer", "#content"], {
+          sizes: horizontalSplitSizes,
+          minSize: [100, 300],
+          onDragEnd: function (horizontalSplitSizes) {
+            localStorage.setItem(
+              Const.localStore.horizontalSplitSizes,
+              JSON.stringify(horizontalSplitSizes),
+            )
+          },
+        })
 
-    <body>
-        <nav>
-            @includes.html.nav()
-       </nav>
+        // if there is no URL fragment, we default to folder views
+        const fragment = window.location.hash || "#folders"
 
-    </body>
+        const tabLink = document.querySelector('a[href="' + fragment + '"]')
+
+        if (tabLink) {
+          tabLink.click()
+        }
+
+        /**
+         * Perform search on load - default one or the one specified in the URL
+         */
+        const searchUrl =
+          "/htmx/search/r/" +
+          window.ctx.getRepoId() +
+          (window.location.search || "") +
+          fragment
+
+        htmx.ajax("get", searchUrl, {
+          swap: "innerHTML",
+          target: "#content",
+        })
+      }
+
+      document.addEventListener("DOMContentLoaded", loadView)
+    </script>
+  </body>
 </html>

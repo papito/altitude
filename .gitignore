@@ -59,3 +59,4 @@ Thumbs.db
 *.sqlite.db
 out.txt
 status.txt
+/data/db/altitude.db*
