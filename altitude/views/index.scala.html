@@ -93,7 +93,7 @@
                   hx-target="#explorerPanelContent"
                   hx-swap="innerHTML"
                   hx-trigger="click"
-                  hx-get='${ url(showFoldersTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+                  hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab"
                 >
                   Folders
                 </a>
@@ -105,7 +105,7 @@
                   hx-target="#explorerPanelContent"
                   hx-trigger="click"
                   hx-swap="innerHTML"
-                  hx-get='${ url(showAlbumsTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+                  hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab"
                 >
                   Albums
                 </a>
@@ -117,7 +117,7 @@
                   hx-target="#explorerPanelContent"
                   hx-trigger="click"
                   hx-swap="innerHTML"
-                  hx-get='${ url(showPeopleTab, Api.Field.REPO_ID -> RequestContext.getRepository.persistedId) }'
+                  hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
                 >
                   People
                 </a>

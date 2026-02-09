@@ -1,0 +1,49 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Folder
+@import altitude.core.Api
+
+@(folder: Folder, minWidth: Int, title: String)
+
+<style>
+    #modalContent {
+        display: grid;
+        grid-template-columns: 1fr;
+        place-items: center;
+    }
+</style>
+
+<button class="action-button error"
+        id="deleteFolder"
+        hx-swap="none"
+        hx-delete="/htmx/folder/r/@{RequestContext.getRepository.persistedId}"
+        hx-trigger="click"
+        hx-vars="{'@{Api.Field.ID}': '@{folder.id}'}"
+        hx-ext="json-enc">
+    Delete "<strong>@{folder.name}</strong>" and move assets into Recycle Bin
+</button>
+
+<script type="module">
+    import { showModal, closeModal } from "/static/js/common/modal.js"
+    import { Const } from "/static/js/constants.js"
+
+    showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
+
+    htmx.find("#deleteFolder").addEventListener(
+        "htmx:afterRequest",
+        function (evt) {
+            if (evt.detail.successful === true) {
+                const deletedFolderEvent = new CustomEvent(
+                    Const.events.folderDeleted,
+                    {
+                        detail: { "@{Api.Field.ID}": "@{folder.id}" },
+                    },
+                )
+
+                document.body.dispatchEvent(deletedFolderEvent)
+
+                closeModal()
+            }
+        },
+    )
+</script>
+

@@ -1,0 +1,29 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+
+<style>
+    #purgeRecycleBin {
+        display: grid;
+        grid-template-columns: 1fr;
+        place-items: center;
+        margin-top: var(--control-vertical-space);
+    }
+</style>
+
+<div id="purgeRecycleBin">
+    <button class="action-button error"
+            hx-swap="#content"
+            hx-target="#content"
+            hx-confirm="This will PERMANENTLY delete all items in the recycle bin. Are you sure?"
+            hx-delete="/htmx/trash//r/@{ RequestContext.getRepository.persistedId }/purge"
+            hx-trigger="click">
+        Purge recycle bin
+    </button>
+</div>
+
+<script type="module">
+    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+</script>
+
+<script type="module" src="/static/js/trash/htmx_event_handlers.js"></script>
+

@@ -1,0 +1,14 @@
+@import altitude.core.RequestContext
+@import altitude.core.Const
+
+<div id="albumList">
+    ALBUMS
+</div>
+
+<script type="module">
+    import { selectTab } from "/static/js/common/navigation.js"
+
+    selectTab("explorer", "albumsTab")
+    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+</script>
+

@@ -1,0 +1,28 @@
+@import altitude.core.RequestContext
+@import altitude.core.Api
+@import altitude.core.Const
+
+@(folderId: String, rootFolderId: String = RequestContext.getRepository.rootFolderId)
+
+<span hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/add-folder"
+      hx-target="#modalContent"
+      hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.ADD_FOLDER_MODAL_MIN_WIDTH}, "parentId": "@{folderId}"}'
+      hx-trigger="click">
+    Add folder
+</span>
+
+@if(folderId != rootFolderId) {
+    <span hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/rename-folder"
+          hx-target="#modalContent"
+          hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.RENAME_FOLDER_MODAL_MIN_WIDTH}, "id": "@{folderId}"}'
+          hx-trigger="click">
+        Rename
+    </span>
+    <span hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/delete-folder"
+      hx-target="#modalContent"
+      hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.DELETE_FOLDER_MODAL_MIN_WIDTH}, "id": "@{folderId}"}'
+      hx-trigger="click">
+        Delete
+    </span>
+}
+

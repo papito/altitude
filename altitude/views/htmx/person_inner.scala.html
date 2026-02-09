@@ -1,0 +1,71 @@
+@import altitude.core.Const
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+@import altitude.core.Const.FaceRecognition
+
+@(person: Person)
+
+<!-- The style for this is in person.scala.html -->
+
+<div class="visual" alt-person-id="@{person.persistedId}">
+    <div class="cover drag-drop" alt-person-id="@{person.persistedId}">
+        <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}"
+             hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
+             hx-target="#modalContent"
+             hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH}, "personId": "@{person.persistedId}"}'
+             hx-trigger="click"
+             draggable="false">
+    </div>
+</div>
+
+<div class="meta">
+    <div class="name" id="personName">
+        @htmx.html.view_person_name(person)
+    </div>
+</div>
+
+<div class="visibility-controls">
+    @if(!person.isBadMatch && person.numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD) {
+        @if(person.isHidden) {
+            <div class="mark-visible">
+                <a href="#"
+                   hx-trigger="click"
+                   hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/show"
+                   hx-swap="innerHTML"
+                   hx-target="#person"
+                ><i class="fas fa-eye"></i>Show</a>
+            </div>
+        } else {
+            <div class="mark-hidden">
+                <a href="#"
+                   hx-trigger="click"
+                   hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/hide"
+                   hx-swap="innerHTML"
+                   hx-target="#person"
+                ><i class="fas fa-eye-slash"></i>Hide</a>
+            </div>
+        }
+    }
+
+    @if(person.numOfFaces < FaceRecognition.MIN_FACES_THRESHOLD && !person.isBadMatch) {
+        <div id="markAsBadMatch"
+             alt-person-id="@{person.persistedId}"
+             class="mark-discarded">
+            <a href="#"
+               hx-trigger="click"
+               hx-delete="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}"
+               hx-swap="innerHTML"
+               hx-target="#person"
+            ><i class="fas fa-trash"></i>Discard</a>
+        </div>
+    }
+
+    @if(person.isBadMatch) {
+        <div class="mark-discarded">
+            Discarded
+        </div>
+    }
+</div>
+
+
