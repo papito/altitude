@@ -1,0 +1,63 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Folder
+@import altitude.core.Api
+
+@(folders: List[Folder])
+
+@for(idx <- folders.indices) {
+
+@defining(folders(idx)) { folder =>
+<div class="folder"
+     id="folder-@{folder.persistedId}"
+     alt-num-of-children="@{folder.numOfChildren}"
+     alt-parent-folder-id="@{folder.parentId}"
+     alt-folder-id="@{folder.persistedId}">
+
+    <div class="controls drag-drop dropzone"
+         alt-folder-id="@{folder.persistedId}">
+
+        <a href="#" hx-swap="innerHTML"
+           id="expand-folder-children-@{folder.persistedId}"
+           alt-folder-id="@{folder.persistedId}"
+           hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/children"
+           hx-target="#children-@{folder.persistedId}"
+           hx-vals='{"parentId": "@{folder.persistedId}"}'>
+
+            <i id="folder-icon-@{folder.persistedId}"
+              @if(folder.numOfChildren > 0) {
+                class="fas fa-folder-plus"
+              } else {
+              class="fas fa-folder"
+              }></i>
+        </a>
+
+        <div class="menu-ctrl">
+            <div>
+                <a href="#"
+                   alt-folder-id="@{folder.persistedId}"
+                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/context-menu"
+                   hx-swap="innerHTML"
+                   hx-target="#menu-@{folder.persistedId}"
+                   hx-vals='{"folderId": "@{folder.persistedId}"}'
+                   hx-trigger="click">&#10247;</a>
+            </div>
+        </div>
+        <span id="folderName-@{folder.persistedId}"
+              class="folder-name"
+              hx-target="#content"
+              hx-trigger="click"
+              hx-swap="innerHTML"
+              hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{folder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">
+        @{folder.name}</span>
+    </div>
+
+    <div class="menu"
+         id="menu-@{folder.persistedId}"
+         alt-folder-id="@{folder.persistedId}">
+    </div>
+    <div class="children"
+         id="children-@{folder.persistedId}"
+         alt-folder-id="@{folder.persistedId}"></div>
+</div>
+}}
+

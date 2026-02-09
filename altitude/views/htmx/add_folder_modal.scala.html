@@ -1,0 +1,65 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import play.api.libs.json.Json
+@import play.api.libs.json.JsObject
+
+@(fieldErrors: Map[String, String] = Map.empty, formJson: JsObject = Json.obj(), parentId: String, minWidth: Int, title: String)
+
+<style>
+    #addFolder input {
+        width: 100%;
+    }
+</style>
+
+<form action="#"
+      id="addFolder"
+      alt-folder-id="@{parentId}"
+      hx-swap="innerHTML"
+      hx-post="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/add"
+      hx-target="#children-@{parentId}"
+      hx-trigger="submit"
+      hx-ext="json-enc">
+
+    @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
+        <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
+    }
+
+    <div>
+        <label for="@{ Api.Field.Folder.NAME }"></label>
+        <input type="text"
+               id="field@{ Api.Field.Folder.NAME }"
+            @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
+               class="error"
+            }
+               name="@{ Api.Field.Folder.NAME }"
+               autocomplete="off"
+               value='@{ (formJson \ Api.Field.Folder.NAME).asOpt[String].getOrElse("") }'
+               placeholder="New folder name"
+               maxlength="@{ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+               minlength="@{ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
+
+        <input type="hidden" name="@{ Api.Field.Folder.PARENT_ID }" value="@{ parentId }">
+    </div>
+</form>
+
+<script type="module">
+    import { showModal, closeModal } from "/static/js/common/modal.js"
+    import { Const } from "/static/js/constants.js"
+
+    showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
+
+    htmx.find("#field@{ Api.Field.Folder.NAME }").focus()
+
+    htmx.find("#addFolder").addEventListener("htmx:afterRequest", function (evt) {
+        if (evt.detail.successful === true) {
+            const folderAddedEvent = new CustomEvent(Const.events.folderAdded, {
+                detail: { "@{ Api.Field.Folder.PARENT_ID }": "@{ parentId }" },
+            })
+
+            document.body.dispatchEvent(folderAddedEvent)
+
+            closeModal()
+        }
+    })
+</script>
+

@@ -1,0 +1,82 @@
+@import altitude.core.Const
+@import altitude.core.util.Util
+@import altitude.core.RequestContext
+@import altitude.core.models.Asset
+@import altitude.core.util.SearchResult
+@import altitude.core.Api
+
+@(isContinuousScroll: Boolean = false, p: Int, results: SearchResult)
+
+@defining(p + 1) { nextPage =>
+
+@for(idx <- results.records.indices) {
+    @defining(results.records(idx): Asset) { asset =>
+    @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
+
+    @if(idx == results.records.length - 1 && results.hasMoreResults) {
+
+        @* Last cell is special because it tells HTMX to load the next page *@
+        <div id="asset-@{asset.persistedId}"
+             class="cell last-cell"
+             hx-trigger="intersect"
+             hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.PAGE}=@{nextPage}&@{Api.Field.Search.IS_CONTINUOUS_SCROLL}=true"
+             hx-swap="afterend">
+    } else {
+        <div class="cell" id="asset-@{asset.persistedId}">
+    }
+
+        <div alt-asset-id="@{asset.persistedId}"
+             x-data="initSelectable('@{asset.persistedId}')"
+             :class="{ 'drag-drop': true, 'selected': selected, 'masked': dragged }">
+
+            <div class="checkmark"
+                 @@click="toggle">
+            </div>
+
+            <img alt-asset-id="@{asset.persistedId}"
+                 draggable="false"
+                 @@click.shift="toggleViaAsset($event)"
+                 hx-trigger="click[!event.shiftKey]"
+                 hx-target="#imageDetailModalContent"
+                 hx-get="/htmx/asset/r/@{RequestContext.getRepository.persistedId}/modals/asset-detail/@{asset.persistedId}"
+                 @if(isContinuousScroll) {alt-data-src="@{imgUrl}"} else {src="@{imgUrl}"}
+                 alt="@{ asset.fileName }"
+                 class="responsive-image">
+
+        </div>@* /inner cell drag droppable *@
+
+        <div class="metadata">
+            <div class="fileName" title="@{ asset.fileName }">
+                <span>File:</span> @{ asset.fileName }
+            </div>
+
+            @defining(Util.humanReadableDateTime(asset.originalCreatedAt)) { originalCreatedAt =>
+            <div class="originalCreatedAt" title="@{ originalCreatedAt }">
+                <span>Created:</span> @{ originalCreatedAt }
+            </div>
+            }
+
+            @defining(Util.humanReadableDateTime(asset.createdAt)) { createdAt =>
+            <div class="importedAt" title="@{ createdAt }">
+                <span>Imported:</span> @{ createdAt }
+            </div>
+            }
+
+            @defining(s"${asset.width} x ${asset.height}") { dimensions =>
+            <div class="dimensions" title="@{ dimensions }px">
+                <span>Dimensions:</span> @{ dimensions } px
+            </div>
+            }
+
+            @defining(Util.humanReadableByteCount(asset.sizeBytes)) { fileSize =>
+            <div class="fileSize" title="@{ fileSize }">
+                <span>Size:</span> @{ fileSize }
+            </div>
+            }
+        </div>
+    </div>@* /cell *@
+    }}}
+}
+
+
+
