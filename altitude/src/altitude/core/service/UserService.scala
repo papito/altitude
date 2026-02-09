@@ -46,14 +46,13 @@ class UserService(val app: Altitude) extends BaseService[User] {
         // Create PASETO token
         val token = app.service.paseto.createToken(user)
 
-        // Also save the token to the database for tracking/revocation
+        // Save the token to the database for tracking/revocation
         val userToken = UserToken(
           userId = user.persistedId,
           token = token,
           expiresAt = LocalDateTime.now.plusDays(Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS))
 
         tokenDao.add(userToken.toJson)
-        app.usersByToken += (token -> user)
 
         switchContextToUser(user)
         Some((user, token))
@@ -67,22 +66,27 @@ class UserService(val app: Altitude) extends BaseService[User] {
    */
   def getUserFromToken(token: String): Option[User] = {
     txManager.asReadOnly[Option[User]] {
-      // First check the cache
-      app.usersByToken.get(token) match {
+      // Validate using PASETO service
+      app.service.paseto.validateTokenAndGetUser(token) match {
         case Some(user) =>
-          switchContextToUser(user)
-          Some(user)
-        case None =>
-          // Validate using PASETO service
-          app.service.paseto.validateTokenAndGetUser(token) match {
-            case Some(user) =>
-              // Cache the token -> user mapping
-              app.usersByToken += (token -> user)
-              switchContextToUser(user)
-              Some(user)
-            case None =>
-              None
+          // Check if token exists in database (not revoked)
+          val query = new Query(params = Map(FieldConst.UserToken.TOKEN -> token))
+          val tokenExists = try {
+            tokenDao.getOneByQuery(query)
+            true
+          } catch {
+            case _: Exception => false
           }
+
+          if (tokenExists) {
+            switchContextToUser(user)
+            Some(user)
+          } else {
+            logger.debug("Token not found in database (revoked)")
+            None
+          }
+        case None =>
+          None
       }
     }
   }
@@ -107,12 +111,6 @@ class UserService(val app: Altitude) extends BaseService[User] {
   }
 
   private def getPasswordHashByEmail(email: String): String = {
-    // try cache first
-
-    if (app.usersPasswordHashByEmail.contains(email)) {
-      return app.usersPasswordHashByEmail(email)
-    }
-
     val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
     val sqlQuery = dao.sqlQueryBuilder.buildSelectSql(query)
 
@@ -120,50 +118,25 @@ class UserService(val app: Altitude) extends BaseService[User] {
        we need to do a low-level query to get the password hash */
     val userRec: Map[String, AnyRef] = dao.executeAndGetOne(sqlQuery.sqlAsString, sqlQuery.bindValues)
 
-    val passwordHash = userRec(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]
-
-    app.usersPasswordHashByEmail += (email -> passwordHash)
-    passwordHash
+    userRec(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]
   }
 
   def getByToken(token: String): Option[User] = {
-    txManager.asReadOnly[Option[User]] {
-      app.usersByToken.get(token)
-    }
+    getUserFromToken(token)
   }
 
   def deleteToken(token: String): Unit = {
     logger.info("Deleting token: " + token)
     tokenDao.deleteByQuery(new Query(params = Map(FieldConst.UserToken.TOKEN -> token)))
-    app.usersByToken -= token
   }
 
-  private def getByEmail(email: String): JsObject = {
-    // try cache first
-    if (app.usersByEmail.contains(email)) {
-      return app.usersByEmail(email).toJson
-    }
-
+  private def getByEmail(email: String): User = {
     val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
-
-    /* Since the user model does not explicitly store the hashed password,
-       we need to do a low-level query to get the password hash */
-    val user: User = dao.getOneByQuery(query)
-
-    app.usersByEmail += (email -> user)
-    user.toJson
+    dao.getOneByQuery(query)
   }
 
-  override def getById(id: String): JsObject = {
-    // try cache first
-    if (app.usersById.contains(id)) {
-      return app.usersById(id).toJson
-    }
+  override def getById(id: String): JsObject = super.getById(id)
 
-    val user = super.getById(id)
-    app.usersById += (id -> user)
-    user
-  }
 
   def setLastActiveRepoId(user: User, repoId: String): Unit = {
     txManager.withTransaction {
