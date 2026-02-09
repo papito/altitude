@@ -34,7 +34,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
     RequestContext.account.value = Some(user)
   }
 
-  def loginAndGetUser(email: String, password: String): Option[User] = {
+  def loginAndGetUser(email: String, password: String): Option[(User, String)] = {
     txManager.withTransaction {
       val passwordHash = getPasswordHashByEmail(email)
 
@@ -43,19 +43,56 @@ class UserService(val app: Altitude) extends BaseService[User] {
       } else {
         val user: User = getByEmail(email)
 
-        // save the token
+        // Create PASETO token
+        val token = app.service.paseto.createToken(user)
+
+        // Also save the token to the database for tracking/revocation
         val userToken = UserToken(
           userId = user.persistedId,
-          token = Util.randomStr(64),
+          token = token,
           expiresAt = LocalDateTime.now.plusDays(Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS))
 
         tokenDao.add(userToken.toJson)
-        app.usersByToken += (userToken.token -> user)
+        app.usersByToken += (token -> user)
 
         switchContextToUser(user)
-        Some(user)
+        Some((user, token))
       }
     }
+  }
+
+  /**
+   * Validates a PASETO token and returns the user if valid.
+   * This also switches the request context to the authenticated user.
+   */
+  def getUserFromToken(token: String): Option[User] = {
+    txManager.asReadOnly[Option[User]] {
+      // First check the cache
+      app.usersByToken.get(token) match {
+        case Some(user) =>
+          switchContextToUser(user)
+          Some(user)
+        case None =>
+          // Validate using PASETO service
+          app.service.paseto.validateTokenAndGetUser(token) match {
+            case Some(user) =>
+              // Cache the token -> user mapping
+              app.usersByToken += (token -> user)
+              switchContextToUser(user)
+              Some(user)
+            case None =>
+              None
+          }
+      }
+    }
+  }
+
+  /**
+   * Logs out the user by invalidating the token.
+   */
+  def logout(token: String): Unit = {
+    logger.info("Logging out user with token")
+    deleteToken(token)
   }
 
   override def add(objIn: User): JsObject =

@@ -2,6 +2,7 @@ package altitude.core.routes.web
 
 import altitude.core.App
 import altitude.core.routes.decorators.repoContext
+import altitude.core.routes.decorators.requireLogin
 import org.slf4j.Logger
 
 class WebController(using logger: Logger) extends cask.Routes:
@@ -20,6 +21,7 @@ class WebController(using logger: Logger) extends cask.Routes:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
+  @requireLogin()
   @repoContext()
   @cask.get("/r/:repoId")
   def repositoryView(repoId: String): cask.Response[String] = {
