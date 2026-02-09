@@ -9,9 +9,12 @@ watch:
 compile:
 	mill altitude.compile
 
-clean:
+clean-all:
 	rm -rf data/*
 	mill clean
+
+clean-db:
+	rm -rf data/*
 
 publish:
 	mill altitude.assembly

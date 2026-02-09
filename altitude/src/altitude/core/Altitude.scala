@@ -11,6 +11,7 @@ import altitude.core.service.ImportPipelineService
 import altitude.core.service.LibraryService
 import altitude.core.service.MetadataExtractionService
 import altitude.core.service.MigrationService
+import altitude.core.service.PasetoService
 import altitude.core.service.PersonService
 import altitude.core.service.PurgePipelineService
 import altitude.core.service.RepositoryService
@@ -222,6 +223,7 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     }
 
     val system = new SystemService(app)
+    val paseto = new PasetoService(app)
     val user = new UserService(app)
     val repository = new RepositoryService(app)
     val metadataExtractor = new MetadataExtractionService
@@ -298,8 +300,8 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     repositoriesById = Map.empty
   }
 
-  setIsInitializedState()
   runMigrations()
+  setIsInitializedState()
 
   logger.info("Altitude Server instance initialized")
 

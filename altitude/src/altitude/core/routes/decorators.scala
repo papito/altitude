@@ -1,6 +1,7 @@
 package altitude.core.routes
 import altitude.core.App
 import altitude.core.util.Util
+import cask.model.Response
 import cask.model.Response.Raw
 import cask.router.Result
 import org.slf4j.Logger
@@ -11,6 +12,72 @@ import java.lang.System.currentTimeMillis
 
 object decorators {
   val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  private val AUTH_COOKIE_NAME = "auth_token"
+  private val AUTH_HEADER_NAME = "Authorization"
+  private val BEARER_PREFIX = "Bearer "
+
+  /**
+   * Extracts the authentication token from the request.
+   * Checks both the Authorization header (Bearer token) and cookies.
+   */
+  private def extractToken(req: cask.Request): Option[String] = {
+    // First check Authorization header
+    val authHeader = Option(req.exchange.getRequestHeaders.getFirst(AUTH_HEADER_NAME))
+    authHeader.filter(_.startsWith(BEARER_PREFIX)).map(_.substring(BEARER_PREFIX.length)) match {
+      case Some(token) => Some(token)
+      case None =>
+        // Fall back to cookie
+        val cookies = req.exchange.getRequestCookies
+        Option(cookies.get(AUTH_COOKIE_NAME)).map(_.getValue)
+    }
+  }
+
+  /**
+   * Decorator that requires a valid PASETO token for the endpoint.
+   * If the token is invalid or missing, returns a 401 Unauthorized response.
+   * For web requests, redirects to the login page.
+   */
+  class requireLogin extends cask.RawDecorator {
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
+      extractToken(req) match {
+        case Some(token) =>
+          App.altitude.service.user.getUserFromToken(token) match {
+            case Some(user) =>
+              logger.debug(s"User authenticated: ${user.email}")
+              delegate(req, Map("user" -> user))
+            case None =>
+              logger.debug("Invalid or expired token")
+              handleUnauthenticated(req)
+          }
+        case None =>
+          logger.debug("No authentication token found")
+          handleUnauthenticated(req)
+      }
+    }
+
+    private def handleUnauthenticated(req: cask.Request): Result[Raw] = {
+      // Check if this is an API request (Accept: application/json or API path)
+      val acceptHeader = Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("")
+      val isApiRequest = acceptHeader.contains("application/json") ||
+        req.exchange.getRequestPath.startsWith("/api/")
+
+      if (isApiRequest) {
+        Result.Success(Response(
+          """{"error": "Unauthorized", "message": "Authentication required"}""",
+          statusCode = 401,
+          headers = Seq("Content-Type" -> "application/json")
+        ))
+      } else {
+        // Redirect to login page for web requests
+        Result.Success(Response(
+          "",
+          statusCode = 302,
+          headers = Seq("Location" -> "/login")
+        ))
+      }
+    }
+  }
 
   class requestResponseLogger extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {

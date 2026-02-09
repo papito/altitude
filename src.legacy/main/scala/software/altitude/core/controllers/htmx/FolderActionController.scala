@@ -36,7 +36,7 @@ class FolderActionController extends BaseHtmxController {
     val folderId: String = params.get(Api.Field.ID).get
 
     val folder: Folder = app.service.folder.getById(folderId)
-
+    
     ssp(
       "htmx/rename_folder_modal",
       Api.Modal.MIN_WIDTH -> C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
