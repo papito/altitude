@@ -2,7 +2,6 @@ package altitude.core
 
 import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
-import altitude.core.models.User
 import altitude.core.service.AssetService
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
@@ -275,7 +274,7 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
 
   def cleanup(): Unit = {
     logger.info("Cleaning up resources")
-    // service.importPipeline.shutdown()
+    service.importPipeline.shutdown()
     logger.info("Pipeline system terminated")
 
     // This is already done by default and will cause a warning

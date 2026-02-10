@@ -23,14 +23,12 @@ class SessionController(using logger: Logger) extends cask.Routes:
    * Process login form submission
    */
   @cask.postForm("/login")
-  def doLogin(login: String, password: String, rememberMe: Option[String] = None): cask.Response[String] = {
+  def doLogin(login: String, password: String): cask.Response[String] = {
     logger.info(s"Login attempt for user: $login")
 
     App.altitude.service.user.loginAndGetUser(login, password) match {
       case Some((user, token)) =>
         logger.info(s"User logged in successfully: ${user.email}")
-
-        val maxAge: Integer = if (rememberMe.contains("true")) COOKIE_MAX_AGE_SECONDS else -1
 
         // Redirect to home page with auth cookie set
         cask.Response(
@@ -41,7 +39,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
             name = AUTH_COOKIE_NAME,
             value = token,
             path = "/",
-            maxAge = maxAge,
+            maxAge = COOKIE_MAX_AGE_SECONDS,
             httpOnly = true
           ))
         )

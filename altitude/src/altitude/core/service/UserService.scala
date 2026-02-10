@@ -3,20 +3,16 @@ package altitude.core.service
 import altitude.core._
 import altitude.core.FieldConst
 import altitude.core.dao.UserDao
-import altitude.core.dao.UserTokenDao
 import altitude.core.models.User
-import altitude.core.models.UserToken
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.Util
-import java.time.LocalDateTime
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 
 class UserService(val app: Altitude) extends BaseService[User] {
   protected val dao: UserDao = app.DAO.user
-  private val tokenDao: UserTokenDao = app.DAO.userToken
 
   override protected val txManager: TransactionManager = app.txManager
 
@@ -43,16 +39,8 @@ class UserService(val app: Altitude) extends BaseService[User] {
       } else {
         val user: User = getByEmail(email)
 
-        // Create PASETO token
+        // Create PASETO token with embedded user data
         val token = app.service.paseto.createToken(user)
-
-        // Save the token to the database for tracking/revocation
-        val userToken = UserToken(
-          userId = user.persistedId,
-          token = token,
-          expiresAt = LocalDateTime.now.plusDays(Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS))
-
-        tokenDao.add(userToken.toJson)
 
         switchContextToUser(user)
         Some((user, token))
@@ -63,40 +51,30 @@ class UserService(val app: Altitude) extends BaseService[User] {
   /**
    * Validates a PASETO token and returns the user if valid.
    * This also switches the request context to the authenticated user.
+   *
+   * Note: This method does NOT query the database. The user data is extracted
+   * from the PASETO token claims. Token revocation is not supported with this
+   * stateless approach - tokens remain valid until expiration.
    */
   def getUserFromToken(token: String): Option[User] = {
-    txManager.asReadOnly[Option[User]] {
-      // Validate using PASETO service
-      app.service.paseto.validateTokenAndGetUser(token) match {
-        case Some(user) =>
-          // Check if token exists in database (not revoked)
-          val query = new Query(params = Map(FieldConst.UserToken.TOKEN -> token))
-          val tokenExists = try {
-            tokenDao.getOneByQuery(query)
-            true
-          } catch {
-            case _: Exception => false
-          }
-
-          if (tokenExists) {
-            switchContextToUser(user)
-            Some(user)
-          } else {
-            logger.debug("Token not found in database (revoked)")
-            None
-          }
-        case None =>
-          None
-      }
+    // Validate using PASETO service - no database query needed
+    app.service.paseto.validateTokenAndGetUser(token) match {
+      case Some(user) =>
+        switchContextToUser(user)
+        Some(user)
+      case None =>
+        None
     }
   }
 
   /**
-   * Logs out the user by invalidating the token.
+   * Logs out the user by clearing the client-side cookie.
+   * With stateless PASETO tokens, there's no server-side revocation.
+   * The token will remain cryptographically valid until it expires.
    */
   def logout(token: String): Unit = {
-    logger.info("Logging out user with token")
-    deleteToken(token)
+    logger.info("Logging out user (stateless - clearing client cookie only)")
+    // No server-side action needed - the SessionController clears the cookie
   }
 
   override def add(objIn: User): JsObject =
@@ -125,10 +103,6 @@ class UserService(val app: Altitude) extends BaseService[User] {
     getUserFromToken(token)
   }
 
-  def deleteToken(token: String): Unit = {
-    logger.info("Deleting token: " + token)
-    tokenDao.deleteByQuery(new Query(params = Map(FieldConst.UserToken.TOKEN -> token)))
-  }
 
   private def getByEmail(email: String): User = {
     val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
