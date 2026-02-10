@@ -100,16 +100,59 @@ class PasetoService(val app: Altitude) {
     }
   }
 
+  /**
+   * Validates a PASETO token and returns the User object if valid.
+   * Returns None if the token is invalid or expired.
+   * 
+   * The User object is reconstructed from the token claims - no database query.
+   */
   def validateTokenAndGetUser(token: String): Option[User] = {
-    validateToken(token).flatMap { userId =>
-      try {
-        val userJson = app.service.user.getById(userId)
-        Some(userJson: User)
-      } catch {
-        case _: Exception =>
-          logger.debug(s"User not found for token user ID: $userId")
-          None
+    try {
+      val parser: PasetoParser = Pasetos.parserBuilder()
+        .setSharedSecret(secretKey)
+        .build()
+
+      val parsedToken: Paseto = parser.parse(token)
+      val claims = parsedToken.getClaims
+
+      // Check expiration
+      val expiration = claims.getExpiration
+      if (expiration != null && expiration.isBefore(Instant.now())) {
+        logger.debug("Token has expired")
+        return None
       }
+
+      val userId = claims.getSubject
+      if (userId == null || userId.isEmpty) {
+        logger.debug("Token has no subject (user ID)")
+        return None
+      }
+
+      // Extract user data from token claims
+      val email = claims.get("email", classOf[String])
+      val name = claims.get("name", classOf[String])
+      val accountTypeStr = claims.get("accountType", classOf[String])
+
+      if (email == null || name == null || accountTypeStr == null) {
+        logger.debug("Token missing required user claims")
+        return None
+      }
+
+      // Reconstruct User from token claims
+      import altitude.core.models.{AccountType, User}
+      val user = User(
+        id = Some(userId),
+        email = email,
+        name = name,
+        accountType = AccountType.valueOf(accountTypeStr),
+        lastActiveRepoId = None // This will be loaded from DB when needed
+      )
+
+      Some(user)
+    } catch {
+      case e: Exception =>
+        logger.debug(s"Token validation failed: ${e.getMessage}")
+        None
     }
   }
 }

@@ -2,7 +2,7 @@ package altitude.core.routes.web.htmx
 
 import cask.Request
 import upickle.default.*
-import altitude.core.{Api, App, DataScrubber, ValidationException, Const as C}
+import altitude.core.{Api, App, DataScrubber, RequestContext, ValidationException, Const as C}
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.{AccountType, User}
 import altitude.core.routes.BaseController
@@ -114,7 +114,7 @@ class SetupController(using logger: Logger) extends BaseController:
         cask.Response(
           data = "",
           statusCode = 200,
-          headers = Seq("HX-Redirect" -> "/")
+          headers = Seq("HX-Redirect" -> s"/r/${RequestContext.repository.value.get.persistedId}")
         )
 
   initialize()
