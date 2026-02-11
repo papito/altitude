@@ -36,8 +36,9 @@ class UserService(val app: Altitude) extends BaseService[User] {
       val passwordHashOpt = getPasswordHashByEmailSafe(email)
       
       // Always perform password check to prevent timing attacks
-      // If user doesn't exist, check against a dummy hash
-      val dummyHash = "$2a$10$dummy.hash.to.prevent.timing.attack.leakage.of.user.existence"
+      // Use a valid bcrypt hash for non-existent users to ensure identical execution paths
+      // This is a pre-generated valid bcrypt hash (hash of a dummy password)
+      val dummyHash = "$2a$10$b58qVLgVVVxh9C4.bF9JjuIB5nbMgw7MrQ69ysrJAXSJG.cdAjbSa"
       val hashToCheck = passwordHashOpt.getOrElse(dummyHash)
       
       val passwordValid = Util.checkPassword(password, hashToCheck)
@@ -101,8 +102,13 @@ class UserService(val app: Altitude) extends BaseService[User] {
     try {
       Some(getPasswordHashByEmail(email))
     } catch {
-      case _: altitude.core.NotFoundException => None
-      case _: Exception => None
+      case _: altitude.core.NotFoundException =>
+        // User doesn't exist - this is expected, return None
+        None
+      case e: Exception =>
+        // Unexpected error - log it but still return None to prevent timing attacks
+        logger.warn(s"Unexpected error while retrieving password hash for email: ${e.getMessage}")
+        None
     }
   }
 
