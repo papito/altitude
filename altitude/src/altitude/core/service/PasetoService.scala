@@ -79,7 +79,6 @@ class PasetoService(val app: Altitude) {
       val parsedToken: Paseto = parser.parse(token)
       val claims = parsedToken.getClaims
 
-      // Check expiration
       val expiration = claims.getExpiration
       if (expiration != null && expiration.isBefore(Instant.now())) {
         logger.debug("Token has expired")
@@ -115,7 +114,6 @@ class PasetoService(val app: Altitude) {
       val parsedToken: Paseto = parser.parse(token)
       val claims = parsedToken.getClaims
 
-      // Check expiration
       val expiration = claims.getExpiration
       if (expiration != null && expiration.isBefore(Instant.now())) {
         logger.debug("Token has expired")

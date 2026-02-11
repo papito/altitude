@@ -4,8 +4,9 @@ import cask.Request
 import upickle.default.*
 import altitude.core.{Api, App, DataScrubber, RequestContext, ValidationException, Const as C}
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.{AccountType, User}
+import altitude.core.models.{AccountType, Repository, User}
 import altitude.core.routes.BaseController
+import altitude.core.routes.web.SessionController
 import cask.model.Response
 import org.slf4j.Logger
 import play.api.libs.json.JsObject
@@ -104,17 +105,31 @@ class SetupController(using logger: Logger) extends BaseController:
           accountType = AccountType.Admin
         )
 
-        App.altitude.service.system.initializeSystem(
+        val (admin, repo) = App.altitude.service.system.initializeSystem(
           repositoryName = repositoryName,
           adminModel = userModel,
           password = password
         )
 
-        // Send HTML redirect header
+        App.altitude.service.user.setLastActiveRepoId(admin, repo.persistedId)
+
+        // Auto-login the newly created admin user
+        val adminUser = RequestContext.getAccount
+        val token = App.altitude.service.paseto.createToken(adminUser)
+
+        // Send HTML redirect header with auth cookie
         cask.Response(
           data = "",
           statusCode = 200,
-          headers = Seq("HX-Redirect" -> s"/r/${RequestContext.repository.value.get.persistedId}")
+          headers = Seq("HX-Redirect" -> s"/r/${repo.persistedId}"),
+          cookies = Seq(cask.model.Cookie(
+            name = SessionController.AUTH_COOKIE_NAME,
+            value = token,
+            path = "/",
+            maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
+              httpOnly = true
+          ))
         )
+
 
   initialize()

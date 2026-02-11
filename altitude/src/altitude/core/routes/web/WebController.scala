@@ -1,8 +1,9 @@
 package altitude.core.routes.web
 
 import altitude.core.App
-import altitude.core.routes.decorators.repoContext
-import altitude.core.routes.decorators.requireLogin
+import altitude.core.RequestContext
+import altitude.core.routes.decorators.{extractToken, requireLogin}
+import cask.Request
 import org.slf4j.Logger
 
 class WebController(using logger: Logger) extends cask.Routes:
@@ -10,30 +11,35 @@ class WebController(using logger: Logger) extends cask.Routes:
   def staticFileRoutes() = "altitude/static"
 
   @cask.get("/")
-  def index(): cask.Response[String] = {
+  def index()(request: Request): cask.Response[String] = {
     if (!App.altitude.isInitialized) {
       logger.warn("App is not initialized, redirecting to setup")
       return cask.Redirect("/setup")
     }
 
-    // FIXME: this is not a completed endpoint, we should redirect to the last active repo for the user after login
-    val payload = "<!doctype html>" + html.index(stats = App.altitude.service.stats.getStats)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    extractToken(request) match {
+      case Some(token) =>
+        App.altitude.service.user.getUserFromToken(token) match {
+          case Some(user) =>
+            logger.info(s"User authenticated: ${user.email}")
+            cask.Redirect(s"/r/${user.lastActiveRepoId}")
+          case None =>
+            cask.Redirect(s"/login")
+        }
+      case None =>
+        cask.Redirect(s"/login")
+    }
   }
 
   @requireLogin()
-  @repoContext()
   @cask.get("/r/:repoId")
-  def repositoryView(repoId: String): cask.Response[String] = {
+  def repositoryView(repoId: String)(using request: Request): cask.Response[String] = {
     if (!App.altitude.isInitialized) {
       logger.warn("App is not initialized, redirecting to setup")
       return cask.Redirect("/setup")
     }
 
-    App.altitude.service.repository.setContextFromRequest(Some(repoId))
-
     val payload = "<!doctype html>" + html.index(stats = App.altitude.service.stats.getStats)
-
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
