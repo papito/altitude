@@ -26,6 +26,9 @@ object App extends cask.Main:
   Loader.load(classOf[opencv_java])
 
   val altitude: Altitude = new Altitude()
+  
+  altitude.runMigrations()
+  altitude.setIsInitializedState()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
 

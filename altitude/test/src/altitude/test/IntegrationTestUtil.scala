@@ -11,6 +11,7 @@ import javax.imageio.ImageIO
 import org.apache.commons.io.FileUtils
 
 object IntegrationTestUtil {
+
   def createTestDir(testApp: Altitude): Unit = {
     val testDir = new File(testApp.config.getString(C.Conf.TEST_DIR))
 
