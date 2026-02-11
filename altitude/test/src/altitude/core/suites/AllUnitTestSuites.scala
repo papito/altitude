@@ -8,6 +8,7 @@ import altitude.core.unit.FolderModelTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.SearchQueryModelTests
 import altitude.core.unit.SearchSqlQueryTests
+import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlQueryTests
 import altitude.core.unit.UrlServiceTests
 
@@ -20,5 +21,6 @@ abstract class AllUnitTestSuites extends Suites (
   new DataScrubberTests,
   new SearchQueryModelTests,
   new PersonModelTests,
+  new SessionControllerTests,
   new UrlServiceTests
 )

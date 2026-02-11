@@ -45,4 +45,30 @@ import org.scalatest.matchers.should.Matchers.shouldEqual
         fail("Login failed: user or token is None")
     }
   }
+
+  test("Login fails with invalid password") {
+    val password = "MyPassword123"
+    val wrongPassword = "WrongPassword456"
+
+    val userModel = User(
+      email = Util.randomStr(),
+      name = Util.randomStr(),
+      accountType = AccountType.User
+    )
+
+    testContext.persistUser(Some(userModel), password = password)
+
+    val loginResult = testApp.service.user.loginAndGetUser(userModel.email, wrongPassword)
+
+    loginResult shouldEqual None
+  }
+
+  test("Login fails with non-existent user") {
+    val nonExistentEmail = "nonexistent@example.com"
+    val password = "SomePassword123"
+
+    val loginResult = testApp.service.user.loginAndGetUser(nonExistentEmail, password)
+
+    loginResult shouldEqual None
+  }
 }
