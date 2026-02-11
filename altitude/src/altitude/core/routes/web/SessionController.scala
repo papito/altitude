@@ -1,15 +1,17 @@
 package altitude.core.routes.web
 
-import altitude.core.App
+import altitude.core.{App, Const}
 import cask.model.Cookie
 import cask.Request
 import org.slf4j.Logger
 import play.api.libs.json.Json
 
-class SessionController(using logger: Logger) extends cask.Routes:
-  private val AUTH_COOKIE_NAME = "auth_token"
-  private val COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60 // 7 days
+object SessionController {
+  val AUTH_COOKIE_NAME = "auth_token"
+  val COOKIE_MAX_AGE_SECONDS: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS * 24 * 60 * 60 // 7 days
+}
 
+class SessionController(using logger: Logger) extends cask.Routes:
   /**
    * Display the login page
    */
@@ -34,12 +36,12 @@ class SessionController(using logger: Logger) extends cask.Routes:
         cask.Response(
           "",
           statusCode = 302,
-          headers = Seq("Location" -> "/"),
+          headers = Seq("Location" -> s"/r/${user.lastActiveRepoId.get}"),
           cookies = Seq(Cookie(
-            name = AUTH_COOKIE_NAME,
+            name = SessionController.AUTH_COOKIE_NAME,
             value = token,
             path = "/",
-            maxAge = COOKIE_MAX_AGE_SECONDS,
+            maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
             httpOnly = true
           ))
         )
@@ -105,7 +107,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
   def doLogout()(using request: Request): cask.Response[String] = {
     // Extract token from cookie to invalidate it
     val cookies = request.exchange.getRequestCookies
-    val tokenOpt = Option(cookies.get(AUTH_COOKIE_NAME)).map(_.getValue)
+    val tokenOpt = Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
 
     tokenOpt.foreach { token =>
       logger.info("Logging out user")
@@ -118,7 +120,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
       statusCode = 302,
       headers = Seq("Location" -> "/login"),
       cookies = Seq(Cookie(
-        name = AUTH_COOKIE_NAME,
+        name = SessionController.AUTH_COOKIE_NAME,
         value = "",
         path = "/",
         maxAge = 0, // Expire immediately
@@ -136,7 +138,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
     val authHeader = Option(request.exchange.getRequestHeaders.getFirst("Authorization"))
     val tokenFromHeader = authHeader.filter(_.startsWith("Bearer ")).map(_.substring(7))
     val cookies = request.exchange.getRequestCookies
-    val tokenFromCookie = Option(cookies.get(AUTH_COOKIE_NAME)).map(_.getValue)
+    val tokenFromCookie = Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
     val tokenOpt = tokenFromHeader.orElse(tokenFromCookie)
 
     tokenOpt.foreach { token =>
@@ -150,7 +152,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
       statusCode = 200,
       headers = Seq(("Content-Type", "application/json")),
       cookies = Seq(Cookie(
-        name = AUTH_COOKIE_NAME,
+        name = SessionController.AUTH_COOKIE_NAME,
         value = "",
         path = "/",
         maxAge = 0,

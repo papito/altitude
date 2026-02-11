@@ -33,7 +33,7 @@ object App extends cask.Main:
   given logger: Logger = LoggerFactory.getLogger(getClass)
 
   override def mainDecorators: Seq[Decorator[?, ?, ?, ?]] =
-    Seq(new cask.decorators.compress(), decorators.requestResponseLogger())
+    Seq(new cask.decorators.compress(), decorators.requestResponseLogger(), decorators.repoContext())
 
   override def allRoutes: Seq[cask.Routes] = Seq(
     new HealthController,

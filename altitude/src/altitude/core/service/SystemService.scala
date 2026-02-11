@@ -52,7 +52,7 @@ class SystemService(val app: Altitude) {
     }
   }
 
-  def initializeSystem(repositoryName: String, adminModel: User, password: String): Unit = {
+  def initializeSystem(repositoryName: String, adminModel: User, password: String): (User, Repository) = {
     logger.warn("INITIALIZING SYSTEM")
 
     txManager.withTransaction {
@@ -62,18 +62,16 @@ class SystemService(val app: Altitude) {
         name = repositoryName,
         fileStoreType = Const.StorageEngineName.FS, // hard default for now
         owner = admin)
-//
-//      // normally done on startup but on the first run still have to do this here.
+
       RequestContext.repository.value = Some(repo)
-//      app.service.faceRecognition.initialize()
-//
-      app.service.user.setLastActiveRepoId(admin, repo.persistedId)
 
       systemMetadataDao.setInitialized()
 
       app.setIsInitializedState()
 
       RequestContext.account.value = Some(admin)
+
+      (admin, repo)
     }
   }
 }
