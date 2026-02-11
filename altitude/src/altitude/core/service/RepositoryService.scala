@@ -1,8 +1,6 @@
 package altitude.core.service
 
-import altitude.core.Altitude
-import altitude.core.FieldConst
-import altitude.core.RequestContext
+import altitude.core.{Altitude, FieldConst, NotFoundException, RequestContext}
 import altitude.core.dao.RepositoryDao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Folder
@@ -88,8 +86,13 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
 
   def setContextFromRequest(repoId: Option[String]): Unit = {
     if (repoId.nonEmpty) {
-      val repo: Repository = getById(repoId.get)
-      RequestContext.repository.value = Some(repo)
+      try {
+        val repo: Repository = getById(repoId.get)
+        RequestContext.repository.value = Some(repo)
+      }
+      catch  {
+        case _: NotFoundException =>
+      }
     }
   }
 }
