@@ -1,5 +1,0 @@
-package suites
-
-import org.scalatest.BeforeAndAfterAll
-
-class ControllerSuiteBundle extends AllControllerTestSuites with BeforeAndAfterAll

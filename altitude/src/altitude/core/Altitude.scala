@@ -288,9 +288,6 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     repositoriesById = Map.empty
   }
 
-  runMigrations()
-  setIsInitializedState()
-
   logger.info("Altitude Server instance initialized")
 
 }
