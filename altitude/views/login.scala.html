@@ -1,9 +1,14 @@
+@(redirect: Option[String] = None)
+
 <p>Please login:</p>
 
 <form action="/login" method="post">
     <p>
         <input type="text" name="login"/><br>
         <input type="password" name="password"/><br/>
+        @redirect.map { r =>
+        <input type="hidden" name="redirect" value="@r"/>
+        }
     </p>
     <p>
         <input type="submit">

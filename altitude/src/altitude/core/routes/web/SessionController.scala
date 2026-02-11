@@ -16,8 +16,8 @@ class SessionController(using logger: Logger) extends cask.Routes:
    * Display the login page
    */
   @cask.get("/login")
-  def loginPage(): cask.Response[String] = {
-    val payload = "<!doctype html>" + html.login()
+  def loginPage(redirect: Option[String] = None): cask.Response[String] = {
+    val payload = "<!doctype html>" + html.login(redirect)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
@@ -25,18 +25,22 @@ class SessionController(using logger: Logger) extends cask.Routes:
    * Process login form submission
    */
   @cask.postForm("/login")
-  def doLogin(login: String, password: String): cask.Response[String] = {
+  def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] = {
     logger.info(s"Login attempt for user: $login")
 
     App.altitude.service.user.loginAndGetUser(login, password) match {
       case Some((user, token)) =>
         logger.info(s"User logged in successfully: ${user.email}")
 
-        // Redirect to home page with auth cookie set
+        // Determine where to redirect after successful login
+        val redirectUrl = redirect.map(java.net.URLDecoder.decode(_, "UTF-8"))
+          .getOrElse(s"/r/${user.lastActiveRepoId.get}")
+
+        // Redirect to the original URL or home page with auth cookie set
         cask.Response(
           "",
           statusCode = 302,
-          headers = Seq("Location" -> s"/r/${user.lastActiveRepoId.get}"),
+          headers = Seq("Location" -> redirectUrl),
           cookies = Seq(Cookie(
             name = SessionController.AUTH_COOKIE_NAME,
             value = token,
@@ -48,8 +52,8 @@ class SessionController(using logger: Logger) extends cask.Routes:
 
       case None =>
         logger.warn(s"Failed login attempt for user: $login")
-        // Return to login page with error
-        val payload = "<!doctype html>" + html.login()
+        // Return to login page with error, preserving the redirect parameter
+        val payload = "<!doctype html>" + html.login(redirect)
         cask.Response(
           payload,
           statusCode = 401,

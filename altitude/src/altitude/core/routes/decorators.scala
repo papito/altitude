@@ -69,11 +69,14 @@ object decorators {
           headers = Seq("Content-Type" -> "application/json")
         ))
       } else {
-        // Redirect to login page for web requests
+        // Redirect to login page for web requests, preserving the original URL
+        val requestPath = req.exchange.getRequestPath
+        val queryString = Option(req.exchange.getQueryString).map(qs => s"?$qs").getOrElse("")
+        val originalUrl = java.net.URLEncoder.encode(s"$requestPath$queryString", "UTF-8")
         Result.Success(Response(
           "",
           statusCode = 302,
-          headers = Seq("Location" -> "/login")
+          headers = Seq("Location" -> s"/login?redirect=$originalUrl")
         ))
       }
     }
