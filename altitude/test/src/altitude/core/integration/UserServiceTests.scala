@@ -19,6 +19,11 @@ import org.scalatest.matchers.should.Matchers.shouldEqual
     user.id shouldEqual storedUser.id
   }
 
+  test("Can set user active repository") {
+    val user: User = testContext.persistUser()
+    testApp.service.user.setLastActiveRepoId(user, testContext.repository.persistedId)
+  }
+
   test("Check valid user password") {
     val password = "MyPassword123"
 
