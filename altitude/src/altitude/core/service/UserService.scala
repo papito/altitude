@@ -32,11 +32,19 @@ class UserService(val app: Altitude) extends BaseService[User] {
 
   def loginAndGetUser(email: String, password: String): Option[(User, String)] = {
     txManager.withTransaction {
-      val passwordHash = getPasswordHashByEmail(email)
-
-      if (!Util.checkPassword(password, passwordHash)) {
-        None
-      } else {
+      // Attempt to get password hash - returns None if user doesn't exist
+      val passwordHashOpt = getPasswordHashByEmailSafe(email)
+      
+      // Always perform password check to prevent timing attacks
+      // Use a valid bcrypt hash for non-existent users to ensure identical execution paths
+      // This is a pre-generated valid bcrypt hash (hash of a dummy password)
+      val dummyHash = "$2a$10$b58qVLgVVVxh9C4.bF9JjuIB5nbMgw7MrQ69ysrJAXSJG.cdAjbSa"
+      val hashToCheck = passwordHashOpt.getOrElse(dummyHash)
+      
+      val passwordValid = Util.checkPassword(password, hashToCheck)
+      
+      // Only return user if both password is valid AND user exists
+      if (passwordValid && passwordHashOpt.isDefined) {
         val user: User = getByEmail(email)
 
         // Create PASETO token with embedded user data
@@ -44,6 +52,8 @@ class UserService(val app: Altitude) extends BaseService[User] {
 
         switchContextToUser(user)
         Some((user, token))
+      } else {
+        None
       }
     }
   }
@@ -85,6 +95,20 @@ class UserService(val app: Altitude) extends BaseService[User] {
       // password and hash are not stored in the model and are not passed around outside of login flow
       val passwordHash = Util.hashPassword(password)
       dao.add(objIn.toJson ++ Json.obj(FieldConst.User.PASSWORD_HASH -> passwordHash))
+    }
+  }
+
+  private def getPasswordHashByEmailSafe(email: String): Option[String] = {
+    try {
+      Some(getPasswordHashByEmail(email))
+    } catch {
+      case _: altitude.core.NotFoundException =>
+        // User doesn't exist - this is expected, return None
+        None
+      case e: Exception =>
+        // Unexpected error - log it but still return None to prevent timing attacks
+        logger.warn(s"Unexpected error while retrieving password hash for email: ${e.getMessage}")
+        None
     }
   }
 

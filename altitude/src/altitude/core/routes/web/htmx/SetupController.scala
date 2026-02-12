@@ -127,7 +127,9 @@ class SetupController(using logger: Logger) extends BaseController:
             value = token,
             path = "/",
             maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
-              httpOnly = true
+            httpOnly = true,
+            secure = true,
+            sameSite = "Strict"
           ))
         )
 

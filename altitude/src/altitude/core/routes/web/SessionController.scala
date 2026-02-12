@@ -9,6 +9,18 @@ import play.api.libs.json.Json
 object SessionController {
   val AUTH_COOKIE_NAME = "auth_token"
   val COOKIE_MAX_AGE_SECONDS: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS * 24 * 60 * 60 // 7 days
+  
+  /**
+   * Validates that a redirect URL is safe to use (prevents open redirect vulnerabilities).
+   * Only allows relative URLs that start with / and don't contain //
+   */
+  def isValidRedirectUrl(url: String): Boolean = {
+    url.nonEmpty && 
+    url.startsWith("/") && 
+    !url.startsWith("//") &&
+    !url.contains("://") &&
+    !url.contains("\\")
+  }
 }
 
 class SessionController(using logger: Logger) extends cask.Routes:
@@ -33,7 +45,10 @@ class SessionController(using logger: Logger) extends cask.Routes:
         logger.info(s"User logged in successfully: ${user.email}")
 
         // Determine where to redirect after successful login
-        val redirectUrl = redirect.map(java.net.URLDecoder.decode(_, "UTF-8"))
+        // Validate redirect URL to prevent open redirect vulnerabilities
+        val decodedRedirect = redirect.map(java.net.URLDecoder.decode(_, "UTF-8"))
+        val redirectUrl = decodedRedirect
+          .filter(SessionController.isValidRedirectUrl)
           .getOrElse(s"/r/${user.lastActiveRepoId.get}")
 
         // Redirect to the original URL or home page with auth cookie set
@@ -46,7 +61,9 @@ class SessionController(using logger: Logger) extends cask.Routes:
             value = token,
             path = "/",
             maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
-            httpOnly = true
+            httpOnly = true,
+            secure = true,
+            sameSite = "Strict"
           ))
         )
 
@@ -128,7 +145,9 @@ class SessionController(using logger: Logger) extends cask.Routes:
         value = "",
         path = "/",
         maxAge = 0, // Expire immediately
-        httpOnly = true
+        httpOnly = true,
+        secure = true,
+        sameSite = "Strict"
       ))
     )
   }
@@ -160,7 +179,9 @@ class SessionController(using logger: Logger) extends cask.Routes:
         value = "",
         path = "/",
         maxAge = 0,
-        httpOnly = true
+        httpOnly = true,
+        secure = true,
+        sameSite = "Strict"
       ))
     )
   }
