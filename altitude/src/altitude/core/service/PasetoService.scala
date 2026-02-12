@@ -55,7 +55,7 @@ class PasetoService(val app: Altitude) {
     val now = Instant.now()
     val expiration = now.plus(Duration.ofDays(tokenExpirationDays))
 
-    Pasetos.V2.LOCAL.builder()
+    val builder = Pasetos.V2.LOCAL.builder()
       .setSharedSecret(secretKey)
       .setIssuedAt(now)
       .setExpiration(expiration)
@@ -63,7 +63,11 @@ class PasetoService(val app: Altitude) {
       .claim("email", user.email)
       .claim("name", user.name)
       .claim("accountType", user.accountType.toString)
-      .compact()
+
+    // Add lastActiveRepoId if present
+    user.lastActiveRepoId.foreach(repoId => builder.claim("lastActiveRepoId", repoId))
+
+    builder.compact()
   }
 
   /**
@@ -130,6 +134,7 @@ class PasetoService(val app: Altitude) {
       val email = claims.get("email", classOf[String])
       val name = claims.get("name", classOf[String])
       val accountTypeStr = claims.get("accountType", classOf[String])
+      val lastActiveRepoId = Option(claims.get("lastActiveRepoId", classOf[String]))
 
       if (email == null || name == null || accountTypeStr == null) {
         logger.debug("Token missing required user claims")
@@ -143,7 +148,7 @@ class PasetoService(val app: Altitude) {
         email = email,
         name = name,
         accountType = AccountType.valueOf(accountTypeStr),
-        lastActiveRepoId = None // This will be loaded from DB when needed
+        lastActiveRepoId = lastActiveRepoId
       )
 
       Some(user)

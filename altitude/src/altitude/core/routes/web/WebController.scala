@@ -22,7 +22,7 @@ class WebController(using logger: Logger) extends cask.Routes:
         App.altitude.service.user.getUserFromToken(token) match {
           case Some(user) =>
             logger.info(s"User authenticated: ${user.email}")
-            Response("", 302, Seq("Location" -> s"/r/${user.lastActiveRepoId}"), Nil)
+            Response("", 302, Seq("Location" -> s"/r/${user.lastActiveRepoId.get}"), Nil)
 
           case None =>
             Response("", 302, Seq("Location" -> "/login"), Nil)
