@@ -129,7 +129,7 @@ class SetupController(using logger: Logger) extends BaseController:
             maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
             httpOnly = true,
             secure = true,
-            sameSite = cask.model.Cookie.SameSite.Strict
+            sameSite = "Strict"
           ))
         )
 

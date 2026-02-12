@@ -63,7 +63,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
             maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
             httpOnly = true,
             secure = true,
-            sameSite = cask.model.Cookie.SameSite.Strict
+            sameSite = "Strict"
           ))
         )
 
@@ -147,7 +147,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
         maxAge = 0, // Expire immediately
         httpOnly = true,
         secure = true,
-        sameSite = cask.model.Cookie.SameSite.Strict
+        sameSite = "Strict"
       ))
     )
   }
@@ -181,7 +181,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
         maxAge = 0,
         httpOnly = true,
         secure = true,
-        sameSite = cask.model.Cookie.SameSite.Strict
+        sameSite = "Strict"
       ))
     )
   }
