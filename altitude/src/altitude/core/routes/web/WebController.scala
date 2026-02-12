@@ -1,9 +1,9 @@
 package altitude.core.routes.web
 
 import altitude.core.App
-import altitude.core.RequestContext
 import altitude.core.routes.decorators.{extractToken, requireLogin}
 import cask.Request
+import cask.model.Response
 import org.slf4j.Logger
 
 class WebController(using logger: Logger) extends cask.Routes:
@@ -14,7 +14,7 @@ class WebController(using logger: Logger) extends cask.Routes:
   def index()(request: Request): cask.Response[String] = {
     if (!App.altitude.isInitialized) {
       logger.warn("App is not initialized, redirecting to setup")
-      return cask.Redirect("/setup")
+      Response("", 302, Seq("Location" -> "/setup"), Nil)
     }
 
     extractToken(request) match {
@@ -22,12 +22,13 @@ class WebController(using logger: Logger) extends cask.Routes:
         App.altitude.service.user.getUserFromToken(token) match {
           case Some(user) =>
             logger.info(s"User authenticated: ${user.email}")
-            cask.Redirect(s"/r/${user.lastActiveRepoId}")
+            Response("", 302, Seq("Location" -> s"/r/${user.lastActiveRepoId}"), Nil)
+
           case None =>
-            cask.Redirect(s"/login")
+            Response("", 302, Seq("Location" -> "/login"), Nil)
         }
       case None =>
-        cask.Redirect(s"/login")
+        Response("", 302, Seq("Location" -> "/login"), Nil)
     }
   }
 
@@ -36,7 +37,7 @@ class WebController(using logger: Logger) extends cask.Routes:
   def repositoryView(repoId: String)(using request: Request): cask.Response[String] = {
     if (!App.altitude.isInitialized) {
       logger.warn("App is not initialized, redirecting to setup")
-      return cask.Redirect("/setup")
+      Response("", 302, Seq("Location" -> "/setup"), Nil)
     }
 
     val payload = "<!doctype html>" + html.index(stats = App.altitude.service.stats.getStats)
