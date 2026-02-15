@@ -112,7 +112,7 @@ object decorators {
     }
   }
 
-  private val RepoPath = """/r/([^/?#]+).*""".r
+  private val RepoPath = """.*/r/([^/?#]+).*""".r
 
   class repoContext extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
@@ -123,7 +123,7 @@ object decorators {
           App.altitude.service.repository.setContextFromRequest(Some(id))
           logger.info("Set repository context to: " + id)
         }
-        case _ =>
+        case _ => // println("No repository context found in path: " + path)
       }
 
       delegate(req, Map("request" -> req))

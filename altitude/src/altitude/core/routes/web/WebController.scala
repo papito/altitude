@@ -40,7 +40,8 @@ class WebController(using logger: Logger) extends cask.Routes:
       Response("", 302, Seq("Location" -> "/setup"), Nil)
     }
 
-    val payload = "<!doctype html>" + html.index(stats = App.altitude.service.stats.getStats)
+    val stats = App.altitude.service.stats.getStats
+    val payload = "<!doctype html>" + html.index(stats = stats)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
@@ -51,5 +52,12 @@ class WebController(using logger: Logger) extends cask.Routes:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
+  @requireLogin()
+  @cask.get("/pipeline/r/:repoId")
+  def pipeline(repoId: String): cask.Response[String] = {
+    val stats = App.altitude.service.stats.getStats
+    val payload = "<!doctype html>" + html.pipeline(stats = stats)
+    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+  }
 
   initialize()
