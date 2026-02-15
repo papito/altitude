@@ -14,7 +14,7 @@ class WebController(using logger: Logger) extends cask.Routes:
   def index()(request: Request): cask.Response[String] = {
     if (!App.altitude.isInitialized) {
       logger.warn("App is not initialized, redirecting to setup")
-      Response("", 302, Seq("Location" -> "/setup"), Nil)
+      return Response("", 302, Seq("Location" -> "/setup"), Nil)
     }
 
     extractToken(request) match {

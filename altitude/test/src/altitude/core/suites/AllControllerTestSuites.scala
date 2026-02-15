@@ -1,8 +1,10 @@
 package altitude.core.suites
 
-import altitude.core.controller.HealthCheckTests
+import altitude.core.controller.HealthControllerTests
+import altitude.core.controller.IndexControllerTests
 import org.scalatest.Suites
 
 abstract class AllControllerTestSuites extends Suites (
-  new HealthCheckTests(),
+  new HealthControllerTests(),
+  new IndexControllerTests(),
 )
