@@ -2,6 +2,6 @@ package altitude.test
 
 import altitude.core.Altitude
 
-trait testAltitudeApp {
+trait TestAltitudeApp {
   val testApp: Altitude
 }

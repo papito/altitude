@@ -32,9 +32,15 @@ trait SqliteOverrides { this: BaseDao =>
   def count(recs: List[Map[String, AnyRef]]): Int = if (recs.nonEmpty) recs.head("total").asInstanceOf[Int] else 0
 
   // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
-  override protected def getBooleanField(value: AnyRef): Boolean = value.asInstanceOf[Int] match {
-    case 0 => false
-    case 1 => true
+  override protected def getBooleanField(value: AnyRef): Boolean = value match {
+    case b: java.lang.Boolean => b.booleanValue
+    case i: java.lang.Integer =>
+      i.intValue match {
+        case 0 => false
+        case 1 => true
+        case _ => false
+      }
+    case _ => false
   }
 
   override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for FOR UPDATE"
