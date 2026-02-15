@@ -7,17 +7,8 @@ import altitude.test.{IntegrationTestUtil, TestAltitudeApp}
 
 object SqliteSuiteBundle {
   val testApp: Altitude = new Altitude(dbEngineOverride = Some(C.DbEngineName.SQLITE))
-}
 
-class SqliteSuiteBundle
-  extends AllIntegrationTestSuites(testApp = SqliteSuiteBundle.testApp)
-    with TestAltitudeApp with BeforeAndAfterAll {
-
-  override def beforeAll(): Unit = {
-    println("\n@@@@@@@@@@@@@@@@@@@@@@@@")
-    println("SQLITE INTEGRATION TESTS")
-    println("@@@@@@@@@@@@@@@@@@@@@@@@\n")
-
+  def setup(): Unit = {
     IntegrationTestUtil.createTestDir(testApp)
 
     val sql =
@@ -44,6 +35,19 @@ class SqliteSuiteBundle
     }
 
     testApp.service.migrationService.migrate()
+  }
+}
+
+class SqliteSuiteBundle
+  extends AllIntegrationTestSuites(testApp = SqliteSuiteBundle.testApp)
+    with TestAltitudeApp with BeforeAndAfterAll {
+
+  override def beforeAll(): Unit = {
+    println("\n@@@@@@@@@@@@@@@@@@@@@@@@")
+    println("SQLITE INTEGRATION TESTS")
+    println("@@@@@@@@@@@@@@@@@@@@@@@@\n")
+
+    SqliteSuiteBundle.setup()
   }
 
   override def afterAll(): Unit = {
