@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 
   test("Health endpoint should return HTTP 200") {
     withServer(App) { host =>
-      requests.get(s"$host/api/health", check = false).statusCode shouldBe 200
+      requests.get(s"$host/api/health").statusCode shouldBe 200
     }
   }
 }

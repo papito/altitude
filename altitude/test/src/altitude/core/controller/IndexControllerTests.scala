@@ -10,7 +10,7 @@ import org.scalatest.DoNotDiscover
   test("New installation goes to setup page") {
     withServer(App) { host =>
       testApp.service.system.readMetadata.isInitialized shouldBe false
-      val response = requests.get(s"$host/", check = false)
+      val response = requests.get(s"$host/")
       response.url should endWith("/setup")
     }
   }
