@@ -1,4 +1,4 @@
-package altitude.core.routes.web.htmx
+package altitude.core.routes.web.partial
 
 import cask.Request
 import upickle.default.*

@@ -100,11 +100,16 @@ object decorators {
 
       logger.info(s"Request START - $pathInfo")
 
+      println(req)
       delegate(req, Map()) match {
+        case cask.router.Result.Success(response: cask.endpoints.WsHandler) =>
+          // WebSocket connection - log connection initiation only
+          logger.info(s"WebSocket connected - $pathInfo in ${currentTimeMillis - startTime}ms")
+          cask.router.Result.Success(response)
         case cask.router.Result.Success(response) =>
+          // Regular HTTP response
           logger.info(s"Request END [${response.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")
           cask.router.Result.Success(response)
-
         case error =>
           logger.error(error.toString)
           error

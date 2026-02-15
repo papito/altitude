@@ -1,7 +1,8 @@
 package altitude.core.actors
 
-import altitude.core.AltitudeActorSystem
+import altitude.core.{AltitudeActorSystem, DuplicateException, StorageException, UnsupportedMediaTypeException}
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalid
+import cask.WsChannelActor
 import org.apache.pekko.actor.typed.Behavior
 import org.apache.pekko.actor.typed.scaladsl.AbstractBehavior
 import org.apache.pekko.actor.typed.scaladsl.ActorContext
@@ -9,11 +10,11 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 
 object ImportStatusWsActor {
   sealed trait Command
-  //  final case class AddClient(userId: String, client: AtmosphereClient) extends AltitudeActorSystem.Command with Command
+  final case class AddClient(userId: String, client: WsChannelActor) extends AltitudeActorSystem.Command with Command
   final case class UserWideImportStatus(userId: String, assetOrInvalid: TAssetOrInvalid)
     extends AltitudeActorSystem.Command
       with Command
-//  final case class RemoveClient(userId: String, client: AtmosphereClient) extends AltitudeActorSystem.Command with Command
+  final case class RemoveClient(userId: String, client: WsChannelActor) extends AltitudeActorSystem.Command with Command
 
   private val successStatusTickerTemplate = "<div id=\"statusText\">%s</div>"
   private val warningStatusTickerTemplate = "<div id=\"statusText\" class=\"warning\">%s</div>"
@@ -27,11 +28,10 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
 
   import ImportStatusWsActor._
 
-  // private val userToWsClientLookup = collection.mutable.Map[String, List[AtmosphereClient]]()
+  private val userToWsClientLookup = collection.mutable.Map[String, List[WsChannelActor]]()
 
   override def onMessage(msg: ImportStatusWsActor.Command): Behavior[ImportStatusWsActor.Command] = {
     Behaviors.same
-/*
     msg match {
       case AddClient(userId, client) =>
         context.log.info(s"Adding client $client for user $userId")
@@ -65,7 +65,7 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
                     errorMessage
                 }
 
-                client.send(TextMessage(wsContent))
+                client.send(cask.Ws.Text(wsContent))
             }
         }
         Behaviors.same
@@ -74,7 +74,6 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
         context.log.info(s"Removing client $client for user $userId")
         userToWsClientLookup.get(userId).foreach(clients => userToWsClientLookup.update(userId, clients.filterNot(_ == client)))
         Behaviors.same
-*/
+    }
   }
 }
-

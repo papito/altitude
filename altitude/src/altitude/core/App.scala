@@ -3,7 +3,7 @@ import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
 import altitude.core.routes.web.SessionController
 import altitude.core.routes.web.WebController
-import altitude.core.routes.web.htmx.SetupController
+import altitude.core.routes.web.partial.SetupController
 import cask.router.Decorator
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
