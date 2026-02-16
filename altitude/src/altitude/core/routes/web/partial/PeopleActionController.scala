@@ -27,7 +27,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")
-  def showChoosePersonCoverFaceModal(repoId: String, personId: String)(using request: Request): Response[String] =
+  def showChoosePersonCoverFaceModal(repoId: String, personId: String, minWidth: String)(using request: Request): Response[String] =
     val person: Person = App.altitude.service.person.getById(personId)
     val topFaces = App.altitude.service.person.getPersonFaces(person.persistedId, limit = 24)
     val payload = "<!doctype html>" + htmx.html.choose_person_cover_face_modal(

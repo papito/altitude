@@ -1,7 +1,7 @@
 package altitude.core
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
-import altitude.core.routes.web.{ImportController, IndexController, SessionController, SetupController, StaticController}
+import altitude.core.routes.web.{ContentViewController, ImportController, IndexController, SessionController, SetupController, StaticController}
 import cask.router.Decorator
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
@@ -42,6 +42,7 @@ object App extends cask.Main:
     new SessionController,
     new SetupController,
     new ImportController,
+    new ContentViewController,
 
     // partials
     new SetupFormController,

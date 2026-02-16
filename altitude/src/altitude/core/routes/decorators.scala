@@ -100,7 +100,6 @@ object decorators {
 
       logger.info(s"Request START - $pathInfo")
 
-      println(req)
       delegate(req, Map()) match {
         case cask.router.Result.Success(response: cask.endpoints.WsHandler) =>
           // WebSocket connection - log connection initiation only
