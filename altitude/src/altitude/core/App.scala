@@ -7,7 +7,7 @@ import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import altitude.core.routes.web.partial.{NavController, SetupFormController}
+import altitude.core.routes.web.partial.{AlbumActionController, AssetActionController, FolderActionController, NavController, PeopleActionController, SearchResultsController, SetupFormController, TrashActionController, ViewSettingsActionController}
 
 object App extends cask.Main:
   /**
@@ -46,4 +46,11 @@ object App extends cask.Main:
     // partials
     new SetupFormController,
     new NavController,
+    new AlbumActionController,
+    new AssetActionController,
+    new FolderActionController,
+    new PeopleActionController,
+    new SearchResultsController,
+    new TrashActionController,
+    new ViewSettingsActionController,
   )
