@@ -7,6 +7,7 @@ import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import altitude.core.routes.web.partial.{NavController, SetupFormController}
 
 object App extends cask.Main:
   /**
@@ -26,6 +27,7 @@ object App extends cask.Main:
   val altitude: Altitude = new Altitude()
   
   altitude.runMigrations()
+  // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
   altitude.setIsInitializedState()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
@@ -40,4 +42,8 @@ object App extends cask.Main:
     new SessionController,
     new SetupController,
     new ImportController,
+
+    // partials
+    new SetupFormController,
+    new NavController,
   )

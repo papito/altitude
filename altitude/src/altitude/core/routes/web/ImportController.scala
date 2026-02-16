@@ -1,14 +1,18 @@
 package altitude.core.routes.web
 
-import altitude.core.{Api, App}
+import altitude.core.{Api, App, RequestContext}
 import altitude.core.actors.ImportStatusWsActor
+import altitude.core.models.{ImportAsset, UserMetadata}
+import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.routes.decorators.requireLogin
 import org.slf4j.Logger
-import cask.Request
 import cask.model.Response
-import io.undertow.server.handlers.form.FormDataParser
+import io.undertow.server.handlers.form.{FormData, FormDataParser}
 
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+import scala.jdk.CollectionConverters.*
 
 object ImportController {
   private val uploadCancelRequest = TrieMap[String, Boolean]()
@@ -18,8 +22,6 @@ object ImportController {
 }
 
 class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
-  // FIXME: add more login enforcement here
-
   @requireLogin()
   @cask.get("/pipeline/r/:repoId")
   def pipeline(repoId: String): cask.Response[String] =
@@ -27,21 +29,54 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     val payload = "<!doctype html>" + html.pipeline(stats = stats)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  @requireLogin()
   @cask.post(s"/r/:repoId/upload/:${Api.Field.Upload.UPLOAD_ID}/cancel")
-  def cancelUpload(repoId: String, uploadId: String)(using request: Request): cask.Response[String] =
+  def cancelUpload(repoId: String, uploadId: String): cask.Response[String] =
     logger.warn(s"CANCELLING upload ID: $uploadId for repo $repoId")
     ImportController.uploadCancelRequest.update(uploadId, true)
     Response("", 200, Seq("Content-Type" -> "text/plain"), Nil)
 
-  @cask.postForm("/r/:repoId/upload/:uploadId")
-  def uploadFilesForm(image: cask.FormFile, repoId: String, uploadId: String)(implicit request: cask.Request): cask.Response[String] =
+  @requireLogin
+  @cask.postForm("/import/r/:repoId/upload/:uploadId")
+  def uploadFilesForm(files: Seq[cask.FormEntry] = Seq.empty, repoId: String, uploadId: String)(using request: cask.Request): cask.Response[String] =
     logger.info(s"Uploading selected files. Upload ID: $uploadId")
 
-    val formData = request.exchange.getAttachment(FormDataParser.FORM_DATA)
+    val formData: FormData = request.exchange.getAttachment(FormDataParser.FORM_DATA)
 
-    logger.error("Not a multipart upload")
-    val payload = "<!doctype html>" + htmx.html.upload_form
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    val uploadFormPayload = "<!doctype html>" + htmx.html.upload_form()
+    if formData == null then
+      logger.error("Not a multipart upload")
+      return cask.Response(uploadFormPayload, 200, Seq(("Content-Type", "text/html")))
+
+    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
+
+    // Get all form field names and process file uploads
+    val fieldNames = formData.iterator().asScala.toList
+
+    for fieldName <- fieldNames if !ImportController.isCancelled(uploadId)
+    do
+      val formValues = formData.get(fieldName).asScala.toList
+      print(formValues)
+      for formValue <- formValues if formValue.isFileItem && !ImportController.isCancelled(uploadId) do
+        logger.info("Next file")
+
+        val fileItem = formValue.getFileItem
+        val inputStream = fileItem.getInputStream
+        val bytes = inputStream.readAllBytes()
+        inputStream.close()
+
+        val fileName = formValue.getFileName
+        logger.info(s"Received file: $fileName")
+
+        val importAsset = ImportAsset(fileName = fileName, data = bytes, metadata = UserMetadata())
+        val assetWithData = App.altitude.service.library.convImportAsset2dataAsset(importAsset)
+
+        logger.info(s"Adding file to import queue: $fileName")
+        val fut = App.altitude.service.importPipeline.addToQueue((assetWithData, pipelineContext))
+        Await.result(fut, Duration.Inf)
+
+    logger.info("All files sent to queue")
+    cask.Response(uploadFormPayload, 200, Seq(("Content-Type", "text/html")))
 
   @cask.websocket("/import/status")
   def pipelineStatus(userId: String): cask.WebsocketResult =

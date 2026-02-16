@@ -1,17 +1,16 @@
 package altitude.core.routes.web.partial
 
 import cask.Request
-import upickle.default.*
 import altitude.core.{Api, App, DataScrubber, RequestContext, ValidationException, Const as C}
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.{AccountType, Repository, User}
+import altitude.core.models.{AccountType, User}
 import altitude.core.routes.BaseController
 import altitude.core.routes.web.SessionController
 import cask.model.Response
 import org.slf4j.Logger
 import play.api.libs.json.JsObject
 
-class SetupController(using logger: Logger) extends BaseController:
+class SetupFormController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
 
   private val dataScrubber = DataScrubber(
@@ -132,6 +131,5 @@ class SetupController(using logger: Logger) extends BaseController:
             sameSite = "Strict"
           ))
         )
-
 
   initialize()

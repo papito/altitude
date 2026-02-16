@@ -13,8 +13,6 @@ log
 logs
 project/project
 project/target
-test-data
-data/db/*.db
 target
 release
 dist
@@ -64,3 +62,6 @@ cs
 mill
 mill.*
 /identifier.sqlite
+test-data
+data/db/*.db
+data/repositories
