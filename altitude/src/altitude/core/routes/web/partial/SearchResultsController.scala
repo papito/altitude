@@ -17,15 +17,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId")
-  def htmxSearchResultsGet(repoId: String)(using request: Request): Response[String] =
-    search()
-
-  @requireLogin()
-  @cask.put(f"/$prefix/r/:repoId")
-  def htmxSearchResultsPut(repoId: String)(using request: Request): Response[String] =
-    search()
-
-  private def search()(using request: Request): Response[String] =
+  def htmxSearchResultsGet(repoId: String,
+                           view: Option[String] = None,
+                           newSearch: Option[String] = None,
+                           isContinuousScroll: Option[String] = None,
+                           rpp: Option[String] = None,
+                           p: Option[String] = None,
+                           q: Option[String] = None,
+                           sort: Option[String] = None,
+                           folderId: Option[String] = None,
+                           personId: Option[String] = None)(using request: Request): Response[String] =
     /**
      * The search controller combines the query parameters from the browser URL and the HTMX request.
      *
@@ -39,9 +40,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
      * Combining the two allows us to get the full set of query parameters, both from the URL (current state) and from the HTMX request (new state).
      *
      * Note that the new HTMX parameters will override the same URL parameters. So when the browser URL dictates "ascending sort" and
-     * the HTMX request has "descending sort", the HTMX request will take precedence as the new value
+     * the HTMX request has "descending sort", the HTMX request will take precedence as the new value.
      *
-     * When this method is done, it will force the new user-friendly browser URL via a special HTMX header.
+     * When this method is finished, it will force the new user-friendly browser URL via a special HTMX header.
      */
     val requestQuery = URLDecoder.decode(Option(request.exchange.getQueryString).getOrElse(""), StandardCharsets.UTF_8.toString)
 

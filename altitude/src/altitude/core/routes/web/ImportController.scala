@@ -56,7 +56,6 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     for fieldName <- fieldNames if !ImportController.isCancelled(uploadId)
     do
       val formValues = formData.get(fieldName).asScala.toList
-      print(formValues)
       for formValue <- formValues if formValue.isFileItem && !ImportController.isCancelled(uploadId) do
         logger.info("Next file")
 

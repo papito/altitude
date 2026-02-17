@@ -44,7 +44,7 @@ object decorators {
         case Some(token) =>
           App.altitude.service.user.getUserFromToken(token) match {
             case Some(user) =>
-              logger.info(s"User authenticated: ${user.email}")
+              logger.trace(s"User authenticated: ${user.email}")
                 delegate(req, Map("request" -> req, "user" -> user))
             case None =>
               logger.warn("Invalid or expired token")
@@ -85,7 +85,7 @@ object decorators {
   class requestResponseLogger extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
 
-      if (req.exchange.getRequestPath.startsWith("/static/")) {
+      if (req.exchange.getRequestPath.startsWith("/static/" ) || req.exchange.getRequestPath.startsWith("/content")) {
         // skip logging for static file requests
         return delegate(req, Map())
       }
@@ -103,7 +103,7 @@ object decorators {
       delegate(req, Map()) match {
         case cask.router.Result.Success(response: cask.endpoints.WsHandler) =>
           // WebSocket connection - log connection initiation only
-          logger.info(s"WebSocket connected - $pathInfo in ${currentTimeMillis - startTime}ms")
+          logger.trace(s"WebSocket connected - $pathInfo in ${currentTimeMillis - startTime}ms")
           cask.router.Result.Success(response)
         case cask.router.Result.Success(response) =>
           // Regular HTTP response
@@ -125,7 +125,7 @@ object decorators {
       path match {
         case RepoPath(id) => {
           App.altitude.service.repository.setContextFromRequest(Some(id))
-          logger.info("Set repository context to: " + id)
+          logger.trace("Set repository context to: " + id)
         }
         case _ => // println("No repository context found in path: " + path)
       }
