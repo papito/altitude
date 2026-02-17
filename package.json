@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "lint": "eslint \"altitude/static/js/**/*.{js,css}\" \"altitude/views/**/*.scala.html\"",
-    "lint:fix": "eslint --fix \"altitude/static/js/**/*.{js,css}\" \"altitude/views/**/*.scala.html\"",
+    "lint": "eslint \"altitude/static/js/**/*.{js,css}\"",
+    "lint:fix": "eslint --fix \"altitude/static/js/**/*.{js,css}\"",
     "format": "prettier --write \"altitude/static/js/**/*.{js,css}\" --config ./.prettierrc.json --ignore-path .prettierignore"
   },
   "devDependencies": {

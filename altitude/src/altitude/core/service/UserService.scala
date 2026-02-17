@@ -1,7 +1,5 @@
 package altitude.core.service
-
 import altitude.core._
-import altitude.core.FieldConst
 import altitude.core.dao.UserDao
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager

@@ -45,6 +45,6 @@
         "extensions": [".js"]
       }
     },
-    "html/html-extensions": [".html", ".ssp"]
+    "html/html-extensions": [".scala.html"]
   }
 }

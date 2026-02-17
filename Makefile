@@ -21,8 +21,8 @@ publish:
 	mill show altitude.assembly
 
 lint:
-	#npm run format
-	#npm run lint:fix
+	npm run lint:fix
+	npm run format
 	mill altitude.fix
 	mill mill.scalalib.scalafmt/
 
