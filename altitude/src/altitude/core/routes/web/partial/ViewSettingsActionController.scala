@@ -1,6 +1,6 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.{Const => C}
+import altitude.core.{ Const => C }
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import cask.Request
@@ -20,5 +20,3 @@ class ViewSettingsActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()
-
-

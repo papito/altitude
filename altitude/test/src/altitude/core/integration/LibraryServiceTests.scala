@@ -78,7 +78,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
      */
     val folders = (1 to 3).map(n => testApp.service.folder.add(s"folder$n"))
 
-    val assets = folders.flatMap { folder => (1 to 3).map(_ => testContext.persistAsset(folder = Some(folder))) }.toList
+    val assets = folders.flatMap(folder => (1 to 3).map(_ => testContext.persistAsset(folder = Some(folder)))).toList
 
     testApp.service.library.moveAssetsToFolder(assets.map(_.persistedId).toSet, folders.last.persistedId)
   }

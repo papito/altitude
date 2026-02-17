@@ -10,4 +10,3 @@ class SetupController(using logger: Logger) extends cask.Routes:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()
-

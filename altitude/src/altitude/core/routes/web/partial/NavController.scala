@@ -1,14 +1,8 @@
 package altitude.core.routes.web.partial
-
-import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.{AccountType, User}
+import altitude.core.App
 import altitude.core.routes.BaseController
-import altitude.core.routes.web.SessionController
-import altitude.core.{Api, App, DataScrubber, RequestContext, ValidationException, Const as C}
-import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
-import play.api.libs.json.JsObject
 
 class NavController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"

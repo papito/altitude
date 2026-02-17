@@ -1,7 +1,8 @@
 package altitude.core.routes.web
 
-import altitude.core.{App, RequestContext}
-import altitude.core.routes.decorators.{extractToken, requireLogin}
+import altitude.core.App
+import altitude.core.routes.decorators.extractToken
+import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
@@ -36,4 +37,3 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()
-

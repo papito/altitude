@@ -1,8 +1,16 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.{Api, App, Const, DataScrubber, DuplicateException, RequestContext, ValidationException, Const => C}
+import altitude.core.{ Const => C }
+import altitude.core.Api
+import altitude.core.App
+import altitude.core.Const
+import altitude.core.DataScrubber
+import altitude.core.DuplicateException
+import altitude.core.RequestContext
+import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.{Face, Person}
+import altitude.core.models.Face
+import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import cask.Request
@@ -15,7 +23,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
-  def showPeopleTab(repoId: String, typeFilter: String = Const.PeopleTypeFilter.COMPLETE)(using request: Request): Response[String] =
+  def showPeopleTab(repoId: String, typeFilter: String = Const.PeopleTypeFilter.COMPLETE)(using
+      request: Request): Response[String] =
     val people: List[Person] = typeFilter match
       case Const.PeopleTypeFilter.ALL => App.altitude.service.person.getAllNotDiscarded
       case Const.PeopleTypeFilter.HIDDEN => App.altitude.service.person.getAllHidden
@@ -27,7 +36,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")
-  def showChoosePersonCoverFaceModal(repoId: String, personId: String, minWidth: String)(using request: Request): Response[String] =
+  def showChoosePersonCoverFaceModal(repoId: String, personId: String, minWidth: String)(using
+      request: Request): Response[String] =
     val person: Person = App.altitude.service.person.getById(personId)
     val topFaces = App.altitude.service.person.getPersonFaces(person.persistedId, limit = 24)
     val payload = "<!doctype html>" + htmx.html.choose_person_cover_face_modal(
@@ -87,8 +97,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       )
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-    try
-      apiRequestValidator.validate(jsonIn)
+    try apiRequestValidator.validate(jsonIn)
     catch
       case validationException: ValidationException =>
         return responseWithValidationErrors(validationException.errors.toMap)
@@ -100,8 +109,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
       return cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-    try
-      App.altitude.service.person.updateName(person, newName = newName)
+    try App.altitude.service.person.updateName(person, newName = newName)
     catch
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Person by that name already exists")
@@ -125,10 +133,9 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val requestedDestPerson: Person = App.altitude.service.person.getById(destPersonId)
 
     // if the merge is requested into a person with fewer faces, swap the source and dest
-    val (sourcePerson, destPerson) = if requestedSourcePerson.numOfFaces < requestedDestPerson.numOfFaces then
-      (requestedSourcePerson, requestedDestPerson)
-    else
-      (requestedDestPerson, requestedSourcePerson)
+    val (sourcePerson, destPerson) =
+      if requestedSourcePerson.numOfFaces < requestedDestPerson.numOfFaces then (requestedSourcePerson, requestedDestPerson)
+      else (requestedDestPerson, requestedSourcePerson)
 
     val payload = "<!doctype html>" + htmx.html.merge_people_modal(
       minWidth = C.UI.MERGE_PEOPLE_MODAL_MIN_WIDTH,
@@ -189,5 +196,3 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()
-
-

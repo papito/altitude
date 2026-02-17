@@ -1,8 +1,15 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.{Api, App, DataScrubber, DuplicateException, RequestContext, ValidationException, Const => C}
+import altitude.core.{ Const => C }
+import altitude.core.Api
+import altitude.core.App
+import altitude.core.DataScrubber
+import altitude.core.DuplicateException
+import altitude.core.RequestContext
+import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.{Folder, Repository}
+import altitude.core.models.Folder
+import altitude.core.models.Repository
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import cask.Request
@@ -88,23 +95,26 @@ class FolderActionController(using logger: Logger) extends BaseController:
         parentId = parentId
       )
       // we want to change the folder modal to show the errors, not reload the folder list!
-      cask.Response(payload, 200, Seq(
-        ("Content-Type", "text/html"),
-        ("HX-Retarget", "this"),
-        ("HX-Reswap", "innerHTML")
-      ))
+      cask.Response(
+        payload,
+        200,
+        Seq(
+          ("Content-Type", "text/html"),
+          ("HX-Retarget", "this"),
+          ("HX-Reswap", "innerHTML")
+        ))
 
-    try
-      apiRequestValidator.validate(jsonIn)
+    try apiRequestValidator.validate(jsonIn)
     catch
       case validationException: ValidationException =>
-        return responseWithValidationErrors(validationException.errors.toMap, parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String])
+        return responseWithValidationErrors(
+          validationException.errors.toMap,
+          parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String])
 
     val folderName = (jsonIn \ Api.Field.Folder.NAME).as[String]
     val parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String]
 
-    try
-      App.altitude.service.folder.add(folderName, parentId = Some(parentId))
+    try App.altitude.service.folder.add(folderName, parentId = Some(parentId))
     catch
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
@@ -143,14 +153,16 @@ class FolderActionController(using logger: Logger) extends BaseController:
         id = folderId
       )
       // we want to change the folder modal to show the errors, not reload the folder list!
-      cask.Response(payload, 200, Seq(
-        ("Content-Type", "text/html"),
-        ("HX-Retarget", "this"),
-        ("HX-Reswap", "innerHTML")
-      ))
+      cask.Response(
+        payload,
+        200,
+        Seq(
+          ("Content-Type", "text/html"),
+          ("HX-Retarget", "this"),
+          ("HX-Reswap", "innerHTML")
+        ))
 
-    try
-      apiRequestValidator.validate(jsonIn)
+    try apiRequestValidator.validate(jsonIn)
     catch
       case validationException: ValidationException =>
         return responseWithValidationErrors(validationException.errors.toMap, folderId = (jsonIn \ Api.Field.ID).as[String])
@@ -158,8 +170,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val newName = (jsonIn \ Api.Field.Folder.NAME).as[String]
     val folderId = (jsonIn \ Api.Field.ID).as[String]
 
-    try
-      App.altitude.service.folder.rename(folderId = folderId, newName = newName)
+    try App.altitude.service.folder.rename(folderId = folderId, newName = newName)
     catch
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
@@ -180,15 +191,16 @@ class FolderActionController(using logger: Logger) extends BaseController:
     logger.info(s"Moving folder $movedFolderId to $newParentId")
 
     // short-circuit if this is a noop
-    if movedFolderId == newParentId then
-      return cask.Response("", 400, Seq(("Content-Type", "text/html")))
+    if movedFolderId == newParentId then return cask.Response("", 400, Seq(("Content-Type", "text/html")))
 
     // Call the movers
-    try
-      App.altitude.service.folder.move(movedFolderId, newParentId)
+    try App.altitude.service.folder.move(movedFolderId, newParentId)
     catch
       case ex: DuplicateException =>
-        return cask.Response(ex.message.getOrElse("Folder name already exists at this level"), 409, Seq(("Content-Type", "text/html")))
+        return cask.Response(
+          ex.message.getOrElse("Folder name already exists at this level"),
+          409,
+          Seq(("Content-Type", "text/html")))
 
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
@@ -199,5 +211,3 @@ class FolderActionController(using logger: Logger) extends BaseController:
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
   initialize()
-
-

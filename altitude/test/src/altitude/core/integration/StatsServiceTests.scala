@@ -184,9 +184,7 @@ import scala.concurrent.duration.Duration
     stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
   }
 
-  /**
-   * Folder counts have been removed - this needs to be re-engineered. Left here for reference.
-   */
+  /** Folder counts have been removed - this needs to be re-engineered. Left here for reference. */
   /*
   test("Test move recycled asset to new folder") {
     var folder1: Folder = testApp.service.folder.add("folder1")

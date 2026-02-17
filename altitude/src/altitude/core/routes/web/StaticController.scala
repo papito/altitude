@@ -7,4 +7,3 @@ class StaticController(using logger: Logger) extends cask.Routes:
   def staticFileRoutes() = "altitude/static"
 
   initialize()
-

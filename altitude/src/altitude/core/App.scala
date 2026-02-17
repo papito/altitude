@@ -1,13 +1,26 @@
 package altitude.core
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
-import altitude.core.routes.web.{ContentViewController, ImportController, IndexController, SessionController, SetupController, StaticController}
+import altitude.core.routes.web.ContentViewController
+import altitude.core.routes.web.ImportController
+import altitude.core.routes.web.IndexController
+import altitude.core.routes.web.SessionController
+import altitude.core.routes.web.SetupController
+import altitude.core.routes.web.StaticController
+import altitude.core.routes.web.partial.AlbumActionController
+import altitude.core.routes.web.partial.AssetActionController
+import altitude.core.routes.web.partial.FolderActionController
+import altitude.core.routes.web.partial.NavController
+import altitude.core.routes.web.partial.PeopleActionController
+import altitude.core.routes.web.partial.SearchResultsController
+import altitude.core.routes.web.partial.SetupFormController
+import altitude.core.routes.web.partial.TrashActionController
+import altitude.core.routes.web.partial.ViewSettingsActionController
 import cask.router.Decorator
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import altitude.core.routes.web.partial.{AlbumActionController, AssetActionController, FolderActionController, NavController, PeopleActionController, SearchResultsController, SetupFormController, TrashActionController, ViewSettingsActionController}
 
 object App extends cask.Main:
   /**
@@ -25,7 +38,7 @@ object App extends cask.Main:
   Loader.load(classOf[opencv_java])
 
   val altitude: Altitude = new Altitude()
-  
+
   altitude.runMigrations()
   // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
   altitude.setIsInitializedState()
@@ -53,5 +66,5 @@ object App extends cask.Main:
     new PeopleActionController,
     new SearchResultsController,
     new TrashActionController,
-    new ViewSettingsActionController,
+    new ViewSettingsActionController
   )

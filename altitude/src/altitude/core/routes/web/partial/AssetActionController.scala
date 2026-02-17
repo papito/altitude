@@ -19,5 +19,3 @@ class AssetActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()
-
-

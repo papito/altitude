@@ -1,11 +1,17 @@
 package altitude.core.routes.web.partial
 
-import cask.Request
-import altitude.core.{Api, App, DataScrubber, RequestContext, ValidationException, Const as C}
+import altitude.core.{ Const => C }
+import altitude.core.Api
+import altitude.core.App
+import altitude.core.DataScrubber
+import altitude.core.RequestContext
+import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.{AccountType, User}
+import altitude.core.models.AccountType
+import altitude.core.models.User
 import altitude.core.routes.BaseController
 import altitude.core.routes.web.SessionController
+import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
 import play.api.libs.json.JsObject
@@ -121,15 +127,16 @@ class SetupFormController(using logger: Logger) extends BaseController:
           data = "",
           statusCode = 200,
           headers = Seq("HX-Redirect" -> s"/r/${repo.persistedId}"),
-          cookies = Seq(cask.model.Cookie(
-            name = SessionController.AUTH_COOKIE_NAME,
-            value = token,
-            path = "/",
-            maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
-            httpOnly = true,
-            secure = true,
-            sameSite = "Strict"
-          ))
+          cookies = Seq(
+            cask.model.Cookie(
+              name = SessionController.AUTH_COOKIE_NAME,
+              value = token,
+              path = "/",
+              maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
+              httpOnly = true,
+              secure = true,
+              sameSite = "Strict"
+            ))
         )
 
   initialize()

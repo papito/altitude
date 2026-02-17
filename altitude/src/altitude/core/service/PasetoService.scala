@@ -7,13 +7,12 @@ import dev.paseto.jpaseto.Paseto
 import dev.paseto.jpaseto.PasetoParser
 import dev.paseto.jpaseto.Pasetos
 import dev.paseto.jpaseto.lang.Keys
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
 import javax.crypto.SecretKey
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 class PasetoService(val app: Altitude) {
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -22,7 +21,8 @@ class PasetoService(val app: Altitude) {
   // This is a pure Java implementation that doesn't require native libraries
   private def initializeBouncyCastle(): Unit = {
     try {
-      val bcProvider = Class.forName("org.bouncycastle.jce.provider.BouncyCastleProvider")
+      val bcProvider = Class
+        .forName("org.bouncycastle.jce.provider.BouncyCastleProvider")
         .getDeclaredConstructor()
         .newInstance()
         .asInstanceOf[java.security.Provider]
@@ -47,15 +47,13 @@ class PasetoService(val app: Altitude) {
 
   private val tokenExpirationDays: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS
 
-  /**
-   * Creates a PASETO token for the given user.
-   * The token contains the user ID and expiration time.
-   */
+  /** Creates a PASETO token for the given user. The token contains the user ID and expiration time. */
   def createToken(user: User): String = {
     val now = Instant.now()
     val expiration = now.plus(Duration.ofDays(tokenExpirationDays))
 
-    val builder = Pasetos.V2.LOCAL.builder()
+    val builder = Pasetos.V2.LOCAL
+      .builder()
       .setSharedSecret(secretKey)
       .setIssuedAt(now)
       .setExpiration(expiration)
@@ -70,13 +68,11 @@ class PasetoService(val app: Altitude) {
     builder.compact()
   }
 
-  /**
-   * Validates a PASETO token and returns the user ID if valid.
-   * Returns None if the token is invalid or expired.
-   */
+  /** Validates a PASETO token and returns the user ID if valid. Returns None if the token is invalid or expired. */
   def validateToken(token: String): Option[String] = {
     try {
-      val parser: PasetoParser = Pasetos.parserBuilder()
+      val parser: PasetoParser = Pasetos
+        .parserBuilder()
         .setSharedSecret(secretKey)
         .build()
 
@@ -104,14 +100,14 @@ class PasetoService(val app: Altitude) {
   }
 
   /**
-   * Validates a PASETO token and returns the User object if valid.
-   * Returns None if the token is invalid or expired.
-   * 
+   * Validates a PASETO token and returns the User object if valid. Returns None if the token is invalid or expired.
+   *
    * The User object is reconstructed from the token claims - no database query.
    */
   def validateTokenAndGetUser(token: String): Option[User] = {
     try {
-      val parser: PasetoParser = Pasetos.parserBuilder()
+      val parser: PasetoParser = Pasetos
+        .parserBuilder()
         .setSharedSecret(secretKey)
         .build()
 
@@ -142,7 +138,7 @@ class PasetoService(val app: Altitude) {
       }
 
       // Reconstruct User from token claims
-      import altitude.core.models.{AccountType, User}
+      import altitude.core.models.{ AccountType, User }
       val user = User(
         id = Some(userId),
         email = email,
@@ -159,5 +155,3 @@ class PasetoService(val app: Altitude) {
     }
   }
 }
-
-

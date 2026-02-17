@@ -1,22 +1,23 @@
 package altitude.core.routes.web
 
-import altitude.core.{App, Const}
-import cask.model.Cookie
+import altitude.core.App
+import altitude.core.Const
 import cask.Request
+import cask.model.Cookie
 import org.slf4j.Logger
 import play.api.libs.json.Json
 
 object SessionController {
   val AUTH_COOKIE_NAME = "auth_token"
   val COOKIE_MAX_AGE_SECONDS: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS * 24 * 60 * 60 // 7 days
-  
+
   /**
-   * Validates that a redirect URL is safe to use (prevents open redirect vulnerabilities).
-   * Only allows relative URLs that start with / and don't contain //
+   * Validates that a redirect URL is safe to use (prevents open redirect vulnerabilities). Only allows relative URLs that start
+   * with / and don't contain //
    */
   def isValidRedirectUrl(url: String): Boolean = {
-    url.nonEmpty && 
-    url.startsWith("/") && 
+    url.nonEmpty &&
+    url.startsWith("/") &&
     !url.startsWith("//") &&
     !url.contains("://") &&
     !url.contains("\\")
@@ -24,18 +25,14 @@ object SessionController {
 }
 
 class SessionController(using logger: Logger) extends cask.Routes:
-  /**
-   * Display the login page
-   */
+  /** Display the login page */
   @cask.get("/login")
   def loginPage(redirect: Option[String] = None): cask.Response[String] = {
     val payload = "<!doctype html>" + html.login(redirect)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
   }
 
-  /**
-   * Process login form submission
-   */
+  /** Process login form submission */
   @cask.postForm("/login")
   def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] = {
     logger.info(s"Login attempt for user: $login")
@@ -56,15 +53,16 @@ class SessionController(using logger: Logger) extends cask.Routes:
           "",
           statusCode = 302,
           headers = Seq("Location" -> redirectUrl),
-          cookies = Seq(Cookie(
-            name = SessionController.AUTH_COOKIE_NAME,
-            value = token,
-            path = "/",
-            maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
-            httpOnly = true,
-            secure = true,
-            sameSite = "Strict"
-          ))
+          cookies = Seq(
+            Cookie(
+              name = SessionController.AUTH_COOKIE_NAME,
+              value = token,
+              path = "/",
+              maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
+              httpOnly = true,
+              secure = true,
+              sameSite = "Strict"
+            ))
         )
 
       case None =>
@@ -79,9 +77,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
     }
   }
 
-  /**
-   * API endpoint for login (returns JSON with token)
-   */
+  /** API endpoint for login (returns JSON with token) */
   @cask.postJson("/api/login")
   def apiLogin(login: String, password: String)(using request: Request): cask.Response[String] = {
     logger.info(s"API login attempt for user: $login")
@@ -121,18 +117,17 @@ class SessionController(using logger: Logger) extends cask.Routes:
     }
   }
 
-  /**
-   * Logout - clears the auth cookie and invalidates the token
-   */
+  /** Logout - clears the auth cookie and invalidates the token */
   @cask.post("/logout")
   def doLogout()(using request: Request): cask.Response[String] = {
     // Extract token from cookie to invalidate it
     val cookies = request.exchange.getRequestCookies
     val tokenOpt = Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
 
-    tokenOpt.foreach { token =>
-      logger.info("Logging out user")
-      App.altitude.service.user.logout(token)
+    tokenOpt.foreach {
+      token =>
+        logger.info("Logging out user")
+        App.altitude.service.user.logout(token)
     }
 
     // Clear the cookie and redirect to log in
@@ -140,21 +135,20 @@ class SessionController(using logger: Logger) extends cask.Routes:
       "",
       statusCode = 302,
       headers = Seq("Location" -> "/login"),
-      cookies = Seq(Cookie(
-        name = SessionController.AUTH_COOKIE_NAME,
-        value = "",
-        path = "/",
-        maxAge = 0, // Expire immediately
-        httpOnly = true,
-        secure = true,
-        sameSite = "Strict"
-      ))
+      cookies = Seq(
+        Cookie(
+          name = SessionController.AUTH_COOKIE_NAME,
+          value = "",
+          path = "/",
+          maxAge = 0, // Expire immediately
+          httpOnly = true,
+          secure = true,
+          sameSite = "Strict"
+        ))
     )
   }
 
-  /**
-   * API endpoint for logout (returns JSON)
-   */
+  /** API endpoint for logout (returns JSON) */
   @cask.post("/api/logout")
   def apiLogout()(using request: Request): cask.Response[String] = {
     // Extract token from Authorization header or cookie
@@ -164,9 +158,10 @@ class SessionController(using logger: Logger) extends cask.Routes:
     val tokenFromCookie = Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
     val tokenOpt = tokenFromHeader.orElse(tokenFromCookie)
 
-    tokenOpt.foreach { token =>
-      logger.info("API logout")
-      App.altitude.service.user.logout(token)
+    tokenOpt.foreach {
+      token =>
+        logger.info("API logout")
+        App.altitude.service.user.logout(token)
     }
 
     val responseJson = Json.obj("success" -> true, "message" -> "Logged out successfully")
@@ -174,19 +169,17 @@ class SessionController(using logger: Logger) extends cask.Routes:
       responseJson.toString(),
       statusCode = 200,
       headers = Seq(("Content-Type", "application/json")),
-      cookies = Seq(Cookie(
-        name = SessionController.AUTH_COOKIE_NAME,
-        value = "",
-        path = "/",
-        maxAge = 0,
-        httpOnly = true,
-        secure = true,
-        sameSite = "Strict"
-      ))
+      cookies = Seq(
+        Cookie(
+          name = SessionController.AUTH_COOKIE_NAME,
+          value = "",
+          path = "/",
+          maxAge = 0,
+          httpOnly = true,
+          secure = true,
+          sameSite = "Strict"
+        ))
     )
   }
 
   initialize()
-
-
-

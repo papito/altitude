@@ -1,15 +1,19 @@
 package altitude.core.routes.web.partial
 
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
-
-import altitude.core.{Api, App, Const, FieldConst}
+import altitude.core.Api
+import altitude.core.App
+import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
-import altitude.core.util.{SearchQuery, SearchSort, SortDirection}
+import altitude.core.util.SearchQuery
+import altitude.core.util.SearchSort
+import altitude.core.util.SortDirection
 import cask.Request
 import cask.model.Response
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import org.slf4j.Logger
 
 class SearchResultsController(using logger: Logger) extends BaseController:
@@ -17,16 +21,17 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId")
-  def htmxSearchResultsGet(repoId: String,
-                           view: Option[String] = None,
-                           newSearch: Option[String] = None,
-                           isContinuousScroll: Option[String] = None,
-                           rpp: Option[String] = None,
-                           p: Option[String] = None,
-                           q: Option[String] = None,
-                           sort: Option[String] = None,
-                           folderId: Option[String] = None,
-                           personId: Option[String] = None)(using request: Request): Response[String] =
+  def htmxSearchResultsGet(
+      repoId: String,
+      view: Option[String] = None,
+      newSearch: Option[String] = None,
+      isContinuousScroll: Option[String] = None,
+      rpp: Option[String] = None,
+      p: Option[String] = None,
+      q: Option[String] = None,
+      sort: Option[String] = None,
+      folderId: Option[String] = None,
+      personId: Option[String] = None)(using request: Request): Response[String] =
     /**
      * The search controller combines the query parameters from the browser URL and the HTMX request.
      *
@@ -37,10 +42,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
      * selects an option in, say, the sorting widget, the sorting widget is not aware of the other query parameters, so it will
      * only send the sorting parameter.
      *
-     * Combining the two allows us to get the full set of query parameters, both from the URL (current state) and from the HTMX request (new state).
+     * Combining the two allows us to get the full set of query parameters, both from the URL (current state) and from the HTMX
+     * request (new state).
      *
-     * Note that the new HTMX parameters will override the same URL parameters. So when the browser URL dictates "ascending sort" and
-     * the HTMX request has "descending sort", the HTMX request will take precedence as the new value.
+     * Note that the new HTMX parameters will override the same URL parameters. So when the browser URL dictates "ascending sort"
+     * and the HTMX request has "descending sort", the HTMX request will take precedence as the new value.
      *
      * When this method is finished, it will force the new user-friendly browser URL via a special HTMX header.
      */
@@ -55,10 +61,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     val isNewSearch = htmxQueryParams.getOrElse(Api.Field.Search.IS_NEW_SEARCH, "false").toBoolean
 
     // If this is a new search, we ignore the browser query params and only use the HTMX params
-    val urlParams = if isNewSearch then
-      htmxQueryParams
-    else
-      browserQueryParams ++ htmxQueryParams
+    val urlParams =
+      if isNewSearch then htmxQueryParams
+      else browserQueryParams ++ htmxQueryParams
 
     // Where are we? Triage? Recycle? etc.
     val view = urlParams.getOrElse(Api.Field.Search.VIEW, Const.Search.View.DEFAULT)
@@ -100,8 +105,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if isContinuousScroll then
       // no more pages
-      if page > results.totalPages then
-        return cask.Response("", 204, Seq(("Content-Type", "text/html")))
+      if page > results.totalPages then return cask.Response("", 204, Seq(("Content-Type", "text/html")))
 
       /** This is a request for another page of search results for continuous scroll. */
       val payload = "<!doctype html>" + htmx.html.results_grid(
@@ -126,13 +130,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         person = maybePerson.orNull,
         view = view
       )
-      cask.Response(payload, 200, Seq(
-        ("Content-Type", "text/html"),
-        ("HX-Replace-Url", replaceUrl)
-      ))
+      cask.Response(
+        payload,
+        200,
+        Seq(
+          ("Content-Type", "text/html"),
+          ("HX-Replace-Url", replaceUrl)
+        ))
 
   initialize()
-
-
-
-

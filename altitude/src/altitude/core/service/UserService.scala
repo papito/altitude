@@ -34,15 +34,15 @@ class UserService(val app: Altitude) extends BaseService[User] {
     txManager.withTransaction {
       // Attempt to get password hash - returns None if user doesn't exist
       val passwordHashOpt = getPasswordHashByEmailSafe(email)
-      
+
       // Always perform password check to prevent timing attacks
       // Use a valid bcrypt hash for non-existent users to ensure identical execution paths
       // This is a pre-generated valid bcrypt hash (hash of a dummy password)
       val dummyHash = "$2a$10$b58qVLgVVVxh9C4.bF9JjuIB5nbMgw7MrQ69ysrJAXSJG.cdAjbSa"
       val hashToCheck = passwordHashOpt.getOrElse(dummyHash)
-      
+
       val passwordValid = Util.checkPassword(password, hashToCheck)
-      
+
       // Only return user if both password is valid AND user exists
       if (passwordValid && passwordHashOpt.isDefined) {
         val user: User = getByEmail(email)
@@ -59,12 +59,10 @@ class UserService(val app: Altitude) extends BaseService[User] {
   }
 
   /**
-   * Validates a PASETO token and returns the user if valid.
-   * This also switches the request context to the authenticated user.
+   * Validates a PASETO token and returns the user if valid. This also switches the request context to the authenticated user.
    *
-   * Note: This method does NOT query the database. The user data is extracted
-   * from the PASETO token claims. Token revocation is not supported with this
-   * stateless approach - tokens remain valid until expiration.
+   * Note: This method does NOT query the database. The user data is extracted from the PASETO token claims. Token revocation is
+   * not supported with this stateless approach - tokens remain valid until expiration.
    */
   def getUserFromToken(token: String): Option[User] = {
     // Validate using PASETO service - no database query needed
@@ -78,9 +76,8 @@ class UserService(val app: Altitude) extends BaseService[User] {
   }
 
   /**
-   * Logs out the user by clearing the client-side cookie.
-   * With stateless PASETO tokens, there's no server-side revocation.
-   * The token will remain cryptographically valid until it expires.
+   * Logs out the user by clearing the client-side cookie. With stateless PASETO tokens, there's no server-side revocation. The
+   * token will remain cryptographically valid until it expires.
    */
   def logout(token: String): Unit = {
     logger.info("Logging out user (stateless - clearing client cookie only)")
@@ -127,14 +124,12 @@ class UserService(val app: Altitude) extends BaseService[User] {
     getUserFromToken(token)
   }
 
-
   private def getByEmail(email: String): User = {
     val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
     dao.getOneByQuery(query)
   }
 
   override def getById(id: String): JsObject = super.getById(id)
-
 
   def setLastActiveRepoId(user: User, repoId: String): Unit = {
     txManager.withTransaction {

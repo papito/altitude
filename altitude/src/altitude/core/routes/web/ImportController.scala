@@ -1,18 +1,22 @@
 package altitude.core.routes.web
 
-import altitude.core.{Api, App, RequestContext}
+import altitude.core.Api
+import altitude.core.App
+import altitude.core.RequestContext
 import altitude.core.actors.ImportStatusWsActor
-import altitude.core.models.{ImportAsset, UserMetadata}
+import altitude.core.models.ImportAsset
+import altitude.core.models.UserMetadata
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.routes.decorators.requireLogin
-import org.slf4j.Logger
 import cask.model.Response
-import io.undertow.server.handlers.form.{FormData, FormDataParser}
+import io.undertow.server.handlers.form.FormData
+import io.undertow.server.handlers.form.FormDataParser
+import org.slf4j.Logger
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
-import scala.jdk.CollectionConverters.*
+import scala.jdk.CollectionConverters._
 
 object ImportController {
   private val uploadCancelRequest = TrieMap[String, Boolean]()
@@ -38,7 +42,8 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
 
   @requireLogin
   @cask.postForm("/import/r/:repoId/upload/:uploadId")
-  def uploadFilesForm(files: Seq[cask.FormEntry] = Seq.empty, repoId: String, uploadId: String)(using request: cask.Request): cask.Response[String] =
+  def uploadFilesForm(files: Seq[cask.FormEntry] = Seq.empty, repoId: String, uploadId: String)(using
+      request: cask.Request): cask.Response[String] =
     logger.info(s"Uploading selected files. Upload ID: $uploadId")
 
     val formData: FormData = request.exchange.getAttachment(FormDataParser.FORM_DATA)
@@ -79,19 +84,19 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
 
   @cask.websocket("/import/status")
   def pipelineStatus(userId: String): cask.WebsocketResult =
-    cask.WsHandler { wsClient =>
-      App.altitude.actorSystem ! ImportStatusWsActor.AddClient(userId, wsClient)
-      wsClient.send(cask.Ws.Text("connected"))
+    cask.WsHandler {
+      wsClient =>
+        App.altitude.actorSystem ! ImportStatusWsActor.AddClient(userId, wsClient)
+        wsClient.send(cask.Ws.Text("connected"))
 
-      cask.WsActor {
-        case cask.Ws.Error(e) =>
-          logger.warn("Connection error: " + e.getMessage)
-          App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
-        case cask.Ws.Close(_, _) | cask.Ws.ChannelClosed() =>
-          logger.info("Connection closed.")
-          App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
-      }
+        cask.WsActor {
+          case cask.Ws.Error(e) =>
+            logger.warn("Connection error: " + e.getMessage)
+            App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
+          case cask.Ws.Close(_, _) | cask.Ws.ChannelClosed() =>
+            logger.info("Connection closed.")
+            App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
+        }
     }
 
   initialize()
-
