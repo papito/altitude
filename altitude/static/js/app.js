@@ -23,7 +23,9 @@ export function initApp() {
             return this.items.size
         },
         reset() {
-            document.body.dispatchEvent(new CustomEvent(Const.events.deselectAll))
+            document.body.dispatchEvent(
+                new CustomEvent(Const.events.deselectAll),
+            )
         },
         contains(id) {
             return this.items.has(id)

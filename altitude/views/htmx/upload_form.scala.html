@@ -124,9 +124,9 @@
         "/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}/cancel"
         htmx.on("#uploadForm", "htmx:abort", function () {
             htmx.ajax("post", url, {
-                        swap: "none",
-                        handler: setIdle,
-                    })
+                swap: "none",
+                handler: setIdle,
+            })
         })
     </script>
 </form>

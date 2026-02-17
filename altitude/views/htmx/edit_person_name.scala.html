@@ -72,7 +72,7 @@
 
             htmx.ajax(
                 "GET",
-                    "/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/",
+                "/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/",
                 {
                     swap: "innerHTML",
                     target: "#personName",

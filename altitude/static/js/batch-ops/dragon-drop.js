@@ -7,14 +7,14 @@ interact("#batchOps button.drag-drop").draggable({
 
     listeners: {
         move: dragMoveListener,
-        start: function(event) {
+        start: function (event) {
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
             // Mark affected assets as being dragged
             selectedAssetsStore.items.forEach((asset) => {
                 asset.drag()
             })
         },
-        end: function(event) {
+        end: function (event) {
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
             // Unmark affected assets as being dragged
             selectedAssetsStore.items.forEach((asset) => {

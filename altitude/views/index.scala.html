@@ -148,71 +148,73 @@
       import { initApp } from "/static/js/app.js"
 
       function loadView() {
-        initApp()
+          initApp()
 
-        window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+          window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
-        /**
-         * Highlight the correct tab
-         */
-        const urlParams = new URLSearchParams(window.location.search)
-        const view = urlParams.get("view") || "repository"
-        highlightNav(view)
-        Alpine.store(Const.state.currentView).setViewName(view)
+          /**
+           * Highlight the correct tab
+           */
+          const urlParams = new URLSearchParams(window.location.search)
+          const view = urlParams.get("view") || "repository"
+          highlightNav(view)
+          Alpine.store(Const.state.currentView).setViewName(view)
 
-        /**
-         * This switches the background color of the content area (triage, trash, etc.)
-         */
-        document.getElementById("content").classList.add(view)
+          /**
+           * This switches the background color of the content area (triage, trash, etc.)
+           */
+          document.getElementById("content").classList.add(view)
 
-        /**
-         * Load which fields to show in the grid
-         */
-        window.ctx.loadMetadataFieldViewSettingsFromStore()
+          /**
+           * Load which fields to show in the grid
+           */
+          window.ctx.loadMetadataFieldViewSettingsFromStore()
 
-        /**
-         * Load user UI config from local storage (specific to browser)
-         */
-        const savedHorizontalSplitSizes = localStorage.getItem(Const.localStore.horizontalSplitSizes)
-        let horizontalSplitSizes = [25, 75]
-
-        if (savedHorizontalSplitSizes) {
-          horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
-        }
-
-        Split(["#explorer", "#content"], {
-          sizes: horizontalSplitSizes,
-          minSize: [100, 300],
-          onDragEnd: function (horizontalSplitSizes) {
-            localStorage.setItem(
+          /**
+           * Load user UI config from local storage (specific to browser)
+           */
+          const savedHorizontalSplitSizes = localStorage.getItem(
               Const.localStore.horizontalSplitSizes,
-              JSON.stringify(horizontalSplitSizes),
-            )
-          },
-        })
+    )
+          let horizontalSplitSizes = [25, 75]
 
-        // if there is no URL fragment, we default to folder views
-        const fragment = window.location.hash || "#folders"
+          if (savedHorizontalSplitSizes) {
+              horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
+          }
 
-        const tabLink = document.querySelector('a[href="' + fragment + '"]')
+          Split(["#explorer", "#content"], {
+              sizes: horizontalSplitSizes,
+              minSize: [100, 300],
+              onDragEnd: function (horizontalSplitSizes) {
+                  localStorage.setItem(
+                      Const.localStore.horizontalSplitSizes,
+                      JSON.stringify(horizontalSplitSizes),
+                  )
+              },
+          })
 
-        if (tabLink) {
-          tabLink.click()
-        }
+          // if there is no URL fragment, we default to folder views
+          const fragment = window.location.hash || "#folders"
 
-        /**
-         * Perform search on load - default one or the one specified in the URL
-         */
-        const searchUrl =
-          "/htmx/search/r/" +
-          window.ctx.getRepoId() +
-          (window.location.search || "") +
-          fragment
+          const tabLink = document.querySelector('a[href="' + fragment + '"]')
 
-        htmx.ajax("get", searchUrl, {
-          swap: "innerHTML",
-          target: "#content",
-        })
+          if (tabLink) {
+              tabLink.click()
+          }
+
+          /**
+           * Perform search on load - default one or the one specified in the URL
+           */
+          const searchUrl =
+              "/htmx/search/r/" +
+              window.ctx.getRepoId() +
+              (window.location.search || "") +
+              fragment
+
+          htmx.ajax("get", searchUrl, {
+              swap: "innerHTML",
+              target: "#content",
+          })
       }
 
       document.addEventListener("DOMContentLoaded", loadView)

@@ -7,16 +7,15 @@ document.body.addEventListener(Const.events.assetMoved, (event) => {
     const newParentFolderId = event.detail["folderId"]
 
     // if we dragged one asset, and there are multiple selected assets, we need to do a batch move
-    if (!Alpine.store(Const.state.selectedAssets).isEmpty
-        && Alpine.store(Const.state.selectedAssets).contains(assetId)) {
-        const batchMovedEvent = new CustomEvent(
-            Const.events.batchAssetsMoved,
-            {
-                detail: {
-                    folderId: newParentFolderId,
-                },
+    if (
+        !Alpine.store(Const.state.selectedAssets).isEmpty &&
+        Alpine.store(Const.state.selectedAssets).contains(assetId)
+    ) {
+        const batchMovedEvent = new CustomEvent(Const.events.batchAssetsMoved, {
+            detail: {
+                folderId: newParentFolderId,
             },
-        )
+        })
 
         document.body.dispatchEvent(batchMovedEvent)
         return
@@ -46,8 +45,10 @@ document.body.addEventListener(Const.events.assetTrashed, (event) => {
     const assetId = event.detail["assetId"]
 
     // if we dragged one asset, and there are multiple selected assets, we need to do a batch move
-    if (!Alpine.store(Const.state.selectedAssets).isEmpty
-        && Alpine.store(Const.state.selectedAssets).contains(assetId)) {
+    if (
+        !Alpine.store(Const.state.selectedAssets).isEmpty &&
+        Alpine.store(Const.state.selectedAssets).contains(assetId)
+    ) {
         const batchMovedEvent = new CustomEvent(
             Const.events.batchAssetsRecycled,
         )

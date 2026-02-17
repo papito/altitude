@@ -13,9 +13,7 @@ interact("#assets .drag-drop").draggable({
     listeners: {
         move: dragMoveListener,
         start: function (event) {
-            const assetId = event.target.getAttribute(
-                Const.attributes.assetId,
-            )
+            const assetId = event.target.getAttribute(Const.attributes.assetId)
 
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
 
@@ -53,10 +51,13 @@ interact("#assets .drag-drop").draggable({
             // Adjust the target position to center the resized image at cursor
             const yOffset = event.clientY - position.top
             target.style.top = position.top + yOffset + "px"
-            target.style.left = (position.left + offsetX) + "px"
+            target.style.left = position.left + offsetX + "px"
             target.classList.add("dragging")
 
-            if (!selectedAssetsStore.isEmpty && selectedAssetsStore.contains(assetId)) {
+            if (
+                !selectedAssetsStore.isEmpty &&
+                selectedAssetsStore.contains(assetId)
+            ) {
                 const checkmark = target.querySelector(".checkmark")
 
                 if (checkmark) {
@@ -75,12 +76,12 @@ interact("#assets .drag-drop").draggable({
                 const offsetLeft = imgRect.left - targetRect.left
                 const offsetTop = imgRect.top - targetRect.top
 
-                countBadge.style.top = `${offsetTop}px`;
-                countBadge.style.left = `${offsetLeft}px`;
-                countBadge.style.width = `${imgRect.width}px`;
-                countBadge.style.height = `${imgRect.height}px`;
-                countBadge.className = "drag-count-badge";
-                countBadge.textContent = selectedAssetsStore.size;
+                countBadge.style.top = `${offsetTop}px`
+                countBadge.style.left = `${offsetLeft}px`
+                countBadge.style.width = `${imgRect.width}px`
+                countBadge.style.height = `${imgRect.height}px`
+                countBadge.className = "drag-count-badge"
+                countBadge.textContent = selectedAssetsStore.size
 
                 // Mark affected assets as being dragged
                 selectedAssetsStore.items.forEach((asset) => {
@@ -95,15 +96,15 @@ interact("#assets .drag-drop").draggable({
             // Clean up multiple selection styling before calling the common dragged function
             const target = event.target
 
-            const assetId = event.target.getAttribute(
-                Const.attributes.assetId,
-            )
+            const assetId = event.target.getAttribute(Const.attributes.assetId)
             const imgElement = target.querySelector("img")
 
             imgElement.style.opacity = "1"
 
             // Remove the grid placeholder if it exists
-            const placeholder = target.parentNode.querySelector(".drag-grid-placeholder")
+            const placeholder = target.parentNode.querySelector(
+                ".drag-grid-placeholder",
+            )
             if (placeholder) {
                 placeholder.remove()
             }
@@ -113,7 +114,7 @@ interact("#assets .drag-drop").draggable({
                 countBadge.remove()
             }
 
-            const clone = document.getElementById('dragCloneStandIn')
+            const clone = document.getElementById("dragCloneStandIn")
             if (clone) {
                 clone.parentNode.removeChild(clone)
             }
@@ -133,7 +134,10 @@ interact("#assets .drag-drop").draggable({
 
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
 
-            if (!selectedAssetsStore.isEmpty && selectedAssetsStore.contains(assetId)) {
+            if (
+                !selectedAssetsStore.isEmpty &&
+                selectedAssetsStore.contains(assetId)
+            ) {
                 // Unmark affected assets as being dragged
                 selectedAssetsStore.items.forEach((asset) => {
                     asset.drop()

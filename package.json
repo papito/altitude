@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "lint": "eslint \"src/main/webapp/js/**/*.{js,css}\" \"src/main/webapp/WEB-INF/templates/views/**/*.ssp\"",
-    "lint:fix": "eslint --fix \"src/main/webapp/js/**/*.{js,css}\" \"src/main/webapp/WEB-INF/templates/views/**/*.ssp\"",
-    "format": "prettier --write \"src/main/webapp/js/**/*.{js,css}\" --config ./.prettierrc.json --ignore-path .prettierignore"
+    "lint": "eslint \"altitude/static/js/**/*.{js,css}\" \"altitude/views/**/*.scala.html\"",
+    "lint:fix": "eslint --fix \"altitude/static/js/**/*.{js,css}\" \"altitude/views/**/*.scala.html\"",
+    "format": "prettier --write \"altitude/static/js/**/*.{js,css}\" --config ./.prettierrc.json --ignore-path .prettierignore"
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",

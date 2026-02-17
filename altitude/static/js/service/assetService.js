@@ -1,5 +1,9 @@
 import { Folder } from "../models/folder.js"
-import { showErrorSnackBar, showSuccessSnackBar, showWarningSnackBar } from "../common/snackbar.js"
+import {
+    showErrorSnackBar,
+    showSuccessSnackBar,
+    showWarningSnackBar,
+} from "../common/snackbar.js"
 
 class AssetService {
     moveAssetFromResultSetUtil(event, response, successMessage) {
@@ -11,7 +15,9 @@ class AssetService {
             htmx.find(`#asset-${assetId}`).remove()
 
             // Decrement the counter in the search control bar
-            const resultsTotalElement = htmx.find("#searchControl .results-total")
+            const resultsTotalElement = htmx.find(
+                "#searchControl .results-total",
+            )
             const currentTotal = parseInt(resultsTotalElement.textContent)
             resultsTotalElement.textContent = currentTotal - 1
 
@@ -26,10 +32,11 @@ class AssetService {
             const message = response["htmx-internal-data"].xhr.responseText
             showWarningSnackBar(message)
         } else {
-            showErrorSnackBar(`Error performing operation on ${assetId}: ${status}`)
+            showErrorSnackBar(
+                `Error performing operation on ${assetId}: ${status}`,
+            )
         }
     }
-
 
     moveAssets({ folderId, assetIds }) {
         const newParentFolder = new Folder(folderId)
@@ -54,7 +61,13 @@ class AssetService {
                 showSuccessSnackBar(successMessage)
 
                 // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection
-                if (assetIds.length > 1 || (assetIds.length === 1 && Alpine.store(Const.state.selectedAssets).contains(assetIds[0]))) {
+                if (
+                    assetIds.length > 1 ||
+                    (assetIds.length === 1 &&
+                        Alpine.store(Const.state.selectedAssets).contains(
+                            assetIds[0],
+                        ))
+                ) {
                     Alpine.store(Const.state.selectedAssets).reset()
                 }
 
@@ -86,7 +99,13 @@ class AssetService {
                 showSuccessSnackBar(successMessage)
 
                 // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection
-                if (assetIds.length > 1 || (assetIds.length === 1 && Alpine.store(Const.state.selectedAssets).contains(assetIds[0]))) {
+                if (
+                    assetIds.length > 1 ||
+                    (assetIds.length === 1 &&
+                        Alpine.store(Const.state.selectedAssets).contains(
+                            assetIds[0],
+                        ))
+                ) {
                     Alpine.store(Const.state.selectedAssets).reset()
                 }
 

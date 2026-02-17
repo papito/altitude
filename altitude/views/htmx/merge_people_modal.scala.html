@@ -96,8 +96,10 @@
 
             const personMergedEvent = new CustomEvent(Const.events.personMerged, {
                 detail: {
-                    "@{Api.Field.Person.MERGE_SOURCE_ID}": "@{ mergeSourcePerson.persistedId }",
-                    "@{Api.Field.Person.MERGE_DEST_ID}": "@{ mergeDestPerson.persistedId }",
+                    "@{Api.Field.Person.MERGE_SOURCE_ID}":
+                        "@{ mergeSourcePerson.persistedId }",
+                    "@{Api.Field.Person.MERGE_DEST_ID}":
+                        "@{ mergeDestPerson.persistedId }",
                 },
             })
 
