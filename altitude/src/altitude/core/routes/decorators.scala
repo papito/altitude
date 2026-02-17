@@ -1,5 +1,6 @@
 package altitude.core.routes
-import altitude.core.App
+import altitude.core.models.User
+import altitude.core.{App, Const}
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
 import cask.model.Response
@@ -40,6 +41,17 @@ object decorators {
    */
   class requireLogin extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
+      val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
+      val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
+
+      val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
+      val devUser = devUserRes.map(_._1)
+
+      if devUser.isEmpty then
+        logger.warn(s"Dev user login failed for email: $devEmail")
+      else
+        return delegate(req, Map("request" -> req, "user" -> devUser))
+
       extractToken(req) match {
         case Some(token) =>
           App.altitude.service.user.getUserFromToken(token) match {

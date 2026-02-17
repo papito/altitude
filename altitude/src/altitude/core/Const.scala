@@ -14,6 +14,10 @@ object Const {
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
     val PERSON_MIN_FACES_THRESHOLD = "face.threshold"
+
+    // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
+    val DEV_USER = "dev.user"
+    val DEV_PASSWORD = "dev.password"
   }
 
   object FaceRecognition {

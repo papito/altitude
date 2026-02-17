@@ -28,7 +28,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
     RequestContext.account.value = Some(user)
   }
 
-  def loginAndGetUser(email: String, password: String): Option[(User, String)] = {
+  def loginAndSetUser(email: String, password: String): Option[(User, String)] = {
     txManager.withTransaction {
       // Attempt to get password hash - returns None if user doesn't exist
       val passwordHashOpt = getPasswordHashByEmailSafe(email)

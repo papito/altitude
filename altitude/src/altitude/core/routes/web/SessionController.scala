@@ -37,7 +37,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
   def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] = {
     logger.info(s"Login attempt for user: $login")
 
-    App.altitude.service.user.loginAndGetUser(login, password) match {
+    App.altitude.service.user.loginAndSetUser(login, password) match {
       case Some((user, token)) =>
         logger.info(s"User logged in successfully: ${user.email}")
 
@@ -82,7 +82,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
   def apiLogin(login: String, password: String)(using request: Request): cask.Response[String] = {
     logger.info(s"API login attempt for user: $login")
 
-    App.altitude.service.user.loginAndGetUser(login, password) match {
+    App.altitude.service.user.loginAndSetUser(login, password) match {
       case Some((user, token)) =>
         logger.info(s"User logged in successfully via API: ${user.email}")
 

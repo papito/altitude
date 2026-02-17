@@ -1,6 +1,6 @@
 package altitude.core.routes.web
 
-import altitude.core.App
+import altitude.core.{App, Const}
 import altitude.core.routes.decorators.extractToken
 import altitude.core.routes.decorators.requireLogin
 import cask.Request
@@ -13,6 +13,21 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     if !App.altitude.isInitialized then
       logger.warn("App is not initialized, redirecting to setup")
       return Response("", 302, Seq("Location" -> "/setup"), Nil)
+
+    val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
+    val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
+
+    if (devEmail.nonEmpty && devPassword.nonEmpty) {
+      val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
+      val devUser = devUserRes.map(_._1)
+
+      if devUser.isEmpty then
+        logger.warn(s"Dev user login failed for email: $devEmail")
+        return Response("", 302, Seq("Location" -> "/login"), Nil)
+
+      logger.info(s"User authenticated: ${devUserRes.get._1.email}")
+      return Response("", 302, Seq("Location" -> s"/r/${devUser.get.lastActiveRepoId.get}"), Nil)
+    }
 
     extractToken(request) match
       case Some(token) =>

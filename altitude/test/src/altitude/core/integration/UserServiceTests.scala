@@ -35,7 +35,7 @@ import org.scalatest.matchers.should.Matchers.shouldEqual
 
     testContext.persistUser(Some(userModel), password = password)
 
-    val loginResult = testApp.service.user.loginAndGetUser(userModel.email, password)
+    val loginResult = testApp.service.user.loginAndSetUser(userModel.email, password)
 
     loginResult match {
       case Some((user, token)) =>
@@ -58,7 +58,7 @@ import org.scalatest.matchers.should.Matchers.shouldEqual
 
     testContext.persistUser(Some(userModel), password = password)
 
-    val loginResult = testApp.service.user.loginAndGetUser(userModel.email, wrongPassword)
+    val loginResult = testApp.service.user.loginAndSetUser(userModel.email, wrongPassword)
 
     loginResult shouldEqual None
   }
@@ -67,7 +67,7 @@ import org.scalatest.matchers.should.Matchers.shouldEqual
     val nonExistentEmail = "nonexistent@example.com"
     val password = "SomePassword123"
 
-    val loginResult = testApp.service.user.loginAndGetUser(nonExistentEmail, password)
+    val loginResult = testApp.service.user.loginAndSetUser(nonExistentEmail, password)
 
     loginResult shouldEqual None
   }

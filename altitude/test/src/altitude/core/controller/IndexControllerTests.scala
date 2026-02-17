@@ -14,4 +14,14 @@ import org.scalatest.DoNotDiscover
       response.url should endWith("/setup")
     }
   }
+
+  test("Unauthenticated initialized install is not allowed to access protected route") {
+    val repo = testContext.persistRepository() // also creates a user
+    testApp.app.isInitialized = true
+
+    withServer(App) { host =>
+      val response = requests.get(s"$host/r/${repo.persistedId}", maxRedirects = 0, check = false)
+      response.statusCode shouldBe 302
+    }
+  }
 }
