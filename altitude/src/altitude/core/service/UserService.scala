@@ -142,7 +142,6 @@ class UserService(val app: Altitude) extends BaseService[User] {
     if (devEmail.nonEmpty && devPassword.nonEmpty) {
       val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
       devUserRes.map(_._1)
-    }
-    else None
+    } else None
   }
 }

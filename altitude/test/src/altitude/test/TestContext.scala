@@ -17,17 +17,21 @@ import altitude.core.util.Util
 import altitude.test.IntegrationTestUtil.generateRandomImagBytesBgr
 import altitude.test.IntegrationTestUtil.generateRandomImagBytesGray
 import java.lang.Thread.sleep
+import java.net.HttpCookie
 
 import scala.util.Random
 
 object TestContext {
   val ASSET_SIZE = 652084
+  val USER_PASSWORD = "password123"
 }
 
 class TestContext(val testApp: Altitude) {
   var users: List[User] = List()
   var repositories: List[Repository] = List()
   var assets: List[Asset] = List()
+  // to maintain login state for controllers
+  var cookies: Map[String, HttpCookie] = Map.empty
 
   def makeUser(): User = User(
     email = Util.randomStr(),
@@ -41,7 +45,7 @@ class TestContext(val testApp: Altitude) {
     accountType = AccountType.Admin
   )
 
-  def persistUser(user: Option[User] = None, password: String = "password"): User = {
+  def persistUser(user: Option[User] = None, password: String = TestContext.USER_PASSWORD): User = {
     val userModel = user.getOrElse(makeUser())
 
     val persistedUser: User = testApp.service.user.add(userModel, password = password)
@@ -73,6 +77,9 @@ class TestContext(val testApp: Altitude) {
       fileStoreType = C.StorageEngineName.FS,
       owner = persistedUser)
     repositories = repositories ::: persistedRepo :: Nil
+
+    // A user always has this set, and this is required for controller flows where login is needed
+    testApp.service.user.setLastActiveRepoId(persistedUser, persistedRepo.persistedId)
 
     // if this is the only (or the first repo), set current request context
     if (repositories.length == 1) {

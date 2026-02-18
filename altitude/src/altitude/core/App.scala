@@ -1,4 +1,5 @@
 package altitude.core
+import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
 import altitude.core.routes.web.ContentViewController
@@ -50,6 +51,7 @@ object App extends cask.Main:
 
   override def allRoutes: Seq[cask.Routes] = Seq(
     new HealthController,
+    new AssetController,
     new IndexController,
     new StaticController,
     new SessionController,

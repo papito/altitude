@@ -35,6 +35,12 @@ object SqliteSuiteBundle {
     }
 
     testApp.service.migrationService.migrate()
+
+    testApp.txManager.withTransaction {
+      testApp.DAO.systemMetadata.setInitialized()
+    }
+
+    testApp.isInitialized = true
   }
 }
 

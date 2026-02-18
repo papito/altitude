@@ -1,7 +1,6 @@
 package altitude.core.routes.web
 
 import altitude.core.App
-import altitude.core.Const
 import altitude.core.routes.decorators.extractToken
 import altitude.core.routes.decorators.requireLogin
 import cask.Request

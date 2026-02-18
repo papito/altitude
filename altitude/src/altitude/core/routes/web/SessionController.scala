@@ -77,46 +77,6 @@ class SessionController(using logger: Logger) extends cask.Routes:
     }
   }
 
-  /** API endpoint for login (returns JSON with token) */
-  @cask.postJson("/api/login")
-  def apiLogin(login: String, password: String)(using request: Request): cask.Response[String] = {
-    logger.info(s"API login attempt for user: $login")
-
-    App.altitude.service.user.loginAndSetUser(login, password) match {
-      case Some((user, token)) =>
-        logger.info(s"User logged in successfully via API: ${user.email}")
-
-        val responseJson = Json.obj(
-          "success" -> true,
-          "token" -> token,
-          "user" -> Json.obj(
-            "id" -> user.persistedId,
-            "email" -> user.email,
-            "name" -> user.name,
-            "accountType" -> user.accountType.toString
-          )
-        )
-
-        cask.Response(
-          responseJson.toString(),
-          statusCode = 200,
-          headers = Seq(("Content-Type", "application/json"))
-        )
-
-      case None =>
-        logger.warn(s"Failed API login attempt for user: $login")
-        val responseJson = Json.obj(
-          "success" -> false,
-          "error" -> "Invalid credentials"
-        )
-        cask.Response(
-          responseJson.toString(),
-          statusCode = 401,
-          headers = Seq(("Content-Type", "application/json"))
-        )
-    }
-  }
-
   /** Logout - clears the auth cookie and invalidates the token */
   @cask.post("/logout")
   def doLogout()(using request: Request): cask.Response[String] = {
