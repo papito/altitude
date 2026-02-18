@@ -50,10 +50,10 @@ class ControllerTestCore
     }
   }
 
-  def withServer[T](example: cask.main.Main)(f: String => T): T = {
+  def withServer[T](app: cask.main.Main)(f: String => T): T = {
     val server = Undertow.builder
       .addHttpListener(8081, "localhost")
-      .setHandler(example.defaultHandler)
+      .setHandler(app.defaultHandler)
       .build
 
     server.start()
