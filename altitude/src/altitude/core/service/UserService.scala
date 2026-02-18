@@ -135,4 +135,14 @@ class UserService(val app: Altitude) extends BaseService[User] {
     }
   }
 
+  def getDevUser: Option[User] = {
+    val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
+    val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
+
+    if (devEmail.nonEmpty && devPassword.nonEmpty) {
+      val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
+      devUserRes.map(_._1)
+    }
+    else None
+  }
 }

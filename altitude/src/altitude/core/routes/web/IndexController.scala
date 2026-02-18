@@ -15,20 +15,14 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
       logger.warn("App is not initialized, redirecting to setup")
       return Response("", 302, Seq("Location" -> "/setup"), Nil)
 
-    val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
-    val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
+    // Locally, we want to allow bypassing authentication with a dev user for easier testing.
+    // This is a slightly different version of the one in the requireLogin decorator as the decorator cannot be used for
+    // this endpoint.
+    val devUser = App.altitude.service.user.getDevUser
 
-    if (devEmail.nonEmpty && devPassword.nonEmpty) {
-      val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
-      val devUser = devUserRes.map(_._1)
-
-      if devUser.isEmpty then
-        logger.warn(s"Dev user login failed for email: $devEmail")
-        return Response("", 302, Seq("Location" -> "/login"), Nil)
-
-      logger.info(s"User authenticated: ${devUserRes.get._1.email}")
+    if devUser.nonEmpty then
+      logger.info(s"User authenticated: ${devUser.get.email}")
       return Response("", 302, Seq("Location" -> s"/r/${devUser.get.lastActiveRepoId.get}"), Nil)
-    }
 
     extractToken(request) match
       case Some(token) =>

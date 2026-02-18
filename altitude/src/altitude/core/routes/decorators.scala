@@ -1,6 +1,5 @@
 package altitude.core.routes
-import altitude.core.App
-import altitude.core.Const
+import altitude.core.{Api, App, Const}
 import altitude.core.models.User
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
@@ -42,14 +41,13 @@ object decorators {
    */
   class requireLogin extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
-      val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
-      val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
-
-      val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
-      val devUser = devUserRes.map(_._1)
+      // locally, we want to allow bypassing authentication with a dev user for easier testing
+      // as hot reload is enabled, changes to the code will log out the dev user, so this is a way to test changes
+      // without needing to log in repeatedly when working with the frontend
+      val devUser = App.altitude.service.user.getDevUser
 
       if devUser.isEmpty then
-        logger.warn(s"Dev user login failed for email: $devEmail")
+        logger.warn(s"Dev user login failed for email: ${App.altitude.config.getString(Const.Conf.DEV_USER)}")
       else
         return delegate(req, Map("request" -> req, "user" -> devUser))
 
