@@ -31,7 +31,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       q: Option[String] = None,
       sort: Option[String] = None,
       folderId: Option[String] = None,
-      personId: Option[String] = None)(using request: Request): Response[String] =
+      personId: Option[String] = None,
+      parentId: Option[String] = None)(using request: Request): Response[String] =
     /**
      * The search controller combines the query parameters from the browser URL and the HTMX request.
      *
