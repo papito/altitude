@@ -1,6 +1,10 @@
 package altitude.core
 
 import java.io.File
+import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -30,11 +34,59 @@ object Environment extends Enumeration {
   }
   logger.info(s"Root path: $ROOT_PATH")
 
-  private val RESOURCES_PATH: String = CURRENT match {
-    case Name.PROD => new File(ROOT_PATH, "resources").getAbsolutePath
-    case _ => "altitude/resources"
+  /**
+   * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths
+   * (e.g. OpenCV model files). Only used when running from a JAR (prod) where classpath resources are not directly
+   * on the filesystem.
+   */
+  private lazy val tempResourceDir: Path = {
+    val dir = Files.createTempDirectory("altitude-resources")
+    logger.info(s"Created temp resource directory: $dir")
+    dir.toFile.deleteOnExit()
+    dir
   }
-  logger.info(s"Resources path: $RESOURCES_PATH")
 
-  val OPENCV_RESOURCE_PATH: String = new File(RESOURCES_PATH, "opencv").getAbsolutePath
+  /**
+   * Resolve a classpath resource to a filesystem path. If the resource lives directly on the filesystem
+   * (dev/test), we return its path. If it's inside a JAR (prod), we extract it to a temp directory first.
+   *
+   * @param classpathPath the classpath resource path, e.g. "/opencv/deploy.prototxt"
+   * @return an absolute filesystem path to the resource file
+   */
+  def resolveResourcePath(classpathPath: String): String = {
+    val resourceUrl = getClass.getResource(classpathPath)
+    if (resourceUrl == null) {
+      throw new RuntimeException(s"Classpath resource not found: $classpathPath")
+    }
+
+    resourceUrl.getProtocol match {
+      case "file" =>
+        // Resource is directly on the filesystem (dev/test or exploded classpath)
+        new File(resourceUrl.toURI).getAbsolutePath
+
+      case "jar" =>
+        // Resource is inside a JAR — extract to a temp directory
+        val destFile = tempResourceDir.resolve(classpathPath.stripPrefix("/")).toFile
+
+        if (!destFile.exists()) {
+          destFile.getParentFile.mkdirs()
+          val stream: InputStream = getClass.getResourceAsStream(classpathPath)
+          if (stream == null) {
+            throw new RuntimeException(s"Classpath resource not found: $classpathPath")
+          }
+          try {
+            Files.copy(stream, destFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+            destFile.deleteOnExit()
+            logger.info(s"Extracted classpath resource $classpathPath to $destFile")
+          } finally {
+            stream.close()
+          }
+        }
+
+        destFile.getAbsolutePath
+
+      case protocol =>
+        throw new RuntimeException(s"Unsupported resource URL protocol: $protocol for $classpathPath")
+    }
+  }
 }

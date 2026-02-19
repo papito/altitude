@@ -8,10 +8,7 @@ import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
 import altitude.core.util.MurmurHash
-import java.io.File
-import java.nio.file.Paths
 import org.apache.commons.io.FilenameUtils
-import org.apache.commons.io.FileUtils
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.opencv.core.CvType
@@ -91,27 +88,11 @@ class FaceDetectionService() {
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private val RESOURCE_FILE_NAMES: Map[String, String] = {
-    Map(
-      "SF_ONNX_MODEL" -> "face_recognition_sface_2021dec.onnx",
-      "DNN_NET_PROTO_CONF" -> "deploy.prototxt",
-      "DNN_NET_MODEL" -> "res10_300x300_ssd_iter_140000.caffemodel",
-      "EMBEDDING_NET_MODEL" -> "openface_nn4.small2.v1.t7",
-      "YUNET_MODEL" -> "face_detection_yunet_2022mar.onnx"
-    )
-  }
-
-  checkAndCreateResourceFiles()
-
-  private val SF_ONNX_MODEL_PATH =
-    new File(Environment.OPENCV_RESOURCE_PATH, RESOURCE_FILE_NAMES("SF_ONNX_MODEL")).getAbsolutePath
-  private val DNN_NET_PROTO_CONF_PATH =
-    new File(Environment.OPENCV_RESOURCE_PATH, RESOURCE_FILE_NAMES("DNN_NET_PROTO_CONF")).getAbsolutePath
-  private val DNN_NET_MODEL_PATH =
-    new File(Environment.OPENCV_RESOURCE_PATH, RESOURCE_FILE_NAMES("DNN_NET_MODEL")).getAbsolutePath
-  private val YUNET_MODEL_PATH = new File(Environment.OPENCV_RESOURCE_PATH, RESOURCE_FILE_NAMES("YUNET_MODEL")).getAbsolutePath
-  private val EMBEDDING_NET_PATH =
-    new File(Environment.OPENCV_RESOURCE_PATH, RESOURCE_FILE_NAMES("EMBEDDING_NET_MODEL")).getAbsolutePath
+  private val SF_ONNX_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_recognition_sface_2021dec.onnx")
+  private val DNN_NET_PROTO_CONF_PATH = Environment.resolveResourcePath("/opencv/deploy.prototxt")
+  private val DNN_NET_MODEL_PATH = Environment.resolveResourcePath("/opencv/res10_300x300_ssd_iter_140000.caffemodel")
+  private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2022mar.onnx")
+  private val EMBEDDING_NET_PATH = Environment.resolveResourcePath("/opencv/openface_nn4.small2.v1.t7")
 
   private val sfaceRecognizer = FaceRecognizerSF.create(SF_ONNX_MODEL_PATH, "")
 
@@ -123,31 +104,6 @@ class FaceDetectionService() {
   yuNet.setScoreThreshold(FaceDetectionService.yunetConfidenceThreshold)
   yuNet.setNMSThreshold(0.2f)
 
-  /** Create the required OPENCV resource files if they do not exist outside of the JAR itself. */
-  private def checkAndCreateResourceFiles(): Unit = {
-    val openCvResourcesDir = new File(Environment.OPENCV_RESOURCE_PATH)
-
-    if (!openCvResourcesDir.exists()) {
-      logger.info(s"Resources directory $openCvResourcesDir not found, creating it")
-      FileUtils.forceMkdir(openCvResourcesDir)
-    }
-
-    RESOURCE_FILE_NAMES.values.foreach {
-      fileName =>
-        val filePath = Paths.get(openCvResourcesDir.getAbsolutePath, fileName).toFile
-
-        if (!filePath.exists() || !filePath.isFile) {
-          logger.info(s"Resource file $fileName not found, creating it from source")
-
-          val resourceFilePath = s"/opencv/$fileName"
-
-          logger.info("Resource path: " + resourceFilePath)
-          val resourceUrl = getClass.getResource(resourceFilePath)
-          logger.info("Copying resource file from " + resourceUrl + " to " + filePath)
-          FileUtils.copyURLToFile(resourceUrl, filePath)
-        }
-    }
-  }
 
   def detectFacesWithDnnNet(image: Mat): List[Rect] = {
     val inputBlob = blobFromImage(

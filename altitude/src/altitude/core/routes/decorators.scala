@@ -47,9 +47,7 @@ object decorators {
       // without needing to log in repeatedly when working with the frontend
       val devUser = App.altitude.service.user.getDevUser
 
-      if devUser.isEmpty then
-        logger.warn(s"Dev user login failed for email: ${App.altitude.config.getString(Const.Conf.DEV_USER)}")
-      else
+      if devUser.nonEmpty then
         return delegate(req, Map("request" -> req, "user" -> devUser))
 
       extractToken(req) match {
