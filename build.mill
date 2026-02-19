@@ -118,6 +118,21 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
   def generatedSources: T[Seq[PathRef]] = Task { Seq(compileTwirl().classes) }
 
+  private def staticResources: T[PathRef] = Task.Source(moduleDir / "static")
+
+  override def resources: T[Seq[PathRef]] = Task {
+    val staticSrcDir = staticResources().path
+    val destDir = Task.dest
+    val staticDestDir = destDir / "static"
+
+    // Copy static files to task output directory for JAR packaging
+    if (os.exists(staticSrcDir)) {
+      os.copy(staticSrcDir, staticDestDir, replaceExisting = true, createFolders = true, mergeFolders = true)
+    }
+
+    super.resources() ++ Seq(PathRef(destDir))
+  }
+
   object test extends ScalaTests with TestModule.ScalaTest {
     def mvnDeps: Task.Simple[Seq[Dep]] = Seq(
       mvn"org.apache.pekko::pekko-testkit:$pekkoVersion",

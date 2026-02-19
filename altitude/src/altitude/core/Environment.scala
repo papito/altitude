@@ -32,7 +32,7 @@ object Environment extends Enumeration {
 
   private val RESOURCES_PATH: String = CURRENT match {
     case Name.PROD => new File(ROOT_PATH, "resources").getAbsolutePath
-    case _ => "src/main/resources"
+    case _ => "altitude/resources"
   }
   logger.info(s"Resources path: $RESOURCES_PATH")
 
