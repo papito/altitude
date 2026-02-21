@@ -93,13 +93,14 @@ class FaceRecognitionService(val app: Altitude) {
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data)
     logger.info(s"Detected ${faceWithImages.size} faces")
 
-    faceWithImages.foreach {
-      case (detectedFace: Face, faceImages: FaceImages) =>
-        val existingOrNewPerson = recognizeFace(detectedFace, dataAsset.asset)
-        val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, existingOrNewPerson)
-        app.service.fileStore.addFace(persistedFace, faceImages)
-        indexFace(persistedFace, existingOrNewPerson.label)
-    }
+    // FIXME: to be rewritten with vectors
+//    faceWithImages.foreach {
+//      case (detectedFace: Face, faceImages: FaceImages) =>
+//        val existingOrNewPerson = recognizeFace(detectedFace, dataAsset.asset)
+//        val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, existingOrNewPerson)
+//        app.service.fileStore.addFace(persistedFace, faceImages)
+//        indexFace(persistedFace, existingOrNewPerson.label)
+//    }
   }
 
   /**

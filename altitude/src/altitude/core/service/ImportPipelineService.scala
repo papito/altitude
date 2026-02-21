@@ -5,15 +5,7 @@ import altitude.core.AltitudeActorSystem
 import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
-import altitude.core.pipeline.flows.AddPreviewFlow
-import altitude.core.pipeline.flows.AssignIdFlow
-import altitude.core.pipeline.flows.CheckDuplicateFlow
-import altitude.core.pipeline.flows.CheckMediaTypeFlow
-import altitude.core.pipeline.flows.ExtractMetadataFlow
-import altitude.core.pipeline.flows.FileStoreFlow
-import altitude.core.pipeline.flows.MarkAsCompleteFlow
-import altitude.core.pipeline.flows.PersistAndIndexAssetFlow
-import altitude.core.pipeline.flows.StripBinaryDataFlow
+import altitude.core.pipeline.flows.{AddPreviewFlow, AssignIdFlow, CheckDuplicateFlow, CheckMediaTypeFlow, ExtractMetadataFlow, FacialRecognitionFlow, FileStoreFlow, MarkAsCompleteFlow, PersistAndIndexAssetFlow, StripBinaryDataFlow}
 import altitude.core.pipeline.sinks.AssetErrorLoggingSink
 import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 import org.apache.pekko.NotUsed
@@ -42,7 +34,7 @@ class ImportPipelineService(app: Altitude) {
   private val checkMediaTypeFlow = CheckMediaTypeFlow(app)
   private val assignIdFlow = AssignIdFlow(app)
   private val persistAndIndexFlow = PersistAndIndexAssetFlow(app)
-  // private val facialRecognitionFlow = FacialRecognitionFlow(app)
+  private val facialRecognitionFlow = FacialRecognitionFlow(app)
   private val extractMetadataFlow = ExtractMetadataFlow(app)
   private val fileStoreFlow = FileStoreFlow(app)
   private val addPreviewFlow = AddPreviewFlow(app)
@@ -62,7 +54,7 @@ class ImportPipelineService(app: Altitude) {
       .via(extractMetadataFlow)
       .via(persistAndIndexFlow)
       .async
-      // .via(facialRecognitionFlow)
+      .via(facialRecognitionFlow)
       .async
       .via(fileStoreFlow)
       .async

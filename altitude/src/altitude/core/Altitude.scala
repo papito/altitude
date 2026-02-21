@@ -289,5 +289,4 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
   }
 
   logger.info("Altitude Server instance initialized")
-
 }
