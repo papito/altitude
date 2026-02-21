@@ -28,7 +28,15 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
         App.altitude.service.user.getUserFromToken(token) match
           case Some(user) =>
             logger.info(s"User authenticated: ${user.email}")
-            Response("", 302, Seq("Location" -> s"/r/${user.lastActiveRepoId.get}"), Nil)
+
+            // Get the last active repo id for the user, and if it doesn't exist, set it to the default repo id and use that.
+            val repoId = user.lastActiveRepoId.getOrElse {
+              val defaultRepoId = App.altitude.service.repository.getDefaultRepository.persistedId
+              App.altitude.service.user.setLastActiveRepoId(user, defaultRepoId)
+              defaultRepoId
+            }
+
+            Response("", 302, Seq("Location" -> s"/r/$repoId"), Nil)
           case None =>
             Response("", 302, Seq("Location" -> "/login"), Nil)
       case None =>

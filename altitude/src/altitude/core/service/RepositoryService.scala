@@ -71,6 +71,15 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
     }
   }
 
+  /*
+    * Right now there is just one repo - we will deal with multiple once later.
+   */
+  def getDefaultRepository: Repository = {
+    txManager.asReadOnly[Repository] {
+      dao.getAll.head
+    }
+  }
+
   override def getById(id: String): JsObject = {
     // try cache first
     if (app.repositoriesById.contains(id)) {

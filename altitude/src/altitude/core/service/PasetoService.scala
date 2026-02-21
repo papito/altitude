@@ -132,7 +132,7 @@ class PasetoService(val app: Altitude) {
       val accountTypeStr = claims.get("accountType", classOf[String])
       val lastActiveRepoId = Option(claims.get("lastActiveRepoId", classOf[String]))
 
-      if (email == null || name == null || accountTypeStr == null) {
+      if (email.isEmpty || name.isEmpty || accountTypeStr.isEmpty) {
         logger.debug("Token missing required user claims")
         return None
       }
