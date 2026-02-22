@@ -68,7 +68,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"dev.paseto:jpaseto-bouncy-castle:0.7.0",
 
     mvn"org.postgresql:postgresql:42.7.4",
-    mvn"org.xerial:sqlite-jdbc:3.47.1.0",
+    mvn"org.xerial:sqlite-jdbc:3.51.2.0",
 
     mvn"com.drewnoakes:metadata-extractor:2.19.0",
     mvn"org.apache.tika:tika-core:3.0.0",

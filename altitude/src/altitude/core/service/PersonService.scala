@@ -58,7 +58,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
         case e: SQLException =>
           throw getDuplicateExceptionOrSame(
             e,
-            Some(s"Face already exists for person ${person.label} in asset ${asset.persistedId}"))
+            Some(s"Face already exists for person ${person.persistedId} in asset ${asset.persistedId}"))
         case ex: Exception =>
           throw ex
       }
@@ -108,7 +108,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
         updateByQuery(
           oldMergeSourcesQ,
-          Map(FieldConst.Person.MERGED_INTO_ID -> dest.persistedId, FieldConst.Person.MERGED_INTO_LABEL -> dest.label))
+          Map(FieldConst.Person.MERGED_INTO_ID -> dest.persistedId))
 
         source.mergedWithIds.foreach {
           oldMergeSourceId =>
@@ -124,27 +124,15 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       logger.debug(s"Moving faces from ${source.name.get} to ${dest.name.get}")
       val query = new Query().add(FieldConst.Face.PERSON_ID -> source.persistedId)
 
-      val allSourceFaces: List[Face] = faceDao.query(query).records.map(r => r: Face)
-      logger.info(s"Training the ${allSourceFaces.size} faces on the destination label ${dest.label}")
-
-      val sourceFacesWithNewDestLabel: List[Face] = allSourceFaces.map(face => face.copy(personLabel = Some(dest.label)))
-
-      /** Take source faces, update them with destination ML label, and push via stream to the training pipeline */
-      val pipelineContext = PipelineContext(RequestContext.getRepository, null)
-      val trainingPipelineSource = Source.fromIterator(() => sourceFacesWithNewDestLabel.iterator).map((_, pipelineContext))
-
       // faces from source are moved to the new person and ML model label
-      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> dest.persistedId, FieldConst.Face.PERSON_LABEL -> dest.label))
+      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> dest.persistedId))
 
-      val updatedSource: Person = persistedSource.copy(mergedIntoId = Some(dest.persistedId), mergedIntoLabel = Some(dest.label))
-
-      updatedSource.clearFaces()
+      val updatedSource: Person = persistedSource.copy(mergedIntoId = Some(dest.persistedId))
 
       updateById(
         updatedSource.persistedId,
         Map(
           FieldConst.Person.MERGED_INTO_ID -> updatedSource.mergedIntoId.get,
-          FieldConst.Person.MERGED_INTO_LABEL -> updatedSource.mergedIntoLabel.get,
           FieldConst.Person.NUM_OF_FACES -> 0
         )
       )

@@ -83,29 +83,15 @@ CREATE TABLE person_label (
   id INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
--- See the postgres version for the explanation of the following 10 inserts
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-INSERT INTO person_label DEFAULT VALUES;
-
 CREATE TABLE person (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
   -- this is taken from the person_label table, where its primary key is a sequence
-  label INT NOT NULL,
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36),
   merged_with_ids TEXT,
   merged_into_id CHAR(36) DEFAULT NULL,
-  merged_into_label INT DEFAULT NULL,
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named TINYINT NOT NULL DEFAULT 0,
   is_hidden TINYINT NOT NULL DEFAULT 0,
@@ -133,12 +119,11 @@ CREATE TABLE face (
   y1 INT NOT NULL,
   repository_id CHAR(36) NOT NULL,
   person_id CHAR(36) NOT NULL,
-  person_label INT NOT NULL,
   width INT NOT NULL,
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
-  embeddings TEXT NOT NULL,
-  features TEXT NOT NULL,
+  embeddings BLOB NOT NULL,
+  features BLOB NOT NULL,
   checksum INT NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,

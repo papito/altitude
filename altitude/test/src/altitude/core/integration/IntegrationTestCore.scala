@@ -58,9 +58,6 @@ abstract class IntegrationTestCore
     // Tests then can create additional repos and users to test the boundaries of repository and user separation.
     testContext.persistRepository()
 
-    // Clear the face recognition model before each test
-    testApp.service.faceRecognition.initialize()
-
     // nuke the data dir tree
     IntegrationTestUtil.createFileStoreDir(testApp)
   }

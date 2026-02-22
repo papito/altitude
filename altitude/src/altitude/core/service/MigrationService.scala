@@ -82,7 +82,8 @@ abstract class MigrationService(val app: Altitude) {
 
     /**
      * We load the entire schema as the one and only migration in the following cases:
-     *   1. In test and dev environments 2. When initiating version 1 in prod
+     *   1. In test and dev environments 
+     *   2. When initiating version 1 in prod
      */
     val path = Environment.CURRENT match {
       case Environment.Name.TEST | Environment.Name.DEV => entireSchemaPath

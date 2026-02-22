@@ -15,11 +15,12 @@ import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.transactions.TransactionManager
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
-import org.apache.pekko.stream.scaladsl.Source
+//import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.Timeout
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.io.Source
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -53,54 +54,16 @@ class FaceRecognitionService(val app: Altitude) {
   implicit val timeout: Timeout = 3.seconds
   implicit val scheduler: Scheduler = app.actorSystem.scheduler
 
-  def initialize(): Unit = {
-//    val result: Future[AltitudeActorSystem.EmptyResponse] =
-//      app.actorSystem.ask(ref => FaceRecManagerActor.Initialize(RequestContext.getRepository.persistedId, ref))
-//    Await.result(result, timeout.duration)
-  }
-
-  def initializeAll(): Unit =
-    app.service.library.forEachRepository(
-      _ => {
-        initialize()
-      })
-
-  def trainModelFromDb(): Unit = {
-    txManager.asReadOnly {
-      logger.info(s"Training model from DB for repo ${RequestContext.getRepository.name}")
-
-      val facesForTraining: List[Face] = faceDao.getAllForTraining
-
-      val pipelineContext = PipelineContext(RequestContext.getRepository, null)
-      val source = Source.fromIterator(() => facesForTraining.iterator).map((_, pipelineContext))
-
-      val labelSizeFut: Future[ModelSize] =
-        app.actorSystem ? (ref => FaceRecManagerActor.GetModelSize(RequestContext.getRepository.persistedId, ref))
-
-      val labelCount = Await.result(labelSizeFut, timeout.duration).size
-      logger.info(s"Trained model from DB. Labels: $labelCount")
-    }
-  }
-
-  def trainModelsFromDbForAll(): Unit = {
-    app.service.library.forEachRepository(
-      _ => {
-        trainModelFromDb()
-      })
-  }
-
   def processAsset(dataAsset: AssetWithData): Unit = {
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data)
     logger.info(s"Detected ${faceWithImages.size} faces")
 
-    // FIXME: to be rewritten with vectors
-//    faceWithImages.foreach {
-//      case (detectedFace: Face, faceImages: FaceImages) =>
-//        val existingOrNewPerson = recognizeFace(detectedFace, dataAsset.asset)
-//        val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, existingOrNewPerson)
-//        app.service.fileStore.addFace(persistedFace, faceImages)
-//        indexFace(persistedFace, existingOrNewPerson.label)
-//    }
+    faceWithImages.foreach {
+      case (detectedFace: Face, faceImages: FaceImages) =>
+        val existingOrNewPerson = recognizeFace(detectedFace, dataAsset.asset)
+        val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, existingOrNewPerson)
+        app.service.fileStore.addFace(persistedFace, faceImages)
+    }
   }
 
   /**
@@ -113,42 +76,23 @@ class FaceRecognitionService(val app: Altitude) {
     require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
-    val result: Future[FacePrediction] =
-      app.actorSystem.ask(ref => FaceRecManagerActor.Predict(RequestContext.getRepository.persistedId, detectedFace, ref))
-    val prediction = Await.result(result, timeout.duration)
-
-    /**
-     * If we have a match, we compare the match to the person's "best" face - the faces are sorted by detection score.
-     *
-     * This is called a "verified" match.
-     *
-     * We do NOT trust the ML model confidence score, as it will always return the closest "match", and the meaning of the score
-     * is relative.
-     */
-    // No verified match, try brute-force comparisons on cached faces
-    val bestPersonFaceMatch: Option[Face] = matchFaceBruteForce(detectedFace)
+    txManager.asReadOnly {
+      try {
+        faceDao.searchClosestFaceMatches(detectedFace.features)
+      }
+      catch {
+        case e: Exception =>
+          println("Error searching for face matches: " + e.getMessage)
+      }
+    }
 
     val personModel = Person()
     val newPerson: Person = app.service.person.addPerson(personModel)
     newPerson
   }
 
-  private def matchFaceBruteForce(face: Face): Option[Face] = {
-    val bestFaceMatch: Option[Face] = getBestFaceMatch(face)
-    logger.debug("Best match: " + bestFaceMatch)
-
-    bestFaceMatch match {
-      case None => None
-      case Some(matchedFace) => Some(matchedFace)
-    }
-  }
-
   private def getBestFaceMatch(thisFace: Face): Option[Face] = {
     None
-  }
-
-  private def indexFace(face: Face, personLabel: Int, repositoryId: String = RequestContext.getRepository.persistedId): Unit = {
-    app.actorSystem ! FaceRecManagerActor.AddFace(repositoryId, face, personLabel)
   }
 
   def indexFaces(faces: Seq[Face], repositoryId: String = RequestContext.getRepository.persistedId): Unit = {

@@ -20,8 +20,6 @@ case class Person(
     coverFaceId: Option[String] = None,
     mergedWithIds: List[String] = List(),
     mergedIntoId: Option[String] = None,
-    mergedIntoLabel: Option[Int] = None,
-    label: Int = -1,
     numOfFaces: Int = 0)
   extends BaseModel
   with NoDates:
@@ -64,4 +62,4 @@ case class Person(
   override def hashCode: Int = super.hashCode
 
   override def toString: String =
-    s"PERSON $id. Label: $label. Name: ${name.getOrElse("N/A")}. Faces: $numOfFaces"
+    s"PERSON $id. Name: ${name.getOrElse("N/A")}. Faces: $numOfFaces"

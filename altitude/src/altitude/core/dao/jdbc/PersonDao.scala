@@ -16,15 +16,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
   final override val tableName = "person"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
-    val mergedIntoLabel = rec(FieldConst.Person.MERGED_INTO_LABEL)
-
     Person(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
-      // To placate Postgres Sequences, which return Longs
-      label = rec(FieldConst.Person.LABEL).getClass match
-        case c if c == classOf[java.lang.Integer] => rec(FieldConst.Person.LABEL).asInstanceOf[Int]
-        case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.LABEL).asInstanceOf[Long].toInt
-      ,
       isHidden = getBooleanField(rec(FieldConst.Person.IS_HIDDEN)),
       isBadMatch = getBooleanField(rec(FieldConst.Person.IS_BAD_MATCH)),
       isNamed = getBooleanField(rec(FieldConst.Person.IS_NAMED)),
@@ -33,14 +26,6 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int],
       mergedWithIds = loadCsv[String](rec(FieldConst.Person.MERGED_WITH_IDS).asInstanceOf[String]),
       mergedIntoId = Option(rec(FieldConst.Person.MERGED_INTO_ID).asInstanceOf[String]),
-      // If mergedIntoLabel is there, it's an Int or a Long, depending on DB
-      mergedIntoLabel =
-        if mergedIntoLabel != null then
-          Some(mergedIntoLabel.getClass match
-            case c if c == classOf[java.lang.Integer] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Int]
-            case c if c == classOf[java.lang.Long] => rec(FieldConst.Person.MERGED_INTO_LABEL).asInstanceOf[Long].toInt
-          )
-        else None
     ).toJson
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =

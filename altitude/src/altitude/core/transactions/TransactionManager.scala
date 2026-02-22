@@ -45,10 +45,13 @@ class TransactionManager(val config: Config) {
         val url: String = config.getString(Const.Conf.SQLITE_URL)
 
         val sqliteConfig: SQLiteConfig = new SQLiteConfig()
+        sqliteConfig.enableLoadExtension(true)
 
         val conn = if (readOnly) {
-          sqliteConfig.setReadOnly(true)
-          DriverManager.getConnection(url, sqliteConfig.toProperties)
+          // sqliteConfig.setReadOnly(true)
+          val readConn = DriverManager.getConnection(url, sqliteConfig.toProperties)
+
+          readConn
         } else {
           val writeConnection = DriverManager.getConnection(url, sqliteConfig.toProperties)
 
@@ -72,6 +75,24 @@ class TransactionManager(val config: Config) {
 
         conn
     }
+  }
+
+  def loadVectorExtension(conn: Connection): Unit = {
+    conn
+      .prepareStatement(
+        "SELECT load_extension('/Users/andrei/projects/altitude/altitude/resources/sqlite-vector/macos/vector.dylib')"
+      )
+      .execute()
+
+    conn.prepareStatement(
+        "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
+      )
+      .execute()
+
+    conn.prepareStatement(
+        "SELECT vector_init('face', 'embeddings', 'dimension=128,type=FLOAT32,distance=cosine')"
+      )
+      .execute()
   }
 
   def withTransaction[A](f: => A): A = {

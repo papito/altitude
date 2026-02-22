@@ -19,18 +19,17 @@ class PersonDao(override val config: Config) extends altitude.core.dao.jdbc.Pers
     val labelSql = "SELECT nextval('person_label')"
     val labelRes = executeAndGetOne(labelSql, List())
     val label = labelRes("nextval").asInstanceOf[Long]
-    val personSeqNum = label - RESERVED_LABEL_COUNT
+    val personSeqNum = label
 
     val sql =
       s"""
         INSERT INTO person (
                 ${FieldConst.ID},
                 ${FieldConst.REPO_ID},
-                ${FieldConst.Person.LABEL},
                 ${FieldConst.Person.NAME},
                 ${FieldConst.Person.NAME_FOR_SORT},
                 ${FieldConst.Person.IS_NAMED})
-              VALUES (?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?)
     """
 
     val person: Person = jsonIn: Person
@@ -43,7 +42,6 @@ class PersonDao(override val config: Config) extends altitude.core.dao.jdbc.Pers
     val sqlVals: List[Any] = List(
       id,
       RequestContext.getRepository.persistedId,
-      label,
       personName,
       personSortName,
       isNamed
@@ -53,6 +51,5 @@ class PersonDao(override val config: Config) extends altitude.core.dao.jdbc.Pers
 
     jsonIn ++ Json.obj(
       FieldConst.ID -> id,
-      FieldConst.Person.LABEL -> label,
       FieldConst.Person.NAME -> Some(personName),
       FieldConst.Person.IS_NAMED -> isNamed)
