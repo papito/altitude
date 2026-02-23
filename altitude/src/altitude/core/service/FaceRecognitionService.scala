@@ -77,13 +77,7 @@ class FaceRecognitionService(val app: Altitude) {
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
     txManager.asReadOnly {
-      try {
-        faceDao.searchClosestFaceMatches(detectedFace.features)
-      }
-      catch {
-        case e: Exception =>
-          println("Error searching for face matches: " + e.getMessage)
-      }
+      faceDao.searchClosestFaceMatches(detectedFace.features)
     }
 
     val personModel = Person()

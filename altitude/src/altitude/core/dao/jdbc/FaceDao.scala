@@ -70,13 +70,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
     preparedStatement.setString(11, toVectorAsF32Arg(face.features))
     preparedStatement.setInt(12, face.checksum)
 
-    try {
-      preparedStatement.execute()
-    }
-    catch {
-      case e: SQLException =>
-        println(s"Error inserting face into database: ${e.getMessage}")
-    }
+    preparedStatement.execute()
 
     jsonIn ++ Json.obj(
       FieldConst.ID -> id,
@@ -99,22 +93,29 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
 
     recs.map(makeModel)
 
-  def searchClosestFaceMatches(features: Array[Float]): Unit =
+  def searchClosestFaceMatches(features: Array[Float]): List[Face] =
     val conn = RequestContext.getConn
     txManager.loadVectorExtension(conn)
 
-    // FIXME: filter by repository_id
     val sql =
       """
-      SELECT rowid, distance
-      FROM vector_full_scan('face', 'features', vector_as_f32(?), ?);
-    """
+      SELECT v.rowid,
+             row_number() OVER (ORDER BY v.distance) AS rank_number,
+             v.distance,
+             face.*
+         FROM vector_full_scan('face', 'features', vector_as_f32(?), ?) AS v
+         JOIN face ON face.rowid = v.rowid
+        WHERE face.repository_id = ?
+          AND v.distance < 0.5
+         ORDER BY v.distance DESC
+   """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(toVectorAsF32Arg(features), 5))
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(toVectorAsF32Arg(features), 5, RequestContext.getRepository.persistedId))
     println(s"Found ${recs.size} face matches")
     for (rec <- recs) {
       val faceId = rec("rowid").asInstanceOf[Int]
       val distance = rec("distance").asInstanceOf[Double]
-
-      println(s"Found face match: faceId=$faceId, distance=$distance")
+      println(s"Face match: id=$faceId, distance=$distance, ${RequestContext.getRepository.persistedId}")
     }
+
+    recs.map(makeModel)

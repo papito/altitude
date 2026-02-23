@@ -9,4 +9,4 @@ import play.api.libs.json.JsObject
 trait FaceDao extends BaseDao:
   def add(jsonIn: JsObject, asset: Asset, person: Person): JsObject
   def getAssetFaces(assetId: String): List[Face]
-  def searchClosestFaceMatches(features: Array[Float]): Unit
+  def searchClosestFaceMatches(features: Array[Float]): List[Face]

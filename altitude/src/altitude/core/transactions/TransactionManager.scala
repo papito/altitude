@@ -88,11 +88,6 @@ class TransactionManager(val config: Config) {
         "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
       )
       .execute()
-
-    conn.prepareStatement(
-        "SELECT vector_init('face', 'embeddings', 'dimension=128,type=FLOAT32,distance=cosine')"
-      )
-      .execute()
   }
 
   def withTransaction[A](f: => A): A = {
