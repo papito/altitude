@@ -30,7 +30,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
       assetId = Option(rec(FieldConst.Face.ASSET_ID).asInstanceOf[String]),
       personId = Option(rec(FieldConst.Face.PERSON_ID).asInstanceOf[String]),
       detectionScore = rec(FieldConst.Face.DETECTION_SCORE).asInstanceOf[Double],
-      embeddings = Array[Float](), //embeddingsArray.toArray,
       features = Array[Float](), // featuresArray.toArray,
       checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int]
     ).toJson
@@ -49,8 +48,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
       s"""
         INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
                           ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.DETECTION_SCORE},
-                          ${FieldConst.Face.EMBEDDINGS}, ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, vector_as_f32(?), vector_as_f32(?), ?)
+                          ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, vector_as_f32(?), ?)
     """
 
     val conn = RequestContext.getConn
@@ -66,9 +65,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
     preparedStatement.setString(7, asset.persistedId)
     preparedStatement.setString(8, person.persistedId)
     preparedStatement.setDouble(9, face.detectionScore)
-    preparedStatement.setString(10, toVectorAsF32Arg(face.embeddings))
-    preparedStatement.setString(11, toVectorAsF32Arg(face.features))
-    preparedStatement.setInt(12, face.checksum)
+    preparedStatement.setString(10, toVectorAsF32Arg(face.features))
+    preparedStatement.setInt(11, face.checksum)
 
     preparedStatement.execute()
 

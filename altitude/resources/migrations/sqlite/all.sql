@@ -122,7 +122,6 @@ CREATE TABLE face (
   width INT NOT NULL,
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
-  embeddings BLOB NOT NULL,
   features BLOB NOT NULL,
   checksum INT NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),

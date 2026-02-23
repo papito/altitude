@@ -26,8 +26,8 @@ case class Face(
     personLabel: Option[Int] = None,
     detectionScore: Double,
     checksum: Int,
-    embeddings: Array[Float],
     features: Array[Float],
+    // FIXME: remove
     alignedImageGs: Array[Byte] = Array.emptyByteArray)
   extends BaseModel:
 
@@ -36,12 +36,8 @@ case class Face(
   override val createdAt: Option[LocalDateTime] = None
   override val updatedAt: Option[LocalDateTime] = None
 
-  val alignedImageGsMat: Mat = if alignedImageGs.length > 0 then matFromBytes(alignedImageGs) else new Mat()
-
-  val featuresMat: Mat =
-    val floatMat = new MatOfFloat()
-    floatMat.fromArray(features*)
-    floatMat
+  // FIXME: remove
+  val alignedImageGsMat: Mat = Mat()
 
   override def toString: String =
     s"FACE $id. Label: $personLabel. Score: $detectionScore, ${width}x$height at ($x1, $y1)"

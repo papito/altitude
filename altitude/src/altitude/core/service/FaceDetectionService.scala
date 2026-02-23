@@ -221,7 +221,6 @@ class FaceDetectionService() {
         val features = getFacialFeatures(alignedFaceImage)
 
         val featuresArray = (0 to 127).map(col => features.get(0, col)(0).asInstanceOf[Float]).toArray
-        val embedding = getEmbeddings(alignedFaceImage)
 
         val rect = FaceDetectionService.faceDetectToRect(res)
         val faceImage: Mat = imageMat.submat(rect)
@@ -243,9 +242,7 @@ class FaceDetectionService() {
           width = rect.width,
           height = rect.height,
           detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
-          embeddings = embedding,
           features = featuresArray,
-          alignedImageGs = alignedFaceImageGsBytes.toArray,
           checksum = MurmurHash.hash32(imageBytes.toArray)
         )
 
