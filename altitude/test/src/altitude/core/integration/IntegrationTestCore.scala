@@ -69,27 +69,5 @@ abstract class IntegrationTestCore
   def switchContextRepo(repository: Repository): Unit = {
     testApp.service.repository.switchContextToRepository(repository)
   }
-
-  /**
-   * Converts a function with no arguments to a Mockito `Answer`.
-   * This method is used when creating a Mockito `Answer` that does not require any information from the `InvocationOnMock`.
-   *
-   * @param f A function that takes no arguments and returns a value of type `T`.
-   * @return An `Answer[T]` that, when invoked, calls the provided function `f`.
-   */
-  implicit def toAnswer[T](f: () => T): Answer[T] = new Answer[T] {
-    override def answer(invocation: InvocationOnMock): T = f()
-  }
-
-  /**
-   * Converts a function with an `InvocationOnMock` argument to a Mockito `Answer`.
-   * This method is used when creating a Mockito `Answer` that requires information from the `InvocationOnMock`.
-   *
-   * @param f A function that takes an `InvocationOnMock` and returns a value of type `T`.
-   * @return An `Answer[T]` that, when invoked, calls the provided function `f` with the `InvocationOnMock`.
-   */
-  implicit def toAnswerWithArguments[T](f: InvocationOnMock => T): Answer[T] = new Answer[T] {
-    override def answer(invocation: InvocationOnMock): T = f(invocation)
-  }
 }
 

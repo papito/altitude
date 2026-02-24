@@ -23,7 +23,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
-  def showPeopleTab(repoId: String, typeFilter: String = Const.PeopleTypeFilter.COMPLETE)(using
+  def showPeopleTab(repoId: String, typeFilter: String = Const.PeopleTypeFilter.COMPLETE, peopleTypeFilter: Option[String] = None)(using
       request: Request): Response[String] =
     val people: List[Person] = typeFilter match
       case Const.PeopleTypeFilter.ALL => App.altitude.service.person.getAllNotDiscarded

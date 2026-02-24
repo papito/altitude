@@ -3,33 +3,22 @@ package altitude.core.service
 import altitude.core.Altitude
 import altitude.core.RequestContext
 import altitude.core.actors.FaceRecManagerActor
-import altitude.core.actors.FaceRecModelActor.FacePrediction
-import altitude.core.actors.FaceRecModelActor.ModelSize
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
 import altitude.core.models.Person
-import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.transactions.TransactionManager
 import org.apache.pekko.actor.typed.Scheduler
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
-//import org.apache.pekko.stream.scaladsl.Source
+
 import org.apache.pekko.util.Timeout
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import scala.io.Source
-import scala.concurrent.Await
-import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
 object FaceRecognitionService {
-  // Number of labels reserved for special cases, and not used for actual people instances
-  // Labels start at this number + 1 but Unknown people start at 1 (so reserved label count must be known)
-  val RESERVED_LABEL_COUNT = 10
-
   /**
    * If there is no machine learning model verified hit, we cycle through all people in the database, but only doing the matching
    * on THIS many best face detections that we have (1 to X)
@@ -76,13 +65,18 @@ class FaceRecognitionService(val app: Altitude) {
     require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
-    txManager.asReadOnly {
-      faceDao.searchClosestFaceMatches(detectedFace.features)
+    val matchedOrNewPerson: Person = txManager.asReadOnly {
+      val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features)
+
+      // must have face matches, and they all have to be the same person
+      if faceMatches.nonEmpty && faceMatches.map(_.personId.get).toSet.size <= 1 then {
+        app.service.person.getPersonById(faceMatches.head.personId.get)
+      } else {
+        app.service.person.addPerson(Person())
+      }
     }
 
-    val personModel = Person()
-    val newPerson: Person = app.service.person.addPerson(personModel)
-    newPerson
+    matchedOrNewPerson
   }
 
   private def getBestFaceMatch(thisFace: Face): Option[Face] = {

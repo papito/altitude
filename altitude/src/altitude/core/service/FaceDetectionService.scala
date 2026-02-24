@@ -271,15 +271,6 @@ class FaceDetectionService() {
     feature
   }
 
-  def getEmbeddings(trainingImage: Mat): Array[Float] = {
-    val alignedFaceBlob = getAlignedFaceBlob(trainingImage)
-    embedder.setInput(alignedFaceBlob)
-    val embeddingsMat = embedder.forward
-    val embeddings = new Array[Float](128)
-    embeddingsMat.get(0, 0, embeddings)
-    embeddings
-  }
-
   def getHistEqualizedGrayScImage(cropAlignedFace: Mat): Mat = {
     val grayAlignedImage = new Mat()
     Imgproc.cvtColor(cropAlignedFace, grayAlignedImage, Imgproc.COLOR_BGR2GRAY)
@@ -292,29 +283,5 @@ class FaceDetectionService() {
     Imgproc.resize(image, resized, new Size(96, 96))
     Imgproc.cvtColor(resized, resized, Imgproc.COLOR_BGR2RGB)
     blobFromImage(resized, 1.0 / 255, new Size(96, 96), new Scalar(0, 0, 0), true, false)
-  }
-
-  def isFaceSimilar(image1: Mat, image2: Mat, detectMat1: Mat, detectMat2: Mat): Boolean = {
-    // DEBUGGING:
-    // val face1Rect = faceDetectToRect(detectMat1)
-    // val face2Rect = faceDetectToRect(detectMat2)
-    // writeDebugOpenCvMat(image1.submat(face1Rect), "face1-1.jpg")
-    // writeDebugOpenCvMat(image2.submat(face2Rect), "face2-1.jpg")
-
-    val alignedFace1 = alignCropFaceFromDetection(image1, detectMat1)
-    val alignedFace2 = alignCropFaceFromDetection(image2, detectMat2)
-
-    // DEBUGGING:
-    // writeDebugOpenCvMat(alignedFace1, "face1-2.jpg")
-    // writeDebugOpenCvMat(alignedFace2, "face2-2.jpg")
-
-    val feature1 = getFacialFeatures(alignedFace1).clone()
-    val feature2 = getFacialFeatures(alignedFace2).clone()
-
-    getFeatureSimilarityScore(feature1, feature2) >= FaceDetectionService.cosineSimilarityThreshold
-  }
-
-  def getFeatureSimilarityScore(feature1: Mat, feature2: Mat): Double = {
-    sfaceRecognizer.`match`(feature1, feature2, FaceRecognizerSF.FR_COSINE)
   }
 }

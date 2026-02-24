@@ -44,7 +44,7 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
 
   @requireLogin()
   @cask.get("/r/:repoId")
-  def repositoryView(repoId: String, view: Option[String] = None): cask.Response[String] =
+  def repositoryView(repoId: String, view: Option[String] = None, newSearch: String = "false", personId: Option[String] = None, folderId: Option[String] = None): cask.Response[String] =
     if !App.altitude.isInitialized then
       logger.warn("App is not initialized, redirecting to setup")
       Response("", 302, Seq("Location" -> "/setup"), Nil)

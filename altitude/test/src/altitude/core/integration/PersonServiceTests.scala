@@ -5,13 +5,11 @@ import altitude.core.Const.FaceRecognition
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
-import altitude.core.service.FaceRecognitionService
 import altitude.core.util.Query
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
 @DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -82,6 +80,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     val people = testApp.service.person.getPeopleForAsset(importedAsset2.persistedId)
     people.size should be(1)
+    println(s"Person: ${people.head}, num of faces: ${people.head.numOfFaces}, ${testContext.repository.persistedId}")
     people.head.numOfFaces should be(2)
   }
 
