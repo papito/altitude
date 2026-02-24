@@ -107,17 +107,9 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
       WHERE face.repository_id = ?
         AND v.distance < 0.49
       ORDER BY v.distance
-      LIMIT ?;
+      LIMIT 1;
    """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId, 3))
-
-//    println(s"Found ${recs.size} face matches")
-
-//    for (rec <- recs) {
-//      val faceId = rec("rowid").asInstanceOf[Int]
-//      val distance = rec("distance").asInstanceOf[Double]
-//      println(s"Face match: id=$faceId, distance=$distance, ${RequestContext.getRepository.persistedId}")
-//    }
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId))
 
     recs.map(makeModel)
