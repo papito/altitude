@@ -1,8 +1,5 @@
 package altitude.core
 
-import altitude.core.actors.FaceRecManagerActor
-import altitude.core.actors.FaceRecManagerActor.Initialize
-import altitude.core.actors.FaceRecModelActor
 import altitude.core.actors.ImportStatusWsActor
 import org.apache.pekko.actor.typed.Behavior
 import org.apache.pekko.actor.typed.PostStop
@@ -30,7 +27,6 @@ private class AltitudeActorSystem(context: ActorContext[AltitudeActorSystem.Comm
   extends AbstractBehavior[AltitudeActorSystem.Command](context) {
 
   private val websocketImportStatusManagerActor = context.spawn(ImportStatusWsActor(), "importStatusWsActor")
-  private val faceRecManagerActor = context.spawn(FaceRecManagerActor(), "faceRecManagerActor")
 
   implicit val timeout: Timeout = 3.seconds
   implicit val scheduler: Scheduler = context.system.scheduler
@@ -42,54 +38,6 @@ private class AltitudeActorSystem(context: ActorContext[AltitudeActorSystem.Comm
     msg match {
       case command: ImportStatusWsActor.Command =>
         websocketImportStatusManagerActor ! command
-        Behaviors.same
-
-      case command: Initialize =>
-        faceRecManagerActor
-          .ask(FaceRecManagerActor.Initialize(command.app, _))
-          .onComplete {
-            case Success(response: AltitudeActorSystem.EmptyResponse) => command.replyTo ! response
-            case Failure(exception) => logger.error("Failed to initialize face rec model actor", exception)
-            case Success(_) => logger.error("Unexpected response type from face rec model actor")
-          }(ec)
-        Behaviors.same
-
-      case command: FaceRecManagerActor.AddFaces =>
-        faceRecManagerActor ! FaceRecManagerActor.AddFaces(command.repositoryId, command.faces)
-        Behaviors.same
-
-      case command: FaceRecManagerActor.AddFace =>
-        faceRecManagerActor ! FaceRecManagerActor.AddFace(command.repositoryId, command.face, command.personLabel)
-        Behaviors.same
-
-      case command: FaceRecManagerActor.Predict =>
-        faceRecManagerActor
-          .ask(FaceRecManagerActor.Predict(command.repositoryId, command.features, _))
-          .onComplete {
-            case Success(response: FaceRecModelActor.FacePrediction) => command.replyTo ! response
-            case Failure(exception) => logger.error("Failed to run face ec", exception)
-            case Success(_) => logger.error("Unexpected response type from face rec model actor")
-          }(ec)
-        Behaviors.same
-
-      case command: FaceRecManagerActor.GetModelSize =>
-        faceRecManagerActor
-          .ask(FaceRecManagerActor.GetModelSize(command.repositoryId, _))
-          .onComplete {
-            case Success(response: FaceRecModelActor.ModelSize) => command.replyTo ! response
-            case Failure(exception) => logger.error("Failed to get model size", exception)
-            case Success(_) => logger.error("Unexpected response type from face rec model actor")
-          }(ec)
-        Behaviors.same
-
-      case command: FaceRecManagerActor.GetModelLabels =>
-        faceRecManagerActor
-          .ask(FaceRecManagerActor.GetModelLabels(command.repositoryId, _))
-          .onComplete {
-            case Success(response: FaceRecModelActor.ModelLabels) => command.replyTo ! response
-            case Failure(exception) => logger.error("Failed to get model labels", exception)
-            case Success(value) => logger.error("Unexpected response type from face rec model actor")
-          }(ec)
         Behaviors.same
 
       case _ =>

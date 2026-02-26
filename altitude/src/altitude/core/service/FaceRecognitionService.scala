@@ -1,7 +1,6 @@
 package altitude.core.service
 
 import altitude.core.{Altitude, AltitudeActorSystem, RequestContext}
-import altitude.core.actors.FaceRecManagerActor
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
@@ -44,12 +43,6 @@ class FaceRecognitionService(val app: Altitude) {
   implicit val timeout: Timeout = 3.seconds
   implicit val scheduler: Scheduler = app.actorSystem.scheduler
 
-  def initialize(): Unit = {
-    val result: Future[AltitudeActorSystem.EmptyResponse] =
-      app.actorSystem.ask(ref => FaceRecManagerActor.Initialize(app, ref))
-    Await.result(result, timeout.duration)
-  }
-
   def processAsset(dataAsset: AssetWithData): Unit = {
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data)
     logger.info(s"Detected ${faceWithImages.size} faces")
@@ -89,13 +82,5 @@ class FaceRecognitionService(val app: Altitude) {
     }
 
     matchedOrNewPerson
-  }
-
-  private def getBestFaceMatch(thisFace: Face): Option[Face] = {
-    None
-  }
-
-  def indexFaces(faces: Seq[Face], repositoryId: String = RequestContext.getRepository.persistedId): Unit = {
-    app.actorSystem ! FaceRecManagerActor.AddFaces(repositoryId, faces)
   }
 }

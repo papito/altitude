@@ -1,7 +1,5 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.actors.FaceRecManagerActor
-import altitude.core.actors.FaceRecModelActor.FacePrediction
 import altitude.core.{App, FieldConst, RequestContext}
 import altitude.core.models.Asset
 import altitude.core.models.Face
