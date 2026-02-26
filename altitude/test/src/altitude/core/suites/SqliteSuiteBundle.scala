@@ -34,7 +34,6 @@ object SqliteSuiteBundle {
       conn.close()
     }
 
-    println("Running migrations...")
     testApp.service.migrationService.migrate()
 
     testApp.txManager.withTransaction {

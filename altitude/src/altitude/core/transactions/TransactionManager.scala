@@ -1,6 +1,7 @@
 package altitude.core.transactions
 
 import altitude.core.Const
+import altitude.core.Environment
 import altitude.core.RequestContext
 import com.typesafe.config.Config
 import java.sql.Connection
@@ -108,12 +109,32 @@ class TransactionManager(val config: Config) {
 
     config.getString(Const.Conf.DB_ENGINE) match {
       case Const.DbEngineName.SQLITE =>
+        val os   = sys.props.getOrElse("os.name", "").toLowerCase
+        val arch = sys.props.getOrElse("os.arch", "").toLowerCase
+
+        val (platformDir, extName) =
+          if (os.contains("mac") || os.contains("darwin")) {
+            val dir = if (arch.contains("aarch64") || arch.contains("arm")) "macos-arm64" else "macos-x86"
+            (dir, "vector.dylib")
+          } else if (os.contains("win")) {
+            ("windows-x86", "vector.dll")
+          } else {
+            // Linux / other Unix
+            val dir = if (arch.contains("aarch64") || arch.contains("arm")) "linux-arm64" else "linux-x86"
+            (dir, "vector.so")
+          }
+
+        logger.debug("Loading sqlite-vector extension for platform: " + platformDir)
+        println("Loading sqlite-vector extension for platform: " + platformDir)
+        val vectorLibPath = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
+        logger.info(s"Loading sqlite-vector extension from: $vectorLibPath")
+
         RequestContext.getConn.prepareStatement(
-          "SELECT load_extension('/Users/andrei/projects/altitude/altitude/resources/sqlite-vector/macos-x86/vector.dylib')"
+          s"SELECT load_extension('$vectorLibPath')"
         ).execute()
 
         RequestContext.getConn.prepareStatement(
-        "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
+          "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
         ).execute()
 
       case _ =>
