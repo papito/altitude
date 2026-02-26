@@ -99,14 +99,14 @@ class TransactionManager(val config: Config) {
     }
   }
 
-  // FIXME: build on top of withTransaction to avoid code duplication
   def withFaceVector[A](f: => A): A = {
-    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
-      return f
+    withTransaction {
+      loadSqliteVectorExtension()
+      f
     }
+  }
 
-    RequestContext.conn.value = Some(connection(readOnly = false))
-
+  private def loadSqliteVectorExtension(): Unit = {
     config.getString(Const.Conf.DB_ENGINE) match {
       case Const.DbEngineName.SQLITE =>
         val os   = sys.props.getOrElse("os.name", "").toLowerCase
@@ -125,7 +125,6 @@ class TransactionManager(val config: Config) {
           }
 
         logger.debug("Loading sqlite-vector extension for platform: " + platformDir)
-        println("Loading sqlite-vector extension for platform: " + platformDir)
         val vectorLibPath = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
         logger.info(s"Loading sqlite-vector extension from: $vectorLibPath")
 
@@ -138,19 +137,7 @@ class TransactionManager(val config: Config) {
         ).execute()
 
       case _ =>
-    }
-
-    try {
-      // actual function call
-      val res: A = f
-      commit()
-      res
-    } catch {
-      case ex: Exception =>
-        rollback()
-        throw ex
-    } finally {
-      close()
+        // Not SQLite
     }
   }
 

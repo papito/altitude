@@ -80,7 +80,6 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     val people = testApp.service.person.getPeopleForAsset(importedAsset2.persistedId)
     people.size should be(1)
-    println(s"Person: ${people.head}, num of faces: ${people.head.numOfFaces}, ${testContext.repository.persistedId}")
     people.head.numOfFaces should be(2)
   }
 
