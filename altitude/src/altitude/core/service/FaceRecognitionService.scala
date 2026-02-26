@@ -1,7 +1,6 @@
 package altitude.core.service
 
-import altitude.core.Altitude
-import altitude.core.RequestContext
+import altitude.core.{Altitude, AltitudeActorSystem, RequestContext}
 import altitude.core.actors.FaceRecManagerActor
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
@@ -11,12 +10,14 @@ import altitude.core.models.FaceImages
 import altitude.core.models.Person
 import altitude.core.transactions.TransactionManager
 import org.apache.pekko.actor.typed.Scheduler
-
 import org.apache.pekko.util.Timeout
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.DurationInt
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
+
 
 object FaceRecognitionService {
   /**
@@ -43,16 +44,26 @@ class FaceRecognitionService(val app: Altitude) {
   implicit val timeout: Timeout = 3.seconds
   implicit val scheduler: Scheduler = app.actorSystem.scheduler
 
+  def initialize(): Unit = {
+    val result: Future[AltitudeActorSystem.EmptyResponse] =
+      app.actorSystem.ask(ref => FaceRecManagerActor.Initialize(app, ref))
+    Await.result(result, timeout.duration)
+  }
+
   def processAsset(dataAsset: AssetWithData): Unit = {
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data)
     logger.info(s"Detected ${faceWithImages.size} faces")
 
-    faceWithImages.foreach {
-      case (detectedFace: Face, faceImages: FaceImages) =>
-        val existingOrNewPerson = recognizeFace(detectedFace, dataAsset.asset)
-        val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, existingOrNewPerson)
-        app.service.fileStore.addFace(persistedFace, faceImages)
+    logger.info(s"Face rec on asset ${dataAsset.asset}")
+    txManager.withFaceVector {
+      faceWithImages.foreach {
+        case (detectedFace: Face, faceImages: FaceImages) =>
+          val existingOrNewPerson = recognizeFace(detectedFace, dataAsset.asset)
+          val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, existingOrNewPerson)
+          app.service.fileStore.addFace(persistedFace, faceImages)
+      }
     }
+    logger.info(s"Face rec DONE: ${dataAsset.asset}")
   }
 
   /**
@@ -65,7 +76,8 @@ class FaceRecognitionService(val app: Altitude) {
     require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
-    val matchedOrNewPerson: Person = txManager.asReadOnly {
+    val matchedOrNewPerson: Person = txManager.withFaceVector {
+      // will return just one for this
       val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features)
 
       // must have face matches, and they all have to be the same person

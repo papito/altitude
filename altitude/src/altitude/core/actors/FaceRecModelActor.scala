@@ -1,8 +1,12 @@
 package altitude.core.actors
 
-import altitude.core.AltitudeActorSystem
+import altitude.core.dao.FaceDao
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.{Altitude, AltitudeActorSystem, App, RequestContext}
 import altitude.core.models.Face
 import altitude.core.util.ImageUtil.matFromBytes
+import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.handlers.MapListHandler
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.actor.typed.Behavior
 import org.apache.pekko.actor.typed.scaladsl.AbstractBehavior
@@ -11,20 +15,21 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.face.LBPHFaceRecognizer
+import scala.jdk.CollectionConverters._
 
 import java.util
 
 object FaceRecModelActor {
   sealed trait Response
-  final case class FacePrediction(label: Int, confidence: Double) extends Response
+  final case class FacePrediction(faceRecs: List[Map[String, AnyRef]]) extends Response
   final case class ModelSize(size: Int) extends Response
   final case class ModelLabels(labels: Seq[Int])
 
   sealed trait Command
   final case class AddFace(face: Face, personLabel: Int) extends Command
   final case class AddFaces(face: Seq[Face]) extends Command
-  final case class Initialize(replyTo: ActorRef[AltitudeActorSystem.EmptyResponse]) extends Command
-  final case class Predict(face: Face, replyTo: ActorRef[FacePrediction]) extends Command
+  final case class Initialize(app: Altitude, replyTo: ActorRef[AltitudeActorSystem.EmptyResponse]) extends Command
+  final case class Predict(repositoryId: String, features: Array[Float], replyTo: ActorRef[FacePrediction]) extends Command
   final case class GetModelSize(replyTo: ActorRef[ModelSize]) extends Command
   final case class GetModelLabels(replyTo: ActorRef[ModelLabels]) extends Command
 
@@ -39,24 +44,14 @@ class FaceRecModelActor(context: ActorContext[FaceRecModelActor.Command])
   recognizer.setGridX(10)
   recognizer.setGridY(10)
   recognizer.setRadius(2)
-
-  initialize()
-
-  private def initialize(): Unit = {
-    recognizer.clear()
-
-    val initialLabels = new Mat(2, 1, CvType.CV_32SC1)
-    val InitialImages = new java.util.ArrayList[Mat]()
-
-    for (idx <- 0 to 1) {
-      val bytes = getClass.getResourceAsStream(s"/train/$idx.png").readAllBytes()
-      val image: Mat = matFromBytes(bytes)
-      initialLabels.put(idx, 0, idx)
-      InitialImages.add(image)
-    }
-
-    recognizer.train(InitialImages, initialLabels)
+  
+  private def initialize(app: Altitude): Unit = {
   }
+
+  private def toVectorAsF32Arg(values: Array[Float]): String =
+    // Must match: vector_as_f32('[0.3, 1.0, ...]')
+    // We bind just the bracketed list as a String parameter.
+    values.mkString("[", ", ", "]")
 
   override def onMessage(msg: Command): Behavior[Command] = {
     msg match {
@@ -81,21 +76,50 @@ class FaceRecModelActor(context: ActorContext[FaceRecModelActor.Command])
         recognizer.update(images, labels)
         Behaviors.same
 
-      case Initialize(replyTo) =>
-        initialize()
+      case Initialize(app, replyTo) =>
+        initialize(app)
         replyTo ! AltitudeActorSystem.EmptyResponse()
         Behaviors.same
 
-      case Predict(face, replyTo) =>
-        val predLabelArr = new Array[Int](1)
-        val confidenceArr = new Array[Double](1)
-        recognizer.predict(face.alignedImageGsMat, predLabelArr, confidenceArr)
+      case Predict(repositoryId, features, replyTo) =>
+        println(s"PREDICT ACTOR !!!!")
+        val sql =
+          """
+            SELECT
+              v.rowid,
+              row_number() OVER (ORDER BY v.distance) AS rank_number,
+              v.distance,
+              face.*
+            FROM vector_full_scan('face', 'features', vector_as_f32(?)) AS v
+            JOIN face ON face.rowid = v.rowid
+            WHERE face.repository_id = ?
+              AND v.distance < 0.49
+            ORDER BY v.distance
+            LIMIT 1;
+         """
 
-        val predLabel = predLabelArr.head
-        val confidence = confidenceArr.head
+        App.altitude.txManager.withTransaction {
+          val conn = RequestContext.conn.value.get
+          conn
+            .prepareStatement(
+              "SELECT load_extension('/Users/andrei/projects/altitude/altitude/resources/sqlite-vector/macos/vector.dylib')"
+            )
+            .execute()
 
-        replyTo ! FacePrediction(predLabel, confidence)
-        Behaviors.same
+          conn
+            .prepareStatement(
+              "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
+            )
+            .execute()
+
+
+          val res = QueryRunner().query(RequestContext.getConn, sql, new MapListHandler(), toVectorAsF32Arg(features), repositoryId).asScala.toList
+
+          replyTo ! FacePrediction(res.map(_.asScala.toMap[String, AnyRef]))
+          Behaviors.same
+        }
+
+
 
       case GetModelSize(replyTo) =>
         replyTo ! ModelSize(recognizer.getLabels.size().height.toInt - 2)

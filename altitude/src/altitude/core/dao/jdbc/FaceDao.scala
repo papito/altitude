@@ -1,15 +1,28 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.FieldConst
-import altitude.core.RequestContext
+import altitude.core.actors.FaceRecManagerActor
+import altitude.core.actors.FaceRecModelActor.FacePrediction
+import altitude.core.{App, FieldConst, RequestContext}
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
 import com.typesafe.config.Config
 
-import java.sql.{PreparedStatement, SQLException}
+import java.sql.PreparedStatement
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+
+import org.apache.pekko.actor.typed.Scheduler
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.Timeout
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 import scala.language.implicitConversions
 
@@ -53,7 +66,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
     """
 
     val conn = RequestContext.getConn
-    txManager.loadVectorExtension(conn)
 
     val preparedStatement: PreparedStatement = conn.prepareStatement(sql)
     preparedStatement.setString(1, id)
@@ -93,7 +105,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
     val conn = RequestContext.getConn
-    txManager.loadVectorExtension(conn)
 
     val sql =
       """

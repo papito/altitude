@@ -65,7 +65,7 @@ class TransactionManager(val config: Config) {
           statement.execute("PRAGMA foreign_keys=ON;")
           statement.execute("PRAGMA temp_store=MEMORY;")
           statement.execute("PRAGMA wal_autocheckpoint=500;")
-          statement.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+          //statement.execute("PRAGMA wal_checkpoint(TRUNCATE);")
           statement.close()
 
           writeConnection.setAutoCommit(false)
@@ -77,25 +77,47 @@ class TransactionManager(val config: Config) {
     }
   }
 
-  def loadVectorExtension(conn: Connection): Unit = {
-    conn
-      .prepareStatement(
-        "SELECT load_extension('/Users/andrei/projects/altitude/altitude/resources/sqlite-vector/macos/vector.dylib')"
-      )
-      .execute()
-
-    conn.prepareStatement(
-        "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
-      )
-      .execute()
-  }
-
   def withTransaction[A](f: => A): A = {
     if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
       return f
     }
 
     RequestContext.conn.value = Some(connection(readOnly = false))
+
+    try {
+      // actual function call
+      val res: A = f
+      commit()
+      res
+    } catch {
+      case ex: Exception =>
+        rollback()
+        throw ex
+    } finally {
+      close()
+    }
+  }
+
+  // FIXME: build on top of withTransaction to avoid code duplication
+  def withFaceVector[A](f: => A): A = {
+    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
+      return f
+    }
+
+    RequestContext.conn.value = Some(connection(readOnly = false))
+
+    config.getString(Const.Conf.DB_ENGINE) match {
+      case Const.DbEngineName.SQLITE =>
+        RequestContext.getConn.prepareStatement(
+          "SELECT load_extension('/Users/andrei/projects/altitude/altitude/resources/sqlite-vector/macos-x86/vector.dylib')"
+        ).execute()
+
+        RequestContext.getConn.prepareStatement(
+        "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
+        ).execute()
+
+      case _ =>
+    }
 
     try {
       // actual function call

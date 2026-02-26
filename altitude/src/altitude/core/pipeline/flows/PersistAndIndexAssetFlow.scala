@@ -18,12 +18,14 @@ object PersistAndIndexAssetFlow {
       case (Left(dataAsset), ctx) =>
         setThreadLocalRequestContext(ctx)
 
-        app.txManager.withTransaction {
+        app.txManager.withFaceVector {
           try {
             debugInfo(s"\tPersisting asset ${dataAsset.asset.fileName}")
             app.service.asset.add(dataAsset.asset)
             debugInfo(s"\tIndexing asset ${dataAsset.asset.fileName}")
             app.service.search.indexAsset(dataAsset.asset)
+            app.service.faceRecognition.processAsset(dataAsset)
+
             Future.successful((Left(dataAsset), ctx))
           } catch {
             case e: DuplicateException =>

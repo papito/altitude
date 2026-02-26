@@ -1,6 +1,6 @@
 package altitude.core.actors
 
-import altitude.core.AltitudeActorSystem
+import altitude.core.{Altitude, AltitudeActorSystem}
 import altitude.core.actors.FaceRecModelActor.FacePrediction
 import altitude.core.actors.FaceRecModelActor.ModelLabels
 import altitude.core.actors.FaceRecModelActor.ModelSize
@@ -25,10 +25,10 @@ object FaceRecManagerActor {
   final case class AddFace(repositoryId: String, face: Face, personLabel: Int) extends AltitudeActorSystem.Command with Command
 
   final case class AddFaces(repositoryId: String, faces: Seq[Face]) extends AltitudeActorSystem.Command with Command
-  final case class Initialize(repositoryId: String, replyTo: ActorRef[AltitudeActorSystem.EmptyResponse])
+  final case class Initialize(app: Altitude, replyTo: ActorRef[AltitudeActorSystem.EmptyResponse])
     extends AltitudeActorSystem.Command
       with Command
-  final case class Predict(repositoryId: String, face: Face, replyTo: ActorRef[FacePrediction])
+  final case class Predict(repositoryId: String, features: Array[Float], replyTo: ActorRef[FacePrediction])
     extends AltitudeActorSystem.Command
       with Command
   final case class GetModelSize(repositoryId: String, replyTo: ActorRef[ModelSize])
@@ -46,6 +46,7 @@ class FaceRecManagerActor(context: ActorContext[FaceRecManagerActor.Command])
   import FaceRecManagerActor._
 
   private var modelActors = Map.empty[String, ActorRef[FaceRecModelActor.Command]]
+  var actor: Option[ActorRef[FaceRecModelActor.Command]] = None
 
   implicit val timeout: Timeout = 3.seconds
   implicit val scheduler: Scheduler = context.system.scheduler
@@ -54,13 +55,11 @@ class FaceRecManagerActor(context: ActorContext[FaceRecManagerActor.Command])
 
   override def onMessage(msg: Command): Behavior[Command] = {
     msg match {
-      case Initialize(repositoryId, replyTo) =>
-        val modelActor =
-          modelActors.getOrElse(repositoryId, context.spawn(FaceRecModelActor(), s"faceRecModelActor-$repositoryId"))
-        modelActors += (repositoryId -> modelActor)
+      case Initialize(app, replyTo) =>
+        actor = Some(context.spawn(FaceRecModelActor(), "faceRecModelActor"))
 
-        modelActor
-          .ask(FaceRecModelActor.Initialize(_))
+      actor.get
+          .ask(FaceRecModelActor.Initialize(app, _))
           .mapTo[AltitudeActorSystem.EmptyResponse]
           .onComplete {
             case Success(response) => replyTo ! response
@@ -86,11 +85,11 @@ class FaceRecManagerActor(context: ActorContext[FaceRecManagerActor.Command])
             throw new RuntimeException(s"No model actor found for repositoryId: $repositoryId")
         }
 
-      case Predict(repositoryId, face, replyTo) =>
-        modelActors.get(repositoryId) match {
+      case Predict(repositoryId, features, replyTo) =>
+        actor match {
           case Some(modelActor) =>
             modelActor
-              .ask(FaceRecModelActor.Predict(face, _))
+              .ask(FaceRecModelActor.Predict(repositoryId, features, _))
               .mapTo[FacePrediction]
               .onComplete {
                 case Success(response) => replyTo ! response

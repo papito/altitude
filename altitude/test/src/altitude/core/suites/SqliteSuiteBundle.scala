@@ -21,7 +21,7 @@ object SqliteSuiteBundle {
       """.stripMargin
 
     val conn = testApp.txManager.connection(readOnly = false)
-    // disables transaction for this connection (cannot user VACUUM in a transaction)
+    // disables transaction for this connection (cannot use VACUUM in a transaction)
     conn.setAutoCommit(true)
 
     val stmt = conn.createStatement()
@@ -34,6 +34,7 @@ object SqliteSuiteBundle {
       conn.close()
     }
 
+    println("Running migrations...")
     testApp.service.migrationService.migrate()
 
     testApp.txManager.withTransaction {

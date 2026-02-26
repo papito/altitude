@@ -53,11 +53,8 @@ class ImportPipelineService(app: Altitude) {
       .via(assignIdFlow)
       .via(extractMetadataFlow)
       .via(persistAndIndexFlow)
-      .async
-      .via(facialRecognitionFlow)
-      .async
+      //.via(facialRecognitionFlow)
       .via(fileStoreFlow)
-      .async
       .via(addPreviewFlow)
       .via(stripBinaryDataFlow)
       .via(markAsCompleteFlow)

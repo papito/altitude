@@ -46,7 +46,7 @@ private class AltitudeActorSystem(context: ActorContext[AltitudeActorSystem.Comm
 
       case command: Initialize =>
         faceRecManagerActor
-          .ask(FaceRecManagerActor.Initialize(command.repositoryId, _))
+          .ask(FaceRecManagerActor.Initialize(command.app, _))
           .onComplete {
             case Success(response: AltitudeActorSystem.EmptyResponse) => command.replyTo ! response
             case Failure(exception) => logger.error("Failed to initialize face rec model actor", exception)
@@ -64,7 +64,7 @@ private class AltitudeActorSystem(context: ActorContext[AltitudeActorSystem.Comm
 
       case command: FaceRecManagerActor.Predict =>
         faceRecManagerActor
-          .ask(FaceRecManagerActor.Predict(command.repositoryId, command.face, _))
+          .ask(FaceRecManagerActor.Predict(command.repositoryId, command.features, _))
           .onComplete {
             case Success(response: FaceRecModelActor.FacePrediction) => command.replyTo ! response
             case Failure(exception) => logger.error("Failed to run face ec", exception)

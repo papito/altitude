@@ -49,8 +49,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
     require(person.persistedId.nonEmpty, "Cannot add a face to an unsaved person object")
     require(asset.persistedId.nonEmpty, "Cannot add a face to an unsaved asset object")
 
-    txManager.withTransaction[Face] {
-
+    txManager.withFaceVector[Face] {
       var persistedFace: Option[Face] = None
       try {
         persistedFace = Some(faceDao.add(face.toJson, asset, person))
