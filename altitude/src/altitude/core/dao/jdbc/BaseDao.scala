@@ -59,6 +59,8 @@ abstract class BaseDao {
 
   protected def getBooleanField(value: AnyRef): Boolean
 
+  protected def getNextVal(tableName: String): AnyRef
+  
   private def queryRunner = new QueryRunner()
 
   protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)

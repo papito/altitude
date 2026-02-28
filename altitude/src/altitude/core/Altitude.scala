@@ -1,6 +1,7 @@
 package altitude.core
 
-import altitude.core.dao.jdbc.SystemMetadataDao
+import altitude.core.dao.jdbc.{PersonDao, SystemMetadataDao}
+import altitude.core.dao.postgres.PostgresOverrides
 import altitude.core.models.Repository
 import altitude.core.service.AssetService
 import altitude.core.service.FaceDetectionService
@@ -26,6 +27,7 @@ import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
+
 import java.io.File
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
@@ -189,8 +191,8 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     }
 
     val person: dao.PersonDao = dataSourceType match {
-      case Const.DbEngineName.POSTGRES => new dao.postgres.PersonDao(app.config)
-      case Const.DbEngineName.SQLITE => new dao.sqlite.PersonDao(app.config)
+      case Const.DbEngineName.POSTGRES => new PersonDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new PersonDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 

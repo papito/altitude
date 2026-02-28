@@ -43,5 +43,11 @@ trait SqliteOverrides { this: BaseDao =>
     case _ => false
   }
 
-  override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for FOR UPDATE"
+  override  protected def getNextVal(tableName: String): AnyRef = {
+    val sql = s"INSERT INTO $tableName DEFAULT VALUES RETURNING id"
+    val res = executeAndGetOne(sql, List())
+    res("id")
+  }
+
+  override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for "FOR UPDATE"
 }

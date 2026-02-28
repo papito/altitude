@@ -6,7 +6,7 @@ import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
+import play.api.libs.json.{JsObject, Json}
 
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -25,6 +25,41 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       coverFaceId = Option(rec(FieldConst.Person.COVER_FACE_ID).asInstanceOf[String]),
       numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int],
     ).toJson
+
+  override def add(jsonIn: JsObject): JsObject =
+    val personSeqNum = getNextVal("person_label").asInstanceOf[Int]
+
+    val sql =
+      s"""
+        INSERT INTO person (${FieldConst.ID},
+                            ${FieldConst.REPO_ID},
+                            ${FieldConst.Person.NAME},
+                            ${FieldConst.Person.NAME_FOR_SORT},
+                            ${FieldConst.Person.IS_NAMED})
+              VALUES (?, ?, ?, ?, ?)
+   """
+
+    val person: Person = jsonIn: Person
+    val personName = getPersonName(person, personSeqNum)
+    val personSortName = getPersonSortName(person, personSeqNum)
+    val isNamed = person.name.nonEmpty
+
+    val id = BaseDao.genId
+
+    val sqlVals: List[Any] = List(
+      id,
+      RequestContext.getRepository.persistedId,
+      personName,
+      personSortName,
+      isNamed
+    )
+
+    addRecord(jsonIn, sql, sqlVals)
+
+    jsonIn ++ Json.obj(
+      FieldConst.ID -> id,
+      FieldConst.Person.NAME -> Some(personName),
+      FieldConst.Person.IS_NAMED -> isNamed)
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     val name =
