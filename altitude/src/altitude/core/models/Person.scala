@@ -18,8 +18,6 @@ case class Person(
     isNamed: Boolean = false,
     isBadMatch: Boolean = false,
     coverFaceId: Option[String] = None,
-    mergedWithIds: List[String] = List(),
-    mergedIntoId: Option[String] = None,
     numOfFaces: Int = 0)
   extends BaseModel
   with NoDates:
@@ -50,8 +48,6 @@ case class Person(
     _faces
 
   def hasFaces: Boolean = _faces.nonEmpty
-
-  def wasMergedFrom: Boolean = mergedIntoId.nonEmpty
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Person]
 

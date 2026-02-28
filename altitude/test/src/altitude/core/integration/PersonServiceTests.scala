@@ -150,12 +150,6 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     val mergedA: Person = testApp.service.person.merge(dest=personA, source=personB)
 
     //
-    // *** Merged destination should have the merged with ID (one)
-    //
-    mergedA.mergedWithIds.size should be(1)
-    mergedA.mergedWithIds.head should be(personB.persistedId)
-    
-    //
     // *** Sanity checks for persisted instances of source and destination2
     //
     val aFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedA.persistedId)
@@ -188,8 +182,6 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     // B is trained on C faces
     mergedB.numOfFaces should be(NUM_OF_FACES * 2)
     mergedB.isAboveThreshold should be(true)
-
-    val bOrigFaceScores = mergedB.getFaces.map(_.detectionScore)
 
     var bFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedB.persistedId)
     bFacesInDb.size should be(NUM_OF_FACES * 2)

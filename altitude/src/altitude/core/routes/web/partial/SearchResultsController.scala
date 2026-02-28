@@ -19,8 +19,11 @@ import org.slf4j.Logger
 class SearchResultsController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/search"
 
+  /*
+  This is a multi-method route as some modals (people merge) can redirect to it from non-GET requests.
+   */
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId")
+  @cask.route(f"/$prefix/r/:repoId", methods = Seq("get", "put"))
   def htmxSearchResultsGet(
       repoId: String,
       view: Option[String] = None,

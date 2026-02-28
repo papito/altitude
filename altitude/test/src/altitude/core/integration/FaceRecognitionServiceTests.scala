@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
 @DoNotDiscover class FaceRecognitionServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  test("Recognize a person twice", Focused) {
+  test("Recognize a person twice") {
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
     val importedAsset1: Asset = testApp.service.library.addImportAsset(importAsset1)
     val (face1, faceImages) = testApp.service.faceDetection.extractFaces(importAsset1.data).head

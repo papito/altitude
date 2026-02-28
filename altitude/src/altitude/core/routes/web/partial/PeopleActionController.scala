@@ -128,9 +128,9 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/merge")
-  def showMergePeopleModal(repoId: String, srcPersonId: String, destPersonId: String)(using request: Request): Response[String] =
-    val requestedSourcePerson: Person = App.altitude.service.person.getById(srcPersonId)
-    val requestedDestPerson: Person = App.altitude.service.person.getById(destPersonId)
+  def showMergePeopleModal(repoId: String, mergeSourceId: String, mergeDestId: String)(using request: Request): Response[String] =
+    val requestedSourcePerson: Person = App.altitude.service.person.getById(mergeSourceId)
+    val requestedDestPerson: Person = App.altitude.service.person.getById(mergeDestId)
 
     // if the merge is requested into a person with fewer faces, swap the source and dest
     val (sourcePerson, destPerson) =
@@ -153,14 +153,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
-    cask.Response(
-      data = "",
-      statusCode = 200,
-      headers = Seq(
-        ("Content-Type", "text/html"),
-        ("HX-Redirect", s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PERSON_ID}=$destPersonId")
-      )
-    )
+    cask.Redirect( s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PERSON_ID}=$destPersonId")
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")

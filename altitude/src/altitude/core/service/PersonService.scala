@@ -1,5 +1,6 @@
 package altitude.core.service
 
+import altitude.core
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -15,6 +16,7 @@ import altitude.core.util.QueryResult
 import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 import altitude.core.util.Util.getDuplicateExceptionOrSame
+
 import java.sql.SQLException
 import org.apache.pekko.stream.scaladsl.Source
 import play.api.libs.json.JsObject
@@ -89,50 +91,23 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       throw new IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
     }
 
-    if (source.mergedIntoId.nonEmpty) {
-      throw new IllegalArgumentException("Cannot merge a person that has already been merged")
-    }
-
-    if (dest.mergedWithIds.contains(source.persistedId)) {
-      throw new IllegalArgumentException("Cannot merge a person that has already been merged with the destination")
-    }
-
     logger.info(s"Merging person ${source.name} into ${dest.name}")
 
     txManager.withTransaction[Person] {
-      if (source.mergedWithIds.nonEmpty) {
-        logger.info(s"Source person ${source.name} was merged with other people before. IDs: ${source.mergedWithIds}")
-        logger.info("Updating the old merge sources with the new destination info")
-        val oldMergeSourcesQ = new Query().add(FieldConst.ID -> Query.IN(source.mergedWithIds.toSet))
-
-        updateByQuery(
-          oldMergeSourcesQ,
-          Map(FieldConst.Person.MERGED_INTO_ID -> dest.persistedId))
-
-        source.mergedWithIds.foreach {
-          oldMergeSourceId =>
-            val oldMergeSource = getPersonById(oldMergeSourceId)
-        }
-      }
-
       val persistedDest: Person = dao.getById(dest.persistedId)
       val persistedSource: Person = dao.getById(source.persistedId)
-
-      val mergedDest: Person = dao.updateMergedWithIds(dest, source.persistedId)
 
       logger.debug(s"Moving faces from ${source.name.get} to ${dest.name.get}")
       val query = new Query().add(FieldConst.Face.PERSON_ID -> source.persistedId)
 
-      // faces from source are moved to the new person and ML model label
+      // faces from source are moved to the new person
       faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> dest.persistedId))
 
-      val updatedSource: Person = persistedSource.copy(mergedIntoId = Some(dest.persistedId))
-
       updateById(
-        updatedSource.persistedId,
+        persistedSource.persistedId,
         Map(
-          FieldConst.Person.MERGED_INTO_ID -> updatedSource.mergedIntoId.get,
-          FieldConst.Person.NUM_OF_FACES -> 0
+          FieldConst.Person.NUM_OF_FACES -> 0,
+          FieldConst.Person.IS_DELETED -> true
         )
       )
 
@@ -147,20 +122,17 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
        * Note that this has to be done AFTER the source is updated as "merged", in order to avoid clawing with the unique name
        * constraint across non-merged people
        */
-      val updatedDest = mergedDest.copy(
+      val updatedDest = persistedDest.copy(
         numOfFaces = persistedDest.numOfFaces + persistedSource.numOfFaces,
         name = Some(mergedPersonName)
       )
 
       updateById(
-        dest.persistedId,
+        persistedDest.persistedId,
         Map(
           FieldConst.Person.NUM_OF_FACES -> updatedDest.numOfFaces,
           FieldConst.Person.NAME -> mergedPersonName
         ))
-
-      val destFaces = getPersonFaces(dest.persistedId, FaceRecognitionService.MAX_COMPARISONS_PER_PERSON)
-      updatedDest.setFaces(destFaces)
 
       updatedDest
     }

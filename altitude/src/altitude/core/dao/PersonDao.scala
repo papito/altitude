@@ -4,7 +4,6 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Person
 
 trait PersonDao extends BaseDao:
-  def updateMergedWithIds(person: Person, newId: String): Person
   def getAll: Map[String, Person]
   def getAllNotDiscarded: Map[String, Person]
   def getAllAboveThreshold: List[Person]

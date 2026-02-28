@@ -90,27 +90,25 @@ CREATE TABLE person (
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36),
-  merged_with_ids TEXT,
-  merged_into_id CHAR(36) DEFAULT NULL,
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named TINYINT NOT NULL DEFAULT 0,
   is_hidden TINYINT NOT NULL DEFAULT 0,
   is_bad_match TINYINT NOT NULL DEFAULT 0,
+  is_deleted TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  FOREIGN KEY (merged_into_id) REFERENCES person (id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
-WHERE merged_into_id IS NULL
+WHERE is_deleted = 1
   AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
-WHERE merged_into_id IS NULL;
+WHERE is_deleted == 1;
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
-WHERE merged_into_id IS NULL;
+WHERE is_deleted = 1;
 
 CREATE TABLE face (
   id CHAR(36) PRIMARY KEY,
