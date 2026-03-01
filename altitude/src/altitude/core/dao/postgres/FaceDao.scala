@@ -63,7 +63,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
                features <=> ?::vector AS distance
         FROM face
         WHERE repository_id = ?
-          AND features <=> ?::vector < 0.49
+          AND features <=> ?::vector < 0.59
         ORDER BY features <=> ?::vector
         LIMIT 1;
         """

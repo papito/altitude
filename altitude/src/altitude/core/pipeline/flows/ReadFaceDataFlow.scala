@@ -12,14 +12,7 @@ object ReadFaceDataFlow {
     Flow[TFaceWithContext].map {
       case (face, ctx) =>
         setThreadLocalRequestContext(ctx)
-
-        val alignedImageGs = app.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
-
-        val faceWithData = face.copy(
-          alignedImageGs = alignedImageGs.data
-        )
-
-        (faceWithData, ctx)
+        (face, ctx)
     }
   }
 }

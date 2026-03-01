@@ -73,7 +73,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       FROM vector_full_scan('face', 'features', vector_as_f32(?)) AS v
       JOIN face ON face.rowid = v.rowid
       WHERE face.repository_id = ?
-        AND v.distance < 0.49
+        AND v.distance < 0.68
       ORDER BY v.distance
       LIMIT 1;
    """

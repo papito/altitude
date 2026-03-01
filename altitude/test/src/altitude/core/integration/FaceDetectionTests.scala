@@ -27,17 +27,6 @@ import org.scalatest.matchers.should.Matchers.should
     detections.length should be(1)
   }
 
-  test("Faces are detected in an image (1)") {
-    val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
-    val detections = testApp.service.faceDetection.detectFacesWithDnnNet(matFromBytes(importAsset.data))
-    detections.length should be(2)
-  }
-
-  test("Faces are detected in an image (2)") {
-    val importAsset = IntegrationTestUtil.getImportAsset("people/meme-wednesday.png")
-    val detections = testApp.service.faceDetection.detectFacesWithDnnNet(matFromBytes(importAsset.data))
-    detections.length should be(2)
-  }
 
   test("Small face image is detected (1)") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/small-face1.jpg")

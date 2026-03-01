@@ -1,9 +1,6 @@
 package altitude.core.models
 
-import altitude.core.util.ImageUtil.matFromBytes
 import java.time.LocalDateTime
-import org.opencv.core.Mat
-import org.opencv.core.MatOfFloat
 import play.api.libs.json._
 import play.api.libs.json.JsonNaming.SnakeCase
 
@@ -26,9 +23,7 @@ case class Face(
     personLabel: Option[Int] = None,
     detectionScore: Double,
     checksum: Int,
-    features: Array[Float],
-    // FIXME: remove
-    alignedImageGs: Array[Byte] = Array.emptyByteArray)
+    features: Array[Float])
   extends BaseModel:
 
   lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
@@ -36,8 +31,6 @@ case class Face(
   override val createdAt: Option[LocalDateTime] = None
   override val updatedAt: Option[LocalDateTime] = None
 
-  // FIXME: remove
-  val alignedImageGsMat: Mat = Mat()
 
   override def toString: String =
     s"FACE $id. Label: $personLabel. Score: $detectionScore, ${width}x$height at ($x1, $y1)"

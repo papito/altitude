@@ -31,8 +31,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
   final override val tableName = "face"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
-//    val embeddingsArray = getFloatListByJsonKey(rec(FieldConst.Face.EMBEDDINGS).asInstanceOf[String], FieldConst.Face.EMBEDDINGS)
-//    val featuresArray = getFloatListByJsonKey(rec(FieldConst.Face.FEATURES).asInstanceOf[String], FieldConst.Face.FEATURES)
 
     Face(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),

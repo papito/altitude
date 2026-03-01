@@ -11,16 +11,13 @@ import altitude.core.util.MurmurHash
 import org.apache.commons.io.FilenameUtils
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
-import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfByte
-import org.opencv.core.Point
 import org.opencv.core.Rect
 import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.dnn.Dnn.blobFromImage
-import org.opencv.dnn.Dnn.readNetFromCaffe
-import org.opencv.dnn.Dnn.readNetFromTorch
+import org.opencv.dnn.Dnn.readNetFromONNX
 import org.opencv.dnn.Net
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
@@ -30,18 +27,14 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 object FaceDetectionService {
-  private val dnnInWidth = 300
-  private val dnnInHeight = 300
 
   val faceDetectionBoxPx = 80
 
-  private val dnnConfidenceThreshold = 0.37
   private val minFaceSize = 50 // minimum acceptable size of face region in pixels
-  private val dnnInScaleFactor = 1.0
-  private val dnnMeanVal = new Scalar(104.0, 177.0, 123.0, 128)
   private val yunetConfidenceThreshold = 0.855f
 
-  private val cosineSimilarityThreshold = 0.363
+  /** Dimensionality of the ArcFace (w600k_r50) embedding vector. */
+  val EMBEDDING_DIMENSIONS = 512
 
   def faceDetectToRect(detectedFace: Mat): Rect = {
     val origX = detectedFace.get(0, 0)(0).asInstanceOf[Int]
@@ -89,69 +82,20 @@ class FaceDetectionService() {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val SF_ONNX_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_recognition_sface_2021dec.onnx")
-  private val DNN_NET_PROTO_CONF_PATH = Environment.resolveResourcePath("/opencv/deploy.prototxt")
-  private val DNN_NET_MODEL_PATH = Environment.resolveResourcePath("/opencv/res10_300x300_ssd_iter_140000.caffemodel")
   private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2022mar.onnx")
-  private val EMBEDDING_NET_PATH = Environment.resolveResourcePath("/opencv/openface_nn4.small2.v1.t7")
+  private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
 
+  /** SFace recognizer – used only for face alignment (alignCrop). */
   private val sfaceRecognizer = FaceRecognizerSF.create(SF_ONNX_MODEL_PATH, "")
 
-  private val dnnNet: Net = readNetFromCaffe(DNN_NET_PROTO_CONF_PATH, DNN_NET_MODEL_PATH)
-
-  private val embedder = readNetFromTorch(EMBEDDING_NET_PATH, true)
+  /** ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings. */
+  private val arcFaceNet: Net = readNetFromONNX(ARCFACE_MODEL_PATH)
 
   private val yuNet = FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size())
   yuNet.setScoreThreshold(FaceDetectionService.yunetConfidenceThreshold)
   yuNet.setNMSThreshold(0.2f)
 
 
-  def detectFacesWithDnnNet(image: Mat): List[Rect] = {
-    val inputBlob = blobFromImage(
-      image,
-      FaceDetectionService.dnnInScaleFactor,
-      new Size(FaceDetectionService.dnnInWidth, FaceDetectionService.dnnInHeight),
-      FaceDetectionService.dnnMeanVal,
-      false,
-      false,
-      CvType.CV_32F
-    )
-
-    dnnNet.setInput(inputBlob)
-
-    val detections = dnnNet.forward()
-
-    // Decode detected face locations
-    val di = detections.reshape(1, detections.total().asInstanceOf[Int] / 7)
-
-    val faceRegions = {
-      for (idx <- 0 until di.rows()) yield {
-        val confidence = di.get(idx, 2)(0)
-
-        if (confidence > FaceDetectionService.dnnConfidenceThreshold) {
-          // logger.info("Found a face with confidence value of " + confidence)
-          val x1 = (di.get(idx, 3)(0) * image.size().width).toInt
-          val y1 = (di.get(idx, 4)(0) * image.size().height).toInt
-          val x2 = (di.get(idx, 5)(0) * image.size().width).toInt
-          val y2 = (di.get(idx, 6)(0) * image.size().height).toInt
-
-          val rect = new Rect(new Point(x1, y1), new Point(x2, y2))
-
-          if (rect.width < FaceDetectionService.minFaceSize || rect.height < FaceDetectionService.minFaceSize) {
-            logger.warn("Face region too small")
-            None
-          } else {
-            Option(rect)
-          }
-        } else {
-          None
-        }
-      }
-    }.flatten.toList
-
-    logger.info(s"Number of face regions found: ${faceRegions.size}")
-
-    faceRegions
-  }
 
   def detectFacesWithYunet(image: Mat): List[Mat] = {
     if (image.empty) {
@@ -216,11 +160,8 @@ class FaceDetectionService() {
     val facesAndImages: List[(Face, FaceImages)] = results.map {
       res =>
         val alignedFaceImage = alignCropFaceFromDetection(imageMat, res)
-        // LBPHFaceRecognizer requires grayscale images
         val alignedFaceImageGs = getHistEqualizedGrayScImage(alignedFaceImage)
-        val features = getFacialFeatures(alignedFaceImage)
-
-        val featuresArray = (0 to 127).map(col => features.get(0, col)(0).asInstanceOf[Float]).toArray
+        val features = getArcFaceEmbedding(alignedFaceImage)
 
         val rect = FaceDetectionService.faceDetectToRect(res)
         val faceImage: Mat = imageMat.submat(rect)
@@ -242,7 +183,7 @@ class FaceDetectionService() {
           width = rect.width,
           height = rect.height,
           detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
-          features = featuresArray,
+          features = features,
           checksum = MurmurHash.hash32(imageBytes.toArray)
         )
 
@@ -265,10 +206,41 @@ class FaceDetectionService() {
     alignedFace
   }
 
-  def getFacialFeatures(image: Mat): Mat = {
-    val feature = new Mat
-    sfaceRecognizer.feature(image, feature)
-    feature
+  /**
+   * Compute a 512-d ArcFace (InsightFace w600k_r50) embedding for an aligned face image.
+   *
+   * The model expects a 112x112 BGR image normalized to [0,1]. The output is L2-normalized so that
+   * cosine distance can be used directly for comparison.
+   */
+  def getArcFaceEmbedding(alignedFaceImage: Mat): Array[Float] = {
+    val resized = new Mat
+    Imgproc.resize(alignedFaceImage, resized, new Size(112, 112))
+
+    val blob = blobFromImage(
+      resized,
+      1.0 / 255.0,
+      new Size(112, 112),
+      new Scalar(0, 0, 0),
+      true, // swapRB: BGR -> RGB
+      false
+    )
+
+    arcFaceNet.setInput(blob)
+    val output = arcFaceNet.forward()
+
+    val embedding = new Array[Float](FaceDetectionService.EMBEDDING_DIMENSIONS)
+    output.get(0, 0, embedding)
+
+
+    // L2-normalize the embedding
+    val norm = Math.sqrt(embedding.map(x => x.toDouble * x.toDouble).sum).toFloat
+    if (norm > 0) {
+      for (i <- embedding.indices) {
+        embedding(i) = embedding(i) / norm
+      }
+    }
+
+    embedding
   }
 
   def getHistEqualizedGrayScImage(cropAlignedFace: Mat): Mat = {
@@ -276,12 +248,5 @@ class FaceDetectionService() {
     Imgproc.cvtColor(cropAlignedFace, grayAlignedImage, Imgproc.COLOR_BGR2GRAY)
     Imgproc.equalizeHist(grayAlignedImage, grayAlignedImage)
     grayAlignedImage
-  }
-
-  private def getAlignedFaceBlob(image: Mat): Mat = {
-    val resized = new Mat
-    Imgproc.resize(image, resized, new Size(96, 96))
-    Imgproc.cvtColor(resized, resized, Imgproc.COLOR_BGR2RGB)
-    blobFromImage(resized, 1.0 / 255, new Size(96, 96), new Scalar(0, 0, 0), true, false)
   }
 }

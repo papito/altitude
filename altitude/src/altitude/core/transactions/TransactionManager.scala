@@ -133,7 +133,7 @@ class TransactionManager(val config: Config) {
         ).execute()
 
         RequestContext.getConn.prepareStatement(
-          "SELECT vector_init('face', 'features', 'dimension=128,type=FLOAT32,distance=cosine')"
+          "SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')"
         ).execute()
 
       case _ =>

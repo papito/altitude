@@ -93,7 +93,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     updatedPerson.isAboveThreshold should be(true)
   }
 
-  test("Person has cover face assigned") {
+  test("Person has cover face assigned", Focused) {
     val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
