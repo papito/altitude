@@ -3,13 +3,11 @@ package altitude.core.service
 import altitude.core
 import altitude.core.Altitude
 import altitude.core.FieldConst
-import altitude.core.RequestContext
 import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
-import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
@@ -18,7 +16,6 @@ import altitude.core.util.SortDirection
 import altitude.core.util.Util.getDuplicateExceptionOrSame
 
 import java.sql.SQLException
-import org.apache.pekko.stream.scaladsl.Source
 import play.api.libs.json.JsObject
 
 object PersonService {

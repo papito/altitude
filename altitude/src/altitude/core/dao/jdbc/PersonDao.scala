@@ -1,8 +1,7 @@
 package altitude.core.dao.jdbc
 
 import altitude.core.Const.FaceRecognition
-import altitude.core.FieldConst
-import altitude.core.RequestContext
+import altitude.core.{FieldConst, RequestContext, Const as C}
 import altitude.core.models.Person
 import altitude.core.service.PersonService
 import com.typesafe.config.Config
@@ -27,7 +26,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
     ).toJson
 
   override def add(jsonIn: JsObject): JsObject =
-    val personSeqNum = getNextVal("person_label").asInstanceOf[Int]
+    val personSeqNum = getDataSourceType match
+      case C.DbEngineName.POSTGRES => getNextVal("person_label").asInstanceOf[Long]
+      case C.DbEngineName.SQLITE => getNextVal("person_label").asInstanceOf[Int].toLong
 
     val sql =
       s"""
@@ -81,7 +82,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                     FROM person
                    WHERE repository_id = ?
                      AND num_of_faces > 0
-                     AND is_deleted == 0
+                     AND is_deleted = FALSE
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
@@ -102,7 +103,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                    WHERE repository_id = ?
                      AND is_bad_match = FALSE
                      AND num_of_faces > 0
-                     AND is_deleted == 0
+                     AND is_deleted = FALSE
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
@@ -124,7 +125,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                      AND is_bad_match = FALSE
                      AND (num_of_faces >= ? OR is_named = ?)
                      AND is_hidden = FALSE
-                     AND is_deleted == 0
+                     AND is_deleted = FALSE
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
@@ -146,7 +147,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                      AND num_of_faces > 0
                      AND num_of_faces < ?
                      AND is_named = ?
-                     AND is_deleted == 0
+                     AND is_deleted = FALSE
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
@@ -161,8 +162,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                      AND is_bad_match = FALSE
                      AND num_of_faces > 0
                      AND is_hidden = TRUE
-                     AND is_deleted == 0
-                ORDER BY is_named DESC, name_for_sort
+                     AND is_deleted = FALSE
+is_d                ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))

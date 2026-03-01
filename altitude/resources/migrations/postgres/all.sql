@@ -1,6 +1,8 @@
 DROP SCHEMA IF EXISTS public CASCADE;
 CREATE SCHEMA public;
 
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE _core (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
@@ -80,59 +82,40 @@ CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processe
 
 CREATE SEQUENCE person_label;
 
--- The first 10 machine learning labels are reserved for the system:
---   1-2: Initial dummy image data because the minimal training set it 2
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-SELECT nextval('person_label');
-
 CREATE TABLE person (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
   -- this is taken from the person_label table, where its primary key is a sequence
-  label BIGINT NOT NULL,
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36),
-  merged_with_ids TEXT,
-  merged_into_id CHAR(36) DEFAULT NULL REFERENCES person (id) ON DELETE CASCADE,
-  merged_into_label BIGINT DEFAULT NULL,
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named BOOLEAN NOT NULL DEFAULT FALSE,
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
   is_bad_match BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
-WHERE merged_into_id IS NULL
-  AND is_bad_match = FALSE;
+    WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
-WHERE merged_into_id IS NULL;
+    WHERE is_deleted = TRUE;
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
-WHERE merged_into_id IS NULL;
+    WHERE is_deleted = TRUE;
 
 CREATE TABLE face (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
   person_id CHAR(36) NOT NULL REFERENCES person (id) ON DELETE CASCADE,
-  person_label BIGINT NOT NULL,
   x1 INT NOT NULL,
   y1 INT NOT NULL,
   width INT NOT NULL,
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
-  embeddings TEXT NOT NULL,
-  features TEXT NOT NULL,
+  features vector NOT NULL,
   checksum INT NOT NULL
 ) INHERITS (_core);
 

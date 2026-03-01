@@ -101,11 +101,10 @@ CREATE TABLE person (
 );
 
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
-WHERE is_deleted = 1
-  AND is_bad_match = FALSE;
+    WHERE is_deleted = 1 AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
-WHERE is_deleted == 1;
+WHERE is_deleted = 1;
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
 WHERE is_deleted = 1;
