@@ -1,8 +1,8 @@
 package altitude.core.pipeline
 
-object PipelineConstants {
-  val parallelism: Int = 1
+import altitude.core.Altitude
 
+object PipelineConstants {
   /**
    * Set to "true" to enable debugging output to console.
    *

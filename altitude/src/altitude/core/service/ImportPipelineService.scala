@@ -2,10 +2,9 @@ package altitude.core.service
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
-import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
-import altitude.core.pipeline.flows.{AddPreviewFlow, AssignIdFlow, CheckDuplicateFlow, CheckMediaTypeFlow, ExtractMetadataFlow, FacialRecognitionFlow, FileStoreFlow, MarkAsCompleteFlow, PersistAndIndexAssetFlow, StripBinaryDataFlow}
+import altitude.core.pipeline.flows.{AddPreviewFlow, AssignIdFlow, CheckDuplicateFlow, CheckMediaTypeFlow, ExtractMetadataFlow, FacialRecognitionFlow, FileStoreFlow, IndexAndFaceRecFlow, MarkAsCompleteFlow, IndexFlow, StripBinaryDataFlow}
 import altitude.core.pipeline.sinks.AssetErrorLoggingSink
 import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 import org.apache.pekko.NotUsed
@@ -33,7 +32,8 @@ class ImportPipelineService(app: Altitude) {
 
   private val checkMediaTypeFlow = CheckMediaTypeFlow(app)
   private val assignIdFlow = AssignIdFlow(app)
-  private val persistAndIndexFlow = PersistAndIndexAssetFlow(app)
+  private val indexAndFaceRecFlow = IndexAndFaceRecFlow(app)
+  private val indexFlow = IndexFlow(app)
   private val facialRecognitionFlow = FacialRecognitionFlow(app)
   private val extractMetadataFlow = ExtractMetadataFlow(app)
   private val fileStoreFlow = FileStoreFlow(app)
@@ -44,7 +44,8 @@ class ImportPipelineService(app: Altitude) {
   private val wsNotificationSink = WsAssetProcessedNotificationSink(app)
   private val errorLoggingSink = AssetErrorLoggingSink()
 
-  private val combinedFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] =
+
+  private val sqliteFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] =
     Flow[TDataAssetWithContext]
       // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
       .groupBy(Int.MaxValue, _._2.repository.id)
@@ -52,8 +53,7 @@ class ImportPipelineService(app: Altitude) {
       .via(checkDuplicateFlow)
       .via(assignIdFlow)
       .via(extractMetadataFlow)
-      .via(persistAndIndexFlow)
-      //.via(facialRecognitionFlow)
+      .via(indexAndFaceRecFlow)
       .via(fileStoreFlow)
       .via(addPreviewFlow)
       .via(stripBinaryDataFlow)
@@ -61,6 +61,34 @@ class ImportPipelineService(app: Altitude) {
       .mergeSubstreams
       .alsoTo(wsNotificationSink)
       .alsoTo(errorLoggingSink)
+
+  private val postgresFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
+    // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
+    .groupBy(Int.MaxValue, _._2.repository.id)
+    .via(checkMediaTypeFlow)
+    .via(checkDuplicateFlow)
+    .via(assignIdFlow)
+    .via(extractMetadataFlow)
+    .via(indexFlow)
+    .async
+    .via(facialRecognitionFlow)
+    .async
+    .via(fileStoreFlow)
+    .async
+    .via(addPreviewFlow)
+    .via(stripBinaryDataFlow)
+    .via(markAsCompleteFlow)
+    .mergeSubstreams
+    .alsoTo(wsNotificationSink)
+    .alsoTo(errorLoggingSink)
+
+  private val combinedFlow = app.dataSourceType match {
+    case "sqlite" => sqliteFlow
+    case "postgres" => postgresFlow
+    case other =>
+      throw RuntimeException("Unsupported data source type for import pipeline: " + other)
+  }
+
   private val queueImportPipeline = runAsQueue()
 
   def run(
@@ -78,9 +106,9 @@ class ImportPipelineService(app: Altitude) {
 
     val (queue, source) = Source
       .queue[TDataAssetWithContext](
-        bufferSize = parallelism * 2,
+        bufferSize = app.parallelism * 2,
         overflowStrategy = OverflowStrategy.backpressure,
-        maxConcurrentOffers = parallelism)
+        maxConcurrentOffers = app.parallelism)
       .preMaterialize()
 
     val res = source

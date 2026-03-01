@@ -53,9 +53,9 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
    * ENV var overrides are a Typesafe Config feature:
    * https://github.com/lightbend/config?tab=readme-ov-file#optional-system-or-env-variable-overrides
    *
-   * In short: FORCE_CONFIG_db_engine=mongo will override db.engine=mysql in the config. This is only for tests,
+   * In short: FORCE_CONFIG_db_engine=postgres will override db.engine=sqlite in the config. This is only for tests,
    *
-   * Default reference configs are in src/main/resources/reference.conf and src/test/resources/reference.conf
+   * Default reference configs are in altitude/resources/reference.conf and test/resources/reference.conf
    *
    * For DEV and PROD, application*.conf files have the final say - and are in the root of the project (and along the live JAR in
    * release)
@@ -85,12 +85,18 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
             .withFallback(ConfigFactory.defaultReference())
             .withValue(Const.Conf.DB_ENGINE, ConfigValueFactory.fromAnyRef(ds))
             .withValue(Const.Conf.FS_DATA_DIR, ConfigValueFactory.fromAnyRef(relativeFsDataDir))
+            .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
+            .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
+            .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
 
         case None =>
           ConfigFactory
             .systemEnvironmentOverrides()
             .withFallback(ConfigFactory.defaultReference())
             .withValue(Const.Conf.FS_DATA_DIR, ConfigValueFactory.fromAnyRef(relativeFsDataDir))
+            .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
+            .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
+            .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
       }
 
     case _ =>
@@ -246,14 +252,19 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
       // S3-based wants to play as well
       case _ => throw new NotImplementedError
     }
+  }
 
-    if (dataSourceType == Const.DbEngineName.SQLITE) {
-      val dbFolder = new File(dataPath, "db")
-      if (!dbFolder.exists()) {
-        logger.info("Creating the DB folder for SQLite: " + dbFolder)
-        FileUtils.forceMkdir(dbFolder)
-      }
+  if (dataSourceType == Const.DbEngineName.SQLITE) {
+    val dbFolder = new File(dataPath, "db")
+    if (!dbFolder.exists()) {
+      logger.info("Creating the DB folder for SQLite: " + dbFolder)
+      FileUtils.forceMkdir(dbFolder)
     }
+  }
+
+  val parallelism: Int = dataSourceType match {
+    case Const.DbEngineName.SQLITE => 1 // SQLite doesn't handle concurrent writes well, so we run the pipeline with a parallelism of 1 for SQLite
+    case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
   }
 
   def setIsInitializedState(): Unit = {

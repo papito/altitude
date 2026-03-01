@@ -1,7 +1,6 @@
 package altitude.core.pipeline.flows
 
 import altitude.core.Altitude
-import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
@@ -12,7 +11,7 @@ import scala.concurrent.Future
 
 object MarkAsCompleteFlow {
   def apply(app: Altitude): Flow[TAssetOrInvalidWithContext, TAssetOrInvalidWithContext, NotUsed] =
-    Flow[TAssetOrInvalidWithContext].mapAsync(parallelism) {
+    Flow[TAssetOrInvalidWithContext].mapAsync(app.parallelism) {
       case (Left(asset), ctx) =>
         setThreadLocalRequestContext(ctx)
 

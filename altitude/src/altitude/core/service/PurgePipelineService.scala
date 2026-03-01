@@ -2,7 +2,6 @@ package altitude.core.service
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
-import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import altitude.core.pipeline.flows._
 import org.apache.pekko.NotUsed
@@ -56,9 +55,9 @@ class PurgePipelineService(app: Altitude) {
 
     val (queue, source) = Source
       .queue[TAssetWithContext](
-        bufferSize = parallelism * 2,
+        bufferSize = app.parallelism * 2,
         overflowStrategy = OverflowStrategy.backpressure,
-        maxConcurrentOffers = parallelism)
+        maxConcurrentOffers = app.parallelism)
       .preMaterialize()
 
     val res = source

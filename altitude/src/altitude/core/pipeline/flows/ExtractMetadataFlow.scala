@@ -2,7 +2,6 @@ package altitude.core.pipeline.flows
 
 import altitude.core.Altitude
 import altitude.core.models.Asset
-import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
@@ -13,7 +12,7 @@ import scala.concurrent.Future
 
 object ExtractMetadataFlow {
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
-    Flow[TDataAssetOrInvalidWithContext].mapAsync(parallelism) {
+    Flow[TDataAssetOrInvalidWithContext].mapAsync(app.parallelism) {
       case (Left(dataAsset), ctx) =>
         setThreadLocalRequestContext(ctx)
 

@@ -1,7 +1,6 @@
 package altitude.core.pipeline.flows
 
 import altitude.core.Altitude
-import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
@@ -12,7 +11,7 @@ import scala.concurrent.Future
 
 object DeletePurgedFromDBFlow {
   def apply(app: Altitude): Flow[TAssetWithContext, TAssetWithContext, NotUsed] =
-    Flow[TAssetWithContext].mapAsync(parallelism) {
+    Flow[TAssetWithContext].mapAsync(app.parallelism) {
       case (asset, ctx) =>
         setThreadLocalRequestContext(ctx)
 

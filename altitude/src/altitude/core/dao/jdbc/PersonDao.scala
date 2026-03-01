@@ -83,6 +83,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                    WHERE repository_id = ?
                      AND num_of_faces > 0
                      AND is_deleted = FALSE
+                ORDER BY num_of_faces DESC
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
@@ -104,6 +105,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                      AND is_bad_match = FALSE
                      AND num_of_faces > 0
                      AND is_deleted = FALSE
+                     ORDER BY num_of_faces DESC
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
@@ -163,7 +165,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
                      AND num_of_faces > 0
                      AND is_hidden = TRUE
                      AND is_deleted = FALSE
-is_d                ORDER BY is_named DESC, name_for_sort
+                ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))

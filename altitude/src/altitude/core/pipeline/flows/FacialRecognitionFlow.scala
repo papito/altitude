@@ -3,7 +3,6 @@ package altitude.core.pipeline.flows
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.SamePersonDetectedTwiceException
-import altitude.core.pipeline.PipelineConstants.parallelism
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
@@ -15,7 +14,7 @@ import scala.concurrent.Future
 
 object FacialRecognitionFlow {
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
-    Flow[TDataAssetOrInvalidWithContext].mapAsync(parallelism) {
+    Flow[TDataAssetOrInvalidWithContext].mapAsync(app.parallelism) {
       case (Left(dataAsset), ctx) =>
         setThreadLocalRequestContext(ctx)
 
