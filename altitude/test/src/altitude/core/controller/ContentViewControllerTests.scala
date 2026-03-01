@@ -1,6 +1,6 @@
 package altitude.core.controller
 
-import altitude.core.models.{Asset, MimedPreviewData}
+import altitude.core.models.{Asset, Face, MimedPreviewData}
 import altitude.core.{App, Const}
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
@@ -28,7 +28,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
   }
 
   test("View a file") {
-    testContext.persistRepository() // and user
+    testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
@@ -45,22 +45,24 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     }
   }
 
-//  FIXME: Resurrect
-//  test("View a person's cover image") {
-//    testContext.persistRepository()
-//    testApp.service.faceRecognition.initialize()
-//    val repoId = testContext.repository.persistedId
-//
-//    val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
-//    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
-//
-//    val faces = testApp.service.person.getAssetFaces(importedAsset.persistedId)
-//    val face: Face = faces.head
-//
-//    get(s"/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}", headers=testAuthHeaders()) {
-//      response.getContentType() should startWith("image/png")
-//      status should equal(200)
-//    }
-//  }
+  test("View a person's cover image") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
 
+    val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+
+    val faces = testApp.service.person.getAssetFaces(importedAsset.persistedId)
+    val face: Face = faces.head
+
+    login()
+
+    withServer(App) { host =>
+      val response = requests.get(
+        s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}",
+        cookies = testContext.cookies)
+      response.statusCode shouldBe 200
+      response.contentType.head should startWith("image/png")
+    }
+  }
 }

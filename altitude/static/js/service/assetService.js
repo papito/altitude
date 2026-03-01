@@ -95,7 +95,7 @@ class AssetService {
                     showErrorSnackBar(`Error  + ${response.statusText}`)
                     return
                 }
-                const successMessage = `${assetIds.size > 0 ? "Assets" : "Asset"} moved to the trash bin"`
+                const successMessage = `${assetIds.size > 0 ? "Assets" : "Asset"} moved to the trash bin`
                 showSuccessSnackBar(successMessage)
 
                 // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection

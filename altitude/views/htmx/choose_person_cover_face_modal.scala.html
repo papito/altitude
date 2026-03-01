@@ -52,8 +52,7 @@
                  alt-face-id="@{face.persistedId}"
                  hx-swap="innerHTML"
                  hx-target="#person"
-                 hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/cover-image"
-                 hx-vals='{"@{Api.Field.FACE_ID}": "@{face.persistedId}"}'
+                 hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/cover-image?@{Api.Field.FACE_ID}=@{face.persistedId}"
                  hx-trigger="click"
             >
         }
