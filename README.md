@@ -18,7 +18,7 @@ in setup mode.
 
 ### Technology Stack
 
-* Scala & Scalatra
+* Scala 3 & Cask
 * Postgres OR Sqlite
 * HTMX
 * OpenCV
