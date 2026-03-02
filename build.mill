@@ -84,22 +84,27 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"ch.qos.logback:logback-classic:1.5.14",
   )
 
-  // "windows-x86_64", "macosx-x86_64", "linux-x86_64
-  private val platform: String = {
-    val os = System.getProperty("os.name").toLowerCase
-    val arch = System.getProperty("os.arch").toLowerCase
+  private def detectPlatform(): String = {
+    val os = sys.props("os.name").toLowerCase
+    val arch = sys.props("os.arch").toLowerCase
 
-    val osName = if (os.contains("win")) "windows"
-    else if (os.contains("mac")) "macosx"
-    else if (os.contains("linux")) "linux"
-    else throw RuntimeException("Unsupported OS: " + os)
-
-    val archName = if (arch.contains("64")) "x86_64"
-    else if (arch.contains("86")) "x86"
-    else arch
-
-    s"$osName-$archName"
+    (os, arch) match {
+      case (os, arch) if os.contains("mac") && (arch.contains("aarch64") || arch.contains("arm")) =>
+        "macosx-arm64"
+      case (os, _) if os.contains("mac") =>
+        "macosx-x86_64"
+      case (os, arch) if os.contains("linux") && (arch.contains("aarch64") || arch.contains("arm")) =>
+        "linux-arm64"
+      case (os, _) if os.contains("linux") =>
+        "linux-x86_64"
+      case (os, _) if os.contains("win") =>
+        "windows-x86_64"
+      case _ =>
+        throw new RuntimeException(s"Unsupported platform: os=$os, arch=$arch")
+    }
   }
+
+  private val platform: String = detectPlatform()
 
   private val bytedecoPresetLibs = Seq(
     "opencv" -> "4.5.5",
