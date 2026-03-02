@@ -1,0 +1,29 @@
+package altitude.core.dao.postgres
+
+import altitude.core.FieldConst
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.models.UserMetadata
+import com.typesafe.config.Config
+
+object AssetDao:
+  val DEFAULT_SQL_COLS_FOR_SELECT: List[String] = List(
+    "asset.*",
+    s"(asset.${FieldConst.Asset.USER_METADATA}#>>'{}')::text AS ${FieldConst.Asset.USER_METADATA}",
+    s"(asset.${FieldConst.Asset.EXTRACTED_METADATA}#>>'{}')::text AS ${FieldConst.Asset.EXTRACTED_METADATA}",
+    BaseDao.totalRecsWindowFunction
+  )
+
+class AssetDao(override val config: Config) extends altitude.core.dao.jdbc.AssetDao(config) with PostgresOverrides:
+  override protected def columnsForSelect: List[String] = AssetDao.DEFAULT_SQL_COLS_FOR_SELECT
+
+  override def getUserMetadata(assetId: String): Option[UserMetadata] =
+    val sql = s"""
+      SELECT (${FieldConst.Asset.USER_METADATA}#>>'{}')::text AS ${FieldConst.Asset.USER_METADATA}
+         FROM asset
+       WHERE ${FieldConst.ID} = ?
+      """
+
+    val rec = executeAndGetOne(sql, List(assetId))
+    val metadataJson = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA))
+    val metadata = UserMetadata.fromJson(metadataJson)
+    Some(metadata)

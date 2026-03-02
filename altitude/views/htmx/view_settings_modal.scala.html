@@ -1,0 +1,111 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import play.api.libs.json.Json
+@import play.api.libs.json.JsObject
+
+@(minWidth: Int, title: String)
+
+<style>
+  #viewSettingsModalForm {
+    display: grid;
+    grid-auto-rows: auto;
+    row-gap: var(--control-vertical-space);
+  }
+
+  #viewSettingsModalForm input[type="checkbox"] {
+    vertical-align: middle;
+  }
+</style>
+
+<!-- NOTE: The "value" here mirrors the ones in the search results grid, so these are
+     the classes we show/hide in the grid. -->
+
+<form id="viewSettingsModalForm">
+  <div>
+    <input type="checkbox"
+           id="fileNameCheckbox"
+           value="fileName"
+           onchange="setFieldVisibility(event)">
+    <label for="fileNameCheckbox">File Name</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="originalCreatedAtCheckbox"
+           value="originalCreatedAt"
+           onchange="setFieldVisibility(event)">
+    <label for="originalCreatedAtCheckbox">Date/Time Created</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="importedAtCheckbox"
+           value="importedAt"
+           onchange="setFieldVisibility(event)">
+    <label for="importedAtCheckbox">Date/Time Imported</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="dimensionsCheckbox"
+           value="dimensions"
+           onchange="setFieldVisibility(event)">
+    <label for="dimensionsCheckbox">Media Dimensions</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="fileSizeCheckbox"
+           value="fileSize"
+           onchange="setFieldVisibility(event)">
+    <label for="fileSizeCheckbox">File Size</label>
+  </div>
+</form>
+
+<script type="module">
+  import { showModal } from "/static/js/common/modal.js"
+  import { Const } from "/static/js/constants.js"
+
+  showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
+
+  /**
+   * Populate the checkboxes with the current field visibility settings (for this browser)
+   */
+  const showFields = window.ctx.getGridMetadataFields()
+
+  if (showFields.size) {
+      const checkboxSelectorStr = Array.from(showFields)
+          .map(
+              (fieldName) =>
+                  '#viewSettingsModalForm input[value="' + fieldName + '"]',
+          )
+          .join(", ")
+
+      document
+          .querySelectorAll(checkboxSelectorStr)
+          .forEach((el) => (el.checked = true))
+  }
+
+  window.setFieldVisibility = function (event) {
+      const fieldName = event.target.value
+      const isChecked = event.target.checked
+
+      if (isChecked) {
+          window.ctx.addGridMetadataField(fieldName)
+      } else {
+          window.ctx.removeGridMetadataField(fieldName)
+      }
+
+      // Fire the change event so that the grid can reconfigure itself
+      const customEvent = new CustomEvent(Const.events.viewSettingChanged, {
+          detail: {
+              fieldName: fieldName,
+              checked: isChecked,
+          },
+          bubbles: true,
+      })
+
+      document.body.dispatchEvent(customEvent)
+  }
+</script>
+

@@ -1,0 +1,73 @@
+package altitude.core.dao.sqlite
+
+import altitude.core.FieldConst
+import altitude.core.RequestContext
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.sqlite.querybuilder.AssetSearchQueryBuilder
+import altitude.core.models.Asset
+import altitude.core.util.SearchQuery
+import altitude.core.util.SearchResult
+import com.typesafe.config.Config
+import org.apache.commons.dbutils.QueryRunner
+
+class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.SearchDao(config) with SqliteOverrides:
+
+  override protected def addSearchDocument(asset: Asset): Unit =
+    val docSql =
+      s"""
+         INSERT INTO search_document (${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID}, body)
+              VALUES (?, ?, ?)
+       """
+
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
+
+    val body = metadataValues.mkString(" ")
+
+    val sqlVals: List[Any] = List(RequestContext.getRepository.persistedId, asset.persistedId, body)
+
+    addRecord(asset.toJson, docSql, sqlVals)
+
+  override protected def replaceSearchDocument(asset: Asset): Unit =
+    BaseDao.incrWriteQueryCount()
+
+    val docSql =
+      s"""
+         UPDATE search_document
+            SET body = ?
+          WHERE ${FieldConst.REPO_ID} = ?
+            AND ${FieldConst.SearchToken.ASSET_ID} = ?
+       """
+
+    val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
+
+    val body = metadataValues.mkString(" ")
+
+    val sqlVals: List[Any] = List(body, RequestContext.getRepository.persistedId, asset.persistedId)
+
+    addRecord(asset.toJson, docSql, sqlVals)
+
+    val runner: QueryRunner = new QueryRunner()
+    runner.update(RequestContext.getConn, docSql, sqlVals.map(_.asInstanceOf[Object])*)
+
+  // overriding for Sqlite as AssetSearchQueryBuilder here is specific to Sqlite
+  override def search(searchQuery: SearchQuery): SearchResult =
+    val sqlQueryBuilder = new AssetSearchQueryBuilder(sqlColsForSelect = columnsForSelect)
+
+    val sqlQuery = sqlQueryBuilder.buildSelectSql(query = searchQuery)
+    // println(s"Search SQL: ${sqlQuery.sqlAsString} with values: ${sqlQuery.bindValues.mkString(",")}")
+    val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
+    val total: Int = count(recs)
+
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+
+    if recs.nonEmpty then logger.debug(recs.map(_.toString()).mkString("\n"))
+
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+    if recs.nonEmpty then logger.debug(recs.map(_.toString()).mkString("\n"))
+
+    SearchResult(
+      records = recs.map(makeModel),
+      total = total,
+      rpp = searchQuery.rpp,
+      page = searchQuery.page,
+      sort = searchQuery.searchSort)

@@ -1,0 +1,146 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import play.api.libs.json.Json
+@import play.api.libs.json.JsObject
+@import altitude.core.App
+
+@(formJson: JsObject = Json.obj(), fieldErrors: Map[String, String] = Map.empty)
+
+<style>
+#setupForm {
+    display: grid;
+    grid-auto-rows: min-content;
+    grid-row-gap: var(--section-vertical-space);
+}
+
+#setupForm label {
+    display: block;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    font-size: 1.2em;
+}
+
+#setupForm input {
+    background-color: #FFFFFF;
+}
+
+#setupForm input:not([type="submit"]) {
+    width: 100%
+}
+
+#setupForm .submit {
+    margin-top: var(--control-vertical-space);
+    display: grid;
+    place-items: center;
+}
+
+#setupForm input[type="submit"] {
+    line-height: 1.3em;
+    font-size: 1.2em;
+    width: 50%
+}
+
+#setupForm .action-button {
+    padding: 10px 36px;
+    font-size: 1.3em;
+}
+
+#setupForm div.error {
+    padding: 5px;
+    margin-top: 2px;
+    background-color: var(--message-background-color);
+    color: #FFF;
+    border: 1px solid var(--error-color);
+    border-bottom: 2px solid var(--error-color);
+    letter-spacing: 1px;
+}
+</style>
+
+<form
+    action="#" id="setupForm"
+    hx-swap="outerHTML"
+    hx-post="/htmx/setup"
+    hx-ext="json-enc">
+
+    <div>
+        <label for="@{ Api.Field.Setup.REPOSITORY_NAME }">Library name</label>
+        <input type="text"
+        id="@{ Api.Field.Setup.REPOSITORY_NAME }"
+        name="@{ Api.Field.Setup.REPOSITORY_NAME }"
+        placeholder="Library name"
+        value='@{ (formJson \ Api.Field.Setup.REPOSITORY_NAME).asOpt[String].getOrElse("Personal") }'
+        autocomplete="off"
+        minlength="@{ Api.Constraints.MIN_REPOSITORY_NAME_LENGTH }"
+        maxlength="@{ Api.Constraints.MAX_REPOSITORY_NAME_LENGTH }"/>
+        @if(fieldErrors.contains(Api.Field.Setup.REPOSITORY_NAME)) {
+            <div class="error">@{ fieldErrors(Api.Field.Setup.REPOSITORY_NAME) }</div>
+        }
+    </div>
+    <div>
+        <label for="dbEngine">Database type</label>
+        <input type="text"
+        id="dbEngine"
+        name="dbEngine"
+        class="readonly"
+        readonly
+        value="@{ App.altitude.config.getString(Const.Conf.DB_ENGINE) }"/>
+    </div>
+    <div>
+        <label for="@{ Api.Field.Setup.ADMIN_NAME }">Administrator Name</label>
+        <input type="text"
+        autocomplete="off"
+        id="@{ Api.Field.Setup.ADMIN_NAME }"
+        name="@{ Api.Field.Setup.ADMIN_NAME }"
+        value='@{ (formJson \ Api.Field.Setup.ADMIN_NAME).asOpt[String].getOrElse("") }'
+        minlength="@{ Api.Constraints.MIN_NAME_LENGTH }"
+        maxlength="@{ Api.Constraints.MAX_NAME_LENGTH }"/>
+        @if(fieldErrors.contains(Api.Field.Setup.ADMIN_NAME)) {
+            <div class="error">@{ fieldErrors(Api.Field.Setup.ADMIN_NAME) }</div>
+        }
+    </div>
+    <div>
+        <label for="@{ Api.Field.Setup.ADMIN_EMAIL }">Administrator Email</label>
+        <input type="email"
+        autocomplete="off"
+        id="@{ Api.Field.Setup.ADMIN_EMAIL }"
+        name="@{ Api.Field.Setup.ADMIN_EMAIL }"
+        value='@{ (formJson \ Api.Field.Setup.ADMIN_EMAIL).asOpt[String].getOrElse("") }'
+        minlength="@{ Api.Constraints.MIN_EMAIL_LENGTH }"
+        maxlength="@{ Api.Constraints.MAX_EMAIL_LENGTH }"/>
+        @if(fieldErrors.contains(Api.Field.Setup.ADMIN_EMAIL)) {
+         <div class="error">@{ fieldErrors(Api.Field.Setup.ADMIN_EMAIL) }</div>
+        }
+    </div>
+    <div>
+        <label for="@{ Api.Field.Setup.PASSWORD }">Administrator Password</label>
+        <input type="password"
+        id="@{ Api.Field.Setup.PASSWORD }"
+        name="@{ Api.Field.Setup.PASSWORD  }"
+        value='@{ (formJson \ Api.Field.Setup.PASSWORD).asOpt[String].getOrElse("") }'
+        minlength="@{ Api.Constraints.MIN_PASSWORD_LENGTH }"
+        maxlength="@{ Api.Constraints.MAX_PASSWORD_LENGTH }"/>
+        @if(fieldErrors.contains(Api.Field.Setup.PASSWORD)) {
+            <div class="error">@{ fieldErrors(Api.Field.Setup.PASSWORD) }</div>
+        }
+    </div>
+    <div>
+        <label for="@{ Api.Field.Setup.PASSWORD2 }">Confirm Password</label>
+        <input type="password"
+        id="@{ Api.Field.Setup.PASSWORD2 }"
+        name="@{ Api.Field.Setup.PASSWORD2 }"
+        value='@{ (formJson \ Api.Field.Setup.PASSWORD2).asOpt[String].getOrElse("") }'
+        minlength="@{ Api.Constraints.MIN_PASSWORD_LENGTH }"
+        maxlength="@{ Api.Constraints.MAX_PASSWORD_LENGTH }"/>
+        @if(fieldErrors.contains(Api.Field.Setup.PASSWORD2)) {
+            <div class="error">@{ fieldErrors(Api.Field.Setup.PASSWORD2) }</div>
+        }
+    </div>
+    <div class="submit">
+        <button type="submit"
+        class="action-button"
+        id="initialize">
+            Dazzle Me
+        </button>
+    </div>
+</form>

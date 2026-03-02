@@ -5,14 +5,14 @@ application.conf
 application-dev.conf
 
 node_modules
+out
+.bsp
 
 *.log
 log
 logs
 project/project
 project/target
-test-data
-data
 target
 release
 dist
@@ -57,3 +57,12 @@ Thumbs.db
 *.sqlite.db
 out.txt
 status.txt
+/data/db/altitude.db*
+cs
+mill
+mill.*
+/identifier.sqlite
+test-data
+data/db/*.db
+data/repositories
+/altitude/resources/opencv/w600k_r50.onnx

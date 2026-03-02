@@ -1,0 +1,57 @@
+<style>
+    #batchOps {
+        display: grid;
+        grid-template-columns: 2fr 2fr;
+    }
+
+    #batchOps .container {
+        display: flex;
+        grid-column-start: 2;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 100px;
+        padding-right: 100px;
+        box-sizing: border-box;
+    }
+
+    #batchOps .action-button {
+        border-width: 1px;
+        border-color: #222121;
+        font-weight:  normal;
+        touch-action: none;
+    }
+
+    #batchOps i {
+        margin-right: 10px;
+    }
+
+    #batchOps .batch-mover button {
+        cursor: move;
+    }
+
+    #batchOps .control button:hover {
+        border-color: var(--warning-background-color);
+    }
+
+</style>
+
+
+<div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
+    <div class="container">
+        <div class="control batch-mover">
+            <button class="action-button success drag-drop"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+        </div>
+        <!-- div class="control">
+            <button class="action-button success"><i class="fas fa-tools"></i>Actions</button>
+        </div -->
+        <div class="control batch-recycler">
+            <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+        </div>
+        <div class="control">
+            <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="/static/js/batch-ops/dragon-drop.js"></script>

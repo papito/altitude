@@ -12,7 +12,7 @@
     "ecmaVersion": 14,
     "sourceType": "module"
   },
-  "ignorePatterns": ["src/main/webapp/js/lib/**"],
+  "ignorePatterns": ["altitude/static/js/lib/**"],
   "plugins": [
     "html"
   ],
@@ -45,6 +45,6 @@
         "extensions": [".js"]
       }
     },
-    "html/html-extensions": [".html", ".ssp"]
+    "html/html-extensions": [".scala.html"]
   }
 }

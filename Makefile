@@ -1,55 +1,61 @@
 SHELL=/bin/sh
 
+run:
+	ENV=dev mill altitude.run
+
 watch:
-	ENV=dev sbt watch
+	ENV=dev mill -w altitude.runBackground
 
 compile:
-	sbt compile
+	mill altitude.compile
 
-test:
-	ENV=test sbt test
+clean-all:
+	rm -rf data/*
+	mill clean
 
-test-focused:
-	ENV=test sbt testFocused
-
-test-focused-psql:
-	ENV=test sbt testFocusedPostgres
-
-test-focused-sqlite:
-	ENV=test sbt testFocusedSqlite
-
-test-focused-unit:
-	ENV=test sbt testFocusedUnit
-
-test-focused-controller:
-	ENV=test sbt testFocusedController
-
-test-controller:
-	ENV=test sbt testController
-
-test-psql:
-	ENV=test sbt testPostgres
-
-test-sqlite:
-	ENV=test sbt testSqlite
-
-test-unit:
-	ENV=test sbt testUnit
-
-lint:
-	npm run format
-	npm run lint:fix
-	sbt scalafixAll
-	sbt scalafmt
-
-clean:
+clean-db:
 	rm -rf data/*
 
 publish:
-	rm -rf release
-	sbt assembly
-	# we don't need this
-	rm -rf target
+	mill altitude.assembly
+	mill show altitude.assembly
+
+lint:
+	npm run lint:fix
+	npm run format
+	mill altitude.fix
+	mill mill.scalalib.scalafmt/
+
+
+test:
+	ENV=test mill -j1 altitude.test
+
+test-focused:
+	ENV=test mill -j1 altitude.test.testOnly -- -n focused -oD
+
+test-focused-psql:
+	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle -- -n focused -oD
+
+test-focused-sqlite:
+	ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle -- -n focused -oD
+
+test-focused-unit:
+	ENV=test mill -j1 altitude.test.testOnly *UnitSuiteBundle -- -n focused -oD
+
+test-focused-controllers:
+	ENV=test mill -j1 altitude.test.testOnly *ControllerSuiteBundle -- -n focused -oD
+
+test-psql:
+	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle --show-output
+
+test-sqlite:
+	ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle --show-output
+
+test-unit:
+	ENV=test mill altitude.test.testOnly *UnitSuiteBundle --show-output
+
+test-controllers:
+	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output
 
 db:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up

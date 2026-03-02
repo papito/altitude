@@ -1,0 +1,86 @@
+@import altitude.core.RequestContext
+@import play.api.libs.json.Json
+@import play.api.libs.json.JsObject
+@import altitude.core.Api
+@import altitude.core.models.Person
+
+@(person: Person, fieldErrors: Map[String, String] = Map.empty, formJson: JsObject = Json.obj())
+@defining((formJson \ Api.Field.Person.NAME).asOpt[String]) { newName =>
+
+<form action="#"
+      id="editPersonName"
+      autocomplete="off"
+      hx-swap="outerHTML"
+      hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/edit"
+      hx-trigger="submit"
+      hx-ext="json-enc">
+
+    @if(fieldErrors.contains( Api.Field.Person.NAME)) {
+        <div class="error">@{ fieldErrors( Api.Field.Folder.NAME) }</div>
+    }
+
+    <input type="text"
+           id="field-@{ Api.Field.Person.NAME }"
+           name="@{ Api.Field.Person.NAME }"
+           value="@{person.name}"
+        @if(newName.isDefined) {
+           value="@{ newName.get }"
+        } else {
+           value="@{ person.name }"
+        }
+    >
+    <input type="hidden" name="@{ Api.Field.ID }" value="@{ person.persistedId }">
+
+</form>
+
+<script type="module">
+    import { Const } from "/static/js/constants.js"
+
+    const elPersonNameInputCtrl = htmx.find("#field-@{ Api.Field.Person.NAME }")
+    elPersonNameInputCtrl.focus()
+    elPersonNameInputCtrl.select()
+
+    htmx.find("#editPersonName").addEventListener(
+        "htmx:afterRequest",
+        function (evt) {
+            if (evt.detail.successful === false) {
+                return
+            }
+
+            const personId = htmx
+                .find("#person")
+                .getAttribute(Const.attributes.personId)
+            const personName = htmx.find("#person .name span").innerText.trim()
+
+            const personNameEditedEvent = new CustomEvent(
+                Const.events.personNameEdited,
+                {
+                    detail: {
+                        personId: personId,
+                        newPersonName: personName,
+                    },
+                },
+            )
+            document.body.dispatchEvent(personNameEditedEvent)
+        },
+    )
+
+    htmx.find("#editPersonName").addEventListener(
+        Const.events.escapeKeyPressed,
+        function (evt) {
+            console.log("THIS DOES NOT WORK")
+
+            htmx.ajax(
+                "GET",
+                "/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/",
+                {
+                    swap: "innerHTML",
+                    target: "#personName",
+                },
+            )
+        },
+    )
+</script>
+
+}
+
