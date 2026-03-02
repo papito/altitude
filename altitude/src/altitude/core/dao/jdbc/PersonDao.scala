@@ -1,11 +1,14 @@
 package altitude.core.dao.jdbc
 
+import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
-import altitude.core.{FieldConst, RequestContext, Const as C}
+import altitude.core.FieldConst
+import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
 import com.typesafe.config.Config
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
 
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -22,7 +25,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       isNamed = getBooleanField(rec(FieldConst.Person.IS_NAMED)),
       name = Option(rec(FieldConst.Person.NAME).asInstanceOf[String]),
       coverFaceId = Option(rec(FieldConst.Person.COVER_FACE_ID).asInstanceOf[String]),
-      numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int],
+      numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int]
     ).toJson
 
   override def add(jsonIn: JsObject): JsObject =
@@ -57,10 +60,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
 
     addRecord(jsonIn, sql, sqlVals)
 
-    jsonIn ++ Json.obj(
-      FieldConst.ID -> id,
-      FieldConst.Person.NAME -> Some(personName),
-      FieldConst.Person.IS_NAMED -> isNamed)
+    jsonIn ++ Json.obj(FieldConst.ID -> id, FieldConst.Person.NAME -> Some(personName), FieldConst.Person.IS_NAMED -> isNamed)
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     val name =

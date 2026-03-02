@@ -1,26 +1,10 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.{App, FieldConst, RequestContext}
-import altitude.core.models.Asset
+import altitude.core.FieldConst
+import altitude.core.RequestContext
 import altitude.core.models.Face
-import altitude.core.models.Person
 import com.typesafe.config.Config
-
-import java.sql.PreparedStatement
 import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-
-import org.apache.pekko.actor.typed.Scheduler
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
-import org.apache.pekko.stream.scaladsl.Source
-import org.apache.pekko.util.Timeout
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
 
 import scala.language.implicitConversions
 
@@ -31,7 +15,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
   final override val tableName = "face"
 
   override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
-
     Face(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       x1 = rec(FieldConst.Face.X1).asInstanceOf[Int],

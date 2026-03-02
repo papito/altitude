@@ -1,19 +1,18 @@
 package altitude.core.dao.sqlite
 
+import altitude.core.FieldConst
+import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
-import altitude.core.models.{Asset, Face, Person}
-import altitude.core.{App, FieldConst, RequestContext}
+import altitude.core.models.Asset
+import altitude.core.models.Face
+import altitude.core.models.Person
+import altitude.core.service.FaceRecognitionService
 import com.typesafe.config.Config
-import org.apache.pekko.actor.typed.Scheduler
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
-import org.apache.pekko.stream.scaladsl.Source
-import org.apache.pekko.util.Timeout
-import org.slf4j.{Logger, LoggerFactory}
-import play.api.libs.json.{JsObject, Json}
 
 import java.sql.PreparedStatement
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.DurationInt
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
+
 import scala.language.implicitConversions
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with SqliteOverrides:
@@ -56,9 +55,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     jsonIn ++ Json.obj(
       FieldConst.ID -> id,
       FieldConst.Face.ASSET_ID -> asset.id.get,
-      FieldConst.Face.PERSON_ID -> person.id.get,
+      FieldConst.Face.PERSON_ID -> person.id.get
     )
-
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
     val conn = RequestContext.getConn
@@ -73,11 +71,12 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       FROM vector_full_scan('face', 'features', vector_as_f32(?)) AS v
       JOIN face ON face.rowid = v.rowid
       WHERE face.repository_id = ?
-        AND v.distance < 0.68
+        AND v.distance < ?
       ORDER BY v.distance
       LIMIT 1;
    """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId))
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId, FaceRecognitionService.COSINE_DISTANCE_THRESHOLD))
 
     recs.map(makeModel)

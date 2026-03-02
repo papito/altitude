@@ -27,7 +27,6 @@ import org.scalatest.matchers.should.Matchers.should
     detections.length should be(1)
   }
 
-
   test("Small face image is detected (1)") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/small-face1.jpg")
     val detections = testApp.service.faceDetection.detectFacesWithYunet(matFromBytes(importAsset.data))

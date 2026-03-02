@@ -1,8 +1,11 @@
 package altitude.core.pipeline.flows
 
-import altitude.core.{Altitude, DuplicateException}
-import altitude.core.pipeline.PipelineTypes.{InvalidAsset, TDataAssetOrInvalidWithContext}
-import altitude.core.pipeline.PipelineUtils.{debugInfo, setThreadLocalRequestContext}
+import altitude.core.Altitude
+import altitude.core.DuplicateException
+import altitude.core.pipeline.PipelineTypes.InvalidAsset
+import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineUtils.debugInfo
+import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 

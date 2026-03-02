@@ -1,19 +1,25 @@
 package altitude.core.dao.postgres
 
+import altitude.core.FieldConst
+import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
-import altitude.core.models.{Asset, Face, Person}
-import altitude.core.{FieldConst, RequestContext}
+import altitude.core.models.Asset
+import altitude.core.models.Face
+import altitude.core.models.Person
+import altitude.core.service.FaceRecognitionService
 import com.typesafe.config.Config
-import play.api.libs.json.{JsObject, Json}
 
 import java.sql.PreparedStatement
+import play.api.libs.json.JsObject
+import play.api.libs.json.Json
+
 import scala.language.implicitConversions
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with PostgresOverrides:
 
   /**
-   * Format a Scala Float array as a pgvector-compatible string literal, e.g. "[0.1, 0.2, ...]".
-   * pgvector accepts this format when cast with `?::vector`.
+   * Format a Scala Float array as a pgvector-compatible string literal, e.g. "[0.1, 0.2, ...]". pgvector accepts this format when
+   * cast with `?::vector`.
    */
   private def toVectorString(values: Array[Float]): String =
     values.mkString("[", ",", "]")
@@ -51,7 +57,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     jsonIn ++ Json.obj(
       FieldConst.ID -> id,
       FieldConst.Face.ASSET_ID -> asset.id.get,
-      FieldConst.Face.PERSON_ID -> person.id.get,
+      FieldConst.Face.PERSON_ID -> person.id.get
     )
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
@@ -63,11 +69,12 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
                features <=> ?::vector AS distance
         FROM face
         WHERE repository_id = ?
-          AND features <=> ?::vector < 0.59
+          AND features <=> ?::vector < ?
         ORDER BY features <=> ?::vector
         LIMIT 1;
         """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(featuresStr, RequestContext.getRepository.persistedId, featuresStr, featuresStr))
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(featuresStr, RequestContext.getRepository.persistedId, featuresStr, FaceRecognitionService.COSINE_DISTANCE_THRESHOLD, featuresStr))
 
     recs.map(makeModel)

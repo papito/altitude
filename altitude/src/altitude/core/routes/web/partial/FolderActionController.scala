@@ -32,7 +32,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/rename-folder")
-  def showRenameFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using request: Request): Response[String] =
+  def showRenameFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using
+      request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
     val payload = "<!doctype html>" + htmx.html.rename_folder_modal(
       minWidth = C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
@@ -44,7 +45,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/delete-folder")
-  def showDeleteFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using request: Request): Response[String] =
+  def showDeleteFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using
+      request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
     val payload = "<!doctype html>" + htmx.html.delete_folder_modal(
       minWidth = C.UI.DELETE_FOLDER_MODAL_MIN_WIDTH,
@@ -55,7 +57,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/context-menu")
-  def showFolderContextMenu(repoId: String, folderId: String, parentId: Option[String] = None)(using request: Request): Response[String] =
+  def showFolderContextMenu(repoId: String, folderId: String, parentId: Option[String] = None)(using
+      request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.folder_context_menu(folderId = folderId)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 

@@ -31,7 +31,6 @@ case class Face(
   override val createdAt: Option[LocalDateTime] = None
   override val updatedAt: Option[LocalDateTime] = None
 
-
   override def toString: String =
     s"FACE $id. Label: $personLabel. Score: $detectionScore, ${width}x$height at ($x1, $y1)"
 

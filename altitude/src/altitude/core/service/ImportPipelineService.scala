@@ -4,7 +4,17 @@ import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
-import altitude.core.pipeline.flows.{AddPreviewFlow, AssignIdFlow, CheckDuplicateFlow, CheckMediaTypeFlow, ExtractMetadataFlow, FacialRecognitionFlow, FileStoreFlow, IndexAndFaceRecFlow, MarkAsCompleteFlow, IndexFlow, StripBinaryDataFlow}
+import altitude.core.pipeline.flows.AddPreviewFlow
+import altitude.core.pipeline.flows.AssignIdFlow
+import altitude.core.pipeline.flows.CheckDuplicateFlow
+import altitude.core.pipeline.flows.CheckMediaTypeFlow
+import altitude.core.pipeline.flows.ExtractMetadataFlow
+import altitude.core.pipeline.flows.FacialRecognitionFlow
+import altitude.core.pipeline.flows.FileStoreFlow
+import altitude.core.pipeline.flows.IndexAndFaceRecFlow
+import altitude.core.pipeline.flows.IndexFlow
+import altitude.core.pipeline.flows.MarkAsCompleteFlow
+import altitude.core.pipeline.flows.StripBinaryDataFlow
 import altitude.core.pipeline.sinks.AssetErrorLoggingSink
 import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 import org.apache.pekko.NotUsed
@@ -43,7 +53,6 @@ class ImportPipelineService(app: Altitude) {
   private val markAsCompleteFlow = MarkAsCompleteFlow(app)
   private val wsNotificationSink = WsAssetProcessedNotificationSink(app)
   private val errorLoggingSink = AssetErrorLoggingSink()
-
 
   private val sqliteFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] =
     Flow[TDataAssetWithContext]

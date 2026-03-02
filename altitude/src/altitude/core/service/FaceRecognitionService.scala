@@ -1,6 +1,6 @@
 package altitude.core.service
 
-import altitude.core.{Altitude, AltitudeActorSystem, RequestContext}
+import altitude.core.Altitude
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
@@ -13,12 +13,10 @@ import org.apache.pekko.util.Timeout
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.DurationInt
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
-
 
 object FaceRecognitionService {
+
   /**
    * If there is no machine learning model verified hit, we cycle through all people in the database, but only doing the matching
    * on THIS many best face detections that we have (1 to X)
@@ -31,7 +29,7 @@ object FaceRecognitionService {
   val MAX_COMPARISONS_PER_PERSON = 12
 
   /** If the cosine distance between the facial features is below this threshold, we consider the face a match. */
-  val PESSIMISTIC_COSINE_DISTANCE_THRESHOLD = .46
+  val COSINE_DISTANCE_THRESHOLD = .63
 }
 
 class FaceRecognitionService(val app: Altitude) {

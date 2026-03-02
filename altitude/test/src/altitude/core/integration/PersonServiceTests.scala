@@ -10,7 +10,7 @@ import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.should.Matchers.{should, shouldBe}
+import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
 @DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -48,7 +48,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
   test("Update person's name") {
     val name = "Ben"
-    val person: Person = testApp.service.person.addPerson(Person(name=Some(name)))
+    val person: Person = testApp.service.person.addPerson(Person(name = Some(name)))
     person.isNamed should be(true)
 
     val personQuery = "select * from person where id = ?"
@@ -124,7 +124,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     val personB: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personB, 4)
 
-    val mergedB: Person = testApp.service.person.merge(dest=personB, source=personA)
+    val mergedB: Person = testApp.service.person.merge(dest = personB, source = personA)
     val NEW_FACES_TOTAL = 7
     mergedB.numOfFaces should be(NEW_FACES_TOTAL)
 
@@ -134,7 +134,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     mergedBPersisted.numOfFaces should be(NEW_FACES_TOTAL)
 
     // all face labels should be the same as the merged INTO person label
-    val faces  = testApp.service.person.getPersonFaces(mergedB.persistedId)
+    val faces = testApp.service.person.getPersonFaces(mergedB.persistedId)
     faces.count(_.personId.get == mergedB.persistedId) should be(NEW_FACES_TOTAL)
   }
 
@@ -147,7 +147,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     // *** Merge B -> A
     //
-    val mergedA: Person = testApp.service.person.merge(dest=personA, source=personB)
+    val mergedA: Person = testApp.service.person.merge(dest = personA, source = personB)
 
     //
     // *** Sanity checks for persisted instances of source and destination2
@@ -166,19 +166,19 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
   }
 
   test("Person merge C -> B, B -> A") {
-    val personC: Person = testApp.service.person.addPerson(Person(name=Some("C")))
+    val personC: Person = testApp.service.person.addPerson(Person(name = Some("C")))
     testContext.addTestFacesAndAssets(personC, NUM_OF_FACES)
 
-    val personB: Person = testApp.service.person.addPerson(Person(name=Some("B")))
+    val personB: Person = testApp.service.person.addPerson(Person(name = Some("B")))
     testContext.addTestFacesAndAssets(personB, NUM_OF_FACES)
 
     // no faces, to keep it simple
-    val personA: Person = testApp.service.person.addPerson(Person(name=Some("A")))
+    val personA: Person = testApp.service.person.addPerson(Person(name = Some("A")))
 
     //
     // *** C -> B
     //
-    val mergedB: Person = testApp.service.person.merge(dest=personB, source=personC)
+    val mergedB: Person = testApp.service.person.merge(dest = personB, source = personC)
     // B is trained on C faces
     mergedB.numOfFaces should be(NUM_OF_FACES * 2)
     mergedB.isAboveThreshold should be(true)
@@ -199,8 +199,8 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     // *** B -> A
     //
     val persistedA: Person = testApp.service.person.getById(personA.persistedId)
-    val mergedA: Person = testApp.service.person.merge(dest=persistedA, source=mergedB)
-    
+    val mergedA: Person = testApp.service.person.merge(dest = persistedA, source = mergedB)
+
     // A is trained on B faces (which now has B + C faces)
     val aFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedA.persistedId)
     aFacesInDb.size should be(NUM_OF_FACES * 2)
@@ -210,25 +210,25 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     cFacesInDb = testApp.service.person.getPersonFaces(personC.persistedId)
     cFacesInDb.size should be(0)
-    
+
   }
 
   test("Merged named person does not cause naming conflicts") {
     val mergedIntoName = "London"
-    val personA: Person = testApp.service.person.addPerson(Person(name=Some(mergedIntoName)))
+    val personA: Person = testApp.service.person.addPerson(Person(name = Some(mergedIntoName)))
     testContext.addTestFacesAndAssets(personA)
 
     val mergedFromName = "Phoenix"
-    val personB: Person = testApp.service.person.addPerson(Person(name=Some(mergedFromName)))
+    val personB: Person = testApp.service.person.addPerson(Person(name = Some(mergedFromName)))
     testContext.addTestFacesAndAssets(personB)
 
-    testApp.service.person.merge(dest=personA, source=personB)
+    testApp.service.person.merge(dest = personA, source = personB)
 
     val updatedPersonA: Person = testApp.service.person.getById(personA.persistedId)
     updatedPersonA.name.get should be(mergedIntoName)
 
     // at this point mergedFromName should be available for use
-    val personC: Person = testApp.service.person.addPerson(Person(name=Some(mergedFromName)))
+    val personC: Person = testApp.service.person.addPerson(Person(name = Some(mergedFromName)))
     personC.name.get should be(mergedFromName)
   }
 
@@ -238,10 +238,10 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
     testContext.addTestFacesAndAssets(personA)
 
     val mergedFromName = "London"
-    val personB: Person = testApp.service.person.addPerson(Person(name=Some(mergedFromName)))
+    val personB: Person = testApp.service.person.addPerson(Person(name = Some(mergedFromName)))
     testContext.addTestFacesAndAssets(personB)
 
-    testApp.service.person.merge(dest=personA, source=personB)
+    testApp.service.person.merge(dest = personA, source = personB)
 
     val mergedPerson: Person = testApp.service.person.getById(personA.persistedId)
 
@@ -296,9 +296,7 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     // recycle some assets
     val recycleCount = 2
-    allAssets.take(recycleCount).foreach { asset =>
-      testApp.service.library.recycleAssets(Set(asset.persistedId))
-    }
+    allAssets.take(recycleCount).foreach(asset => testApp.service.library.recycleAssets(Set(asset.persistedId)))
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
@@ -320,16 +318,14 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     // recycle some assets
     val recycleCount = 2
-    allAssets.take(recycleCount).foreach { asset =>
-      testApp.service.library.recycleAssets(Set(asset.persistedId))
-    }
+    allAssets.take(recycleCount).foreach(asset => testApp.service.library.recycleAssets(Set(asset.persistedId)))
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
 
     // restore the assets (move from recycle)
-    allAssets.take(recycleCount).foreach { asset =>
-      testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), testContext.repository.rootFolderId)
+    allAssets.take(recycleCount).foreach {
+      asset => testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), testContext.repository.rootFolderId)
     }
 
     person = testApp.service.person.getById(person.persistedId)

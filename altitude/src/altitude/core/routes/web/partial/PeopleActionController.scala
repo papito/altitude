@@ -23,8 +23,10 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
-  def showPeopleTab(repoId: String, typeFilter: String = Const.PeopleTypeFilter.COMPLETE, peopleTypeFilter: Option[String] = None)(using
-      request: Request): Response[String] =
+  def showPeopleTab(
+      repoId: String,
+      typeFilter: String = Const.PeopleTypeFilter.COMPLETE,
+      peopleTypeFilter: Option[String] = None)(using request: Request): Response[String] =
     val people: List[Person] = typeFilter match
       case Const.PeopleTypeFilter.ALL => App.altitude.service.person.getAllNotDiscarded
       case Const.PeopleTypeFilter.HIDDEN => App.altitude.service.person.getAllHidden
@@ -153,7 +155,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
-    cask.Redirect( s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PERSON_ID}=$destPersonId")
+    cask.Redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PERSON_ID}=$destPersonId")
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")

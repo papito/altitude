@@ -1,7 +1,7 @@
 package altitude.core
 
-import altitude.core.dao.jdbc.{PersonDao, SystemMetadataDao}
-import altitude.core.dao.postgres.PostgresOverrides
+import altitude.core.dao.jdbc.PersonDao
+import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
 import altitude.core.service.AssetService
 import altitude.core.service.FaceDetectionService
@@ -27,7 +27,6 @@ import altitude.core.transactions.TransactionManager
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
-
 import java.io.File
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
@@ -263,7 +262,8 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
   }
 
   val parallelism: Int = dataSourceType match {
-    case Const.DbEngineName.SQLITE => 1 // SQLite doesn't handle concurrent writes well, so we run the pipeline with a parallelism of 1 for SQLite
+    case Const.DbEngineName.SQLITE =>
+      1 // SQLite doesn't handle concurrent writes well, so we run the pipeline with a parallelism of 1 for SQLite
     case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
   }
 

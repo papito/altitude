@@ -35,9 +35,8 @@ object Environment extends Enumeration {
   logger.info(s"Root path: $ROOT_PATH")
 
   /**
-   * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths
-   * (e.g. OpenCV model files). Only used when running from a JAR (prod) where classpath resources are not directly
-   * on the filesystem.
+   * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths (e.g. OpenCV
+   * model files). Only used when running from a JAR (prod) where classpath resources are not directly on the filesystem.
    */
   private lazy val tempResourceDir: Path = {
     val dir = Files.createTempDirectory("altitude-resources")
@@ -47,11 +46,13 @@ object Environment extends Enumeration {
   }
 
   /**
-   * Resolve a classpath resource to a filesystem path. If the resource lives directly on the filesystem
-   * (dev/test), we return its path. If it's inside a JAR (prod), we extract it to a temp directory first.
+   * Resolve a classpath resource to a filesystem path. If the resource lives directly on the filesystem (dev/test), we return its
+   * path. If it's inside a JAR (prod), we extract it to a temp directory first.
    *
-   * @param classpathPath the classpath resource path, e.g. "/opencv/deploy.prototxt"
-   * @return an absolute filesystem path to the resource file
+   * @param classpathPath
+   *   the classpath resource path, e.g. "/opencv/deploy.prototxt"
+   * @return
+   *   an absolute filesystem path to the resource file
    */
   def resolveResourcePath(classpathPath: String): String = {
     val resourceUrl = getClass.getResource(classpathPath)

@@ -184,7 +184,7 @@ class TestContext(val testApp: Altitude) {
             personLabel = Some(idx),
             detectionScore = Random.nextDouble(),
             features = Array.fill(128)(Random.nextFloat()),
-            checksum = Random.nextInt(),
+            checksum = Random.nextInt()
           )
 
           val persistedFace = testApp.service.person.addFace(face, asset, person)

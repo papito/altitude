@@ -72,7 +72,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   }
 
   /*
-    * Right now there is just one repo - we will deal with multiple once later.
+   * Right now there is just one repo - we will deal with multiple once later.
    */
   def getDefaultRepository: Repository = {
     txManager.asReadOnly[Repository] {

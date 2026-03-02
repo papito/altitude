@@ -7,15 +7,12 @@ import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.Signal
 import org.apache.pekko.actor.typed.scaladsl.AbstractBehavior
 import org.apache.pekko.actor.typed.scaladsl.ActorContext
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.util.Timeout
 import org.slf4j.Logger
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
-import scala.util.Failure
-import scala.util.Success
 
 object AltitudeActorSystem {
   trait Command

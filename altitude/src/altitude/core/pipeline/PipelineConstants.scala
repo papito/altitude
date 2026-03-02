@@ -1,8 +1,7 @@
 package altitude.core.pipeline
 
-import altitude.core.Altitude
-
 object PipelineConstants {
+
   /**
    * Set to "true" to enable debugging output to console.
    *

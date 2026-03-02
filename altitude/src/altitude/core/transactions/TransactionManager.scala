@@ -66,7 +66,7 @@ class TransactionManager(val config: Config) {
           statement.execute("PRAGMA foreign_keys=ON;")
           statement.execute("PRAGMA temp_store=MEMORY;")
           statement.execute("PRAGMA wal_autocheckpoint=500;")
-          //statement.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+          // statement.execute("PRAGMA wal_checkpoint(TRUNCATE);")
           statement.close()
 
           writeConnection.setAutoCommit(false)
@@ -109,7 +109,7 @@ class TransactionManager(val config: Config) {
   private def loadSqliteVectorExtension(): Unit = {
     config.getString(Const.Conf.DB_ENGINE) match {
       case Const.DbEngineName.SQLITE =>
-        val os   = sys.props.getOrElse("os.name", "").toLowerCase
+        val os = sys.props.getOrElse("os.name", "").toLowerCase
         val arch = sys.props.getOrElse("os.arch", "").toLowerCase
 
         val (platformDir, extName) =
@@ -128,16 +128,20 @@ class TransactionManager(val config: Config) {
         val vectorLibPath = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
         logger.info(s"Loading sqlite-vector extension from: $vectorLibPath")
 
-        RequestContext.getConn.prepareStatement(
-          s"SELECT load_extension('$vectorLibPath')"
-        ).execute()
+        RequestContext.getConn
+          .prepareStatement(
+            s"SELECT load_extension('$vectorLibPath')"
+          )
+          .execute()
 
-        RequestContext.getConn.prepareStatement(
-          "SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')"
-        ).execute()
+        RequestContext.getConn
+          .prepareStatement(
+            "SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')"
+          )
+          .execute()
 
       case _ =>
-        // Not SQLite
+      // Not SQLite
     }
   }
 

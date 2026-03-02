@@ -14,7 +14,6 @@ import altitude.core.util.QueryResult
 import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 import altitude.core.util.Util.getDuplicateExceptionOrSame
-
 import java.sql.SQLException
 import play.api.libs.json.JsObject
 

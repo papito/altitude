@@ -1,6 +1,5 @@
 package altitude.core.routes
 import altitude.core.App
-import altitude.core.Const
 import altitude.core.models.User
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
