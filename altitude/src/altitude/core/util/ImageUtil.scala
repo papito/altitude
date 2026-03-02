@@ -19,10 +19,12 @@ import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
 object ImageUtil {
+
   // Get OPENCV image Mat from a byte array
   def matFromBytes(data: Array[Byte]): Mat = {
     Imgcodecs.imdecode(new MatOfByte(data*), Imgcodecs.IMREAD_ANYCOLOR)
   }
+
 
   def determineImageScale(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): Double = {
     val scaleX = targetWidth.toDouble / sourceWidth

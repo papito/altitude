@@ -15,6 +15,14 @@ object Const {
     val SQLITE_URL = "db.sqlite.url"
     val PERSON_MIN_FACES_THRESHOLD = "face.threshold"
 
+    val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
+    val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
+    val FACE_DETECTION_BOUNDING_BOX_SIZE = "face.detection.bounding_box_size"
+    val FACE_DETECTION_MIN_FACE_SIZE = "face.detection.min_face_size"
+    val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
+    val FACE_RECOGNITION_MAX_COMPARISONS_PER_PERSON = "face.recognition.max_comparisons_per_person"
+    val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"

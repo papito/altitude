@@ -6,7 +6,6 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
-import altitude.core.service.FaceRecognitionService
 import com.typesafe.config.Config
 
 import java.sql.PreparedStatement
@@ -71,10 +70,13 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
         WHERE repository_id = ?
           AND features <=> ?::vector < ?
         ORDER BY features <=> ?::vector
-        LIMIT 1;
+        LIMIT ?;
         """
 
+    val matchCount = config.getInt("face.recognition.match_count")
+    val threshold = config.getDouble("face.recognition.cosine_distance_threshold")
+
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(featuresStr, RequestContext.getRepository.persistedId, featuresStr, FaceRecognitionService.COSINE_DISTANCE_THRESHOLD, featuresStr))
+      manyBySqlQuery(sql, List(featuresStr, RequestContext.getRepository.persistedId, featuresStr, threshold, featuresStr, matchCount))
 
     recs.map(makeModel)

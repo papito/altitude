@@ -1,6 +1,7 @@
 package altitude.core.service
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
@@ -38,8 +39,8 @@ class FaceRecognitionService(val app: Altitude) {
   protected val txManager: TransactionManager = app.txManager
   private val faceDao: FaceDao = app.DAO.face
 
-  implicit val timeout: Timeout = 3.seconds
-  implicit val scheduler: Scheduler = app.actorSystem.scheduler
+  /** Number of nearest-neighbor results to retrieve for majority-vote matching. */
+  private val matchCount: Int = app.config.getInt(Const.Conf.FACE_RECOGNITION_MATCH_COUNT)
 
   def processAsset(dataAsset: AssetWithData): Unit = {
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data)
@@ -60,21 +61,28 @@ class FaceRecognitionService(val app: Altitude) {
   /**
    * Returns an existing OR a new person, already persisted in the database.
    *
-   * The person/faces are also added to the cache for this repository, as we may need to brute-force search for the person's face
-   * in the future.
+   * Uses top-K nearest-neighbor search with majority voting: retrieves up to [[matchCount]] closest face matches from the vector
+   * index, then picks the person ID that appears most frequently. If a clear majority exists, the face is associated with that
+   * person; otherwise a new person is created.
    */
   def recognizeFace(detectedFace: Face, asset: Asset): Person = {
     require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
     val matchedOrNewPerson: Person = txManager.withFaceVector {
-      // will return just one for this
       val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features)
 
-      // must have face matches, and they all have to be the same person
-      if faceMatches.nonEmpty && faceMatches.map(_.personId.get).toSet.size <= 1 then {
-        app.service.person.getPersonById(faceMatches.head.personId.get)
+      if (faceMatches.nonEmpty) {
+        // Majority vote: group by person ID, pick the most frequent
+        val personVotes = faceMatches.groupBy(_.personId.get)
+        val (bestPersonId, votes) = personVotes.maxBy(_._2.size)
+
+        logger.debug(s"Face match: ${votes.size}/$matchCount votes for person $bestPersonId " +
+          s"(${personVotes.size} distinct person(s) in top-${faceMatches.size})")
+
+        app.service.person.getPersonById(bestPersonId)
       } else {
+        logger.info("No match. Adding new person")
         app.service.person.addPerson(Person())
       }
     }

@@ -1,13 +1,13 @@
 package altitude.core.service
 
-import altitude.core.Environment
+import altitude.core.{Altitude, Const, Environment}
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
-import altitude.core.service.FaceDetectionService.minFaceSize
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
 import altitude.core.util.MurmurHash
+import com.typesafe.config.Config
 import org.apache.commons.io.FilenameUtils
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
@@ -30,9 +30,6 @@ import org.slf4j.LoggerFactory
 object FaceDetectionService {
 
   val faceDetectionBoxPx = 80
-
-  private val minFaceSize = 50 // minimum acceptable size of face region in pixels
-  private val yunetConfidenceThreshold = 0.855f
 
   /** Dimensionality of the ArcFace (w600k_r50) embedding vector. */
   val EMBEDDING_DIMENSIONS = 512
@@ -128,20 +125,30 @@ object FaceDetectionService {
     M
   }
 
-  def faceDetectToRect(detectedFace: Mat): Rect = {
-    val origX = detectedFace.get(0, 0)(0).asInstanceOf[Int]
-    val origY = detectedFace.get(0, 1)(0).asInstanceOf[Int]
+  /**
+   * Convert a YuNet detection row to a [[Rect]], clamping coordinates to the given image dimensions to prevent out-of-bounds
+   * errors when the detected face region extends past the image edge.
+   */
+  def faceDetectToRect(detectedFace: Mat, imageWidth: Int, imageHeight: Int): Rect = {
+    val origX = detectedFace.get(0, 0)(0).toInt
+    val origY = detectedFace.get(0, 1)(0).toInt
+    val origW = detectedFace.get(0, 2)(0).toInt
+    val origH = detectedFace.get(0, 3)(0).toInt
 
     val x = Math.max(0, origX)
     val y = Math.max(0, origY)
+    val w = Math.min(origW, imageWidth - x)
+    val h = Math.min(origH, imageHeight - y)
 
-    val w = detectedFace.get(0, 2)(0).asInstanceOf[Int]
-    val h = detectedFace.get(0, 3)(0).asInstanceOf[Int]
-    new Rect(x, y, w, h)
+    new Rect(x, y, Math.max(0, w), Math.max(0, h))
   }
 
+  /** Overload without clamping — delegates with Int.MaxValue bounds (legacy-safe). */
+  def faceDetectToRect(detectedFace: Mat): Rect =
+    faceDetectToRect(detectedFace, Int.MaxValue, Int.MaxValue)
+
   def faceDetectToMat(image: Mat, detectedFace: Mat): Mat = {
-    val faceRect = faceDetectToRect(detectedFace)
+    val faceRect = faceDetectToRect(detectedFace, image.cols(), image.rows())
     image.submat(faceRect)
   }
 
@@ -159,7 +166,7 @@ object FaceDetectionService {
   }
 }
 
-class FaceDetectionService() {
+class FaceDetectionService(app: Altitude) {
 
   /**
    * OpenCV for Java has two competing APIs, which is confusing enough (org.opencv, org.bytedeco), every example under the sun
@@ -173,6 +180,12 @@ class FaceDetectionService() {
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
+  // Read configurable thresholds from config, falling back to sensible defaults
+  private val yunetConfidenceThreshold: Float = app.config.getDouble(Const.Conf.FACE_YUNET_CONFIDENCE_THRESHOLD).toFloat
+  private val yunetNmsThreshold: Float = app.config.getDouble(Const.Conf.FACE_YUNET_NMS_THRESHOLD).toFloat
+  private val boundingBoxSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_BOUNDING_BOX_SIZE)
+  private val minFaceSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_MIN_FACE_SIZE)
+
   private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2022mar.onnx")
   private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
 
@@ -180,8 +193,8 @@ class FaceDetectionService() {
   private val arcFaceNet: Net = readNetFromONNX(ARCFACE_MODEL_PATH)
 
   private val yuNet = FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size())
-  yuNet.setScoreThreshold(FaceDetectionService.yunetConfidenceThreshold)
-  yuNet.setNMSThreshold(0.2f)
+  yuNet.setScoreThreshold(yunetConfidenceThreshold)
+  yuNet.setNMSThreshold(yunetNmsThreshold)
 
   def detectFacesWithYunet(image: Mat): List[Mat] = {
     if (image.empty) {
@@ -195,8 +208,6 @@ class FaceDetectionService() {
     }
 
     val detectionResults = new Mat()
-
-    val boundingBoxSize = 600
 
     val scaleFactor = determineImageScale(image.width(), image.height(), boundingBoxSize, boundingBoxSize) match {
       case scale if scale < 1.0 => scale
@@ -226,9 +237,9 @@ class FaceDetectionService() {
         }
       }
 
-      val detectionRect = FaceDetectionService.faceDetectToRect(detection)
+      val detectionRect = FaceDetectionService.faceDetectToRect(detection, image.cols(), image.rows())
 
-      if (detectionRect.height < FaceDetectionService.minFaceSize || detectionRect.width < FaceDetectionService.minFaceSize) {
+      if (detectionRect.height < minFaceSize || detectionRect.width < minFaceSize) {
         logger.warn("Face region too small")
         None
       } else {
@@ -239,8 +250,12 @@ class FaceDetectionService() {
     ret.flatten
   }
 
+  /**
+   * Extract faces from raw image bytes.
+   */
   def extractFaces(data: Array[Byte]): List[(Face, FaceImages)] = {
     val imageMat: Mat = matFromBytes(data)
+
     val results: List[Mat] = detectFacesWithYunet(imageMat)
 
     val facesAndImages: List[(Face, FaceImages)] = results.map {
@@ -249,7 +264,7 @@ class FaceDetectionService() {
         val alignedFaceImageGs = getHistEqualizedGrayScImage(alignedFaceImage)
         val features = getArcFaceEmbedding(alignedFaceImage)
 
-        val rect = FaceDetectionService.faceDetectToRect(res)
+        val rect = FaceDetectionService.faceDetectToRect(res, imageMat.cols(), imageMat.rows())
         val faceImage: Mat = imageMat.submat(rect)
 
         val imageBytes = new MatOfByte
