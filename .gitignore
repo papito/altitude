@@ -65,3 +65,4 @@ mill.*
 test-data
 data/db/*.db
 data/repositories
+/altitude/resources/opencv/w600k_r50.onnx
