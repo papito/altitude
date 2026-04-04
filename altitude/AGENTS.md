@@ -2,8 +2,9 @@
 
 ## Do
 
-Update this document if you are making changes to the architecture, design patterns, or anything else that future developers should know when working on the codebase. 
-This is not a place for general usage instructions (see `README.md`), but rather a deep dive into how the code works and why.
+* Update this document if you are making changes to the architecture, design patterns, or anything else that future developers should know when working on the codebase. 
+* Factor out duplicated code into helper methods.
+* Update comments and docstrings when making changes to the code and warn about discrepancies in comments vs code.
 
 ## Architecture Overview
 

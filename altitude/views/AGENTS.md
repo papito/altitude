@@ -84,6 +84,51 @@ Batch ops escalate a single-asset drag to a batch when selected assets exist: th
 `assetMoved`/`assetTrashed` handlers in `search-results/event_handlers.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled` if `selectedAssets` store is non-empty.
 
+### Full action flow (drag-and-drop example)
+
+```
+interact.js drag end / ondrop
+  → dispatch CustomEvent on document.body
+    → event_handlers.js listener
+        → fetch() or htmx.ajax() to server
+          → on success: direct DOM mutation + snackbar + optional nav reload
+```
+
+`htmx_event_handlers.js` sits on the **HTMX lifecycle** side of this, not the custom event side.
+It intercepts `htmx:beforeRequest` to short-circuit requests the client can already resolve
+locally (e.g. collapsing a folder), and `htmx:afterRequest` to apply post-response state changes
+(e.g. marking a folder as expanded).
+
+## Alpine.js Integration
+
+Alpine serves two distinct roles in this codebase:
+
+### 1. Global shared state (stores)
+Stores in `app.js` hold data any module needs to read — the active repo ID, current view, and
+the set of selected assets. All access goes through `window.ctx` helpers or
+`Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
+
+### 2. Per-element component registry
+`x-data="initSelectable(id)"` (defined in `alpine/components/selectable.js`, exposed on `window`
+so Twirl can reference it by name) creates a reactive object for each asset cell. Crucially,
+the `selectedAssets` store holds a `Map<id, componentProxy>`. This means external JS — drag
+handlers, service calls — can reach into individual asset cells and mutate their reactive state
+(`.drag()`, `.drop()`, `.deselect()`) imperatively, causing Alpine to update CSS class bindings
+without those modules needing to know anything about the DOM structure.
+
+### Data flow summary
+
+- **Alpine → drag handler**: drag handlers read store state (e.g. is this asset selected?) to
+  decide whether to escalate to a batch operation.
+- **Drag handler → Alpine**: on drag start/end, handlers call methods on component proxies
+  stored in `selectedAssets.items` to reflect dragging state in the UI.
+- **Event handler → Alpine**: after a server call succeeds, the handler calls
+  `Alpine.store(...).reset()` to clear selection, which in turn dispatches `deselectAll` so each
+  component proxy deselects itself.
+
+Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
+those responsibilities stay with HTMX and the custom event bus.
+
 ## UI Patterns
 
 **Modals** — Two containers live in `html_common.scala.html`. Load into `#modalContent` for general
