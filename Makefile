@@ -11,6 +11,7 @@ compile:
 
 clean-all:
 	rm -rf data/*
+	rm -rf out
 	mill clean
 
 clean-db:
