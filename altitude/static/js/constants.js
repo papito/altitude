@@ -53,6 +53,7 @@ export let Const = {
     state: {
         selectedAssets: "selectedAssets",
         currentView: "currentView",
+        resultsTotal: "resultsTotal",
     },
 
     localStore: {

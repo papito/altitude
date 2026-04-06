@@ -29,13 +29,7 @@ class AssetService {
         }
 
         if (removedCount > 0) {
-            const resultsTotalElement = htmx.find(
-                "#searchControl .results-total",
-            )
-            if (resultsTotalElement) {
-                const currentTotal = parseInt(resultsTotalElement.textContent)
-                resultsTotalElement.textContent = currentTotal - removedCount
-            }
+            Alpine.store(Const.state.resultsTotal).decrement(removedCount)
         }
     }
 
@@ -71,15 +65,9 @@ class AssetService {
         const assetId = event.detail["assetId"]
 
         if (status === 200) {
-            // Remove the asset from the DOM
+            // Remove the asset from the DOM and decrement the reactive counter
             htmx.find(`#asset-${assetId}`).remove()
-
-            // Decrement the counter in the search control bar
-            const resultsTotalElement = htmx.find(
-                "#searchControl .results-total",
-            )
-            const currentTotal = parseInt(resultsTotalElement.textContent)
-            resultsTotalElement.textContent = currentTotal - 1
+            Alpine.store(Const.state.resultsTotal).decrement(1)
 
             showSuccessSnackBar(successMessage)
 

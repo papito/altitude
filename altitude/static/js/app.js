@@ -32,6 +32,25 @@ export function initApp() {
         },
     })
 
+    /**
+     * Reactive results-total counter. Seeded by the search_results template
+     * on every new search/sort/page load; decremented/incremented by
+     * assetService when assets are moved or recycled.
+     */
+    Alpine.store(Const.state.resultsTotal, {
+        count: 0,
+
+        set(n) {
+            this.count = n
+        },
+        increment(n = 1) {
+            this.count += n
+        },
+        decrement(n = 1) {
+            this.count = Math.max(0, this.count - n)
+        },
+    })
+
     Alpine.store(Const.state.currentView, {
         name: null,
 

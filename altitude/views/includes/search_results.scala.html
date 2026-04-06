@@ -147,10 +147,10 @@
 @htmx.html.trashbin_header()
 }
 
-<div id="searchControl">
+<div id="searchControl" x-data>
   <div class="total">
     <div>
-      <strong>Total:</strong> <span class="results-total">@{results.total}</span>
+      <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.count"></span>
     </div>
   </div>
   <div>
@@ -238,6 +238,7 @@ F
    * scratch pads and selection stashes.
    */
   Alpine.store(Const.state.selectedAssets).reset()
+  Alpine.store(Const.state.resultsTotal).set(@{results.total})
 
   window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 </script>
