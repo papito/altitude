@@ -165,6 +165,26 @@ export class Folder {
         this.childrenEl.appendChild(folder.element)
     }
 
+    /**
+     * Returns true if this folder is the same as, or a descendant of, the folder
+     * identified by ancestorId. Walks up the DOM via alt-parent-folder-id attributes.
+     * Returns false if ancestorId is not found in the ancestor chain (or the chain
+     * is broken by a missing DOM element).
+     */
+    isDescendantOrSelf(ancestorId) {
+        let currentId = this.id
+        while (currentId) {
+            if (currentId === ancestorId) return true
+            const el = document.getElementById("folder-" + currentId)
+            if (!el) return false
+            const parentId = el.getAttribute(Const.attributes.parentFolderId)
+            // root folder is its own parent — stop to avoid infinite loop
+            if (parentId === currentId) return false
+            currentId = parentId
+        }
+        return false
+    }
+
     htmxExpandChildrenAction() {
         console.debug("Triggering expand children action for " + this.name())
         const expandFolderChildrenEl = htmx.find(

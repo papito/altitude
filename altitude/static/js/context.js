@@ -18,6 +18,15 @@ export const context = {
         return Alpine.store(Const.context.repoId)
     },
 
+    /**
+     * Returns the folder ID currently being browsed, parsed from the browser URL's
+     * "folderId" query parameter. Returns null if no folder filter is active.
+     */
+    getCurrentFolderId: function () {
+        const params = new URLSearchParams(window.location.search)
+        return params.get("folderId")
+    },
+
     loadMetadataFieldViewSettingsFromStore: function () {
         // localStorage stores the grid-visible metadata fields as a comma-separated list
         const savedGridMetadataFields = localStorage.getItem(

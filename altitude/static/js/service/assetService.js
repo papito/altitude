@@ -1,4 +1,5 @@
 import { Folder } from "../models/folder.js"
+ import { Const } from "../constants.js"
 import {
     showErrorSnackBar,
     showSuccessSnackBar,
@@ -11,6 +12,58 @@ class AssetService {
             swap: "innerHTML",
             target: "nav",
         })
+    }
+
+    /**
+     * Remove the given assets from the result grid and decrement the results
+     * counter by the number of assets actually removed.
+     */
+    removeAssetsFromGrid(assetIds) {
+        let removedCount = 0
+        for (const assetId of assetIds) {
+            const el = htmx.find(`#asset-${assetId}`)
+            if (el) {
+                el.remove()
+                removedCount++
+            }
+        }
+
+        if (removedCount > 0) {
+            const resultsTotalElement = htmx.find(
+                "#searchControl .results-total",
+            )
+            if (resultsTotalElement) {
+                const currentTotal = parseInt(resultsTotalElement.textContent)
+                resultsTotalElement.textContent = currentTotal - removedCount
+            }
+        }
+    }
+
+    /**
+     * Returns true if the destination folder is outside the currently viewed
+     * folder's subtree, meaning moved assets should be removed from the grid.
+     *
+     * If no folder filter is active (browsing everything), returns false (no removal).
+     */
+    shouldRemoveFromGrid(destinationFolderId) {
+        const viewedFolderId = window.ctx.getCurrentFolderId()
+        if (!viewedFolderId) {
+            // No folder filter active — asset stays visible regardless
+            return false
+        }
+
+        try {
+            const destFolder = new Folder(destinationFolderId)
+            return !destFolder.isDescendantOrSelf(viewedFolderId)
+        } catch (e) {
+            // Destination folder element not found in sidebar DOM — it's outside
+            // the currently expanded tree, so conservatively assume it's outside
+            // the viewed subtree.
+            console.debug(
+                `Destination folder ${destinationFolderId} not in DOM, assuming outside viewed subtree`,
+            )
+            return true
+        }
     }
 
     moveAssetFromResultSetUtil(event, response, successMessage) {
@@ -63,6 +116,12 @@ class AssetService {
                 const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} moved to folder "${newParentFolder.name()}"`
                 showSuccessSnackBar(successMessage)
 
+                // Remove assets from the grid if the destination folder is outside
+                // the currently viewed folder's subtree (respecting ancestry)
+                if (this.shouldRemoveFromGrid(folderId)) {
+                    this.removeAssetsFromGrid(assetIds)
+                }
+
                 // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection
                 if (
                     assetIds.length > 1 ||
@@ -100,6 +159,10 @@ class AssetService {
                 }
                 const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} moved to the trash bin`
                 showSuccessSnackBar(successMessage)
+
+                // Always remove recycled assets from the grid — the trash bin
+                // is never inside any folder's subtree
+                this.removeAssetsFromGrid(assetIds)
 
                 // reset the selected assets store, but only if we moved multiple assets, or if the moved asset was part of a selection
                 if (
