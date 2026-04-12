@@ -44,9 +44,12 @@
         </div>
         <span id="folderName-@{folder.persistedId}"
               class="folder-name"
+              x-data
+              :class="{ 'disabled': $store.currentView.isTriageView() }"
               hx-target="#content"
               hx-trigger="click"
               hx-swap="innerHTML"
+              x-on:click="if ($store.currentView.isTriageView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
               hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{folder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">
         @{folder.name}</span>
     </div>

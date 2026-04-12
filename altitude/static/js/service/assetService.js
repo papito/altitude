@@ -15,6 +15,24 @@ class AssetService {
     }
 
     /**
+     * Remove triage styling (marker) from assets after they are moved to a folder.
+     * This is called after a successful move operation to update the UI.
+     */
+    removeTriageStyling(assetIds) {
+        for (const assetId of assetIds) {
+            const cellEl = htmx.find(`#asset-${assetId}`)
+            if (cellEl) {
+                cellEl.removeAttribute("alt-is-triaged")
+
+                const marker = cellEl.querySelector(".triage-marker")
+                if (marker) {
+                    marker.remove()
+                }
+            }
+        }
+    }
+
+    /**
      * Remove the given assets from the result grid and decrement the results
      * counter by the number of assets actually removed.
      */
@@ -103,6 +121,9 @@ class AssetService {
 
                 const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} moved to folder "${newParentFolder.name()}"`
                 showSuccessSnackBar(successMessage)
+
+                // Remove triage styling from moved assets (they are no longer in triage)
+                this.removeTriageStyling(assetIds)
 
                 // Remove assets from the grid if the destination folder is outside
                 // the currently viewed folder's subtree (respecting ancestry)

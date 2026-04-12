@@ -19,11 +19,12 @@
         <div id="asset-@{asset.persistedId}"
              class="cell last-cell"
              alt-folder-id="@{asset.folderId}"
+             @if(asset.isTriaged){alt-is-triaged="true"}
              hx-trigger="intersect"
              hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.PAGE}=@{nextPage}&@{Api.Field.Search.IS_CONTINUOUS_SCROLL}=true"
              hx-swap="afterend">
     } else {
-        <div class="cell" id="asset-@{asset.persistedId}" alt-folder-id="@{asset.folderId}">
+        <div class="cell" id="asset-@{asset.persistedId}" alt-folder-id="@{asset.folderId}" @if(asset.isTriaged){alt-is-triaged="true"}>
     }
 
         <div alt-asset-id="@{asset.persistedId}"
@@ -33,6 +34,10 @@
             <div class="checkmark"
                  @@click="toggle">
             </div>
+
+            @if(asset.isTriaged) {
+              <div class="triage-marker">triage</div>
+            }
 
             <img alt-asset-id="@{asset.persistedId}"
                  draggable="false"
@@ -78,6 +83,3 @@
     </div>@* /cell *@
     }}}
 }
-
-
-

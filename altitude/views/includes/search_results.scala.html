@@ -137,6 +137,25 @@
     color: var(--faded-font-color);
   }
 
+  #assets .cell .drag-drop .triage-marker {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: var(--success-background-color);
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 1px;
+  }
+
+  /* Hide triage marker when in triage view (all items are triaged there) */
+  #content.triage #assets .cell .drag-drop .triage-marker {
+    display: none;
+  }
+
 </style>
 
 @if(person != null) {

@@ -83,6 +83,12 @@
         cursor: pointer;
     }
 
+    #rootFolderList .folder-name.disabled {
+        cursor: default;
+        color: var(--faded-font-color);
+        pointer-events: none;
+    }
+
 </style>
 
 <div id="rootFolderList" class="folder-list">
@@ -109,9 +115,12 @@
             </div>
             <span id="folderName-@{rootFolder.persistedId}"
                   class="folder-name"
+                  x-data
+                  :class="{ 'disabled': $store.currentView.isTriageView() }"
                   hx-target="#content"
                   hx-trigger="click"
                   hx-swap="innerHTML"
+                  x-on:click="if ($store.currentView.isTriageView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
                   hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root</span>
         </div>
 
