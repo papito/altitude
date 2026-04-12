@@ -73,6 +73,13 @@ export function setupDragAndDrop() {
 
                     evt.preventDefault() // do not trip to the server
                 } else {
+                    // Leaf folder (no children) - skip expand/collapse and navigate to contents instead
+                    if (folder.numOfChildren() === 0) {
+                        evt.preventDefault()
+                        folder.folderNameEl().click()
+                        return
+                    }
+
                     // ELSE proceed with request and update state
                     folder.expand()
                 }
