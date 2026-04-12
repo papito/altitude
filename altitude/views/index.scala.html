@@ -95,7 +95,7 @@
                   hx-trigger="click"
                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab"
                 >
-                  Folders
+                  <i class="fas fa-folder"></i> Folders
                 </a>
               </button>
 
@@ -107,7 +107,7 @@
                   hx-swap="innerHTML"
                   hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab"
                 >
-                  Albums
+                  <i class="fas fa-images"></i> Albums
                 </a>
               </button>
 
@@ -119,7 +119,7 @@
                   hx-swap="innerHTML"
                   hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
                 >
-                  People
+                  <i class="fas fa-users"></i> People
                 </a>
               </button>
             </div>

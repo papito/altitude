@@ -1,72 +1,76 @@
+/* TAB LIST */
+
 [role="tablist"] {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.15em;
     overflow: visible;
+    border-bottom: 1px solid var(--panel-border-color);
+    padding: 0 var(--panel-padding);
 }
 
 [role="tablist"] a {
-    color: white;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    /* Padding lives here so the full visual tab area is a link hit-target */
+    padding: 0.6em 0.8em;
+    color: inherit;
     text-decoration: none;
-    text-transform: uppercase;
-    font-size: 0.9em;
-    font-weight: bold;
-    letter-spacing: 1px;
+    text-transform: capitalize;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
 }
+
+/* TAB BUTTON */
 
 [role="tab"] {
     position: relative;
-    margin-right: .5em;
-    padding: 0.5em;
-    border: 2px solid var(--panel-border-color);
-    border-left: 1px;
-    border-right: 1px;
-    border-bottom: none;
-    border-radius: .2em .2em 0 0;
-    box-shadow: 0 0 .2em var(--background-secondary-color);
-    overflow: visible;
-    letter-spacing: .05em;
-    text-decoration: none;
-    font-size: 0.9em;
-    color: white;
-    background: var(--background-color);
-    cursor: default;
+    /* No padding — the <a> inside carries it */
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--faded-font-color);
+    cursor: pointer;
+    font-size: 1em;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    outline: none;
 }
 
-[role="tab"][aria-selected="True"]::before {
-    position: absolute;
-    bottom: 100%;
-    right: -1px;
-    left: -1px;
-    border-radius: 0.2em 0.2em 0 0;
-    border-top: var(--success-background-color) 2px solid;
-    content: '';
+[role="tab"]:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
 }
+
+/* ACTIVE TAB */
 
 [role="tab"][aria-selected="True"] {
-    border-radius: 0;
+    color: #fff;
+    border-bottom: 2px solid var(--success-font-color);
+    background: transparent;
     outline: 0;
-    background: var(--background-tertiary-color);
-    color: #FFF;
+    border-radius: 0;
 }
 
+[role="tab"][aria-selected="True"]::before,
 [role="tab"][aria-selected="True"]::after {
-    position: absolute;
-    bottom: -1px;
-    right: 0;
-    left: 0;
-    height: .3em;
-    box-shadow: none;
-    content: '';
+    display: none;
 }
 
 [role="tab"]:focus,
 [role="tab"]:active {
-    color: #FFF;
+    color: #fff;
     outline: 0;
-    border-radius: 0;
 }
+
+/* TAB PANEL */
 
 [role="tabpanel"] {
     position: relative;
-    border-top: 1px solid var(--panel-border-color);
     padding: var(--panel-padding);
 }
 
