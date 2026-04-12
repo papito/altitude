@@ -89,6 +89,12 @@
         pointer-events: none;
     }
 
+    /* Override .draggable cursor for folders when in triage mode (indicated by disabled class on folder name) */
+    #rootFolderList .folder:has(.folder-name.disabled) .draggable,
+    #rootFolderList .folder:has(.folder-name.disabled) .drag-drop {
+        cursor: default !important;
+    }
+
 </style>
 
 <div id="rootFolderList" class="folder-list">
@@ -154,4 +160,3 @@
 
 <script type="module" src="/static/js/folders/event_handlers.js"></script>
 <script type="module" src="/static/js/folders/dragon-drop.js"></script>
-
