@@ -56,8 +56,14 @@ class AssetService {
      * folder's subtree, meaning moved assets should be removed from the grid.
      *
      * If no folder filter is active (browsing everything), returns false (no removal).
+     * If in triage view, always returns true (triage items moved to folders should disappear).
      */
     shouldRemoveFromGrid(destinationFolderId) {
+        // If we're in triage view, moving assets to any folder removes them from triage
+        if (Alpine.store(Const.state.currentView).isTriageView()) {
+            return true
+        }
+
         const viewedFolderId = window.ctx.getCurrentFolderId()
         if (!viewedFolderId) {
             // No folder filter active — asset stays visible regardless
