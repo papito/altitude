@@ -95,7 +95,34 @@
         cursor: default !important;
     }
 
+    #folderNavWarning {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: var(--control-vertical-space);
+        padding: 8px;
+        border-radius: 5px;
+        background-color: var(--warning-background-color);
+        color: var(--warning-font-color);
+        line-height: 1.4;
+        border: 1px solid var(--warning-font-color);
+        text-shadow: none;
+    }
+
+    #folderNavWarning i {
+        flex-shrink: 0;
+        font-size: 1.1em;
+    }
+
 </style>
+
+<div id="folderNavWarning"
+     x-data
+     x-show="$store.currentView.isTriageView() || $store.currentView.isTrashBinView()"
+     x-cloak>
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>Navigation in this view is disabled. You can only drag-and-drop assets/folders.</span>
+</div>
 
 <div id="rootFolderList" class="folder-list">
     <div class="folder root"
