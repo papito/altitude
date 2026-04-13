@@ -45,7 +45,7 @@
         <span id="folderName-@{folder.persistedId}"
               class="folder-name"
               x-data
-              :class="{ 'disabled': $store.currentView.isTriageView() }"
+              :class="{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }"
               hx-target="#content"
               hx-trigger="click"
               hx-swap="innerHTML"
@@ -63,4 +63,3 @@
          alt-folder-id="@{folder.persistedId}"></div>
 </div>
 }}
-

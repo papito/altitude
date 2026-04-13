@@ -122,12 +122,13 @@
             <span id="folderName-@{rootFolder.persistedId}"
                   class="folder-name"
                   x-data
-                  :class="{ 'disabled': $store.currentView.isTriageView() }"
+                  :class="{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }"
                   hx-target="#content"
                   hx-trigger="click"
                   hx-swap="innerHTML"
-                  x-on:click="if ($store.currentView.isTriageView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
-                  hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root</span>
+                  x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
+                  hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root
+            </span>
         </div>
 
         <div class="menu"

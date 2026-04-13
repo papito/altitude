@@ -76,6 +76,11 @@ export function setupDragAndDrop() {
                     // Leaf folder (no children) - skip expand/collapse and navigate to contents instead
                     if (folder.numOfChildren() === 0) {
                         evt.preventDefault()
+                        // Do not navigate when in triage or trash bin view
+                        const currentView = Alpine.store(Const.state.currentView)
+                        if (currentView.isTriageView() || currentView.isTrashBinView()) {
+                            return
+                        }
                         folder.folderNameEl().click()
                         return
                     }
