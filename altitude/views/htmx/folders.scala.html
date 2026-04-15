@@ -79,7 +79,7 @@
         font-size: .9em;
     }
 
-    #rootFolderList .folder-name {
+    #rootFolderList .folder-name, #rootFolderList .folder.root i {
         cursor: pointer;
     }
 
@@ -121,7 +121,7 @@
      x-show="$store.currentView.isTriageView() || $store.currentView.isTrashBinView()"
      x-cloak>
     <i class="fas fa-exclamation-triangle"></i>
-    <span>Navigation in this view is disabled. You can only drag-and-drop assets/folders.</span>
+    <span>Navigation in this view is disabled. You can only drag-and-drop assets and folders.</span>
 </div>
 
 <div id="rootFolderList" class="folder-list">
@@ -135,7 +135,12 @@
 
         <div class="controls dropzone"
              alt-folder-id="@{rootFolder.persistedId}">
-            <i class="fas fa-folder"></i>
+                <i class="fas fa-folder"
+                hx-target="#content"
+                hx-trigger="click"
+                hx-swap="innerHTML"
+                x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
+                hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true"></i>
             <div class="menu-ctrl">
                 <a href="#"
                    alt-folder-id="@{rootFolder.persistedId}"
