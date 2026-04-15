@@ -173,25 +173,40 @@
           /**
            * Load user UI config from local storage (specific to browser)
            */
-          const savedHorizontalSplitSizes = localStorage.getItem(
-              Const.localStore.horizontalSplitSizes,
-    )
-          let horizontalSplitSizes = [25, 75]
+          if (view === Const.views.trashbin) {
+              /**
+               * In trash bin view the explorer panel is not useful — hide it
+               * entirely and let the content area fill the full width.
+               * Split.js is intentionally NOT initialised so no gutter is
+               * inserted into the DOM.
+               */
+              const explorer = document.getElementById("explorer")
+              explorer.style.display = "none"
 
-          if (savedHorizontalSplitSizes) {
-              horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
+              const content = document.getElementById("content")
+              content.style.float = "none"
+              content.style.width = "100%"
+          } else {
+              const savedHorizontalSplitSizes = localStorage.getItem(
+                  Const.localStore.horizontalSplitSizes,
+              )
+              let horizontalSplitSizes = [25, 75]
+
+              if (savedHorizontalSplitSizes) {
+                  horizontalSplitSizes = JSON.parse(savedHorizontalSplitSizes)
+              }
+
+              Split(["#explorer", "#content"], {
+                  sizes: horizontalSplitSizes,
+                  minSize: [100, 300],
+                  onDragEnd: function (horizontalSplitSizes) {
+                      localStorage.setItem(
+                          Const.localStore.horizontalSplitSizes,
+                          JSON.stringify(horizontalSplitSizes),
+                      )
+                  },
+              })
           }
-
-          Split(["#explorer", "#content"], {
-              sizes: horizontalSplitSizes,
-              minSize: [100, 300],
-              onDragEnd: function (horizontalSplitSizes) {
-                  localStorage.setItem(
-                      Const.localStore.horizontalSplitSizes,
-                      JSON.stringify(horizontalSplitSizes),
-                  )
-              },
-          })
 
           // if there is no URL fragment, we default to folder views
           const fragment = window.location.hash || "#folders"
