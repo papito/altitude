@@ -66,6 +66,11 @@ class AssetService {
 
         const viewedFolderId = window.ctx.getCurrentFolderId()
         if (!viewedFolderId) {
+            // If we're in triage view, moving assets to any folder removes them from triage
+            if (Alpine.store(Const.state.currentView).isTriageView()) {
+                return true
+            }
+
             // No folder filter active — asset stays visible regardless
             return false
         }
