@@ -44,7 +44,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
       extractedMetadata = getJsonFromColumn(rec(FieldConst.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
       userMetadata = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)): UserMetadata,
-      folderId = rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String],
+      folderId = rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String].trim,
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),

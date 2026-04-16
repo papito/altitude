@@ -162,11 +162,26 @@ class LibraryService(val app: Altitude) {
         txManager.withTransaction {
           if (asset.isRecycled) {
             app.service.asset.setRecycledProp(asset, isRecycled = false)
-            // OPTIMIZE: create a lookup cache for folders, to avoid querying for each asset
-            val folder: Folder = app.service.folder.getById(asset.folderId)
 
-            if (folder.isRecycled) {
-              app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
+            // Assets recycled directly from triage have no folder assigned — skip folder restoration
+            if (asset.folderId.nonEmpty) {
+              // Restore the full ancestor chain (top-down) so the folder tree is consistent.
+              // getAncestors returns from root -> direct parent, so we can iterate in order.
+              val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
+              ancestors.foreach { ancestor =>
+                if (ancestor.isRecycled) {
+                  app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
+                }
+              }
+
+              // Restore the immediate folder of the asset
+              val folder: Folder = app.service.folder.getById(asset.folderId)
+              if (folder.isRecycled) {
+                app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
+              }
+            } else {
+              // Asset was originally in triage — restore it back to triage
+              app.service.asset.updateById(asset.persistedId, Map(FieldConst.Asset.IS_TRIAGED -> true))
             }
 
             val restoredAsset: Asset = app.service.asset.getById(assetId)
