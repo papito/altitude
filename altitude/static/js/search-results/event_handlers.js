@@ -69,6 +69,26 @@ document.body.addEventListener(Const.events.batchAssetsRecycled, (event) => {
     })
 })
 
+document.body.addEventListener(Const.events.batchAssetsPurged, (event) => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+    console.debug(`Batch purging ${selectedAssetsStore.size} assets`)
+
+    assetService.purgeAssets({
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
+    })
+})
+
+document.body.addEventListener(Const.events.batchAssetsRestored, (event) => {
+    const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
+
+    console.debug(`Batch restoring ${selectedAssetsStore.size} assets`)
+
+    assetService.restoreAssets({
+        assetIds: Array.from(selectedAssetsStore.items.keys()),
+    })
+})
+
 document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
     const fieldName = event.detail["fieldName"]
     const checked = event.detail["checked"]

@@ -203,6 +203,68 @@ class AssetService {
                 )
             })
     }
+
+    purgeAssets({ assetIds }) {
+        const payload = {
+            assetIds: assetIds,
+        }
+
+        fetch(`/api/asset/r/${window.ctx.getRepoId()}/purge`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    showErrorSnackBar(`Error purging assets: ${response.statusText}`)
+                    return
+                }
+                const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} permanently deleted`
+                showSuccessSnackBar(successMessage)
+
+                this.removeAssetsFromGrid(assetIds)
+                Alpine.store(Const.state.selectedAssets).reset()
+                this.reloadNav()
+            })
+            .catch((response) => {
+                showErrorSnackBar(
+                    `Error purging assets: ${response.status}, ${response.statusText}`,
+                )
+            })
+    }
+
+    restoreAssets({ assetIds }) {
+        const payload = {
+            assetIds: assetIds,
+        }
+
+        fetch(`/api/asset/r/${window.ctx.getRepoId()}/restore`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    if (response.status === 409) {
+                        showWarningSnackBar("Cannot restore: a non-recycled asset with the same content already exists")
+                    } else {
+                        showErrorSnackBar(`Error restoring assets: ${response.statusText}`)
+                    }
+                    return
+                }
+                const successMessage = `${assetIds.length > 1 ? "Assets" : "Asset"} restored`
+                showSuccessSnackBar(successMessage)
+
+                this.removeAssetsFromGrid(assetIds)
+                Alpine.store(Const.state.selectedAssets).reset()
+                this.reloadNav()
+            })
+            .catch((response) => {
+                showErrorSnackBar(
+                    `Error restoring assets: ${response.status}, ${response.statusText}`,
+                )
+            })
+    }
 }
 
 const assetService = new AssetService()

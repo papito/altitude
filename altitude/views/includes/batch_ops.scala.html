@@ -39,18 +39,34 @@
 
 <div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
     <div class="container">
-        <div class="control batch-mover">
-            <button class="action-button success drag-drop"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-        </div>
-        <!-- div class="control">
-            <button class="action-button success"><i class="fas fa-tools"></i>Actions</button>
-        </div -->
-        <div class="control batch-recycler">
-            <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-        </div>
-        <div class="control">
-            <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
-        </div>
+        <!-- Default view: Move, Recycle, Deselect All -->
+        <template x-if="!$store.currentView.isTrashBinView()">
+            <div class="container">
+                <div class="control batch-mover">
+                    <button class="action-button success drag-drop"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                </div>
+                <div class="control batch-recycler">
+                    <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                </div>
+                <div class="control">
+                    <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
+                </div>
+            </div>
+        </template>
+        <!-- Trash bin view: Purge, Restore, Deselect All -->
+        <template x-if="$store.currentView.isTrashBinView()">
+            <div class="container">
+                <div class="control">
+                    <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsPurged)"><i class="fas fa-fire"></i>Purge&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                </div>
+                <div class="control">
+                    <button class="action-button success" @@click="$dispatch(window.Const.events.batchAssetsRestored)"><i class="fas fa-undo"></i>Restore&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                </div>
+                <div class="control">
+                    <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
+                </div>
+            </div>
+        </template>
     </div>
 </div>
 

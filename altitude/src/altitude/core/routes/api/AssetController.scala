@@ -34,4 +34,26 @@ class AssetController(using logger: Logger) extends BaseController:
 
     cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
 
+  @requireLogin()
+  @cask.put(f"/$prefix/r/:repoId/restore")
+  def restoreAssets(repoId: String)(using request: Request): Response[String] =
+    val jsonIn: JsObject = unscrubbedJson.get
+    val assetIdSet = (jsonIn \ Api.Field.ASSET_IDS).as[Seq[String]].toSet
+    logger.info(s"Restoring assets ${assetIdSet.mkString(", ")}")
+
+    App.altitude.service.library.restoreRecycledAssets(assetIdSet)
+
+    cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
+
+  @requireLogin()
+  @cask.delete(f"/$prefix/r/:repoId/purge")
+  def purgeSelectedAssets(repoId: String)(using request: Request): Response[String] =
+    val jsonIn: JsObject = unscrubbedJson.get
+    val assetIdSet = (jsonIn \ Api.Field.ASSET_IDS).as[Seq[String]].toSet
+    logger.info(s"Purging selected assets ${assetIdSet.mkString(", ")}")
+
+    App.altitude.service.library.purgeSelectedAssets(assetIdSet)
+
+    cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
+
   initialize()

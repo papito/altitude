@@ -283,6 +283,42 @@ class LibraryService(val app: Altitude) {
     assetsToPurge.records.map(app.service.purgePipeline.addToQueue(_, pipelineContext))
   }
 
+  def purgeSelectedAssets(assetIds: Set[String]): Unit = {
+    logger.info(s"Purging selected assets [${assetIds.mkString(",")}]")
+
+    val assetsToPurge = txManager.withTransaction {
+      markSelectedAssetsForPurging(assetIds)
+      app.service.asset.queryRecycled(
+        new Query()
+          .add(FieldConst.Asset.IS_PURGED -> true)
+          .add(FieldConst.ID -> Query.IN(assetIds.asInstanceOf[Set[Any]]))
+      )
+    }
+
+    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
+    assetsToPurge.records.map(app.service.purgePipeline.addToQueue(_, pipelineContext))
+  }
+
+  private def markSelectedAssetsForPurging(assetIds: Set[String]): Unit = {
+    txManager.withTransaction {
+      val assetQuery = new Query()
+        .add(FieldConst.Asset.IS_RECYCLED -> true)
+        .add(FieldConst.ID -> Query.IN(assetIds.asInstanceOf[Set[Any]]))
+
+      val assets = app.service.asset.queryAll(assetQuery).records.map(r => r: Asset)
+
+      if (assets.nonEmpty) {
+        val purgeQuery = new Query().add(FieldConst.ID -> Query.IN(assets.map(_.persistedId).toSet[Any]))
+        app.service.asset.updateByQuery(purgeQuery, Map(FieldConst.Asset.IS_PURGED -> true))
+
+        val totalBytes = assets.foldLeft(0L)((sum, asset) => sum + asset.sizeBytes)
+
+        app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, assets.size)
+        app.service.stats.decrementStat(Stats.RECYCLED_BYTES, totalBytes)
+      }
+    }
+  }
+
   private def markRecycledAssetsForPurging(): Unit = {
     txManager.withTransaction {
       val assetQuery = new Query().add(FieldConst.Asset.IS_RECYCLED -> true)
