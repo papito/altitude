@@ -104,6 +104,20 @@ import scala.math.Ordered.orderingToOrdered
 
   }
 
+  test("Searching with root folder ID includes triaged assets") {
+    val folder1: Folder = testApp.service.folder.add("folder1")
+
+    // 2 sorted assets in a sub-folder
+    (1 to 2).foreach(_ => testContext.persistAsset(folder = Some(folder1)))
+    // 1 triaged asset (no folder assigned)
+    testContext.persistAsset(isTriaged = true)
+
+    val rootFolderId = testContext.repository.rootFolderId
+
+    val results = testApp.service.library.search(new SearchQuery(folderIds = Set(rootFolderId)))
+    results.total shouldBe 3
+  }
+
   def fixtureForPersonFilter: Object { val assetsPerPersonCount: Int; val people: Seq[Person] } = new {
     val peopleCount = 3
     val assetsPerPersonCount = 3

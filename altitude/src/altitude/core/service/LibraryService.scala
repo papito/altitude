@@ -101,18 +101,17 @@ class LibraryService(val app: Altitude) {
           throw IllegalOperationException("Currently cannot search in multiple folders at once")
         }
 
-        val allFolders = app.service.folder.getChildrenRecursive(rootId = query.folderIds.head)
-        val allFolderIds = (query.folderIds.head :: allFolders.map(_.persistedId)).toSet
+        val folderId = query.folderIds.head
 
-        new SearchQuery(
-          text = query.text,
-          folderIds = allFolderIds,
-          params = query.params,
-          metadataFilters = query.metadataFilters,
-          rpp = query.rpp,
-          page = query.page,
-          searchSort = query.searchSort
-        )
+        // If the root folder is selected, treat it as "no folder filter" so that
+        // triaged assets (which have an empty folderId) are included — matching the default view.
+        if (app.service.folder.isRootFolder(folderId)) {
+          query.withFolderIds(Set.empty)
+        } else {
+          val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
+          val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
+          query.withFolderIds(allFolderIds)
+        }
       } else {
         query
       }

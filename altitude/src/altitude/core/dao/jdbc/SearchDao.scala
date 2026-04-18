@@ -22,18 +22,23 @@ object SearchDao:
 abstract class SearchDao(override val config: Config) extends AssetDao(config) with altitude.core.dao.SearchDao:
   override def search(query: SearchQuery): SearchResult =
     throw new NotImplementedError
+
   protected def addSearchDocument(asset: Asset): Unit =
     throw new NotImplementedError
+
   protected def replaceSearchDocument(asset: Asset): Unit =
     throw new NotImplementedError
+
   override def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit =
     logger.debug(s"Indexing asset ${asset.persistedId} for search")
     indexMetadata(asset, metadataFields)
     addSearchDocument(asset)
+
   def reindexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit =
     clearMetadata(asset.persistedId)
     indexMetadata(asset, metadataFields)
     replaceSearchDocument(asset)
+
   private def clearMetadata(assetId: String): Unit =
     logger.debug(s"Clearing asset $assetId metadata")
     BaseDao.incrWriteQueryCount()
@@ -48,6 +53,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val runner: QueryRunner = new QueryRunner()
     val numDeleted = runner.update(RequestContext.getConn, sql, bindValues*)
     logger.debug(s"Deleted records: $numDeleted")
+
   private def indexMetadata(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit =
     logger.debug(s"Indexing metadata for asset ${asset.persistedId}")
     asset.userMetadata.data.foreach {
@@ -60,8 +66,10 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
           addMetadataValues(asset = asset, field = field, values = values.map(_.value))
         else logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
     }
+
   override def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
     addMetadataValues(asset = asset, field = field, values = Set(value))
+
   override def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
     logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)

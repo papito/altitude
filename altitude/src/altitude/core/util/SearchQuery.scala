@@ -50,6 +50,18 @@ class SearchQuery(
       searchSort = searchSort
     )
 
+  def withFolderIds(ids: Set[String]): SearchQuery =
+    new SearchQuery(
+      text = text,
+      params = params,
+      folderIds = ids,
+      personIds = personIds,
+      metadataFilters = metadataFilters,
+      rpp = rpp,
+      page = page,
+      searchSort = searchSort
+    )
+
   override def add(_params: (String, Any)*): SearchQuery =
     new SearchQuery(
       text = text,
