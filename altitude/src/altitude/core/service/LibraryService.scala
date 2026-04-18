@@ -164,7 +164,7 @@ class LibraryService(val app: Altitude) {
             app.service.asset.setRecycledProp(asset, isRecycled = false)
 
             // Assets recycled directly from triage have no folder assigned — skip folder restoration
-            if (asset.folderId.nonEmpty) {
+            if (!asset.isTriaged) {
               // Restore the full ancestor chain (top-down) so the folder tree is consistent.
               // getAncestors returns from root -> direct parent, so we can iterate in order.
               val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
@@ -179,9 +179,6 @@ class LibraryService(val app: Altitude) {
               if (folder.isRecycled) {
                 app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
               }
-            } else {
-              // Asset was originally in triage — restore it back to triage
-              app.service.asset.updateById(asset.persistedId, Map(FieldConst.Asset.IS_TRIAGED -> true))
             }
 
             val restoredAsset: Asset = app.service.asset.getById(assetId)
@@ -262,7 +259,7 @@ class LibraryService(val app: Altitude) {
 
         app.service.asset.updateByQuery(
           query = assetQuery,
-          data = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_TRIAGED -> false)
+          data = Map(FieldConst.Asset.IS_RECYCLED -> true)
         )
 
         // update the stats in one pass

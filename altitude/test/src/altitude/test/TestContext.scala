@@ -107,7 +107,9 @@ class TestContext(val testApp: Altitude) {
     }
 
     val currentRepo = repository.getOrElse(repositories.headOption.get)
-    val folderId = if (folder.isDefined) folder.get.persistedId else currentRepo.rootFolderId
+    val folderId = if (folder.isDefined) folder.get.persistedId
+                  else if (isTriaged) ""
+                  else currentRepo.rootFolderId
 
     val currentUser = user.getOrElse(this.user)
 

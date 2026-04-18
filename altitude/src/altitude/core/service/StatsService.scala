@@ -101,9 +101,15 @@ class StatsService(val app: Altitude) {
     app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
     app.service.stats.decrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
 
-    logger.debug(s"Recycled asset [${asset.id}] moving TO sorted. Incrementing SORTED")
-    app.service.stats.incrementStat(Stats.SORTED_ASSETS)
-    app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
+    if (asset.isTriaged) {
+      logger.debug(s"Recycled asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
+      app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
+      app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
+    } else {
+      logger.debug(s"Recycled asset [${asset.id}] moving TO sorted. Incrementing SORTED")
+      app.service.stats.incrementStat(Stats.SORTED_ASSETS)
+      app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
+    }
   }
 
   def recycleAsset(asset: Asset): Unit = {

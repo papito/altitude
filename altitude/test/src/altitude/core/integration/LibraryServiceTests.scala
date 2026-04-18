@@ -11,7 +11,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Rename asset and attempt to rename a recycled asset") {
-    var asset: Asset = testContext.persistAsset()
+    val asset: Asset = testContext.persistAsset()
     var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
     updatedAsset.fileName shouldBe "newName"
 

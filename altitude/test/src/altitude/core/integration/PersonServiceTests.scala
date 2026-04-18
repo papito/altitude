@@ -305,7 +305,7 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
     testApp.service.person.getPersonFaces(person.persistedId).length should be(totalAssets)
   }
 
-  test("Restored asset should restore person face counts", Focused) {
+  test("Restored asset should restore person face counts") {
     val totalAssets = 5
     val people = List.fill(2)(testApp.service.person.addPerson(Person()))
     var person: Person = people.head
