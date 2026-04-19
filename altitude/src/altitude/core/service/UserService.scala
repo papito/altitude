@@ -1,5 +1,5 @@
 package altitude.core.service
-import altitude.core._
+import altitude.core.*
 import altitude.core.dao.UserDao
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager

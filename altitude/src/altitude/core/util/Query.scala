@@ -3,11 +3,10 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 
 object Query {
-  object ParamType extends Enumeration {
-    val EQ, GT, LT, GTE, LTE, IN, RANGE, OR, CONTAINS, MATCHES = Value
-  }
+  enum ParamType:
+    case EQ, GT, LT, GTE, LTE, IN, RANGE, OR, CONTAINS, MATCHES
 
-  case class QueryParam(values: Set[Any], paramType: ParamType.Value, negate: Boolean = false) {
+  case class QueryParam(values: Set[Any], paramType: ParamType, negate: Boolean = false) {
     require(values.nonEmpty)
 
     // types that requires two values
@@ -16,7 +15,7 @@ object Query {
     }
 
     // overloaded to accept one value
-    def this(value: Any, paramType: ParamType.Value, negate: Boolean) =
+    def this(value: Any, paramType: ParamType, negate: Boolean) =
       this(Set(value), paramType, negate)
   }
 
@@ -58,12 +57,16 @@ object Query {
   def NOT_MATCHES(value: Any) = new QueryParam(value, ParamType.MATCHES, negate = true)
 }
 
-object SortDirection extends Enumeration {
-  val ASC: Value = Value(0)
-  val DESC: Value = Value(1)
-}
+enum SortDirection(val id: Int):
+  case ASC extends SortDirection(0)
+  case DESC extends SortDirection(1)
 
-case class Sort(param: String, direction: SortDirection.Value)
+object SortDirection:
+  def apply(id: Int): SortDirection = SortDirection.values.find(_.id == id).getOrElse(
+    throw new IllegalArgumentException(s"Invalid SortDirection id: $id")
+  )
+
+case class Sort(param: String, direction: SortDirection)
 
 class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: Int = 1, val sort: List[Sort] = List()) {
   if (rpp < 0) throw new IllegalArgumentException(s"Invalid results per page value: $rpp")

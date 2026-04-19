@@ -2,7 +2,7 @@ package altitude.core.suites
 
 import org.scalatest.BeforeAndAfterAll
 import altitude.core.Altitude
-import altitude.core.{Const => C}
+import altitude.core.Const as C
 import altitude.test.TestAltitudeApp
 
 object PostgresSuiteBundle {

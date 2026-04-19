@@ -4,7 +4,7 @@ import altitude.core.Api
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 
-case class SearchSort(field: String, direction: SortDirection.Value) {
+case class SearchSort(field: String, direction: SortDirection) {
   def toJson: JsObject = Json.obj(
     Api.Field.SearchSort.DIRECTION -> direction.toString,
     Api.Field.SearchSort.FIELD -> field

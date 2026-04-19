@@ -16,7 +16,7 @@ import org.slf4j.Logger
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 object ImportController {
   private val uploadCancelRequest = TrieMap[String, Boolean]()

@@ -1,7 +1,7 @@
 package altitude.core.models
 
 
-import play.api.libs.json._
+import play.api.libs.json.*
 
 enum AccountType:
   case Admin, User, Guest

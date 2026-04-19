@@ -1,7 +1,7 @@
 package altitude.core.integration
 
-import altitude.core._
-import altitude.core.models._
+import altitude.core.*
+import altitude.core.models.*
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink

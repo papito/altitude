@@ -7,14 +7,14 @@ import com.drew.metadata.Directory
 import org.apache.tika.detect.DefaultDetector
 import org.apache.tika.detect.Detector
 import org.apache.tika.io.TikaInputStream
-import org.apache.tika.metadata.{ Metadata => TikaMetadata }
-import org.apache.tika.mime.{ MediaType => TikaMediaType }
+import org.apache.tika.metadata.Metadata as TikaMetadata
+import org.apache.tika.mime.MediaType as TikaMediaType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 class MetadataExtractionService {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)

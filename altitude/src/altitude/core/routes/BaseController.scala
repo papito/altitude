@@ -1,6 +1,6 @@
 package altitude.core.routes
 
-import altitude.core.{ Const => C }
+import altitude.core.Const as C
 import altitude.core.ValidationException
 import cask.Request
 import org.slf4j.Logger

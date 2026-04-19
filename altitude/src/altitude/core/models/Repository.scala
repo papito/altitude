@@ -1,7 +1,7 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
-import play.api.libs.json._
+import play.api.libs.json.*
 import play.api.libs.json.JsonNaming.SnakeCase
 
 object Repository:

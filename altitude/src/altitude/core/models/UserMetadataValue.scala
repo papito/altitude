@@ -1,6 +1,6 @@
 package altitude.core.models
 import altitude.core.util.MurmurHash
-import play.api.libs.json._
+import play.api.libs.json.*
 import play.api.libs.json.JsonNaming.SnakeCase
 
 object UserMetadataValue:

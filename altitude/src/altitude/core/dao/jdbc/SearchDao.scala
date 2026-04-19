@@ -1,7 +1,7 @@
 package altitude.core.dao.jdbc
 import altitude.core.FieldConst
 import altitude.core.RequestContext
-import altitude.core.models._
+import altitude.core.models.*
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 import com.typesafe.config.Config

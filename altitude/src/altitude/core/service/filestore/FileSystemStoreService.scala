@@ -1,6 +1,6 @@
 package altitude.core.service.filestore
 
-import altitude.core.{ Const => C }
+import altitude.core.Const as C
 import altitude.core.Altitude
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -11,7 +11,7 @@ import altitude.core.models.FaceImages
 import altitude.core.models.MimedAssetData
 import altitude.core.models.MimedFaceData
 import altitude.core.models.MimedPreviewData
-import java.io._
+import java.io.*
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.slf4j.Logger

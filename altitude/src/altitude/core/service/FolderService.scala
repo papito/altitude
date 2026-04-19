@@ -10,7 +10,7 @@ import altitude.core.ValidationException
 import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
 import altitude.core.util.Query
-import play.api.libs.json._
+import play.api.libs.json.*
 
 class FolderService(val app: Altitude) extends BaseService[Folder] {
 

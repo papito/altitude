@@ -29,7 +29,7 @@ object ImportStatusWsActor {
 class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
   extends AbstractBehavior[ImportStatusWsActor.Command](context) {
 
-  import ImportStatusWsActor._
+  import ImportStatusWsActor.*
 
   private val userToWsClientLookup = collection.mutable.Map[String, List[WsChannelActor]]()
 

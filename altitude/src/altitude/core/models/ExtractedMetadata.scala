@@ -1,6 +1,6 @@
 package altitude.core.models
 
-import play.api.libs.json._
+import play.api.libs.json.*
 
 object ExtractedMetadata:
   private type FieldValuesType = Map[String, String]

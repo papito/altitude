@@ -1,6 +1,6 @@
 package altitude.test
 
-import altitude.core.{ Const => C }
+import altitude.core.Const as C
 import altitude.core.Altitude
 import altitude.core.models.ImportAsset
 import altitude.core.models.UserMetadata

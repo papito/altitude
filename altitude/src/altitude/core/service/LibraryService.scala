@@ -1,6 +1,6 @@
 package altitude.core.service
-import altitude.core.{ Const => _, _ }
-import altitude.core.models._
+import altitude.core.{Const as _, *}
+import altitude.core.models.*
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink

@@ -8,10 +8,9 @@ import java.nio.file.StandardCopyOption
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-object Environment extends Enumeration {
+object Environment {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  type Environment = String
 
   object Name {
     val TEST = "test"

@@ -2,8 +2,8 @@ package altitude.core.routes.web
 
 import altitude.core.App
 import altitude.core.models.MimedPreviewData
-import altitude.core.{Const => C}
-import cask._
+import altitude.core.Const as C
+import cask.*
 
 class ContentViewController extends cask.Routes:
 

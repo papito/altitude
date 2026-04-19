@@ -1,6 +1,6 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.{ Const => C }
+import altitude.core.Const as C
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
@@ -16,7 +16,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json._
+import play.api.libs.json.*
 
 import scala.language.implicitConversions
 

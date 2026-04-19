@@ -1,7 +1,7 @@
 package altitude.core.integration
 
-import altitude.core._
-import altitude.core.models._
+import altitude.core.*
+import altitude.core.models.*
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
 import org.scalatest.DoNotDiscover

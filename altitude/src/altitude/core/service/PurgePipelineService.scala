@@ -3,7 +3,7 @@ package altitude.core.service
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
-import altitude.core.pipeline.flows._
+import altitude.core.pipeline.flows.*
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.stream.OverflowStrategy

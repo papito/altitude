@@ -1,7 +1,7 @@
 // src/main/scala/software/altitude/core/Validators.scala
 package altitude.core
 
-import altitude.core.{ Const => C }
+import altitude.core.Const as C
 import play.api.libs.json.JsObject
 
 import scala.util.matching.Regex

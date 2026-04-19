@@ -1,6 +1,6 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.{ Const => C }
+import altitude.core.Const as C
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import cask.Request

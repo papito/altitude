@@ -1,7 +1,7 @@
 package altitude.core.models
 
 import altitude.core.Const.FaceRecognition
-import play.api.libs.json._
+import play.api.libs.json.*
 import play.api.libs.json.JsonNaming.SnakeCase
 
 import scala.collection.mutable

@@ -37,16 +37,12 @@ object Const {
     val PREVIEW_BOX_PIXELS = 200
   }
 
-  object DbEngineName extends Enumeration {
-    type DbEngineName = String
+  object DbEngineName:
     val SQLITE = "sqlite"
     val POSTGRES = "postgres"
-  }
 
-  object StorageEngineName extends Enumeration {
-    type StorageEngineName = String
+  object StorageEngineName:
     val FS = "fs"
-  }
 
   object Search {
     val DEFAULT_RPP = 50

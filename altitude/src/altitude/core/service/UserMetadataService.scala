@@ -1,14 +1,15 @@
 package altitude.core.service
 
-import altitude.core.{ Const => C, _ }
+import altitude.core.Const as C
+import altitude.core.*
 import altitude.core.dao.AssetDao
 import altitude.core.dao.UserMetadataFieldDao
-import altitude.core.models._
+import altitude.core.models.*
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json._
+import play.api.libs.json.*
 
 object UserMetadataService {
   final private val VALID_BOOLEAN_VALUES: Set[String] = Set("0", "1", "true", "false")
