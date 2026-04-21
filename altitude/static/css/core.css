@@ -327,10 +327,27 @@ form input.error, form input.error:focus {
     top: 0;
     width: 100%;
     height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
 }
 
 #imageDetailModalContainer .modal-box {
     border: none;
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+#imageDetailSpinner {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    font-size: 3em;
+    color: var(--font-color-dim);
+    pointer-events: none;
 }
 
 /*            */

@@ -51,6 +51,23 @@ export function initApp() {
         },
     })
 
+    Alpine.store(Const.state.shadowResults, {
+        items: [],
+        page: 1,
+        totalPages: 0,
+        currentAssetId: null,
+
+        reset(page, totalPages) {
+            this.items = []
+        },
+        prepend(newItems) {
+            this.items = newItems.concat(this.items)
+        },
+        append(newItems) {
+            this.items = this.items.concat(newItems)
+        },
+    })
+
     Alpine.store(Const.state.currentView, {
         name: null,
 
@@ -69,6 +86,10 @@ export function initApp() {
         isTrashBinView() {
             return this.view === Const.views.trashbin
         },
+    })
+
+    Alpine.store(Const.state.imageDetailLoading, {
+        value: false,
     })
 
     Alpine.start()

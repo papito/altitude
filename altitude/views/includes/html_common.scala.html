@@ -22,6 +22,11 @@
             <div class="modal-title">Title!</div>
             <div class="close-modal">&times;</div>
         </div>
+        <div id="imageDetailSpinner"
+            x-data
+            x-show="$store.imageDetailLoading.value">
+            <i class="fas fa-spinner fa-spin"></i>
+        </div>
         <div id="imageDetailModalContent">
         </div>
     </div>

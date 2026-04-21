@@ -4,6 +4,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.FieldConst
+import altitude.core.models.Asset
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
@@ -15,6 +16,7 @@ import cask.model.Response
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import org.slf4j.Logger
+import play.api.libs.json.Json
 
 class SearchResultsController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/search"
@@ -35,7 +37,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       sort: Option[String] = None,
       folderId: Option[String] = None,
       personId: Option[String] = None,
-      parentId: Option[String] = None)(using request: Request): Response[String] =
+      parentId: Option[String] = None,
+      format: Option[String] = None)(using request: Request): Response[String] =
     /**
      * The search controller combines the query parameters from the browser URL and the HTMX request.
      *
@@ -106,6 +109,23 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     logger.info(s"QUERY: ${q.toString}")
 
     val results = App.altitude.service.library.search(q)
+
+    val contentType = request.exchange.getRequestHeaders.getFirst("Content-Type")
+    val isJsonFormat = contentType != null && contentType.contains("application/json")
+
+    if isJsonFormat then
+      val assets = results.records.map(r => r: Asset)
+      val ids = assets.map(_.persistedId)
+      val fileNamesMap = assets.map(a => a.persistedId -> a.fileName).toMap
+      val jsonPayload = Json.obj(
+        "ids" -> ids,
+        "page" -> page,
+        "totalPages" -> results.totalPages,
+      )
+      return cask.Response(
+        Json.stringify(jsonPayload),
+        200,
+        Seq(("Content-Type", "application/json")))
 
     if isContinuousScroll then
       // no more pages

@@ -13,8 +13,21 @@ export function showModal({ minWidthPx, title }) {
     htmx.find("#modalContainer").style.display = "block"
 }
 
-export function showAssetDetailModal({ title }) {
+export function showAssetDetailModal({ title, width, height }) {
     htmx.find("#imageDetailModalContainer .modal-title").innerText = title
+
+    const box = htmx.find("#imageDetailModalContainer .modal-box")
+    if (width && height) {
+        const maxW = window.innerWidth - 10
+        const maxH = window.innerHeight - 40
+        const scale = Math.min(1, maxW / width, maxH / height)
+        box.style.width = `${Math.round(width * scale)}px`
+        box.style.height = `${Math.round(height * scale) + 40}px` // +40 for toolbar
+    } else {
+        box.style.width = ""
+        box.style.height = ""
+    }
+
     htmx.find("#imageDetailModalContainer").style.display = "grid"
 }
 
