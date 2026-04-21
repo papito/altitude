@@ -51,6 +51,33 @@ export function initApp() {
         },
     })
 
+    Alpine.store(Const.state.searchUrl, {
+        url: null,
+
+        set(url) {
+            this.url = url
+        }
+    })
+
+    Alpine.store(Const.state.shadowResults, {
+        items: [],
+        page: 1,
+        totalPages: 0,
+        currentAssetId: null,
+
+        reset(page, totalPages) {
+            this.items = []
+            this.page = page
+            this.totalPages = totalPages
+        },
+        prepend(newItems) {
+            this.items = newItems.concat(this.items)
+        },
+        append(newItems) {
+            this.items = this.items.concat(newItems)
+        },
+    })
+
     Alpine.store(Const.state.currentView, {
         name: null,
 

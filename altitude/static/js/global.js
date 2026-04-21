@@ -25,4 +25,12 @@ document.onkeydown = function (evt) {
         )
         document.body.dispatchEvent(escapeKeyPressed)
     }
+
+    if (evt.key === "ArrowLeft") {
+        const showPreviousEvent = new CustomEvent(Const.events.showPrevious)
+        document.body.dispatchEvent(showPreviousEvent)
+    } else if (evt.key === "ArrowRight") {
+        const showNextEvent = new CustomEvent(Const.events.showNext)
+        document.body.dispatchEvent(showNextEvent)
+    }
 }

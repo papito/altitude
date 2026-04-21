@@ -25,6 +25,9 @@ export let Const = {
         viewSettingChanged: "VIEW_SETTING_CHANGED_EVENT",
         deselectAll: "DESELECT_ALL_EVENT",
         toggleAsset: "TOGGLE_ASSET_EVENT",
+        showNext: "SHOW_NEXT_EVENT",
+        showPrevious: "SHOW_PREVIOUS_EVENT",
+        detailShown: "DETAIL_SHOWN_EVENT",
     },
 
     /**
@@ -56,6 +59,8 @@ export let Const = {
         selectedAssets: "selectedAssets",
         currentView: "currentView",
         resultsTotal: "resultsTotal",
+        shadowResults: "shadowResults",
+        searchUrl: "searchUrl",
     },
 
     localStore: {
