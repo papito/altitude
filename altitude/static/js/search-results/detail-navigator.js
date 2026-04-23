@@ -34,7 +34,10 @@ export function initDetailNavigator(){
                     if (!data) return
                     const store = Alpine.store(Const.state.shadowResults)
                     store.append(data.ids)
-                })
+                    store.page = data.page
+                    store.totalPages = data.totalPages
+                    console.debug(`Setting search URL to ${requestPath}`)
+                    Alpine.store(Const.state.searchUrl).set(requestPath)                })
                 .catch((response) => {
                     console.error(`Error fetching search results: ${response.status}, ${response.statusText}`)
                 })

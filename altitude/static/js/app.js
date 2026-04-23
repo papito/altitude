@@ -51,6 +51,14 @@ export function initApp() {
         },
     })
 
+    Alpine.store(Const.state.searchUrl, {
+        url: null,
+
+        set(url) {
+            this.url = url
+        }
+    })
+
     Alpine.store(Const.state.shadowResults, {
         items: [],
         page: 1,
