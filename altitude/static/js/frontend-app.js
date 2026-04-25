@@ -407,6 +407,10 @@ export class FrontendApp {
                 event.detail.assetId
         })
 
+        document.body.addEventListener(Const.events.escapeKeyPressed, () => {
+            this.handleEscapeKeyPressed()
+        })
+
         document.body.addEventListener("htmx:afterRequest", (event) => {
             this.handleAfterRequest(event)
         })
@@ -493,6 +497,12 @@ export class FrontendApp {
         const requestPath = event.detail.pathInfo.requestPath
         const status = event.detail.xhr.status
         const discardPersonElement = this.getDiscardPersonElement(event)
+        const personNameEditorElement = this.getPersonNameEditorElement(event)
+
+        if (this.isPersonNameEditRequest(requestPath, personNameEditorElement)) {
+            this.handlePersonNameEditAfterRequest(event, personNameEditorElement)
+            return
+        }
 
         if (this.isDiscardPersonRequest(requestPath, discardPersonElement)) {
             if (event.detail.successful === false) {
@@ -591,6 +601,51 @@ export class FrontendApp {
             requestPath.startsWith(`/htmx/people/r/${this.context.getRepoId()}/p/`) &&
             discardPersonElement !== null
         )
+    }
+
+    getPersonNameEditorElement(event) {
+        return event.target?.closest?.("#editPersonName") ?? null
+    }
+
+    isPersonNameEditRequest(requestPath, personNameEditorElement) {
+        return (
+            requestPath.startsWith(`/htmx/people/r/${this.context.getRepoId()}/p/`) &&
+            requestPath.endsWith("/name/edit") &&
+            personNameEditorElement !== null
+        )
+    }
+
+    handlePersonNameEditAfterRequest(event, personNameEditorElement) {
+        if (event.detail.successful === false) {
+            return
+        }
+
+        if (event.detail.xhr.responseText.includes('id="editPersonName"')) {
+            return
+        }
+
+        const responseEl = document.createElement("div")
+        responseEl.innerHTML = event.detail.xhr.responseText
+        const newPersonName = responseEl.textContent?.trim() || ""
+
+        this.dispatch(Const.events.personNameEdited, {
+            personId: personNameEditorElement.dataset.appPersonId,
+            newPersonName,
+        })
+    }
+
+    handleEscapeKeyPressed() {
+        const personNameEditorElement = document.querySelector(
+            '[data-app-fragment="person-name-editor"]',
+        )
+        if (!personNameEditorElement) {
+            return
+        }
+
+        htmx.ajax("GET", personNameEditorElement.dataset.appRestoreUrl, {
+            swap: "innerHTML",
+            target: "#personName",
+        })
     }
 
     handleHtmxLoad(event) {
@@ -785,8 +840,18 @@ export class FrontendApp {
     }
 
     hydrateFragments(root) {
+        this.findFragmentRoots(root, "person-name-editor").forEach(
+            (fragmentEl) => {
+                this.hydratePersonNameEditorFragment(fragmentEl)
+            },
+        )
+
         this.findFragmentRoots(root, "modal").forEach((fragmentEl) => {
             this.hydrateModalFragment(fragmentEl)
+        })
+
+        this.findFragmentRoots(root, "image-detail").forEach((fragmentEl) => {
+            this.hydrateImageDetailFragment(fragmentEl)
         })
 
         this.findFragmentRoots(root, "search-results").forEach((fragmentEl) => {
@@ -817,12 +882,62 @@ export class FrontendApp {
             title: fragmentEl.dataset.appModalTitle,
         })
 
-        this.focusModalFragment(fragmentEl)
+        this.initializeModalFragment(fragmentEl)
+        this.focusFragmentElement(
+            fragmentEl,
+            fragmentEl.dataset.appModalAutofocusSelector,
+            fragmentEl.dataset.appModalSelectOnFocus === "true",
+        )
         this.bindModalFragment(fragmentEl)
     }
 
-    focusModalFragment(fragmentEl) {
-        const selector = fragmentEl.dataset.appModalAutofocusSelector
+    initializeModalFragment(fragmentEl) {
+        if (fragmentEl.dataset.appModalKind === "view-settings") {
+            this.initializeViewSettingsModalFragment(fragmentEl)
+        }
+    }
+
+    initializeViewSettingsModalFragment(fragmentEl) {
+        const showFields = this.context.getGridMetadataFields()
+
+        fragmentEl
+            .querySelectorAll('input[type="checkbox"]')
+            .forEach((checkboxEl) => {
+                checkboxEl.checked = showFields.has(checkboxEl.value)
+            })
+
+        if (fragmentEl.dataset.appViewSettingsBound === "true") {
+            return
+        }
+
+        fragmentEl.dataset.appViewSettingsBound = "true"
+
+        fragmentEl.addEventListener("change", (event) => {
+            const checkboxEl = event.target
+            if (
+                !(checkboxEl instanceof HTMLInputElement) ||
+                checkboxEl.type !== "checkbox"
+            ) {
+                return
+            }
+
+            const fieldName = checkboxEl.value
+            const checked = checkboxEl.checked
+
+            if (checked) {
+                this.context.addGridMetadataField(fieldName)
+            } else {
+                this.context.removeGridMetadataField(fieldName)
+            }
+
+            this.dispatch(Const.events.viewSettingChanged, {
+                fieldName,
+                checked,
+            })
+        })
+    }
+
+    focusFragmentElement(fragmentEl, selector, selectOnFocus = false) {
         if (!selector) {
             return
         }
@@ -837,10 +952,7 @@ export class FrontendApp {
 
         focusEl.focus()
 
-        if (
-            fragmentEl.dataset.appModalSelectOnFocus === "true" &&
-            typeof focusEl.select === "function"
-        ) {
+        if (selectOnFocus && typeof focusEl.select === "function") {
             focusEl.select()
         }
     }
@@ -857,12 +969,12 @@ export class FrontendApp {
                 return
             }
 
-            this.handleModalFragmentSuccess(fragmentEl)
+            this.handleModalFragmentSuccess(fragmentEl, event)
         })
     }
 
-    handleModalFragmentSuccess(fragmentEl) {
-        this.dispatchModalFragmentSuccessEvent(fragmentEl)
+    handleModalFragmentSuccess(fragmentEl, event) {
+        this.dispatchModalFragmentSuccessEvent(fragmentEl, event)
         this.runModalFragmentSuccessAction(fragmentEl)
 
         if (fragmentEl.dataset.appModalCloseOnSuccess !== "false") {
@@ -870,7 +982,7 @@ export class FrontendApp {
         }
     }
 
-    dispatchModalFragmentSuccessEvent(fragmentEl) {
+    dispatchModalFragmentSuccessEvent(fragmentEl, event) {
         const eventKey = fragmentEl.dataset.appModalSuccessEvent
         if (!eventKey) {
             return
@@ -884,8 +996,45 @@ export class FrontendApp {
 
         this.dispatch(
             eventName,
-            this.parseModalFragmentDetail(fragmentEl.dataset.appModalSuccessDetail),
+            this.buildModalFragmentSuccessDetail(fragmentEl, event),
         )
+    }
+
+    buildModalFragmentSuccessDetail(fragmentEl, event) {
+        return {
+            ...this.parseModalFragmentDetail(
+                fragmentEl.dataset.appModalSuccessDetail,
+            ),
+            ...this.parseModalFragmentTargetDetail(fragmentEl, event),
+        }
+    }
+
+    parseModalFragmentTargetDetail(fragmentEl, event) {
+        const detail = {}
+
+        Object.entries(fragmentEl.dataset).forEach(([key, value]) => {
+            const prefix = "appModalSuccessDetailTargetAttr"
+            if (!key.startsWith(prefix)) {
+                return
+            }
+
+            const detailKey = this.datasetKeySuffixToDetailKey(
+                key.slice(prefix.length),
+            )
+
+            detail[detailKey] =
+                event.target?.getAttribute?.(value) ?? detail[detailKey]
+        })
+
+        return detail
+    }
+
+    datasetKeySuffixToDetailKey(keySuffix) {
+        if (!keySuffix) {
+            return ""
+        }
+
+        return keySuffix.charAt(0).toLowerCase() + keySuffix.slice(1)
     }
 
     runModalFragmentSuccessAction(fragmentEl) {
@@ -925,6 +1074,48 @@ export class FrontendApp {
             console.error("Error parsing modal success detail", error)
             return {}
         }
+    }
+
+    hydratePersonNameEditorFragment(fragmentEl) {
+        this.focusFragmentElement(
+            fragmentEl,
+            fragmentEl.dataset.appAutofocusSelector,
+            fragmentEl.dataset.appSelectOnFocus === "true",
+        )
+    }
+
+    hydrateImageDetailFragment(fragmentEl) {
+        if (fragmentEl.dataset.appImageDetailBound === "true") {
+            return
+        }
+
+        fragmentEl.dataset.appImageDetailBound = "true"
+
+        const imgEl = fragmentEl.querySelector("img")
+        if (!imgEl) {
+            return
+        }
+
+        this.Alpine.store(Const.state.imageDetailLoading).value = true
+
+        setImgSrcAndWait(imgEl, fragmentEl.dataset.appImageDetailUrl)
+            .then(() => {
+                showAssetDetailModal({
+                    title: fragmentEl.dataset.appImageDetailTitle,
+                    width: Number(fragmentEl.dataset.appImageDetailWidth),
+                    height: Number(fragmentEl.dataset.appImageDetailHeight),
+                })
+
+                this.dispatch(Const.events.detailShown, {
+                    assetId: fragmentEl.dataset.appImageDetailAssetId,
+                })
+            })
+            .catch((error) => {
+                console.error("Error loading asset image", error)
+            })
+            .finally(() => {
+                this.Alpine.store(Const.state.imageDetailLoading).value = false
+            })
     }
 
     hydrateSearchResultsFragment(fragmentEl) {
