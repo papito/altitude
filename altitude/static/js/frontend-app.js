@@ -141,6 +141,77 @@ export class FrontendApp {
     }
 
     registerEventListeners() {
+        document.body.addEventListener(Const.events.folderMoved, (event) => {
+            const movedFolderId = event.detail["movedFolderId"]
+            const newParentId = event.detail["newParentId"]
+
+            if (newParentId === movedFolderId) {
+                return
+            }
+
+            const movedFolder = new Folder(movedFolderId)
+            const newParent = new Folder(newParentId)
+            const oldParent = movedFolder.parent()
+
+            htmx.ajax(
+                "put",
+                `/htmx/folder/r/${this.context.getRepoId()}/move?movedFolderId=${movedFolderId}&newParentId=${newParentId}`,
+                {
+                    swap: "none",
+                    handler: (response) => {
+                        const status = response["htmx-internal-data"].xhr.status
+
+                        if (status === 200) {
+                            movedFolder.closeContextMenu()
+                            movedFolder.clearChildren()
+
+                            newParent.incrementNumOfChildren()
+                            oldParent.decrementNumOfChildren()
+
+                            showSuccessSnackBar(
+                                `Folder ${movedFolder.name()} moved into "${newParent.name()}"`,
+                            )
+
+                            if (newParent.isExpanded()) {
+                                newParent.addChild(movedFolder)
+                                movedFolder.collapse()
+                            } else {
+                                movedFolder.remove()
+                            }
+
+                            newParent.updateVisualState()
+                            oldParent.updateVisualState()
+                        } else if (status === 409) {
+                            showWarningSnackBar(
+                                response["htmx-internal-data"].xhr.responseText,
+                            )
+                        } else {
+                            showErrorSnackBar(
+                                `Error moving folder "${movedFolder.name()}". Status: ${status}`,
+                            )
+                        }
+                    },
+                },
+            )
+        })
+
+        document.body.addEventListener(Const.events.folderAdded, (event) => {
+            const parentFolder = new Folder(event.detail["parentId"])
+            parentFolder.incrementNumOfChildren()
+            parentFolder.updateVisualState()
+        })
+
+        document.body.addEventListener(Const.events.folderDeleted, (event) => {
+            const folder = new Folder(event.detail["id"])
+            const parent = folder.parent()
+
+            parent.decrementNumOfChildren()
+            parent.updateVisualState()
+
+            showSuccessSnackBar(`Folder "${folder.name()}" deleted`)
+            folder.remove()
+        })
+
         document.body.addEventListener(
             Const.events.confirmPersonMerge,
             (event) => {
@@ -337,11 +408,89 @@ export class FrontendApp {
         document.body.addEventListener("htmx:afterSwap", (event) => {
             this.handleAfterSwap(event)
         })
+
+        document.body.addEventListener("htmx:beforeRequest", (event) => {
+            this.handleBeforeRequest(event)
+        })
+
+        document.body.addEventListener("htmx:load", (event) => {
+            this.handleHtmxLoad(event)
+        })
+    }
+
+    handleBeforeRequest(event) {
+        const requestPath = event.detail.pathInfo.requestPath
+
+        if (!this.isFolderRequest(requestPath)) {
+            return
+        }
+
+        if (
+            requestPath ===
+            `/htmx/folder/r/${this.context.getRepoId()}/context-menu`
+        ) {
+            const folderId = event.detail.target.getAttribute(
+                Const.attributes.folderId,
+            )
+            const folder = new Folder(folderId)
+
+            if (folder.isMenuExpanded()) {
+                folder.closeContextMenu()
+                event.preventDefault()
+            } else {
+                document
+                    .querySelectorAll("#rootFolderList .menu")
+                    .forEach((menuEl) => {
+                        Folder.closeContextMenu(menuEl)
+                    })
+            }
+        }
+
+        if (
+            requestPath === `/htmx/folder/r/${this.context.getRepoId()}/children`
+        ) {
+            const url = new URL(
+                "https://dummy.com" + event.detail.pathInfo.finalRequestPath,
+            )
+            const folderId = url.searchParams.get("parentId")
+            const folder = new Folder(folderId)
+
+            if (folder.isRoot) {
+                return
+            }
+
+            if (folder.isExpanded()) {
+                folder.collapse()
+                event.preventDefault()
+                return
+            }
+
+            if (folder.numOfChildren() === 0) {
+                event.preventDefault()
+                const currentView = this.Alpine.store(Const.state.currentView)
+                if (
+                    currentView.isTriageView() ||
+                    currentView.isTrashBinView()
+                ) {
+                    return
+                }
+
+                folder.folderNameEl().click()
+                return
+            }
+
+            folder.expand()
+        }
     }
 
     handleAfterRequest(event) {
         const requestPath = event.detail.pathInfo.requestPath
         const status = event.detail.xhr.status
+
+        if (this.isFolderRequest(requestPath)) {
+            this.handleFolderAfterRequest(event)
+            return
+        }
 
         if (this.isTrashPurgeRequest(requestPath)) {
             if (event.detail.successful === false) {
@@ -366,11 +515,57 @@ export class FrontendApp {
         }
     }
 
+    handleFolderAfterRequest(event) {
+        const requestPath = event.detail.pathInfo.requestPath
+        const status = event.detail.xhr.status
+
+        if (event.detail.successful === false) {
+            showErrorSnackBar(
+                `Error for request to ${requestPath}. HTTP ${status}`,
+            )
+            return
+        }
+
+        if (
+            requestPath ===
+            `/htmx/folder/r/${this.context.getRepoId()}/context-menu`
+        ) {
+            const folder = new Folder(
+                event.target.getAttribute(Const.attributes.folderId),
+            )
+            folder.showContextMenu()
+
+            if (!folder.isExpanded() && !folder.isRoot) {
+                folder.htmxExpandChildrenAction()
+            }
+        }
+
+        if (
+            requestPath === `/htmx/folder/r/${this.context.getRepoId()}/children` ||
+            requestPath === `/htmx/folder/r/${this.context.getRepoId()}/add`
+        ) {
+            const folder = new Folder(
+                event.target.getAttribute(Const.attributes.folderId),
+            )
+            folder.expand()
+        }
+    }
+
     isTrashPurgeRequest(requestPath) {
         return (
             requestPath.startsWith("/htmx/trash//r/") &&
             requestPath.endsWith("/purge")
         )
+    }
+
+    isFolderRequest(requestPath) {
+        return requestPath.startsWith(`/htmx/folder/r/${this.context.getRepoId()}/`)
+    }
+
+    handleHtmxLoad(event) {
+        if (event.target.id === "folderNavWarning") {
+            this.Alpine.initTree(event.target)
+        }
     }
 
     handleAfterSwap(event) {

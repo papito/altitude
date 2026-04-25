@@ -27,11 +27,11 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 
 | JS directory | Template(s) it serves |
 |---|---|
-| `js/folders/` | `htmx/folders.scala.html`, `htmx/folder_children.scala.html` |
+| `js/folders/` | `htmx/folders.scala.html`, `htmx/folder_children.scala.html` (drag-and-drop only) |
 | `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
 | `js/people/` | `htmx/people.scala.html`, `htmx/person.scala.html`, `htmx/person_inner.scala.html` (drag-and-drop only) |
 | `js/person/` | `htmx/person.scala.html` (single person view) |
-| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/trash event handling, batch drag wiring |
+| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/trash event handling, batch drag wiring, folder event/HTMX handling |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
