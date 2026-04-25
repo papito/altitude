@@ -32,7 +32,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/people/` | `htmx/people.scala.html`, `htmx/person.scala.html`, `htmx/person_inner.scala.html` |
 | `js/person/` | `htmx/person.scala.html` (single person view) |
 | `js/batch-ops/` | `includes/batch_ops.scala.html` |
-| `js/service/assetService.js` | consumed by `js/search-results/event_handlers.js` |
+| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -81,8 +81,9 @@ Two-layer event bus, both on `document.body`:
    server round-trip is needed.
 
 Batch ops escalate a single-asset drag to a batch when selected assets exist: the
-`assetMoved`/`assetTrashed` handlers in `search-results/event_handlers.js` re-dispatch
-`batchAssetsMoved`/`batchAssetsRecycled` if `selectedAssets` store is non-empty.
+`assetMoved`/`assetTrashed` handlers are now registered centrally in `js/frontend-app.js`,
+which re-dispatches `batchAssetsMoved`/`batchAssetsRecycled` if the
+`selectedAssets` store is non-empty.
 
 ### Full action flow (drag-and-drop example)
 

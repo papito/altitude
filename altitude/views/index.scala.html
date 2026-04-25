@@ -146,11 +146,9 @@
       import { highlightNav } from "/static/js/common/navigation.js"
       import { Const } from "/static/js/constants.js"
       import { initApp } from "/static/js/app.js"
-      import { initDetailNavigator } from "../static/js/search-results/detail-navigator.js";
 
       function loadView() {
           initApp()
-          initDetailNavigator()
 
           window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
