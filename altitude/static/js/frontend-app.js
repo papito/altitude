@@ -139,6 +139,82 @@ export class FrontendApp {
     }
 
     registerEventListeners() {
+        document.body.addEventListener(
+            Const.events.confirmPersonMerge,
+            (event) => {
+                const mergeSourceId = event.detail["mergeSourceId"]
+                const mergeDestId = event.detail["mergeDestId"]
+
+                if (mergeSourceId === mergeDestId) {
+                    return
+                }
+
+                htmx.ajax(
+                    "GET",
+                    `/htmx/people/r/${this.context.getRepoId()}/modals/merge`,
+                    {
+                        swap: "innerHTML",
+                        target: "#modalContent",
+                        values: { ...event.detail },
+                    },
+                )
+            },
+        )
+
+        document.body.addEventListener(Const.events.personMerged, (event) => {
+            const mergeSourceId = event.detail["mergeSourceId"]
+            const sourcePersonEl = htmx.find(`#person-${mergeSourceId}`)
+
+            if (sourcePersonEl) {
+                sourcePersonEl.remove()
+            }
+
+            showSuccessSnackBar("Person merged successfully")
+        })
+
+        document.body.addEventListener(
+            Const.events.personNameEdited,
+            (event) => {
+                const personId = event.detail["personId"]
+                const newPersonName = event.detail["newPersonName"]
+                const personNameEl = htmx.find(`#person-${personId} .name a`)
+
+                if (!personNameEl) {
+                    return
+                }
+
+                personNameEl.textContent = newPersonName
+                personNameEl.classList.remove("unknown")
+            },
+        )
+
+        document.body.addEventListener(
+            Const.events.personCoverFaceSet,
+            (event) => {
+                const personId = event.detail["personId"]
+                const faceId = event.detail["faceId"]
+                const imageEl = htmx.find(`#person-${personId} .image img`)
+
+                if (!imageEl) {
+                    return
+                }
+
+                imageEl.src = `/content/r/${this.context.getRepoId()}/face/${faceId}`
+            },
+        )
+
+        document.body.addEventListener(
+            Const.events.personMarkedAsBadMatch,
+            (event) => {
+                const personId = event.detail["personId"]
+                const personEl = htmx.find(`#person-${personId}`)
+
+                if (personEl) {
+                    personEl.remove()
+                }
+            },
+        )
+
         document.body.addEventListener(Const.events.assetMoved, (event) => {
             const assetId = event.detail["assetId"]
             const folderId = event.detail["folderId"]
@@ -265,6 +341,18 @@ export class FrontendApp {
         const requestPath = event.detail.pathInfo.requestPath
         const status = event.detail.xhr.status
 
+        if (this.isTrashPurgeRequest(requestPath)) {
+            if (event.detail.successful === false) {
+                showErrorSnackBar(
+                    `Error for request to ${requestPath}. HTTP ${status}`,
+                )
+                return
+            }
+
+            this.reloadNav()
+            return
+        }
+
         if (status !== 200 || !requestPath.startsWith("/htmx/search/r")) {
             return
         }
@@ -274,6 +362,13 @@ export class FrontendApp {
         if (!event.target.classList?.contains("last-cell")) {
             this.syncShadowResultsFromSearchUrl()
         }
+    }
+
+    isTrashPurgeRequest(requestPath) {
+        return (
+            requestPath.startsWith("/htmx/trash//r/") &&
+            requestPath.endsWith("/purge")
+        )
     }
 
     handleAfterSwap(event) {

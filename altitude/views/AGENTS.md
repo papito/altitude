@@ -29,10 +29,10 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 |---|---|
 | `js/folders/` | `htmx/folders.scala.html`, `htmx/folder_children.scala.html` |
 | `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
-| `js/people/` | `htmx/people.scala.html`, `htmx/person.scala.html`, `htmx/person_inner.scala.html` |
+| `js/people/` | `htmx/people.scala.html`, `htmx/person.scala.html`, `htmx/person_inner.scala.html` (drag-and-drop only) |
 | `js/person/` | `htmx/person.scala.html` (single person view) |
 | `js/batch-ops/` | `includes/batch_ops.scala.html` |
-| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions |
+| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/trash event handling |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -83,7 +83,8 @@ Two-layer event bus, both on `document.body`:
 Batch ops escalate a single-asset drag to a batch when selected assets exist: the
 `assetMoved`/`assetTrashed` handlers are now registered centrally in `js/frontend-app.js`,
 which re-dispatches `batchAssetsMoved`/`batchAssetsRecycled` if the
-`selectedAssets` store is non-empty.
+`selectedAssets` store is non-empty. Person merge/name/cover-face events and
+trash purge request outcomes are also handled centrally there.
 
 ### Full action flow (drag-and-drop example)
 
