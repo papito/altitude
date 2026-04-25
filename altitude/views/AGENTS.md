@@ -27,7 +27,6 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 
 | JS directory | Template(s) it serves |
 |---|---|
-| `js/folders/` | `htmx/folders.scala.html`, `htmx/folder_children.scala.html` (drag-and-drop only) |
 | `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
 | `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/person drag-and-drop, people/trash event handling, batch drag wiring, folder event/HTMX handling |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
@@ -37,7 +36,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
 - `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:beforeRequest`, `htmx:afterRequest`)
-- `dragon-drop.js` — interact.js drag-and-drop wiring (except batch drag wiring, which now lives in `js/frontend-app.js`)
+- `dragon-drop.js` — interact.js drag-and-drop wiring (now centralized in `js/frontend-app.js` for batch, people/person, and folder-tree flows)
 
 ## Alpine.js Stores (defined in `app.js`)
 
@@ -81,8 +80,8 @@ Batch ops escalate a single-asset drag to a batch when selected assets exist: th
 `assetMoved`/`assetTrashed` handlers are now registered centrally in `js/frontend-app.js`,
 which re-dispatches `batchAssetsMoved`/`batchAssetsRecycled` if the
 `selectedAssets` store is non-empty. Person merge/name/cover-face events,
-person discard follow-up, people/person drag-and-drop, and trash purge request
-outcomes are also handled centrally there.
+person discard follow-up, people/person drag-and-drop, folder-tree drag-and-drop,
+and trash purge request outcomes are also handled centrally there.
 
 ### Full action flow (drag-and-drop example)
 
