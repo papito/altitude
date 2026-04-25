@@ -7,6 +7,15 @@ import {
 } from "../common/snackbar.js"
 
 /**
+ * folder nav warning visibility is not backend-driven, so we need to initialize the tree when it is loaded in the DOM
+ */
+htmx.find("#explorer").addEventListener("htmx:load", (evt) => {
+    if (evt.target.id === "folderNavWarning") {
+        Alpine.initTree(evt.target)
+    }
+})
+
+/**
  * A folder is dragon dropped in UI BUT not yet removed on the server-side
  */
 document.body.addEventListener(Const.events.folderMoved, (event) => {

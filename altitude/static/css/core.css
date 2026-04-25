@@ -435,3 +435,8 @@ nav .menu.trashbin.empty span {
     font-size: 10px;
     cursor: default;
 }
+
+/* For Alpine x-cloak prop */
+[x-cloak] {
+    display: none !important;
+}

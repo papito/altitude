@@ -77,7 +77,7 @@ export function initApp() {
     })
 
     Alpine.store(Const.state.currentView, {
-        name: null,
+        view: null,
 
         setViewName(view) {
             this.view = view
