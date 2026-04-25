@@ -5,6 +5,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "./common/snackbar.js"
+import { dragged, dragMoveListener } from "./common/dragon-drop.js"
 import { showAssetDetailModal } from "./common/modal.js"
 import { setImgSrcAndWait } from "./search-results/detail-navigator.js"
 import "./search-results/dragon-drop.js"
@@ -30,6 +31,7 @@ export class FrontendApp {
         this.initializeStores()
         this.registerEventListeners()
         this.Alpine.start()
+        this.bindBatchOpsDragDrop()
         this.hydrateFragments(document)
 
         return this
@@ -373,6 +375,42 @@ export class FrontendApp {
 
     handleAfterSwap(event) {
         this.hydrateFragments(event.detail.target)
+    }
+
+    bindBatchOpsDragDrop() {
+        const dragHandleEl = document.querySelector("#batchOps button.drag-drop")
+        if (!dragHandleEl) {
+            return
+        }
+
+        interact("#batchOps button.drag-drop").draggable({
+            inertia: true,
+            autoScroll: true,
+
+            listeners: {
+                move: dragMoveListener,
+                start: () => {
+                    const selectedAssetsStore = this.Alpine.store(
+                        Const.state.selectedAssets,
+                    )
+
+                    selectedAssetsStore.items.forEach((asset) => {
+                        asset.drag()
+                    })
+                },
+                end: (event) => {
+                    const selectedAssetsStore = this.Alpine.store(
+                        Const.state.selectedAssets,
+                    )
+
+                    selectedAssetsStore.items.forEach((asset) => {
+                        asset.drop()
+                    })
+
+                    dragged(event)
+                },
+            },
+        })
     }
 
     hydrateFragments(root) {

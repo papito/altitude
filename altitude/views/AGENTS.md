@@ -31,8 +31,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
 | `js/people/` | `htmx/people.scala.html`, `htmx/person.scala.html`, `htmx/person_inner.scala.html` (drag-and-drop only) |
 | `js/person/` | `htmx/person.scala.html` (single person view) |
-| `js/batch-ops/` | `includes/batch_ops.scala.html` |
-| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/trash event handling |
+| `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/trash event handling, batch drag wiring |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -40,7 +39,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 Each JS section has a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
 - `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:beforeRequest`, `htmx:afterRequest`)
-- `dragon-drop.js` — interact.js drag-and-drop wiring
+- `dragon-drop.js` — interact.js drag-and-drop wiring (except batch drag wiring, which now lives in `js/frontend-app.js`)
 
 ## Alpine.js Stores (defined in `app.js`)
 
