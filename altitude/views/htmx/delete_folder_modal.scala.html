@@ -14,6 +14,12 @@
 
 <button class="action-button error"
         id="deleteFolder"
+        data-app-fragment="modal"
+        data-app-modal-title="@{title}"
+        data-app-modal-min-width="@{minWidth}"
+        data-app-modal-close-on-success="true"
+        data-app-modal-success-event="folderDeleted"
+        data-app-modal-success-detail='{"@{Api.Field.ID}":"@{folder.id}"}'
         hx-swap="none"
         hx-delete="/htmx/folder/r/@{RequestContext.getRepository.persistedId}"
         hx-trigger="click"
@@ -22,28 +28,4 @@
     Delete "<strong>@{folder.name}</strong>" and move assets into Recycle Bin
 </button>
 
-<script type="module">
-    import { showModal, closeModal } from "/static/js/common/modal.js"
-    import { Const } from "/static/js/constants.js"
-
-    showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
-
-    htmx.find("#deleteFolder").addEventListener(
-        "htmx:afterRequest",
-        function (evt) {
-            if (evt.detail.successful === true) {
-                const deletedFolderEvent = new CustomEvent(
-                    Const.events.folderDeleted,
-                    {
-                        detail: { "@{Api.Field.ID}": "@{folder.id}" },
-                    },
-                )
-
-                document.body.dispatchEvent(deletedFolderEvent)
-
-                closeModal()
-            }
-        },
-    )
-</script>
 

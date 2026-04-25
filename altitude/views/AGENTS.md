@@ -21,7 +21,9 @@ and `@includes.html.header_common()` (loads HTMX, Alpine, core CSS).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
 controllers as `"<!doctype html>" + template(...)`. They regularly include inline `<style>` blocks
-(scoped styles for that component) and inline `<script type="module">` blocks for JS setup.
+(scoped styles for that component). Prefer declarative `data-app-*` attributes over inline
+`<script type="module">` blocks when the behavior can be hydrated centrally from
+`js/frontend-app.js`.
 
 ## JS Directory ↔ Template Mapping
 
@@ -133,7 +135,10 @@ those responsibilities stay with HTMX and the custom event bus.
 **Modals** — Two containers live in `html_common.scala.html`. Load into `#modalContent` for general
 modals; load into `#imageDetailModalContent` for asset detail. Use `showModal()` /
 `showAssetDetailModal()` / `closeModal()` from `js/common/modal.js`. ESC key is wired globally in
-`global.js`.
+`global.js`. General HTMX modal fragments can opt into centralized hydration by adding
+`data-app-fragment="modal"` plus `data-app-modal-*` attributes (title, width, autofocus selector,
+success event/action metadata) on the fragment root; `js/frontend-app.js` will show the modal,
+focus/select controls, dispatch success events, and close the modal after successful requests.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.

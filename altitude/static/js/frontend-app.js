@@ -10,7 +10,7 @@ import {
     dragMoveListener,
     setFixedPositionWhileDragging,
 } from "./common/dragon-drop.js"
-import { showAssetDetailModal } from "./common/modal.js"
+import { closeModal, showAssetDetailModal, showModal } from "./common/modal.js"
 import { setImgSrcAndWait } from "./search-results/detail-navigator.js"
 import "./search-results/dragon-drop.js"
 
@@ -785,6 +785,10 @@ export class FrontendApp {
     }
 
     hydrateFragments(root) {
+        this.findFragmentRoots(root, "modal").forEach((fragmentEl) => {
+            this.hydrateModalFragment(fragmentEl)
+        })
+
         this.findFragmentRoots(root, "search-results").forEach((fragmentEl) => {
             this.hydrateSearchResultsFragment(fragmentEl)
         })
@@ -805,6 +809,122 @@ export class FrontendApp {
         roots.push(...root.querySelectorAll(selector))
 
         return roots
+    }
+
+    hydrateModalFragment(fragmentEl) {
+        showModal({
+            minWidthPx: fragmentEl.dataset.appModalMinWidth,
+            title: fragmentEl.dataset.appModalTitle,
+        })
+
+        this.focusModalFragment(fragmentEl)
+        this.bindModalFragment(fragmentEl)
+    }
+
+    focusModalFragment(fragmentEl) {
+        const selector = fragmentEl.dataset.appModalAutofocusSelector
+        if (!selector) {
+            return
+        }
+
+        const focusEl = fragmentEl.matches(selector)
+            ? fragmentEl
+            : fragmentEl.querySelector(selector)
+
+        if (!focusEl) {
+            return
+        }
+
+        focusEl.focus()
+
+        if (
+            fragmentEl.dataset.appModalSelectOnFocus === "true" &&
+            typeof focusEl.select === "function"
+        ) {
+            focusEl.select()
+        }
+    }
+
+    bindModalFragment(fragmentEl) {
+        if (fragmentEl.dataset.appModalBound === "true") {
+            return
+        }
+
+        fragmentEl.dataset.appModalBound = "true"
+
+        fragmentEl.addEventListener("htmx:afterRequest", (event) => {
+            if (event.detail.successful !== true) {
+                return
+            }
+
+            this.handleModalFragmentSuccess(fragmentEl)
+        })
+    }
+
+    handleModalFragmentSuccess(fragmentEl) {
+        this.dispatchModalFragmentSuccessEvent(fragmentEl)
+        this.runModalFragmentSuccessAction(fragmentEl)
+
+        if (fragmentEl.dataset.appModalCloseOnSuccess !== "false") {
+            closeModal()
+        }
+    }
+
+    dispatchModalFragmentSuccessEvent(fragmentEl) {
+        const eventKey = fragmentEl.dataset.appModalSuccessEvent
+        if (!eventKey) {
+            return
+        }
+
+        const eventName = Const.events[eventKey]
+        if (!eventName) {
+            console.warn(`Unknown modal success event key: ${eventKey}`)
+            return
+        }
+
+        this.dispatch(
+            eventName,
+            this.parseModalFragmentDetail(fragmentEl.dataset.appModalSuccessDetail),
+        )
+    }
+
+    runModalFragmentSuccessAction(fragmentEl) {
+        const action = fragmentEl.dataset.appModalSuccessAction
+        if (!action) {
+            return
+        }
+
+        if (action === "close-folder-context-menu") {
+            this.closeFolderContextMenu(fragmentEl.dataset.appModalFolderId)
+            return
+        }
+
+        console.warn(`Unknown modal success action: ${action}`)
+    }
+
+    closeFolderContextMenu(folderId) {
+        if (!folderId) {
+            return
+        }
+
+        try {
+            new Folder(folderId).closeContextMenu()
+        } catch (error) {
+            console.debug(`Unable to close folder context menu for ${folderId}`, error)
+        }
+    }
+
+    parseModalFragmentDetail(jsonValue) {
+        if (!jsonValue) {
+            return {}
+        }
+
+        try {
+            return JSON.parse(jsonValue)
+        } catch (error) {
+            console.error("Error parsing modal success detail", error)
+            return {}
+        }
     }
 
     hydrateSearchResultsFragment(fragmentEl) {
