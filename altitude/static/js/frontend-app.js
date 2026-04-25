@@ -5,7 +5,11 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "./common/snackbar.js"
-import { dragged, dragMoveListener } from "./common/dragon-drop.js"
+import {
+    dragged,
+    dragMoveListener,
+    setFixedPositionWhileDragging,
+} from "./common/dragon-drop.js"
 import { showAssetDetailModal } from "./common/modal.js"
 import { setImgSrcAndWait } from "./search-results/detail-navigator.js"
 import "./search-results/dragon-drop.js"
@@ -32,6 +36,7 @@ export class FrontendApp {
         this.registerEventListeners()
         this.Alpine.start()
         this.bindBatchOpsDragDrop()
+        this.bindPeopleDragDrop()
         this.hydrateFragments(document)
 
         return this
@@ -486,6 +491,20 @@ export class FrontendApp {
     handleAfterRequest(event) {
         const requestPath = event.detail.pathInfo.requestPath
         const status = event.detail.xhr.status
+        const discardPersonElement = this.getDiscardPersonElement(event)
+
+        if (this.isDiscardPersonRequest(requestPath, discardPersonElement)) {
+            if (event.detail.successful === false) {
+                return
+            }
+
+            this.dispatch(Const.events.personMarkedAsBadMatch, {
+                personId: discardPersonElement.getAttribute(
+                    Const.attributes.personId,
+                ),
+            })
+            return
+        }
 
         if (this.isFolderRequest(requestPath)) {
             this.handleFolderAfterRequest(event)
@@ -562,6 +581,17 @@ export class FrontendApp {
         return requestPath.startsWith(`/htmx/folder/r/${this.context.getRepoId()}/`)
     }
 
+    getDiscardPersonElement(event) {
+        return event.target?.closest?.("#markAsBadMatch") ?? null
+    }
+
+    isDiscardPersonRequest(requestPath, discardPersonElement) {
+        return (
+            requestPath.startsWith(`/htmx/people/r/${this.context.getRepoId()}/p/`) &&
+            discardPersonElement !== null
+        )
+    }
+
     handleHtmxLoad(event) {
         if (event.target.id === "folderNavWarning") {
             this.Alpine.initTree(event.target)
@@ -604,6 +634,68 @@ export class FrontendApp {
 
                     dragged(event)
                 },
+            },
+        })
+    }
+
+    bindPeopleDragDrop() {
+        interact("#people .drag-drop, #person .drag-drop").draggable({
+            inertia: true,
+            autoScroll: true,
+
+            listeners: {
+                move: dragMoveListener,
+                start: setFixedPositionWhileDragging,
+                end: dragged,
+            },
+        })
+
+        interact("#people .dropzone, #person.dropzone").dropzone({
+            accept: "#person .drag-drop, #people .drag-drop",
+            overlap: 0.75,
+
+            ondropactivate: (event) => {
+                event.target.classList.add("drop-active")
+            },
+
+            ondragenter: (event) => {
+                const draggableElement = event.relatedTarget
+                const dropzoneElement = event.target
+
+                dropzoneElement.classList.add("drop-target")
+                draggableElement.classList.add("can-drop")
+            },
+
+            ondragleave: (event) => {
+                event.target.classList.remove("drop-target")
+                event.relatedTarget.classList.remove("can-drop")
+            },
+
+            ondrop: (event) => {
+                const draggableElement = event.relatedTarget
+                const dropzoneElement = event.target
+
+                dropzoneElement.classList.remove("drop-active")
+                dropzoneElement.classList.remove("drop-target")
+                draggableElement.classList.remove("can-drop")
+
+                const mergeSourceId = draggableElement.getAttribute(
+                    Const.attributes.personId,
+                )
+                const mergeDestId = dropzoneElement.getAttribute(
+                    Const.attributes.personId,
+                )
+
+                console.debug(`Merging ${mergeSourceId} into ${mergeDestId}`)
+                this.dispatch(Const.events.confirmPersonMerge, {
+                    mergeSourceId,
+                    mergeDestId,
+                })
+            },
+
+            ondropdeactivate: (event) => {
+                event.target.classList.remove("drop-active")
+                event.target.classList.remove("drop-target")
             },
         })
     }
