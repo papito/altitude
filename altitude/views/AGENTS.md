@@ -34,6 +34,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
+| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
@@ -116,9 +117,9 @@ People-specific HTMX follow-up for discard actions and the inline person-name ed
 Alpine serves two distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
-Stores in `app.js` hold data any module needs to read — the active repo ID, current view, and
-the set of selected assets. All access goes through `window.ctx` helpers or
-`Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
+Stores initialized from `js/stores/app-stores.js` hold data any module needs to read — the active
+repo ID, current view, and the set of selected assets. All access goes through `window.ctx`
+helpers or `Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
 
 ### 2. Per-element component registry
 `x-data="initSelectable(id)"` (defined in `alpine/components/selectable.js`, exposed on `window`
