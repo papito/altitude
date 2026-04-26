@@ -35,7 +35,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
-| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, and delegation into asset/dragdrop/fragment/listener/search modules |
+| `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -175,8 +175,9 @@ htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", t
 ```
 
 Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js`,
-and drag/drop interact.js bindings live in `js/dragdrop/`. Both are called through thin wrappers
-or coordinator calls on `FrontendApp`, preserving the existing listener contracts.
+and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
+coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
+`FrontendApp` remains the composition root that wires them together.
 
 ## Key Files
 

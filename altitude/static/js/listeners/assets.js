@@ -11,14 +11,14 @@ export function registerAssetListeners(app) {
             return
         }
 
-        app.moveAssets({ folderId, assetIds: [assetId] })
+        app.assetActions.moveAssets({ folderId, assetIds: [assetId] })
     })
 
     document.body.addEventListener(Const.events.batchAssetsMoved, (event) => {
         const folderId = event.detail.folderId
         const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        app.moveAssets({
+        app.assetActions.moveAssets({
             folderId,
             assetIds: Array.from(selectedAssetsStore.items.keys()),
         })
@@ -33,13 +33,13 @@ export function registerAssetListeners(app) {
             return
         }
 
-        app.recycleAssets({ assetIds: [assetId] })
+        app.assetActions.recycleAssets({ assetIds: [assetId] })
     })
 
     document.body.addEventListener(Const.events.batchAssetsRecycled, () => {
         const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        app.recycleAssets({
+        app.assetActions.recycleAssets({
             assetIds: Array.from(selectedAssetsStore.items.keys()),
         })
     })
@@ -47,7 +47,7 @@ export function registerAssetListeners(app) {
     document.body.addEventListener(Const.events.batchAssetsPurged, () => {
         const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        app.purgeAssets({
+        app.assetActions.purgeAssets({
             assetIds: Array.from(selectedAssetsStore.items.keys()),
         })
     })
@@ -55,7 +55,7 @@ export function registerAssetListeners(app) {
     document.body.addEventListener(Const.events.batchAssetsRestored, () => {
         const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        app.restoreAssets({
+        app.assetActions.restoreAssets({
             assetIds: Array.from(selectedAssetsStore.items.keys()),
         })
     })

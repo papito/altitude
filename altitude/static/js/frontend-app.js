@@ -4,7 +4,6 @@ import { showErrorSnackBar } from "./common/snackbar.js"
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
-import { handleViewSettingChanged } from "./fragments/search-results.js"
 import {
     handleFolderAfterRequest,
     handleFolderBeforeRequest,
@@ -105,7 +104,7 @@ export class FrontendApp {
         this.Alpine.store(Const.state.searchUrl).set(requestPath)
 
         if (!event.target.classList?.contains("last-cell")) {
-            this.syncShadowResultsFromSearchUrl()
+            this.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
         }
     }
 
@@ -147,38 +146,6 @@ export class FrontendApp {
         }
     }
 
-    handleViewSettingChanged(event) {
-        handleViewSettingChanged({ event, context: this.context })
-    }
-
-    syncShadowResultsFromSearchUrl() {
-        this.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
-    }
-
-    appendShadowResultsForRequestPath(requestPath) {
-        this.searchDetailCoordinator.appendShadowResultsForRequestPath(requestPath)
-    }
-
-    fetchSearchResultsJson(url) {
-        return this.searchDetailCoordinator.fetchSearchResultsJson(url)
-    }
-
-    handleShowNext() {
-        this.searchDetailCoordinator.handleShowNext()
-    }
-
-    handleShowPrevious() {
-        this.searchDetailCoordinator.handleShowPrevious()
-    }
-
-    fetchShadowSearchResultsPage(pageNum) {
-        return this.searchDetailCoordinator.fetchShadowSearchResultsPage(pageNum)
-    }
-
-    loadAssetDetail(assetId) {
-        this.searchDetailCoordinator.loadAssetDetail(assetId)
-    }
-
     dispatch(eventName, detail = {}) {
         document.body.dispatchEvent(new CustomEvent(eventName, { detail }))
     }
@@ -188,22 +155,6 @@ export class FrontendApp {
             swap: "innerHTML",
             target: "nav",
         })
-    }
-
-    moveAssets({ folderId, assetIds }) {
-        this.assetActions.moveAssets({ folderId, assetIds })
-    }
-
-    recycleAssets({ assetIds }) {
-        this.assetActions.recycleAssets({ assetIds })
-    }
-
-    purgeAssets({ assetIds }) {
-        this.assetActions.purgeAssets({ assetIds })
-    }
-
-    restoreAssets({ assetIds }) {
-        this.assetActions.restoreAssets({ assetIds })
     }
 }
 

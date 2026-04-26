@@ -1,16 +1,17 @@
 import { Const } from "../constants.js"
+import { handleViewSettingChanged } from "../fragments/search-results.js"
 
 export function registerHtmxAndSearchListeners(app) {
     document.body.addEventListener(Const.events.viewSettingChanged, (event) => {
-        app.handleViewSettingChanged(event)
+        handleViewSettingChanged({ event, context: app.context })
     })
 
     document.body.addEventListener(Const.events.showNext, () => {
-        app.handleShowNext()
+        app.searchDetailCoordinator.handleShowNext()
     })
 
     document.body.addEventListener(Const.events.showPrevious, () => {
-        app.handleShowPrevious()
+        app.searchDetailCoordinator.handleShowPrevious()
     })
 
     document.body.addEventListener(Const.events.detailShown, (event) => {

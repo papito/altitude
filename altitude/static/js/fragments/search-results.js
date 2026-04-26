@@ -23,7 +23,7 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
     bindSearchResultsInfiniteScroll({ assetsElement, app })
     bindSearchResultsLazyLoad({ assetsElement, app })
     applyGridMetadataVisibilityToAllCells({ assetsElement, context: app.context })
-    app.syncShadowResultsFromSearchUrl()
+    app.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
 }
 
 export function handleViewSettingChanged({ event, context }) {
@@ -71,7 +71,9 @@ function bindSearchResultsInfiniteScroll({ assetsElement, app }) {
         event.detail.target.setAttribute("data-hx-revealed", "true")
 
         if (event.detail.successful) {
-            app.appendShadowResultsForRequestPath(event.detail.pathInfo.requestPath)
+            app.searchDetailCoordinator.appendShadowResultsForRequestPath(
+                event.detail.pathInfo.requestPath,
+            )
         }
     })
 }
