@@ -10,6 +10,7 @@ import {
     dragMoveListener,
     setFixedPositionWhileDragging,
 } from "./common/dragon-drop.js"
+import { createAssetActions } from "./assets/asset-actions.js"
 import { showAssetDetailModal } from "./common/modal.js"
 import { hydrateAppFragments } from "./fragments/index.js"
 import { handleViewSettingChanged } from "./fragments/search-results.js"
@@ -33,6 +34,11 @@ export class FrontendApp {
         this.started = false
         this.shadowResultsSyncToken = 0
         this.lazyImageObserver = null
+        this.assetActions = createAssetActions({
+            Alpine,
+            context,
+            reloadNav: this.reloadNav.bind(this),
+        })
     }
 
     start() {
@@ -616,204 +622,20 @@ export class FrontendApp {
         })
     }
 
-    removeTriageStyling(assetIds) {
-        for (const assetId of assetIds) {
-            const cellEl = htmx.find(`#asset-${assetId}`)
-            if (!cellEl) {
-                continue
-            }
-
-            cellEl.removeAttribute("alt-is-triaged")
-
-            const marker = cellEl.querySelector(".triage-marker")
-            if (marker) {
-                marker.remove()
-            }
-        }
-    }
-
-    removeAssetsFromGrid(assetIds) {
-        let removedCount = 0
-
-        for (const assetId of assetIds) {
-            const el = htmx.find(`#asset-${assetId}`)
-            if (!el) {
-                continue
-            }
-
-            el.remove()
-            removedCount++
-        }
-
-        if (removedCount > 0) {
-            this.Alpine.store(Const.state.resultsTotal).decrement(removedCount)
-        }
-    }
-
-    shouldRemoveFromGrid(destinationFolderId) {
-        if (this.Alpine.store(Const.state.currentView).isTriageView()) {
-            return true
-        }
-
-        const viewedFolderId = this.context.getCurrentFolderId()
-        if (!viewedFolderId) {
-            return false
-        }
-
-        try {
-            const destFolder = new Folder(destinationFolderId)
-            return !destFolder.isDescendantOrSelf(viewedFolderId)
-        } catch {
-            console.debug(
-                `Destination folder ${destinationFolderId} not in DOM, assuming outside viewed subtree`,
-            )
-            return true
-        }
-    }
-
-    shouldResetSelectedAssets(assetIds) {
-        return (
-            assetIds.length > 1 ||
-            (assetIds.length === 1 &&
-                this.Alpine.store(Const.state.selectedAssets).contains(assetIds[0]))
-        )
-    }
-
     moveAssets({ folderId, assetIds }) {
-        const newParentFolder = new Folder(folderId)
-        const payload = { assetIds, folderId }
-
-        fetch(`/api/asset/r/${this.context.getRepoId()}/move`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    showErrorSnackBar(`Error moving assets: ${response.statusText}`)
-                    return
-                }
-
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } moved to folder "${newParentFolder.name()}"`
-                showSuccessSnackBar(successMessage)
-
-                this.removeTriageStyling(assetIds)
-
-                if (this.shouldRemoveFromGrid(folderId)) {
-                    this.removeAssetsFromGrid(assetIds)
-                }
-
-                if (this.shouldResetSelectedAssets(assetIds)) {
-                    this.Alpine.store(Const.state.selectedAssets).reset()
-                }
-
-                this.reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error moving assets: ${error}`)
-            })
+        this.assetActions.moveAssets({ folderId, assetIds })
     }
 
     recycleAssets({ assetIds }) {
-        const payload = { assetIds }
-
-        fetch(`/api/asset/r/${this.context.getRepoId()}/move`, {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    showErrorSnackBar(
-                        `Error moving assets to trash: ${response.statusText}`,
-                    )
-                    return
-                }
-
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } moved to the trash bin`
-                showSuccessSnackBar(successMessage)
-
-                this.removeAssetsFromGrid(assetIds)
-
-                if (this.shouldResetSelectedAssets(assetIds)) {
-                    this.Alpine.store(Const.state.selectedAssets).reset()
-                }
-
-                this.reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error moving assets to trash: ${error}`)
-            })
+        this.assetActions.recycleAssets({ assetIds })
     }
 
     purgeAssets({ assetIds }) {
-        const payload = { assetIds }
-
-        fetch(`/api/asset/r/${this.context.getRepoId()}/purge`, {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    showErrorSnackBar(
-                        `Error purging assets: ${response.statusText}`,
-                    )
-                    return
-                }
-
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } permanently deleted`
-                showSuccessSnackBar(successMessage)
-
-                this.removeAssetsFromGrid(assetIds)
-                this.Alpine.store(Const.state.selectedAssets).reset()
-                this.reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error purging assets: ${error}`)
-            })
+        this.assetActions.purgeAssets({ assetIds })
     }
 
     restoreAssets({ assetIds }) {
-        const payload = { assetIds }
-
-        fetch(`/api/asset/r/${this.context.getRepoId()}/restore`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    if (response.status === 409) {
-                        showWarningSnackBar(
-                            "Cannot restore: a non-recycled asset with the same content already exists",
-                        )
-                    } else {
-                        showErrorSnackBar(
-                            `Error restoring assets: ${response.statusText}`,
-                        )
-                    }
-                    return
-                }
-
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } restored`
-                showSuccessSnackBar(successMessage)
-
-                this.removeAssetsFromGrid(assetIds)
-                this.Alpine.store(Const.state.selectedAssets).reset()
-                this.reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error restoring assets: ${error}`)
-            })
+        this.assetActions.restoreAssets({ assetIds })
     }
 }
 

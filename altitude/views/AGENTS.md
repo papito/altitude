@@ -29,10 +29,11 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 
 | JS directory | Template(s) it serves |
 |---|---|
+| `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
 | `js/search-results/` | search-results helpers such as detail navigation and drag/drop used by fragment hydrators and grid views |
-| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, drag/drop bindings, search-results coordination, asset actions, and delegation into fragment/listener modules |
+| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, drag/drop bindings, search/detail coordination, and delegation into asset/fragment/listener modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -167,6 +168,9 @@ lazy image loading, and metadata visibility for `data-app-fragment="search-resul
 ```js
 htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", target: "nav" })
 ```
+
+Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js` and
+called through thin wrappers on `FrontendApp`, preserving the existing listener contracts.
 
 ## Key Files
 
