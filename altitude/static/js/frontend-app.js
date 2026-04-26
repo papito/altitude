@@ -13,6 +13,11 @@ import {
 import { showAssetDetailModal } from "./common/modal.js"
 import { hydrateAppFragments } from "./fragments/index.js"
 import { handleViewSettingChanged } from "./fragments/search-results.js"
+import {
+    handleFolderAfterRequest,
+    handleFolderBeforeRequest,
+    isFolderRequest,
+} from "./listeners/htmx-folders.js"
 import { registerAppEventListeners } from "./listeners/index.js"
 import { setImgSrcAndWait } from "./search-results/detail-navigator.js"
 import "./search-results/dragon-drop.js"
@@ -153,66 +158,11 @@ export class FrontendApp {
     handleBeforeRequest(event) {
         const requestPath = event.detail.pathInfo.requestPath
 
-        if (!this.isFolderRequest(requestPath)) {
+        if (!isFolderRequest({ app: this, requestPath })) {
             return
         }
 
-        if (
-            requestPath ===
-            `/htmx/folder/r/${this.context.getRepoId()}/context-menu`
-        ) {
-            const folderId = event.detail.target.getAttribute(
-                Const.attributes.folderId,
-            )
-            const folder = new Folder(folderId)
-
-            if (folder.isMenuExpanded()) {
-                folder.closeContextMenu()
-                event.preventDefault()
-            } else {
-                document
-                    .querySelectorAll("#rootFolderList .menu")
-                    .forEach((menuEl) => {
-                        Folder.closeContextMenu(menuEl)
-                    })
-            }
-        }
-
-        if (
-            requestPath === `/htmx/folder/r/${this.context.getRepoId()}/children`
-        ) {
-            const url = new URL(
-                "https://dummy.com" + event.detail.pathInfo.finalRequestPath,
-            )
-            const folderId = url.searchParams.get("parentId")
-            const folder = new Folder(folderId)
-
-            if (folder.isRoot) {
-                return
-            }
-
-            if (folder.isExpanded()) {
-                folder.collapse()
-                event.preventDefault()
-                return
-            }
-
-            if (folder.numOfChildren() === 0) {
-                event.preventDefault()
-                const currentView = this.Alpine.store(Const.state.currentView)
-                if (
-                    currentView.isTriageView() ||
-                    currentView.isTrashBinView()
-                ) {
-                    return
-                }
-
-                folder.folderNameEl().click()
-                return
-            }
-
-            folder.expand()
-        }
+        handleFolderBeforeRequest({ app: this, event })
     }
 
     handleAfterRequest(event) {
@@ -239,8 +189,8 @@ export class FrontendApp {
             return
         }
 
-        if (this.isFolderRequest(requestPath)) {
-            this.handleFolderAfterRequest(event)
+        if (isFolderRequest({ app: this, requestPath })) {
+            handleFolderAfterRequest({ app: this, event })
             return
         }
 
@@ -267,42 +217,6 @@ export class FrontendApp {
         }
     }
 
-    handleFolderAfterRequest(event) {
-        const requestPath = event.detail.pathInfo.requestPath
-        const status = event.detail.xhr.status
-
-        if (event.detail.successful === false) {
-            showErrorSnackBar(
-                `Error for request to ${requestPath}. HTTP ${status}`,
-            )
-            return
-        }
-
-        if (
-            requestPath ===
-            `/htmx/folder/r/${this.context.getRepoId()}/context-menu`
-        ) {
-            const folder = new Folder(
-                event.target.getAttribute(Const.attributes.folderId),
-            )
-            folder.showContextMenu()
-
-            if (!folder.isExpanded() && !folder.isRoot) {
-                folder.htmxExpandChildrenAction()
-            }
-        }
-
-        if (
-            requestPath === `/htmx/folder/r/${this.context.getRepoId()}/children` ||
-            requestPath === `/htmx/folder/r/${this.context.getRepoId()}/add`
-        ) {
-            const folder = new Folder(
-                event.target.getAttribute(Const.attributes.folderId),
-            )
-            folder.expand()
-        }
-    }
-
     isTrashPurgeRequest(requestPath) {
         return (
             requestPath.startsWith("/htmx/trash//r/") &&
@@ -310,9 +224,6 @@ export class FrontendApp {
         )
     }
 
-    isFolderRequest(requestPath) {
-        return requestPath.startsWith(`/htmx/folder/r/${this.context.getRepoId()}/`)
-    }
 
     getDiscardPersonElement(event) {
         return event.target?.closest?.("#markAsBadMatch") ?? null

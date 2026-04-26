@@ -103,6 +103,10 @@ It intercepts `htmx:beforeRequest` to short-circuit requests the client can alre
 locally (e.g. collapsing a folder), and `htmx:afterRequest` to apply post-response state changes
 (e.g. marking a folder as expanded).
 
+In the current structure, that HTMX lifecycle logic is split by concern: folder-specific
+before/after request behavior lives in `js/listeners/htmx-folders.js`, while shared HTMX/search
+listener wiring remains in `js/listeners/htmx-search.js` and delegates back into `frontend-app.js`.
+
 ## Alpine.js Integration
 
 Alpine serves two distinct roles in this codebase:
