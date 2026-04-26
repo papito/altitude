@@ -86,6 +86,7 @@ make publish              # fat JAR → target/
 ```
 
 > **Do not run `make test`** (requires a live Postgres container). Use `make test-sqlite` and `make test-controllers`.
+> **Do not run tests if only the frontend was changed** (Twirl templates, CSS, JS, HTML) — these can be manually verified in the browser without running the full test suite.
 
 To focus a test, tag it with the `Focused` tag:
 ```scala
