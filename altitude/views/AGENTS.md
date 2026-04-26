@@ -31,7 +31,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 |---|---|
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
-| `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
+| `js/search-results/` | search-results helpers such as detail navigation and drag/drop used by fragment hydrators and grid views |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, drag/drop bindings, search-results coordination, asset actions, and delegation into fragment/listener modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
@@ -148,9 +148,9 @@ requests, while `js/frontend-app.js` remains the composition root that triggers 
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
 
 **Infinite scroll + lazy load** — The last `.cell` gets class `last-cell`; HTMX fires on
-`intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; `IntersectionObserver`
-in `infinite-scroll.js` swaps `src` in/out as cells enter/leave the viewport. Always call both
-`initLazyLoad()` and `initInfiniteScroll()` in the search results inline `<script>`.
+`intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; the centralized
+search-results fragment hydrator in `js/fragments/search-results.js` binds infinite scroll,
+lazy image loading, and metadata visibility for `data-app-fragment="search-results"`.
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)` to persist to
