@@ -29,6 +29,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 
 | JS directory | Template(s) it serves |
 |---|---|
+| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
 | `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
 | `js/frontend-app.js` | app-wide bootstrap, shared Alpine stores, search-results hydration, asset actions, people/person drag-and-drop, people/trash event handling, batch drag wiring, folder event/HTMX handling |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
@@ -137,8 +138,9 @@ modals; load into `#imageDetailModalContent` for asset detail. Use `showModal()`
 `showAssetDetailModal()` / `closeModal()` from `js/common/modal.js`. ESC key is wired globally in
 `global.js`. General HTMX modal fragments can opt into centralized hydration by adding
 `data-app-fragment="modal"` plus `data-app-modal-*` attributes (title, width, autofocus selector,
-success event/action metadata) on the fragment root; `js/frontend-app.js` will show the modal,
-focus/select controls, dispatch success events, and close the modal after successful requests.
+success event/action metadata) on the fragment root; `js/fragments/` hydrators handle modal
+display, focus/select controls, dispatch success events, and close the modal after successful
+requests, while `js/frontend-app.js` remains the composition root that triggers hydration.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
