@@ -30,10 +30,11 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | JS directory | Template(s) it serves |
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
+| `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
-| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, drag/drop bindings, and delegation into asset/fragment/listener/search modules |
+| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -41,7 +42,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
 - `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:beforeRequest`, `htmx:afterRequest`)
-- `dragon-drop.js` — interact.js drag-and-drop wiring (now centralized in `js/frontend-app.js` for batch, people/person, and folder-tree flows)
+- `dragon-drop.js` — interact.js drag-and-drop wiring (now split into `js/dragdrop/` modules for batch, people/person, and folder-tree flows)
 
 ## Alpine.js Stores (defined in `app.js`)
 
@@ -172,8 +173,9 @@ and modal asset-detail loading are coordinated from `js/search-results/detail-na
 htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", target: "nav" })
 ```
 
-Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js` and
-called through thin wrappers on `FrontendApp`, preserving the existing listener contracts.
+Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js`,
+and drag/drop interact.js bindings live in `js/dragdrop/`. Both are called through thin wrappers
+or coordinator calls on `FrontendApp`, preserving the existing listener contracts.
 
 ## Key Files
 
