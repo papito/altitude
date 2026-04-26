@@ -106,6 +106,8 @@ locally (e.g. collapsing a folder), and `htmx:afterRequest` to apply post-respon
 In the current structure, that HTMX lifecycle logic is split by concern: folder-specific
 before/after request behavior lives in `js/listeners/htmx-folders.js`, while shared HTMX/search
 listener wiring remains in `js/listeners/htmx-search.js` and delegates back into `frontend-app.js`.
+People-specific HTMX follow-up for discard actions and the inline person-name editor lives in
+`js/listeners/htmx-people-inline-editor.js`.
 
 ## Alpine.js Integration
 

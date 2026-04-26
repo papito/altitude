@@ -18,6 +18,10 @@ import {
     handleFolderBeforeRequest,
     isFolderRequest,
 } from "./listeners/htmx-folders.js"
+import {
+    handlePeopleAfterRequest,
+    handlePeopleEscapeKeyPressed,
+} from "./listeners/htmx-people-inline-editor.js"
 import { registerAppEventListeners } from "./listeners/index.js"
 import { setImgSrcAndWait } from "./search-results/detail-navigator.js"
 import "./search-results/dragon-drop.js"
@@ -168,24 +172,8 @@ export class FrontendApp {
     handleAfterRequest(event) {
         const requestPath = event.detail.pathInfo.requestPath
         const status = event.detail.xhr.status
-        const discardPersonElement = this.getDiscardPersonElement(event)
-        const personNameEditorElement = this.getPersonNameEditorElement(event)
 
-        if (this.isPersonNameEditRequest(requestPath, personNameEditorElement)) {
-            this.handlePersonNameEditAfterRequest(event, personNameEditorElement)
-            return
-        }
-
-        if (this.isDiscardPersonRequest(requestPath, discardPersonElement)) {
-            if (event.detail.successful === false) {
-                return
-            }
-
-            this.dispatch(Const.events.personMarkedAsBadMatch, {
-                personId: discardPersonElement.getAttribute(
-                    Const.attributes.personId,
-                ),
-            })
+        if (handlePeopleAfterRequest({ app: this, event })) {
             return
         }
 
@@ -224,61 +212,8 @@ export class FrontendApp {
         )
     }
 
-
-    getDiscardPersonElement(event) {
-        return event.target?.closest?.("#markAsBadMatch") ?? null
-    }
-
-    isDiscardPersonRequest(requestPath, discardPersonElement) {
-        return (
-            requestPath.startsWith(`/htmx/people/r/${this.context.getRepoId()}/p/`) &&
-            discardPersonElement !== null
-        )
-    }
-
-    getPersonNameEditorElement(event) {
-        return event.target?.closest?.("#editPersonName") ?? null
-    }
-
-    isPersonNameEditRequest(requestPath, personNameEditorElement) {
-        return (
-            requestPath.startsWith(`/htmx/people/r/${this.context.getRepoId()}/p/`) &&
-            requestPath.endsWith("/name/edit") &&
-            personNameEditorElement !== null
-        )
-    }
-
-    handlePersonNameEditAfterRequest(event, personNameEditorElement) {
-        if (event.detail.successful === false) {
-            return
-        }
-
-        if (event.detail.xhr.responseText.includes('id="editPersonName"')) {
-            return
-        }
-
-        const responseEl = document.createElement("div")
-        responseEl.innerHTML = event.detail.xhr.responseText
-        const newPersonName = responseEl.textContent?.trim() || ""
-
-        this.dispatch(Const.events.personNameEdited, {
-            personId: personNameEditorElement.dataset.appPersonId,
-            newPersonName,
-        })
-    }
-
     handleEscapeKeyPressed() {
-        const personNameEditorElement = document.querySelector(
-            '[data-app-fragment="person-name-editor"]',
-        )
-        if (!personNameEditorElement) {
-            return
-        }
-
-        htmx.ajax("GET", personNameEditorElement.dataset.appRestoreUrl, {
-            swap: "innerHTML",
-            target: "#personName",
-        })
+        handlePeopleEscapeKeyPressed()
     }
 
     handleHtmxLoad(event) {
