@@ -1,17 +1,12 @@
 import { Const } from "./constants.js"
 import { Folder } from "./models/folder.js"
-import {
-    showErrorSnackBar,
-    showSuccessSnackBar,
-    showWarningSnackBar,
-} from "./common/snackbar.js"
+import { showErrorSnackBar } from "./common/snackbar.js"
 import {
     dragged,
     dragMoveListener,
     setFixedPositionWhileDragging,
 } from "./common/dragon-drop.js"
 import { createAssetActions } from "./assets/asset-actions.js"
-import { showAssetDetailModal } from "./common/modal.js"
 import { hydrateAppFragments } from "./fragments/index.js"
 import { handleViewSettingChanged } from "./fragments/search-results.js"
 import {
@@ -24,7 +19,7 @@ import {
     handlePeopleEscapeKeyPressed,
 } from "./listeners/htmx-people-inline-editor.js"
 import { registerAppEventListeners } from "./listeners/index.js"
-import { setImgSrcAndWait } from "./search-results/detail-navigator.js"
+import { createSearchDetailCoordinator } from "./search-results/detail-navigator.js"
 import "./search-results/dragon-drop.js"
 
 export class FrontendApp {
@@ -32,12 +27,16 @@ export class FrontendApp {
         this.Alpine = Alpine
         this.context = context
         this.started = false
-        this.shadowResultsSyncToken = 0
         this.lazyImageObserver = null
         this.assetActions = createAssetActions({
             Alpine,
             context,
             reloadNav: this.reloadNav.bind(this),
+        })
+        this.searchDetailCoordinator = createSearchDetailCoordinator({
+            Alpine,
+            context,
+            dispatch: this.dispatch.bind(this),
         })
     }
 
@@ -434,181 +433,31 @@ export class FrontendApp {
     }
 
     syncShadowResultsFromSearchUrl() {
-        const searchUrl = this.Alpine.store(Const.state.searchUrl).url
-        if (!searchUrl) {
-            return
-        }
-
-        const token = ++this.shadowResultsSyncToken
-        const store = this.Alpine.store(Const.state.shadowResults)
-
-        this.fetchSearchResultsJson(searchUrl)
-            .then((data) => {
-                if (!data || token !== this.shadowResultsSyncToken) {
-                    return
-                }
-
-                store.replace(data.ids, data.page, data.totalPages)
-            })
-            .catch((error) => {
-                console.error(`Error fetching search results: ${error}`)
-            })
+        this.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
     }
 
     appendShadowResultsForRequestPath(requestPath) {
-        const store = this.Alpine.store(Const.state.shadowResults)
-
-        this.fetchSearchResultsJson(requestPath)
-            .then((data) => {
-                if (!data) {
-                    return
-                }
-
-                store.append(data.ids)
-                store.page = data.page
-                store.totalPages = data.totalPages
-            })
-            .catch((error) => {
-                console.error(`Error fetching search results: ${error}`)
-            })
+        this.searchDetailCoordinator.appendShadowResultsForRequestPath(requestPath)
     }
 
     fetchSearchResultsJson(url) {
-        return fetch(url, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "HX-Current-URL": window.location.href,
-            },
-        }).then((response) => {
-            if (!response.ok) {
-                console.error(
-                    `Error fetching search results: ${response.statusText}`,
-                )
-                return null
-            }
-
-            return response.json()
-        })
+        return this.searchDetailCoordinator.fetchSearchResultsJson(url)
     }
 
     handleShowNext() {
-        const store = this.Alpine.store(Const.state.shadowResults)
-        const currentIdx = store.items.indexOf(store.currentAssetId)
-        const nextId =
-            currentIdx !== -1 && currentIdx + 1 < store.items.length
-                ? store.items[currentIdx + 1]
-                : null
-
-        if (nextId) {
-            store.currentAssetId = nextId
-            this.loadAssetDetail(nextId)
-            return
-        }
-
-        if (store.page < store.totalPages) {
-            const nextPage = store.page + 1
-            this.fetchShadowSearchResultsPage(nextPage).then((data) => {
-                if (!data) {
-                    return
-                }
-
-                store.append(data.ids)
-                store.page = nextPage
-                store.totalPages = data.totalPages
-                this.dispatch(Const.events.showNext)
-            })
-        }
+        this.searchDetailCoordinator.handleShowNext()
     }
 
     handleShowPrevious() {
-        const store = this.Alpine.store(Const.state.shadowResults)
-        const currentIdx = store.items.indexOf(store.currentAssetId)
-        const previousId = currentIdx > 0 ? store.items[currentIdx - 1] : null
-
-        if (previousId) {
-            store.currentAssetId = previousId
-            this.loadAssetDetail(previousId)
-            return
-        }
-
-        if (store.page > 1) {
-            const previousPage = store.page - 1
-            this.fetchShadowSearchResultsPage(previousPage).then((data) => {
-                if (!data) {
-                    return
-                }
-
-                store.prepend(data.ids)
-                store.page = previousPage
-                store.totalPages = data.totalPages
-                this.dispatch(Const.events.showPrevious)
-            })
-        }
+        this.searchDetailCoordinator.handleShowPrevious()
     }
 
     fetchShadowSearchResultsPage(pageNum) {
-        const searchUrl = this.Alpine.store(Const.state.searchUrl).url
-        if (!searchUrl) {
-            return Promise.resolve(null)
-        }
-
-        const url = new URL(searchUrl, window.location.origin)
-        url.searchParams.set("p", pageNum)
-
-        return this.fetchSearchResultsJson(url.toString())
+        return this.searchDetailCoordinator.fetchShadowSearchResultsPage(pageNum)
     }
 
     loadAssetDetail(assetId) {
-        const repoId = this.context.getRepoId()
-        const imgEl = document.querySelector("#imageDetailModalContent img")
-
-        if (!imgEl) {
-            return
-        }
-
-        this.Alpine.store(Const.state.imageDetailLoading).value = true
-
-        fetch(`/htmx/asset/r/${repoId}/modals/asset-detail/${assetId}`, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-            },
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    console.error(
-                        `Error loading asset detail: ${response.statusText}`,
-                    )
-                    this.Alpine.store(Const.state.imageDetailLoading).value =
-                        false
-                    return null
-                }
-
-                return response.json()
-            })
-            .then(async (assetData) => {
-                if (!assetData) {
-                    return
-                }
-
-                await setImgSrcAndWait(
-                    imgEl,
-                    `/content/r/${repoId}/file/${assetId}`,
-                )
-
-                showAssetDetailModal({
-                    title: assetData.file_name,
-                    width: assetData.width,
-                    height: assetData.height,
-                })
-
-                this.dispatch(Const.events.detailShown, { assetId })
-            })
-            .catch((error) => {
-                console.error(`Error loading asset detail: ${error}`)
-                this.Alpine.store(Const.state.imageDetailLoading).value = false
-            })
+        this.searchDetailCoordinator.loadAssetDetail(assetId)
     }
 
     dispatch(eventName, detail = {}) {

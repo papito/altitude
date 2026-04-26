@@ -32,8 +32,8 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
-| `js/search-results/` | search-results helpers such as detail navigation and drag/drop used by fragment hydrators and grid views |
-| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, drag/drop bindings, search/detail coordination, and delegation into asset/fragment/listener modules |
+| `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
+| `js/frontend-app.js` | app-wide bootstrap/composition root, shared Alpine stores, drag/drop bindings, and delegation into asset/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
@@ -158,6 +158,9 @@ requests, while `js/frontend-app.js` remains the composition root that triggers 
 `intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; the centralized
 search-results fragment hydrator in `js/fragments/search-results.js` binds infinite scroll,
 lazy image loading, and metadata visibility for `data-app-fragment="search-results"`.
+
+**Detail navigation** — Shadow-results syncing, next/previous navigation, paged JSON fetching,
+and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`.
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)` to persist to
