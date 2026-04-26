@@ -46,6 +46,19 @@ export class FrontendApp {
         this.registerEventListeners()
         this.Alpine.start()
         bindAppDragDrop(this)
+
+        /*
+         * Hydrate any declarative app fragments already present in the initial page HTML.
+         *
+         * This is safe to call with `document` even though many HTMX fragments are loaded later:
+         *
+         * 1. `hydrateAppFragments()` only initializes fragment roots that already exist in the
+         *    current DOM, so on first load it hydrates just the initial page content.
+         * 2. Fragments injected later by HTMX are handled separately in `handleAfterSwap()`,
+         *    which re-runs hydration for the newly swapped subtree only.
+         * 3. Individual fragment hydrators are written to be idempotent (using `data-app-*`
+         *    bound flags where needed), so re-hydrating overlapping DOM is harmless.
+         */
         this.hydrateFragments(document)
 
         return this
