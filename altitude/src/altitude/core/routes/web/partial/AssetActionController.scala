@@ -17,7 +17,11 @@ class AssetActionController(using logger: Logger) extends BaseController:
     val asset: Asset = App.altitude.service.asset.getById(assetId)
 
     val contentType = request.exchange.getRequestHeaders.getFirst("Content-Type")
-    val isJsonFormat = contentType != null && contentType.contains("application/json")
+    val accept = request.exchange.getRequestHeaders.getFirst("Accept")
+
+    val isJsonFormat =
+      (contentType != null && contentType.contains("application/json")) ||
+        (accept != null && accept.contains("application/json"))
     if isJsonFormat then
       cask.Response(asset.toJson.toString, 200, Seq(("Content-Type", "application/json")))
     else
