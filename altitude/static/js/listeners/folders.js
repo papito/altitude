@@ -19,46 +19,45 @@ export function registerFolderListeners(app) {
         const newParent = new Folder(newParentId)
         const oldParent = movedFolder.parent()
 
-        htmx.ajax(
-            "put",
+        fetch(
             `/htmx/folder/r/${app.context.getRepoId()}/move?movedFolderId=${movedFolderId}&newParentId=${newParentId}`,
-            {
-                swap: "none",
-                handler: (response) => {
-                    const status = response["htmx-internal-data"].xhr.status
-
-                    if (status === 200) {
-                        movedFolder.closeContextMenu()
-                        movedFolder.clearChildren()
-
-                        newParent.incrementNumOfChildren()
-                        oldParent.decrementNumOfChildren()
-
-                        showSuccessSnackBar(
-                            `Folder ${movedFolder.name()} moved into "${newParent.name()}"`,
-                        )
-
-                        if (newParent.isExpanded()) {
-                            newParent.addChild(movedFolder)
-                            movedFolder.collapse()
-                        } else {
-                            movedFolder.remove()
-                        }
-
-                        newParent.updateVisualState()
-                        oldParent.updateVisualState()
-                    } else if (status === 409) {
-                        showWarningSnackBar(
-                            response["htmx-internal-data"].xhr.responseText,
-                        )
-                    } else {
-                        showErrorSnackBar(
-                            `Error moving folder "${movedFolder.name()}". Status: ${status}`,
-                        )
-                    }
-                },
-            },
+            { method: "PUT" },
         )
+            .then(async (response) => {
+                if (response.status === 200) {
+                    movedFolder.closeContextMenu()
+                    movedFolder.clearChildren()
+
+                    newParent.incrementNumOfChildren()
+                    oldParent.decrementNumOfChildren()
+
+                    showSuccessSnackBar(
+                        `Folder ${movedFolder.name()} moved into "${newParent.name()}"`,
+                    )
+
+                    if (newParent.isExpanded()) {
+                        newParent.addChild(movedFolder)
+                        movedFolder.collapse()
+                    } else {
+                        movedFolder.remove()
+                    }
+
+                    newParent.updateVisualState()
+                    oldParent.updateVisualState()
+                } else if (response.status === 409) {
+                    const text = await response.text()
+                    showWarningSnackBar(text)
+                } else {
+                    showErrorSnackBar(
+                        `Error moving folder "${movedFolder.name()}". Status: ${response.status}`,
+                    )
+                }
+            })
+            .catch((error) => {
+                showErrorSnackBar(
+                    `Error moving folder "${movedFolder.name()}": ${error}`,
+                )
+            })
     })
 
     document.body.addEventListener(Const.events.folderAdded, (event) => {
