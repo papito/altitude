@@ -1,5 +1,6 @@
 import { findFragmentRoots } from "./helpers.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
+import { getHttpErrorMessage, http } from "../http/client.js"
 
 export function hydrateUploadFormFragments(root = document) {
     findFragmentRoots(root, "upload-form").forEach((fragmentEl) => {
@@ -70,20 +71,17 @@ export function hydrateUploadFormFragment({ fragmentEl }) {
         }
 
         try {
-            const response = await fetch(cancelUrl, {
-                method: "POST",
-            })
-
-            if (!response.ok) {
-                showErrorSnackBar(
-                    `Error cancelling upload: POST ${cancelUrl} failed with HTTP ${response.status}`,
-                )
-                return
-            }
+            await http.post(cancelUrl)
 
             setIdle()
         } catch (error) {
-            showErrorSnackBar("Error cancelling upload")
+            const status = error?.response?.status
+
+            showErrorSnackBar(
+                status
+                    ? `Error cancelling upload: POST ${cancelUrl} failed with HTTP ${status}`
+                    : `Error cancelling upload: ${getHttpErrorMessage(error)}`,
+            )
         }
     })
 

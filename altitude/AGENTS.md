@@ -19,6 +19,7 @@ Feature logic is split into focused ES module folders instead of accumulating in
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
 - `static/js/search-results/` — shadow-results/detail navigation and image-detail coordination
 - `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
+- `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)
 
 `frontend-app.js` should stay the composition root: it initializes context stores, creates the
 feature coordinators, registers listeners, starts Alpine, binds drag/drop, and hydrates initial

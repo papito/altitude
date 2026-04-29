@@ -5,6 +5,11 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
+import {
+    allowHttpStatuses,
+    getHttpErrorMessage,
+    http,
+} from "../http/client.js"
 
 export function createAssetActions({ Alpine, context, reloadNav }) {
     function removeTriageStyling(assetIds) {
@@ -70,139 +75,118 @@ export function createAssetActions({ Alpine, context, reloadNav }) {
         )
     }
 
-    function moveAssets({ folderId, assetIds }) {
+    async function moveAssets({ folderId, assetIds }) {
         const newParentFolder = new Folder(folderId)
         const payload = { assetIds, folderId }
 
-        fetch(`/api/asset/r/${context.getRepoId()}/move`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    showErrorSnackBar(`Error moving assets: ${response.statusText}`)
-                    return
-                }
+        try {
+            await http.put(`/api/asset/r/${context.getRepoId()}/move`, payload)
 
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } moved to folder "${newParentFolder.name()}"`
-                showSuccessSnackBar(successMessage)
+            const successMessage = `${
+                assetIds.length > 1 ? "Assets" : "Asset"
+            } moved to folder "${newParentFolder.name()}"`
+            showSuccessSnackBar(successMessage)
 
-                removeTriageStyling(assetIds)
+            removeTriageStyling(assetIds)
 
-                if (shouldRemoveFromGrid(folderId)) {
-                    removeAssetsFromGrid(assetIds)
-                }
-
-                if (shouldResetSelectedAssets(assetIds)) {
-                    Alpine.store(Const.state.selectedAssets).reset()
-                }
-
-                reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error moving assets: ${error}`)
-            })
-    }
-
-    function recycleAssets({ assetIds }) {
-        const payload = { assetIds }
-
-        fetch(`/api/asset/r/${context.getRepoId()}/move`, {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    showErrorSnackBar(
-                        `Error moving assets to trash: ${response.statusText}`,
-                    )
-                    return
-                }
-
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } moved to the trash bin`
-                showSuccessSnackBar(successMessage)
-
+            if (shouldRemoveFromGrid(folderId)) {
                 removeAssetsFromGrid(assetIds)
+            }
 
-                if (shouldResetSelectedAssets(assetIds)) {
-                    Alpine.store(Const.state.selectedAssets).reset()
-                }
-
-                reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error moving assets to trash: ${error}`)
-            })
-    }
-
-    function purgeAssets({ assetIds }) {
-        const payload = { assetIds }
-
-        fetch(`/api/asset/r/${context.getRepoId()}/purge`, {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    showErrorSnackBar(`Error purging assets: ${response.statusText}`)
-                    return
-                }
-
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } permanently deleted`
-                showSuccessSnackBar(successMessage)
-
-                removeAssetsFromGrid(assetIds)
+            if (shouldResetSelectedAssets(assetIds)) {
                 Alpine.store(Const.state.selectedAssets).reset()
-                reloadNav()
-            })
-            .catch((error) => {
-                showErrorSnackBar(`Error purging assets: ${error}`)
-            })
+            }
+
+            reloadNav()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error moving assets: ${getHttpErrorMessage(error)}`,
+            )
+        }
     }
 
-    function restoreAssets({ assetIds }) {
+    async function recycleAssets({ assetIds }) {
         const payload = { assetIds }
 
-        fetch(`/api/asset/r/${context.getRepoId()}/restore`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    if (response.status === 409) {
-                        showWarningSnackBar(
-                            "Cannot restore: a non-recycled asset with the same content already exists",
-                        )
-                    } else {
-                        showErrorSnackBar(
-                            `Error restoring assets: ${response.statusText}`,
-                        )
-                    }
-                    return
-                }
+        try {
+            await http.delete(`/api/asset/r/${context.getRepoId()}/move`, {
+                data: payload,
+            })
 
-                const successMessage = `${
-                    assetIds.length > 1 ? "Assets" : "Asset"
-                } restored`
-                showSuccessSnackBar(successMessage)
+            const successMessage = `${
+                assetIds.length > 1 ? "Assets" : "Asset"
+            } moved to the trash bin`
+            showSuccessSnackBar(successMessage)
 
-                removeAssetsFromGrid(assetIds)
+            removeAssetsFromGrid(assetIds)
+
+            if (shouldResetSelectedAssets(assetIds)) {
                 Alpine.store(Const.state.selectedAssets).reset()
-                reloadNav()
+            }
+
+            reloadNav()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error moving assets to trash: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
+    async function purgeAssets({ assetIds }) {
+        const payload = { assetIds }
+
+        try {
+            await http.delete(`/api/asset/r/${context.getRepoId()}/purge`, {
+                data: payload,
             })
-            .catch((error) => {
-                showErrorSnackBar(`Error restoring assets: ${error}`)
-            })
+
+            const successMessage = `${
+                assetIds.length > 1 ? "Assets" : "Asset"
+            } permanently deleted`
+            showSuccessSnackBar(successMessage)
+
+            removeAssetsFromGrid(assetIds)
+            Alpine.store(Const.state.selectedAssets).reset()
+            reloadNav()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error purging assets: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
+    async function restoreAssets({ assetIds }) {
+        const payload = { assetIds }
+
+        try {
+            const response = await http.put(
+                `/api/asset/r/${context.getRepoId()}/restore`,
+                payload,
+                {
+                    validateStatus: allowHttpStatuses(409),
+                },
+            )
+
+            if (response.status === 409) {
+                showWarningSnackBar(
+                    "Cannot restore: a non-recycled asset with the same content already exists",
+                )
+                return
+            }
+
+            const successMessage = `${
+                assetIds.length > 1 ? "Assets" : "Asset"
+            } restored`
+            showSuccessSnackBar(successMessage)
+
+            removeAssetsFromGrid(assetIds)
+            Alpine.store(Const.state.selectedAssets).reset()
+            reloadNav()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error restoring assets: ${getHttpErrorMessage(error)}`,
+            )
+        }
     }
 
     return {

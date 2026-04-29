@@ -1,5 +1,6 @@
 import { Const } from "../constants.js"
 import { showAssetDetailModal } from "../common/modal.js"
+import { getHttpErrorMessage, http } from "../http/client.js"
 
 export function setImgSrcAndWait(img, url) {
     return new Promise((resolve, reject) => {
@@ -29,7 +30,7 @@ export function setImgSrcAndWait(img, url) {
 export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     let shadowResultsSyncToken = 0
 
-    function syncShadowResultsFromSearchUrl() {
+    async function syncShadowResultsFromSearchUrl() {
         const searchUrl = Alpine.store(Const.state.searchUrl).url
         if (!searchUrl) {
             return
@@ -37,58 +38,47 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
 
         const token = ++shadowResultsSyncToken
         const store = Alpine.store(Const.state.shadowResults)
+        const data = await fetchSearchResultsJson(searchUrl)
 
-        fetchSearchResultsJson(searchUrl)
-            .then((data) => {
-                if (!data || token !== shadowResultsSyncToken) {
-                    return
-                }
+        if (!data || token !== shadowResultsSyncToken) {
+            return
+        }
 
-                store.replace(data.ids, data.page, data.totalPages)
-            })
-            .catch((error) => {
-                console.error(`Error fetching search results: ${error}`)
-            })
+        store.replace(data.ids, data.page, data.totalPages)
     }
 
-    function appendShadowResultsForRequestPath(requestPath) {
+    async function appendShadowResultsForRequestPath(requestPath) {
         const store = Alpine.store(Const.state.shadowResults)
+        const data = await fetchSearchResultsJson(requestPath)
 
-        fetchSearchResultsJson(requestPath)
-            .then((data) => {
-                if (!data) {
-                    return
-                }
+        if (!data) {
+            return
+        }
 
-                store.append(data.ids)
-                store.page = data.page
-                store.totalPages = data.totalPages
-            })
-            .catch((error) => {
-                console.error(`Error fetching search results: ${error}`)
-            })
+        store.append(data.ids)
+        store.page = data.page
+        store.totalPages = data.totalPages
     }
 
-    function fetchSearchResultsJson(url) {
-        return fetch(url, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "HX-Current-URL": window.location.href,
-            },
-        }).then((response) => {
-            if (!response.ok) {
-                console.error(
-                    `Error fetching search results: ${response.statusText}`,
-                )
-                return null
-            }
+    async function fetchSearchResultsJson(url) {
+        try {
+            const response = await http.get(url, {
+                headers: {
+                    "Content-Type": "application/json",
+                    "HX-Current-URL": window.location.href,
+                },
+            })
 
-            return response.json()
-        })
+            return response.data
+        } catch (error) {
+            console.error(
+                `Error fetching search results: ${getHttpErrorMessage(error)}`,
+            )
+            return null
+        }
     }
 
-    function handleShowNext() {
+    async function handleShowNext() {
         const store = Alpine.store(Const.state.shadowResults)
         const currentIdx = store.items.indexOf(store.currentAssetId)
         const nextId =
@@ -104,20 +94,20 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
 
         if (store.page < store.totalPages) {
             const nextPage = store.page + 1
-            fetchShadowSearchResultsPage(nextPage).then((data) => {
-                if (!data) {
-                    return
-                }
+            const data = await fetchShadowSearchResultsPage(nextPage)
 
-                store.append(data.ids)
-                store.page = nextPage
-                store.totalPages = data.totalPages
-                dispatch(Const.events.showNext)
-            })
+            if (!data) {
+                return
+            }
+
+            store.append(data.ids)
+            store.page = nextPage
+            store.totalPages = data.totalPages
+            dispatch(Const.events.showNext)
         }
     }
 
-    function handleShowPrevious() {
+    async function handleShowPrevious() {
         const store = Alpine.store(Const.state.shadowResults)
         const currentIdx = store.items.indexOf(store.currentAssetId)
         const previousId = currentIdx > 0 ? store.items[currentIdx - 1] : null
@@ -130,32 +120,32 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
 
         if (store.page > 1) {
             const previousPage = store.page - 1
-            fetchShadowSearchResultsPage(previousPage).then((data) => {
-                if (!data) {
-                    return
-                }
+            const data = await fetchShadowSearchResultsPage(previousPage)
 
-                store.prepend(data.ids)
-                store.page = previousPage
-                store.totalPages = data.totalPages
-                dispatch(Const.events.showPrevious)
-            })
+            if (!data) {
+                return
+            }
+
+            store.prepend(data.ids)
+            store.page = previousPage
+            store.totalPages = data.totalPages
+            dispatch(Const.events.showPrevious)
         }
     }
 
-    function fetchShadowSearchResultsPage(pageNum) {
+    async function fetchShadowSearchResultsPage(pageNum) {
         const searchUrl = Alpine.store(Const.state.searchUrl).url
         if (!searchUrl) {
-            return Promise.resolve(null)
+            return null
         }
 
         const url = new URL(searchUrl, window.location.origin)
         url.searchParams.set("p", pageNum)
 
-        return fetchSearchResultsJson(url.toString())
+        return await fetchSearchResultsJson(url.toString())
     }
 
-    function loadAssetDetail(assetId) {
+    async function loadAssetDetail(assetId) {
         const repoId = context.getRepoId()
         const imgEl = document.querySelector("#imageDetailModalContent img")
 
@@ -165,45 +155,31 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
 
         Alpine.store(Const.state.imageDetailLoading).value = true
 
-        fetch(`/htmx/asset/r/${repoId}/modals/asset-detail/${assetId}`, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-            },
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    console.error(
-                        `Error loading asset detail: ${response.statusText}`,
-                    )
-                    Alpine.store(Const.state.imageDetailLoading).value = false
-                    return null
-                }
+        try {
+            const response = await http.get(
+                `/htmx/asset/r/${repoId}/modals/asset-detail/${assetId}`,
+            )
+            const assetData = response.data
 
-                return response.json()
+            if (!assetData) {
+                return
+            }
+
+            await setImgSrcAndWait(imgEl, `/content/r/${repoId}/file/${assetId}`)
+
+            showAssetDetailModal({
+                title: assetData.file_name,
+                width: assetData.width,
+                height: assetData.height,
             })
-            .then(async (assetData) => {
-                if (!assetData) {
-                    return
-                }
 
-                await setImgSrcAndWait(
-                    imgEl,
-                    `/content/r/${repoId}/file/${assetId}`,
-                )
-
-                showAssetDetailModal({
-                    title: assetData.file_name,
-                    width: assetData.width,
-                    height: assetData.height,
-                })
-
-                dispatch(Const.events.detailShown, { assetId })
-            })
-            .catch((error) => {
-                console.error(`Error loading asset detail: ${error}`)
-                Alpine.store(Const.state.imageDetailLoading).value = false
-            })
+            dispatch(Const.events.detailShown, { assetId })
+        } catch (error) {
+            console.error(
+                `Error loading asset detail: ${getHttpErrorMessage(error)}`,
+            )
+            Alpine.store(Const.state.imageDetailLoading).value = false
+        }
     }
 
     return {

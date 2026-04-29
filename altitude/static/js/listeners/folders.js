@@ -5,9 +5,14 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
+import {
+    allowHttpStatuses,
+    getHttpErrorMessage,
+    http,
+} from "../http/client.js"
 
 export function registerFolderListeners(app) {
-    document.body.addEventListener(Const.events.folderMoved, (event) => {
+    document.body.addEventListener(Const.events.folderMoved, async (event) => {
         const movedFolderId = event.detail.movedFolderId
         const newParentId = event.detail.newParentId
 
@@ -19,45 +24,47 @@ export function registerFolderListeners(app) {
         const newParent = new Folder(newParentId)
         const oldParent = movedFolder.parent()
 
-        fetch(
-            `/htmx/folder/r/${app.context.getRepoId()}/move?movedFolderId=${movedFolderId}&newParentId=${newParentId}`,
-            { method: "PUT" },
-        )
-            .then(async (response) => {
-                if (response.status === 200) {
-                    movedFolder.closeContextMenu()
-                    movedFolder.clearChildren()
+        try {
+            const response = await http.put(
+                `/htmx/folder/r/${app.context.getRepoId()}/move?movedFolderId=${movedFolderId}&newParentId=${newParentId}`,
+                null,
+                {
+                    validateStatus: allowHttpStatuses(409),
+                },
+            )
 
-                    newParent.incrementNumOfChildren()
-                    oldParent.decrementNumOfChildren()
+            if (response.status === 200) {
+                movedFolder.closeContextMenu()
+                movedFolder.clearChildren()
 
-                    showSuccessSnackBar(
-                        `Folder ${movedFolder.name()} moved into "${newParent.name()}"`,
-                    )
+                newParent.incrementNumOfChildren()
+                oldParent.decrementNumOfChildren()
 
-                    if (newParent.isExpanded()) {
-                        newParent.addChild(movedFolder)
-                        movedFolder.collapse()
-                    } else {
-                        movedFolder.remove()
-                    }
-
-                    newParent.updateVisualState()
-                    oldParent.updateVisualState()
-                } else if (response.status === 409) {
-                    const text = await response.text()
-                    showWarningSnackBar(text)
-                } else {
-                    showErrorSnackBar(
-                        `Error moving folder "${movedFolder.name()}". Status: ${response.status}`,
-                    )
-                }
-            })
-            .catch((error) => {
-                showErrorSnackBar(
-                    `Error moving folder "${movedFolder.name()}": ${error}`,
+                showSuccessSnackBar(
+                    `Folder ${movedFolder.name()} moved into "${newParent.name()}"`,
                 )
-            })
+
+                if (newParent.isExpanded()) {
+                    newParent.addChild(movedFolder)
+                    movedFolder.collapse()
+                } else {
+                    movedFolder.remove()
+                }
+
+                newParent.updateVisualState()
+                oldParent.updateVisualState()
+            } else if (response.status === 409) {
+                showWarningSnackBar(response.data)
+            } else {
+                showErrorSnackBar(
+                    `Error moving folder "${movedFolder.name()}". Status: ${response.status}`,
+                )
+            }
+        } catch (error) {
+            showErrorSnackBar(
+                `Error moving folder "${movedFolder.name()}": ${getHttpErrorMessage(error)}`,
+            )
+        }
     })
 
     document.body.addEventListener(Const.events.folderAdded, (event) => {

@@ -16,8 +16,10 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
 
     Alpine.store(Const.state.imageDetailLoading).value = true
 
-    setImgSrcAndWait(imgEl, fragmentEl.dataset.appImageDetailUrl)
-        .then(() => {
+    ;(async () => {
+        try {
+            await setImgSrcAndWait(imgEl, fragmentEl.dataset.appImageDetailUrl)
+
             showAssetDetailModal({
                 title: fragmentEl.dataset.appImageDetailTitle,
                 width: Number(fragmentEl.dataset.appImageDetailWidth),
@@ -27,12 +29,11 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
             dispatch(Const.events.detailShown, {
                 assetId: fragmentEl.dataset.appImageDetailAssetId,
             })
-        })
-        .catch((error) => {
+        } catch (error) {
             console.error("Error loading asset image", error)
-        })
-        .finally(() => {
+        } finally {
             Alpine.store(Const.state.imageDetailLoading).value = false
-        })
+        }
+    })()
 }
 

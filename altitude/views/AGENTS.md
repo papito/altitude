@@ -97,7 +97,7 @@ domain listener modules.
 interact.js drag end / ondrop
   → dispatch CustomEvent on document.body
     → event_handlers.js listener
-        → fetch() or htmx.ajax() to server
+        → shared axios client (`js/http/client.js`) or htmx.ajax() to server
           → on success: direct DOM mutation + snackbar + optional nav reload
 ```
 
@@ -186,6 +186,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/constants.js` | All string constants: events, attributes, store keys, view names |
 | `static/js/app.js` | thin bootstrap that exposes `initApp()` and starts `FrontendApp` |
 | `static/js/context.js` | `window.ctx` — repo ID and metadata field settings |
+| `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes |
 | `static/js/common/modal.js` | `showModal`, `showAssetDetailModal`, `closeModal` |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
