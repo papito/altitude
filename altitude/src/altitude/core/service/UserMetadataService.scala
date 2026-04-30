@@ -9,7 +9,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.*
 
 object UserMetadataService {
   final private val VALID_BOOLEAN_VALUES: Set[String] = Set("0", "1", "true", "false")
@@ -36,7 +35,7 @@ class UserMetadataService(val app: Altitude) {
         throw DuplicateException()
       }
 
-      metadataFieldDao.add(metadataField.toJson)
+      metadataFieldDao.add(metadataField)
     }
   }
 
@@ -47,14 +46,13 @@ class UserMetadataService(val app: Altitude) {
       val allFields = metadataFieldDao.query(q).records
 
       allFields.map {
-        res =>
-          val metadataField: UserMetadataField = res
+        metadataField =>
           metadataField.persistedId -> metadataField
       }.toMap
     }
 
-  def getFieldById(id: String): JsObject =
-    txManager.asReadOnly[JsObject] {
+  def getFieldById(id: String): UserMetadataField =
+    txManager.asReadOnly[UserMetadataField] {
       metadataFieldDao.getById(id)
     }
 
@@ -368,29 +366,29 @@ class UserMetadataService(val app: Altitude) {
    *
    * VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type ]
    */
-  def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): JsArray = {
+  def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): ujson.Arr = {
 
-    txManager.asReadOnly[JsArray] {
+    txManager.asReadOnly[ujson.Arr] {
       val allFields = if (allMetadataFields.isDefined) allMetadataFields.get else getAllFields
 
-      def toJson(field: UserMetadataField, mdVals: Set[UserMetadataValue]): JsObject = {
-        Json.obj(
-          FieldConst.MetadataField.FIELD -> (field.toJson -
-            FieldConst.UPDATED_AT -
-            FieldConst.CREATED_AT -
-            FieldConst.MetadataField.NAME_LC),
-          FieldConst.VALUES -> JsArray(mdVals.toSeq.map(_.toJson))
+      def toJsonEntry(field: UserMetadataField, mdVals: Set[UserMetadataValue]): ujson.Obj = {
+        val fieldJson = ujson.Obj(field.toJson.obj)
+        fieldJson.obj.remove(FieldConst.UPDATED_AT)
+        fieldJson.obj.remove(FieldConst.CREATED_AT)
+        fieldJson.obj.remove(FieldConst.MetadataField.NAME_LC)
+        ujson.Obj(
+          FieldConst.MetadataField.FIELD -> (fieldJson: ujson.Value),
+          FieldConst.VALUES -> ujson.Arr(mdVals.toSeq.map(v => v.toJson: ujson.Value)*)
         )
       }
 
-      val res = metadata.data.foldLeft(scala.collection.Seq[JsValue]()) {
+      val res = metadata.data.foldLeft(Seq[ujson.Value]()) {
         (res, m) =>
           val fieldId = m._1
           val field: UserMetadataField = allFields(fieldId)
-          res :+ toJson(field, m._2)
+          res :+ toJsonEntry(field, m._2)
       }
 
-      // add the missing fields that have no values
       val emptyFields = allFields
         .filterNot {
           case (fieldId, _) =>
@@ -399,17 +397,17 @@ class UserMetadataService(val app: Altitude) {
         .map {
           case (fieldId, _) =>
             val field: UserMetadataField = allFields(fieldId)
-            toJson(field, Set[UserMetadataValue]())
+            toJsonEntry(field, Set[UserMetadataValue]())
         }
 
       val sorted = (res ++ emptyFields).sortWith {
         (left, right) =>
-          val leftFieldName: String = (left \ FieldConst.MetadataField.FIELD \ FieldConst.MetadataField.NAME).as[String]
-          val rightFieldName: String = (right \ FieldConst.MetadataField.FIELD \ FieldConst.MetadataField.NAME).as[String]
+          val leftFieldName: String = left(FieldConst.MetadataField.FIELD)(FieldConst.MetadataField.NAME).str
+          val rightFieldName: String = right(FieldConst.MetadataField.FIELD)(FieldConst.MetadataField.NAME).str
           leftFieldName.compareToIgnoreCase(rightFieldName) < 1
       }
 
-      JsArray(sorted)
+      ujson.Arr(sorted*)
     }
   }
 

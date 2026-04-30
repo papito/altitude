@@ -14,7 +14,6 @@ import altitude.core.routes.web.SessionController
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
-import play.api.libs.json.JsObject
 
 class SetupFormController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
@@ -66,7 +65,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
       )
     else
       // Parse JSON from request body
-      val jsonIn: JsObject = dataScrubber.scrub(jsonData.get)
+      val jsonIn: ujson.Obj = dataScrubber.scrub(jsonData.get)
 
       val validationException: ValidationException =
         try
@@ -83,11 +82,11 @@ class SetupFormController(using logger: Logger) extends BaseController:
             )
             return cask.Abort(500)
 
-      val repositoryName = (jsonIn \ Api.Field.Setup.REPOSITORY_NAME).asOpt[String].getOrElse("")
-      val email = (jsonIn \ Api.Field.Setup.ADMIN_EMAIL).asOpt[String].getOrElse("")
-      val name = (jsonIn \ Api.Field.Setup.ADMIN_NAME).asOpt[String].getOrElse("")
-      val password = (jsonIn \ Api.Field.Setup.PASSWORD).asOpt[String].getOrElse("")
-      val password2 = (jsonIn \ Api.Field.Setup.PASSWORD2).asOpt[String].getOrElse("")
+      val repositoryName = jsonIn.obj.get(Api.Field.Setup.REPOSITORY_NAME).flatMap(_.strOpt).getOrElse("")
+      val email = jsonIn.obj.get(Api.Field.Setup.ADMIN_EMAIL).flatMap(_.strOpt).getOrElse("")
+      val name = jsonIn.obj.get(Api.Field.Setup.ADMIN_NAME).flatMap(_.strOpt).getOrElse("")
+      val password = jsonIn.obj.get(Api.Field.Setup.PASSWORD).flatMap(_.strOpt).getOrElse("")
+      val password2 = jsonIn.obj.get(Api.Field.Setup.PASSWORD2).flatMap(_.strOpt).getOrElse("")
 
       // Secondary validation checks
       if !validationException.errors.contains(Api.Field.Setup.PASSWORD) &&

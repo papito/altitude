@@ -6,7 +6,7 @@ import java.text.SimpleDateFormat
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-trait SqliteOverrides { this: BaseDao =>
+trait SqliteOverrides { this: BaseDao[?] =>
 
   override protected def jsonFunc = "?"
 

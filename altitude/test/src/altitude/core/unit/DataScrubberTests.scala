@@ -2,7 +2,6 @@ package altitude.core.unit
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
-import play.api.libs.json.Json
 import altitude.core.DataScrubber
 import altitude.test.TestFocus
 import org.scalatest.matchers.should.Matchers.shouldBe
@@ -16,13 +15,13 @@ import org.scalatest.matchers.should.Matchers.shouldBe
       lower = List("toTrimAndLower"),
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       "toTrim" -> "  what a mess   ",
       "toTrimAndLower" -> "  tyPe beTTEr ",
     )
 
     val scrubbedJson = dataScrubber.scrub(jsonIn)
-    (scrubbedJson \ "toTrim").as[String] shouldBe "what a mess"
-    (scrubbedJson \ "toTrimAndLower").as[String] shouldBe "type better"
+    scrubbedJson("toTrim").str shouldBe "what a mess"
+    scrubbedJson("toTrimAndLower").str shouldBe "type better"
   }
 }

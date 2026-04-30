@@ -1,13 +1,13 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object Repository:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[Repository] = Json.format[Repository]
-  given Conversion[JsValue, Repository] = json => Json.fromJson[Repository](json).get
+  given JsonCodec.ReadWriter[Repository] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Repository] = json => JsonCodec.read[Repository](json)
 
 case class Repository(
     id: Option[String] = None,
@@ -20,6 +20,6 @@ case class Repository(
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override def toString: String = s"<repo> ${id.getOrElse("NO ID")}: $name"

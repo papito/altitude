@@ -15,7 +15,6 @@ import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
-import play.api.libs.json.JsObject
 
 class FolderActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/folder"
@@ -87,7 +86,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
       )
     )
 
-    val jsonIn: JsObject = dataScrubber.scrub(unscrubbedJson.get)
+    val jsonIn: ujson.Obj = dataScrubber.scrub(unscrubbedJson.get)
 
     def responseWithValidationErrors(errors: Map[String, String], parentId: String): Response[String] =
       val payload = "<!doctype html>" + htmx.html.add_folder_modal(
@@ -112,10 +111,10 @@ class FolderActionController(using logger: Logger) extends BaseController:
       case validationException: ValidationException =>
         return responseWithValidationErrors(
           validationException.errors.toMap,
-          parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String])
+          parentId = jsonIn(Api.Field.Folder.PARENT_ID).str)
 
-    val folderName = (jsonIn \ Api.Field.Folder.NAME).as[String]
-    val parentId = (jsonIn \ Api.Field.Folder.PARENT_ID).as[String]
+    val folderName = jsonIn(Api.Field.Folder.NAME).str
+    val parentId = jsonIn(Api.Field.Folder.PARENT_ID).str
 
     try App.altitude.service.folder.add(folderName, parentId = Some(parentId))
     catch
@@ -145,7 +144,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
       uuid = List(Api.Field.ID)
     )
 
-    val jsonIn: JsObject = dataScrubber.scrub(unscrubbedJson.get)
+    val jsonIn: ujson.Obj = dataScrubber.scrub(unscrubbedJson.get)
 
     def responseWithValidationErrors(errors: Map[String, String], folderId: String): Response[String] =
       val payload = "<!doctype html>" + htmx.html.rename_folder_modal(
@@ -168,10 +167,10 @@ class FolderActionController(using logger: Logger) extends BaseController:
     try apiRequestValidator.validate(jsonIn)
     catch
       case validationException: ValidationException =>
-        return responseWithValidationErrors(validationException.errors.toMap, folderId = (jsonIn \ Api.Field.ID).as[String])
+        return responseWithValidationErrors(validationException.errors.toMap, folderId = jsonIn(Api.Field.ID).str)
 
-    val newName = (jsonIn \ Api.Field.Folder.NAME).as[String]
-    val folderId = (jsonIn \ Api.Field.ID).as[String]
+    val newName = jsonIn(Api.Field.Folder.NAME).str
+    val folderId = jsonIn(Api.Field.ID).str
 
     try App.altitude.service.folder.rename(folderId = folderId, newName = newName)
     catch

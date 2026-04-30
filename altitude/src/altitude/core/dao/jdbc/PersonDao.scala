@@ -6,18 +6,18 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
 import scala.collection.mutable
 import scala.language.implicitConversions
 
-abstract class PersonDao(override val config: Config) extends BaseDao with altitude.core.dao.PersonDao:
+abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 
   final override val tableName = "person"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): Person =
     Person(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       isHidden = getBooleanField(rec(FieldConst.Person.IS_HIDDEN)),
@@ -26,9 +26,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       name = Option(rec(FieldConst.Person.NAME).asInstanceOf[String]),
       coverFaceId = Option(rec(FieldConst.Person.COVER_FACE_ID).asInstanceOf[String]),
       numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int]
-    ).toJson
+    )
 
-  override def add(jsonIn: JsObject): JsObject =
+  override def add(person: Person): Person =
     val personSeqNum = getDataSourceType match
       case C.DbEngineName.POSTGRES => getNextVal("person_label").asInstanceOf[Long]
       case C.DbEngineName.SQLITE => getNextVal("person_label").asInstanceOf[Int].toLong
@@ -43,7 +43,6 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
               VALUES (?, ?, ?, ?, ?)
    """
 
-    val person: Person = jsonIn: Person
     val personName = getPersonName(person, personSeqNum)
     val personSortName = getPersonSortName(person, personSeqNum)
     val isNamed = person.name.nonEmpty
@@ -58,9 +57,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       isNamed
     )
 
-    addRecord(jsonIn, sql, sqlVals)
-
-    jsonIn ++ Json.obj(FieldConst.ID -> id, FieldConst.Person.NAME -> Some(personName), FieldConst.Person.IS_NAMED -> isNamed)
+    addRecord(sql, sqlVals)
+    person.copy(id = Some(id), name = Some(personName), isNamed = isNamed)
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     val name =

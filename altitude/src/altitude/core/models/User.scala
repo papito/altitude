@@ -1,12 +1,12 @@
 package altitude.core.models
 
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object User:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[User] = Json.format[User]
-  given Conversion[JsValue, User] = json => Json.fromJson[User](json).get
+  given JsonCodec.ReadWriter[User] = JsonCodec.macroRW
+  given Conversion[ujson.Value, User] = json => JsonCodec.read[User](json)
 
 case class User(
     id: Option[String] = None,
@@ -18,7 +18,7 @@ case class User(
   with NoDates:
 
   override def toString: String = s"<user> ${id.getOrElse("NO ID")}, email: $email, accountType: $accountType"
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   def forgetMe(): Unit =
     println("User: this is where you'd invalidate the saved token in you User model")

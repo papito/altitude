@@ -1,9 +1,7 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
-@import play.api.libs.json.Json
-@import play.api.libs.json.JsObject
 
-@(fieldErrors: Map[String, String] = Map.empty, formJson: JsObject = Json.obj(), parentId: String, minWidth: Int, title: String)
+@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String, minWidth: Int, title: String)
 
 <style>
     #addFolder input {
@@ -40,7 +38,7 @@
             }
                name="@{ Api.Field.Folder.NAME }"
                autocomplete="off"
-               value='@{ (formJson \ Api.Field.Folder.NAME).asOpt[String].getOrElse("") }'
+               value='@{ formJson.obj.get(Api.Field.Folder.NAME).flatMap(_.strOpt).getOrElse("") }'
                placeholder="New folder name"
                maxlength="@{ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
                minlength="@{ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
@@ -48,5 +46,4 @@
         <input type="hidden" name="@{ Api.Field.Folder.PARENT_ID }" value="@{ parentId }">
     </div>
 </form>
-
 

@@ -9,7 +9,7 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsObject
+
 
 class StatsService(val app: Altitude) {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -19,7 +19,7 @@ class StatsService(val app: Altitude) {
   def getStats: Stats = {
     txManager.asReadOnly[Stats] {
       val q: Query = new Query().withRepository()
-      val stats: List[Stat] = dao.query(q).records.map(r => r: Stat)
+      val stats: List[Stat] = dao.query(q).records
 
       // Assemble the total stats on-the-fly
       val totalAssetsDims = Stats.SORTED_ASSETS :: Stats.RECYCLED_ASSETS :: Stats.TRIAGE_ASSETS :: Nil
@@ -42,7 +42,7 @@ class StatsService(val app: Altitude) {
     dao.decrementStat(statName, count)
   }
 
-  def createStat(dimension: String): JsObject = {
+  def createStat(dimension: String): Stat = {
     txManager.withTransaction {
       val stat = Stat(dimension, 0)
       dao.add(stat)

@@ -5,25 +5,19 @@ import altitude.core.RequestContext
 import altitude.core.models.FieldType
 import altitude.core.models.UserMetadataField
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
-import scala.language.implicitConversions
-
-abstract class MetadataFieldDao(override val config: Config) extends BaseDao with altitude.core.dao.UserMetadataFieldDao:
+abstract class MetadataFieldDao(override val config: Config) extends BaseDao[UserMetadataField] with altitude.core.dao.UserMetadataFieldDao:
 
   final override val tableName = "metadata_field"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): UserMetadataField =
     UserMetadataField(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.MetadataField.NAME).asInstanceOf[String],
       fieldType = FieldType.valueOf(rec(FieldConst.MetadataField.FIELD_TYPE).asInstanceOf[String])
-    ).toJson
+    )
 
-  override def add(jsonIn: JsObject): JsObject =
-    val metadataField = jsonIn: UserMetadataField
-
+  override def add(metadataField: UserMetadataField): UserMetadataField =
     val sql = s"""
         INSERT INTO metadata_field (
              ${FieldConst.ID},
@@ -44,6 +38,5 @@ abstract class MetadataFieldDao(override val config: Config) extends BaseDao wit
         metadataField.nameLowercase,
         metadataField.fieldType.toString)
 
-    addRecord(jsonIn, sql, sqlVals)
-
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    addRecord(sql, sqlVals)
+    metadataField.copy(id = Some(id))

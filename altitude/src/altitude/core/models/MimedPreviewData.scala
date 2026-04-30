@@ -2,36 +2,28 @@ package altitude.core.models
 
 import altitude.core.FieldConst
 import org.apache.commons.codec.binary.Base64
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-import play.api.libs.json.JsSuccess
-import play.api.libs.json.JsValue
-import play.api.libs.json.OWrites
-import play.api.libs.json.Reads
+import altitude.core.util.JsonCodec
 
 object MimedPreviewData:
   final val MIME_TYPE = "image/png"
   final val FILE_EXTENSION = "png"
 
-  given reads: Reads[MimedPreviewData] = (json: JsValue) =>
-    val data: String = (json \ FieldConst.MimedData.DATA).as[String]
-    JsSuccess(
-      MimedPreviewData(
-        assetId = (json \ FieldConst.MimedData.ASSET_ID).as[String],
-        data = Base64.decodeBase64(data)
-      ))
-
-  given writes: OWrites[MimedPreviewData] = (mimedPreviewData: MimedPreviewData) =>
-    Json.obj(
-      FieldConst.MimedData.ASSET_ID -> mimedPreviewData.assetId,
-      FieldConst.MimedData.MIME_TYPE -> mimedPreviewData.mimeType,
-      FieldConst.MimedData.DATA -> Base64.encodeBase64String(mimedPreviewData.data)
+  given JsonCodec.ReadWriter[MimedPreviewData] = JsonCodec.readwriter[ujson.Value].bimap(
+    (mp: MimedPreviewData) => ujson.Obj(
+      FieldConst.MimedData.ASSET_ID -> ujson.Str(mp.assetId),
+      FieldConst.MimedData.MIME_TYPE -> ujson.Str(mp.mimeType),
+      FieldConst.MimedData.DATA -> ujson.Str(Base64.encodeBase64String(mp.data))
+    ),
+    (json: ujson.Value) => MimedPreviewData(
+      assetId = json(FieldConst.MimedData.ASSET_ID).str,
+      data = Base64.decodeBase64(json(FieldConst.MimedData.DATA).str)
     )
+  )
 
-  given Conversion[JsValue, MimedPreviewData] = json => Json.fromJson[MimedPreviewData](json).get
+  given Conversion[ujson.Value, MimedPreviewData] = json => JsonCodec.read[MimedPreviewData](json)
 
 case class MimedPreviewData(assetId: String, data: Array[Byte]) extends BaseModel with NoId with NoDates:
 
   val mimeType: String = MimedPreviewData.MIME_TYPE
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

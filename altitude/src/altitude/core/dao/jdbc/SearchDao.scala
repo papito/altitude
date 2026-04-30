@@ -8,7 +8,7 @@ import com.typesafe.config.Config
 import java.sql.PreparedStatement
 import java.sql.Types
 import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json.JsObject
+
 object SearchDao:
   private val VALUE_INSERT_SQL: String = s"""
             INSERT INTO metadata_parameter (
@@ -92,7 +92,4 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         preparedStatement.execute()
     }
     replaceSearchDocument(asset)
-  override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any]): Unit =
-    BaseDao.incrWriteQueryCount()
-    val runner: QueryRunner = new QueryRunner()
-    runner.update(RequestContext.getConn, q, values.map(_.asInstanceOf[Object])*)
+

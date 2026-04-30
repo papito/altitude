@@ -4,17 +4,14 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Face
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
 
-import scala.language.implicitConversions
-
-abstract class FaceDao(override val config: Config) extends BaseDao with altitude.core.dao.FaceDao:
+abstract class FaceDao(override val config: Config) extends BaseDao[Face] with altitude.core.dao.FaceDao:
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face]
 
   final override val tableName = "face"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): Face =
     Face(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       x1 = rec(FieldConst.Face.X1).asInstanceOf[Int],
@@ -26,7 +23,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
       detectionScore = rec(FieldConst.Face.DETECTION_SCORE).asInstanceOf[Double],
       features = Array[Float](),
       checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int]
-    ).toJson
+    )
 
   def getAssetFaces(assetId: String): List[Face] =
     val sql = """

@@ -3,7 +3,7 @@ package altitude.core.dao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Person
 
-trait PersonDao extends BaseDao:
+trait PersonDao extends BaseDao[Person]:
   def getAll: Map[String, Person]
   def getAllNotDiscarded: Map[String, Person]
   def getAllAboveThreshold: List[Person]

@@ -1,16 +1,16 @@
 package altitude.core.models
 
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object AssetType:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[AssetType] = Json.format[AssetType]
-  given Conversion[JsValue, AssetType] = json => Json.fromJson[AssetType](json).get
+  given JsonCodec.ReadWriter[AssetType] = JsonCodec.macroRW
+  given Conversion[ujson.Value, AssetType] = json => JsonCodec.read[AssetType](json)
 
 case class AssetType(mediaType: String, mediaSubtype: String, mime: String) extends BaseModel with NoId with NoDates:
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override def equals(other: Any): Boolean = other match {
     case that: AssetType =>

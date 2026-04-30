@@ -1,11 +1,9 @@
 @import altitude.core.RequestContext
-@import play.api.libs.json.Json
-@import play.api.libs.json.JsObject
 @import altitude.core.Api
 @import altitude.core.models.Person
 
-@(person: Person, fieldErrors: Map[String, String] = Map.empty, formJson: JsObject = Json.obj())
-@defining((formJson \ Api.Field.Person.NAME).asOpt[String]) { newName =>
+@(person: Person, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@defining(formJson.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt)) { newName =>
 
 <form action="#"
       id="editPersonName"
@@ -34,4 +32,3 @@
 
 
 }
-

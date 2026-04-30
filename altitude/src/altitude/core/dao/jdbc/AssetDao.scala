@@ -9,6 +9,8 @@ import altitude.core.models.AssetType
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import com.typesafe.config.Config
@@ -16,16 +18,15 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json.*
 
 import scala.language.implicitConversions
 
-abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.dao.AssetDao:
+abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude.core.dao.AssetDao:
   final override val tableName = "asset"
 
   override val sqlQueryBuilder = new SqlQueryBuilder[Query](columnsForSelect, tableName)
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): Asset =
     val assetType = new AssetType(
       mediaType = rec(FieldConst.AssetType.MEDIA_TYPE).asInstanceOf[String],
       mediaSubtype = rec(FieldConst.AssetType.MEDIA_SUBTYPE).asInstanceOf[String],
@@ -51,18 +52,18 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
       originalCreatedAt = getDateTimeField(rec.get(FieldConst.Asset.ORIGINAL_CREATED_AT)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
-    ).toJson
+    )
 
-  override def queryNotRecycled(q: Query): QueryResult =
+  override def queryNotRecycled(q: Query): QueryResult[Asset] =
     this.query(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository(), sqlQueryBuilder)
 
-  override def queryTriaged(q: Query): QueryResult =
+  override def queryTriaged(q: Query): QueryResult[Asset] =
     this.query(q.add(FieldConst.Asset.IS_TRIAGED -> true).withRepository(), sqlQueryBuilder)
 
-  override def queryRecycled(q: Query): QueryResult =
+  override def queryRecycled(q: Query): QueryResult[Asset] =
     this.query(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository(), sqlQueryBuilder)
 
-  override def queryAll(q: Query): QueryResult =
+  override def queryAll(q: Query): QueryResult[Asset] =
     this.query(q.withRepository(), sqlQueryBuilder)
 
   override def getUserMetadata(assetId: String): Option[UserMetadata] =
@@ -77,9 +78,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     val userMetadata = UserMetadata.fromJson(userMetadataJson)
     Some(userMetadata)
 
-  override def add(jsonIn: JsObject): JsObject =
-    val asset = jsonIn: Asset
-
+  override def add(asset: Asset): Asset =
     val sql = s"""
         INSERT INTO asset (
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
@@ -136,8 +135,8 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
       asset.publicMetadata.toJson.toString
     )
 
-    addRecord(jsonIn, sql, sqlVals)
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    addRecord(sql, sqlVals)
+    asset.copy(id = Some(id))
 
   override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Unit =
     BaseDao.incrWriteQueryCount()
@@ -195,11 +194,6 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     res.map(makeModel)
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
-    /**
-     * Pedestrian version of this just overwrites fields for old metadata and re-sets it on the asset. A better implementation -
-     * for advanced engines - updates only the metadata fields of interest.
-     */
-    // OPTIMIZE
     val existingMetadata = getUserMetadata(assetId) match
       case Some(m) => m
       case None => UserMetadata()

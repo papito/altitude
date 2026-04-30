@@ -2,23 +2,22 @@ package altitude.core.dao.jdbc
 
 import altitude.core.FieldConst
 import altitude.core.models.Repository
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
-import scala.language.implicitConversions
-
-abstract class RepositoryDao(override val config: Config) extends BaseDao with altitude.core.dao.RepositoryDao:
+abstract class RepositoryDao(override val config: Config) extends BaseDao[Repository] with altitude.core.dao.RepositoryDao:
 
   final override val tableName = "repository"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): Repository =
     val fileStoreConfigCol = rec(FieldConst.Repository.FILES_STORE_CONFIG)
     val fileStoreConfigJsonStr: String =
       if fileStoreConfigCol == null then "{}"
       else fileStoreConfigCol.asInstanceOf[String]
 
-    val fileStoreConfigJson = Json.parse(fileStoreConfigJsonStr).as[JsObject]
+    val fileStoreConfigJson = ujson.read(fileStoreConfigJsonStr).asInstanceOf[ujson.Obj]
+    val fileStoreConfig = fileStoreConfigJson.obj.map { case (k, v) => k -> v.str }.toMap
 
     Repository(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
@@ -26,14 +25,12 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
       ownerAccountId = rec(FieldConst.Repository.OWNER_ACCOUNT_ID).asInstanceOf[String],
       rootFolderId = rec(FieldConst.Repository.ROOT_FOLDER_ID).asInstanceOf[String],
       fileStoreType = rec(FieldConst.Repository.FILE_STORE_TYPE).asInstanceOf[String],
-      fileStoreConfig = fileStoreConfigJson.as[Map[String, String]],
+      fileStoreConfig = fileStoreConfig,
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
-    ).toJson
+    )
 
-  override def add(jsonIn: JsObject): JsObject =
-    val repo = jsonIn: Repository
-
+  override def add(repo: Repository): Repository =
     val sql = s"""
         INSERT INTO repository (
              ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.OWNER_ACCOUNT_ID}, ${FieldConst.Repository.FILE_STORE_TYPE},
@@ -42,8 +39,9 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
             VALUES (?, ?, ?, ?, ?,$jsonFunc)
     """
 
-    val id = BaseDao.genId
-
+    val id = repo.id.getOrElse(BaseDao.genId)
+    val fileStoreConfigJson = ujson.Obj()
+    repo.fileStoreConfig.foreach { case (k, v) => fileStoreConfigJson(k) = v }
     val sqlVals: List[Any] =
       List(
         id,
@@ -51,11 +49,10 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
         repo.ownerAccountId,
         repo.fileStoreType,
         repo.rootFolderId,
-        Json.toJson(repo.fileStoreConfig).toString())
+        ujson.write(fileStoreConfigJson))
 
-    addRecord(jsonIn, sql, sqlVals)
-
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    addRecord(sql, sqlVals)
+    repo.copy(id = Some(id))
 
   def getAll: List[Repository] =
     val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM repository"

@@ -25,7 +25,7 @@ class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.Sear
 
     val sqlVals: List[Any] = List(RequestContext.getRepository.persistedId, asset.persistedId, body)
 
-    addRecord(asset.toJson, docSql, sqlVals)
+    addRecord(docSql, sqlVals)
 
   override protected def replaceSearchDocument(asset: Asset): Unit =
     BaseDao.incrWriteQueryCount()
@@ -36,7 +36,7 @@ class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.Sear
             SET body = ?
           WHERE ${FieldConst.REPO_ID} = ?
             AND ${FieldConst.SearchToken.ASSET_ID} = ?
-       """
+        """
 
     val metadataValues = asset.userMetadata.data.foldLeft(Set[String]())((res, m) => res ++ m._2.map(_.value))
 
@@ -44,7 +44,6 @@ class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.Sear
 
     val sqlVals: List[Any] = List(body, RequestContext.getRepository.persistedId, asset.persistedId)
 
-    addRecord(asset.toJson, docSql, sqlVals)
 
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, docSql, sqlVals.map(_.asInstanceOf[Object])*)

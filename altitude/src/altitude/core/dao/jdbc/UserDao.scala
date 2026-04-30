@@ -4,24 +4,20 @@ import altitude.core.FieldConst
 import altitude.core.models.AccountType
 import altitude.core.models.User
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
-import scala.language.implicitConversions
-
-abstract class UserDao(override val config: Config) extends BaseDao with altitude.core.dao.UserDao:
+abstract class UserDao(override val config: Config) extends BaseDao[User] with altitude.core.dao.UserDao:
   final override val tableName = "account"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): User =
     User(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       email = rec(FieldConst.User.EMAIL).asInstanceOf[String],
       name = rec(FieldConst.User.NAME).asInstanceOf[String],
       accountType = AccountType.valueOf(rec(FieldConst.User.ACCOUNT_TYPE).asInstanceOf[String]),
       lastActiveRepoId = Option(rec(FieldConst.User.LAST_ACTIVE_REPO_ID).asInstanceOf[String])
-    ).toJson
+    )
 
-  override def add(jsonIn: JsObject): JsObject =
+  override def addUser(user: User, passwordHash: String): User =
     val sql = s"""
         INSERT INTO account (${FieldConst.ID}, ${FieldConst.User.EMAIL}, ${FieldConst.User.NAME},
                                 ${FieldConst.User.ACCOUNT_TYPE}, ${FieldConst.User.PASSWORD_HASH},
@@ -29,10 +25,7 @@ abstract class UserDao(override val config: Config) extends BaseDao with altitud
              VALUES (?, ?, ?, ?, ?, ?)
     """
 
-    val user: User = jsonIn: User
-
     val id = BaseDao.genId
-    val passwordHash = (jsonIn \ FieldConst.User.PASSWORD_HASH).as[String]
 
     val sqlVals: List[Any] = List(
       id,
@@ -43,5 +36,5 @@ abstract class UserDao(override val config: Config) extends BaseDao with altitud
       user.lastActiveRepoId.orNull
     )
 
-    addRecord(jsonIn, sql, sqlVals)
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    addRecord(sql, sqlVals)
+    user.copy(id = Some(id))

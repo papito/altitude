@@ -3,31 +3,27 @@ package altitude.core.models
 import altitude.core.FieldConst
 import altitude.core.util.Util
 import java.time.LocalDateTime
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-import play.api.libs.json.JsSuccess
-import play.api.libs.json.JsValue
-import play.api.libs.json.OWrites
-import play.api.libs.json.Reads
+import altitude.core.util.JsonCodec
 
 object UserToken:
-  given reads: Reads[UserToken] = (json: JsValue) =>
-    val expiresAtStr = (json \ FieldConst.UserToken.EXPIRES_AT).as[String]
-    JsSuccess(
-      UserToken(
-        userId = (json \ FieldConst.UserToken.ACCOUNT_ID).as[String],
-        token = (json \ FieldConst.UserToken.TOKEN).as[String],
-        expiresAt = Util.stringToLocalDateTime(expiresAtStr).get
-      ))
-
-  given writes: OWrites[UserToken] = (userToken: UserToken) =>
-    Json.obj(
-      FieldConst.UserToken.ACCOUNT_ID -> userToken.userId,
-      FieldConst.UserToken.TOKEN -> userToken.token,
-      FieldConst.UserToken.EXPIRES_AT -> userToken.expiresAt.toString
+  given JsonCodec.ReadWriter[UserToken] = JsonCodec.readwriter[ujson.Value].bimap(
+    (ut: UserToken) => ujson.Obj(
+      FieldConst.UserToken.ACCOUNT_ID -> ujson.Str(ut.userId),
+      FieldConst.UserToken.TOKEN -> ujson.Str(ut.token),
+      FieldConst.UserToken.EXPIRES_AT -> ujson.Str(ut.expiresAt.toString)
+    ),
+    (json: ujson.Value) => UserToken(
+      userId   = json(FieldConst.UserToken.ACCOUNT_ID).str,
+      token    = json(FieldConst.UserToken.TOKEN).str,
+      expiresAt = Util.stringToLocalDateTime(json(FieldConst.UserToken.EXPIRES_AT).str).get
     )
-  given Conversion[JsValue, UserToken] = json => Json.fromJson[UserToken](json).get
+  )
 
-case class UserToken(userId: String, token: String, expiresAt: LocalDateTime):
+  given Conversion[ujson.Value, UserToken] = json => JsonCodec.read[UserToken](json)
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+case class UserToken(userId: String, token: String, expiresAt: LocalDateTime)
+  extends BaseModel
+  with NoId
+  with NoDates:
+
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

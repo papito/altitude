@@ -1,13 +1,13 @@
 package altitude.core.models
 
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object Stat:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[Stat] = Json.format[Stat]
-  given Conversion[JsValue, Stat] = json => Json.fromJson[Stat](json).get
-  given Conversion[Stat, JsObject] = stats => stats.toJson
+  given JsonCodec.ReadWriter[Stat] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Stat] = json => JsonCodec.read[Stat](json)
+  given Conversion[Stat, ujson.Obj] = stat => stat.toJson
 
-case class Stat(dimension: String, dimVal: Int):
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+case class Stat(dimension: String, dimVal: Int) extends BaseModel with NoId with NoDates:
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

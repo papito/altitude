@@ -4,16 +4,16 @@ import altitude.core.Const as C
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Folder
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
 import scala.language.implicitConversions
 
-abstract class FolderDao(override val config: Config) extends BaseDao with altitude.core.dao.FolderDao:
+abstract class FolderDao(override val config: Config) extends BaseDao[Folder] with altitude.core.dao.FolderDao:
   final override val tableName = "folder"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): Folder =
     Folder(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.Folder.NAME).asInstanceOf[String],
@@ -24,9 +24,9 @@ abstract class FolderDao(override val config: Config) extends BaseDao with altit
         case l: java.lang.Long => l.toInt
         case _ =>
           throw new IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
-    ).toJson
+    )
 
-  override def getById(id: String): JsObject =
+  override def getById(id: String): Folder =
     /**
      * The wrinkle here is that we need to return the number of children for the folder, but if the folder is a root folder, we
      * need to subtract 1 from the count, because the root folder is its own parent, introducing a one-off error.
@@ -52,9 +52,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao with altit
 
     getOneBySql(sql, List(nativeBool(false), nativeBool(false), id))
 
-  override def add(jsonIn: JsObject): JsObject =
-    val folder = jsonIn: Folder
-
+  override def add(folder: Folder): Folder =
     val id = folder.id match
       case Some(id) => id
       case None => BaseDao.genId
@@ -69,8 +67,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao with altit
     val sqlVals: List[Any] =
       List(id, RequestContext.getRepository.persistedId, folder.name, folder.nameLowercase, folder.parentId)
 
-    addRecord(jsonIn, sql, sqlVals)
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    addRecord(sql, sqlVals)
+    folder.copy(id = Some(id))
 
   def getChildren(parentId: String): List[Folder] =
     /**

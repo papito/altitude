@@ -2,7 +2,6 @@
 package altitude.core
 
 import altitude.core.Const as C
-import play.api.libs.json.JsObject
 
 import scala.util.matching.Regex
 
@@ -18,55 +17,52 @@ object Validators {
       email: List[String] = List.empty,
       uuid: List[String] = List.empty) {
 
-    def validate(json: JsObject): Unit = {
+    def validate(json: ujson.Obj): Unit = {
       val ex: ValidationException = ValidationException()
 
-      required.foreach {
-        field =>
-          if (!json.keys.contains(field) || json(field).as[String].isEmpty) {
-            ex.errors += (field -> C.Msg.Err.VALUE_REQUIRED)
-          }
+      required.foreach { field =>
+        if (!json.obj.contains(field) || json(field).strOpt.forall(_.isEmpty)) {
+          ex.errors += (field -> C.Msg.Err.VALUE_REQUIRED)
+        }
       }
 
       maxLengths.foreach {
         case (field, maxLength) =>
-          if (json.keys.contains(field) && json(field).as[String].length > maxLength) {
+          if (json.obj.contains(field) && json(field).strOpt.exists(_.length > maxLength)) {
             ex.errors += (field -> C.Msg.Err.VALUE_TOO_LONG.format(maxLength))
           }
       }
 
       minLengths.foreach {
         case (field, minLength) =>
-          if (json.keys.contains(field) && json(field).as[String].length < minLength) {
+          if (json.obj.contains(field) && json(field).strOpt.exists(_.length < minLength)) {
             ex.errors += (field -> C.Msg.Err.VALUE_TOO_SHORT.format(minLength))
           }
       }
 
-      email.foreach {
-        field =>
-          if (
-            isStillValid(ex, field, json) && json.keys.contains(field) &&
-            !emailRegex.matches(json(field).as[String])
-          ) {
-            ex.errors += (field -> C.Msg.Err.VALUE_NOT_AN_EMAIL)
-          }
+      email.foreach { field =>
+        if (
+          isStillValid(ex, field, json) && json.obj.contains(field) &&
+          !emailRegex.matches(json(field).str)
+        ) {
+          ex.errors += (field -> C.Msg.Err.VALUE_NOT_AN_EMAIL)
+        }
       }
 
-      uuid.foreach {
-        field =>
-          if (
-            isStillValid(ex, field, json) &&
-            !uuidRegex.matches(json(field).as[String])
-          ) {
-            ex.errors += (field -> C.Msg.Err.VALUE_NOT_A_UUID)
-          }
+      uuid.foreach { field =>
+        if (
+          isStillValid(ex, field, json) &&
+          !uuidRegex.matches(json(field).str)
+        ) {
+          ex.errors += (field -> C.Msg.Err.VALUE_NOT_A_UUID)
+        }
       }
 
       ex.trigger()
     }
 
-    private def isStillValid(ex: ValidationException, field: String, json: JsObject): Boolean = {
-      !ex.errors.contains(field) && json.keys.contains(field)
+    private def isStillValid(ex: ValidationException, field: String, json: ujson.Obj): Boolean = {
+      !ex.errors.contains(field) && json.obj.contains(field)
     }
   }
 }

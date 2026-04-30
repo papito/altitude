@@ -1,13 +1,13 @@
 package altitude.core.models
 
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 import altitude.core.ValidationException
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
 
 object Folder:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[Folder] = Json.format[Folder]
-  given Conversion[JsValue, Folder] = json => Json.fromJson[Folder](json).get
+  given JsonCodec.ReadWriter[Folder] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Folder] = json => JsonCodec.read[Folder](json)
 
 case class Folder(
     id: Option[String] = None,
@@ -23,7 +23,7 @@ case class Folder(
 
   val nameLowercase: String = name.toLowerCase
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Folder]
 

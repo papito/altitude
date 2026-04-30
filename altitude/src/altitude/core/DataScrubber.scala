@@ -1,8 +1,5 @@
 package altitude.core
 
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-
 /**
  * API JSON payload data scrubber.
  *
@@ -21,10 +18,10 @@ case class DataScrubber(trim: List[String] = List(), lower: List[String] = List(
    * @return
    *   a new JSON object with the specified fields trimmed and converted to lower case
    */
-  def scrub(json: JsObject): JsObject = {
-    val trimmed = doTrim(json)
-    val lowerCased = doLower(trimmed)
-    lowerCased
+  def scrub(json: ujson.Obj): ujson.Obj = {
+    doTrim(json)
+    doLower(json)
+    json
   }
 
   /**
@@ -35,13 +32,12 @@ case class DataScrubber(trim: List[String] = List(), lower: List[String] = List(
    * @return
    *   a new JSON object with the specified fields trimmed
    */
-  private def doTrim(json: JsObject): JsObject = {
-    json ++ trim.foldLeft(Json.obj()) {
-      (res, field) =>
-        (json \ field).asOpt[String] match {
-          case v: Some[String] if v.nonEmpty => res ++ Json.obj(field -> v.get.trim)
-          case _ => res
-        }
+  private def doTrim(json: ujson.Obj): Unit = {
+    trim.foreach { field =>
+      json.obj.get(field).flatMap(v => v.strOpt).filter(_.nonEmpty) match {
+        case Some(v) => json(field) = v.trim
+        case None =>
+      }
     }
   }
 
@@ -53,13 +49,12 @@ case class DataScrubber(trim: List[String] = List(), lower: List[String] = List(
    * @return
    *   a new JSON object with the specified fields converted to lower case
    */
-  private def doLower(json: JsObject): JsObject = {
-    json ++ lower.foldLeft(Json.obj()) {
-      (res, field) =>
-        (json \ field).asOpt[String] match {
-          case v: Some[String] if v.nonEmpty => res ++ Json.obj(field -> v.get.toLowerCase)
-          case _ => res
-        }
+  private def doLower(json: ujson.Obj): Unit = {
+    lower.foreach { field =>
+      json.obj.get(field).flatMap(v => v.strOpt).filter(_.nonEmpty) match {
+        case Some(v) => json(field) = v.toLowerCase
+        case None =>
+      }
     }
   }
 }

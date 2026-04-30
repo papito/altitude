@@ -77,8 +77,8 @@ class LibraryService(val app: Altitude) {
     }
   }
 
-  def query(query: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  def query(query: Query): QueryResult[Asset] = {
+    txManager.asReadOnly[QueryResult[Asset]] {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
 
       val _query: Query = if (folderId.isDefined) {

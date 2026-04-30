@@ -1,7 +1,5 @@
 package altitude.core.models
 
-import play.api.libs.json.JsObject
-
 import java.time.LocalDateTime
 
 abstract class BaseModel {
@@ -18,8 +16,6 @@ abstract class BaseModel {
     }
   }
 
-  // Required for DAO operations
-  def toJson: JsObject
 
   override def toString: String = s"<${getClass.getSimpleName}> ${id.getOrElse("NO ID")}"
 }

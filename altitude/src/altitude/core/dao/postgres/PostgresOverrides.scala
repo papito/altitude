@@ -4,7 +4,7 @@ import altitude.core.dao.jdbc.BaseDao
 
 import java.time.LocalDateTime
 
-trait PostgresOverrides { this: BaseDao =>
+trait PostgresOverrides { this: BaseDao[?] =>
   override protected def jsonFunc = "CAST(? as jsonb)"
 
   override protected def nativeBool(value: Boolean): Any = {

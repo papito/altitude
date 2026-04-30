@@ -292,7 +292,7 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets)
 
-    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records
 
     // recycle some assets
     val recycleCount = 2
@@ -314,7 +314,7 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets)
 
-    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records
 
     // recycle some assets
     val recycleCount = 2

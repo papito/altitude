@@ -65,9 +65,6 @@ import scala.math.Ordered.orderingToOrdered
     var results: SearchResult = testApp.service.library.search(new SearchQuery(text = Some("keanu")))
     results.nonEmpty shouldBe true
     results.total shouldBe 1
-    // check that the document is indeed - an asset
-    val resultJson = results.records.head
-    Asset.fromJson(resultJson)
 
     results = testApp.service.library.search(new SearchQuery(text = Some("TERI")))
     results.nonEmpty shouldBe true
@@ -329,7 +326,7 @@ import scala.math.Ordered.orderingToOrdered
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
     val resultsAsc = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    val sortedAssetsAsc: List[Asset] = resultsAsc.records.map(Asset.fromJson)
+    val sortedAssetsAsc: List[Asset] = resultsAsc.records
 
     sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get >= assets.last.createdAt.get)
   }
@@ -347,7 +344,7 @@ import scala.math.Ordered.orderingToOrdered
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.DESC)
     val resultsAsc = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
-    val sortedAssetsAsc: List[Asset] = resultsAsc.records.map(Asset.fromJson)
+    val sortedAssetsAsc: List[Asset] = resultsAsc.records
 
     sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get <= assets.last.createdAt.get)
   }

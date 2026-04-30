@@ -1,12 +1,13 @@
 package altitude.core.models
+
 import altitude.core.util.MurmurHash
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object UserMetadataValue:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[UserMetadataValue] = Json.format[UserMetadataValue]
-  given Conversion[JsValue, UserMetadataField] = json => Json.fromJson[UserMetadataField](json).get
+  given JsonCodec.ReadWriter[UserMetadataValue] = JsonCodec.macroRW
+  given Conversion[ujson.Value, UserMetadataField] = json => JsonCodec.read[UserMetadataField](json)
 
 case class UserMetadataValue(id: Option[String] = None, value: String) extends BaseModel with NoDates:
   val checksum: Int = MurmurHash.hash32(value.toLowerCase.getBytes("UTF-8"))
@@ -20,6 +21,6 @@ case class UserMetadataValue(id: Option[String] = None, value: String) extends B
     case that: UserMetadataValue => this.checksum == that.checksum
     case _ => false
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override def hashCode: Int = super.hashCode
