@@ -9,7 +9,8 @@ const defaultValidateStatus =
     http.defaults.validateStatus ?? ((status) => status >= 200 && status < 300)
 
 export function allowHttpStatuses(...statuses) {
-    return (status) => defaultValidateStatus(status) || statuses.includes(status)
+    return (status) =>
+        defaultValidateStatus(status) || statuses.includes(status)
 }
 
 export function getHttpErrorMessage(error) {
@@ -26,4 +27,3 @@ export function getHttpErrorMessage(error) {
 
     return error?.message ?? String(error)
 }
-

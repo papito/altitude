@@ -15,7 +15,6 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
     }
 
     Alpine.store(Const.state.imageDetailLoading).value = true
-
     ;(async () => {
         try {
             await setImgSrcAndWait({
@@ -40,4 +39,3 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
         }
     })()
 }
-

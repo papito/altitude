@@ -22,7 +22,10 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
 
     bindSearchResultsInfiniteScroll({ assetsElement, app })
     bindSearchResultsLazyLoad({ assetsElement, app })
-    applyGridMetadataVisibilityToAllCells({ assetsElement, context: app.context })
+    applyGridMetadataVisibilityToAllCells({
+        assetsElement,
+        context: app.context,
+    })
     app.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
 }
 
@@ -184,4 +187,3 @@ function showOrHideAssetGridMetadata({ cellEl, context }) {
         divEl.style.display = "block"
     })
 }
-

@@ -16,7 +16,9 @@ export function hydrateUploadFormFragment({ fragmentEl }) {
     fragmentEl.dataset.appUploadFormBound = "true"
 
     const elProgressBarCtrl = fragmentEl.querySelector("#progressBarControl")
-    const elStartUploadButton = fragmentEl.querySelector("#startUploadButtonControl")
+    const elStartUploadButton = fragmentEl.querySelector(
+        "#startUploadButtonControl",
+    )
     const elAbortButton = fragmentEl.querySelector("#abortUploadButtonControl")
     const elStayOnPage = fragmentEl.querySelector("#stayOnPage")
     const elProgressBar = fragmentEl.querySelector("#progressBar")
@@ -90,4 +92,3 @@ export function hydrateUploadFormFragment({ fragmentEl }) {
         htmx.trigger(fragmentEl, "htmx:abort")
     })
 }
-

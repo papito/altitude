@@ -42,9 +42,8 @@ export function bindFolderDragDrop({ dispatch }) {
             const movedAssetId = draggableElement.getAttribute(
                 Const.attributes.assetId,
             )
-            const isBatchMover = draggableElement.parentNode.classList.contains(
-                "batch-mover",
-            )
+            const isBatchMover =
+                draggableElement.parentNode.classList.contains("batch-mover")
             const newParentId = dropzoneElement.getAttribute(
                 Const.attributes.folderId,
             )
@@ -83,4 +82,3 @@ export function bindFolderDragDrop({ dispatch }) {
         },
     })
 }
-

@@ -39,4 +39,3 @@ export function registerHtmxAndSearchListeners(app) {
         app.handleHtmxLoad(event)
     })
 }
-

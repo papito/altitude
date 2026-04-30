@@ -9,17 +9,23 @@ export function handleFolderBeforeRequest({ app, event }) {
         return false
     }
 
-    if (requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`) {
-        const folderId = event.detail.target.getAttribute(Const.attributes.folderId)
+    if (
+        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
+    ) {
+        const folderId = event.detail.target.getAttribute(
+            Const.attributes.folderId,
+        )
         const folder = new Folder(folderId)
 
         if (folder.isMenuExpanded()) {
             folder.closeContextMenu()
             event.preventDefault()
         } else {
-            document.querySelectorAll("#rootFolderList .menu").forEach((menuEl) => {
-                Folder.closeContextMenu(menuEl)
-            })
+            document
+                .querySelectorAll("#rootFolderList .menu")
+                .forEach((menuEl) => {
+                    Folder.closeContextMenu(menuEl)
+                })
         }
 
         return true
@@ -73,8 +79,12 @@ export function handleFolderAfterRequest({ app, event }) {
         return true
     }
 
-    if (requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`) {
-        const folder = new Folder(event.target.getAttribute(Const.attributes.folderId))
+    if (
+        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
+    ) {
+        const folder = new Folder(
+            event.target.getAttribute(Const.attributes.folderId),
+        )
         folder.showContextMenu()
 
         if (!folder.isExpanded() && !folder.isRoot) {
@@ -88,7 +98,9 @@ export function handleFolderAfterRequest({ app, event }) {
         requestPath === `/htmx/folder/r/${app.context.getRepoId()}/children` ||
         requestPath === `/htmx/folder/r/${app.context.getRepoId()}/add`
     ) {
-        const folder = new Folder(event.target.getAttribute(Const.attributes.folderId))
+        const folder = new Folder(
+            event.target.getAttribute(Const.attributes.folderId),
+        )
         folder.expand()
         return true
     }
@@ -99,4 +111,3 @@ export function handleFolderAfterRequest({ app, event }) {
 export function isFolderRequest({ app, requestPath }) {
     return requestPath.startsWith(`/htmx/folder/r/${app.context.getRepoId()}/`)
 }
-

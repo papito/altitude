@@ -36,7 +36,11 @@ function initializeModalFragment({ fragmentEl, context, dispatch }) {
     }
 }
 
-function initializeViewSettingsModalFragment({ fragmentEl, context, dispatch }) {
+function initializeViewSettingsModalFragment({
+    fragmentEl,
+    context,
+    dispatch,
+}) {
     const showFields = context.getGridMetadataFields()
 
     fragmentEl
@@ -76,11 +80,7 @@ function initializeViewSettingsModalFragment({ fragmentEl, context, dispatch }) 
     })
 }
 
-function bindModalFragment({
-    fragmentEl,
-    dispatch,
-    closeFolderContextMenu,
-}) {
+function bindModalFragment({ fragmentEl, dispatch, closeFolderContextMenu }) {
     if (fragmentEl.dataset.appModalBound === "true") {
         return
     }
@@ -137,10 +137,7 @@ function buildModalFragmentSuccessDetail({ fragmentEl, event }) {
     }
 }
 
-function runModalFragmentSuccessAction({
-    fragmentEl,
-    closeFolderContextMenu,
-}) {
+function runModalFragmentSuccessAction({ fragmentEl, closeFolderContextMenu }) {
     const action = fragmentEl.dataset.appModalSuccessAction
     if (!action) {
         return
@@ -153,4 +150,3 @@ function runModalFragmentSuccessAction({
 
     console.warn(`Unknown modal success action: ${action}`)
 }
-

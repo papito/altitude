@@ -7,4 +7,3 @@ export function bindAppDragDrop(app) {
     bindPeopleDragDrop({ dispatch: app.dispatch.bind(app) })
     bindFolderDragDrop({ dispatch: app.dispatch.bind(app) })
 }
-

@@ -5,7 +5,9 @@ export function handlePeopleAfterRequest({ app, event }) {
     const discardPersonElement = getDiscardPersonElement(event)
     const personNameEditorElement = getPersonNameEditorElement(event)
 
-    if (isPersonNameEditRequest({ app, requestPath, personNameEditorElement })) {
+    if (
+        isPersonNameEditRequest({ app, requestPath, personNameEditorElement })
+    ) {
         handlePersonNameEditAfterRequest({
             app,
             event,
@@ -20,7 +22,9 @@ export function handlePeopleAfterRequest({ app, event }) {
         }
 
         app.dispatch(Const.events.personMarkedAsBadMatch, {
-            personId: discardPersonElement.getAttribute(Const.attributes.personId),
+            personId: discardPersonElement.getAttribute(
+                Const.attributes.personId,
+            ),
         })
         return true
     }
@@ -50,8 +54,9 @@ function getDiscardPersonElement(event) {
 
 function isDiscardPersonRequest({ app, requestPath, discardPersonElement }) {
     return (
-        requestPath.startsWith(`/htmx/people/r/${app.context.getRepoId()}/p/`) &&
-        discardPersonElement !== null
+        requestPath.startsWith(
+            `/htmx/people/r/${app.context.getRepoId()}/p/`,
+        ) && discardPersonElement !== null
     )
 }
 
@@ -65,7 +70,9 @@ function isPersonNameEditRequest({
     personNameEditorElement,
 }) {
     return (
-        requestPath.startsWith(`/htmx/people/r/${app.context.getRepoId()}/p/`) &&
+        requestPath.startsWith(
+            `/htmx/people/r/${app.context.getRepoId()}/p/`,
+        ) &&
         requestPath.endsWith("/name/edit") &&
         personNameEditorElement !== null
     )
@@ -93,4 +100,3 @@ function handlePersonNameEditAfterRequest({
         newPersonName,
     })
 }
-

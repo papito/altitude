@@ -5,7 +5,6 @@ import { hydratePersonNameEditorFragment } from "./person-name-editor.js"
 import { hydrateSearchResultsFragment } from "./search-results.js"
 
 export function hydrateAppFragments({ root, app }) {
-
     findFragmentRoots(root, "person-name-editor").forEach((fragmentEl) => {
         hydratePersonNameEditorFragment({ fragmentEl })
     })
@@ -31,4 +30,3 @@ export function hydrateAppFragments({ root, app }) {
         hydrateSearchResultsFragment({ fragmentEl, app })
     })
 }
-

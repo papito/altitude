@@ -10,11 +10,15 @@ export function registerPeopleListeners(app) {
             return
         }
 
-        htmx.ajax("GET", `/htmx/people/r/${app.context.getRepoId()}/modals/merge`, {
-            swap: "innerHTML",
-            target: "#modalContent",
-            values: { ...event.detail },
-        })
+        htmx.ajax(
+            "GET",
+            `/htmx/people/r/${app.context.getRepoId()}/modals/merge`,
+            {
+                swap: "innerHTML",
+                target: "#modalContent",
+                values: { ...event.detail },
+            },
+        )
     })
 
     document.body.addEventListener(Const.events.personMerged, (event) => {
@@ -53,13 +57,15 @@ export function registerPeopleListeners(app) {
         imageEl.src = `/content/r/${app.context.getRepoId()}/face/${faceId}`
     })
 
-    document.body.addEventListener(Const.events.personMarkedAsBadMatch, (event) => {
-        const personId = event.detail.personId
-        const personEl = htmx.find(`#person-${personId}`)
+    document.body.addEventListener(
+        Const.events.personMarkedAsBadMatch,
+        (event) => {
+            const personId = event.detail.personId
+            const personEl = htmx.find(`#person-${personId}`)
 
-        if (personEl) {
-            personEl.remove()
-        }
-    })
+            if (personEl) {
+                personEl.remove()
+            }
+        },
+    )
 }
-

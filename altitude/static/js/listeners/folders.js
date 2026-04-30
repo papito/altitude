@@ -5,11 +5,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
-import {
-    allowHttpStatuses,
-    getHttpErrorMessage,
-    http,
-} from "../http/client.js"
+import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
 
 export function registerFolderListeners(app) {
     document.body.addEventListener(Const.events.folderMoved, async (event) => {
@@ -84,4 +80,3 @@ export function registerFolderListeners(app) {
         folder.remove()
     })
 }
-

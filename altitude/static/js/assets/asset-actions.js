@@ -5,11 +5,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
-import {
-    allowHttpStatuses,
-    getHttpErrorMessage,
-    http,
-} from "../http/client.js"
+import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
 
 export function createAssetActions({ Alpine, context, reloadNav }) {
     function removeTriageStyling(assetIds) {
@@ -196,4 +192,3 @@ export function createAssetActions({ Alpine, context, reloadNav }) {
         restoreAssets,
     }
 }
-

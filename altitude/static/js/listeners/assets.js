@@ -6,7 +6,10 @@ export function registerAssetListeners(app) {
         const folderId = event.detail.folderId
         const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        if (!selectedAssetsStore.isEmpty && selectedAssetsStore.contains(assetId)) {
+        if (
+            !selectedAssetsStore.isEmpty &&
+            selectedAssetsStore.contains(assetId)
+        ) {
             app.dispatch(Const.events.batchAssetsMoved, { folderId })
             return
         }
@@ -28,7 +31,10 @@ export function registerAssetListeners(app) {
         const assetId = event.detail.assetId
         const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        if (!selectedAssetsStore.isEmpty && selectedAssetsStore.contains(assetId)) {
+        if (
+            !selectedAssetsStore.isEmpty &&
+            selectedAssetsStore.contains(assetId)
+        ) {
             app.dispatch(Const.events.batchAssetsRecycled)
             return
         }
@@ -69,4 +75,3 @@ export function registerAssetListeners(app) {
         selectedAssetsStore.items.clear()
     })
 }
-

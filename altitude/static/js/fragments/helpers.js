@@ -64,7 +64,9 @@ export function parseFragmentTargetDetail(
             return
         }
 
-        const detailKey = datasetKeySuffixToDetailKey(key.slice(keyPrefix.length))
+        const detailKey = datasetKeySuffixToDetailKey(
+            key.slice(keyPrefix.length),
+        )
 
         detail[detailKey] =
             event.target?.getAttribute?.(value) ?? detail[detailKey]
@@ -80,4 +82,3 @@ export function datasetKeySuffixToDetailKey(keySuffix) {
 
     return keySuffix.charAt(0).toLowerCase() + keySuffix.slice(1)
 }
-

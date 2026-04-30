@@ -7,4 +7,3 @@ export function hydratePersonNameEditorFragment({ fragmentEl }) {
         fragmentEl.dataset.appSelectOnFocus === "true",
     )
 }
-

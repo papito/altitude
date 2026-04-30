@@ -9,4 +9,3 @@ hydrateUploadForms(document)
 document.body.addEventListener("htmx:load", (event) => {
     hydrateUploadForms(event.detail?.elt ?? event.target)
 })
-

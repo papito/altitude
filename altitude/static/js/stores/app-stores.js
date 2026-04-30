@@ -13,7 +13,9 @@ export function initializeFrontendStores({ Alpine }) {
         },
 
         reset() {
-            document.body.dispatchEvent(new CustomEvent(Const.events.deselectAll))
+            document.body.dispatchEvent(
+                new CustomEvent(Const.events.deselectAll),
+            )
         },
 
         contains(id) {
@@ -97,4 +99,3 @@ export function initializeFrontendStores({ Alpine }) {
         value: false,
     })
 }
-

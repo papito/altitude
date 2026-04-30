@@ -9,4 +9,3 @@ export function registerAppEventListeners(app) {
     registerAssetListeners(app)
     registerHtmxAndSearchListeners(app)
 }
-
