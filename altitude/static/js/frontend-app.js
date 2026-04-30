@@ -9,6 +9,7 @@ import {
     handleFolderBeforeRequest,
     isFolderRequest,
 } from "./listeners/htmx-folders.js"
+import { isTrashPurgeRequest } from "./listeners/htmx-routes.js"
 import {
     handlePeopleAfterRequest,
     handlePeopleEscapeKeyPressed,
@@ -23,7 +24,6 @@ export class FrontendApp {
         this.Alpine = Alpine
         this.context = context
         this.started = false
-        this.lazyImageObserver = null
         this.assetActions = createAssetActions({
             Alpine,
             context,
@@ -98,7 +98,7 @@ export class FrontendApp {
             return
         }
 
-        if (this.isTrashPurgeRequest(requestPath)) {
+        if (isTrashPurgeRequest(requestPath)) {
             if (event.detail.successful === false) {
                 showErrorSnackBar(
                     `Error for request to ${requestPath}. HTTP ${status}`,
@@ -121,13 +121,6 @@ export class FrontendApp {
         }
     }
 
-    isTrashPurgeRequest(requestPath) {
-        return (
-            requestPath.startsWith("/htmx/trash//r/") &&
-            requestPath.endsWith("/purge")
-        )
-    }
-
     handleEscapeKeyPressed() {
         handlePeopleEscapeKeyPressed()
     }
@@ -142,7 +135,6 @@ export class FrontendApp {
         this.hydrateFragments(event.detail.target)
     }
 
-
     hydrateFragments(root) {
         hydrateAppFragments({ root, app: this })
     }
@@ -155,7 +147,10 @@ export class FrontendApp {
         try {
             new Folder(folderId).closeContextMenu()
         } catch (error) {
-            console.debug(`Unable to close folder context menu for ${folderId}`, error)
+            console.debug(
+                `Unable to close folder context menu for ${folderId}`,
+                error,
+            )
         }
     }
 

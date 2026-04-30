@@ -2,7 +2,7 @@ import { Const } from "../constants.js"
 import { showAssetDetailModal } from "../common/modal.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
-export function setImgSrcAndWait(img, url) {
+export function setImgSrcAndWait({ Alpine, img, url }) {
     return new Promise((resolve, reject) => {
         const onLoad = () => {
             cleanup()
@@ -165,7 +165,11 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
                 return
             }
 
-            await setImgSrcAndWait(imgEl, `/content/r/${repoId}/file/${assetId}`)
+            await setImgSrcAndWait({
+                Alpine,
+                img: imgEl,
+                url: `/content/r/${repoId}/file/${assetId}`,
+            })
 
             showAssetDetailModal({
                 title: assetData.file_name,

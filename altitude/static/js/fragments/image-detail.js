@@ -18,7 +18,11 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
 
     ;(async () => {
         try {
-            await setImgSrcAndWait(imgEl, fragmentEl.dataset.appImageDetailUrl)
+            await setImgSrcAndWait({
+                Alpine,
+                img: imgEl,
+                url: fragmentEl.dataset.appImageDetailUrl,
+            })
 
             showAssetDetailModal({
                 title: fragmentEl.dataset.appImageDetailTitle,
