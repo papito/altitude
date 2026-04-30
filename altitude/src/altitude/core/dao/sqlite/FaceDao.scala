@@ -6,12 +6,9 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
 
 import java.sql.PreparedStatement
-import scala.language.implicitConversions
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with SqliteOverrides:
 
@@ -20,9 +17,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     // We bind just the bracketed list as a String parameter.
     values.mkString("[", ", ", "]")
 
-  override def add(jsonIn: ujson.Obj, asset: Asset, person: Person): ujson.Obj =
-    val face: Face = jsonIn
-
+  override def add(face: Face, asset: Asset, person: Person): Face =
     val id = BaseDao.genId
 
     val sql =
@@ -50,10 +45,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
 
     preparedStatement.execute()
 
-    jsonIn(FieldConst.ID) = id
-    jsonIn(FieldConst.Face.ASSET_ID) = asset.id.get
-    jsonIn(FieldConst.Face.PERSON_ID) = person.id.get
-    jsonIn
+    face.copy(id = Some(id), assetId = asset.id, personId = person.id)
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
     val sql =

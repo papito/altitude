@@ -93,7 +93,7 @@ import scala.concurrent.duration.Duration
       stats.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2
 
-    val all: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+    val all: List[Asset] = testApp.service.asset.query(new Query()).records
 
     testApp.service.library.recycleAssets(all.map(_.persistedId).toSet)
 
@@ -171,7 +171,7 @@ import scala.concurrent.duration.Duration
       testApp.service.importPipeline.run(source, AssetSeqOutputSink())
     val pipelineRes = Await.result(pipelineResFuture, Duration.Inf)
 
-    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records.map(Asset.fromJson)
+    val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records
 
     val allAssetIds = allAssets.map(_.persistedId).toSet
     testApp.service.library.recycleAssets(allAssetIds)

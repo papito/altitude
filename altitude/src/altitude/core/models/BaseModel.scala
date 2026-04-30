@@ -16,8 +16,6 @@ abstract class BaseModel {
     }
   }
 
-  // Required for DAO operations
-  def toJson: ujson.Obj
 
   override def toString: String = s"<${getClass.getSimpleName}> ${id.getOrElse("NO ID")}"
 }

@@ -6,13 +6,11 @@ import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
 
-import scala.language.implicitConversions
-
-abstract class RepositoryDao(override val config: Config) extends BaseDao with altitude.core.dao.RepositoryDao:
+abstract class RepositoryDao(override val config: Config) extends BaseDao[Repository] with altitude.core.dao.RepositoryDao:
 
   final override val tableName = "repository"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
+  override protected def makeModel(rec: Map[String, AnyRef]): Repository =
     val fileStoreConfigCol = rec(FieldConst.Repository.FILES_STORE_CONFIG)
     val fileStoreConfigJsonStr: String =
       if fileStoreConfigCol == null then "{}"
@@ -30,11 +28,9 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
       fileStoreConfig = fileStoreConfig,
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
-    ).toJson
+    )
 
-  override def add(jsonIn: ujson.Obj): ujson.Obj =
-    val repo: Repository = jsonIn
-
+  override def add(repo: Repository): Repository =
     val sql = s"""
         INSERT INTO repository (
              ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.OWNER_ACCOUNT_ID}, ${FieldConst.Repository.FILE_STORE_TYPE},
@@ -43,7 +39,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
             VALUES (?, ?, ?, ?, ?,$jsonFunc)
     """
 
-    val id = BaseDao.genId
+    val id = repo.id.getOrElse(BaseDao.genId)
     val fileStoreConfigJson = ujson.Obj()
     repo.fileStoreConfig.foreach { case (k, v) => fileStoreConfigJson(k) = v }
     val sqlVals: List[Any] =
@@ -55,10 +51,8 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao with a
         repo.rootFolderId,
         ujson.write(fileStoreConfigJson))
 
-    addRecord(jsonIn, sql, sqlVals)
-
-    jsonIn(FieldConst.ID) = id
-    jsonIn
+    addRecord(sql, sqlVals)
+    repo.copy(id = Some(id))
 
   def getAll: List[Repository] =
     val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM repository"

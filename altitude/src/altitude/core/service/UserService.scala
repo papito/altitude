@@ -16,8 +16,8 @@ class UserService(val app: Altitude) extends BaseService[User] {
    * The User model is a model that does not have repository_id. Other models are scoped by it as no operations are cross-repo
    * (normally).
    */
-  override def query(query: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  override def query(query: Query): QueryResult[User] = {
+    txManager.asReadOnly[QueryResult[User]] {
       dao.query(query)
     }
   }
@@ -80,16 +80,13 @@ class UserService(val app: Altitude) extends BaseService[User] {
     // No server-side action needed - the SessionController clears the cookie
   }
 
-  override def add(objIn: User): ujson.Obj =
+  override def add(objIn: User): User =
     throw new NotImplementedError("Use the alternate add() method with password")
 
-  def add(objIn: User, password: String): ujson.Obj = {
+  def add(objIn: User, password: String): User = {
     txManager.withTransaction {
       val passwordHash = Util.hashPassword(password)
-      val jsonToSave = ujson.Obj()
-      objIn.toJson.obj.foreach { case (k, v) => jsonToSave(k) = v }
-      jsonToSave(FieldConst.User.PASSWORD_HASH) = passwordHash
-      dao.add(jsonToSave)
+      dao.addUser(objIn, passwordHash)
     }
   }
 
@@ -126,8 +123,6 @@ class UserService(val app: Altitude) extends BaseService[User] {
     val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
     dao.getOneByQuery(query)
   }
-
-  override def getById(id: String): ujson.Obj = super.getById(id)
 
   def setLastActiveRepoId(user: User, repoId: String): Unit = {
     txManager.withTransaction {

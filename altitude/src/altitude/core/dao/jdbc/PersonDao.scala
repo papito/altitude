@@ -13,11 +13,11 @@ import com.typesafe.config.Config
 import scala.collection.mutable
 import scala.language.implicitConversions
 
-abstract class PersonDao(override val config: Config) extends BaseDao with altitude.core.dao.PersonDao:
+abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 
   final override val tableName = "person"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
+  override protected def makeModel(rec: Map[String, AnyRef]): Person =
     Person(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       isHidden = getBooleanField(rec(FieldConst.Person.IS_HIDDEN)),
@@ -26,9 +26,9 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       name = Option(rec(FieldConst.Person.NAME).asInstanceOf[String]),
       coverFaceId = Option(rec(FieldConst.Person.COVER_FACE_ID).asInstanceOf[String]),
       numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int]
-    ).toJson
+    )
 
-  override def add(jsonIn: ujson.Obj): ujson.Obj =
+  override def add(person: Person): Person =
     val personSeqNum = getDataSourceType match
       case C.DbEngineName.POSTGRES => getNextVal("person_label").asInstanceOf[Long]
       case C.DbEngineName.SQLITE => getNextVal("person_label").asInstanceOf[Int].toLong
@@ -43,7 +43,6 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
               VALUES (?, ?, ?, ?, ?)
    """
 
-    val person: Person = jsonIn
     val personName = getPersonName(person, personSeqNum)
     val personSortName = getPersonSortName(person, personSeqNum)
     val isNamed = person.name.nonEmpty
@@ -58,12 +57,8 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       isNamed
     )
 
-    addRecord(jsonIn, sql, sqlVals)
-
-    jsonIn(FieldConst.ID) = id
-    jsonIn(FieldConst.Person.NAME) = personName
-    jsonIn(FieldConst.Person.IS_NAMED) = isNamed
-    jsonIn
+    addRecord(sql, sqlVals)
+    person.copy(id = Some(id), name = Some(personName), isNamed = isNamed)
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     val name =

@@ -26,8 +26,8 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
   override protected val txManager: TransactionManager = app.txManager
 
-  override def add(objIn: Person): ujson.Obj = {
-    throw new NotImplementedError("Use the alternate addPerson() method2")
+  override def add(objIn: Person): Person = {
+    throw new NotImplementedError("Use the alternate addPerson() method")
   }
 
   def getPersonById(personId: String): Person = {
@@ -49,7 +49,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
     txManager.withFaceVector[Face] {
       var persistedFace: Option[Face] = None
       try {
-        persistedFace = Some(faceDao.add(face.toJson, asset, person))
+        persistedFace = Some(faceDao.add(face, asset, person))
       } catch {
         case e: SQLException =>
           throw getDuplicateExceptionOrSame(
@@ -77,7 +77,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
         numOfFaces = person.getFaces.size
       )
 
-      dao.add(personForUpdate.toJson): Person
+      dao.add(personForUpdate)
     }
   }
 
@@ -139,8 +139,8 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
       val q = new Query(params = Map(FieldConst.Face.PERSON_ID -> personId), sort = List(sort))
 
-      val qRes: QueryResult = faceDao.query(q)
-      qRes.records.take(limit).map(r => r: Face)
+      val qRes: QueryResult[Face] = faceDao.query(q)
+      qRes.records.take(limit)
     }
   }
 
@@ -176,8 +176,8 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       } else {
         val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
 
-        val qRes: QueryResult = dao.query(q)
-        qRes.records.map(r => r: Person)
+        val qRes: QueryResult[Person] = dao.query(q)
+        qRes.records
       }
     }
   }

@@ -23,13 +23,13 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
    * The Repository model is a model that does not have repository_id. Other models are scoped by it as no operations are
    * cross-repo (normally).
    */
-  override def query(query: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  override def query(query: Query): QueryResult[Repository] = {
+    txManager.asReadOnly[QueryResult[Repository]] {
       dao.query(query)
     }
   }
 
-  def addRepository(name: String, fileStoreType: String, owner: User): ujson.Obj = {
+  def addRepository(name: String, fileStoreType: String, owner: User): Repository = {
     val id = BaseDao.genId
 
     val repoToSave = Repository(
@@ -40,7 +40,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       fileStoreType = fileStoreType
     )
 
-    txManager.withTransaction[ujson.Obj] {
+    txManager.withTransaction[Repository] {
       val repo: Repository = super.add(repoToSave)
 
       // we must force the context to the new repository because following operations depend on this
@@ -66,7 +66,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
       app.service.stats.createStat(Stats.RECYCLED_BYTES)
       logger.info(s"Created repository [$repo]")
 
-      repo.toJson
+      repo
     }
   }
 
@@ -79,13 +79,13 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
     }
   }
 
-  override def getById(id: String): ujson.Obj = {
+  override def getById(id: String): Repository = {
     // try cache first
     if (app.repositoriesById.contains(id)) {
-      return app.repositoriesById(id).toJson
+      return app.repositoriesById(id)
     }
 
-    val repo = super.getById(id)
+    val repo: Repository = super.getById(id)
 
     app.repositoriesById += (id -> repo)
     repo

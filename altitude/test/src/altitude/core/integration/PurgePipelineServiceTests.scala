@@ -61,7 +61,7 @@ import scala.concurrent.duration.Duration
     // 1 face for each person in an asset, so total will be totalAssets * totalPeople
     testContext.addTestFacesAndAssets(people, assetCount = assetsPerPerson)
 
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records
 
     // add a decoy person/face to make sure we don't delete the wrong ones
     val extraPerson = testApp.service.person.addPerson(Person())
@@ -112,7 +112,7 @@ import scala.concurrent.duration.Duration
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
     testContext.addTestFacesAndAssets(people, assetCount = assetsPerPerson)
 
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
@@ -135,7 +135,7 @@ import scala.concurrent.duration.Duration
     val coverFace = testApp.service.person.getPersonFaces(person.persistedId).head
     testApp.service.person.setFaceAsCover(person, coverFace)
 
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records.map(Asset.fromJson)
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
@@ -176,7 +176,7 @@ import scala.concurrent.duration.Duration
     Await.result(pipelineResFuture, Duration.Inf)
 
     // Recycle one
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query(rpp = 1)).records.map(Asset.fromJson)
+    val assets: List[Asset] = testApp.service.asset.queryAll(new Query(rpp = 1)).records
     val recycledAsset = assets.head
     testApp.service.library.recycleAssets(Set(recycledAsset.persistedId))
 

@@ -19,7 +19,7 @@ import java.sql.SQLException
 abstract class BaseService[Model <: BaseModel]:
   protected val app: Altitude
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
-  protected val dao: BaseDao
+  protected val dao: BaseDao[Model]
   protected val txManager: TransactionManager = app.txManager
 
   protected def conn: Connection =
@@ -30,10 +30,10 @@ abstract class BaseService[Model <: BaseModel]:
     // get the connection associated with this request
     RequestContext.getRepository
 
-  def add(objIn: Model): ujson.Obj =
-    txManager.withTransaction[ujson.Obj] {
+  def add(objIn: Model): Model =
+    txManager.withTransaction[Model] {
       try
-        dao.add(objIn.toJson)
+        dao.add(objIn)
       catch
         // NOTE: duplicate logic in add() and updateById()
         case e: SQLException => throw getDuplicateExceptionOrSame(e)
@@ -62,22 +62,22 @@ abstract class BaseService[Model <: BaseModel]:
       dao.updateByQuery(repoScopedQuery, data)
     }
 
-  def getById(id: String): ujson.Obj =
-    txManager.asReadOnly[ujson.Obj] {
+  def getById(id: String): Model =
+    txManager.asReadOnly[Model] {
       dao.getById(id)
     }
 
   /** Get a single document using a Query */
-  def getOneByQuery(query: Query): ujson.Obj =
-    txManager.asReadOnly[ujson.Obj] {
+  def getOneByQuery(query: Query): Model =
+    txManager.asReadOnly[Model] {
       dao.getOneByQuery(query)
     }
 
   /** Get multiple documents using a Query */
-  def query(query: Query): QueryResult =
+  def query(query: Query): QueryResult[Model] =
     val repoScopedQuery = query.withRepository()
 
-    txManager.asReadOnly[QueryResult] {
+    txManager.asReadOnly[QueryResult[Model]] {
       dao.query(repoScopedQuery)
     }
 

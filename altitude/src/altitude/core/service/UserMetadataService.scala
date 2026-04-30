@@ -35,7 +35,7 @@ class UserMetadataService(val app: Altitude) {
         throw DuplicateException()
       }
 
-      metadataFieldDao.add(metadataField.toJson)
+      metadataFieldDao.add(metadataField)
     }
   }
 
@@ -46,14 +46,13 @@ class UserMetadataService(val app: Altitude) {
       val allFields = metadataFieldDao.query(q).records
 
       allFields.map {
-        res =>
-          val metadataField: UserMetadataField = res
+        metadataField =>
           metadataField.persistedId -> metadataField
       }.toMap
     }
 
-  def getFieldById(id: String): ujson.Obj =
-    txManager.asReadOnly[ujson.Obj] {
+  def getFieldById(id: String): UserMetadataField =
+    txManager.asReadOnly[UserMetadataField] {
       metadataFieldDao.getById(id)
     }
 

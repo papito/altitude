@@ -3,19 +3,17 @@ package altitude.core.dao.jdbc
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.SystemMetadata
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 
-abstract class SystemMetadataDao(override val config: Config) extends BaseDao with altitude.core.dao.SystemMetadataDao {
+abstract class SystemMetadataDao(override val config: Config) extends BaseDao[SystemMetadata] with altitude.core.dao.SystemMetadataDao {
 
   override val tableName = "system"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj = SystemMetadata(
+  override protected def makeModel(rec: Map[String, AnyRef]): SystemMetadata = SystemMetadata(
     version = rec(FieldConst.SystemMetadata.VERSION).asInstanceOf[Int],
     isInitialized = getBooleanField(rec(FieldConst.SystemMetadata.IS_INITIALIZED))
-  ).toJson
+  )
 
   def updateVersion(toVersion: Int): Unit = {
     val runner: QueryRunner = new QueryRunner()
@@ -36,7 +34,7 @@ abstract class SystemMetadataDao(override val config: Config) extends BaseDao wi
   }
 
   // overriding the base method since there is no repository relation in this model
-  override def getById(id: String): ujson.Obj = {
+  override def getById(id: String): SystemMetadata = {
     val sql: String = """
       SELECT *
         FROM system

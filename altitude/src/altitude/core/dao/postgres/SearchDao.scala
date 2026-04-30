@@ -26,7 +26,7 @@ class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.Sear
     val sqlVals: List[Any] =
       List(RequestContext.getRepository.persistedId, asset.persistedId, metadataValues.mkString(" "), "" /* body */ )
 
-    addRecord(asset.toJson, docSql, sqlVals)
+    addRecord(docSql, sqlVals)
 
   override protected def replaceSearchDocument(asset: Asset): Unit =
     BaseDao.incrWriteQueryCount()

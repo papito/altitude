@@ -34,7 +34,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     txManager.asReadOnly[Option[Asset]] {
       val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum))
       val existing = query(q)
-      if (existing.nonEmpty) Some(existing.records.head: Asset) else None
+      if (existing.nonEmpty) Some(existing.records.head) else None
     }
   }
 
@@ -55,26 +55,26 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     }
   }
 
-  override def query(q: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  override def query(q: Query): QueryResult[Asset] = {
+    txManager.asReadOnly[QueryResult[Asset]] {
       dao.queryNotRecycled(q)
     }
   }
 
-  def queryTriaged(q: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  def queryTriaged(q: Query): QueryResult[Asset] = {
+    txManager.asReadOnly[QueryResult[Asset]] {
       dao.queryTriaged(q)
     }
   }
 
-  def queryRecycled(q: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  def queryRecycled(q: Query): QueryResult[Asset] = {
+    txManager.asReadOnly[QueryResult[Asset]] {
       dao.queryRecycled(q)
     }
   }
 
-  def queryAll(q: Query): QueryResult = {
-    txManager.asReadOnly[QueryResult] {
+  def queryAll(q: Query): QueryResult[Asset] = {
+    txManager.asReadOnly[QueryResult[Asset]] {
       dao.queryAll(q)
     }
   }
@@ -88,7 +88,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   def getDanglingAssets: List[Asset] = {
     txManager.asReadOnly {
       val danglingAssets = dao.queryAll(new Query(Map(FieldConst.Asset.IS_PIPELINE_PROCESSED -> false)))
-      danglingAssets.records.map(r => r: Asset)
+      danglingAssets.records
     }
   }
 

@@ -16,22 +16,21 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   override protected val dao: FolderDao = app.DAO.folder
 
   def add(name: String, parentId: Option[String] = None): Folder = {
-    txManager.withTransaction[ujson.Obj] {
+    txManager.withTransaction[Folder] {
       val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
-      val addedFolder: Folder = app.service.folder.add(folder)
-      addedFolder.toJson
+      app.service.folder.add(folder)
     }
   }
 
-  override def add(folder: Folder): ujson.Obj = {
-    txManager.withTransaction[ujson.Obj] {
+  override def add(folder: Folder): Folder = {
+    txManager.withTransaction[Folder] {
       super.add(folder)
     }
   }
 
-  def getAll: List[ujson.Obj] = {
-    txManager.asReadOnly[List[ujson.Obj]] {
+  def getAll: List[Folder] = {
+    txManager.asReadOnly[List[Folder]] {
       val q: Query = new Query().withRepository()
       dao.query(q).records
     }

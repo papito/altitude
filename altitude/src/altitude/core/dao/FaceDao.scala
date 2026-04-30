@@ -5,7 +5,7 @@ import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
 
-trait FaceDao extends BaseDao:
-  def add(jsonIn: ujson.Obj, asset: Asset, person: Person): ujson.Obj
+trait FaceDao extends BaseDao[Face]:
+  def add(face: Face, asset: Asset, person: Person): Face
   def getAssetFaces(assetId: String): List[Face]
   def searchClosestFaceMatches(features: Array[Float]): List[Face]

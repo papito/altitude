@@ -6,20 +6,20 @@ import altitude.core.models.UserMetadata
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 
-trait AssetDao extends BaseDao:
+trait AssetDao extends BaseDao[Asset]:
   def getUserMetadata(assetId: String): Option[UserMetadata]
 
   def setUserMetadata(assetId: String, metadata: UserMetadata): Unit
 
-  def queryNotRecycled(q: Query): QueryResult
+  def queryNotRecycled(q: Query): QueryResult[Asset]
 
-  def queryTriaged(q: Query): QueryResult
+  def queryTriaged(q: Query): QueryResult[Asset]
 
-  def queryRecycled(q: Query): QueryResult
+  def queryRecycled(q: Query): QueryResult[Asset]
 
-  def queryAll(q: Query): QueryResult
+  def queryAll(q: Query): QueryResult[Asset]
 
-  override def query(q: Query): QueryResult =
+  override def query(q: Query): QueryResult[Asset] =
     throw new NotImplementedError("Can only directly query recycled and not recycled data sets")
 
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = throw new NotImplementedError("")

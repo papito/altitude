@@ -92,8 +92,4 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         preparedStatement.execute()
     }
     replaceSearchDocument(asset)
-  override protected def addRecord(jsonIn: ujson.Obj, q: String, values: List[Any]): Unit =
-    BaseDao.incrWriteQueryCount()
-    val runner: QueryRunner = new QueryRunner()
-    runner.update(RequestContext.getConn, q, values.map(_.asInstanceOf[Object])*)
 

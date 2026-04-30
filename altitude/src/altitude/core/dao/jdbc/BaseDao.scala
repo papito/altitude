@@ -6,6 +6,7 @@ import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.querybuilder.SqlQuery
 import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
+import altitude.core.models.BaseModel
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
@@ -37,7 +38,7 @@ object BaseDao {
   }
 }
 
-abstract class BaseDao {
+abstract class BaseDao[Model <: BaseModel] {
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   val config: Config
@@ -67,14 +68,14 @@ abstract class BaseDao {
 
   protected val forUpdate: String
 
-  def add(jsonIn: ujson.Obj): ujson.Obj = throw new NotImplementedError("add method must be implemented")
+  def add(modelIn: Model): Model = throw new NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): ujson.Obj = {
     val jsonStr: String = if (column == null) "{}" else column.toString
     ujson.read(jsonStr).asInstanceOf[ujson.Obj]
   }
 
-  def getOneByQuery(q: Query): ujson.Obj = {
+  def getOneByQuery(q: Query): Model = {
     val sqlQuery = sqlQueryBuilder.buildSelectSql(q)
     getOneBySql(sqlQuery.sqlAsString, sqlQuery.bindValues)
   }
@@ -93,12 +94,12 @@ abstract class BaseDao {
     res.head
   }
 
-  def getOneBySql(sql: String, values: List[Any] = List()): ujson.Obj = {
+  def getOneBySql(sql: String, values: List[Any] = List()): Model = {
     val rec = executeAndGetOne(sql, values)
     makeModel(rec)
   }
 
-  def getById(id: String): ujson.Obj = {
+  def getById(id: String): Model = {
     logger.debug(s"Getting by ID '$id' from '$tableName'")
     val q: Query = new Query().add(FieldConst.ID -> id)
     getOneByQuery(q)
@@ -130,11 +131,11 @@ abstract class BaseDao {
     numDeleted
   }
 
-  def query(q: Query): QueryResult = {
+  def query(q: Query): QueryResult[Model] = {
     this.query(q, sqlQueryBuilder)
   }
 
-  protected def query(query: Query, sqlQueryBuilder: SqlQueryBuilder[Query]): QueryResult = {
+  protected def query(query: Query, sqlQueryBuilder: SqlQueryBuilder[Query]): QueryResult[Model] = {
     val sqlQuery: SqlQuery = sqlQueryBuilder.buildSelectSql(query)
     val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
     val total: Int = count(recs)
@@ -142,7 +143,7 @@ abstract class BaseDao {
     QueryResult(records = recs.map(makeModel), total = total, rpp = query.rpp, sort = query.sort)
   }
 
-  protected def addRecord(jsonIn: ujson.Obj, sql: String, values: List[Any]): Unit = {
+  protected def addRecord(sql: String, values: List[Any]): Unit = {
     BaseDao.incrWriteQueryCount()
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
@@ -160,7 +161,7 @@ abstract class BaseDao {
     executeAndGetMany(sql, values)
   }
 
-  def getByIds(ids: Set[String]): List[ujson.Obj] = {
+  def getByIds(ids: Set[String]): List[Model] = {
     if (ids.isEmpty) {
       return List()
     }
@@ -224,7 +225,7 @@ abstract class BaseDao {
     increment(id, field, -count)
   }
 
-  protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj
+  protected def makeModel(rec: Map[String, AnyRef]): Model
 
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
 }

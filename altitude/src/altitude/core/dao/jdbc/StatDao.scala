@@ -3,38 +3,25 @@ package altitude.core.dao.jdbc
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Stat
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
 
-import scala.language.implicitConversions
-
-abstract class StatDao(override val config: Config) extends BaseDao with altitude.core.dao.StatDao:
+abstract class StatDao(override val config: Config) extends BaseDao[Stat] with altitude.core.dao.StatDao:
 
   final override val tableName = "stats"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
-    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int]).toJson
+  override protected def makeModel(rec: Map[String, AnyRef]): Stat =
+    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int])
 
-  override def add(jsonIn: ujson.Obj): ujson.Obj =
+  override def add(stat: Stat): Stat =
     val sql: String = s"""
       INSERT INTO $tableName (${FieldConst.REPO_ID}, ${FieldConst.Stat.DIMENSION})
            VALUES (? ,?)"""
 
-    val stat: Stat = jsonIn
     val values: List[Any] = RequestContext.getRepository.persistedId :: stat.dimension :: Nil
 
-    addRecord(jsonIn, sql, values)
-    jsonIn
-
-  override protected def addRecord(jsonIn: ujson.Obj, q: String, values: List[Any]): Unit =
-    logger.info(s"JDBC INSERT: $jsonIn")
-
-    BaseDao.incrWriteQueryCount()
-
-    val runner: QueryRunner = new QueryRunner()
-    runner.update(RequestContext.getConn, q, values.map(_.asInstanceOf[Object])*)
+    addRecord(sql, values)
+    stat
 
   /**
    * Increment a particular stat name, per repository

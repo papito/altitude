@@ -21,6 +21,9 @@ object UserToken:
 
   given Conversion[ujson.Value, UserToken] = json => JsonCodec.read[UserToken](json)
 
-case class UserToken(userId: String, token: String, expiresAt: LocalDateTime):
+case class UserToken(userId: String, token: String, expiresAt: LocalDateTime)
+  extends BaseModel
+  with NoId
+  with NoDates:
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

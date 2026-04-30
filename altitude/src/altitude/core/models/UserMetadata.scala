@@ -83,4 +83,4 @@ case class UserMetadata(data: Map[String, Set[UserMetadataValue]]) extends BaseM
   def contains(key: String): Boolean = data.keys.toSeq.contains(key)
   def isEmpty: Boolean = data.isEmpty
 
-  override def toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
+  def toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
