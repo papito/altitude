@@ -1,10 +1,8 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
-@import play.api.libs.json.Json
-@import play.api.libs.json.JsObject
 
-@(minWidth: Int, title: String, fieldErrors: Map[String, String] = Map.empty, formJson: JsObject = Json.obj(), id: String, existingName: Option[String] = None)
-@defining((formJson \ Api.Field.Folder.NAME).asOpt[String]) { name =>
+@(minWidth: Int, title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), id: String, existingName: Option[String] = None)
+@defining(formJson.obj.get(Api.Field.Folder.NAME).flatMap(_.strOpt)) { name =>
 
 <style>
   #renameFolder input {
@@ -51,4 +49,3 @@
 
 
 }
-

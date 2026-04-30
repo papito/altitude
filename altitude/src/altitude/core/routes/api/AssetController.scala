@@ -7,7 +7,6 @@ import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.Response
 import org.slf4j.Logger
-import play.api.libs.json.JsObject
 
 class AssetController(using logger: Logger) extends BaseController:
   private val prefix = "api/asset"
@@ -15,9 +14,9 @@ class AssetController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/move")
   def moveAssets(repoId: String)(using request: Request): Response[String] =
-    val jsonIn: JsObject = unscrubbedJson.get
-    val folderId = (jsonIn \ Api.Field.FOLDER_ID).as[String]
-    val assetIdSet = (jsonIn \ Api.Field.ASSET_IDS).as[Seq[String]].toSet
+    val jsonIn: ujson.Obj = unscrubbedJson.get
+    val folderId = jsonIn(Api.Field.FOLDER_ID).str
+    val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.info(s"Moving assets ${assetIdSet.mkString(", ")} to $folderId")
     App.altitude.service.library.moveAssetsToFolder(assetIdSet, folderId)
 
@@ -26,8 +25,8 @@ class AssetController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/move")
   def moveAssetsToTrash(repoId: String)(using request: Request): Response[String] =
-    val jsonIn: JsObject = unscrubbedJson.get
-    val assetIdSet = (jsonIn \ Api.Field.ASSET_IDS).as[Seq[String]].toSet
+    val jsonIn: ujson.Obj = unscrubbedJson.get
+    val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.info(s"Recycling assets ${assetIdSet.mkString(", ")}")
 
     App.altitude.service.library.recycleAssets(assetIdSet)
@@ -37,8 +36,8 @@ class AssetController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/restore")
   def restoreAssets(repoId: String)(using request: Request): Response[String] =
-    val jsonIn: JsObject = unscrubbedJson.get
-    val assetIdSet = (jsonIn \ Api.Field.ASSET_IDS).as[Seq[String]].toSet
+    val jsonIn: ujson.Obj = unscrubbedJson.get
+    val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.info(s"Restoring assets ${assetIdSet.mkString(", ")}")
 
     App.altitude.service.library.restoreRecycledAssets(assetIdSet)
@@ -48,8 +47,8 @@ class AssetController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/purge")
   def purgeSelectedAssets(repoId: String)(using request: Request): Response[String] =
-    val jsonIn: JsObject = unscrubbedJson.get
-    val assetIdSet = (jsonIn \ Api.Field.ASSET_IDS).as[Seq[String]].toSet
+    val jsonIn: ujson.Obj = unscrubbedJson.get
+    val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.info(s"Purging selected assets ${assetIdSet.mkString(", ")}")
 
     App.altitude.service.library.purgeSelectedAssets(assetIdSet)

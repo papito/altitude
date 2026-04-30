@@ -1,16 +1,15 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object Face:
   // For sorting faces by detection score automatically, highest score first
   given faceOrdering: Ordering[Face] = Ordering.by(-_.detectionScore)
-
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[Face] = Json.format[Face]
-  given Conversion[JsValue, Face] = json => Json.fromJson[Face](json).get
+  given JsonCodec.ReadWriter[Face] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Face] = json => JsonCodec.read[Face](json)
 
 case class Face(
     id: Option[String] = None,
@@ -26,7 +25,7 @@ case class Face(
     features: Array[Float])
   extends BaseModel:
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override val createdAt: Option[LocalDateTime] = None
   override val updatedAt: Option[LocalDateTime] = None

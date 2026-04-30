@@ -16,7 +16,6 @@ import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
-import play.api.libs.json.JsObject
 
 class PeopleActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/people"
@@ -87,8 +86,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       uuid = List(Api.Field.ID)
     )
 
-    val jsonIn: JsObject = dataScrubber.scrub(unscrubbedJson.get)
-    val personIdFromJson = (jsonIn \ Api.Field.ID).as[String]
+    val jsonIn: ujson.Obj = dataScrubber.scrub(unscrubbedJson.get)
+    val personIdFromJson = jsonIn(Api.Field.ID).str
     val person: Person = App.altitude.service.person.getById(personIdFromJson)
 
     def responseWithValidationErrors(errors: Map[String, String]): Response[String] =
@@ -104,7 +103,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       case validationException: ValidationException =>
         return responseWithValidationErrors(validationException.errors.toMap)
 
-    val newName = (jsonIn \ Api.Field.Person.NAME).as[String]
+    val newName = jsonIn(Api.Field.Person.NAME).str
 
     if newName.toLowerCase == person.name.get.toLowerCase then
       logger.info("Name has not changed")

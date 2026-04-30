@@ -10,34 +10,28 @@ import altitude.core.ValidationException
 import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
 import altitude.core.util.Query
-import play.api.libs.json.*
 
 class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   override protected val dao: FolderDao = app.DAO.folder
 
   def add(name: String, parentId: Option[String] = None): Folder = {
-    txManager.withTransaction[JsObject] {
+    txManager.withTransaction[ujson.Obj] {
       val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
       val addedFolder: Folder = app.service.folder.add(folder)
-
       addedFolder.toJson
     }
   }
 
-  /**
-   * Used in low-level calls when the folder object has more shape, say, with a predefined ID, like the root folder. Normally,
-   * this method should not be used and the other version of add() should be used instead.
-   */
-  override def add(folder: Folder): JsObject = {
-    txManager.withTransaction[JsObject] {
+  override def add(folder: Folder): ujson.Obj = {
+    txManager.withTransaction[ujson.Obj] {
       super.add(folder)
     }
   }
 
-  def getAll: List[JsObject] = {
-    txManager.asReadOnly[List[JsObject]] {
+  def getAll: List[ujson.Obj] = {
+    txManager.asReadOnly[List[ujson.Obj]] {
       val q: Query = new Query().withRepository()
       dao.query(q).records
     }

@@ -26,28 +26,29 @@ Regard this code as for reference use only in the meantime.
 package altitude.core.models
 
 import altitude.core.dao.jdbc.BaseDao
-import play.api.libs.json.*
+import altitude.core.util.JsonCodec
 
 object UserMetadata:
-  given reads: Reads[UserMetadata] = (json: JsValue) =>
-    val data = json.as[JsObject].keys.foldLeft(Map[String, Set[UserMetadataValue]]()) {
-      (res, fieldId) =>
-        val valuesJson = (json \ fieldId).as[List[JsValue]]
-        res + (fieldId -> valuesJson.map(_.as[UserMetadataValue]).toSet)
-    }
-    JsSuccess(UserMetadata(data))
+  given JsonCodec.ReadWriter[UserMetadata] = JsonCodec.readwriter[ujson.Value].bimap(
+    (userMetadata: UserMetadata) => {
+      val result = ujson.Obj()
+      userMetadata.data.foreach { case (fieldId, values) =>
+        result(fieldId) = ujson.Arr(values.toSeq.map(v => JsonCodec.writeJs(v))*)
+      }
+      result
+    },
+    (json: ujson.Value) =>
+      UserMetadata(
+        json.obj.keys.foldLeft(Map[String, Set[UserMetadataValue]]()) { (res, fieldId) =>
+          val valuesJson = json(fieldId).arr
+          res + (fieldId -> valuesJson.map(v => JsonCodec.read[UserMetadataValue](v)).toSet)
+        }
+      )
+  )
 
-  given writes: OWrites[UserMetadata] = (userMetadata: UserMetadata) =>
-    userMetadata.data.foldLeft(Json.obj()) {
-      (res, m) =>
-        val fieldId = m._1
-        val valuesJsArray: JsArray = JsArray(m._2.toSeq.map(Json.toJson(_)))
-        res ++ Json.obj(fieldId -> valuesJsArray)
-    }
+  given Conversion[ujson.Value, UserMetadata] = json => JsonCodec.read[UserMetadata](json)
 
-  given Conversion[JsValue, UserMetadata] = json => Json.fromJson[UserMetadata](json).get
-
-  def fromJson(json: JsValue): UserMetadata = Json.fromJson[UserMetadata](json).get
+  def fromJson(json: ujson.Value): UserMetadata = JsonCodec.read[UserMetadata](json)
 
   /**
    * Adapter to easily set metadata from a set of plain strings. Note: dummy implicit is added to prevent compiler from
@@ -58,11 +59,9 @@ object UserMetadata:
       case (a, (fieldId, strValues)) =>
         a ++ Map[String, Set[UserMetadataValue]](fieldId -> strValues.map(value => UserMetadataValue(None, value)))
     }
-
     UserMetadata(convertedData)
 
-  def apply(): UserMetadata =
-    UserMetadata(Map[String, Set[UserMetadataValue]]())
+  def apply(): UserMetadata = UserMetadata(Map[String, Set[UserMetadataValue]]())
 
   def withIds(metadata: UserMetadata): UserMetadata =
     val dataWithIds = metadata.data.map {
@@ -75,7 +74,6 @@ object UserMetadata:
         }
         (fieldId, mdValsWithIds)
     }
-
     UserMetadata(dataWithIds)
 
 case class UserMetadata(data: Map[String, Set[UserMetadataValue]]) extends BaseModel with NoId with NoDates:
@@ -85,4 +83,4 @@ case class UserMetadata(data: Map[String, Set[UserMetadataValue]]) extends BaseM
   def contains(key: String): Boolean = data.keys.toSeq.contains(key)
   def isEmpty: Boolean = data.isEmpty
 
-  override def toJson: JsObject = Json.toJson(this).as[JsObject]
+  override def toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

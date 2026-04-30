@@ -5,7 +5,6 @@ import altitude.core.Const
 import cask.Request
 import cask.model.Cookie
 import org.slf4j.Logger
-import play.api.libs.json.Json
 
 object SessionController {
   val AUTH_COOKIE_NAME = "auth_token"
@@ -124,10 +123,9 @@ class SessionController(using logger: Logger) extends cask.Routes:
         App.altitude.service.user.logout(token)
     }
 
-    val responseJson = Json.obj("success" -> true, "message" -> "Logged out successfully")
+    val responseJson = ujson.Obj("success" -> true, "message" -> "Logged out successfully")
     cask.Response(
-      responseJson.toString(),
-      statusCode = 200,
+      responseJson.toString,      statusCode = 200,
       headers = Seq(("Content-Type", "application/json")),
       cookies = Seq(
         Cookie(

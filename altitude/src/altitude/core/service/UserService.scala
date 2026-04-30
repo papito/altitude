@@ -6,8 +6,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.Util
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
 class UserService(val app: Altitude) extends BaseService[User] {
   protected val dao: UserDao = app.DAO.user
@@ -82,14 +80,16 @@ class UserService(val app: Altitude) extends BaseService[User] {
     // No server-side action needed - the SessionController clears the cookie
   }
 
-  override def add(objIn: User): JsObject =
+  override def add(objIn: User): ujson.Obj =
     throw new NotImplementedError("Use the alternate add() method with password")
 
-  def add(objIn: User, password: String): JsObject = {
+  def add(objIn: User, password: String): ujson.Obj = {
     txManager.withTransaction {
-      // password and hash are not stored in the model and are not passed around outside of login flow
       val passwordHash = Util.hashPassword(password)
-      dao.add(objIn.toJson ++ Json.obj(FieldConst.User.PASSWORD_HASH -> passwordHash))
+      val jsonToSave = ujson.Obj()
+      objIn.toJson.obj.foreach { case (k, v) => jsonToSave(k) = v }
+      jsonToSave(FieldConst.User.PASSWORD_HASH) = passwordHash
+      dao.add(jsonToSave)
     }
   }
 
@@ -127,7 +127,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
     dao.getOneByQuery(query)
   }
 
-  override def getById(id: String): JsObject = super.getById(id)
+  override def getById(id: String): ujson.Obj = super.getById(id)
 
   def setLastActiveRepoId(user: User, repoId: String): Unit = {
     txManager.withTransaction {

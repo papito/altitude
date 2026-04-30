@@ -1,48 +1,37 @@
 package altitude.core.models
 
-import play.api.libs.json.*
+import altitude.core.util.JsonCodec
 
 object ExtractedMetadata:
   private type FieldValuesType = Map[String, String]
   private type MetadataType = Map[String, FieldValuesType]
 
-  given reads: Reads[ExtractedMetadata] = (json: JsValue) =>
-    val data = json
-      .as[JsObject]
-      .fields
-      .map {
-        case (key, value) =>
-          key -> value
-            .as[JsObject]
-            .fields
-            .map {
-              case (fieldKey, fieldValue) =>
-                fieldKey -> fieldValue.as[String]
-            }
-            .toMap
+  given JsonCodec.ReadWriter[ExtractedMetadata] = JsonCodec.readwriter[ujson.Value].bimap(
+    (em: ExtractedMetadata) => {
+      val result = ujson.Obj()
+      em.data.foreach { case (dirName, fields) =>
+        val inner = ujson.Obj()
+        fields.foreach { case (k, v) => inner(k) = ujson.Str(v) }
+        result(dirName) = inner
       }
-      .toMap
-    JsSuccess(ExtractedMetadata(data))
+      result
+    },
+    (json: ujson.Value) =>
+      ExtractedMetadata(
+        json.obj.map { case (key, value) =>
+          key -> value.obj.map { case (fieldKey, fieldValue) => fieldKey -> fieldValue.str }.toMap
+        }.toMap
+      )
+  )
 
-  given writes: OWrites[ExtractedMetadata] = (extractedMetadata: ExtractedMetadata) =>
-    JsObject(
-      extractedMetadata.data.map {
-        case (directoryName, fields) =>
-          directoryName -> JsObject(fields.map {
-            case (key, value) =>
-              key -> JsString(value)
-          })
-      }
-    )
-
-  given Conversion[JsValue, ExtractedMetadata] = json => Json.fromJson[ExtractedMetadata](json).get
+  given Conversion[ujson.Value, ExtractedMetadata] = json => JsonCodec.read[ExtractedMetadata](json)
 
 case class ExtractedMetadata(var data: ExtractedMetadata.MetadataType = Map[String, ExtractedMetadata.FieldValuesType]())
   extends BaseModel
   with NoId
   with NoDates:
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   /**
    * The raw extracted metadata is stored in a map of directories, each containing a map of field/value pairs.

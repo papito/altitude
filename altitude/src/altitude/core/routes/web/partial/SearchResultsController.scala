@@ -16,7 +16,6 @@ import cask.model.Response
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import org.slf4j.Logger
-import play.api.libs.json.Json
 
 class SearchResultsController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/search"
@@ -121,13 +120,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val assets = results.records.map(r => r: Asset)
       val ids = assets.map(_.persistedId)
       val fileNamesMap = assets.map(a => a.persistedId -> a.fileName).toMap
-      val jsonPayload = Json.obj(
+      val jsonPayload = ujson.Obj(
         "ids" -> ids,
         "page" -> page,
         "totalPages" -> results.totalPages,
       )
       return cask.Response(
-        Json.stringify(jsonPayload),
+        ujson.write(jsonPayload),
         200,
         Seq(("Content-Type", "application/json")))
 

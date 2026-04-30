@@ -7,6 +7,8 @@ import altitude.core.RequestContext
 import altitude.core.dao.jdbc.querybuilder.SqlQuery
 import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.Const as C
@@ -15,8 +17,6 @@ import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsValue.jsValueToJsLookup
-import play.api.libs.json.*
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -60,21 +60,21 @@ abstract class BaseDao {
   protected def getBooleanField(value: AnyRef): Boolean
 
   protected def getNextVal(tableName: String): AnyRef
-  
+
   private def queryRunner = new QueryRunner()
 
   protected def getDataSourceType: String = config.getString(C.Conf.DB_ENGINE)
 
   protected val forUpdate: String
 
-  def add(jsonIn: JsObject): JsObject = throw new NotImplementedError("add method must be implemented")
+  def add(jsonIn: ujson.Obj): ujson.Obj = throw new NotImplementedError("add method must be implemented")
 
-  def getJsonFromColumn(column: AnyRef): JsObject = {
+  def getJsonFromColumn(column: AnyRef): ujson.Obj = {
     val jsonStr: String = if (column == null) "{}" else column.toString
-    Json.parse(jsonStr).as[JsObject]
+    ujson.read(jsonStr).asInstanceOf[ujson.Obj]
   }
 
-  def getOneByQuery(q: Query): JsObject = {
+  def getOneByQuery(q: Query): ujson.Obj = {
     val sqlQuery = sqlQueryBuilder.buildSelectSql(q)
     getOneBySql(sqlQuery.sqlAsString, sqlQuery.bindValues)
   }
@@ -93,12 +93,12 @@ abstract class BaseDao {
     res.head
   }
 
-  def getOneBySql(sql: String, values: List[Any] = List()): JsObject = {
+  def getOneBySql(sql: String, values: List[Any] = List()): ujson.Obj = {
     val rec = executeAndGetOne(sql, values)
     makeModel(rec)
   }
 
-  def getById(id: String): JsObject = {
+  def getById(id: String): ujson.Obj = {
     logger.debug(s"Getting by ID '$id' from '$tableName'")
     val q: Query = new Query().add(FieldConst.ID -> id)
     getOneByQuery(q)
@@ -114,20 +114,15 @@ abstract class BaseDao {
     updateByQuery(q, data)
   }
 
-  // FIXME: this should be part of query builder, a hack for now
   def deleteByQuery(q: Query): Int = {
     logger.debug(s"Deleting record by query: $q")
-
     BaseDao.incrWriteQueryCount()
-
     val fieldPlaceholders: List[String] = q.params.keys.map(_ + " = ?").toList
-
     val sql = s"""
       DELETE
         FROM $tableName
        WHERE ${fieldPlaceholders.mkString(",")}
       """
-
     logger.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
     val runner = queryRunner
     val numDeleted = runner.update(RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object])*)
@@ -143,27 +138,21 @@ abstract class BaseDao {
     val sqlQuery: SqlQuery = sqlQueryBuilder.buildSelectSql(query)
     val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
     val total: Int = count(recs)
-
     logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
-
     QueryResult(records = recs.map(makeModel), total = total, rpp = query.rpp, sort = query.sort)
   }
 
-  protected def addRecord(jsonIn: JsObject, sql: String, values: List[Any]): Unit = {
+  protected def addRecord(jsonIn: ujson.Obj, sql: String, values: List[Any]): Unit = {
     BaseDao.incrWriteQueryCount()
-
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
   }
 
   private def executeAndGetMany(sql: String, values: List[Any]): List[Map[String, AnyRef]] = {
     BaseDao.incrReadQueryCount()
-
     logger.debug(s"SELECT SQL: $sql with values: $values")
-
     val res =
       queryRunner.query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object])*).asScala.toList
-
     res.map(_.asScala.toMap[String, AnyRef])
   }
 
@@ -171,23 +160,17 @@ abstract class BaseDao {
     executeAndGetMany(sql, values)
   }
 
-  def getByIds(ids: Set[String]): List[JsObject] = {
+  def getByIds(ids: Set[String]): List[ujson.Obj] = {
     if (ids.isEmpty) {
       return List()
     }
-
     BaseDao.incrReadQueryCount()
-
     val query = new Query().add(FieldConst.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
     val sqlQuery = sqlQueryBuilder.buildSelectSql(query)
-
     logger.debug(s"SELECT SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")
-
     val runner: QueryRunner = new QueryRunner()
-
     val res =
       runner.query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(), sqlQuery.bindValues*).asScala.toList
-
     logger.debug(s"Found ${res.length} records")
     val recs = res.map(_.asScala.toMap[String, AnyRef])
     recs.map(makeModel)
@@ -195,12 +178,9 @@ abstract class BaseDao {
 
   def updateByQuery(q: Query, data: Map[String, Any]): Int = {
     BaseDao.incrWriteQueryCount()
-
     val sqlQuery = sqlQueryBuilder.buildUpdateSql(q, data)
     logger.debug(s"UPDATE SQL: ${sqlQuery.sqlAsString} with bind values ${sqlQuery.bindValues}")
-
     val runner = queryRunner
-
     val numUpdated = runner.update(RequestContext.getConn, sqlQuery.sqlAsString, sqlQuery.bindValues*)
     logger.debug("Updated records: " + numUpdated)
     numUpdated
@@ -208,14 +188,13 @@ abstract class BaseDao {
 
   def updateByBySql(sql: String, values: List[Any]): Int = {
     BaseDao.incrWriteQueryCount()
-
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
   }
 
   def getFloatListByJsonKey(jsonStr: String, key: String): List[Float] = {
-    val json = Json.parse(jsonStr)
-    (json \ key).as[List[Float]]
+    val json = ujson.read(jsonStr)
+    json(key).arr.map(_.num.toFloat).toList
   }
 
   def makeCsv[T](values: List[T]): String = {
@@ -231,14 +210,12 @@ abstract class BaseDao {
 
   def increment(id: String, field: String, count: Int = 1): Unit = {
     BaseDao.incrWriteQueryCount()
-
     val sql = s"""
       UPDATE $tableName
          SET $field = $field + $count
        WHERE id = ?
       """
     logger.debug(s"INCR SQL: $sql, $id")
-
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, id)
   }
@@ -247,12 +224,7 @@ abstract class BaseDao {
     increment(id, field, -count)
   }
 
-  /**
-   * Implementations should define this method, which returns an optional JSON object which is guaranteed to serialize into a
-   * valid model backing this class. JSON can be constructed directly, but best to create a model instance first and return it,
-   * triggering implicit conversion.
-   */
-  protected def makeModel(rec: Map[String, AnyRef]): JsObject
+  protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj
 
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
 }

@@ -15,7 +15,6 @@ import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 import altitude.core.util.Util.getDuplicateExceptionOrSame
 import java.sql.SQLException
-import play.api.libs.json.JsObject
 
 object PersonService {
   val UNKNOWN_NAME_PREFIX = "Unknown"
@@ -27,7 +26,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
   override protected val txManager: TransactionManager = app.txManager
 
-  override def add(objIn: Person): JsObject = {
+  override def add(objIn: Person): ujson.Obj = {
     throw new NotImplementedError("Use the alternate addPerson() method2")
   }
 

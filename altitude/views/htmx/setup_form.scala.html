@@ -1,10 +1,8 @@
 @import altitude.core.Api
 @import altitude.core.Const
-@import play.api.libs.json.Json
-@import play.api.libs.json.JsObject
 @import altitude.core.App
 
-@(formJson: JsObject = Json.obj(), fieldErrors: Map[String, String] = Map.empty)
+@(formJson: ujson.Obj = ujson.Obj(), fieldErrors: Map[String, String] = Map.empty)
 
 <style>
 #setupForm {
@@ -69,7 +67,7 @@
         id="@{ Api.Field.Setup.REPOSITORY_NAME }"
         name="@{ Api.Field.Setup.REPOSITORY_NAME }"
         placeholder="Library name"
-        value='@{ (formJson \ Api.Field.Setup.REPOSITORY_NAME).asOpt[String].getOrElse("Personal") }'
+        value='@{ formJson.obj.get(Api.Field.Setup.REPOSITORY_NAME).flatMap(_.strOpt).getOrElse("Personal") }'
         autocomplete="off"
         minlength="@{ Api.Constraints.MIN_REPOSITORY_NAME_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_REPOSITORY_NAME_LENGTH }"/>
@@ -92,7 +90,7 @@
         autocomplete="off"
         id="@{ Api.Field.Setup.ADMIN_NAME }"
         name="@{ Api.Field.Setup.ADMIN_NAME }"
-        value='@{ (formJson \ Api.Field.Setup.ADMIN_NAME).asOpt[String].getOrElse("") }'
+        value='@{ formJson.obj.get(Api.Field.Setup.ADMIN_NAME).flatMap(_.strOpt).getOrElse("") }'
         minlength="@{ Api.Constraints.MIN_NAME_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_NAME_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.ADMIN_NAME)) {
@@ -105,7 +103,7 @@
         autocomplete="off"
         id="@{ Api.Field.Setup.ADMIN_EMAIL }"
         name="@{ Api.Field.Setup.ADMIN_EMAIL }"
-        value='@{ (formJson \ Api.Field.Setup.ADMIN_EMAIL).asOpt[String].getOrElse("") }'
+        value='@{ formJson.obj.get(Api.Field.Setup.ADMIN_EMAIL).flatMap(_.strOpt).getOrElse("") }'
         minlength="@{ Api.Constraints.MIN_EMAIL_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_EMAIL_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.ADMIN_EMAIL)) {
@@ -117,7 +115,7 @@
         <input type="password"
         id="@{ Api.Field.Setup.PASSWORD }"
         name="@{ Api.Field.Setup.PASSWORD  }"
-        value='@{ (formJson \ Api.Field.Setup.PASSWORD).asOpt[String].getOrElse("") }'
+        value='@{ formJson.obj.get(Api.Field.Setup.PASSWORD).flatMap(_.strOpt).getOrElse("") }'
         minlength="@{ Api.Constraints.MIN_PASSWORD_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_PASSWORD_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.PASSWORD)) {
@@ -129,7 +127,7 @@
         <input type="password"
         id="@{ Api.Field.Setup.PASSWORD2 }"
         name="@{ Api.Field.Setup.PASSWORD2 }"
-        value='@{ (formJson \ Api.Field.Setup.PASSWORD2).asOpt[String].getOrElse("") }'
+        value='@{ formJson.obj.get(Api.Field.Setup.PASSWORD2).flatMap(_.strOpt).getOrElse("") }'
         minlength="@{ Api.Constraints.MIN_PASSWORD_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_PASSWORD_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.PASSWORD2)) {

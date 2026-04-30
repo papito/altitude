@@ -5,7 +5,6 @@ import altitude.core.App
 import altitude.core.models.Asset
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.shouldBe
-import play.api.libs.json.Json
 
 @DoNotDiscover class AssetControllerTests extends ControllerTestCore {
 
@@ -24,7 +23,7 @@ import play.api.libs.json.Json
 
       val assetIds = Seq(asset1.persistedId, asset2.persistedId)
 
-      val payload = Json.obj(
+      val payload = ujson.Obj(
         Api.Field.FOLDER_ID -> targetFolder.persistedId,
         Api.Field.ASSET_IDS -> assetIds
       )
@@ -32,7 +31,7 @@ import play.api.libs.json.Json
       val response = requests.put(
         s"$host/api/asset/r/$repoId/move",
         cookies = testContext.cookies,
-        data = payload.toString()
+        data = ujson.write(payload)
       )
 
       response.statusCode.shouldBe(200)
@@ -60,14 +59,14 @@ import play.api.libs.json.Json
 
       val assetIds = Seq(asset1.persistedId, asset2.persistedId)
 
-      val payload = Json.obj(
+      val payload = ujson.Obj(
         Api.Field.ASSET_IDS -> assetIds
       )
 
       val response = requests.delete(
         s"$host/api/asset/r/$repoId/move",
         cookies = testContext.cookies,
-        data = payload.toString()
+        data = ujson.write(payload)
       )
 
       response.statusCode.shouldBe(200)
@@ -97,7 +96,7 @@ import play.api.libs.json.Json
       // Now move it to a folder (which should restore it)
       val targetFolder = testApp.service.folder.add("restore-folder")
 
-      val payload = Json.obj(
+      val payload = ujson.Obj(
         Api.Field.FOLDER_ID -> targetFolder.persistedId,
         Api.Field.ASSET_IDS -> Seq(asset.persistedId)
       )
@@ -105,7 +104,7 @@ import play.api.libs.json.Json
       val response = requests.put(
         s"$host/api/asset/r/$repoId/move",
         cookies = testContext.cookies,
-        data = payload.toString()
+        data = ujson.write(payload)
       )
 
       response.statusCode.shouldBe(200)
@@ -117,9 +116,3 @@ import play.api.libs.json.Json
     }
   }
 }
-
-
-
-
-
-

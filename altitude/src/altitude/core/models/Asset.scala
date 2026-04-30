@@ -1,8 +1,9 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 /**
  * All asset-related metadata.
@@ -11,9 +12,10 @@ import play.api.libs.json.JsonNaming.SnakeCase
  * for passing around asset metadata.
  */
 object Asset:
-  implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  implicit val format: OFormat[Asset] = Json.format[Asset]
-  implicit def fromJson(json: JsValue): Asset = Json.fromJson[Asset](json).get
+  given JsonCodec.ReadWriter[Asset] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Asset] = json => JsonCodec.read[Asset](json)
+
+  def fromJson(json: ujson.Value): Asset = JsonCodec.read[Asset](json)
 
   def getPublicMetadata(extractedMetadata: ExtractedMetadata): PublicMetadata =
     PublicMetadata(
@@ -47,7 +49,7 @@ case class Asset(
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override def toString: String =
     s"Asset: [$id] [$fileName] Recycled: [$isRecycled] Triaged: [$isTriaged] Type: [${assetType.mediaType}:${assetType.mediaSubtype}]"

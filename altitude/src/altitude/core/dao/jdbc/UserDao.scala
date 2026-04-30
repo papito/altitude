@@ -3,16 +3,16 @@ package altitude.core.dao.jdbc
 import altitude.core.FieldConst
 import altitude.core.models.AccountType
 import altitude.core.models.User
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
 import scala.language.implicitConversions
 
 abstract class UserDao(override val config: Config) extends BaseDao with altitude.core.dao.UserDao:
   final override val tableName = "account"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
     User(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       email = rec(FieldConst.User.EMAIL).asInstanceOf[String],
@@ -21,7 +21,7 @@ abstract class UserDao(override val config: Config) extends BaseDao with altitud
       lastActiveRepoId = Option(rec(FieldConst.User.LAST_ACTIVE_REPO_ID).asInstanceOf[String])
     ).toJson
 
-  override def add(jsonIn: JsObject): JsObject =
+  override def add(jsonIn: ujson.Obj): ujson.Obj =
     val sql = s"""
         INSERT INTO account (${FieldConst.ID}, ${FieldConst.User.EMAIL}, ${FieldConst.User.NAME},
                                 ${FieldConst.User.ACCOUNT_TYPE}, ${FieldConst.User.PASSWORD_HASH},
@@ -29,10 +29,10 @@ abstract class UserDao(override val config: Config) extends BaseDao with altitud
              VALUES (?, ?, ?, ?, ?, ?)
     """
 
-    val user: User = jsonIn: User
+    val user: User = jsonIn
 
     val id = BaseDao.genId
-    val passwordHash = (jsonIn \ FieldConst.User.PASSWORD_HASH).as[String]
+    val passwordHash = jsonIn(FieldConst.User.PASSWORD_HASH).str
 
     val sqlVals: List[Any] = List(
       id,
@@ -44,4 +44,5 @@ abstract class UserDao(override val config: Config) extends BaseDao with altitud
     )
 
     addRecord(jsonIn, sql, sqlVals)
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    jsonIn(FieldConst.ID) = id
+    jsonIn

@@ -1,12 +1,12 @@
 package altitude.core.models
 
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 object PublicMetadata:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[PublicMetadata] = Json.format[PublicMetadata]
-  given Conversion[JsValue, PublicMetadata] = json => Json.fromJson[PublicMetadata](json).get
+  given JsonCodec.ReadWriter[PublicMetadata] = JsonCodec.macroRW
+  given Conversion[ujson.Value, PublicMetadata] = json => JsonCodec.read[PublicMetadata](json)
 
 case class PublicMetadata(
     deviceModel: Option[String] = None,
@@ -19,4 +19,4 @@ case class PublicMetadata(
   with NoId
   with NoDates:
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

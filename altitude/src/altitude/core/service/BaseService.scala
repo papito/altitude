@@ -11,7 +11,6 @@ import altitude.core.util.QueryResult
 import altitude.core.util.Util.getDuplicateExceptionOrSame
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsObject
 
 import java.sql.Connection
 import java.sql.SQLException
@@ -31,8 +30,8 @@ abstract class BaseService[Model <: BaseModel]:
     // get the connection associated with this request
     RequestContext.getRepository
 
-  def add(objIn: Model): JsObject =
-    txManager.withTransaction[JsObject] {
+  def add(objIn: Model): ujson.Obj =
+    txManager.withTransaction[ujson.Obj] {
       try
         dao.add(objIn.toJson)
       catch
@@ -63,14 +62,14 @@ abstract class BaseService[Model <: BaseModel]:
       dao.updateByQuery(repoScopedQuery, data)
     }
 
-  def getById(id: String): JsObject =
-    txManager.asReadOnly[JsObject] {
+  def getById(id: String): ujson.Obj =
+    txManager.asReadOnly[ujson.Obj] {
       dao.getById(id)
     }
 
   /** Get a single document using a Query */
-  def getOneByQuery(query: Query): JsObject =
-    txManager.asReadOnly[JsObject] {
+  def getOneByQuery(query: Query): ujson.Obj =
+    txManager.asReadOnly[ujson.Obj] {
       dao.getOneByQuery(query)
     }
 

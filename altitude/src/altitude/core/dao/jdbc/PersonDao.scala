@@ -6,9 +6,9 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
 
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -17,7 +17,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
 
   final override val tableName = "person"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
     Person(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       isHidden = getBooleanField(rec(FieldConst.Person.IS_HIDDEN)),
@@ -28,7 +28,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
       numOfFaces = rec(FieldConst.Person.NUM_OF_FACES).asInstanceOf[Int]
     ).toJson
 
-  override def add(jsonIn: JsObject): JsObject =
+  override def add(jsonIn: ujson.Obj): ujson.Obj =
     val personSeqNum = getDataSourceType match
       case C.DbEngineName.POSTGRES => getNextVal("person_label").asInstanceOf[Long]
       case C.DbEngineName.SQLITE => getNextVal("person_label").asInstanceOf[Int].toLong
@@ -43,7 +43,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
               VALUES (?, ?, ?, ?, ?)
    """
 
-    val person: Person = jsonIn: Person
+    val person: Person = jsonIn
     val personName = getPersonName(person, personSeqNum)
     val personSortName = getPersonSortName(person, personSeqNum)
     val isNamed = person.name.nonEmpty
@@ -60,7 +60,10 @@ abstract class PersonDao(override val config: Config) extends BaseDao with altit
 
     addRecord(jsonIn, sql, sqlVals)
 
-    jsonIn ++ Json.obj(FieldConst.ID -> id, FieldConst.Person.NAME -> Some(personName), FieldConst.Person.IS_NAMED -> isNamed)
+    jsonIn(FieldConst.ID) = id
+    jsonIn(FieldConst.Person.NAME) = personName
+    jsonIn(FieldConst.Person.IS_NAMED) = isNamed
+    jsonIn
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
     val name =

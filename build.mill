@@ -53,7 +53,6 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"ch.qos.logback:logback-classic:$logbackVersion",
 
     mvn"com.typesafe:config:1.4.3",
-    mvn"com.typesafe.play::play-json:2.10.6",
     mvn"com.typesafe.play::twirl-api:${_twirlVersion}",
 
     mvn"commons-io:commons-io:2.18.0",

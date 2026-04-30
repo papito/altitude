@@ -6,12 +6,11 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
 
 import java.sql.PreparedStatement
-import play.api.libs.json.JsObject
-import play.api.libs.json.Json
-
 import scala.language.implicitConversions
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with PostgresOverrides:
@@ -23,8 +22,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
   private def toVectorString(values: Array[Float]): String =
     values.mkString("[", ",", "]")
 
-  override def add(jsonIn: JsObject, asset: Asset, person: Person): JsObject =
-    val face: Face = jsonIn: Face
+  override def add(jsonIn: ujson.Obj, asset: Asset, person: Person): ujson.Obj =
+    val face: Face = jsonIn
 
     val id = BaseDao.genId
 
@@ -53,11 +52,10 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
 
     preparedStatement.execute()
 
-    jsonIn ++ Json.obj(
-      FieldConst.ID -> id,
-      FieldConst.Face.ASSET_ID -> asset.id.get,
-      FieldConst.Face.PERSON_ID -> person.id.get
-    )
+    jsonIn(FieldConst.ID) = id
+    jsonIn(FieldConst.Face.ASSET_ID) = asset.id.get
+    jsonIn(FieldConst.Face.PERSON_ID) = person.id.get
+    jsonIn
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
     val featuresStr = toVectorString(features)

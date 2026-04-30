@@ -1,15 +1,15 @@
 package altitude.core.models
 
 import altitude.core.Const.FaceRecognition
-import play.api.libs.json.*
-import play.api.libs.json.JsonNaming.SnakeCase
+import altitude.core.util.JsonCodec
+import JsonCodec.given
+import JsonCodec.macroRW
 
 import scala.collection.mutable
 
 object Person:
-  given config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  given format: OFormat[Person] = Json.format[Person]
-  given Conversion[JsValue, Person] = json => Json.fromJson[Person](json).get
+  given JsonCodec.ReadWriter[Person] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Person] = json => JsonCodec.read[Person](json)
 
 case class Person(
     id: Option[String] = None,
@@ -24,7 +24,7 @@ case class Person(
 
   def isAboveThreshold: Boolean = numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD
 
-  lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   private val _faces: mutable.TreeSet[Face] = mutable.TreeSet[Face]()
 
@@ -38,13 +38,10 @@ case class Person(
     _faces.clear()
     _faces.addAll(faces)
 
-  def clearFaces(): Unit =
-    _faces.clear()
+  def clearFaces(): Unit = _faces.clear()
 
   def getFaces: mutable.TreeSet[Face] =
-    // we do not get faces for a person automatically, but "numOfFaces" reflects the actual number in DB
     if numOfFaces > 0 && _faces.isEmpty then throw new IllegalStateException(s"Faces have not been loaded for person $this")
-
     _faces
 
   def hasFaces: Boolean = _faces.nonEmpty

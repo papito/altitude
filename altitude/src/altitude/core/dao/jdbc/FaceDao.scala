@@ -3,8 +3,9 @@ package altitude.core.dao.jdbc
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Face
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
-import play.api.libs.json.JsObject
 
 import scala.language.implicitConversions
 
@@ -14,7 +15,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao with altitud
 
   final override val tableName = "face"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
     Face(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       x1 = rec(FieldConst.Face.X1).asInstanceOf[Int],

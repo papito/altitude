@@ -4,55 +4,39 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.include
-import play.api.libs.json.JsonNaming.SnakeCase
-import play.api.libs.json.*
-import altitude.core.models.BaseModel
+import altitude.core.models.Stat
+import altitude.core.models.Folder
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import altitude.test.TestFocus
 import org.scalatest.matchers.should.Matchers.{convertToStringShouldWrapperForVerb, should}
 
-import java.time.LocalDateTime
 import scala.language.implicitConversions
 
 
 @DoNotDiscover class CoreModelTests extends funsuite.AnyFunSuite with TestFocus {
 
-  object TestModel {
-    implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
-    implicit val writes: OWrites[TestModel] = Json.writes[TestModel]
-    implicit val reads: Reads[TestModel] = Json.reads[TestModel]
-
-    implicit def fromJson(json: JsValue): TestModel = Json.fromJson[TestModel](json).get
+  test("Serialize and deserialize a Stat model") {
+    val stat = Stat(dimension = "test_dim", dimVal = 42)
+    val json = stat.toJson
+    val deserialized: Stat = json
+    deserialized.dimension should be(stat.dimension)
+    deserialized.dimVal should be(stat.dimVal)
   }
 
-  case class TestModel(id: Option[String] = None,
-                       createdAt: Option[LocalDateTime] = None,
-                       updatedAt: Option[LocalDateTime] = None,
-                       stringProp: String,
-                       boolProp: Boolean,
-                       intProp: Int) extends BaseModel {
-
-    lazy val toJson: JsObject = Json.toJson(this).as[JsObject]
+  test("Serialize and deserialize a Folder model") {
+    val folder = Folder(id = Some("test-id"), parentId = "parent-id", name = "Test Folder")
+    val json = folder.toJson
+    val deserialized: Folder = json
+    deserialized.id should be(folder.id)
+    deserialized.name should be(folder.name)
+    deserialized.parentId should be(folder.parentId)
   }
 
-  test("Create a model") {
-    TestModel(stringProp = "stringPropValue", boolProp = true, intProp = 2)
-  }
-
-  test("Model JSON conversion") {
-    val obj = TestModel(
-      id = Some("idValue"),
-      createdAt = Some(LocalDateTime.now()),
-      stringProp = "stringPropValue",
-      boolProp = true,
-      intProp = 2)
-
-    val jsonObj = Json.toJson(obj)
-    jsonObj.toString() should include("\"string_prop\":\"stringPropValue\"")
-    jsonObj.toString() should include("\"created_at\":\"20")
-
-    val objFromJson =  TestModel.fromJson(jsonObj)
-    objFromJson.intProp should be(obj.intProp)
-    objFromJson.boolProp should be(obj.boolProp)
-    objFromJson.stringProp should be(obj.stringProp)
+  test("Model toJson contains expected fields") {
+    val stat = Stat(dimension = "my_dimension", dimVal = 100)
+    val jsonStr = stat.toJson.toString()
+    jsonStr should include("my_dimension")
+    jsonStr should include("100")
   }
 }

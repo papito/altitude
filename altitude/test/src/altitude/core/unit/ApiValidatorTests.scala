@@ -5,7 +5,6 @@ import org.scalatest.funsuite
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.noException
 import org.scalatest.matchers.should.Matchers.should
-import play.api.libs.json.Json
 import altitude.core.Api
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
@@ -29,7 +28,7 @@ import altitude.test.TestFocus
     )
 
     invalidEmails.foreach { email =>
-      val jsonIn = Json.obj(
+      val jsonIn = ujson.Obj(
         Api.Field.Setup.ADMIN_EMAIL -> email
       )
 
@@ -56,7 +55,7 @@ import altitude.test.TestFocus
     )
 
     validEmails.foreach { email =>
-      val jsonIn = Json.obj(
+      val jsonIn = ujson.Obj(
         Api.Field.Setup.ADMIN_EMAIL -> email
       )
 
@@ -70,7 +69,7 @@ import altitude.test.TestFocus
       email=List(Api.Field.Setup.ADMIN_EMAIL)
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.Folder.PATH -> "Bright Future Path",
       Api.Field.Setup.ADMIN_EMAIL -> "invalid-email"
     )
@@ -89,7 +88,7 @@ import altitude.test.TestFocus
       maxLengths=Map(Api.Field.Folder.NAME -> maxFieldLength)
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.Folder.NAME -> "Bright Future Name",
     )
 
@@ -107,7 +106,7 @@ import altitude.test.TestFocus
       minLengths=Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.Setup.PASSWORD -> "lol/$",
     )
 
@@ -126,7 +125,7 @@ import altitude.test.TestFocus
       minLengths=Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
     )
 
-    val jsonIn = Json.obj()
+    val jsonIn = ujson.Obj()
 
     val validationException = intercept[ValidationException] {
       validator.validate(jsonIn)
@@ -141,7 +140,7 @@ import altitude.test.TestFocus
       maxLengths=Map(Api.Field.Folder.NAME -> 5, Api.Field.Folder.PATH -> 10)
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.Folder.NAME -> "Bright Future Name",
       Api.Field.Folder.PATH -> "Bright Future Path"
     )
@@ -159,7 +158,7 @@ import altitude.test.TestFocus
       maxLengths=Map(Api.Field.Folder.NAME -> 5)
     )
 
-    val jsonIn = Json.obj()
+    val jsonIn = ujson.Obj()
 
     val validationException = intercept[ValidationException] {
       validator.validate(jsonIn)
@@ -176,7 +175,7 @@ import altitude.test.TestFocus
       maxLengths=Map(Api.Field.Folder.NAME -> maxFieldLength, Api.Field.Folder.PATH -> maxFieldLength)
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.Folder.PATH -> "Bright Future Path"
     )
 
@@ -194,7 +193,7 @@ import altitude.test.TestFocus
       required=List(Api.Field.Folder.NAME)
     )
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.Folder.NAME -> ""
     )
 
@@ -219,7 +218,7 @@ import altitude.test.TestFocus
     )
 
     invalidUUIDs.foreach { uuid =>
-      val jsonIn = Json.obj(
+      val jsonIn = ujson.Obj(
         Api.Field.ID -> uuid
       )
 
@@ -239,7 +238,7 @@ import altitude.test.TestFocus
 
     val validUUID = "12345678-1234-1234-1234-1234567890ab"
 
-    val jsonIn = Json.obj(
+    val jsonIn = ujson.Obj(
       Api.Field.ID -> validUUID
     )
 

@@ -3,9 +3,10 @@ package altitude.core.dao.jdbc
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Stat
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json.JsObject
 
 import scala.language.implicitConversions
 
@@ -13,10 +14,10 @@ abstract class StatDao(override val config: Config) extends BaseDao with altitud
 
   final override val tableName = "stats"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
-    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int])
+  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
+    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int]).toJson
 
-  override def add(jsonIn: JsObject): JsObject =
+  override def add(jsonIn: ujson.Obj): ujson.Obj =
     val sql: String = s"""
       INSERT INTO $tableName (${FieldConst.REPO_ID}, ${FieldConst.Stat.DIMENSION})
            VALUES (? ,?)"""
@@ -27,7 +28,7 @@ abstract class StatDao(override val config: Config) extends BaseDao with altitud
     addRecord(jsonIn, sql, values)
     jsonIn
 
-  override protected def addRecord(jsonIn: JsObject, q: String, values: List[Any]): Unit =
+  override protected def addRecord(jsonIn: ujson.Obj, q: String, values: List[Any]): Unit =
     logger.info(s"JDBC INSERT: $jsonIn")
 
     BaseDao.incrWriteQueryCount()

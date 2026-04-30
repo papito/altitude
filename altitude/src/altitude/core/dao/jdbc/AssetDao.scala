@@ -9,6 +9,8 @@ import altitude.core.models.AssetType
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import com.typesafe.config.Config
@@ -16,7 +18,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
-import play.api.libs.json.*
 
 import scala.language.implicitConversions
 
@@ -25,7 +26,7 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
 
   override val sqlQueryBuilder = new SqlQueryBuilder[Query](columnsForSelect, tableName)
 
-  override protected def makeModel(rec: Map[String, AnyRef]): JsObject =
+  override protected def makeModel(rec: Map[String, AnyRef]): ujson.Obj =
     val assetType = new AssetType(
       mediaType = rec(FieldConst.AssetType.MEDIA_TYPE).asInstanceOf[String],
       mediaSubtype = rec(FieldConst.AssetType.MEDIA_SUBTYPE).asInstanceOf[String],
@@ -77,8 +78,8 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     val userMetadata = UserMetadata.fromJson(userMetadataJson)
     Some(userMetadata)
 
-  override def add(jsonIn: JsObject): JsObject =
-    val asset = jsonIn: Asset
+  override def add(jsonIn: ujson.Obj): ujson.Obj =
+    val asset: Asset = jsonIn
 
     val sql = s"""
         INSERT INTO asset (
@@ -137,7 +138,8 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     )
 
     addRecord(jsonIn, sql, sqlVals)
-    jsonIn ++ Json.obj(FieldConst.ID -> id)
+    jsonIn(FieldConst.ID) = id
+    jsonIn
 
   override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Unit =
     BaseDao.incrWriteQueryCount()
@@ -195,11 +197,6 @@ abstract class AssetDao(val config: Config) extends BaseDao with altitude.core.d
     res.map(makeModel)
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
-    /**
-     * Pedestrian version of this just overwrites fields for old metadata and re-sets it on the asset. A better implementation -
-     * for advanced engines - updates only the metadata fields of interest.
-     */
-    // OPTIMIZE
     val existingMetadata = getUserMetadata(assetId) match
       case Some(m) => m
       case None => UserMetadata()
