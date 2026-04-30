@@ -39,7 +39,14 @@
     }
 </style>
 
-<div id="faceSelector">
+<div id="faceSelector"
+     data-app-fragment="modal"
+     data-app-modal-title="@{title}"
+     data-app-modal-min-width="@{minWidth}"
+     data-app-modal-close-on-success="true"
+     data-app-modal-success-event="personCoverFaceSet"
+     data-app-modal-success-detail='{"@{ Api.Field.PERSON_ID }":"@{ person.persistedId }"}'
+     data-app-modal-success-detail-target-attr-face-id="alt-face-id">
     <div class="info">
         <div>
             Best faces for <strong>@{person.name}</strong>
@@ -49,6 +56,7 @@
     <div class="faces">
         @for(face <- faces) {
             <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{face.persistedId}"
+                 alt="Face option for @{person.name}"
                  alt-face-id="@{face.persistedId}"
                  hx-swap="innerHTML"
                  hx-target="#person"
@@ -60,31 +68,4 @@
 
 </div>
 
-<script type="module">
-    import { showModal, closeModal } from "/static/js/common/modal.js"
-    import { Const } from "/static/js/constants.js"
-
-    showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
-
-    htmx.find("#faceSelector").addEventListener(
-        "htmx:afterRequest",
-        function (evt) {
-            if (evt.detail.successful === true) {
-                const faceId = evt.target.getAttribute(Const.attributes.faceId)
-                const personCoverImageSet = new CustomEvent(
-                    Const.events.personCoverFaceSet,
-                    {
-                        detail: {
-                            "@{ Api.Field.FACE_ID }": faceId,
-                            "@{ Api.Field.PERSON_ID }": "@{ person.persistedId }",
-                        },
-                    },
-                )
-                document.body.dispatchEvent(personCoverImageSet)
-
-                closeModal()
-            }
-        },
-    )
-</script>
 

@@ -21,26 +21,29 @@ and `@includes.html.header_common()` (loads HTMX, Alpine, core CSS).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
 controllers as `"<!doctype html>" + template(...)`. They regularly include inline `<style>` blocks
-(scoped styles for that component) and inline `<script type="module">` blocks for JS setup.
+(scoped styles for that component). Prefer declarative `data-app-*` attributes over inline
+`<script type="module">` blocks when the behavior can be hydrated centrally from
+`js/frontend-app.js`.
 
 ## JS Directory ↔ Template Mapping
 
 | JS directory | Template(s) it serves |
 |---|---|
-| `js/folders/` | `htmx/folders.scala.html`, `htmx/folder_children.scala.html` |
-| `js/search-results/` | `includes/search_results.scala.html`, `htmx/results_grid.scala.html` |
-| `js/people/` | `htmx/people.scala.html`, `htmx/person.scala.html`, `htmx/person_inner.scala.html` |
-| `js/person/` | `htmx/person.scala.html` (single person view) |
-| `js/batch-ops/` | `includes/batch_ops.scala.html` |
-| `js/service/assetService.js` | consumed by `js/search-results/event_handlers.js` |
+| `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
+| `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
+| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
+| `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
+| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
+| `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, nodes |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/selectable.js` | asset grid multi-select |
 
-Each JS section has a consistent file split:
+Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
 - `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:beforeRequest`, `htmx:afterRequest`)
-- `dragon-drop.js` — interact.js drag-and-drop wiring
+- `dragon-drop.js` — interact.js drag-and-drop wiring (now split into `js/dragdrop/` modules for batch, people/person, and folder-tree flows)
 
 ## Alpine.js Stores (defined in `app.js`)
 
@@ -81,8 +84,12 @@ Two-layer event bus, both on `document.body`:
    server round-trip is needed.
 
 Batch ops escalate a single-asset drag to a batch when selected assets exist: the
-`assetMoved`/`assetTrashed` handlers in `search-results/event_handlers.js` re-dispatch
-`batchAssetsMoved`/`batchAssetsRecycled` if `selectedAssets` store is non-empty.
+`assetMoved`/`assetTrashed` handlers are now registered via `js/listeners/assets.js`,
+which re-dispatches `batchAssetsMoved`/`batchAssetsRecycled` if the
+`selectedAssets` store is non-empty. Person merge/name/cover-face events,
+person discard follow-up, people/person drag-and-drop, folder-tree drag-and-drop,
+and trash purge request outcomes are coordinated from `js/frontend-app.js` via the
+domain listener modules.
 
 ### Full action flow (drag-and-drop example)
 
@@ -90,7 +97,7 @@ Batch ops escalate a single-asset drag to a batch when selected assets exist: th
 interact.js drag end / ondrop
   → dispatch CustomEvent on document.body
     → event_handlers.js listener
-        → fetch() or htmx.ajax() to server
+        → shared axios client (`js/http/client.js`) or htmx.ajax() to server
           → on success: direct DOM mutation + snackbar + optional nav reload
 ```
 
@@ -99,14 +106,20 @@ It intercepts `htmx:beforeRequest` to short-circuit requests the client can alre
 locally (e.g. collapsing a folder), and `htmx:afterRequest` to apply post-response state changes
 (e.g. marking a folder as expanded).
 
+In the current structure, that HTMX lifecycle logic is split by concern: folder-specific
+before/after request behavior lives in `js/listeners/htmx-folders.js`, while shared HTMX/search
+listener wiring remains in `js/listeners/htmx-search.js` and delegates back into `frontend-app.js`.
+People-specific HTMX follow-up for discard actions and the inline person-name editor lives in
+`js/listeners/htmx-people-inline-editor.js`.
+
 ## Alpine.js Integration
 
 Alpine serves two distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
-Stores in `app.js` hold data any module needs to read — the active repo ID, current view, and
-the set of selected assets. All access goes through `window.ctx` helpers or
-`Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
+Stores initialized from `js/stores/app-stores.js` hold data any module needs to read — the active
+repo ID, current view, and the set of selected assets. All access goes through `window.ctx`
+helpers or `Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
 
 ### 2. Per-element component registry
 `x-data="initSelectable(id)"` (defined in `alpine/components/selectable.js`, exposed on `window`
@@ -134,15 +147,22 @@ those responsibilities stay with HTMX and the custom event bus.
 **Modals** — Two containers live in `html_common.scala.html`. Load into `#modalContent` for general
 modals; load into `#imageDetailModalContent` for asset detail. Use `showModal()` /
 `showAssetDetailModal()` / `closeModal()` from `js/common/modal.js`. ESC key is wired globally in
-`global.js`.
+`global.js`. General HTMX modal fragments can opt into centralized hydration by adding
+`data-app-fragment="modal"` plus `data-app-modal-*` attributes (title, width, autofocus selector,
+success event/action metadata) on the fragment root; `js/fragments/` hydrators handle modal
+display, focus/select controls, dispatch success events, and close the modal after successful
+requests, while `js/frontend-app.js` remains the composition root that triggers hydration.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
 
 **Infinite scroll + lazy load** — The last `.cell` gets class `last-cell`; HTMX fires on
-`intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; `IntersectionObserver`
-in `infinite-scroll.js` swaps `src` in/out as cells enter/leave the viewport. Always call both
-`initLazyLoad()` and `initInfiniteScroll()` in the search results inline `<script>`.
+`intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; the centralized
+search-results fragment hydrator in `js/fragments/search-results.js` binds infinite scroll,
+lazy image loading, and metadata visibility for `data-app-fragment="search-results"`.
+
+**Detail navigation** — Shadow-results syncing, next/previous navigation, paged JSON fetching,
+and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`.
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)` to persist to
@@ -154,13 +174,19 @@ in `infinite-scroll.js` swaps `src` in/out as cells enter/leave the viewport. Al
 htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", target: "nav" })
 ```
 
+Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js`,
+and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
+coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
+`FrontendApp` remains the composition root that wires them together.
+
 ## Key Files
 
 | File | Purpose |
 |---|---|
 | `static/js/constants.js` | All string constants: events, attributes, store keys, view names |
-| `static/js/app.js` | Alpine init, store registration, `initApp()` entry point |
+| `static/js/app.js` | thin bootstrap that exposes `initApp()` and starts `FrontendApp` |
 | `static/js/context.js` | `window.ctx` — repo ID and metadata field settings |
+| `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes |
 | `static/js/common/modal.js` | `showModal`, `showAssetDetailModal`, `closeModal` |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |

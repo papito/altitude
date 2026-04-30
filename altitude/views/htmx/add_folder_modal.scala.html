@@ -13,6 +13,13 @@
 
 <form action="#"
       id="addFolder"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-modal-min-width="@{minWidth}"
+      data-app-modal-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
+      data-app-modal-close-on-success="true"
+      data-app-modal-success-event="folderAdded"
+      data-app-modal-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
       alt-folder-id="@{parentId}"
       hx-swap="innerHTML"
       hx-post="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/add"
@@ -42,24 +49,4 @@
     </div>
 </form>
 
-<script type="module">
-    import { showModal, closeModal } from "/static/js/common/modal.js"
-    import { Const } from "/static/js/constants.js"
-
-    showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
-
-    htmx.find("#field@{ Api.Field.Folder.NAME }").focus()
-
-    htmx.find("#addFolder").addEventListener("htmx:afterRequest", function (evt) {
-        if (evt.detail.successful === true) {
-            const folderAddedEvent = new CustomEvent(Const.events.folderAdded, {
-                detail: { "@{ Api.Field.Folder.PARENT_ID }": "@{ parentId }" },
-            })
-
-            document.body.dispatchEvent(folderAddedEvent)
-
-            closeModal()
-        }
-    })
-</script>
 

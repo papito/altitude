@@ -54,6 +54,8 @@
 </style>
 
 <form id="uploadForm"
+      data-app-fragment="upload-form"
+      data-app-upload-cancel-url="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}/cancel"
       hx-post="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}"
       hx-encoding="multipart/form-data">
     <div>
@@ -77,57 +79,10 @@
 
     <div id="abortUploadButtonControl" hidden>
         <button id="abortButton"
-                onclick="htmx.trigger('#uploadForm', 'htmx:abort')"
+                type="button"
+                data-app-upload-abort
                 class="action-button error">Cancel
         </button>
     </div>
-
-    <script type="module">
-        const elProgressBarCtrl = htmx.find("#progressBarControl")
-        const elStartUploadButton = htmx.find("#startUploadButtonControl")
-        const elAbortButton = htmx.find("#abortUploadButtonControl")
-        const elStayOnPage = htmx.find("#stayOnPage")
-        const elProgressBar = htmx.find("#progressBar")
-        const elFiles = htmx.find("#files")
-        const elProgressTextCtrl = htmx.find("#progressTextControl")
-
-        function setIdle() {
-            elStartUploadButton.removeAttribute("hidden")
-            elProgressBarCtrl.setAttribute("hidden", "true")
-            elStayOnPage.setAttribute("hidden", "true")
-            elAbortButton.setAttribute("hidden", "true")
-            elFiles.removeAttribute("disabled")
-            elProgressTextCtrl.setAttribute("hidden", "true")
-        }
-
-        function setBusy(percentLoaded) {
-            elAbortButton.removeAttribute("hidden")
-            elProgressBarCtrl.removeAttribute("hidden")
-            elStayOnPage.removeAttribute("hidden")
-            elProgressBar.setAttribute("value", percentLoaded)
-            elStartUploadButton.setAttribute("hidden", "true")
-            elFiles.setAttribute("disabled", "true")
-            elProgressTextCtrl.removeAttribute("hidden")
-            elProgressTextCtrl.innerText = percentLoaded.toString() + "%"
-        }
-
-        htmx.on("#uploadForm", "htmx:xhr:progress", function (evt) {
-            const percentLoaded = parseInt((evt.detail.loaded / evt.detail.total) * 100)
-            setBusy(percentLoaded)
-
-            if (percentLoaded === 100) {
-                setIdle()
-            }
-        })
-
-        const url =
-        "/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}/cancel"
-        htmx.on("#uploadForm", "htmx:abort", function () {
-            htmx.ajax("post", url, {
-                swap: "none",
-                handler: setIdle,
-            })
-        })
-    </script>
 </form>
 

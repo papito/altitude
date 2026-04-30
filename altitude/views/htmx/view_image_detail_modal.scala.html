@@ -20,36 +20,14 @@
 
 <div id="imageDetailView">
     @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }") { imgUrl =>
-        <img src="" alt="@{ asset.fileName }">
-
-        <script type="module">
-            import { showAssetDetailModal } from "/static/js/common/modal.js"
-            import { setImgSrcAndWait } from "/static/js/search-results/detail-navigator.js"
-            import { Const } from "/static/js/constants.js"
-
-            Alpine.store(Const.state.imageDetailLoading).value = true
-
-            const img = document.querySelector('#imageDetailModalContent img')
-
-            setImgSrcAndWait(img, "@{imgUrl}")
-                .then(() => {
-                    showAssetDetailModal({
-                        title: "@{ asset.fileName }",
-                        width: @{ asset.width },
-                        height: @{ asset.height }
-                    })
-
-                    document.body.dispatchEvent(new CustomEvent(Const.events.detailShown, {
-                        detail: { assetId: "@{ asset.persistedId }" }
-                    }))
-                })
-                .catch((e) => {
-                    console.error("Error loading asset image", e)
-                })
-                .finally(() => {
-                    Alpine.store(Const.state.imageDetailLoading).value = false
-                })
-        </script>
+        <div data-app-fragment="image-detail"
+             data-app-image-detail-url="@{imgUrl}"
+             data-app-image-detail-title="@{ asset.fileName }"
+             data-app-image-detail-width="@{ asset.width }"
+             data-app-image-detail-height="@{ asset.height }"
+             data-app-image-detail-asset-id="@{ asset.persistedId }">
+            <img src="" alt="@{ asset.fileName }">
+        </div>
     }
 </div>
 

@@ -14,6 +14,14 @@
 
 <form action="#"
       id="renameFolder"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-modal-min-width="@{minWidth}"
+      data-app-modal-autofocus-selector="#field-@{ Api.Field.Folder.NAME }"
+      data-app-modal-select-on-focus="true"
+      data-app-modal-close-on-success="true"
+      data-app-modal-success-action="close-folder-context-menu"
+      data-app-modal-folder-id="@{id}"
       hx-swap="innerHTML"
       hx-put="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/rename"
       hx-trigger="submit"
@@ -32,41 +40,15 @@
            autocomplete="off"
            placeholder="New folder name"
            maxlength="@{ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
-           minlength="@{ Api.Constraints.MIN_FOLDER_NAME_LENGTH }">
-
+           minlength="@{ Api.Constraints.MIN_FOLDER_NAME_LENGTH }"
         @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
            class="error"
         }
-
-        @if(name.isDefined) {
-           value="@{ name.get }"
-        } else {
-           value="@{ existingName.getOrElse("") }"
-        }
+           value="@{ name.getOrElse(existingName.getOrElse("")) }">
     <input type="hidden" name="@{ Api.Field.ID }" value="@{ id }">
   </div>
 </form>
 
-<script type="module">
-  import { Folder } from "/static/js/models/folder.js"
-  import { showModal, closeModal } from "/static/js/common/modal.js"
-
-  showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
-  htmx.find("#field-@{ Api.Field.Folder.NAME }").focus()
-  htmx.find("#field-@{ Api.Field.Folder.NAME }").select()
-
-  htmx.find("#renameFolder").addEventListener(
-      "htmx:afterRequest",
-      function (evt) {
-          if (evt.detail.successful === true) {
-              const folder = new Folder("@{id}")
-              folder.closeContextMenu()
-
-              closeModal()
-          }
-      },
-  )
-</script>
 
 }
 

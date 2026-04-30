@@ -158,6 +158,9 @@
 
 </style>
 
+<div data-app-fragment="search-results"
+     data-results-total="@{results.total}">
+
 @if(person != null) {
 @htmx.html.person(person)
 }
@@ -225,7 +228,6 @@
       <option value="area_size1" @if(sort.field == "area_size" && sort.direction.id == 1) {selected}>
         Dimensions (Largest)
       </option>
-F
     </select>
   </div>
 </div>
@@ -233,38 +235,7 @@ F
 <div id="assets" x-data>
   @htmx.html.results_grid(isContinuousScroll = false, p = 1, results = results)
 </div>
-
-<script type="module">
-  import {
-      initInfiniteScroll,
-      initLazyLoad,
-} from "/static/js/search-results/infinite-scroll.js"
-
-  // this container template is loaded on new search, so scroll to top
-  const contentElement = document.getElementById("content")
-  contentElement.scrollTo({ top: 0, behavior: "auto" })
-
-  initLazyLoad()
-  initInfiniteScroll()
-
-  /**
-   * Reset the selected assets store.
-   * This means any selection is cleared when a new search is performed.
-   * This may be suboptimal if the user wants to select assets across multiple searches,
-   * but this is the simplest approach for now.
-   *
-   * A more advanced approach requires more thinking through. Perhaps a sort of...
-   * scratch pads and selection stashes.
-   */
-  Alpine.store(Const.state.selectedAssets).reset()
-  Alpine.store(Const.state.resultsTotal).set(@{results.total})
-
-  window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
-</script>
-
-<script type="module" src="/static/js/search-results/dragon-drop.js"></script>
-<script type="module" src="/static/js/search-results/event_handlers.js"></script>
-<script type="module" src="/static/js/search-results/detail-navigator.js"></script>
+</div>
 
 }
 

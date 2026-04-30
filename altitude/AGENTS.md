@@ -10,6 +10,21 @@
 
 `App.scala` is the single entrypoint (extends `cask.Main`). It registers all routes and wires the app via `new Altitude()`.
 
+The frontend is now organized around a thin composition root in `static/js/frontend-app.js`.
+Feature logic is split into focused ES module folders instead of accumulating in one large file:
+
+- `static/js/stores/` — Alpine store initialization (`app-stores.js`)
+- `static/js/fragments/` — declarative HTMX fragment hydration (`data-app-fragment="..."`)
+- `static/js/listeners/` — `document.body` custom-event and HTMX lifecycle wiring
+- `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
+- `static/js/search-results/` — shadow-results/detail navigation and image-detail coordination
+- `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
+- `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)
+
+`frontend-app.js` should stay the composition root: it initializes context stores, creates the
+feature coordinators, registers listeners, starts Alpine, binds drag/drop, and hydrates initial
+fragments. Avoid moving feature logic back into that file when adding new behavior.
+
 `Altitude.scala` is the central dependency-injection object. It creates every DAO, service, and the Pekko `ActorSystem` inline. The `DAO` inner object and the `service` inner object both use `dataSourceType match` blocks to mix in the correct DB-specific trait:
 
 ```scala
@@ -86,6 +101,7 @@ make publish              # fat JAR → target/
 ```
 
 > **Do not run `make test`** (requires a live Postgres container). Use `make test-sqlite` and `make test-controllers`.
+> **Do not run tests if only the frontend was changed** (Twirl templates, CSS, JS, HTML) — these can be manually verified in the browser without running the full test suite.
 
 To focus a test, tag it with the `Focused` tag:
 ```scala

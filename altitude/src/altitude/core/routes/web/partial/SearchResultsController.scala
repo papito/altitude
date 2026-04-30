@@ -111,7 +111,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     val results = App.altitude.service.library.search(q)
 
     val contentType = request.exchange.getRequestHeaders.getFirst("Content-Type")
-    val isJsonFormat = contentType != null && contentType.contains("application/json")
+    val accept = request.exchange.getRequestHeaders.getFirst("Accept")
+
+    val isJsonFormat =
+      (contentType != null && contentType.contains("application/json")) ||
+        (accept != null && accept.contains("application/json"))
 
     if isJsonFormat then
       val assets = results.records.map(r => r: Asset)

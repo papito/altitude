@@ -182,13 +182,8 @@
 
 <script type="module">
     import { selectTab } from "/static/js/common/navigation.js"
-    import { setupDragAndDrop } from "/static/js/folders/htmx_event_handlers.js"
 
     selectTab("explorer", "foldersTab")
     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
-
-    setupDragAndDrop()
 </script>
 
-<script type="module" src="/static/js/folders/event_handlers.js"></script>
-<script type="module" src="/static/js/folders/dragon-drop.js"></script>

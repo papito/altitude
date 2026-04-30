@@ -40,6 +40,12 @@
 
 <form action="#"
       id="mergePeople"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-modal-min-width="@{minWidth}"
+      data-app-modal-close-on-success="true"
+      data-app-modal-success-event="personMerged"
+      data-app-modal-success-detail='{"@{Api.Field.Person.MERGE_SOURCE_ID}":"@{ mergeSourcePerson.persistedId }","@{Api.Field.Person.MERGE_DEST_ID}":"@{ mergeDestPerson.persistedId }"}'
       hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/src/@{mergeSourcePerson.persistedId}/dest/@{mergeDestPerson.persistedId}"
       hx-trigger="submit"
       hx-target="#content"
@@ -47,7 +53,8 @@
     <div class="people-to-merge">
         <div class="person-to-merge">
             <div>
-                <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{mergeSourcePerson.coverFaceId}">
+                <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{mergeSourcePerson.coverFaceId}"
+                     alt="Source person face for @{mergeSourcePerson.name}">
             </div>
             <div class="person-info">
                 <div>
@@ -63,7 +70,8 @@
         </div>
         <div class="person-to-merge">
             <div>
-                <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{mergeDestPerson.coverFaceId}">
+                <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{mergeDestPerson.coverFaceId}"
+                     alt="Destination person face for @{mergeDestPerson.name}">
             </div>
             <div class="person-info">
                 <div>
@@ -84,27 +92,4 @@
 
 </form>
 
-<script type="module">
-    import { showModal, closeModal } from "/static/js/common/modal.js"
-    import { Const } from "/static/js/constants.js"
-
-    showModal({ minWidthPx: "@{minWidth}", title: "@{title}" })
-
-    htmx.find("#mergePeople").addEventListener("htmx:afterRequest", function (evt) {
-        if (evt.detail.successful === true) {
-            closeModal()
-
-            const personMergedEvent = new CustomEvent(Const.events.personMerged, {
-                detail: {
-                    "@{Api.Field.Person.MERGE_SOURCE_ID}":
-                        "@{ mergeSourcePerson.persistedId }",
-                    "@{Api.Field.Person.MERGE_DEST_ID}":
-                        "@{ mergeDestPerson.persistedId }",
-                },
-            })
-
-            document.body.dispatchEvent(personMergedEvent)
-        }
-    })
-</script>
 
