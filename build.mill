@@ -22,6 +22,8 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   private val opencvVersion = "1.5.10"
   private val javacppVersion = "1.5.7"
 
+  def mainClass: T[Option[String]] = Some("altitude.core.App")
+
   def publishVersion = "0.1.0-SNAPSHOT"
 
   def scalacOptions: Task.Simple[Seq[String]] = Seq(

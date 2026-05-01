@@ -9,13 +9,12 @@ watch:
 compile:
 	mill altitude.compile
 
-clean-all:
-	rm -rf data/*
+clean:
 	rm -rf out
 	mill clean
 
-clean-db:
-	rm -rf data/*
+clear-db:
+	ENV=dev mill altitude.runMain altitude.tools.clearDb
 
 publish:
 	mill altitude.assembly
