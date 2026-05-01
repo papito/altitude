@@ -8,7 +8,7 @@ import altitude.core.models.Repository
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import altitude.core.util.Util.getDuplicateExceptionOrSame
+import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -27,26 +27,25 @@ abstract class BaseService[Model <: BaseModel]:
     RequestContext.conn.value.get
 
   protected def contextRepo: Repository =
-    // get the connection associated with this request
+    // get the repository associated with this request
     RequestContext.getRepository
 
   def add(objIn: Model): Model =
-    txManager.withTransaction[Model] {
+    txManager.withTransaction {
       try
         dao.add(objIn)
       catch
-        // NOTE: duplicate logic in add() and updateById()
-        case e: SQLException => throw getDuplicateExceptionOrSame(e)
+        case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
         case ex: Exception =>
           throw ex
     }
 
   def updateById(id: String, data: Map[String, Any]): Int =
-    txManager.withTransaction[Int] {
+    txManager.withTransaction {
       try
         dao.updateById(id, data)
       catch
-        case e: SQLException => throw getDuplicateExceptionOrSame(e)
+        case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
         case ex: Exception =>
           throw ex
     }
@@ -58,18 +57,18 @@ abstract class BaseService[Model <: BaseModel]:
     // should not update ALL repositories by default
     val repoScopedQuery = query.withRepository()
 
-    txManager.withTransaction[Int] {
+    txManager.withTransaction {
       dao.updateByQuery(repoScopedQuery, data)
     }
 
   def getById(id: String): Model =
-    txManager.asReadOnly[Model] {
+    txManager.asReadOnly {
       dao.getById(id)
     }
 
   /** Get a single document using a Query */
   def getOneByQuery(query: Query): Model =
-    txManager.asReadOnly[Model] {
+    txManager.asReadOnly {
       dao.getOneByQuery(query)
     }
 
@@ -77,12 +76,12 @@ abstract class BaseService[Model <: BaseModel]:
   def query(query: Query): QueryResult[Model] =
     val repoScopedQuery = query.withRepository()
 
-    txManager.asReadOnly[QueryResult[Model]] {
+    txManager.asReadOnly {
       dao.query(repoScopedQuery)
     }
 
   def deleteById(id: String): Int =
-    txManager.withTransaction[Int] {
+    txManager.withTransaction {
       dao.deleteById(id)
     }
 
@@ -93,7 +92,7 @@ abstract class BaseService[Model <: BaseModel]:
     // should not delete from ALL repositories by default
     val repoScopedQuery = query.withRepository()
 
-    txManager.withTransaction[Int] {
+    txManager.withTransaction {
       dao.deleteByQuery(repoScopedQuery)
     }
 

@@ -23,7 +23,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
       return
     }
 
-    txManager.withTransaction[Unit] {
+    txManager.withTransaction {
       logger.info(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
 
       dao.updateById(asset.persistedId, Map(FieldConst.Asset.IS_RECYCLED -> isRecycled))
@@ -31,7 +31,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   }
 
   def getByChecksum(checksum: Int): Option[Asset] = {
-    txManager.asReadOnly[Option[Asset]] {
+    txManager.asReadOnly {
       val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum))
       val existing = query(q)
       if (existing.nonEmpty) Some(existing.records.head) else None
@@ -39,7 +39,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   }
 
   def rename(assetId: String, newFilename: String): Asset = {
-    txManager.withTransaction[Asset] {
+    txManager.withTransaction {
       val asset: Asset = getById(assetId)
 
       if (asset.isRecycled) {
@@ -56,25 +56,25 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   }
 
   override def query(q: Query): QueryResult[Asset] = {
-    txManager.asReadOnly[QueryResult[Asset]] {
+    txManager.asReadOnly {
       dao.queryNotRecycled(q)
     }
   }
 
   def queryTriaged(q: Query): QueryResult[Asset] = {
-    txManager.asReadOnly[QueryResult[Asset]] {
+    txManager.asReadOnly {
       dao.queryTriaged(q)
     }
   }
 
   def queryRecycled(q: Query): QueryResult[Asset] = {
-    txManager.asReadOnly[QueryResult[Asset]] {
+    txManager.asReadOnly {
       dao.queryRecycled(q)
     }
   }
 
   def queryAll(q: Query): QueryResult[Asset] = {
-    txManager.asReadOnly[QueryResult[Asset]] {
+    txManager.asReadOnly {
       dao.queryAll(q)
     }
   }
@@ -141,13 +141,13 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   }
 
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = {
-    txManager.asReadOnly[List[Asset]] {
+    txManager.asReadOnly {
       dao.getAssetsToRecycle(assetIds)
     }
   }
 
   def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = {
-    txManager.asReadOnly[List[Asset]] {
+    txManager.asReadOnly {
       dao.getAssetsToMove(assetIds, folderId)
     }
   }

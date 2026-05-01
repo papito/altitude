@@ -23,7 +23,7 @@ class UserMetadataService(val app: Altitude) {
 
   def addField(metadataField: UserMetadataField): UserMetadataField = {
 
-    txManager.withTransaction[UserMetadataField] {
+    txManager.withTransaction {
       val existing = metadataFieldDao.query(
         new Query(
           params = Map(
@@ -41,7 +41,7 @@ class UserMetadataService(val app: Altitude) {
 
   /** Returns a lookup map (by ID) of all configured fields in this repository */
   def getAllFields: Map[String, UserMetadataField] =
-    txManager.asReadOnly[Map[String, UserMetadataField]] {
+    txManager.asReadOnly {
       val q: Query = new Query().withRepository()
       val allFields = metadataFieldDao.query(q).records
 
@@ -52,17 +52,17 @@ class UserMetadataService(val app: Altitude) {
     }
 
   def getFieldById(id: String): UserMetadataField =
-    txManager.asReadOnly[UserMetadataField] {
+    txManager.asReadOnly {
       metadataFieldDao.getById(id)
     }
 
   def deleteFieldById(id: String): Int =
-    txManager.withTransaction[Int] {
+    txManager.withTransaction {
       metadataFieldDao.deleteById(id)
     }
 
   def getMetadata(assetId: String): UserMetadata = {
-    txManager.asReadOnly[UserMetadata] {
+    txManager.asReadOnly {
       // return the metadata or a new empty one if blank
       assetDao.getUserMetadata(assetId) match {
         case Some(metadata) => metadata
@@ -368,7 +368,7 @@ class UserMetadataService(val app: Altitude) {
    */
   def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): ujson.Arr = {
 
-    txManager.asReadOnly[ujson.Arr] {
+    txManager.asReadOnly {
       val allFields = if (allMetadataFields.isDefined) allMetadataFields.get else getAllFields
 
       def toJsonEntry(field: UserMetadataField, mdVals: Set[UserMetadataValue]): ujson.Obj = {

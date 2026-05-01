@@ -16,7 +16,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   override protected val dao: FolderDao = app.DAO.folder
 
   def add(name: String, parentId: Option[String] = None): Folder = {
-    txManager.withTransaction[Folder] {
+    txManager.withTransaction {
       val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
       app.service.folder.add(folder)
@@ -24,13 +24,13 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
   }
 
   override def add(folder: Folder): Folder = {
-    txManager.withTransaction[Folder] {
+    txManager.withTransaction {
       super.add(folder)
     }
   }
 
   def getAll: List[Folder] = {
-    txManager.asReadOnly[List[Folder]] {
+    txManager.asReadOnly {
       val q: Query = new Query().withRepository()
       dao.query(q).records
     }
@@ -41,19 +41,19 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
 
   /** Get children for the parent given, but only a single level - non-recursive */
   def getChildren(rootId: String): List[Folder] = {
-    txManager.asReadOnly[List[Folder]] {
+    txManager.asReadOnly {
       dao.getChildren(rootId)
     }
   }
 
   def getChildrenRecursive(rootId: String): List[Folder] = {
-    txManager.asReadOnly[List[Folder]] {
+    txManager.asReadOnly {
       dao.getChildrenRecursive(rootId)
     }
   }
 
   def getAncestors(folderId: String): List[Folder] = {
-    txManager.asReadOnly[List[Folder]] {
+    txManager.asReadOnly {
       dao.getAncestors(folderId)
     }
   }

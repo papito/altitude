@@ -13,7 +13,7 @@ import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.Sort
 import altitude.core.util.SortDirection
-import altitude.core.util.Util.getDuplicateExceptionOrSame
+import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 import java.sql.SQLException
 
 object PersonService {
@@ -31,13 +31,13 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
   }
 
   def getPersonById(personId: String): Person = {
-    txManager.asReadOnly[Person] {
+    txManager.asReadOnly {
       dao.getById(personId)
     }
   }
 
   def getFaceById(faceId: String): Face = {
-    txManager.asReadOnly[Face] {
+    txManager.asReadOnly {
       faceDao.getById(faceId)
     }
   }
@@ -52,7 +52,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
         persistedFace = Some(faceDao.add(face, asset, person))
       } catch {
         case e: SQLException =>
-          throw getDuplicateExceptionOrSame(
+          throw newDuplicateExceptionOrRethrow(
             e,
             Some(s"Face already exists for person ${person.persistedId} in asset ${asset.persistedId}"))
         case ex: Exception =>
@@ -70,7 +70,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
   }
 
   def addPerson(person: Person): Person = {
-    txManager.withTransaction[Person] {
+    txManager.withTransaction {
       require(person.getFaces.size < 2, "Adding a new person with more than one face is currently not supported")
 
       val personForUpdate = person.copy(
@@ -88,7 +88,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
     logger.info(s"Merging person ${source.name} into ${dest.name}")
 
-    txManager.withTransaction[Person] {
+    txManager.withTransaction {
       val persistedDest: Person = dao.getById(dest.persistedId)
       val persistedSource: Person = dao.getById(source.persistedId)
 
@@ -134,7 +134,7 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
   }
 
   def getPersonFaces(personId: String, limit: Int = 50): List[Face] = {
-    txManager.asReadOnly[List[Face]] {
+    txManager.asReadOnly {
       val sort: Sort = Sort(FieldConst.Face.DETECTION_SCORE, SortDirection.DESC)
 
       val q = new Query(params = Map(FieldConst.Face.PERSON_ID -> personId), sort = List(sort))
@@ -161,13 +161,13 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
   }
 
   def getAssetFaces(assetId: String): List[Face] = {
-    txManager.asReadOnly[List[Face]] {
+    txManager.asReadOnly {
       faceDao.getAssetFaces(assetId)
     }
   }
 
   def getPeopleForAsset(assetId: String): List[Person] = {
-    txManager.asReadOnly[List[Person]] {
+    txManager.asReadOnly {
       val faces = getAssetFaces(assetId)
       val personIds = faces.map(_.personId.get)
 

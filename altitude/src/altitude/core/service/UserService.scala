@@ -17,7 +17,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
    * (normally).
    */
   override def query(query: Query): QueryResult[User] = {
-    txManager.asReadOnly[QueryResult[User]] {
+    txManager.asReadOnly {
       dao.query(query)
     }
   }

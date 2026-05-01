@@ -78,7 +78,7 @@ class LibraryService(val app: Altitude) {
   }
 
   def query(query: Query): QueryResult[Asset] = {
-    txManager.asReadOnly[QueryResult[Asset]] {
+    txManager.asReadOnly {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
 
       val _query: Query = if (folderId.isDefined) {
@@ -95,7 +95,7 @@ class LibraryService(val app: Altitude) {
   }
 
   def search(query: SearchQuery): SearchResult = {
-    txManager.asReadOnly[SearchResult] {
+    txManager.asReadOnly {
       val _query: SearchQuery = if (query.folderIds.nonEmpty) {
         if (query.folderIds.size > 1) {
           throw IllegalOperationException("Currently cannot search in multiple folders at once")

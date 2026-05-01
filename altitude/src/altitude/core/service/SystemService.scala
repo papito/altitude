@@ -19,7 +19,7 @@ class SystemService(val app: Altitude) {
   protected val txManager: TransactionManager = app.txManager
 
   def version: Int = {
-    txManager.withTransaction[Int] {
+    txManager.withTransaction {
       try {
         readMetadata.version
       } catch {
@@ -47,7 +47,7 @@ class SystemService(val app: Altitude) {
   }
 
   def readMetadata: SystemMetadata = {
-    txManager.asReadOnly[SystemMetadata] {
+    txManager.asReadOnly {
       systemMetadataDao.getById(SystemMetadataDao.SYSTEM_RECORD_ID.toString)
     }
   }

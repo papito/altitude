@@ -74,7 +74,7 @@ object Util {
     BCrypt.checkpw(password, hashedPassword)
   }
 
-  def getDuplicateExceptionOrSame(e: SQLException, message: Option[String] = None): Exception = {
+  def newDuplicateExceptionOrRethrow(e: SQLException, message: Option[String] = None): Exception = {
     if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
       DuplicateException(message = message)
     } else {
