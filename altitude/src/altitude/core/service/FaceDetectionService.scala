@@ -235,12 +235,28 @@ class FaceDetectionService(app: Altitude) {
   private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2022mar.onnx")
   private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
 
-  /** ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings. */
-  private val arcFaceNet: Net = readNetFromONNX(ARCFACE_MODEL_PATH)
+  /**
+   * ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings.
+   *
+   * One Net instance per thread: OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe.
+   * ThreadLocal ensures each Pekko dispatcher thread gets its own exclusive copy with zero contention.
+   */
+  private val arcFaceNetLocal: ThreadLocal[Net] =
+    ThreadLocal.withInitial(() => readNetFromONNX(ARCFACE_MODEL_PATH))
 
-  private val yuNet = FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size())
-  yuNet.setScoreThreshold(yunetConfidenceThreshold)
-  yuNet.setNMSThreshold(yunetNmsThreshold)
+  /**
+   * YuNet face detector.
+   *
+   * One FaceDetectorYN instance per thread for the same reason as arcFaceNetLocal: the native object carries mutable
+   * state (input size, score/NMS thresholds, detection scratch buffers) and must not be shared across threads.
+   * Thresholds are applied once at construction time inside the initializer.
+   */
+  private val yuNetLocal: ThreadLocal[FaceDetectorYN] = ThreadLocal.withInitial { () =>
+    val detector = FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size())
+    detector.setScoreThreshold(yunetConfidenceThreshold)
+    detector.setNMSThreshold(yunetNmsThreshold)
+    detector
+  }
 
   def detectFacesWithYunet(image: Mat): List[Mat] = {
     if (image.empty) {
@@ -268,8 +284,8 @@ class FaceDetectionService(app: Altitude) {
       image.clone()
     }
 
-    yuNet.setInputSize(srcMat.size())
-    yuNet.detect(srcMat, detectionResults)
+    yuNetLocal.get().setInputSize(srcMat.size())
+    yuNetLocal.get().detect(srcMat, detectionResults)
     srcMat.release()
 
     val numOfFaces = detectionResults.rows()
@@ -420,8 +436,8 @@ class FaceDetectionService(app: Altitude) {
       false
     )
 
-    arcFaceNet.setInput(blob)
-    val output = arcFaceNet.forward()
+    arcFaceNetLocal.get().setInput(blob)
+    val output = arcFaceNetLocal.get().forward()
     blob.release()
 
     val embedding = new Array[Float](FaceDetectionService.EMBEDDING_DIMENSIONS)
