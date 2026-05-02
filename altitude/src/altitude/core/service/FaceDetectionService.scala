@@ -3,23 +3,18 @@ package altitude.core.service
 import altitude.core.{Altitude, Const, Environment}
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
+
 import java.io.File
 import org.apache.commons.io.FileUtils
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
 import altitude.core.util.MurmurHash
-import com.typesafe.config.Config
 import org.apache.commons.io.FilenameUtils
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
-import org.opencv.core.CvType
-import org.opencv.core.Mat
-import org.opencv.core.MatOfByte
-import org.opencv.core.Point
-import org.opencv.core.Rect
-import org.opencv.core.Scalar
-import org.opencv.core.Size
+import org.opencv.calib3d.Calib3d
+import org.opencv.core.{CvType, Mat, MatOfByte, MatOfPoint2f, Point, Rect, Scalar, Size}
 import org.opencv.dnn.Dnn.blobFromImage
 import org.opencv.dnn.Dnn.readNetFromONNX
 import org.opencv.dnn.Net
@@ -192,7 +187,6 @@ object FaceDetectionService {
   ): Unit = {
     val green = new Scalar(0, 255, 0)
 
-    // Clone once; draw all bounding boxes + 5-point landmark dots on the single annotated image
     val annotated = imageMat.clone()
     faceData.foreach { case (face, detectionRow, _, _) =>
       val rect = new Rect(face.x1, face.y1, face.width, face.height)
@@ -202,14 +196,15 @@ object FaceDetectionService {
       }
     }
     Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$baseName-annotated.jpg"), annotated)
+    annotated.release()
 
     // Per-face crops
-    faceData.zipWithIndex.foreach { case ((face, _, rawCrop, alignedColor), idx) =>
-      val score = (face.detectionScore * 100).toInt
-      val prefix = s"$baseName-${idx + 1}-$score"
-      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix.png"), rawCrop)
-      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix-aligned.png"), alignedColor)
-    }
+//    faceData.zipWithIndex.foreach { case ((face, _, rawCrop, alignedColor), idx) =>
+//      val score = (face.detectionScore * 100).toInt
+//      val prefix = s"$baseName-${idx + 1}-$score"
+//      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix.png"), rawCrop)
+//      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix-aligned.png"), alignedColor)
+//    }
   }
 }
 
@@ -254,7 +249,7 @@ class FaceDetectionService(app: Altitude) {
     }
 
     if (Math.min(image.size().width, image.size().height).toInt < minFaceSize) {
-      logger.warn("Image too small")
+      logger.warn(s"Image dimensions too small to contain a detectable face (${image.width()}x${image.height()} px)")
       return List()
     }
 
@@ -275,14 +270,17 @@ class FaceDetectionService(app: Altitude) {
 
     yuNet.setInputSize(srcMat.size())
     yuNet.detect(srcMat, detectionResults)
+    srcMat.release()
+
     val numOfFaces = detectionResults.rows()
 
     val ret: List[Option[Mat]] = (for (idx <- 0 until numOfFaces) yield {
       val detection = detectionResults.row(idx)
 
-      // update the original detection matrix to account for the scaling factor
+      // Rescale bbox + landmark columns (0–13) back to original image coordinates.
+      // Column 14 is the confidence score and must NOT be divided by scaleFactor.
       if (scaleFactor < 1.0) {
-        for (col <- 0 until detection.cols()) {
+        for (col <- 0 until (detection.cols() - 1)) {
           val originalValue = detection.get(0, col)(0)
           detection.put(0, col, originalValue / scaleFactor)
         }
@@ -291,13 +289,15 @@ class FaceDetectionService(app: Altitude) {
       val detectionRect = FaceDetectionService.faceDetectToRect(detection, image.cols(), image.rows())
 
       if (detectionRect.height < minFaceSize || detectionRect.width < minFaceSize) {
-        logger.warn("Face region too small")
+        logger.warn(s"Face region too small (${detectionRect.width}x${detectionRect.height} px)")
         None
       } else {
-        Option(detection)
+        // Clone the row so detectionResults can be released independently
+        Option(detection.clone())
       }
     }).toList
 
+    detectionResults.release()
     ret.flatten
   }
 
@@ -315,7 +315,7 @@ class FaceDetectionService(app: Altitude) {
     val results: List[Mat] = detectFacesWithYunet(imageMat)
 
     // Accumulate both the public result and the intermediate Mats needed for debug output in one pass
-    case class FaceEntry(face: Face, faceImages: FaceImages, detectionRow: Mat, rawCrop: Mat, alignedColor: Mat, alignedGs: Mat)
+    case class FaceEntry(face: Face, faceImages: FaceImages, detectionRow: Mat, rawCrop: Mat, alignedColor: Mat)
 
     val entries: List[FaceEntry] = results.map { res =>
       val alignedFaceImage = alignCropFaceFromDetection(imageMat, res)
@@ -349,11 +349,16 @@ class FaceDetectionService(app: Altitude) {
       val faceImages = FaceImages(
         image = imageBytes.toArray,
         displayImage = displayImage,
-        alignedImage = alignedFaceImageGsBytes.toArray,
+        alignedImage = alignedImageBytes.toArray,    // fix: was alignedFaceImageGsBytes
         alignedImageGs = alignedFaceImageGsBytes.toArray
       )
 
-      FaceEntry(face, faceImages, res, faceImage, alignedFaceImage, alignedFaceImageGs)
+      imageBytes.release()
+      alignedImageBytes.release()
+      alignedFaceImageGsBytes.release()
+      alignedFaceImageGs.release()
+
+      FaceEntry(face, faceImages, res, faceImage, alignedFaceImage)
     }
 
     if (faceDebugEnabled && fileName.isDefined) {
@@ -361,6 +366,12 @@ class FaceDetectionService(app: Altitude) {
       val debugData = entries.map(e => (e.face, e.detectionRow, e.rawCrop, e.alignedColor))
       FaceDetectionService.dumpDebugArtifacts(imageMat, debugData, baseName, debugDir)
     }
+
+    entries.foreach { e =>
+      e.alignedColor.release()
+      // e.rawCrop is a submat view of imageMat — its data is freed with imageMat below
+    }
+    imageMat.release()
 
     entries.map(e => (e.face, e.faceImages))
   }
@@ -387,6 +398,7 @@ class FaceDetectionService(app: Altitude) {
       org.opencv.core.Core.BORDER_REPLICATE,
       new Scalar(0, 0, 0)
     )
+    transformMatrix.release()
     aligned
   }
 
@@ -395,13 +407,12 @@ class FaceDetectionService(app: Altitude) {
    *
    * The model expects a 112x112 BGR image normalized to [0,1]. The output is L2-normalized so that cosine distance can be used
    * directly for comparison.
+   *
+   * The input is expected to already be 112x112 (as produced by [[alignCropFaceFromDetection]]); no resize is performed.
    */
   def getArcFaceEmbedding(alignedFaceImage: Mat): Array[Float] = {
-    val resized = new Mat
-    Imgproc.resize(alignedFaceImage, resized, new Size(112, 112))
-
     val blob = blobFromImage(
-      resized,
+      alignedFaceImage,
       1.0 / 255.0,
       new Size(112, 112),
       new Scalar(0, 0, 0),
@@ -411,9 +422,11 @@ class FaceDetectionService(app: Altitude) {
 
     arcFaceNet.setInput(blob)
     val output = arcFaceNet.forward()
+    blob.release()
 
     val embedding = new Array[Float](FaceDetectionService.EMBEDDING_DIMENSIONS)
     output.get(0, 0, embedding)
+    output.release()
 
     // L2-normalize the embedding
     val norm = Math.sqrt(embedding.map(x => x.toDouble * x.toDouble).sum).toFloat
