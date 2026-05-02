@@ -22,7 +22,6 @@ object Const {
     val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
     val FACE_RECOGNITION_MAX_COMPARISONS_PER_PERSON = "face.recognition.max_comparisons_per_person"
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
-    val FACE_RECOGNITION_MIN_DETECTION_SCORE = "face.recognition.min_detection_score"
 
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
