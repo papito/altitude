@@ -65,61 +65,29 @@ object FaceDetectionService {
   }
 
   /**
-   * Estimate a 2D similarity transform (rotation + uniform scale + translation) from source to destination point sets using a
-   * least-squares fit over all provided point pairs.
+   * Estimate a 2D similarity transform (rotation + uniform scale + translation) from source to destination point sets.
+   *
+   * Delegates to [[Calib3d.estimateAffinePartial2D]], which fits the same 4-DOF model (a, b, tx, ty) and is more numerically
+   * robust than a manual least-squares solve.
    *
    * Returns a 2x3 affine matrix suitable for [[Imgproc.warpAffine]].
    */
   def estimateSimilarityTransform(src: Array[Point], dst: Array[Point]): Mat = {
     require(src.length == dst.length && src.length >= 2, "Need at least 2 matching point pairs")
-    val n = src.length
 
-    // Build the linear system  A * [a, b, tx, ty]^T = B
-    // where the similarity transform is:  x' = a*x - b*y + tx,  y' = b*x + a*y + ty
-    val A = Mat.zeros(2 * n, 4, CvType.CV_64F)
-    val B = Mat.zeros(2 * n, 1, CvType.CV_64F)
+    val srcMat = new MatOfPoint2f(src*)
+    val dstMat = new MatOfPoint2f(dst*)
 
-    for (i <- 0 until n) {
-      val sx = src(i).x
-      val sy = src(i).y
-      // row for x
-      A.put(2 * i, 0, sx)
-      A.put(2 * i, 1, -sy)
-      A.put(2 * i, 2, 1.0)
-      A.put(2 * i, 3, 0.0)
-      B.put(2 * i, 0, dst(i).x)
-      // row for y
-      A.put(2 * i + 1, 0, sy)
-      A.put(2 * i + 1, 1, sx)
-      A.put(2 * i + 1, 2, 0.0)
-      A.put(2 * i + 1, 3, 1.0)
-      B.put(2 * i + 1, 0, dst(i).y)
+    try {
+      val M = Calib3d.estimateAffinePartial2D(srcMat, dstMat)
+
+      require(!M.empty(), "Could not estimate similarity transform from the provided points")
+
+      M
+    } finally {
+      srcMat.release()
+      dstMat.release()
     }
-
-    // Solve via least squares: params = (A^T A)^-1 A^T B
-    val At = new Mat
-    org.opencv.core.Core.transpose(A, At)
-    val AtA = new Mat
-    org.opencv.core.Core.gemm(At, A, 1.0, new Mat(), 0.0, AtA)
-    val AtB = new Mat
-    org.opencv.core.Core.gemm(At, B, 1.0, new Mat(), 0.0, AtB)
-    val params = new Mat
-    org.opencv.core.Core.solve(AtA, AtB, params)
-
-    val a = params.get(0, 0)(0)
-    val b = params.get(1, 0)(0)
-    val tx = params.get(2, 0)(0)
-    val ty = params.get(3, 0)(0)
-
-    // Build 2x3 affine matrix
-    val M = Mat.zeros(2, 3, CvType.CV_64F)
-    M.put(0, 0, a)
-    M.put(0, 1, -b)
-    M.put(0, 2, tx)
-    M.put(1, 0, b)
-    M.put(1, 1, a)
-    M.put(1, 2, ty)
-    M
   }
 
   /**
