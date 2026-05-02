@@ -3,6 +3,8 @@ package altitude.core.service
 import altitude.core.{Altitude, Const, Environment}
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
+import java.io.File
+import org.apache.commons.io.FileUtils
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
@@ -164,6 +166,51 @@ object FaceDetectionService {
     println(String.format("Writing %s", outputPath))
     Imgcodecs.imwrite(outputPath, mat)
   }
+
+  /**
+   * Dump face detection debug artifacts to the given directory.
+   *
+   * Writes:
+   *   - `{baseName}-annotated.jpg` — original image with green bounding boxes and 5-point landmark dots drawn for every detection
+   *   - `{baseName}-{N}-{score}.png` — raw face crop (N 1-based, score is 0–100 integer from detectionScore)
+   *   - `{baseName}-{N}-{score}-aligned.png` — 112×112 aligned color crop (ArcFace model input)
+   *
+   * @param imageMat
+   *   the original source image
+   * @param faceData
+   *   per-face tuple: (Face, detectionRow Mat, raw crop Mat, aligned color Mat)
+   * @param baseName
+   *   base filename without extension, derived from the source asset filename
+   * @param debugDir
+   *   absolute path to the output directory (must already exist)
+   */
+  def dumpDebugArtifacts(
+    imageMat: Mat,
+    faceData: List[(Face, Mat, Mat, Mat)],
+    baseName: String,
+    debugDir: String
+  ): Unit = {
+    val green = new Scalar(0, 255, 0)
+
+    // Clone once; draw all bounding boxes + 5-point landmark dots on the single annotated image
+    val annotated = imageMat.clone()
+    faceData.foreach { case (face, detectionRow, _, _) =>
+      val rect = new Rect(face.x1, face.y1, face.width, face.height)
+      Imgproc.rectangle(annotated, rect, green, 2)
+      extractLandmarksFromDetection(detectionRow).foreach { pt =>
+        Imgproc.circle(annotated, pt, 3, green, -1)
+      }
+    }
+    Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$baseName-annotated.jpg"), annotated)
+
+    // Per-face crops
+    faceData.zipWithIndex.foreach { case ((face, _, rawCrop, alignedColor), idx) =>
+      val score = (face.detectionScore * 100).toInt
+      val prefix = s"$baseName-${idx + 1}-$score"
+      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix.png"), rawCrop)
+      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix-aligned.png"), alignedColor)
+    }
+  }
 }
 
 class FaceDetectionService(app: Altitude) {
@@ -185,6 +232,10 @@ class FaceDetectionService(app: Altitude) {
   private val yunetNmsThreshold: Float = app.config.getDouble(Const.Conf.FACE_YUNET_NMS_THRESHOLD).toFloat
   private val boundingBoxSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_BOUNDING_BOX_SIZE)
   private val minFaceSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_MIN_FACE_SIZE)
+  private val faceDebugEnabled: Boolean = app.config.getBoolean(Const.Conf.FACE_DEBUG_ENABLED)
+
+  private val debugDir: String = FilenameUtils.concat(Environment.ROOT_PATH, "debug")
+  if (faceDebugEnabled) FileUtils.forceMkdir(new File(debugDir))
 
   private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2022mar.onnx")
   private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
@@ -252,53 +303,66 @@ class FaceDetectionService(app: Altitude) {
 
   /**
    * Extract faces from raw image bytes.
+   *
+   * @param data
+   *   raw image bytes
+   * @param fileName
+   *   optional source filename; when provided and [[faceDebugEnabled]] is true, debug artifacts are written to the `debug/`
+   *   folder at the project root
    */
-  def extractFaces(data: Array[Byte]): List[(Face, FaceImages)] = {
+  def extractFaces(data: Array[Byte], fileName: Option[String] = None): List[(Face, FaceImages)] = {
     val imageMat: Mat = matFromBytes(data)
-
     val results: List[Mat] = detectFacesWithYunet(imageMat)
 
-    val facesAndImages: List[(Face, FaceImages)] = results.map {
-      res =>
-        val alignedFaceImage = alignCropFaceFromDetection(imageMat, res)
-        val alignedFaceImageGs = getHistEqualizedGrayScImage(alignedFaceImage)
-        val features = getArcFaceEmbedding(alignedFaceImage)
+    // Accumulate both the public result and the intermediate Mats needed for debug output in one pass
+    case class FaceEntry(face: Face, faceImages: FaceImages, detectionRow: Mat, rawCrop: Mat, alignedColor: Mat, alignedGs: Mat)
 
-        val rect = FaceDetectionService.faceDetectToRect(res, imageMat.cols(), imageMat.rows())
-        val faceImage: Mat = imageMat.submat(rect)
+    val entries: List[FaceEntry] = results.map { res =>
+      val alignedFaceImage = alignCropFaceFromDetection(imageMat, res)
+      val alignedFaceImageGs = getHistEqualizedGrayScImage(alignedFaceImage)
+      val features = getArcFaceEmbedding(alignedFaceImage)
 
-        val imageBytes = new MatOfByte
-        Imgcodecs.imencode(".png", faceImage, imageBytes)
+      val rect = FaceDetectionService.faceDetectToRect(res, imageMat.cols(), imageMat.rows())
+      val faceImage: Mat = imageMat.submat(rect)
 
-        val alignedImageBytes = new MatOfByte
-        Imgcodecs.imencode(".png", alignedFaceImage, alignedImageBytes)
+      val imageBytes = new MatOfByte
+      Imgcodecs.imencode(".png", faceImage, imageBytes)
 
-        val alignedFaceImageGsBytes = new MatOfByte
-        Imgcodecs.imencode(".png", alignedFaceImageGs, alignedFaceImageGsBytes)
+      val alignedImageBytes = new MatOfByte
+      Imgcodecs.imencode(".png", alignedFaceImage, alignedImageBytes)
 
-        val displayImage = makeImageThumbnail(imageBytes.toArray, FaceDetectionService.faceDetectionBoxPx)
+      val alignedFaceImageGsBytes = new MatOfByte
+      Imgcodecs.imencode(".png", alignedFaceImageGs, alignedFaceImageGsBytes)
 
-        val face = Face(
-          x1 = rect.x,
-          y1 = rect.y,
-          width = rect.width,
-          height = rect.height,
-          detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
-          features = features,
-          checksum = MurmurHash.hash32(imageBytes.toArray)
-        )
+      val displayImage = makeImageThumbnail(imageBytes.toArray, FaceDetectionService.faceDetectionBoxPx)
 
-        val faceImages = FaceImages(
-          image = imageBytes.toArray,
-          displayImage = displayImage,
-          alignedImage = alignedFaceImageGsBytes.toArray,
-          alignedImageGs = alignedFaceImageGsBytes.toArray
-        )
+      val face = Face(
+        x1 = rect.x,
+        y1 = rect.y,
+        width = rect.width,
+        height = rect.height,
+        detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
+        features = features,
+        checksum = MurmurHash.hash32(imageBytes.toArray)
+      )
 
-        (face, faceImages)
+      val faceImages = FaceImages(
+        image = imageBytes.toArray,
+        displayImage = displayImage,
+        alignedImage = alignedFaceImageGsBytes.toArray,
+        alignedImageGs = alignedFaceImageGsBytes.toArray
+      )
+
+      FaceEntry(face, faceImages, res, faceImage, alignedFaceImage, alignedFaceImageGs)
     }
 
-    facesAndImages
+    if (faceDebugEnabled && fileName.isDefined) {
+      val baseName = FilenameUtils.getBaseName(fileName.get)
+      val debugData = entries.map(e => (e.face, e.detectionRow, e.rawCrop, e.alignedColor))
+      FaceDetectionService.dumpDebugArtifacts(imageMat, debugData, baseName, debugDir)
+    }
+
+    entries.map(e => (e.face, e.faceImages))
   }
 
   /**

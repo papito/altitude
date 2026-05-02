@@ -23,7 +23,7 @@ class FaceRecognitionService(val app: Altitude) {
   private val matchCount: Int = app.config.getInt(Const.Conf.FACE_RECOGNITION_MATCH_COUNT)
 
   def processAsset(dataAsset: AssetWithData): Unit = {
-    val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data)
+    val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data, Some(dataAsset.asset.fileName))
     logger.info(s"Detected ${faceWithImages.size} faces")
 
     logger.info(s"Face rec on asset ${dataAsset.asset}")
