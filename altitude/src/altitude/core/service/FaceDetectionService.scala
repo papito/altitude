@@ -82,13 +82,13 @@ object FaceDetectionService {
     for (i <- 0 until n) {
       val sx = src(i).x
       val sy = src(i).y
-      // row for x'
+      // row for x
       A.put(2 * i, 0, sx)
       A.put(2 * i, 1, -sy)
       A.put(2 * i, 2, 1.0)
       A.put(2 * i, 3, 0.0)
       B.put(2 * i, 0, dst(i).x)
-      // row for y'
+      // row for y
       A.put(2 * i + 1, 0, sy)
       A.put(2 * i + 1, 1, sx)
       A.put(2 * i + 1, 2, 0.0)
@@ -230,9 +230,13 @@ class FaceDetectionService(app: Altitude) {
   private val faceDebugEnabled: Boolean = app.config.getBoolean(Const.Conf.FACE_DEBUG_ENABLED)
 
   private val debugDir: String = FilenameUtils.concat(Environment.ROOT_PATH, "debug")
-  if (faceDebugEnabled) FileUtils.forceMkdir(new File(debugDir))
+  if (faceDebugEnabled) {
+    FileUtils.forceMkdir(new File(debugDir))
+    FileUtils.cleanDirectory(new File(debugDir))
+    logger.info(s"Cleared debug directory: $debugDir")
+  }
 
-  private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2022mar.onnx")
+  private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2023mar.onnx")
   private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
 
   /**

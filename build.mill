@@ -19,8 +19,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   
   private val logbackVersion = "1.5.16"
   private val pekkoVersion = "1.1.2"
-  private val opencvVersion = "1.5.10"
-  private val javacppVersion = "1.5.7"
+  private val javacppVersion = "1.5.10"
 
   def mainClass: T[Option[String]] = Some("altitude.core.App")
 
@@ -108,10 +107,10 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   private val platform: String = detectPlatform()
 
   private val bytedecoPresetLibs = Seq(
-    "opencv" -> "4.5.5",
-    "ffmpeg" -> "5.0",
-    "openblas" -> "0.3.19",
-    "opencv-platform" -> "4.5.5",
+    "opencv" -> "4.9.0",
+    "ffmpeg" -> "6.1.1",
+    "openblas" -> "0.3.26",
+    "opencv-platform" -> "4.9.0",
   ).flatMap {
     case (lib, ver) => Seq(
       // Add both: dependency and its native binaries for the current platform

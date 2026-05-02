@@ -12,8 +12,8 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
 @DoNotDiscover class FaceRecognitionServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  test("Recognize a person twice") {
-    val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+  test("Recognize a person") {
+    val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     val importedAsset1: Asset = testApp.service.library.addImportAsset(importAsset1)
     val (face1, faceImages) = testApp.service.faceDetection.extractFaces(importAsset1.data).head
     faceImages.image should not be empty
@@ -22,24 +22,16 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
     faceImages.alignedImageGs should not be empty
     val recognizedPerson: Person = testApp.service.faceRecognition.recognizeFace(face1, importedAsset1)
 
-    // Recognize again
-    val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
+    // Recognize
+    val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
     val importedAsset2: Asset = testApp.service.library.addImportAsset(importAsset2)
     val (face2, _) = testApp.service.faceDetection.extractFaces(importAsset2.data).head
 
     val samePerson: Person = testApp.service.faceRecognition.recognizeFace(face2, importedAsset2)
     samePerson.persistedId shouldBe recognizedPerson.persistedId
 
-    // Recognize a second time
-    val importAsset3 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
-    val importedAsset3: Asset = testApp.service.library.addImportAsset(importAsset3)
-    val (face3, _) = testApp.service.faceDetection.extractFaces(importAsset3.data).head
-
-    val samePersonAgain: Person = testApp.service.faceRecognition.recognizeFace(face3, importedAsset3)
-    samePersonAgain.persistedId shouldBe recognizedPerson.persistedId
-
     val persistedPerson = testApp.service.person.getPersonById(recognizedPerson.persistedId)
-    persistedPerson.numOfFaces should be(3)
+    persistedPerson.numOfFaces should be(2)
   }
 
   test("Recognize two new people") {

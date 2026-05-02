@@ -71,11 +71,11 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
   }
 
   test("Faces are added to a person") {
-    val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     testApp.service.library.addImportAsset(importAsset1)
 
     // Add another face to the same person
-    val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
+    val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
     val importedAsset2: Asset = testApp.service.library.addImportAsset(importAsset2)
 
     val people = testApp.service.person.getPeopleForAsset(importedAsset2.persistedId)

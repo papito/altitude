@@ -13,7 +13,6 @@ object Const {
     val POSTGRES_URL = "db.postgres.url"
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
-    val PERSON_MIN_FACES_THRESHOLD = "face.threshold"
 
     val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
     val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"

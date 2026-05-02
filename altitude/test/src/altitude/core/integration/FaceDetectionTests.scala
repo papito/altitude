@@ -1,8 +1,6 @@
 package altitude.core.integration
 
 import altitude.core.Altitude
-import altitude.core.models.Face
-import altitude.core.models.FaceImages
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
