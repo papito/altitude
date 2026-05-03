@@ -86,7 +86,7 @@
       <div id="explorer" class="split content split-horizontal">
         <div id="explorerViews" class="content">
           <tab-container>
-            <div role="tablist">
+            <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
               <button type="button" id="foldersTab" role="tab" data-tab-container-no-tabstop>
                 <a
                   href="#folders"
@@ -209,7 +209,8 @@
           }
 
           // if there is no URL fragment, we default to folder views
-          const fragment = window.location.hash || "#folders"
+          // in triage view the tab list is hidden — always load the folders tab
+          const fragment = (view === Const.views.triage) ? "#folders" : (window.location.hash || "#folders")
 
           const tabLink = document.querySelector('a[href="' + fragment + '"]')
 
