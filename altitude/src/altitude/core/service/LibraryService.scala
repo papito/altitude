@@ -244,7 +244,11 @@ class LibraryService(val app: Altitude) {
         app.service.stats.incrementStat(Stats.SORTED_ASSETS, sortedAssets)
         app.service.stats.incrementStat(Stats.SORTED_BYTES, sortedBytes)
 
-        app.service.person.restoreFacesForAssets(assetIds)
+        // Restoring face counts is only valid when assets are coming out of recycle.
+        // Triage/folder moves should not mutate person.numOfFaces.
+        if (assetsToMove.nonEmpty && assetsToMove.forall(_.isRecycled)) {
+          app.service.person.restoreFacesForAssets(assetIds)
+        }
       }
     }
   }

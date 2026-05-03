@@ -6,11 +6,14 @@ import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.util.Query
+import altitude.core.util.Util
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+
+import scala.util.Random
 
 @DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -330,5 +333,34 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets)
+  }
+
+  test("Moving triaged asset to a folder does not change person face counts") {
+    val person: Person = testApp.service.person.addPerson(Person())
+    val triagedAsset: Asset = testContext.persistAsset(isTriaged = true)
+
+    val face = Face(
+      id = Some(Util.randomStr(32)),
+      x1 = 10,
+      y1 = 10,
+      width = 30,
+      height = 30,
+      assetId = Some(triagedAsset.persistedId),
+      personId = Some(person.persistedId),
+      personLabel = Some(1),
+      detectionScore = 0.99,
+      checksum = Random.nextInt(),
+      features = Array.fill(128)(0.1f)
+    )
+
+    testApp.service.person.addFace(face, triagedAsset, person)
+
+    var persistedPerson = testApp.service.person.getById(person.persistedId)
+    persistedPerson.numOfFaces shouldBe 1
+
+    testApp.service.library.moveAssetsToFolder(Set(triagedAsset.persistedId), testContext.repository.rootFolderId)
+
+    persistedPerson = testApp.service.person.getById(person.persistedId)
+    persistedPerson.numOfFaces shouldBe 1
   }
 }
