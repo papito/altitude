@@ -16,6 +16,11 @@ clean:
 clear-db:
 	ENV=dev mill altitude.runMain altitude.tools.clearDb
 
+# temp target to restore a DB after trying to reproduce a bug
+# (to avoid importing all the time)
+restore-db:
+	cp data/db/altitude.db.bak data/db/altitude.db
+
 publish:
 	mill altitude.assembly
 	mill show altitude.assembly
