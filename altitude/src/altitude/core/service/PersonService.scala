@@ -11,6 +11,7 @@ import altitude.core.models.Person
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.SearchQuery
 import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
@@ -115,10 +116,22 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
       /**
        * Note that this has to be done AFTER the source is updated as "merged", in order to avoid clawing with the unique name
-       * constraint across non-merged people
+       * constraint across non-merged people.
+       *
+       * Secondly, we DO NOT do a simple sum of the number of faces, as the source and destination may overlap in assets.
+       * We recalculate using the same person-filtered search semantics as the main results set:
+       * recycled assets excluded, triaged assets included.
        */
+
+      val recountQuery = new SearchQuery(
+        params = Map(FieldConst.Asset.IS_RECYCLED -> false),
+        personIds = Set(persistedDest.persistedId)
+      )
+
+      val mergedFaceCount = app.service.library.search(recountQuery).total
+
       val updatedDest = persistedDest.copy(
-        numOfFaces = persistedDest.numOfFaces + persistedSource.numOfFaces,
+        numOfFaces = mergedFaceCount,
         name = Some(mergedPersonName)
       )
 
