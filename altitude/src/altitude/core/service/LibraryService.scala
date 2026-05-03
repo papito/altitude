@@ -182,6 +182,7 @@ class LibraryService(val app: Altitude) {
 
             val restoredAsset: Asset = app.service.asset.getById(assetId)
             app.service.stats.restoreAsset(restoredAsset)
+            app.service.person.restoreFacesForAssets(Set(assetId))
           }
         }
     }

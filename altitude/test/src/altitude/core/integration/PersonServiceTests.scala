@@ -335,10 +335,12 @@ import scala.util.Random
 
     // recycle some assets
     val recycleCount = 2
-    allAssets.take(recycleCount).foreach(asset => testApp.service.library.recycleAssets(Set(asset.persistedId)))
+    val recycledAssetIds = allAssets.take(recycleCount).map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(recycledAssetIds)
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
+
     // The faces are still in DB, but they are not counted toward the person,
     // as they are in the trash bin until being Purged.
     testApp.service.person.getPersonFaces(person.persistedId).length should be(totalAssets)
@@ -357,16 +359,16 @@ import scala.util.Random
 
     // recycle some assets
     val recycleCount = 2
-    allAssets.take(recycleCount).foreach(asset => testApp.service.library.recycleAssets(Set(asset.persistedId)))
+    val recycledAssetIds = allAssets.take(recycleCount).map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(recycledAssetIds)
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
 
-    // restore the assets (move from recycle)
-    allAssets.take(recycleCount).foreach {
-      asset => testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), testContext.repository.rootFolderId)
-    }
+    // restore the recycled assets
+    testApp.service.library.restoreRecycledAssets(recycledAssetIds)
 
+    // face counts should be back to the original number
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets)
   }
