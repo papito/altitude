@@ -55,7 +55,7 @@ object Environment {
    */
   def resolveResourcePath(classpathPath: String): String = {
     val resourceUrl = getClass.getResource(classpathPath)
-    if (resourceUrl == null) {
+    if resourceUrl == null then {
       throw new RuntimeException(s"Classpath resource not found: $classpathPath")
     }
 
@@ -68,10 +68,10 @@ object Environment {
         // Resource is inside a JAR — extract to a temp directory
         val destFile = tempResourceDir.resolve(classpathPath.stripPrefix("/")).toFile
 
-        if (!destFile.exists()) {
+        if !destFile.exists() then {
           destFile.getParentFile.mkdirs()
           val stream: InputStream = getClass.getResourceAsStream(classpathPath)
-          if (stream == null) {
+          if stream == null then {
             throw new RuntimeException(s"Classpath resource not found: $classpathPath")
           }
           try {

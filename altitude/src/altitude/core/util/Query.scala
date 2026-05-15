@@ -10,7 +10,7 @@ object Query {
     require(values.nonEmpty)
 
     // types that requires two values
-    if (paramType == ParamType.RANGE || paramType == ParamType.OR) {
+    if paramType == ParamType.RANGE || paramType == ParamType.OR then {
       require(values.size == 2)
     }
 
@@ -42,7 +42,7 @@ object Query {
 
   def IN(values: Set[Any], negate: Boolean = false): QueryParam = {
     // if only one value given - simplify this to be just an equals
-    if (values.size == 1) {
+    if values.size == 1 then {
       new QueryParam(values.head, ParamType.EQ, negate)
     } else {
       QueryParam(values, ParamType.IN, negate)
@@ -69,10 +69,10 @@ object SortDirection:
 case class Sort(param: String, direction: SortDirection)
 
 class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: Int = 1, val sort: List[Sort] = List()) {
-  if (rpp < 0) throw new IllegalArgumentException(s"Invalid results per page value: $rpp")
-  if (page < 1) throw new IllegalArgumentException(s"Invalid page value: $page")
+  if rpp < 0 then throw new IllegalArgumentException(s"Invalid results per page value: $rpp")
+  if page < 1 then throw new IllegalArgumentException(s"Invalid page value: $page")
 
-  if (sort.size > 1) {
+  if sort.size > 1 then {
     throw new IllegalArgumentException("Only one sort currently supported")
   }
 

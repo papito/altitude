@@ -46,7 +46,7 @@ object decorators {
       // without needing to log in repeatedly when working with the frontend
       val devUser = App.altitude.service.user.getDevUser
 
-      if devUser.nonEmpty then
+      if devUser.isDefined then
         return delegate(req, Map("request" -> req, "user" -> devUser))
 
       extractToken(req) match {
@@ -71,7 +71,7 @@ object decorators {
       val isApiRequest = acceptHeader.contains("application/json") ||
         req.exchange.getRequestPath.startsWith("/api/")
 
-      if (isApiRequest) {
+      if isApiRequest then {
         Result.Success(Response(
           """{"error": "Unauthorized", "message": "Authentication required"}""",
           statusCode = 401,
@@ -94,7 +94,7 @@ object decorators {
   class requestResponseLogger extends cask.RawDecorator {
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] = {
 
-      if (req.exchange.getRequestPath.startsWith("/static/" ) || req.exchange.getRequestPath.startsWith("/content")) {
+      if req.exchange.getRequestPath.startsWith("/static/") || req.exchange.getRequestPath.startsWith("/content") then {
         // skip logging for static file requests
         return delegate(req, Map())
       }

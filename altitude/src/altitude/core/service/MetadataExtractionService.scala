@@ -48,7 +48,7 @@ class MetadataExtractionService {
    * Postgres, for example, is not a fan of null unicode characters in strings
    */
   private def sanitizeString(input: String): String = {
-    if (input == null) return null
+    if input == null then return null
     input.replace("\u0000", "")
   }
 
@@ -70,7 +70,7 @@ class MetadataExtractionService {
 
       assetType
     } finally {
-      if (inputStream.isDefined) inputStream.get.close()
+      if inputStream.isDefined then inputStream.get.close()
     }
   }
 }

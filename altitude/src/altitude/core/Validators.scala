@@ -21,39 +21,35 @@ object Validators {
       val ex: ValidationException = ValidationException()
 
       required.foreach { field =>
-        if (!json.obj.contains(field) || json(field).strOpt.forall(_.isEmpty)) {
+        if !json.obj.contains(field) || json(field).strOpt.forall(_.isEmpty) then {
           ex.errors += (field -> C.Msg.Err.VALUE_REQUIRED)
         }
       }
 
       maxLengths.foreach {
         case (field, maxLength) =>
-          if (json.obj.contains(field) && json(field).strOpt.exists(_.length > maxLength)) {
+          if json.obj.contains(field) && json(field).strOpt.exists(_.length > maxLength) then {
             ex.errors += (field -> C.Msg.Err.VALUE_TOO_LONG.format(maxLength))
           }
       }
 
       minLengths.foreach {
         case (field, minLength) =>
-          if (json.obj.contains(field) && json(field).strOpt.exists(_.length < minLength)) {
+          if json.obj.contains(field) && json(field).strOpt.exists(_.length < minLength) then {
             ex.errors += (field -> C.Msg.Err.VALUE_TOO_SHORT.format(minLength))
           }
       }
 
       email.foreach { field =>
-        if (
-          isStillValid(ex, field, json) && json.obj.contains(field) &&
-          !emailRegex.matches(json(field).str)
-        ) {
+        if isStillValid(ex, field, json) && json.obj.contains(field) &&
+           !emailRegex.matches(json(field).str) then {
           ex.errors += (field -> C.Msg.Err.VALUE_NOT_AN_EMAIL)
         }
       }
 
       uuid.foreach { field =>
-        if (
-          isStillValid(ex, field, json) &&
-          !uuidRegex.matches(json(field).str)
-        ) {
+        if isStillValid(ex, field, json) &&
+           !uuidRegex.matches(json(field).str) then {
           ex.errors += (field -> C.Msg.Err.VALUE_NOT_A_UUID)
         }
       }

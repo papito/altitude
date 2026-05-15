@@ -106,10 +106,10 @@ object ImageUtil {
         new BufferedImage(previewBoxSize, previewBoxSize, BufferedImage.TYPE_INT_ARGB)
       val G2D: Graphics2D = compositeImage.createGraphics
 
-      val x: Int = if (rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth) {
+      val x: Int = if rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth then {
         (previewBoxSize - rotationCorrectScaledImage.getWidth) / 2
       } else 0
-      val y: Int = if (rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth) {
+      val y: Int = if rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth then {
         (previewBoxSize - rotationCorrectScaledImage.getHeight()) / 2
       } else 0
 

@@ -30,7 +30,7 @@ class UserMetadataService(val app: Altitude) {
             FieldConst.MetadataField.NAME_LC -> metadataField.nameLowercase
           )).withRepository())
 
-      if (existing.nonEmpty) {
+      if existing.nonEmpty then {
         logger.debug(s"Duplicate found for field [${metadataField.name}]")
         throw DuplicateException()
       }
@@ -130,7 +130,7 @@ class UserMetadataService(val app: Altitude) {
       val cleanMetadata = cleanAndValidate(metadata)
 
       // if after cleaning the value is not there - it's empty
-      if (!cleanMetadata.contains(fieldId)) {
+      if !cleanMetadata.contains(fieldId) then {
         val ex = ValidationException()
         ex.errors += (fieldId -> C.Msg.Err.VALUE_CANNOT_BE_EMPTY)
         ex.trigger()
@@ -143,16 +143,16 @@ class UserMetadataService(val app: Altitude) {
       val currentMetadata = app.service.metadata.getMetadata(assetId)
       val existingValues = currentMetadata.get(fieldId).getOrElse(Set[UserMetadataValue]())
 
-      if (field.fieldType != FieldType.BOOL) {
+      if field.fieldType != FieldType.BOOL then {
         // check duplicate
-        if (existingValues.contains(cleanValue)) {
+        if existingValues.contains(cleanValue) then {
           val ex = ValidationException()
           ex.errors += (fieldId -> C.Msg.Err.DUPLICATE)
           ex.trigger()
         }
       }
 
-      val currentValues: Set[UserMetadataValue] = if (currentMetadata.get(fieldId).isEmpty) {
+      val currentValues: Set[UserMetadataValue] = if currentMetadata.get(fieldId).isEmpty then {
         Set[UserMetadataValue]()
       } else {
         currentMetadata.get(fieldId).get
@@ -210,7 +210,7 @@ class UserMetadataService(val app: Altitude) {
       val cleanMetadata = cleanAndValidate(metadata)
 
       // if after cleaning the value is not there - it's empty
-      if (!cleanMetadata.contains(fieldId)) {
+      if !cleanMetadata.contains(fieldId) then {
         val ex = ValidationException()
         ex.errors += (fieldId -> C.Msg.Err.VALUE_CANNOT_BE_EMPTY)
         ex.trigger()
@@ -221,12 +221,12 @@ class UserMetadataService(val app: Altitude) {
       val existingMdVal = currentMdVals.find(_.id.contains(valueId))
 
       // FIXME: NotFound
-      require(existingMdVal.nonEmpty)
+      require(existingMdVal.isDefined)
 
       // bail if the new values is identical to the old one
-      if (existingMdVal.get.value != newMdVal.value) {
+      if existingMdVal.get.value != newMdVal.value then {
         // when checking for existing values, ignore the current ID
-        if (currentMdVals.filterNot(_.id.contains(valueId)).contains(cleamMdVal)) {
+        if currentMdVals.filterNot(_.id.contains(valueId)).contains(cleamMdVal) then {
           val ex = ValidationException()
           ex.errors += (fieldId -> C.Msg.Err.DUPLICATE)
           ex.trigger()
@@ -238,8 +238,8 @@ class UserMetadataService(val app: Altitude) {
             val mdVals = item._2
 
             // return all values as is, only replacing the one value we are working on
-            val newMdVals = if (fId == fieldId) {
-              mdVals.map(v => if (v.persistedId == valueId) newMdVal else v)
+            val newMdVals = if fId == fieldId then {
+              mdVals.map(v => if v.persistedId == valueId then newMdVal else v)
             } else {
               mdVals
             }
@@ -262,7 +262,7 @@ class UserMetadataService(val app: Altitude) {
 
     val missing = suppliedFieldIds.diff(existingFieldIds)
 
-    if (missing.nonEmpty) {
+    if missing.nonEmpty then {
       throw NotFoundException(
         s"Fields [${missing.mkString(", ")}] are not supported by this repository"
       )
@@ -302,14 +302,14 @@ class UserMetadataService(val app: Altitude) {
               .filter(_.nonEmpty)
         }
 
-        if (trimmed.nonEmpty) res + (fieldId -> trimmed) else res
+        if trimmed.nonEmpty then res + (fieldId -> trimmed) else res
     }
 
     UserMetadata(data = cleanData)
   }
 
   def validate(metadata: UserMetadata): Unit = {
-    if (metadata.data.isEmpty) {
+    if metadata.data.isEmpty then {
       return
     }
 
@@ -327,13 +327,13 @@ class UserMetadataService(val app: Altitude) {
         val mdVals: Set[UserMetadataValue] = m._2
 
         // booleans cannot have multiple values
-        if (field.fieldType == FieldType.BOOL && mdVals.size > 1) {
+        if field.fieldType == FieldType.BOOL && mdVals.size > 1 then {
           ex.errors += (field.persistedId -> C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name))
         } else {
           val illegalValues = collectInvalidTypeValues(field.fieldType, mdVals)
 
           // add to the validation exception if any
-          if (illegalValues.nonEmpty) {
+          if illegalValues.nonEmpty then {
             ex.errors += (field.persistedId ->
               C.Msg.Err.INCORRECT_VALUE_TYPE.format(field.name, illegalValues.mkString(", ")))
           }
@@ -369,7 +369,7 @@ class UserMetadataService(val app: Altitude) {
   def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): ujson.Arr = {
 
     txManager.asReadOnly {
-      val allFields = if (allMetadataFields.isDefined) allMetadataFields.get else getAllFields
+      val allFields = if allMetadataFields.isDefined then allMetadataFields.get else getAllFields
 
       def toJsonEntry(field: UserMetadataField, mdVals: Set[UserMetadataValue]): ujson.Obj = {
         val fieldJson = ujson.Obj(field.toJson.obj)
@@ -437,7 +437,7 @@ class UserMetadataService(val app: Altitude) {
             case FieldType.KEYWORD => None // everything is allowed
             case FieldType.TEXT => None // everything is allowed
             case FieldType.BOOL => // only values that we recognize as booleans
-              if (UserMetadataService.VALID_BOOLEAN_VALUES.contains(mdVal.value.toLowerCase)) {
+              if UserMetadataService.VALID_BOOLEAN_VALUES.contains(mdVal.value.toLowerCase) then {
                 None
               } else {
                 Some(mdVal.value)

@@ -19,7 +19,7 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     // this endpoint.
     val devUser = App.altitude.service.user.getDevUser
 
-    if devUser.nonEmpty then
+    if devUser.isDefined then
       logger.info(s"User authenticated: ${devUser.get.email}")
       return Response("", 302, Seq("Location" -> s"/r/${devUser.get.lastActiveRepoId.get}"), Nil)
 

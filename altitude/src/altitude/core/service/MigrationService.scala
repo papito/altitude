@@ -87,7 +87,7 @@ abstract class MigrationService(val app: Altitude) {
     val path = Environment.CURRENT match {
       case Environment.Name.TEST | Environment.Name.DEV => entireSchemaPath
       case Environment.Name.PROD =>
-        if (version == 1) entireSchemaPath
+        if version == 1 then entireSchemaPath
         else
           s"$MIGRATIONS_DIR/$version.sql"
     }

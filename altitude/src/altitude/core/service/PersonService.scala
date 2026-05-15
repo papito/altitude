@@ -56,13 +56,10 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
           throw newDuplicateExceptionOrRethrow(
             e,
             Some(s"Face already exists for person ${person.persistedId} in asset ${asset.persistedId}"))
-        case ex: Exception =>
-          throw ex
       }
 
-      if (person.numOfFaces == 0) {
+      if person.numOfFaces == 0 then
         setFaceAsCover(person, persistedFace.get)
-      }
 
       increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
 
@@ -83,9 +80,8 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
   }
 
   def merge(dest: Person, source: Person): Person = {
-    if (source == dest) {
+    if source == dest then
       throw new IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
-    }
 
     logger.info(s"Merging person ${source.name} into ${dest.name}")
 
@@ -108,11 +104,10 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       )
 
       // if destination is NOT named and the source IS named, use the source name
-      val mergedPersonName = if (!dest.isNamed && source.isNamed) {
+      val mergedPersonName = if !dest.isNamed && source.isNamed then
         source.name.get
-      } else {
+      else
         dest.name.get
-      }
 
       /**
        * Note that this has to be done AFTER the source is updated as "merged", in order to avoid clawing with the unique name
@@ -184,14 +179,12 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       val faces = getAssetFaces(assetId)
       val personIds = faces.map(_.personId.get)
 
-      if (personIds.isEmpty) {
+      if personIds.isEmpty then
         List()
-      } else {
+      else
         val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
-
         val qRes: QueryResult[Person] = dao.query(q)
         qRes.records
-      }
     }
   }
 

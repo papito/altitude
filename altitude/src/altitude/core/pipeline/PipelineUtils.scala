@@ -11,7 +11,7 @@ object PipelineUtils {
   }
 
   def debugInfo(msg: String): Unit = {
-    if (DEBUG) {
+    if DEBUG then {
       println(s"(${Thread.currentThread().getName}) $msg")
     }
   }

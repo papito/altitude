@@ -156,28 +156,28 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], val tableNa
 
   protected def groupBy(query: QueryT): ClauseComponents = ClauseComponents()
   protected def groupByStr(clauseComponents: ClauseComponents): String = {
-    if (clauseComponents.isEmpty) return ""
+    if clauseComponents.isEmpty then return ""
     s"GROUP BY ${clauseComponents.elements.mkString(", ")}"
   }
 
   protected def orderBy(query: QueryT): ClauseComponents = {
-    if (!query.isSorted) return ClauseComponents()
+    if !query.isSorted then return ClauseComponents()
 
     val sort = query.sort.head
     ClauseComponents(elements = List(s"$tableName.${sort.param} ${sort.direction}"))
   }
 
   protected def orderByStr(clauseComponents: ClauseComponents): String = {
-    if (clauseComponents.isEmpty) return ""
+    if clauseComponents.isEmpty then return ""
     s"ORDER BY ${clauseComponents.elements.mkString(", ")}"
   }
 
   protected def having(query: QueryT): ClauseComponents = ClauseComponents()
   protected def havingStr(clauseComponents: ClauseComponents): String = {
-    if (clauseComponents.isEmpty) return ""
+    if clauseComponents.isEmpty then return ""
     s"HAVING ${clauseComponents.elements.mkString(", ")}"
   }
 
-  protected def limitStr(query: QueryT): String = if (query.rpp > 0) s" LIMIT ${query.rpp}" else ""
-  protected def offsetStr(query: QueryT): String = if (query.rpp > 0) s" OFFSET ${(query.page - 1) * query.rpp}" else ""
+  protected def limitStr(query: QueryT): String = if query.rpp > 0 then s" LIMIT ${query.rpp}" else ""
+  protected def offsetStr(query: QueryT): String = if query.rpp > 0 then s" OFFSET ${(query.page - 1) * query.rpp}" else ""
 }

@@ -81,9 +81,8 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
 
   override def getById(id: String): Repository = {
     // try cache first
-    if (app.repositoriesById.contains(id)) {
+    if app.repositoriesById.contains(id) then
       return app.repositoriesById(id)
-    }
 
     val repo: Repository = super.getById(id)
 
@@ -96,13 +95,12 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
   }
 
   def setContextFromRequest(repoId: Option[String]): Unit = {
-    if (repoId.nonEmpty) {
+    if repoId.isDefined then
       try {
         val repo: Repository = getById(repoId.get)
         RequestContext.repository.value = Some(repo)
       } catch {
         case _: NotFoundException =>
       }
-    }
   }
 }

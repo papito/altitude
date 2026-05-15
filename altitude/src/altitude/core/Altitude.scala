@@ -253,9 +253,9 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     }
   }
 
-  if (dataSourceType == Const.DbEngineName.SQLITE) {
+  if dataSourceType == Const.DbEngineName.SQLITE then {
     val dbFolder = new File(dataPath, "db")
-    if (!dbFolder.exists()) {
+    if !dbFolder.exists() then {
       logger.info("Creating the DB folder for SQLite: " + dbFolder)
       FileUtils.forceMkdir(dbFolder)
     }
@@ -269,17 +269,17 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
 
   def setIsInitializedState(): Unit = {
     this.isInitialized = service.system.readMetadata.isInitialized
-    if (!this.isInitialized) {
+    if !this.isInitialized then {
       logger.warn("Instance NOT YET INITIALIZED!")
     }
   }
 
   def runMigrations(): Unit = {
-    if (Environment.CURRENT == Environment.Name.TEST) {
+    if Environment.CURRENT == Environment.Name.TEST then {
       return
     }
 
-    if (service.migrationService.migrationRequired) {
+    if service.migrationService.migrationRequired then {
       logger.warn("Migration is required!")
       service.migrationService.migrate()
     }

@@ -22,11 +22,10 @@ object CheckDuplicateFlow {
 
         val existing: Option[Asset] = app.service.asset.getByChecksum(dataAsset.asset.checksum)
 
-        if (existing.nonEmpty) {
+        if existing.isDefined then
           Future.successful(Right(InvalidAsset(dataAsset.asset, Some(new DuplicateException))), ctx)
-        } else {
+        else
           Future.successful((Left(dataAsset), ctx))
-        }
 
       case (Right(invalid), ctx) =>
         Future.successful((Right(invalid), ctx))

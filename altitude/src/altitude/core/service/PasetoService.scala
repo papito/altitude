@@ -80,13 +80,13 @@ class PasetoService(val app: Altitude) {
       val claims = parsedToken.getClaims
 
       val expiration = claims.getExpiration
-      if (expiration != null && expiration.isBefore(Instant.now())) {
+      if expiration != null && expiration.isBefore(Instant.now()) then {
         logger.debug("Token has expired")
         return None
       }
 
       val userId = claims.getSubject
-      if (userId == null || userId.isEmpty) {
+      if userId == null || userId.isEmpty then {
         logger.debug("Token has no subject (user ID)")
         return None
       }
@@ -115,13 +115,13 @@ class PasetoService(val app: Altitude) {
       val claims = parsedToken.getClaims
 
       val expiration = claims.getExpiration
-      if (expiration != null && expiration.isBefore(Instant.now())) {
+      if expiration != null && expiration.isBefore(Instant.now()) then {
         logger.debug("Token has expired")
         return None
       }
 
       val userId = claims.getSubject
-      if (userId == null || userId.isEmpty) {
+      if userId == null || userId.isEmpty then {
         logger.debug("Token has no subject (user ID)")
         return None
       }
@@ -132,7 +132,7 @@ class PasetoService(val app: Altitude) {
       val accountTypeStr = claims.get("accountType", classOf[String])
       val lastActiveRepoId = Option(claims.get("lastActiveRepoId", classOf[String]))
 
-      if (email.isEmpty || name.isEmpty || accountTypeStr.isEmpty) {
+      if email.isEmpty || name.isEmpty || accountTypeStr.isEmpty then {
         logger.debug("Token missing required user claims")
         return None
       }

@@ -38,7 +38,7 @@ class LibraryService(val app: Altitude) {
   protected val txManager: TransactionManager = app.txManager
 
   def checkMediaType(asset: Asset): Unit = {
-    if (!LibraryService.SUPPORTED_MEDIA_TYPES.contains(asset.assetType.mediaType)) {
+    if !LibraryService.SUPPORTED_MEDIA_TYPES.contains(asset.assetType.mediaType) then {
       throw UnsupportedMediaTypeException(asset)
     }
   }
@@ -81,7 +81,7 @@ class LibraryService(val app: Altitude) {
     txManager.asReadOnly {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
 
-      val _query: Query = if (folderId.isDefined) {
+      val _query: Query = if folderId.isDefined then {
         val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId.get)
         val allFolderIds = (folderId.get :: allFolders.map(_.persistedId)).toSet
 
@@ -96,8 +96,8 @@ class LibraryService(val app: Altitude) {
 
   def search(query: SearchQuery): SearchResult = {
     txManager.asReadOnly {
-      val _query: SearchQuery = if (query.folderIds.nonEmpty) {
-        if (query.folderIds.size > 1) {
+      val _query: SearchQuery = if query.folderIds.nonEmpty then {
+        if query.folderIds.size > 1 then {
           throw IllegalOperationException("Currently cannot search in multiple folders at once")
         }
 
@@ -105,7 +105,7 @@ class LibraryService(val app: Altitude) {
 
         // If the root folder is selected, treat it as "no folder filter" so that
         // triaged assets (which have an empty folderId) are included — matching the default view.
-        if (app.service.folder.isRootFolder(folderId)) {
+        if app.service.folder.isRootFolder(folderId) then {
           query.withFolderIds(Set.empty)
         } else {
           val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
@@ -122,7 +122,7 @@ class LibraryService(val app: Altitude) {
 
   /** Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. */
   def deleteFolderById(id: String): Unit = {
-    if (app.service.folder.isRootFolder(id)) {
+    if app.service.folder.isRootFolder(id) then {
       throw IllegalOperationException("Cannot delete the root folder")
     }
 
@@ -154,28 +154,28 @@ class LibraryService(val app: Altitude) {
         val asset: Asset = app.service.asset.getById(assetId)
         val existing = app.service.asset.getByChecksum(asset.checksum)
 
-        if (existing.isDefined) {
+        if existing.isDefined then {
           throw DuplicateException()
         }
 
         txManager.withTransaction {
-          if (asset.isRecycled) {
+          if asset.isRecycled then {
             app.service.asset.setRecycledProp(asset, isRecycled = false)
 
             // Assets recycled directly from triage have no folder assigned — skip folder restoration
-            if (!asset.isTriaged) {
+            if !asset.isTriaged then {
               // Restore the full ancestor chain (top-down) so the folder tree is consistent.
               // getAncestors returns from root -> direct parent, so we can iterate in order.
               val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
               ancestors.foreach { ancestor =>
-                if (ancestor.isRecycled) {
+                if ancestor.isRecycled then {
                   app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
                 }
               }
 
               // Restore the immediate folder of the asset
               val folder: Folder = app.service.folder.getById(asset.folderId)
-              if (folder.isRecycled) {
+              if folder.isRecycled then {
                 app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
               }
             }
@@ -193,12 +193,12 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       val assetsToMove = app.service.asset.getAssetsToMove(assetIds, destFolderId)
 
-      if (destFolderId == null) {
+      if destFolderId == null then {
         throw IllegalOperationException("Destination folder ID cannot be null")
       }
 
       logger.info(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
-      if (assetsToMove.nonEmpty) {
+      if assetsToMove.nonEmpty then {
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
 
         app.service.asset.updateByQuery(
@@ -215,7 +215,7 @@ class LibraryService(val app: Altitude) {
             case (
                   (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum),
                   asset) =>
-              if (asset.isTriaged) {
+              if asset.isTriaged then {
                 (
                   triagedAssetsSum + 1,
                   triagedBytesSum + asset.sizeBytes,
@@ -223,7 +223,7 @@ class LibraryService(val app: Altitude) {
                   recycledAssetsBytesSum,
                   sortedAssetsSum + 1,
                   sortedBytesSum + asset.sizeBytes)
-              } else if (asset.isRecycled) {
+              } else if asset.isRecycled then {
                 (
                   triagedAssetsSum,
                   triagedBytesSum,
@@ -247,7 +247,7 @@ class LibraryService(val app: Altitude) {
 
         // Restoring face counts is only valid when assets are coming out of recycle.
         // Triage/folder moves should not mutate person.numOfFaces.
-        if (assetsToMove.nonEmpty && assetsToMove.forall(_.isRecycled)) {
+        if assetsToMove.nonEmpty && assetsToMove.forall(_.isRecycled) then {
           app.service.person.restoreFacesForAssets(assetIds)
         }
       }
@@ -258,7 +258,7 @@ class LibraryService(val app: Altitude) {
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
 
-      if (assetsToRecycle.nonEmpty) {
+      if assetsToRecycle.nonEmpty then {
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
 
         app.service.asset.updateByQuery(
@@ -269,7 +269,7 @@ class LibraryService(val app: Altitude) {
         // update the stats in one pass
         val (triagedAssets, triagedBytes, sortedAssets, sortedBytes) = assetsToRecycle.foldLeft((0, 0L, 0, 0L)) {
           case ((triagedAssetsSum, triagedBytesSum, sortedAssetsSum, sortedBytesSum), asset) =>
-            if (asset.isTriaged) {
+            if asset.isTriaged then {
               (triagedAssetsSum + 1, triagedBytesSum + asset.sizeBytes, sortedAssetsSum, sortedBytesSum)
             } else {
               (triagedAssetsSum, triagedBytesSum, sortedAssetsSum + 1, sortedBytesSum + asset.sizeBytes)
@@ -323,7 +323,7 @@ class LibraryService(val app: Altitude) {
 
       val assets = app.service.asset.queryAll(assetQuery).records.map(r => r: Asset)
 
-      if (assets.nonEmpty) {
+      if assets.nonEmpty then {
         val purgeQuery = new Query().add(FieldConst.ID -> Query.IN(assets.map(_.persistedId).toSet[Any]))
         app.service.asset.updateByQuery(purgeQuery, Map(FieldConst.Asset.IS_PURGED -> true))
 
@@ -356,7 +356,7 @@ class LibraryService(val app: Altitude) {
         logger.info(s"Pruning dangling assets. Repo: ${repository.name}")
         val danglingAssets = app.service.asset.getDanglingAssets
 
-        if (danglingAssets.nonEmpty) {
+        if danglingAssets.nonEmpty then {
           logger.warn(s"Found ${danglingAssets.size} dangling assets")
           danglingAssets.foreach(asset => logger.warn(s"Will prune: ${asset.persistedId} - ${asset.fileName}"))
         }

@@ -22,16 +22,16 @@ class SearchQuery(
     val searchSort: List[SearchSort] = List())
   extends Query(params = metadataFilters, rpp = rpp, page = page) {
 
-  if (sort.nonEmpty) {
+  if sort.nonEmpty then {
     throw new IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
   }
 
-  if (searchSort.size > 1) {
+  if searchSort.size > 1 then {
     throw new IllegalArgumentException("Only one sort currently supported")
   }
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
-  val isText: Boolean = text.nonEmpty
+  val isText: Boolean = text.isDefined
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =

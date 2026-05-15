@@ -71,7 +71,7 @@ abstract class BaseDao[Model <: BaseModel] {
   def add(modelIn: Model): Model = throw new NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): ujson.Obj = {
-    val jsonStr: String = if (column == null) "{}" else column.toString
+    val jsonStr: String = if column == null then "{}" else column.toString
     ujson.read(jsonStr).asInstanceOf[ujson.Obj]
   }
 
@@ -83,11 +83,11 @@ abstract class BaseDao[Model <: BaseModel] {
   def executeAndGetOne(sql: String, values: List[Any] = List()): Map[String, AnyRef] = {
     val res = executeAndGetMany(sql, values)
 
-    if (res.isEmpty) {
+    if res.isEmpty then {
       throw NotFoundException(s"Cannot find record with SQL: $sql and values: $values")
     }
 
-    if (res.length > 1) {
+    if res.length > 1 then {
       throw ConstraintException("getById should return only a single result")
     }
 
@@ -162,7 +162,7 @@ abstract class BaseDao[Model <: BaseModel] {
   }
 
   def getByIds(ids: Set[String]): List[Model] = {
-    if (ids.isEmpty) {
+    if ids.isEmpty then {
       return List()
     }
     BaseDao.incrReadQueryCount()
@@ -203,7 +203,7 @@ abstract class BaseDao[Model <: BaseModel] {
   }
 
   def loadCsv[T: ClassTag](csv: String): List[T] = {
-    if (csv == null || csv.isEmpty) {
+    if csv == null || csv.isEmpty then {
       return List()
     }
     csv.split(",").map(_.asInstanceOf[T]).toList

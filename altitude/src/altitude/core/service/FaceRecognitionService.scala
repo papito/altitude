@@ -52,7 +52,7 @@ class FaceRecognitionService(val app: Altitude) {
     val matchedOrNewPerson: Person = txManager.withFaceVector {
       val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features)
 
-      if (faceMatches.nonEmpty) {
+      if faceMatches.nonEmpty then {
         // Majority vote: group by person ID, pick the most frequent
         val personVotes = faceMatches.groupBy(_.personId.get)
         val (bestPersonId, votes) = personVotes.maxBy(_._2.size)

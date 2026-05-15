@@ -120,7 +120,7 @@ object FaceDetectionService {
   def writeDebugOpenCvMat(mat: Mat, fileName: String): Unit = {
     val outputDir = System.getenv().get("OUTPUT")
 
-    if (outputDir == null) {
+    if outputDir == null then {
       println("OUTPUT environment variable not set for debug image writing")
       return
     }
@@ -198,7 +198,7 @@ class FaceDetectionService(app: Altitude) {
   private val faceDebugEnabled: Boolean = app.config.getBoolean(Const.Conf.FACE_DEBUG_ENABLED)
 
   private val debugDir: String = FilenameUtils.concat(Environment.ROOT_PATH, "debug")
-  if (faceDebugEnabled) {
+  if faceDebugEnabled then {
     FileUtils.forceMkdir(new File(debugDir))
     FileUtils.cleanDirectory(new File(debugDir))
     logger.info(s"Cleared debug directory: $debugDir")
@@ -231,12 +231,12 @@ class FaceDetectionService(app: Altitude) {
   }
 
   def detectFacesWithYunet(image: Mat): List[Mat] = {
-    if (image.empty) {
+    if image.empty then {
       logger.warn("No data in image")
       return List()
     }
 
-    if (Math.min(image.size().width, image.size().height).toInt < minFaceSize) {
+    if Math.min(image.size().width, image.size().height).toInt < minFaceSize then {
       logger.warn(s"Image dimensions too small to contain a detectable face (${image.width()}x${image.height()} px)")
       return List()
     }
@@ -248,7 +248,7 @@ class FaceDetectionService(app: Altitude) {
       case _ => 1.0
     }
 
-    val srcMat: Mat = if (scaleFactor < 1.0) {
+    val srcMat: Mat = if scaleFactor < 1.0 then {
       val resized = new Mat()
       Imgproc.resize(image, resized, new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR)
       resized
@@ -267,7 +267,7 @@ class FaceDetectionService(app: Altitude) {
 
       // Rescale bbox + landmark columns (0–13) back to original image coordinates.
       // Column 14 is the confidence score and must NOT be divided by scaleFactor.
-      if (scaleFactor < 1.0) {
+      if scaleFactor < 1.0 then {
         for (col <- 0 until (detection.cols() - 1)) {
           val originalValue = detection.get(0, col)(0)
           detection.put(0, col, originalValue / scaleFactor)
@@ -276,7 +276,7 @@ class FaceDetectionService(app: Altitude) {
 
       val detectionRect = FaceDetectionService.faceDetectToRect(detection, image.cols(), image.rows())
 
-      if (detectionRect.height < minFaceSize || detectionRect.width < minFaceSize) {
+      if detectionRect.height < minFaceSize || detectionRect.width < minFaceSize then {
         logger.warn(s"Face region too small (${detectionRect.width}x${detectionRect.height} px)")
         None
       } else {
@@ -349,7 +349,7 @@ class FaceDetectionService(app: Altitude) {
       FaceEntry(face, faceImages, res, faceImage, alignedFaceImage)
     }
 
-    if (faceDebugEnabled && fileName.isDefined) {
+    if faceDebugEnabled && fileName.isDefined then {
       val baseName = FilenameUtils.getBaseName(fileName.get)
       val debugData = entries.map(e => (e.face, e.detectionRow, e.rawCrop, e.alignedColor))
       FaceDetectionService.dumpDebugArtifacts(imageMat, debugData, baseName, debugDir)
@@ -418,7 +418,7 @@ class FaceDetectionService(app: Altitude) {
 
     // L2-normalize the embedding
     val norm = Math.sqrt(embedding.map(x => x.toDouble * x.toDouble).sum).toFloat
-    if (norm > 0) {
+    if norm > 0 then {
       for (i <- embedding.indices) {
         embedding(i) = embedding(i) / norm
       }

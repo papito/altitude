@@ -25,7 +25,7 @@ object Util {
   }
 
   def localDateTimeToString(dt: Option[LocalDateTime]): String = {
-    if (dt.isDefined) {
+    if dt.isDefined then {
       val formatter = DateTimeFormatter.ISO_DATE_TIME
       dt.get.format(formatter)
     } else {
@@ -34,7 +34,7 @@ object Util {
   }
 
   def stringToLocalDateTime(str: String): Option[LocalDateTime] = {
-    if (str.isEmpty) {
+    if str.isEmpty then {
       None
     } else {
       val formatter = DateTimeFormatter.ISO_DATE_TIME
@@ -45,17 +45,17 @@ object Util {
   private val outputFormatter = DateTimeFormatter.ofPattern("MMM d yyyy, h:mma", Locale.ENGLISH)
 
   def humanReadableDateTime(dateTime: Option[LocalDateTime]): String = {
-    if (dateTime.isEmpty) {
+    if dateTime.isEmpty then {
       return "N/A"
     }
     dateTime.get.format(outputFormatter)
   }
 
   def humanReadableByteCount(bytes: Long): String = {
-    if (bytes <= 0) return "0 B"
+    if bytes <= 0 then return "0 B"
 
     val unit = 1024
-    if (bytes < unit) {
+    if bytes < unit then {
       s"$bytes B"
     } else {
       val exp = (Math.log(bytes.toDouble) / Math.log(unit)).toInt
@@ -75,7 +75,7 @@ object Util {
   }
 
   def newDuplicateExceptionOrRethrow(e: SQLException, message: Option[String] = None): Exception = {
-    if (e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505") {
+    if e.getErrorCode == /* SQLITE */ 19 || e.getSQLState == /* POSTGRES */ "23505" then {
       DuplicateException(message = message)
     } else {
       e

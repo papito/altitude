@@ -53,7 +53,7 @@ class StatsService(val app: Altitude) {
     logger.debug(s"Adding asset [${asset.id}]")
 
     txManager.withTransaction {
-      if (asset.isTriaged) {
+      if asset.isTriaged then {
         logger.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
         app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
         app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
@@ -69,13 +69,13 @@ class StatsService(val app: Altitude) {
   def moveAsset(asset: Asset): Unit = {
     logger.debug(s"Moving asset [${asset.id}]")
 
-    if (asset.isRecycled) {
+    if asset.isRecycled then {
       logger.debug(s"Asset [${asset.id}] is recycled")
       moveRecycledAsset(asset)
       return
     }
 
-    if (asset.isTriaged) {
+    if asset.isTriaged then {
       logger.debug(s"Asset [${asset.id}] is triaged")
       moveTriagedAsset(asset)
       return
@@ -101,7 +101,7 @@ class StatsService(val app: Altitude) {
     app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
     app.service.stats.decrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
 
-    if (asset.isTriaged) {
+    if asset.isTriaged then {
       logger.debug(s"Recycled asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
       app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
       app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
@@ -115,7 +115,7 @@ class StatsService(val app: Altitude) {
   def recycleAsset(asset: Asset): Unit = {
     logger.debug(s"Recycling asset [${asset.id}]. Incrementing RECYCLED")
 
-    if (asset.isTriaged) {
+    if asset.isTriaged then {
       logger.debug(s"Asset [${asset.id}] recycled and moving FROM triage. Decrementing TRIAGE")
       app.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
       app.service.stats.decrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)

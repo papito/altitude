@@ -33,7 +33,6 @@ class SystemService(val app: Altitude) {
 
           0 // new installation
         }
-        case ex: Exception => throw ex
       }
     }
   }

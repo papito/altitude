@@ -135,7 +135,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
       val srcFile = new File(path)
 
       try {
-        if (srcFile.isFile) {
+        if srcFile.isFile then {
           srcFile.delete()
         }
       } catch {
@@ -157,7 +157,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
       val srcFile = new File(path)
 
       try {
-        if (srcFile.isFile) {
+        if srcFile.isFile then {
           srcFile.delete()
         }
       } catch {
@@ -168,7 +168,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService {
   }
 
   private def getBinaryData(srcFile: File): Option[Array[Byte]] = {
-    if (!srcFile.isFile) {
+    if !srcFile.isFile then {
       throw NotFoundException(s"Cannot find file $srcFile")
     }
 

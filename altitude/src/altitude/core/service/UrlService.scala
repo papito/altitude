@@ -14,10 +14,10 @@ class UrlService {
   }
 
   private def gerFragment(browserUrl: String): String = {
-    if (browserUrl == null) return ""
+    if browserUrl == null then return ""
 
     val urlFragment = browserUrl.split("#").lastOption.getOrElse("")
-    if (urlFragment.isEmpty) "" else s"#$urlFragment"
+    if urlFragment.isEmpty then "" else s"#$urlFragment"
   }
 
   def getUrlParams(queryString: String): Map[String, String] = {
@@ -28,7 +28,7 @@ class UrlService {
             .map {
               param =>
                 val parts = param.split("=", 2)
-                parts(0) -> (if (parts.length > 1) parts(1) else "")
+                parts(0) -> (if parts.length > 1 then parts(1) else "")
             }
             .toMap
             .filter(_._1.nonEmpty)
@@ -37,6 +37,6 @@ class UrlService {
   }
 
   private def constructQueryString(params: Map[String, String]): String = {
-    if (params.isEmpty) "" else params.map { case (key, value) => s"$key=$value" }.mkString("&")
+    if params.isEmpty then "" else params.map { case (key, value) => s"$key=$value" }.mkString("&")
   }
 }

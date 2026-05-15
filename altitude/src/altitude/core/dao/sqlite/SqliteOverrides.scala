@@ -11,11 +11,11 @@ trait SqliteOverrides { this: BaseDao[?] =>
   override protected def jsonFunc = "?"
 
   override protected def nativeBool(value: Boolean): Any = {
-    if (value) "1" else "0"
+    if value then "1" else "0"
   }
 
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] = {
-    if (value.isEmpty || value.get == null) {
+    if value.isEmpty || value.get == null then {
       return None
     }
 
@@ -29,7 +29,7 @@ trait SqliteOverrides { this: BaseDao[?] =>
     date.toInstant.atZone(ZoneId.systemDefault).toLocalDateTime
   }
 
-  def count(recs: List[Map[String, AnyRef]]): Int = if (recs.nonEmpty) recs.head("total").asInstanceOf[Int] else 0
+  def count(recs: List[Map[String, AnyRef]]): Int = if recs.nonEmpty then recs.head("total").asInstanceOf[Int] else 0
 
   // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
   override protected def getBooleanField(value: AnyRef): Boolean = value match {

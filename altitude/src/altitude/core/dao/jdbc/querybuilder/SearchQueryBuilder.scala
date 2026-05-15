@@ -33,18 +33,17 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   /** If we are joining a table - this will also include its name(s) */
   private def allTableNames(searchQuery: SearchQuery): List[String] = {
     val _tablesNames = List(SearchQueryBuilder.ASSET_TABLE_NAME) ++
-      (if (searchQuery.hasMetadataFilters) Set(metadataParamTable) else Set()) ++
-      (if (searchQuery.isText) Set(searchDocumentTable) else Set())
+      (if searchQuery.hasMetadataFilters then Set(metadataParamTable) else Set()) ++
+      (if searchQuery.isText then Set(searchDocumentTable) else Set())
 
     _tablesNames
   }
 
   override def buildSelectSql(query: SearchQuery): SqlQuery = {
-    if (query.isSorted) {
+    if query.isSorted then
       buildSelectSqlAsSubquery(query)
-    } else {
+    else
       super.buildSelectSql(query)
-    }
   }
 
   private def buildSelectSqlAsSubquery(query: SearchQuery): SqlQuery = {
@@ -93,7 +92,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
   /** Generates a SQL "IN" clause for folder IDs */
   private def folderFilter(searchQuery: SearchQuery): ClauseComponents = {
-    if (searchQuery.folderIds.isEmpty) return ClauseComponents()
+    if searchQuery.folderIds.isEmpty then return ClauseComponents()
 
     // get ? placeholders equal to the number of folder ids
     val folderIdPlaceholders: String = List.fill(searchQuery.folderIds.size)("?").mkString(", ")
@@ -106,7 +105,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
   /** Generates a SQL "IN" clause for people IDs */
   private def personFilter(searchQuery: SearchQuery): ClauseComponents = {
-    if (searchQuery.personIds.isEmpty) return ClauseComponents()
+    if searchQuery.personIds.isEmpty then return ClauseComponents()
 
     // get ? placeholders equal to the number of person ids
     val peopleIdPlaceholders: String = List.fill(searchQuery.personIds.size)("?").mkString(", ")
@@ -157,7 +156,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
         })
     }
 
-    if (filters.isEmpty) {
+    if filters.isEmpty then {
       ClauseComponents()
     } else {
       ClauseComponents(elements = List("(" + filters.mkString(" OR ") + ")"), bindVals = bindVals)
@@ -165,33 +164,31 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   }
 
   protected def searchDocumentJoin(searchQuery: SearchQuery): ClauseComponents = {
-    if (searchQuery.isText) {
+    if searchQuery.isText then
       ClauseComponents(elements = List(s"$searchDocumentTable.asset_id = asset.id"))
-    } else {
+    else
       ClauseComponents()
-    }
   }
 
   protected def searchParameterJoin(searchQuery: SearchQuery): ClauseComponents = {
-    if (searchQuery.hasMetadataFilters) {
+    if searchQuery.hasMetadataFilters then
       ClauseComponents(elements = List(s"$metadataParamTable.asset_id = asset.id"))
-    } else {
+    else
       ClauseComponents()
-    }
   }
 
   override protected def groupBy(searchQuery: SearchQuery): ClauseComponents = {
-    if (!searchQuery.hasMetadataFilters) return ClauseComponents()
+    if !searchQuery.hasMetadataFilters then return ClauseComponents()
     ClauseComponents(elements = List(s"asset.${FieldConst.ID}"))
   }
 
   override protected def having(searchQuery: SearchQuery): ClauseComponents = {
-    if (!searchQuery.hasMetadataFilters) return ClauseComponents()
+    if !searchQuery.hasMetadataFilters then return ClauseComponents()
     ClauseComponents(elements = List(s"count(asset.${FieldConst.ID}) >= ${searchQuery.metadataFilters.size}"))
   }
 
   override protected def orderBy(query: SearchQuery): ClauseComponents = {
-    if (!query.isSorted) return ClauseComponents()
+    if !query.isSorted then return ClauseComponents()
 
     val sort = query.searchSort.head
     val sql = s" ORDER BY $tableName.${sort.field} ${sort.direction}"
@@ -200,7 +197,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
   }
 
   override protected def orderByStr(clauseComponents: ClauseComponents): String = {
-    if (clauseComponents.isEmpty) return ""
+    if clauseComponents.isEmpty then return ""
     clauseComponents.elements.mkString("")
   }
 

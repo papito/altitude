@@ -40,7 +40,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
       val passwordValid = Util.checkPassword(password, hashToCheck)
 
       // Only return user if both password is valid AND user exists
-      if (passwordValid && passwordHashOpt.isDefined) {
+      if passwordValid && passwordHashOpt.isDefined then {
         val user: User = getByEmail(email)
 
         // Create PASETO token with embedded user data
@@ -134,7 +134,7 @@ class UserService(val app: Altitude) extends BaseService[User] {
     val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
     val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
 
-    if (devEmail.nonEmpty && devPassword.nonEmpty) {
+    if devEmail.nonEmpty && devPassword.nonEmpty then {
       val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
       devUserRes.map(_._1)
     } else None

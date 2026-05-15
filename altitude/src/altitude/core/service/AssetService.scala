@@ -19,7 +19,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
   override protected val dao: AssetDao = app.DAO.asset
 
   def setRecycledProp(asset: Asset, isRecycled: Boolean): Unit = {
-    if (asset.isRecycled == isRecycled) {
+    if asset.isRecycled == isRecycled then {
       return
     }
 
@@ -34,7 +34,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     txManager.asReadOnly {
       val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum))
       val existing = query(q)
-      if (existing.nonEmpty) Some(existing.records.head) else None
+      if existing.nonEmpty then Some(existing.records.head) else None
     }
   }
 
@@ -42,7 +42,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset] {
     txManager.withTransaction {
       val asset: Asset = getById(assetId)
 
-      if (asset.isRecycled) {
+      if asset.isRecycled then {
         throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
       }
 

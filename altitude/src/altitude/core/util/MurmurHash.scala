@@ -30,7 +30,7 @@ object MurmurHash {
     }
 
     k1 = 0
-    if (buffer.remaining > 0) {
+    if buffer.remaining > 0 then {
       for (i <- buffer.remaining - 1 to 0 by -1) {
         k1 ^= (buffer.get & 0xff) << (i * 8)
       }

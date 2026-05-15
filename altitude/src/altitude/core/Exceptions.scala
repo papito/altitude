@@ -11,7 +11,7 @@ case class ValidationException(message: String = "") extends Exception {
   val errors: mutable.Map[String, String] = mutable.Map()
 
   def trigger(): Unit = {
-    if (nonEmpty) {
+    if nonEmpty then {
       throw this
     }
   }

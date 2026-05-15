@@ -31,7 +31,7 @@ class TransactionManager(val config: Config) {
         val conn = DriverManager.getConnection(url, props)
         logger.debug(s"Opening connection $conn. Read-only: $readOnly")
 
-        if (readOnly) {
+        if readOnly then {
           conn.setReadOnly(true)
         } else {
           conn.setReadOnly(false)
@@ -48,7 +48,7 @@ class TransactionManager(val config: Config) {
         val sqliteConfig: SQLiteConfig = new SQLiteConfig()
         sqliteConfig.enableLoadExtension(true)
 
-        val conn = if (readOnly) {
+        val conn = if readOnly then {
           // sqliteConfig.setReadOnly(true)
           val readConn = DriverManager.getConnection(url, sqliteConfig.toProperties)
 
@@ -79,7 +79,7 @@ class TransactionManager(val config: Config) {
   }
 
   def withTransaction[A](f: => A): A = {
-    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
+    if RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed then {
       return f
     }
 
@@ -113,14 +113,14 @@ class TransactionManager(val config: Config) {
         val arch = sys.props.getOrElse("os.arch", "").toLowerCase
 
         val (platformDir, extName) =
-          if (os.contains("mac") || os.contains("darwin")) {
-            val dir = if (arch.contains("aarch64") || arch.contains("arm")) "macos-arm64" else "macos-x86"
+          if os.contains("mac") || os.contains("darwin") then {
+            val dir = if arch.contains("aarch64") || arch.contains("arm") then "macos-arm64" else "macos-x86"
             (dir, "vector.dylib")
-          } else if (os.contains("win")) {
+          } else if os.contains("win") then {
             ("windows-x86", "vector.dll")
           } else {
             // Linux / other Unix
-            val dir = if (arch.contains("aarch64") || arch.contains("arm")) "linux-arm64" else "linux-x86"
+            val dir = if arch.contains("aarch64") || arch.contains("arm") then "linux-arm64" else "linux-x86"
             (dir, "vector.so")
           }
 
@@ -146,7 +146,7 @@ class TransactionManager(val config: Config) {
   }
 
   def asReadOnly[A](f: => A): A = {
-    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
+    if RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed then {
       return f
     }
 
@@ -168,7 +168,7 @@ class TransactionManager(val config: Config) {
   }
 
   def close(): Unit = {
-    if (RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed) {
+    if RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed then {
       logger.warn("Connection already closed")
       return
     }

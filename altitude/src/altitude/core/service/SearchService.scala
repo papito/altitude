@@ -42,14 +42,14 @@ class SearchService(val app: Altitude) {
 
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit = {
     // some fields are not eligible for parameterized search
-    if (SearchService.NON_FACETED_FIELD_TYPES.contains(field.fieldType)) return
+    if SearchService.NON_FACETED_FIELD_TYPES.contains(field.fieldType) then return
 
     searchDao.addMetadataValue(asset, field, value)
   }
 
   def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit = {
     // some fields are not eligible for parameterized search
-    if (SearchService.NON_FACETED_FIELD_TYPES.contains(field.fieldType)) return
+    if SearchService.NON_FACETED_FIELD_TYPES.contains(field.fieldType) then return
 
     searchDao.addMetadataValues(asset, field, values)
   }
