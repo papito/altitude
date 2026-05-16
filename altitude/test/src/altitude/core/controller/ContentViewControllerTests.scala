@@ -1,11 +1,12 @@
 package altitude.core.controller
 
-import altitude.core.models.{Asset, Face, MimedPreviewData}
-import altitude.core.{App, Const}
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.{endWith, startWith}
-import org.scalatest.matchers.should.Matchers.{should, shouldBe}
+import org.scalatest.matchers.must.Matchers.{ endWith, startWith }
+import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+
+import altitude.core.{ App, Const }
+import altitude.core.models.{ Asset, Face, MimedPreviewData }
 
 @DoNotDiscover class ContentViewControllerTests extends ControllerTestCore {
 
@@ -18,12 +19,13 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     login()
 
-    withServer(App) { host =>
-      val response = requests.get(
-        s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
-        cookies = testContext.cookies)
-      response.statusCode shouldBe 200
-      response.contentType.head shouldBe s"${MimedPreviewData.MIME_TYPE}"
+    withServer(App) {
+      host =>
+        val response = requests.get(
+          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
+          cookies = testContext.cookies)
+        response.statusCode shouldBe 200
+        response.contentType.head shouldBe s"${MimedPreviewData.MIME_TYPE}"
     }
   }
 
@@ -36,12 +38,13 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     login()
 
-    withServer(App) { host =>
-      val response = requests.get(
-        s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FILE}/${importedAsset.persistedId}",
-        cookies = testContext.cookies)
-      response.statusCode shouldBe 200
-      response.contentType.head should startWith("application/octet-stream")
+    withServer(App) {
+      host =>
+        val response = requests.get(
+          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FILE}/${importedAsset.persistedId}",
+          cookies = testContext.cookies)
+        response.statusCode shouldBe 200
+        response.contentType.head should startWith("application/octet-stream")
     }
   }
 
@@ -57,12 +60,13 @@ import org.scalatest.matchers.should.Matchers.{should, shouldBe}
 
     login()
 
-    withServer(App) { host =>
-      val response = requests.get(
-        s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}",
-        cookies = testContext.cookies)
-      response.statusCode shouldBe 200
-      response.contentType.head should startWith("image/png")
+    withServer(App) {
+      host =>
+        val response = requests.get(
+          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}",
+          cookies = testContext.cookies)
+        response.statusCode shouldBe 200
+        response.contentType.head should startWith("image/png")
     }
   }
 }

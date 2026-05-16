@@ -1,13 +1,12 @@
 package altitude.core.util
 
-import ujson.*
-import upickle.default.*
-
 import java.time.LocalDateTime
+import ujson._
+import upickle.default._
 
 /**
- * Project-wide upickle bundle with automatic camelCase → snake_case key mapping.
- * Import `JsonCodec.{given, *}` to bring all codecs and extensions into scope.
+ * Project-wide upickle bundle with automatic camelCase → snake_case key mapping. Import `JsonCodec.{given, *}` to bring all
+ * codecs and extensions into scope.
  */
 object JsonCodec extends upickle.AttributeTagged:
 
@@ -64,7 +63,3 @@ object JsonCodec extends upickle.AttributeTagged:
       val result = ujson.Obj()
       obj.value.filterNot(kv => keySet.contains(kv._1)).foreach { case (k, v) => result(k) = v }
       result
-
-
-
-

@@ -1,5 +1,10 @@
 package altitude.core.service
 
+import java.sql.Connection
+import java.sql.SQLException
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import altitude.core.Altitude
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
@@ -9,12 +14,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
-import java.sql.Connection
-import java.sql.SQLException
-
 
 abstract class BaseService[Model <: BaseModel]:
   protected val app: Altitude
@@ -32,8 +31,7 @@ abstract class BaseService[Model <: BaseModel]:
 
   def add(objIn: Model): Model =
     txManager.withTransaction {
-      try
-        dao.add(objIn)
+      try dao.add(objIn)
       catch
         case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
         case ex: Exception =>
@@ -42,8 +40,7 @@ abstract class BaseService[Model <: BaseModel]:
 
   def updateById(id: String, data: Map[String, Any]): Int =
     txManager.withTransaction {
-      try
-        dao.updateById(id, data)
+      try dao.updateById(id, data)
       catch
         case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
         case ex: Exception =>
@@ -51,8 +48,7 @@ abstract class BaseService[Model <: BaseModel]:
     }
 
   def updateByQuery(query: Query, data: Map[String, Any]): Int =
-    if query.params.isEmpty then
-      throw new RuntimeException("Cannot update [ALL] document with an empty Query")
+    if query.params.isEmpty then throw new RuntimeException("Cannot update [ALL] document with an empty Query")
 
     // should not update ALL repositories by default
     val repoScopedQuery = query.withRepository()
@@ -86,8 +82,7 @@ abstract class BaseService[Model <: BaseModel]:
     }
 
   def deleteByQuery(query: Query): Int =
-    if query.params.isEmpty then
-      throw new RuntimeException("Cannot delete [ALL] document with an empty Query")
+    if query.params.isEmpty then throw new RuntimeException("Cannot delete [ALL] document with an empty Query")
 
     // should not delete from ALL repositories by default
     val repoScopedQuery = query.withRepository()

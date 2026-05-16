@@ -1,9 +1,10 @@
 package altitude.core.suites
 
+import altitude.test.TestAltitudeApp
 import org.scalatest.BeforeAndAfterAll
+
 import altitude.core.Altitude
 import altitude.core.Const as C
-import altitude.test.TestAltitudeApp
 
 object PostgresSuiteBundle {
   val testApp: Altitude = new Altitude(dbEngineOverride = Some(C.DbEngineName.POSTGRES))
@@ -15,8 +16,7 @@ object PostgresSuiteBundle {
     try {
       stmt.executeUpdate("DROP SCHEMA IF EXISTS \"public\" CASCADE; CREATE SCHEMA \"public\";")
       conn.commit()
-    }
-    finally {
+    } finally {
       stmt.close()
       conn.close()
     }
@@ -27,7 +27,8 @@ object PostgresSuiteBundle {
 
 class PostgresSuiteBundle
   extends AllIntegrationTestSuites(testApp = PostgresSuiteBundle.testApp)
-    with TestAltitudeApp with BeforeAndAfterAll {
+  with TestAltitudeApp
+  with BeforeAndAfterAll {
 
   override def beforeAll(): Unit = {
     println("\n@@@@@@@@@@@@@@@@@@@@@@@@@@")

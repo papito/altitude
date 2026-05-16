@@ -1,14 +1,15 @@
 package altitude.core.integration
 
 import altitude.core
-import altitude.core.Altitude
-import altitude.core.models.AccountType
-import altitude.core.models.User
-import altitude.core.util.Util
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.should
 import org.scalatest.matchers.should.Matchers.shouldEqual
+
+import altitude.core.Altitude
+import altitude.core.models.AccountType
+import altitude.core.models.User
+import altitude.core.util.Util
 
 @DoNotDiscover class UserServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

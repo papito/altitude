@@ -2,6 +2,7 @@ package altitude.core.unit
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
+
 import altitude.core.util.SearchQuery
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {

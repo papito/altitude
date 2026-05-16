@@ -1,5 +1,13 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.be
+import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+
+import scala.util.Random
+
 import altitude.core.Altitude
 import altitude.core.Const.FaceRecognition
 import altitude.core.models.Asset
@@ -8,13 +16,6 @@ import altitude.core.models.Person
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
 import altitude.core.util.Util
-import altitude.test.IntegrationTestUtil
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.be
-import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
-
-import scala.util.Random
 
 @DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -134,12 +135,14 @@ import scala.util.Random
 
     val mergedBPersisted: Person = testApp.service.person.getById(mergedB.persistedId)
 
-    val mergedSearchTotal = testApp.service.library.search(
-      new SearchQuery(
-        params = Map(altitude.core.FieldConst.Asset.IS_RECYCLED -> false),
-        personIds = Set(mergedB.persistedId)
+    val mergedSearchTotal = testApp.service.library
+      .search(
+        new SearchQuery(
+          params = Map(altitude.core.FieldConst.Asset.IS_RECYCLED -> false),
+          personIds = Set(mergedB.persistedId)
+        )
       )
-    ).total
+      .total
 
     // merged person should have the correct face number
     mergedBPersisted.numOfFaces should be(NEW_FACES_TOTAL)
@@ -261,10 +264,9 @@ import scala.util.Random
     val mergedPerson: Person = testApp.service.person.merge(dest = people.head, source = people.last)
 
     /**
-     * After the merge, there should be still oen asset and one person with one asset.
-     * This is technically not a real scenario - except for twins, one person cannot be in the image twice,
-     * but the use case is real. As same person gets merged into themselves across assets,
-     * the face count should not drift and reflect the actual search results
+     * After the merge, there should be still oen asset and one person with one asset. This is technically not a real scenario -
+     * except for twins, one person cannot be in the image twice, but the use case is real. As same person gets merged into
+     * themselves across assets, the face count should not drift and reflect the actual search results
      */
     val mergedIntoPerson = testApp.service.person.getById(mergedPerson.persistedId)
     // yes, two faces in DB, but only one asset will be returned when you query for the person

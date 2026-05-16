@@ -1,12 +1,13 @@
 package altitude.tools
 
-import altitude.core.Const
-import altitude.core.Environment
 import com.typesafe.config.ConfigFactory
 import java.io.File
 import java.sql.DriverManager
 import java.util.Properties
 import org.apache.commons.io.FileUtils
+
+import altitude.core.Const
+import altitude.core.Environment
 
 @main def clearDb(): Unit =
   if Environment.CURRENT != Environment.Name.DEV then
@@ -23,20 +24,19 @@ import org.apache.commons.io.FileUtils
 
   dbEngine match
     case Const.DbEngineName.SQLITE =>
-      val dataDir        = config.getString(Const.Conf.FS_DATA_DIR)
-      val relDbPath      = config.getString(Const.Conf.REL_SQLITE_DB_PATH)
-      val dbDir          = new File(dataDir, new File(relDbPath).getParent)
+      val dataDir = config.getString(Const.Conf.FS_DATA_DIR)
+      val relDbPath = config.getString(Const.Conf.REL_SQLITE_DB_PATH)
+      val dbDir = new File(dataDir, new File(relDbPath).getParent)
 
       if dbDir.exists() && dbDir.isDirectory then
         println(s"Clearing SQLite database files in: ${dbDir.getCanonicalPath}")
         FileUtils.cleanDirectory(dbDir)
         println("Done.")
-      else
-        println(s"SQLite database directory not found: ${dbDir.getPath}. Nothing to clear.")
+      else println(s"SQLite database directory not found: ${dbDir.getPath}. Nothing to clear.")
 
     case Const.DbEngineName.POSTGRES =>
-      val url      = config.getString(Const.Conf.POSTGRES_URL)
-      val user     = config.getString(Const.Conf.POSTGRES_USER)
+      val url = config.getString(Const.Conf.POSTGRES_URL)
+      val user = config.getString(Const.Conf.POSTGRES_USER)
       val password = config.getString(Const.Conf.POSTGRES_PASSWORD)
 
       println(s"Clearing Postgres database at: $url")
@@ -54,12 +54,9 @@ import org.apache.commons.io.FileUtils
           stmt.executeUpdate("""CREATE SCHEMA "public"""")
           conn.commit()
           println("Done.")
-        finally
-          stmt.close()
-      finally
-        conn.close()
+        finally stmt.close()
+      finally conn.close()
 
     case other =>
       System.err.println(s"ERROR: Unknown db.engine value: '$other'. Aborting.")
       sys.exit(1)
-

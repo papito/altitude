@@ -1,9 +1,8 @@
 package altitude.core.models
 
-import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
 import altitude.core.ValidationException
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 
 object Folder:
   given JsonCodec.ReadWriter[Folder] = JsonCodec.macroRW

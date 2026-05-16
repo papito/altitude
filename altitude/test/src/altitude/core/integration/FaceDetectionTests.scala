@@ -1,10 +1,11 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.should
+
+import altitude.core.Altitude
 
 @DoNotDiscover class FaceDetectionTests(override val testApp: Altitude) extends IntegrationTestCore {
 

@@ -1,32 +1,32 @@
 package altitude.core.service
 
-import altitude.core.Altitude
-import altitude.core.Const
-import altitude.core.Environment
-import altitude.core.RequestContext
-import altitude.core.transactions.TransactionManager
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.io.Source
 
-abstract class MigrationService(val app: Altitude) {
+import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.Environment
+import altitude.core.RequestContext
+import altitude.core.transactions.TransactionManager
+
+abstract class MigrationService(val app: Altitude):
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   protected val txManager: TransactionManager = app.txManager
   protected val CURRENT_VERSION: Int
 
-  private def migrateVersion(version: Int): Unit = {
+  private def migrateVersion(version: Int): Unit =
     version match {
       case 1 => v1()
     }
-  }
 
   private def v1(): Unit = {}
 
   protected val MIGRATIONS_DIR: String
 
-  private def executeCommand(command: String): Unit = {
+  private def executeCommand(command: String): Unit =
     val stmt = RequestContext.getConn.createStatement()
 
     /**
@@ -41,9 +41,8 @@ abstract class MigrationService(val app: Altitude) {
     }
 
     stmt.close()
-  }
 
-  private def runMigration(version: Int): Unit = {
+  private def runMigration(version: Int): Unit =
     val sqlCommands = parseMigrationCommands(version)
 
     txManager.withTransaction {
@@ -55,27 +54,24 @@ abstract class MigrationService(val app: Altitude) {
       migrateVersion(version)
       app.service.system.versionUp()
     }
-  }
 
-  def migrationRequired: Boolean = {
+  def migrationRequired: Boolean =
     logger.info("Checking if migration is required")
     val version = app.service.system.version
     logger.info(s"Current database version is @ $version")
     val isRequired = version < CURRENT_VERSION
     logger.info(s"Migration required? : $isRequired")
     isRequired
-  }
 
-  def migrate(): Unit = {
+  def migrate(): Unit =
     val oldVersion = app.service.system.version
     logger.warn("!!!! MIGRATING !!!!")
     logger.info(s"From version $oldVersion to $CURRENT_VERSION")
     for (version <- oldVersion + 1 to CURRENT_VERSION) {
       runMigration(version)
     }
-  }
 
-  private def parseMigrationCommands(version: Int): String = {
+  private def parseMigrationCommands(version: Int): String =
     logger.info(s"RUNNING MIGRATION TO VERSION ^^$version^^")
 
     val entireSchemaPath = s"$MIGRATIONS_DIR/all.sql"
@@ -88,8 +84,7 @@ abstract class MigrationService(val app: Altitude) {
       case Environment.Name.TEST | Environment.Name.DEV => entireSchemaPath
       case Environment.Name.PROD =>
         if version == 1 then entireSchemaPath
-        else
-          s"$MIGRATIONS_DIR/$version.sql"
+        else s"$MIGRATIONS_DIR/$version.sql"
     }
 
     logger.info(s"Migration path: $path")
@@ -100,5 +95,3 @@ abstract class MigrationService(val app: Altitude) {
     source.close()
 
     commands
-  }
-}

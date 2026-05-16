@@ -1,11 +1,12 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.shouldBe
+
 import altitude.core.*
 import altitude.core.models.*
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
 
 @DoNotDiscover class LibraryServicePruneTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Prune should remove all assets in undefined state") {

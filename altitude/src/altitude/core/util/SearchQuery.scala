@@ -2,14 +2,13 @@ package altitude.core.util
 
 import altitude.core.Api
 
-case class SearchSort(field: String, direction: SortDirection) {
+case class SearchSort(field: String, direction: SortDirection):
   def toJson: ujson.Obj = ujson.Obj(
     Api.Field.SearchSort.DIRECTION -> direction.toString,
     Api.Field.SearchSort.FIELD -> field
   )
 
   override def toString: String = s"SearchSort(field=$field, direction=${direction.id})"
-}
 
 class SearchQuery(
     val text: Option[String] = None,
@@ -20,15 +19,11 @@ class SearchQuery(
     rpp: Int = 0,
     page: Int = 1,
     val searchSort: List[SearchSort] = List())
-  extends Query(params = metadataFilters, rpp = rpp, page = page) {
+  extends Query(params = metadataFilters, rpp = rpp, page = page):
 
-  if sort.nonEmpty then {
-    throw new IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
-  }
+  if sort.nonEmpty then throw new IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
 
-  if searchSort.size > 1 then {
-    throw new IllegalArgumentException("Only one sort currently supported")
-  }
+  if searchSort.size > 1 then throw new IllegalArgumentException("Only one sort currently supported")
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
   val isText: Boolean = text.isDefined
@@ -71,4 +66,3 @@ class SearchQuery(
       page = page,
       searchSort = searchSort
     )
-}

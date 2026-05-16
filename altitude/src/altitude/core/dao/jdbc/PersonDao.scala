@@ -1,16 +1,15 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.Const as C
+import com.typesafe.config.Config
+
+import scala.language.implicitConversions
+
+import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
-import com.typesafe.config.Config
-
-import scala.language.implicitConversions
 
 abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 

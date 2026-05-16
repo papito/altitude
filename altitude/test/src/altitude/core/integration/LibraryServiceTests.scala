@@ -1,12 +1,13 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.shouldBe
+
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.models.*
 import altitude.core.util.Query
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
 
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

@@ -1,13 +1,15 @@
 package altitude.core.dao.jdbc
-import altitude.core.FieldConst
-import altitude.core.RequestContext
-import altitude.core.models.*
-import altitude.core.util.SearchQuery
-import altitude.core.util.SearchResult
+
 import com.typesafe.config.Config
 import java.sql.PreparedStatement
 import java.sql.Types
 import org.apache.commons.dbutils.QueryRunner
+
+import altitude.core.FieldConst
+import altitude.core.RequestContext
+import altitude.core.models._
+import altitude.core.util.SearchQuery
+import altitude.core.util.SearchResult
 
 object SearchDao:
   private val VALUE_INSERT_SQL: String = s"""
@@ -71,7 +73,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     addMetadataValues(asset = asset, field = field, values = Set(value))
 
   override def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
-    logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString()}")
+    logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString}")
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)
     values.foreach {
       valueStr =>
@@ -92,4 +94,3 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         preparedStatement.execute()
     }
     replaceSearchDocument(asset)
-

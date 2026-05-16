@@ -1,8 +1,7 @@
 package altitude.core.models
 
 import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
+import altitude.core.util.JsonCodec.given
 
 object AssetType:
   given JsonCodec.ReadWriter[AssetType] = JsonCodec.macroRW
@@ -12,13 +11,12 @@ case class AssetType(mediaType: String, mediaSubtype: String, mime: String) exte
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
-  override def equals(other: Any): Boolean = other match {
+  override def equals(other: Any): Boolean = other match
     case that: AssetType =>
       that.mime == this.mime &&
       that.mediaType == this.mediaType &&
       that.mediaSubtype == this.mediaSubtype
     case _ => false
-  }
 
   override def toString: String = List(mediaType, mediaSubtype, mime).mkString(":")
 

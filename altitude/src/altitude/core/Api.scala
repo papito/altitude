@@ -1,8 +1,8 @@
 package altitude.core
 
-object Api {
+object Api:
 
-  object Constraints {
+  object Constraints:
     val MAX_EMAIL_LENGTH = 80
     val MIN_EMAIL_LENGTH = 3
 
@@ -17,16 +17,14 @@ object Api {
 
     val MAX_FOLDER_NAME_LENGTH = 250
     val MIN_FOLDER_NAME_LENGTH = 1
-  }
 
-  object Modal {
+  object Modal:
     val MIN_WIDTH = "minWidth"
     val TITLE = "title"
     val FIELD_ERRORS = "fieldErrors"
     val FORM_JSON = "formJson"
-  }
 
-  object Field {
+  object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
     val ASSET_IDS = "assetIds"
@@ -57,20 +55,18 @@ object Api {
     val PATH_POS = "pos"
     val CHILD_DIR = "dir"
 
-    object ALBUM {
+    object ALBUM:
       val ALBUMS = "albums"
-    }
 
-    object Asset {
+    object Asset:
       val ASSET = "asset"
       val FOLDER_ID = "folderId"
       val ASSETS = "assets"
       val METADATA = "metadata"
       val METADATA_FIELD_ID = "metadataFieldId"
       val METADATA_VALUE_ID = "metadataValueId"
-    }
 
-    object Folder {
+    object Folder:
       val FOLDER = "folder"
       val FOLDERS = "folders"
       val HIERARCHY = "hierarchy"
@@ -82,19 +78,16 @@ object Api {
       val MOVED_FOLDER_ID = "movedFolderId"
       val NEW_PARENT_ID = "newParentId"
       val ROOT_FOLDER = "rootFolder"
-    }
 
-    object Metadata {
+    object Metadata:
       val FIELDS = "fields"
       val VALUE = "value"
 
-      object Field {
+      object Field:
         val NAME = "name"
         val TYPE = "type"
-      }
-    }
 
-    object Person {
+    object Person:
       val PERSON = "person"
       val FACES = "faces"
       val PEOPLE = "people"
@@ -107,13 +100,11 @@ object Api {
       // do not delete - used in templates but not references in Scala code
       val SRC_PERSON_ID = "srcPersonId"
       val DEST_PERSON_ID = "destPersonId"
-    }
 
-    object People {
+    object People:
       val TYPE_FILTER = "typeFilter"
-    }
 
-    object Search {
+    object Search:
       val PERSON = "person"
       val QUERY_TEXT = "q"
       val RESULTS_PER_PAGE = "rpp"
@@ -125,29 +116,22 @@ object Api {
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
       val IS_NEW_SEARCH = "newSearch"
-    }
 
-    object SearchSort {
+    object SearchSort:
       val DIRECTION = "direction"
       val FIELD = "field"
 
       val BY_ASSET_CREATED_AT = "created_at"
-    }
 
-    object Setup {
+    object Setup:
       val ADMIN_EMAIL = "adminEmail"
       val ADMIN_NAME = "adminName"
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
       val PASSWORD2 = "password2"
-    }
 
-    object Sort {
+    object Sort:
       val DIRECTION = "direction"
-    }
 
-    object Upload {
+    object Upload:
       val UPLOAD_ID = "uploadId"
-    }
-  }
-}

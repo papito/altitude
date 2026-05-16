@@ -1,15 +1,5 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.DuplicateException
-import altitude.core.UnsupportedMediaTypeException
-import altitude.core.models.Asset
-import altitude.core.models.AssetType
-import altitude.core.models.AssetWithData
-import altitude.core.pipeline.PipelineTypes.PipelineContext
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
-import altitude.core.pipeline.sinks.AssetSeqOutputSink
-import altitude.core.pipeline.sinks.VoidAssetSink
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
@@ -20,6 +10,17 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
+
+import altitude.core.Altitude
+import altitude.core.DuplicateException
+import altitude.core.UnsupportedMediaTypeException
+import altitude.core.models.Asset
+import altitude.core.models.AssetType
+import altitude.core.models.AssetWithData
+import altitude.core.pipeline.PipelineTypes.PipelineContext
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.sinks.AssetSeqOutputSink
+import altitude.core.pipeline.sinks.VoidAssetSink
 
 @DoNotDiscover class ImportPipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

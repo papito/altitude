@@ -1,9 +1,8 @@
 package altitude.core.models
 
-import altitude.core.util.MurmurHash
 import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
+import altitude.core.util.JsonCodec.given
+import altitude.core.util.MurmurHash
 
 object UserMetadataValue:
   given JsonCodec.ReadWriter[UserMetadataValue] = JsonCodec.macroRW

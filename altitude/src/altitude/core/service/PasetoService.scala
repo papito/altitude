@@ -1,8 +1,5 @@
 package altitude.core.service
 
-import altitude.core.Altitude
-import altitude.core.Const
-import altitude.core.models.User
 import dev.paseto.jpaseto.Paseto
 import dev.paseto.jpaseto.PasetoParser
 import dev.paseto.jpaseto.Pasetos
@@ -14,13 +11,16 @@ import javax.crypto.SecretKey
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-class PasetoService(val app: Altitude) {
+import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.models.User
+
+class PasetoService(val app: Altitude):
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
   // Initialize BouncyCastle provider for PASETO
-  // This is a pure Java implementation that doesn't require native libraries
-  private def initializeBouncyCastle(): Unit = {
-    try {
+  private def initializeBouncyCastle(): Unit =
+    try
       val bcProvider = Class
         .forName("org.bouncycastle.jce.provider.BouncyCastleProvider")
         .getDeclaredConstructor()
@@ -28,27 +28,23 @@ class PasetoService(val app: Altitude) {
         .asInstanceOf[java.security.Provider]
       java.security.Security.addProvider(bcProvider)
       logger.info("BouncyCastle provider initialized for PASETO")
-    } catch {
+    catch
       case e: Exception =>
         logger.warn(s"Failed to initialize BouncyCastle provider: ${e.getMessage}")
-    }
-  }
 
   initializeBouncyCastle()
 
   // Generate a secret key for PASETO local tokens (symmetric encryption)
-  // In production, this should be loaded from configuration or environment variables
-  private val secretKey: SecretKey = {
+  private val secretKey: SecretKey =
     val random = new SecureRandom()
     val keyBytes = new Array[Byte](32) // 256 bits for PASETO v2 local
     random.nextBytes(keyBytes)
     Keys.secretKey(keyBytes)
-  }
 
   private val tokenExpirationDays: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS
 
   /** Creates a PASETO token for the given user. The token contains the user ID and expiration time. */
-  def createToken(user: User): String = {
+  def createToken(user: User): String =
     val now = Instant.now()
     val expiration = now.plus(Duration.ofDays(tokenExpirationDays))
 
@@ -66,11 +62,10 @@ class PasetoService(val app: Altitude) {
     user.lastActiveRepoId.foreach(repoId => builder.claim("lastActiveRepoId", repoId))
 
     builder.compact()
-  }
 
   /** Validates a PASETO token and returns the user ID if valid. Returns None if the token is invalid or expired. */
-  def validateToken(token: String): Option[String] = {
-    try {
+  def validateToken(token: String): Option[String] =
+    try
       val parser: PasetoParser = Pasetos
         .parserBuilder()
         .setSharedSecret(secretKey)
@@ -80,32 +75,28 @@ class PasetoService(val app: Altitude) {
       val claims = parsedToken.getClaims
 
       val expiration = claims.getExpiration
-      if expiration != null && expiration.isBefore(Instant.now()) then {
+      if expiration != null && expiration.isBefore(Instant.now()) then
         logger.debug("Token has expired")
         return None
-      }
 
       val userId = claims.getSubject
-      if userId == null || userId.isEmpty then {
+      if userId == null || userId.isEmpty then
         logger.debug("Token has no subject (user ID)")
         return None
-      }
 
       Some(userId)
-    } catch {
+    catch
       case e: Exception =>
         logger.debug(s"Token validation failed: ${e.getMessage}")
         None
-    }
-  }
 
   /**
    * Validates a PASETO token and returns the User object if valid. Returns None if the token is invalid or expired.
    *
    * The User object is reconstructed from the token claims - no database query.
    */
-  def validateTokenAndGetUser(token: String): Option[User] = {
-    try {
+  def validateTokenAndGetUser(token: String): Option[User] =
+    try
       val parser: PasetoParser = Pasetos
         .parserBuilder()
         .setSharedSecret(secretKey)
@@ -115,16 +106,14 @@ class PasetoService(val app: Altitude) {
       val claims = parsedToken.getClaims
 
       val expiration = claims.getExpiration
-      if expiration != null && expiration.isBefore(Instant.now()) then {
+      if expiration != null && expiration.isBefore(Instant.now()) then
         logger.debug("Token has expired")
         return None
-      }
 
       val userId = claims.getSubject
-      if userId == null || userId.isEmpty then {
+      if userId == null || userId.isEmpty then
         logger.debug("Token has no subject (user ID)")
         return None
-      }
 
       // Extract user data from token claims
       val email = claims.get("email", classOf[String])
@@ -132,10 +121,9 @@ class PasetoService(val app: Altitude) {
       val accountTypeStr = claims.get("accountType", classOf[String])
       val lastActiveRepoId = Option(claims.get("lastActiveRepoId", classOf[String]))
 
-      if email.isEmpty || name.isEmpty || accountTypeStr.isEmpty then {
+      if email.isEmpty || name.isEmpty || accountTypeStr.isEmpty then
         logger.debug("Token missing required user claims")
         return None
-      }
 
       // Reconstruct User from token claims
       import altitude.core.models.{ AccountType, User }
@@ -148,10 +136,7 @@ class PasetoService(val app: Altitude) {
       )
 
       Some(user)
-    } catch {
+    catch
       case e: Exception =>
         logger.debug(s"Token validation failed: ${e.getMessage}")
         None
-    }
-  }
-}

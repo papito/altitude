@@ -18,32 +18,26 @@ import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
-object ImageUtil {
+object ImageUtil:
 
   // Get OPENCV image Mat from a byte array
-  def matFromBytes(data: Array[Byte]): Mat = {
+  def matFromBytes(data: Array[Byte]): Mat =
     Imgcodecs.imdecode(new MatOfByte(data*), Imgcodecs.IMREAD_ANYCOLOR)
-  }
 
-
-  def determineImageScale(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): Double = {
+  def determineImageScale(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): Double =
     val scaleX = targetWidth.toDouble / sourceWidth
     val scaleY = targetHeight.toDouble / sourceHeight
     Math.min(scaleX, scaleY)
-  }
 
-  def makeImageThumbnail(data: Array[Byte], previewBoxSize: Int): Array[Byte] = {
-    try {
+  def makeImageThumbnail(data: Array[Byte], previewBoxSize: Int): Array[Byte] =
+    try
       val mt: com.drew.metadata.Metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(data))
       val exifDirectory = mt.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
       // val jpegDirectory = mt.getFirstDirectoryOfType(classOf[JpegDirectory])
 
       val orientation: Int =
-        try {
-          exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
-        } catch {
-          case _: Exception => 1
-        }
+        try exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
+        catch case _: Exception => 1
 
       /**
        * Rotate the image if necessary
@@ -65,7 +59,7 @@ object ImageUtil {
       val height = scaledImage.getHeight
 
       val transform: AffineTransform = new AffineTransform()
-      orientation match {
+      orientation match
         case 1 =>
         case 2 =>
           transform.scale(-1.0, 1.0);
@@ -91,7 +85,6 @@ object ImageUtil {
           transform.translate(0, width);
           transform.rotate(3 * Math.PI / 2);
         case _ =>
-      }
 
       val op = new AffineTransformOp(transform, AffineTransformOp.TYPE_BICUBIC)
 
@@ -106,12 +99,14 @@ object ImageUtil {
         new BufferedImage(previewBoxSize, previewBoxSize, BufferedImage.TYPE_INT_ARGB)
       val G2D: Graphics2D = compositeImage.createGraphics
 
-      val x: Int = if rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth then {
-        (previewBoxSize - rotationCorrectScaledImage.getWidth) / 2
-      } else 0
-      val y: Int = if rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth then {
-        (previewBoxSize - rotationCorrectScaledImage.getHeight()) / 2
-      } else 0
+      val x: Int =
+        if rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth then
+          (previewBoxSize - rotationCorrectScaledImage.getWidth) / 2
+        else 0
+      val y: Int =
+        if rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth then
+          (previewBoxSize - rotationCorrectScaledImage.getHeight()) / 2
+        else 0
 
       G2D.setComposite(AlphaComposite.Clear)
       G2D.fillRect(0, 0, previewBoxSize, previewBoxSize)
@@ -123,10 +118,7 @@ object ImageUtil {
 
       byteArray.toByteArray
 
-    } catch {
+    catch
       case ex: Exception =>
         Util.logStacktrace(ex)
         throw ex
-    }
-  }
-}

@@ -1,6 +1,7 @@
 import org.scalatest.Tag
 
 trait TestFocus {
+
   /**
    * Scalatest tag to run a specific test[s]
    *

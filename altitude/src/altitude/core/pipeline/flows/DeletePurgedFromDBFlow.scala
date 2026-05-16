@@ -1,15 +1,16 @@
 package altitude.core.pipeline.flows
 
-import altitude.core.Altitude
-import altitude.core.pipeline.PipelineTypes.TAssetWithContext
-import altitude.core.pipeline.PipelineUtils.debugInfo
-import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
 import scala.concurrent.Future
 
-object DeletePurgedFromDBFlow {
+import altitude.core.Altitude
+import altitude.core.pipeline.PipelineTypes.TAssetWithContext
+import altitude.core.pipeline.PipelineUtils.debugInfo
+import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+
+object DeletePurgedFromDBFlow:
   def apply(app: Altitude): Flow[TAssetWithContext, TAssetWithContext, NotUsed] =
     Flow[TAssetWithContext].mapAsync(app.parallelism) {
       case (asset, ctx) =>
@@ -22,5 +23,3 @@ object DeletePurgedFromDBFlow {
 
         Future.successful(asset, ctx)
     }
-
-}

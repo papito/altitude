@@ -1,6 +1,14 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.Const as C
+import com.typesafe.config.Config
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import org.apache.commons.dbutils.QueryRunner
+
+import scala.language.implicitConversions
+
+import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
@@ -9,17 +17,8 @@ import altitude.core.models.AssetType
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import com.typesafe.config.Config
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-import org.apache.commons.dbutils.QueryRunner
-
-import scala.language.implicitConversions
 
 abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude.core.dao.AssetDao:
   final override val tableName = "asset"

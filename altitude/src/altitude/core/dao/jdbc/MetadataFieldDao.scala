@@ -1,12 +1,15 @@
 package altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
+
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.FieldType
 import altitude.core.models.UserMetadataField
-import com.typesafe.config.Config
 
-abstract class MetadataFieldDao(override val config: Config) extends BaseDao[UserMetadataField] with altitude.core.dao.UserMetadataFieldDao:
+abstract class MetadataFieldDao(override val config: Config)
+  extends BaseDao[UserMetadataField]
+  with altitude.core.dao.UserMetadataFieldDao:
 
   final override val tableName = "metadata_field"
 

@@ -14,7 +14,7 @@ case class Stats(stats: List[Stat]):
   private val lookup: Map[String, Stat] = stats.foldLeft(Map[String, Stat]())((res, stat) => res + (stat.dimension -> stat))
 
   def getStatValue(key: String): Int =
-    if !lookup.contains(key) then throw new RuntimeException(s"No stats for '$key'")
+    if !lookup.contains(key) then throw RuntimeException(s"No stats for '$key'")
 
     lookup(key).dimVal
 

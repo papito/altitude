@@ -1,10 +1,11 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.shouldBe
+
 import altitude.core.*
 import altitude.core.models.*
 import altitude.core.util.Query
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
 
 @DoNotDiscover class LibraryServiceRecycleTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Recycle multiple assets") {

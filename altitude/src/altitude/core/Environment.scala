@@ -8,15 +8,13 @@ import java.nio.file.StandardCopyOption
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-object Environment {
+object Environment:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-
-  object Name {
+  object Name:
     val TEST = "test"
     val PROD = "prod"
     val DEV = "dev"
-  }
 
   var CURRENT: String = System.getenv().getOrDefault("ENV", Name.PROD) match {
     case "test" | "TEST" => Name.TEST
@@ -37,12 +35,11 @@ object Environment {
    * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths (e.g. OpenCV
    * model files). Only used when running from a JAR (prod) where classpath resources are not directly on the filesystem.
    */
-  private lazy val tempResourceDir: Path = {
+  private lazy val tempResourceDir: Path =
     val dir = Files.createTempDirectory("altitude-resources")
     logger.info(s"Created temp resource directory: $dir")
     dir.toFile.deleteOnExit()
     dir
-  }
 
   /**
    * Resolve a classpath resource to a filesystem path. If the resource lives directly on the filesystem (dev/test), we return its
@@ -53,11 +50,9 @@ object Environment {
    * @return
    *   an absolute filesystem path to the resource file
    */
-  def resolveResourcePath(classpathPath: String): String = {
+  def resolveResourcePath(classpathPath: String): String =
     val resourceUrl = getClass.getResource(classpathPath)
-    if resourceUrl == null then {
-      throw new RuntimeException(s"Classpath resource not found: $classpathPath")
-    }
+    if resourceUrl == null then throw RuntimeException(s"Classpath resource not found: $classpathPath")
 
     resourceUrl.getProtocol match {
       case "file" =>
@@ -68,12 +63,10 @@ object Environment {
         // Resource is inside a JAR — extract to a temp directory
         val destFile = tempResourceDir.resolve(classpathPath.stripPrefix("/")).toFile
 
-        if !destFile.exists() then {
+        if !destFile.exists() then
           destFile.getParentFile.mkdirs()
           val stream: InputStream = getClass.getResourceAsStream(classpathPath)
-          if stream == null then {
-            throw new RuntimeException(s"Classpath resource not found: $classpathPath")
-          }
+          if stream == null then throw RuntimeException(s"Classpath resource not found: $classpathPath")
           try {
             Files.copy(stream, destFile.toPath, StandardCopyOption.REPLACE_EXISTING)
             destFile.deleteOnExit()
@@ -81,12 +74,9 @@ object Environment {
           } finally {
             stream.close()
           }
-        }
 
         destFile.getAbsolutePath
 
       case protocol =>
-        throw new RuntimeException(s"Unsupported resource URL protocol: $protocol for $classpathPath")
+        throw RuntimeException(s"Unsupported resource URL protocol: $protocol for $classpathPath")
     }
-  }
-}

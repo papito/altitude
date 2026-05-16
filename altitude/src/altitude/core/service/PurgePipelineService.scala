@@ -1,9 +1,5 @@
 package altitude.core.service
 
-import altitude.core.Altitude
-import altitude.core.AltitudeActorSystem
-import altitude.core.pipeline.PipelineTypes.TAssetWithContext
-import altitude.core.pipeline.flows.*
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.stream.OverflowStrategy
@@ -22,7 +18,12 @@ import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
 
-class PurgePipelineService(app: Altitude) {
+import altitude.core.Altitude
+import altitude.core.AltitudeActorSystem
+import altitude.core.pipeline.PipelineTypes.TAssetWithContext
+import altitude.core.pipeline.flows._
+
+class PurgePipelineService(app: Altitude):
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   implicit val system: ActorSystem[AltitudeActorSystem.Command] = app.actorSystem
@@ -39,18 +40,17 @@ class PurgePipelineService(app: Altitude) {
       .via(deleteAssetFilesFlow)
       .via(deletePurgedFromDBFlow)
       .mergeSubstreams
+
   private val queuePurgePipeline = runAsQueue()
 
   def run(
       source: Source[TAssetWithContext, NotUsed],
-      outputSink: Sink[TAssetWithContext, Future[Seq[TAssetWithContext]]]): Future[Seq[TAssetWithContext]] = {
-
+      outputSink: Sink[TAssetWithContext, Future[Seq[TAssetWithContext]]]): Future[Seq[TAssetWithContext]] =
     source
       .via(combinedFlow)
       .runWith(outputSink)
-  }
 
-  private def runAsQueue() = {
+  private def runAsQueue() =
     logger.info("Starting the purge queue pipeline")
 
     val (queue, source) = Source
@@ -75,9 +75,8 @@ class PurgePipelineService(app: Altitude) {
     }(ExecutionContext.global)
 
     queue
-  }
 
-  def addToQueue(asset: TAssetWithContext): Future[Unit] = {
+  def addToQueue(asset: TAssetWithContext): Future[Unit] =
     queuePurgePipeline
       .offer(asset)
       .map {
@@ -90,10 +89,7 @@ class PurgePipelineService(app: Altitude) {
         case QueueOfferResult.QueueClosed =>
           logger.warn(s"Purge queue closed, asset dropped: ${asset._1.fileName}")
       }(ExecutionContext.global)
-  }
 
-  def shutdown(): Unit = {
+  def shutdown(): Unit =
     queuePurgePipeline.complete()
     Await.result(queuePurgePipeline.watchCompletion(), Duration.Inf)
-  }
-}

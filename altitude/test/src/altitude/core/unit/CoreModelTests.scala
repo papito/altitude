@@ -1,18 +1,18 @@
 package altitude.core.unit
 
+import altitude.test.TestFocus
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.include
-import altitude.core.models.Stat
-import altitude.core.models.Folder
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
-import altitude.test.TestFocus
-import org.scalatest.matchers.should.Matchers.{convertToStringShouldWrapperForVerb, should}
+import org.scalatest.matchers.should.Matchers.{ convertToStringShouldWrapperForVerb, should }
 
 import scala.language.implicitConversions
 
+import altitude.core.models.Folder
+import altitude.core.models.Stat
+import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.given
 
 @DoNotDiscover class CoreModelTests extends funsuite.AnyFunSuite with TestFocus {
 

@@ -225,7 +225,7 @@ var Split = function (idsOption, options) {
         var style = elementStyle(dimension, size, gutSize, i);
 
         Object.keys(style).forEach(function (prop) {
-            // eslint-disable-next-line no-param-reassign
+             
             el.style[prop] = style[prop];
         });
     }
@@ -234,7 +234,7 @@ var Split = function (idsOption, options) {
         var style = gutterStyle(dimension, gutSize, i);
 
         Object.keys(style).forEach(function (prop) {
-            // eslint-disable-next-line no-param-reassign
+             
             gutterElement.style[prop] = style[prop];
         });
     }
@@ -704,7 +704,7 @@ var Split = function (idsOption, options) {
             if (expandToMin) {
                 adjustToMin(element);
             } else {
-                // eslint-disable-next-line no-param-reassign
+                 
                 element.minSize = computedSize;
             }
         }

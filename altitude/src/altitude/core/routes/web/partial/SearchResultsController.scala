@@ -1,5 +1,11 @@
 package altitude.core.routes.web.partial
 
+import cask.Request
+import cask.model.Response
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import org.slf4j.Logger
+
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
@@ -11,11 +17,6 @@ import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
-import cask.Request
-import cask.model.Response
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
-import org.slf4j.Logger
 
 class SearchResultsController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/search"
@@ -123,12 +124,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val jsonPayload = ujson.Obj(
         "ids" -> ids,
         "page" -> page,
-        "totalPages" -> results.totalPages,
+        "totalPages" -> results.totalPages
       )
-      return cask.Response(
-        ujson.write(jsonPayload),
-        200,
-        Seq(("Content-Type", "application/json")))
+      return cask.Response(ujson.write(jsonPayload), 200, Seq(("Content-Type", "application/json")))
 
     if isContinuousScroll then
       // no more pages

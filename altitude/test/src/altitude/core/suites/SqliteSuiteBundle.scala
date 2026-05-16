@@ -1,9 +1,10 @@
 package altitude.core.suites
 
+import altitude.test.{ IntegrationTestUtil, TestAltitudeApp }
 import org.scalatest.BeforeAndAfterAll
+
 import altitude.core.Altitude
 import altitude.core.Const as C
-import altitude.test.{IntegrationTestUtil, TestAltitudeApp}
 
 object SqliteSuiteBundle {
   val testApp: Altitude = new Altitude(dbEngineOverride = Some(C.DbEngineName.SQLITE))
@@ -28,8 +29,7 @@ object SqliteSuiteBundle {
 
     try {
       stmt.executeUpdate(sql)
-    }
-    finally {
+    } finally {
       stmt.close()
       conn.close()
     }
@@ -46,7 +46,8 @@ object SqliteSuiteBundle {
 
 class SqliteSuiteBundle
   extends AllIntegrationTestSuites(testApp = SqliteSuiteBundle.testApp)
-    with TestAltitudeApp with BeforeAndAfterAll {
+  with TestAltitudeApp
+  with BeforeAndAfterAll {
 
   override def beforeAll(): Unit = {
     println("\n@@@@@@@@@@@@@@@@@@@@@@@@")

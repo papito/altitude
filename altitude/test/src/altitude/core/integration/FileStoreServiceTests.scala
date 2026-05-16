@@ -1,10 +1,11 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.NotFoundException
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.should
+
+import altitude.core.Altitude
+import altitude.core.NotFoundException
 
 @DoNotDiscover class FileStoreServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

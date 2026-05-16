@@ -1,22 +1,5 @@
 package altitude.core.service
 
-import altitude.core.Altitude
-import altitude.core.AltitudeActorSystem
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
-import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
-import altitude.core.pipeline.flows.AddPreviewFlow
-import altitude.core.pipeline.flows.AssignIdFlow
-import altitude.core.pipeline.flows.CheckDuplicateFlow
-import altitude.core.pipeline.flows.CheckMediaTypeFlow
-import altitude.core.pipeline.flows.ExtractMetadataFlow
-import altitude.core.pipeline.flows.FacialRecognitionFlow
-import altitude.core.pipeline.flows.FileStoreFlow
-import altitude.core.pipeline.flows.IndexAndFaceRecFlow
-import altitude.core.pipeline.flows.IndexFlow
-import altitude.core.pipeline.flows.MarkAsCompleteFlow
-import altitude.core.pipeline.flows.StripBinaryDataFlow
-import altitude.core.pipeline.sinks.AssetErrorLoggingSink
-import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.stream.OverflowStrategy
@@ -35,7 +18,25 @@ import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
 
-class ImportPipelineService(app: Altitude) {
+import altitude.core.Altitude
+import altitude.core.AltitudeActorSystem
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
+import altitude.core.pipeline.flows.AddPreviewFlow
+import altitude.core.pipeline.flows.AssignIdFlow
+import altitude.core.pipeline.flows.CheckDuplicateFlow
+import altitude.core.pipeline.flows.CheckMediaTypeFlow
+import altitude.core.pipeline.flows.ExtractMetadataFlow
+import altitude.core.pipeline.flows.FacialRecognitionFlow
+import altitude.core.pipeline.flows.FileStoreFlow
+import altitude.core.pipeline.flows.IndexAndFaceRecFlow
+import altitude.core.pipeline.flows.IndexFlow
+import altitude.core.pipeline.flows.MarkAsCompleteFlow
+import altitude.core.pipeline.flows.StripBinaryDataFlow
+import altitude.core.pipeline.sinks.AssetErrorLoggingSink
+import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
+
+class ImportPipelineService(app: Altitude):
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   implicit val system: ActorSystem[AltitudeActorSystem.Command] = app.actorSystem
@@ -91,26 +92,23 @@ class ImportPipelineService(app: Altitude) {
     .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)
 
-  private val combinedFlow = app.dataSourceType match {
+  private val combinedFlow = app.dataSourceType match
     case "sqlite" => sqliteFlow
     case "postgres" => postgresFlow
     case other =>
       throw RuntimeException("Unsupported data source type for import pipeline: " + other)
-  }
 
   private val queueImportPipeline = runAsQueue()
 
   def run(
       source: Source[TDataAssetWithContext, NotUsed],
       outputSink: Sink[TAssetOrInvalidWithContext, Future[Seq[TAssetOrInvalidWithContext]]])
-      : Future[Seq[TAssetOrInvalidWithContext]] = {
-
+      : Future[Seq[TAssetOrInvalidWithContext]] =
     source
       .via(combinedFlow)
       .runWith(outputSink)
-  }
 
-  private def runAsQueue() = {
+  private def runAsQueue() =
     logger.info("Starting the import queue pipeline")
 
     val (queue, source) = Source
@@ -135,9 +133,8 @@ class ImportPipelineService(app: Altitude) {
     }(ExecutionContext.global)
 
     queue
-  }
 
-  def addToQueue(asset: TDataAssetWithContext): Future[Unit] = {
+  def addToQueue(asset: TDataAssetWithContext): Future[Unit] =
     queueImportPipeline
       .offer(asset)
       .map {
@@ -150,10 +147,7 @@ class ImportPipelineService(app: Altitude) {
         case QueueOfferResult.QueueClosed =>
           logger.warn(s"Import queue closed, asset dropped: ${asset._1.asset.fileName}")
       }(ExecutionContext.global)
-  }
 
-  def shutdown(): Unit = {
+  def shutdown(): Unit =
     queueImportPipeline.complete()
     Await.result(queueImportPipeline.watchCompletion(), Duration.Inf)
-  }
-}

@@ -14,7 +14,7 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 
-class RepositoryService(val app: Altitude) extends BaseService[Repository] {
+class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   protected val dao: RepositoryDao = app.DAO.repository
 
   override protected val txManager: TransactionManager = app.txManager
@@ -23,13 +23,12 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
    * The Repository model is a model that does not have repository_id. Other models are scoped by it as no operations are
    * cross-repo (normally).
    */
-  override def query(query: Query): QueryResult[Repository] = {
+  override def query(query: Query): QueryResult[Repository] =
     txManager.asReadOnly {
       dao.query(query)
     }
-  }
 
-  def addRepository(name: String, fileStoreType: String, owner: User): Repository = {
+  def addRepository(name: String, fileStoreType: String, owner: User): Repository =
     val id = BaseDao.genId
 
     val repoToSave = Repository(
@@ -68,39 +67,31 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository] {
 
       repo
     }
-  }
 
   /*
    * Right now there is just one repo - we will deal with multiple once later.
    */
-  def getDefaultRepository: Repository = {
+  def getDefaultRepository: Repository =
     txManager.asReadOnly {
       dao.getAll.head
     }
-  }
 
-  override def getById(id: String): Repository = {
+  override def getById(id: String): Repository =
     // try cache first
-    if app.repositoriesById.contains(id) then
-      return app.repositoriesById(id)
+    if app.repositoriesById.contains(id) then return app.repositoriesById(id)
 
     val repo: Repository = super.getById(id)
 
     app.repositoriesById += (id -> repo)
     repo
-  }
 
-  def switchContextToRepository(repo: Repository): Unit = {
+  def switchContextToRepository(repo: Repository): Unit =
     RequestContext.repository.value = Some(repo)
-  }
 
-  def setContextFromRequest(repoId: Option[String]): Unit = {
+  def setContextFromRequest(repoId: Option[String]): Unit =
     if repoId.isDefined then
-      try {
+      try
         val repo: Repository = getById(repoId.get)
         RequestContext.repository.value = Some(repo)
-      } catch {
-        case _: NotFoundException =>
-      }
-  }
-}
+      catch
+        case _: NotFoundException => {}

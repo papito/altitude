@@ -1,8 +1,10 @@
 package altitude.core.routes.web.partial
-import altitude.core.App
-import altitude.core.routes.BaseController
+
 import cask.model.Response
 import org.slf4j.Logger
+
+import altitude.core.App
+import altitude.core.routes.BaseController
 
 class NavController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"

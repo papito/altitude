@@ -1,11 +1,12 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.App
-import altitude.core.routes.BaseController
-import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
+
+import altitude.core.App
+import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.requireLogin
 
 class TrashActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/trash"

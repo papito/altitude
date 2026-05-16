@@ -1,10 +1,5 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.Api
-import altitude.core.FieldConst
-import altitude.core.models.*
-import altitude.core.util.*
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
@@ -12,6 +7,12 @@ import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldNot }
 
 import scala.language.reflectiveCalls
 import scala.math.Ordered.orderingToOrdered
+
+import altitude.core.Altitude
+import altitude.core.Api
+import altitude.core.FieldConst
+import altitude.core.models.*
+import altitude.core.util.*
 
 @DoNotDiscover class SearchServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

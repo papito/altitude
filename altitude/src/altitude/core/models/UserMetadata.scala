@@ -29,22 +29,26 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.util.JsonCodec
 
 object UserMetadata:
-  given JsonCodec.ReadWriter[UserMetadata] = JsonCodec.readwriter[ujson.Value].bimap(
-    (userMetadata: UserMetadata) => {
-      val result = ujson.Obj()
-      userMetadata.data.foreach { case (fieldId, values) =>
-        result(fieldId) = ujson.Arr(values.toSeq.map(v => JsonCodec.writeJs(v))*)
-      }
-      result
-    },
-    (json: ujson.Value) =>
-      UserMetadata(
-        json.obj.keys.foldLeft(Map[String, Set[UserMetadataValue]]()) { (res, fieldId) =>
-          val valuesJson = json(fieldId).arr
-          res + (fieldId -> valuesJson.map(v => JsonCodec.read[UserMetadataValue](v)).toSet)
+  given JsonCodec.ReadWriter[UserMetadata] = JsonCodec
+    .readwriter[ujson.Value]
+    .bimap(
+      (userMetadata: UserMetadata) => {
+        val result = ujson.Obj()
+        userMetadata.data.foreach {
+          case (fieldId, values) =>
+            result(fieldId) = ujson.Arr(values.toSeq.map(v => JsonCodec.writeJs(v))*)
         }
-      )
-  )
+        result
+      },
+      (json: ujson.Value) =>
+        UserMetadata(
+          json.obj.keys.foldLeft(Map[String, Set[UserMetadataValue]]()) {
+            (res, fieldId) =>
+              val valuesJson = json(fieldId).arr
+              res + (fieldId -> valuesJson.map(v => JsonCodec.read[UserMetadataValue](v)).toSet)
+          }
+        )
+    )
 
   given Conversion[ujson.Value, UserMetadata] = json => JsonCodec.read[UserMetadata](json)
 

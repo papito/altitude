@@ -1,5 +1,15 @@
 package altitude.core
 
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigValueFactory
+import java.io.File
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
+import org.apache.pekko.actor.typed.ActorSystem
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import altitude.core.dao.jdbc.PersonDao
 import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
@@ -24,17 +34,8 @@ import altitude.core.service.UserService
 import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.TransactionManager
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigValueFactory
-import java.io.File
-import org.apache.commons.io.FilenameUtils
-import org.apache.commons.io.FileUtils
-import org.apache.pekko.actor.typed.ActorSystem
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 
-class Altitude(val dbEngineOverride: Option[String] = None) {
+class Altitude(val dbEngineOverride: Option[String] = None):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   logger.info(s"Environment is: ${Environment.CURRENT}")
 
@@ -103,10 +104,9 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
 
   }
 
-  final def dataPath: String = {
+  final def dataPath: String =
     val dataDir: String = app.config.getString(Const.Conf.FS_DATA_DIR)
     FilenameUtils.concat(Environment.ROOT_PATH, dataDir)
-  }
 
   /** Heroically assemble SQLITE URL based on what we have */
   final private val sqliteRelDbPath = preConfig.getString(Const.Conf.REL_SQLITE_DB_PATH)
@@ -267,39 +267,29 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
   }
 
-  def setIsInitializedState(): Unit = {
+  def setIsInitializedState(): Unit =
     this.isInitialized = service.system.readMetadata.isInitialized
-    if !this.isInitialized then {
-      logger.warn("Instance NOT YET INITIALIZED!")
-    }
-  }
+    if !this.isInitialized then logger.warn("Instance NOT YET INITIALIZED!")
 
-  def runMigrations(): Unit = {
-    if Environment.CURRENT == Environment.Name.TEST then {
-      return
-    }
+  def runMigrations(): Unit =
+    if Environment.CURRENT == Environment.Name.TEST then return
 
-    if service.migrationService.migrationRequired then {
+    if service.migrationService.migrationRequired then
       logger.warn("Migration is required!")
       service.migrationService.migrate()
-    }
-  }
 
-  def cleanup(): Unit = {
+  def cleanup(): Unit =
     logger.info("Cleaning up resources")
     service.importPipeline.shutdown()
     logger.info("Pipeline system terminated")
 
     // This is already done by default and will cause a warning
     // actorSystem.terminate()
-  }
 
   // id -> repository
   var repositoriesById: Map[String, Repository] = Map[String, Repository]()
 
-  def clearState(): Unit = {
+  def clearState(): Unit =
     repositoriesById = Map.empty
-  }
 
   logger.info("Altitude Server instance initialized")
-}

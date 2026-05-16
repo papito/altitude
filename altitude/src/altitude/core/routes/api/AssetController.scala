@@ -1,12 +1,13 @@
 package altitude.core.routes.api
 
+import cask.Request
+import cask.Response
+import org.slf4j.Logger
+
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
-import cask.Request
-import cask.Response
-import org.slf4j.Logger
 
 class AssetController(using logger: Logger) extends BaseController:
   private val prefix = "api/asset"

@@ -1,5 +1,11 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.contain
+import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldEqual, shouldNot }
+
+import scala.language.reflectiveCalls
+
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
@@ -7,11 +13,6 @@ import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.models.Folder
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.contain
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldEqual, shouldNot }
-
-import scala.language.reflectiveCalls
 
 @DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

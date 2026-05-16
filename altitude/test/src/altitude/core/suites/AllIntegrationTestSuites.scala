@@ -1,8 +1,9 @@
 package altitude.core.suites
 
+import org.scalatest.Suites
+
 import altitude.core.Altitude
 import altitude.core.integration.*
-import org.scalatest.Suites
 
 abstract class AllIntegrationTestSuites(val testApp: Altitude)
   extends Suites(

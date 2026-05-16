@@ -1,8 +1,7 @@
 package altitude.core.models
 
 import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
+import altitude.core.util.JsonCodec.given
 
 object Stat:
   given JsonCodec.ReadWriter[Stat] = JsonCodec.macroRW

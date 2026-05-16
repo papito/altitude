@@ -20,10 +20,10 @@ trait AssetDao extends BaseDao[Asset]:
   def queryAll(q: Query): QueryResult[Asset]
 
   override def query(q: Query): QueryResult[Asset] =
-    throw new NotImplementedError("Can only directly query recycled and not recycled data sets")
+    throw NotImplementedError("Can only directly query recycled and not recycled data sets")
 
-  def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = throw new NotImplementedError("")
+  def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = throw NotImplementedError("")
 
-  def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = throw new NotImplementedError("")
+  def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = throw NotImplementedError("")
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit

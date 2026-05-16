@@ -1,8 +1,6 @@
 package altitude.core.integration
 
-import altitude.core.*
-import altitude.core.models.*
-import altitude.test.{IntegrationTestUtil, TestContext, TestFocus}
+import altitude.test.{ IntegrationTestUtil, TestContext, TestFocus }
 import org.apache.commons.dbutils.QueryRunner
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.apache.pekko.actor.typed.Scheduler
@@ -10,20 +8,23 @@ import org.apache.pekko.util.Timeout
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.*
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.{ Logger, LoggerFactory }
 
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.*
 import scala.language.implicitConversions
 
+import altitude.core.*
+import altitude.core.models.*
+
 abstract class IntegrationTestCore
   extends funsuite.AnyFunSuite
-    with AltitudeTestApp
-    with BeforeAndAfter
-    with BeforeAndAfterEach
-    with OptionValues
-    with TestFocus {
-  protected final val log: Logger = LoggerFactory.getLogger(getClass)
+  with AltitudeTestApp
+  with BeforeAndAfter
+  with BeforeAndAfterEach
+  with OptionValues
+  with TestFocus {
+  final protected val log: Logger = LoggerFactory.getLogger(getClass)
 
   var testContext: TestContext = new TestContext(testApp)
 
@@ -32,7 +33,10 @@ abstract class IntegrationTestCore
 
   def query(sql: String, values: Any*): List[Map[String, AnyRef]] = {
     val res =
-      new QueryRunner().query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object])*).asScala.toList
+      new QueryRunner()
+        .query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object])*)
+        .asScala
+        .toList
 
     res.map(_.asScala.toMap[String, AnyRef])
   }
@@ -44,7 +48,7 @@ abstract class IntegrationTestCore
   def getSqlDateTime(t: java.sql.Timestamp): Any = {
     testApp.dataSourceType match {
       case Const.DbEngineName.POSTGRES => t
-      case  Const.DbEngineName.SQLITE => t.toString
+      case Const.DbEngineName.SQLITE => t.toString
       case _ => throw new IllegalArgumentException("Unsupported data source type")
     }
   }
@@ -70,4 +74,3 @@ abstract class IntegrationTestCore
     testApp.service.repository.switchContextToRepository(repository)
   }
 }
-

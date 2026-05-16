@@ -1,14 +1,15 @@
 package altitude.core.routes.web
 
+import cask._
+
+import altitude.core.{ Const => C }
 import altitude.core.App
 import altitude.core.models.MimedPreviewData
-import altitude.core.Const as C
-import cask.*
 
 class ContentViewController extends cask.Routes:
 
   @cask.get("/content/r/:repoId/:dataType/:itemId")
-  def getContent(repoId: String, dataType: String, itemId: String, request: cask.Request): cask.Response[Array[Byte]] = {
+  def getContent(repoId: String, dataType: String, itemId: String, request: cask.Request): cask.Response[Array[Byte]] =
     // TODO: Add authentication check equivalent to requireLogin()
 
     App.altitude.service.repository.setContextFromRequest(Some(repoId))
@@ -30,7 +31,5 @@ class ContentViewController extends cask.Routes:
         cask.Response(Array.empty[Byte], statusCode = 404)
 
     }
-  }
 
   initialize()
-

@@ -1,5 +1,12 @@
 package altitude.test
 
+import altitude.test.IntegrationTestUtil.generateRandomImagBytesBgr
+import altitude.test.IntegrationTestUtil.generateRandomImagBytesGray
+import java.lang.Thread.sleep
+import java.net.HttpCookie
+
+import scala.util.Random
+
 import altitude.core.Altitude
 import altitude.core.Const as C
 import altitude.core.models.AccountType
@@ -14,12 +21,6 @@ import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
 import altitude.core.util.Util
-import altitude.test.IntegrationTestUtil.generateRandomImagBytesBgr
-import altitude.test.IntegrationTestUtil.generateRandomImagBytesGray
-import java.lang.Thread.sleep
-import java.net.HttpCookie
-
-import scala.util.Random
 
 object TestContext {
   val ASSET_SIZE = 652084
@@ -107,9 +108,10 @@ class TestContext(val testApp: Altitude) {
     }
 
     val currentRepo = repository.getOrElse(repositories.headOption.get)
-    val folderId = if (folder.isDefined) folder.get.persistedId
-                  else if (isTriaged) ""
-                  else currentRepo.rootFolderId
+    val folderId =
+      if (folder.isDefined) folder.get.persistedId
+      else if (isTriaged) ""
+      else currentRepo.rootFolderId
 
     val currentUser = user.getOrElse(this.user)
 

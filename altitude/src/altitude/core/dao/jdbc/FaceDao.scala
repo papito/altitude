@@ -1,9 +1,10 @@
 package altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
+
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Face
-import com.typesafe.config.Config
 
 abstract class FaceDao(override val config: Config) extends BaseDao[Face] with altitude.core.dao.FaceDao:
 

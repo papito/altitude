@@ -1,12 +1,13 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.shouldBe
+
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.models.Asset
 import altitude.core.util.Query
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
 
 @DoNotDiscover class AssetServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Getting asset by invalid ID should raise NotFoundException") {

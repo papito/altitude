@@ -1,15 +1,16 @@
 package altitude.core.pipeline.flows
 
-import altitude.core.Altitude
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
-import altitude.core.pipeline.PipelineUtils.debugInfo
-import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
 import scala.concurrent.Future
 
-object MarkAsCompleteFlow {
+import altitude.core.Altitude
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineUtils.debugInfo
+import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+
+object MarkAsCompleteFlow:
   def apply(app: Altitude): Flow[TAssetOrInvalidWithContext, TAssetOrInvalidWithContext, NotUsed] =
     Flow[TAssetOrInvalidWithContext].mapAsync(app.parallelism) {
       case (Left(asset), ctx) =>
@@ -28,5 +29,3 @@ object MarkAsCompleteFlow {
       case (Right(invalid), ctx) =>
         Future.successful((Right(invalid), ctx))
     }
-
-}

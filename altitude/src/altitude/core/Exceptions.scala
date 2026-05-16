@@ -1,21 +1,17 @@
 package altitude.core
 
-import altitude.core.models.Asset
-
 import scala.collection.mutable
 
-case class ValidationException(message: String = "") extends Exception {
+import altitude.core.models.Asset
+
+case class ValidationException(message: String = "") extends Exception:
   final def isEmpty: Boolean = message.isEmpty && errors.isEmpty
   final def nonEmpty: Boolean = !isEmpty
 
   val errors: mutable.Map[String, String] = mutable.Map()
 
-  def trigger(): Unit = {
-    if nonEmpty then {
-      throw this
-    }
-  }
-}
+  def trigger(): Unit =
+    if nonEmpty then throw this
 
 // All-purpose event to get out of loops and sticky situations
 case class AllDone(success: Boolean) extends Exception

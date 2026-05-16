@@ -1,11 +1,10 @@
 package altitude.core.models
 
+import scala.collection.mutable
+
 import altitude.core.Const.FaceRecognition
 import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
-
-import scala.collection.mutable
+import altitude.core.util.JsonCodec.given
 
 object Person:
   given JsonCodec.ReadWriter[Person] = JsonCodec.macroRW
@@ -41,7 +40,7 @@ case class Person(
   def clearFaces(): Unit = _faces.clear()
 
   def getFaces: mutable.TreeSet[Face] =
-    if numOfFaces > 0 && _faces.isEmpty then throw new IllegalStateException(s"Faces have not been loaded for person $this")
+    if numOfFaces > 0 && _faces.isEmpty then throw IllegalStateException(s"Faces have not been loaded for person $this")
     _faces
 
   def hasFaces: Boolean = _faces.nonEmpty

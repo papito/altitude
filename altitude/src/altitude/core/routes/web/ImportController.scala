@@ -1,13 +1,5 @@
 package altitude.core.routes.web
 
-import altitude.core.Api
-import altitude.core.App
-import altitude.core.RequestContext
-import altitude.core.actors.ImportStatusWsActor
-import altitude.core.models.ImportAsset
-import altitude.core.models.UserMetadata
-import altitude.core.pipeline.PipelineTypes.PipelineContext
-import altitude.core.routes.decorators.requireLogin
 import cask.model.Response
 import io.undertow.server.handlers.form.FormData
 import io.undertow.server.handlers.form.FormDataParser
@@ -16,14 +8,22 @@ import org.slf4j.Logger
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
-import scala.jdk.CollectionConverters.*
+import scala.jdk.CollectionConverters._
 
-object ImportController {
+import altitude.core.Api
+import altitude.core.App
+import altitude.core.RequestContext
+import altitude.core.actors.ImportStatusWsActor
+import altitude.core.models.ImportAsset
+import altitude.core.models.UserMetadata
+import altitude.core.pipeline.PipelineTypes.PipelineContext
+import altitude.core.routes.decorators.requireLogin
+
+object ImportController:
   private val uploadCancelRequest = TrieMap[String, Boolean]()
 
   def isCancelled(uploadId: String): Boolean =
     uploadCancelRequest.contains(uploadId)
-}
 
 class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
   @requireLogin()

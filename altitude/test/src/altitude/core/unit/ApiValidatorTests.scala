@@ -1,22 +1,22 @@
 package altitude.core.unit
 
+import altitude.test.TestFocus
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.noException
 import org.scalatest.matchers.should.Matchers.should
+
 import altitude.core.Api
+import altitude.core.Const as C
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.Const as C
-import altitude.test.TestFocus
-
 
 @DoNotDiscover class ApiValidatorTests extends funsuite.AnyFunSuite with TestFocus {
 
   test("Test multiple invalid email addresses") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      email=List(Api.Field.Setup.ADMIN_EMAIL)
+      email = List(Api.Field.Setup.ADMIN_EMAIL)
     )
 
     val invalidEmails = List(
@@ -27,23 +27,24 @@ import altitude.test.TestFocus
       "invalid@domain..com"
     )
 
-    invalidEmails.foreach { email =>
-      val jsonIn = ujson.Obj(
-        Api.Field.Setup.ADMIN_EMAIL -> email
-      )
+    invalidEmails.foreach {
+      email =>
+        val jsonIn = ujson.Obj(
+          Api.Field.Setup.ADMIN_EMAIL -> email
+        )
 
-      val validationException = intercept[ValidationException] {
-        validator.validate(jsonIn)
-      }
+        val validationException = intercept[ValidationException] {
+          validator.validate(jsonIn)
+        }
 
-      validationException.errors.size should be(1)
-      validationException.errors.head._2 should be(C.Msg.Err.VALUE_NOT_AN_EMAIL)
+        validationException.errors.size should be(1)
+        validationException.errors.head._2 should be(C.Msg.Err.VALUE_NOT_AN_EMAIL)
     }
   }
 
   test("Test valid email addresses") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      email=List(Api.Field.Setup.ADMIN_EMAIL)
+      email = List(Api.Field.Setup.ADMIN_EMAIL)
     )
 
     val validEmails = List(
@@ -54,19 +55,20 @@ import altitude.test.TestFocus
       "user@subdomain.example.com"
     )
 
-    validEmails.foreach { email =>
-      val jsonIn = ujson.Obj(
-        Api.Field.Setup.ADMIN_EMAIL -> email
-      )
+    validEmails.foreach {
+      email =>
+        val jsonIn = ujson.Obj(
+          Api.Field.Setup.ADMIN_EMAIL -> email
+        )
 
-      noException should be thrownBy validator.validate(jsonIn)
+        noException should be thrownBy validator.validate(jsonIn)
     }
   }
 
   test("Test multiple failed required fields") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(Api.Field.ID, Api.Field.Folder.NAME, Api.Field.Setup.ADMIN_EMAIL),
-      email=List(Api.Field.Setup.ADMIN_EMAIL)
+      required = List(Api.Field.ID, Api.Field.Folder.NAME, Api.Field.Setup.ADMIN_EMAIL),
+      email = List(Api.Field.Setup.ADMIN_EMAIL)
     )
 
     val jsonIn = ujson.Obj(
@@ -85,11 +87,11 @@ import altitude.test.TestFocus
   test("Test failed max length") {
     val maxFieldLength = 5
     val validator: ApiRequestValidator = ApiRequestValidator(
-      maxLengths=Map(Api.Field.Folder.NAME -> maxFieldLength)
+      maxLengths = Map(Api.Field.Folder.NAME -> maxFieldLength)
     )
 
     val jsonIn = ujson.Obj(
-      Api.Field.Folder.NAME -> "Bright Future Name",
+      Api.Field.Folder.NAME -> "Bright Future Name"
     )
 
     val validationException = intercept[ValidationException] {
@@ -103,11 +105,11 @@ import altitude.test.TestFocus
   test("Test failed min length") {
     val minPasswordLength = 6
     val validator: ApiRequestValidator = ApiRequestValidator(
-      minLengths=Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
+      minLengths = Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
     )
 
     val jsonIn = ujson.Obj(
-      Api.Field.Setup.PASSWORD -> "lol/$",
+      Api.Field.Setup.PASSWORD -> "lol/$"
     )
 
     val validationException = intercept[ValidationException] {
@@ -121,8 +123,8 @@ import altitude.test.TestFocus
   test("Test min length error should not override the REQUIRED error") {
     val minPasswordLength = 6
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(Api.Field.Setup.PASSWORD),
-      minLengths=Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
+      required = List(Api.Field.Setup.PASSWORD),
+      minLengths = Map(Api.Field.Setup.PASSWORD -> minPasswordLength)
     )
 
     val jsonIn = ujson.Obj()
@@ -137,7 +139,7 @@ import altitude.test.TestFocus
 
   test("Test multiple failed length checks") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      maxLengths=Map(Api.Field.Folder.NAME -> 5, Api.Field.Folder.PATH -> 10)
+      maxLengths = Map(Api.Field.Folder.NAME -> 5, Api.Field.Folder.PATH -> 10)
     )
 
     val jsonIn = ujson.Obj(
@@ -154,8 +156,8 @@ import altitude.test.TestFocus
 
   test("Test missing required field should not be checked for length") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(Api.Field.Folder.NAME),
-      maxLengths=Map(Api.Field.Folder.NAME -> 5)
+      required = List(Api.Field.Folder.NAME),
+      maxLengths = Map(Api.Field.Folder.NAME -> 5)
     )
 
     val jsonIn = ujson.Obj()
@@ -171,8 +173,8 @@ import altitude.test.TestFocus
     val maxFieldLength = 10
 
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(Api.Field.Folder.NAME),
-      maxLengths=Map(Api.Field.Folder.NAME -> maxFieldLength, Api.Field.Folder.PATH -> maxFieldLength)
+      required = List(Api.Field.Folder.NAME),
+      maxLengths = Map(Api.Field.Folder.NAME -> maxFieldLength, Api.Field.Folder.PATH -> maxFieldLength)
     )
 
     val jsonIn = ujson.Obj(
@@ -190,7 +192,7 @@ import altitude.test.TestFocus
 
   test("Test empty strings fail the required check") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      required=List(Api.Field.Folder.NAME)
+      required = List(Api.Field.Folder.NAME)
     )
 
     val jsonIn = ujson.Obj(
@@ -204,10 +206,9 @@ import altitude.test.TestFocus
     validationException.errors.size should be(validator.required.size)
   }
 
-
   test("Test multiple invalid UUIDs") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      uuid=List(Api.Field.ID)
+      uuid = List(Api.Field.ID)
     )
 
     val invalidUUIDs = List(
@@ -217,23 +218,24 @@ import altitude.test.TestFocus
       "12345678-1234-1234-1234-1234567890ab-1234"
     )
 
-    invalidUUIDs.foreach { uuid =>
-      val jsonIn = ujson.Obj(
-        Api.Field.ID -> uuid
-      )
+    invalidUUIDs.foreach {
+      uuid =>
+        val jsonIn = ujson.Obj(
+          Api.Field.ID -> uuid
+        )
 
-      val validationException = intercept[ValidationException] {
-        validator.validate(jsonIn)
-      }
+        val validationException = intercept[ValidationException] {
+          validator.validate(jsonIn)
+        }
 
-      validationException.errors.size should be(1)
-      validationException.errors.head._2 should be(C.Msg.Err.VALUE_NOT_A_UUID)
+        validationException.errors.size should be(1)
+        validationException.errors.head._2 should be(C.Msg.Err.VALUE_NOT_A_UUID)
     }
   }
 
   test("Test valid UUID") {
     val validator: ApiRequestValidator = ApiRequestValidator(
-      uuid=List(Api.Field.ID)
+      uuid = List(Api.Field.ID)
     )
 
     val validUUID = "12345678-1234-1234-1234-1234567890ab"

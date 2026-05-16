@@ -1,6 +1,7 @@
 package altitude.core.service
 
-import altitude.core
+import java.sql.SQLException
+
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.dao.FaceDao
@@ -15,59 +16,50 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.Sort
 import altitude.core.util.SortDirection
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
-import java.sql.SQLException
 
-object PersonService {
+object PersonService:
   val UNKNOWN_NAME_PREFIX = "Unknown"
-}
 
-class PersonService(val app: Altitude) extends BaseService[Person] {
+class PersonService(val app: Altitude) extends BaseService[Person]:
   protected val dao: PersonDao = app.DAO.person
   private val faceDao: FaceDao = app.DAO.face
 
   override protected val txManager: TransactionManager = app.txManager
 
-  override def add(objIn: Person): Person = {
-    throw new NotImplementedError("Use the alternate addPerson() method")
-  }
+  override def add(objIn: Person): Person =
+    throw NotImplementedError("Use the alternate addPerson() method")
 
-  def getPersonById(personId: String): Person = {
+  def getPersonById(personId: String): Person =
     txManager.asReadOnly {
       dao.getById(personId)
     }
-  }
 
-  def getFaceById(faceId: String): Face = {
+  def getFaceById(faceId: String): Face =
     txManager.asReadOnly {
       faceDao.getById(faceId)
     }
-  }
 
-  def addFace(face: Face, asset: Asset, person: Person): Face = {
+  def addFace(face: Face, asset: Asset, person: Person): Face =
     require(person.persistedId.nonEmpty, "Cannot add a face to an unsaved person object")
     require(asset.persistedId.nonEmpty, "Cannot add a face to an unsaved asset object")
 
     txManager.withFaceVector[Face] {
       var persistedFace: Option[Face] = None
-      try {
-        persistedFace = Some(faceDao.add(face, asset, person))
-      } catch {
+      try persistedFace = Some(faceDao.add(face, asset, person))
+      catch
         case e: SQLException =>
           throw newDuplicateExceptionOrRethrow(
             e,
             Some(s"Face already exists for person ${person.persistedId} in asset ${asset.persistedId}"))
-      }
 
-      if person.numOfFaces == 0 then
-        setFaceAsCover(person, persistedFace.get)
+      if person.numOfFaces == 0 then setFaceAsCover(person, persistedFace.get)
 
       increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
 
       persistedFace.get
     }
-  }
 
-  def addPerson(person: Person): Person = {
+  def addPerson(person: Person): Person =
     txManager.withTransaction {
       require(person.getFaces.size < 2, "Adding a new person with more than one face is currently not supported")
 
@@ -77,11 +69,9 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
       dao.add(personForUpdate)
     }
-  }
 
-  def merge(dest: Person, source: Person): Person = {
-    if source == dest then
-      throw new IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
+  def merge(dest: Person, source: Person): Person =
+    if source == dest then throw IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
 
     logger.info(s"Merging person ${source.name} into ${dest.name}")
 
@@ -104,19 +94,9 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       )
 
       // if destination is NOT named and the source IS named, use the source name
-      val mergedPersonName = if !dest.isNamed && source.isNamed then
-        source.name.get
-      else
-        dest.name.get
-
-      /**
-       * Note that this has to be done AFTER the source is updated as "merged", in order to avoid clawing with the unique name
-       * constraint across non-merged people.
-       *
-       * Secondly, we DO NOT do a simple sum of the number of faces, as the source and destination may overlap in assets.
-       * We recalculate using the same person-filtered search semantics as the main results set:
-       * recycled assets excluded, triaged assets included.
-       */
+      val mergedPersonName =
+        if !dest.isNamed && source.isNamed then source.name.get
+        else dest.name.get
 
       val recountQuery = new SearchQuery(
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -139,9 +119,8 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
       updatedDest
     }
-  }
 
-  def getPersonFaces(personId: String, limit: Int = 50): List[Face] = {
+  def getPersonFaces(personId: String, limit: Int = 50): List[Face] =
     txManager.asReadOnly {
       val sort: Sort = Sort(FieldConst.Face.DETECTION_SCORE, SortDirection.DESC)
 
@@ -150,45 +129,39 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
       val qRes: QueryResult[Face] = faceDao.query(q)
       qRes.records.take(limit)
     }
-  }
 
   /**
-   * When an asset gets recycled, we need to decrement the number of faces for the person as the recycled assets do not count
-   * toward person occurrences in the data set.
+   * When an asset gets recycled, we need to decrement the number of faces for the person toward person occurrences in the data
+   * set.
    *
    * We don't do anything else, as we remove the actual faces during asset Purge.
    *
    * If an asset is restored, we just do the reverse of this and everyone is happy.
    */
-  def recycleFacesForAssets(assetIds: Set[String]): Unit = {
+  def recycleFacesForAssets(assetIds: Set[String]): Unit =
     dao.recycleFacesForAssets(assetIds)
-  }
 
-  def restoreFacesForAssets(assetIds: Set[String]): Unit = {
+  def restoreFacesForAssets(assetIds: Set[String]): Unit =
     dao.restoreFacesForAssets(assetIds)
-  }
 
-  def getAssetFaces(assetId: String): List[Face] = {
+  def getAssetFaces(assetId: String): List[Face] =
     txManager.asReadOnly {
       faceDao.getAssetFaces(assetId)
     }
-  }
 
-  def getPeopleForAsset(assetId: String): List[Person] = {
+  def getPeopleForAsset(assetId: String): List[Person] =
     txManager.asReadOnly {
       val faces = getAssetFaces(assetId)
       val personIds = faces.map(_.personId.get)
 
-      if personIds.isEmpty then
-        List()
+      if personIds.isEmpty then List()
       else
         val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
         val qRes: QueryResult[Person] = dao.query(q)
         qRes.records
     }
-  }
 
-  def setFaceAsCover(person: Person, face: Face): Person = {
+  def setFaceAsCover(person: Person, face: Face): Person =
     txManager.withTransaction {
       val personForUpdate = person.copy(coverFaceId = Some(face.persistedId))
 
@@ -196,63 +169,53 @@ class PersonService(val app: Altitude) extends BaseService[Person] {
 
       personForUpdate
     }
-  }
 
-  def updateName(person: Person, newName: String): Person = {
+  def updateName(person: Person, newName: String): Person =
     txManager.withTransaction {
       updateById(
         person.persistedId,
         Map(
           FieldConst.Person.NAME -> newName,
-          FieldConst.Person.NAME_FOR_SORT -> newName.toLowerCase(),
+          FieldConst.Person.NAME_FOR_SORT -> newName.toLowerCase,
           FieldConst.Person.IS_NAMED -> true
         ))
 
       person.copy(name = Some(newName), isNamed = true)
     }
-  }
 
-  def setVisibility(person: Person, isHidden: Boolean): Person = {
+  def setVisibility(person: Person, isHidden: Boolean): Person =
     txManager.withTransaction {
       updateById(person.persistedId, Map(FieldConst.Person.IS_HIDDEN -> isHidden))
       person.copy(isHidden = isHidden)
     }
-  }
 
-  def markAsBadMatch(person: Person): Person = {
+  def markAsBadMatch(person: Person): Person =
     txManager.withTransaction {
       updateById(person.persistedId, Map(FieldConst.Person.IS_BAD_MATCH -> true))
       person.copy(isBadMatch = true)
     }
-  }
 
-  def getAll: List[Person] = {
+  def getAll: List[Person] =
     txManager.asReadOnly {
       dao.getAll.values.toList
     }
-  }
 
-  def getAllNotDiscarded: List[Person] = {
+  def getAllNotDiscarded: List[Person] =
     txManager.asReadOnly {
       dao.getAllNotDiscarded.values.toList
     }
-  }
 
-  def getAllAboveThreshold: List[Person] = {
+  def getAllAboveThreshold: List[Person] =
     txManager.asReadOnly {
       dao.getAllAboveThreshold
     }
-  }
 
-  def getAllBelowThreshold: List[Person] = {
+  def getAllBelowThreshold: List[Person] =
     txManager.asReadOnly {
       dao.getAllBelowThreshold
     }
-  }
 
-  def getAllHidden: List[Person] = {
+  def getAllHidden: List[Person] =
     txManager.asReadOnly {
       dao.getAllHidden
     }
-  }
-}

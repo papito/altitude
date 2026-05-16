@@ -1,14 +1,14 @@
 package altitude.core.dao.sqlite
 
+import com.typesafe.config.Config
+import java.sql.PreparedStatement
+
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
-import com.typesafe.config.Config
-
-import java.sql.PreparedStatement
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with SqliteOverrides:
 

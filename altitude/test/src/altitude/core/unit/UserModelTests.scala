@@ -1,12 +1,13 @@
 package altitude.core.unit
 
-import altitude.core.models.{AccountType, User}
-import org.scalatest.{DoNotDiscover, funsuite}
-import org.scalatest.matchers.should.Matchers.{equal, include, should}
+import org.scalatest.{ funsuite, DoNotDiscover }
+import org.scalatest.matchers.should.Matchers.{ equal, include, should }
+
+import altitude.core.models.{ AccountType, User }
 
 @DoNotDiscover class UserModelTests extends funsuite.AnyFunSuite {
 
-/*
+  /*
   test("User model should convert to JSON") {
     val email = "webmaster@altitude-dam.com"
 
@@ -24,5 +25,5 @@ import org.scalatest.matchers.should.Matchers.{equal, include, should}
     val jsonValue = user.toJson
     jsonValue("email").str should equal(email)
   }
-*/
+   */
 }

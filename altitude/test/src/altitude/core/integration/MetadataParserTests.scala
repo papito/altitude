@@ -1,12 +1,13 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.models.AssetType
-import altitude.core.models.ExtractedMetadata
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.{ convertToStringShouldWrapperForVerb, should }
+
+import altitude.core.Altitude
+import altitude.core.models.AssetType
+import altitude.core.models.ExtractedMetadata
 
 @DoNotDiscover class MetadataParserTests(override val testApp: Altitude) extends IntegrationTestCore {
 

@@ -1,13 +1,5 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.models.Asset
-import altitude.core.models.Folder
-import altitude.core.models.Stats
-import altitude.core.pipeline.PipelineTypes.PipelineContext
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
-import altitude.core.pipeline.sinks.AssetSeqOutputSink
-import altitude.core.util.Query
 import altitude.test.TestContext
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
@@ -16,6 +8,15 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
+
+import altitude.core.Altitude
+import altitude.core.models.Asset
+import altitude.core.models.Folder
+import altitude.core.models.Stats
+import altitude.core.pipeline.PipelineTypes.PipelineContext
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.sinks.AssetSeqOutputSink
+import altitude.core.util.Query
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

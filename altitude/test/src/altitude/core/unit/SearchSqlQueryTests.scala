@@ -1,15 +1,16 @@
 package altitude.core.unit
 
+import altitude.test.TestFocus
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
+import org.scalatest.matchers.should.Matchers.shouldBe
+
+import altitude.core.Const as C
 import altitude.core.RequestContext
 import altitude.core.dao.postgres.querybuilder.AssetSearchQueryBuilder as PostgresAssetSearchQueryBuilder
 import altitude.core.dao.sqlite.querybuilder.AssetSearchQueryBuilder as SqliteAssetSearchQueryBuilder
 import altitude.core.models.Repository
 import altitude.core.util.*
-import altitude.core.Const as C
-import altitude.test.TestFocus
-import org.scalatest.matchers.should.Matchers.shouldBe
 
 @DoNotDiscover class SearchSqlQueryTests extends funsuite.AnyFunSuite with TestFocus {
   private val repo = new Repository(
@@ -70,9 +71,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
   test("Text search SQL query with sorting is built correctly") {
     val builder = new SqliteAssetSearchQueryBuilder(List("*"))
 
-    val q = new SearchQuery(
-      text = Some("my text"),
-      searchSort = List(SearchSort("sort_field", SortDirection.ASC)))
+    val q = new SearchQuery(text = Some("my text"), searchSort = List(SearchSort("sort_field", SortDirection.ASC)))
 
     val sqlQuery = builder.buildSelectSql(q)
     sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND asset.is_pipeline_processed = ? AND search_document.asset_id = asset.id ) AS asset ORDER BY asset.sort_field ASC"
