@@ -18,26 +18,8 @@ export class Folder {
             this.element.getAttribute(Const.attributes.isRoot) === "true"
     }
 
-    static closeContextMenu(menuEl) {
-        clearInnerNodes(menuEl)
-        menuEl.innerHTML = ""
-        menuEl.style.display = "none"
-    }
-    menuEl() {
-        return htmx.find("#menu-" + this.id)
-    }
-
     folderNameEl() {
         return htmx.find("#folderName-" + this.id)
-    }
-
-    closeContextMenu() {
-        Folder.closeContextMenu(this.menuEl())
-    }
-
-    showContextMenu() {
-        console.debug("Showing context menu for folder " + this.name())
-        this.menuEl().style.display = "flex"
     }
 
     clearChildren() {

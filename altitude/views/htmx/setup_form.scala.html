@@ -72,7 +72,7 @@
         minlength="@{ Api.Constraints.MIN_REPOSITORY_NAME_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_REPOSITORY_NAME_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.REPOSITORY_NAME)) {
-            <div class="error">@{ fieldErrors(Api.Field.Setup.REPOSITORY_NAME) }</div>
+            <div role="alert" data-variant="error">@{ fieldErrors(Api.Field.Setup.REPOSITORY_NAME) }</div>
         }
     </div>
     <div>
@@ -94,7 +94,7 @@
         minlength="@{ Api.Constraints.MIN_NAME_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_NAME_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.ADMIN_NAME)) {
-            <div class="error">@{ fieldErrors(Api.Field.Setup.ADMIN_NAME) }</div>
+            <div role="alert" data-variant="error">@{ fieldErrors(Api.Field.Setup.ADMIN_NAME) }</div>
         }
     </div>
     <div>
@@ -107,7 +107,7 @@
         minlength="@{ Api.Constraints.MIN_EMAIL_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_EMAIL_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.ADMIN_EMAIL)) {
-         <div class="error">@{ fieldErrors(Api.Field.Setup.ADMIN_EMAIL) }</div>
+         <div role="alert" data-variant="error">@{ fieldErrors(Api.Field.Setup.ADMIN_EMAIL) }</div>
         }
     </div>
     <div>
@@ -119,7 +119,7 @@
         minlength="@{ Api.Constraints.MIN_PASSWORD_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_PASSWORD_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.PASSWORD)) {
-            <div class="error">@{ fieldErrors(Api.Field.Setup.PASSWORD) }</div>
+            <div role="alert" data-variant="error">@{ fieldErrors(Api.Field.Setup.PASSWORD) }</div>
         }
     </div>
     <div>
@@ -131,12 +131,11 @@
         minlength="@{ Api.Constraints.MIN_PASSWORD_LENGTH }"
         maxlength="@{ Api.Constraints.MAX_PASSWORD_LENGTH }"/>
         @if(fieldErrors.contains(Api.Field.Setup.PASSWORD2)) {
-            <div class="error">@{ fieldErrors(Api.Field.Setup.PASSWORD2) }</div>
+            <div role="alert" data-variant="error">@{ fieldErrors(Api.Field.Setup.PASSWORD2) }</div>
         }
     </div>
     <div class="submit">
         <button type="submit"
-        class="action-button"
         id="initialize">
             Dazzle Me
         </button>

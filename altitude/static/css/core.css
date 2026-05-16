@@ -102,123 +102,13 @@ footer {
 /* FORMS */
 /*       */
 
-input, textarea {
-    padding: 8px;
-    border: 2px solid #ccc;
-    border-radius: 4px;
-    color: #2C3E50;
-    font-size: 1.2em;
-    background-color: #f6f6f6;
-}
-
 input.readonly {
     background-color: #ada8a8;
-}
-
-form div.error {
-    color: var(--error-font-color);
-    padding: 5px;
 }
 
 form input.error, form input.error:focus {
     border: var(--form-error-border);
     outline: none !important;
-}
-
-/*         */
-/* BUTTONS */
-/*         */
-
-.action-button {
-    background: rgb(76, 75, 75);
-    font-weight: bold;
-    color: white;
-    border: 2px solid #bdbbbb;
-    border-radius: 4px;
-    cursor: pointer;
-    padding: 7px;
-    text-decoration: none;
-    text-shadow: rgba(72, 70, 70, 0.55) 4px 4px 4px;
-    font-size: 1em;
-}
-
-.action-button:hover, .action-button:focus {
-    box-shadow: var(--box-shadow);
-}
-
-.action-button.success {
-    background: var(--success-background-color);
-}
-
-.action-button.warning {
-    background: var(--warning-background-color);
-}
-
-.action-button.error {
-    background: var(--error-background-color);
-}
-
-.action-button.small {
-    font-size: 0.8em;
-    background: var(--background-secondary-color);
-    border: 1px solid var(--background-tertiary-color);
-}
-
-.action-button.small span {
-    margin-left: 5px;
-}
-
-/*          */
-/* MESSAGES */
-/*          */
-
-#serverError {
-    color: #FFF;
-    background-color: var(--message-background-color);
-    border: 1px solid var(--error-color);
-    padding: 8px;
-    font-size: 1.1em;
-}
-
-#snackbar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    visibility: hidden;
-    min-width: 500px;
-    margin-left: -250px;
-    color: #fff;
-    text-align: center;
-    border-radius: 2px;
-    padding: 16px;
-    position: fixed;
-    z-index: 1;
-    left: 50%;
-    top: 50px;
-    height: 30px;
-    border: 1px solid white;
-}
-
-#snackbar.show {
-    visibility: visible;
-    animation: fadein 0.5s;
-}
-
-#snackbar.success {
-    background-color: var(--success-background-color);
-}
-
-#snackbar.warning {
-    background-color: var(--warning-background-color);
-}
-
-#snackbar.error {
-    background-color: var(--error-background-color);
-}
-
-@keyframes fadein {
-    from {bottom: 0; opacity: 0;}
-    to {bottom: 30px; opacity: 1;}
 }
 
 
@@ -263,16 +153,15 @@ form input.error, form input.error:focus {
 /*       */
 
 #modalContainer {
-    display: none;
-    position: fixed;
-    z-index: 4;
-    padding-top: 100px;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.4);
+    border: var(--modal-border);
+    border-radius: 5px;
+    background-color: var(--modal-background-color);
+    padding: 0;
+    max-width: 90vw;
+}
+
+#modalContainer::backdrop {
+    background-color: rgba(0, 0, 0, 0.4);
 }
 
 #modalContent {
@@ -283,9 +172,7 @@ form input.error, form input.error:focus {
     display: grid;
     grid-template-rows: 30px auto;
     background-color: var(--background-secondary-color);
-    margin: auto;
     width: fit-content;
-    border: var(--modal-border);
     border-radius: 5px;
     box-shadow: rgba(10, 0, 0, 0.66) 6px 6px 6px;
 }
@@ -302,13 +189,16 @@ form input.error, form input.error:focus {
     font-size: 1.6em;
     font-weight: bold;
     padding-right: .4em;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
 }
 
 .close-modal:hover,
 .close-modal:focus {
     color: var(--warning-font-color);
     text-decoration: none;
-    cursor: pointer;
 }
 
 .modal-title {
@@ -319,21 +209,23 @@ form input.error, form input.error:focus {
 }
 
 #imageDetailModalContainer {
-    display: none;
-    place-items: center;
-    position: fixed;
-    z-index: 4;
-    left: 0;
-    top: 0;
+    background: transparent;
+    border: none;
+    padding: 0;
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    display: grid;
+    place-items: center;
+}
+
+#imageDetailModalContainer::backdrop {
     background-color: rgba(0, 0, 0, 0.9);
 }
 
 #imageDetailModalContainer .modal-box {
     border: none;
-    width: 100%;
-    height: 100%;
     background-color: transparent;
     box-shadow: none;
     border-radius: 0;
@@ -354,51 +246,38 @@ form input.error, form input.error:focus {
 /*            */
 
 nav {
-     display: grid;
-     grid-template-columns: 120px repeat(5, 1fr) 220px;
-     grid-column-gap: 10px;
-     background: var(--background-secondary-color);
-     color: #fff;
-     align-items: center;
-     border-bottom: var(--navbar-border);
-     text-shadow: var(--navbar-text-shadow);
- }
+    display: grid;
+    grid-template-columns: max-content 1fr 1fr 1fr 1fr 1fr 220px;
+    grid-column-gap: 10px;
+    background: var(--background-secondary-color);
+    color: #fff;
+    align-items: center;
+    border-bottom: var(--navbar-border);
+    text-shadow: var(--navbar-text-shadow);
+    padding: 0 10px;
+}
 
-nav span, nav a {
+nav a, nav span {
     color: #FFF;
     text-decoration: none;
     font-size: 10px;
     font-weight: bold;
     font-family: var(--font);
     text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 6px;
 }
-nav .brand a {
+
+nav strong {
     letter-spacing: .15em;
     text-transform: uppercase;
-    text-decoration: none;
     color: #979393;
-    font-weight: bold;
     font-size: 16px;
 }
 
-nav div {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-nav .menu {
-    letter-spacing: .10em;
-    color: #9399b4;
-    padding: 6px;
-    cursor: pointer;
-}
-
-nav .menu span {
-    margin-left: .5em;
-}
-
-nav .menu.active {
+nav a.active {
     background-color: var(--background-tertiary-color);
     color: #FFF;
     border: 2px solid var(--warning-background-color);
@@ -406,7 +285,7 @@ nav .menu.active {
     font-weight: bold;
 }
 
-nav input {
+nav input[type="search"] {
     border-radius: 3px;
     border: 2px groove #5a5855;
     padding: 5px;
@@ -414,29 +293,30 @@ nav input {
     width: 90%;
 }
 
-nav input::placeholder {
+nav input[type="search"]::placeholder {
     color: #a5a2a2;
 }
 
-nav .menu.triage i, nav .menu.triage span {
+nav .nav-triage {
     color: var(--success-font-color);
 }
 
-nav .menu.trashbin i, nav .menu.trashbin span {
+nav .nav-trashbin {
     color: var(--warning-font-color);
 }
 
-
-nav .menu.triage.empty i,
-nav .menu.triage.empty span,
-nav .menu.trashbin.empty i,
-nav .menu.trashbin.empty span {
+nav .nav-empty {
     color: var(--faded-font-color);
-    font-size: 10px;
     cursor: default;
+    pointer-events: none;
 }
 
 /* For Alpine x-cloak prop */
 [x-cloak] {
     display: none !important;
+}
+
+/* Hide ot-tabs tab buttons in triage mode */
+.explorer-triage-mode [slot="tab"] {
+    display: none;
 }

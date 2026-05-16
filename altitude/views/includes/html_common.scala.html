@@ -1,34 +1,25 @@
 @()
 
-<div id="snackbar"></div>
-
-<!-- The wiring for closing the modal is in the modal.js file -->
-
-<div id="modalContainer">
+<dialog id="modalContainer">
     <div class="modal-box">
         <div class="modal-toolbar">
             <div class="modal-title">Title!</div>
-            <div class="close-modal"
-            >&times;</div>
+            <button class="close-modal" aria-label="Close">&times;</button>
         </div>
         <div id="modalContent">
         </div>
     </div>
-</div>
+</dialog>
 
-<div id="imageDetailModalContainer">
+<dialog id="imageDetailModalContainer">
     <div class="modal-box">
         <div class="modal-toolbar">
             <div class="modal-title">Title!</div>
-            <div class="close-modal">&times;</div>
+            <button class="close-modal" aria-label="Close">&times;</button>
         </div>
-        <div id="imageDetailSpinner"
-            x-data
-            x-show="$store.imageDetailLoading.value">
-            <i class="fas fa-spinner fa-spin"></i>
-        </div>
+        <div id="imageDetailSpinner" aria-busy="true" aria-label="Loading…" hidden></div>
         <div id="imageDetailModalContent">
         </div>
     </div>
-</div>
+</dialog>
 

@@ -85,47 +85,35 @@
 
       <div id="explorer" class="split content split-horizontal">
         <div id="explorerViews" class="content">
-          <tab-container>
-            <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
-              <button type="button" id="foldersTab" role="tab" data-tab-container-no-tabstop>
-                <a
-                  href="#folders"
-                  hx-target="#explorerPanelContent"
-                  hx-swap="innerHTML"
-                  hx-trigger="click"
-                  hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab"
-                >
-                  <i class="fas fa-folder"></i> Folders
-                </a>
-              </button>
+          <ot-tabs id="explorerTabs" selected="folders" x-data :class="{ 'explorer-triage-mode': $store.currentView.isTriageView() }">
+            <button slot="tab" id="foldersTab" value="folders">
+              <i class="fas fa-folder"></i> Folders
+            </button>
+            <button slot="tab" id="albumsTab" value="albums">
+              <i class="fas fa-images"></i> Albums
+            </button>
+            <button slot="tab" id="peopleTab" value="people">
+              <i class="fas fa-users"></i> People
+            </button>
 
-              <button type="button" id="albumsTab" role="tab" data-tab-container-no-tabstop>
-                <a
-                  href="#albums"
-                  hx-target="#explorerPanelContent"
-                  hx-trigger="click"
-                  hx-swap="innerHTML"
-                  hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab"
-                >
-                  <i class="fas fa-images"></i> Albums
-                </a>
-              </button>
+            <div slot="panel" value="folders"
+                 id="foldersPanelContent"
+                 hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab"
+                 hx-trigger="revealed"
+                 hx-swap="innerHTML"></div>
 
-              <button type="button" id="peopleTab" role="tab" data-tab-container-no-tabstop>
-                <a
-                  href="#people"
-                  hx-target="#explorerPanelContent"
-                  hx-trigger="click"
-                  hx-swap="innerHTML"
-                  hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-                >
-                  <i class="fas fa-users"></i> People
-                </a>
-              </button>
-            </div>
+            <div slot="panel" value="albums"
+                 id="albumsPanelContent"
+                 hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab"
+                 hx-trigger="revealed"
+                 hx-swap="innerHTML"></div>
 
-            <div id="explorerPanelContent" role="tabpanel" class="tab-content"></div>
-          </tab-container>
+            <div slot="panel" value="people"
+                 id="explorerPanelContent"
+                 hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
+                 hx-trigger="revealed"
+                 hx-swap="innerHTML"></div>
+          </ot-tabs>
         </div>
       </div>
 
@@ -208,14 +196,15 @@
               })
           }
 
-          // if there is no URL fragment, we default to folder views
-          // in triage view the tab list is hidden — always load the folders tab
-          const fragment = (view === Const.views.triage) ? "#folders" : (window.location.hash || "#folders")
-
-          const tabLink = document.querySelector('a[href="' + fragment + '"]')
-
-          if (tabLink) {
-              tabLink.click()
+          // Select the explorer tab based on URL fragment (ot-tabs manages lazy loading via revealed)
+          // In triage view always default to folders; otherwise respect URL hash
+          const tabName = (view === Const.views.triage) ? "folders" : (window.location.hash?.replace("#", "") || "folders")
+          const validTabs = ["folders", "albums", "people"]
+          if (validTabs.includes(tabName) && tabName !== "folders") {
+              const explorerTabs = document.getElementById("explorerTabs")
+              if (explorerTabs) {
+                  explorerTabs.setAttribute("selected", tabName)
+              }
           }
 
           /**
@@ -224,8 +213,7 @@
           const searchUrl =
               "/htmx/search/r/" +
               window.ctx.getRepoId() +
-              (window.location.search || "") +
-              fragment
+              (window.location.search || "")
 
           htmx.ajax("get", searchUrl, {
               swap: "innerHTML",

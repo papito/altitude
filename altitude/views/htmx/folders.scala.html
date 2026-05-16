@@ -30,17 +30,10 @@
         touch-action: none;
     }
 
-
     #rootFolderList .folder .menu-ctrl {
         display: grid;
         padding-left: 6px;
         place-items: center;
-    }
-
-    #rootFolderList .folder .menu-ctrl a {
-        font-size: 1.3em;
-        color: #FFFFFF;
-        text-decoration: none;
     }
 
     #rootFolderList .folder i {
@@ -60,25 +53,6 @@
         color: var(--success-font-color);
     }
 
-    #rootFolderList .folder .menu {
-        display: none;
-        padding: 5px 5px 5px 5px;
-        margin: 0 6px 6px 6px;
-        flex-wrap: wrap;
-        border-radius: 5px;
-        gap: 5px;
-        background-color: var(--background-form-color);
-    }
-
-    #rootFolderList .folder .menu span {
-        display: flex;
-        padding: 3px 6px;
-        cursor: pointer;
-        border: 1px solid gray;
-        border-radius: 5px;
-        font-size: .9em;
-    }
-
     #rootFolderList .folder-name, #rootFolderList .folder.root i {
         cursor: pointer;
     }
@@ -95,32 +69,15 @@
         cursor: default !important;
     }
 
-    #folderNavWarning {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: var(--control-vertical-space);
-        padding: 8px;
-        border-radius: 5px;
-        background-color: var(--warning-background-color);
-        color: var(--warning-font-color);
-        line-height: 1.4;
-        border: 1px solid var(--warning-font-color);
-        text-shadow: none;
-    }
-
-    #folderNavWarning i {
-        flex-shrink: 0;
-        font-size: 1.1em;
-    }
-
 </style>
 
 <div id="folderNavWarning"
+     role="alert"
+     data-variant="warning"
      x-data
      x-show="$store.currentView.isTriageView() || $store.currentView.isTrashBinView()">
     <i class="fas fa-exclamation-triangle"></i>
-    <span>Navigation in this view is disabled. You can only drag-and-drop assets and folders.</span>
+    Navigation in this view is disabled. You can only drag-and-drop assets and folders.
 </div>
 
 <div id="rootFolderList" class="folder-list">
@@ -141,14 +98,18 @@
                 x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
                 hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true"></i>
             <div class="menu-ctrl">
-                <a href="#"
-                   alt-folder-id="@{rootFolder.persistedId}"
-                   id="expand-folder-children-@{rootFolder.persistedId}"
-                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/context-menu"
-                   hx-swap="innerHTML"
-                   hx-target="#menu-@{rootFolder.persistedId}"
-                   hx-vals='{"folderId": "@{rootFolder.persistedId}"}'
-                   hx-trigger="click">&#10247;</a>
+                <ot-dropdown>
+                    <button slot="trigger" data-variant="ghost" aria-label="Folder options"
+                            id="expand-folder-children-@{rootFolder.persistedId}">&#10247;</button>
+                    <menu>
+                        <li>
+                            <button hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/add-folder"
+                                    hx-target="#modalContent"
+                                    hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.ADD_FOLDER_MODAL_MIN_WIDTH}, "parentId": "@{rootFolder.persistedId}"}'
+                                    hx-trigger="click">Add folder</button>
+                        </li>
+                    </menu>
+                </ot-dropdown>
             </div>
             <span id="folderName-@{rootFolder.persistedId}"
                   class="folder-name"
@@ -160,12 +121,6 @@
                   x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
                   hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root
             </span>
-        </div>
-
-        <div class="menu"
-             id="menu-@{rootFolder.persistedId}"
-             alt-folder-id="@{rootFolder.persistedId}">
-
         </div>
 
         <div class="children"
@@ -181,9 +136,6 @@
 </div>
 
 <script type="module">
-    import { selectTab } from "/static/js/common/navigation.js"
-
-    selectTab("explorer", "foldersTab")
     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 </script>
 

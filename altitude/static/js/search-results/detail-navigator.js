@@ -2,6 +2,11 @@ import { Const } from "../constants.js"
 import { showAssetDetailModal } from "../common/modal.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
+function setSpinner(visible) {
+    const spinner = document.getElementById("imageDetailSpinner")
+    if (spinner) spinner.hidden = !visible
+}
+
 export function setImgSrcAndWait({ Alpine, img, url }) {
     return new Promise((resolve, reject) => {
         const onLoad = () => {
@@ -14,7 +19,7 @@ export function setImgSrcAndWait({ Alpine, img, url }) {
         }
 
         const cleanup = () => {
-            Alpine.store(Const.state.imageDetailLoading).value = false
+            setSpinner(false)
             img.removeEventListener("load", onLoad)
             img.removeEventListener("error", onError)
         }
@@ -153,7 +158,7 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
             return
         }
 
-        Alpine.store(Const.state.imageDetailLoading).value = true
+        setSpinner(true)
 
         try {
             const response = await http.get(
@@ -182,7 +187,7 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
             console.error(
                 `Error loading asset detail: ${getHttpErrorMessage(error)}`,
             )
-            Alpine.store(Const.state.imageDetailLoading).value = false
+            setSpinner(false)
         }
     }
 

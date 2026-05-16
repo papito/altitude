@@ -1,8 +1,9 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Folder
 @import altitude.core.Api
+@import altitude.core.Const
 
-@(folders: List[Folder])
+@(folders: List[Folder], rootFolderId: String = RequestContext.getRepository.rootFolderId)
 
 @for(idx <- folders.indices) {
 
@@ -32,15 +33,32 @@
         </a>
 
         <div class="menu-ctrl">
-            <div>
-                <a href="#"
-                   alt-folder-id="@{folder.persistedId}"
-                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/context-menu"
-                   hx-swap="innerHTML"
-                   hx-target="#menu-@{folder.persistedId}"
-                   hx-vals='{"folderId": "@{folder.persistedId}"}'
-                   hx-trigger="click">&#10247;</a>
-            </div>
+            <ot-dropdown>
+                <button slot="trigger" data-variant="ghost" aria-label="Folder options">&#10247;</button>
+                <menu>
+                    <li>
+                        <button hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/add-folder"
+                                hx-target="#modalContent"
+                                hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.ADD_FOLDER_MODAL_MIN_WIDTH}, "parentId": "@{folder.persistedId}"}'
+                                hx-trigger="click">Add folder</button>
+                    </li>
+                    @if(folder.persistedId != rootFolderId) {
+                    <li>
+                        <button hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/rename-folder"
+                                hx-target="#modalContent"
+                                hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.RENAME_FOLDER_MODAL_MIN_WIDTH}, "id": "@{folder.persistedId}"}'
+                                hx-trigger="click">Rename</button>
+                    </li>
+                    <li>
+                        <button data-variant="error"
+                                hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/modals/delete-folder"
+                                hx-target="#modalContent"
+                                hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.DELETE_FOLDER_MODAL_MIN_WIDTH}, "id": "@{folder.persistedId}"}'
+                                hx-trigger="click">Delete</button>
+                    </li>
+                    }
+                </menu>
+            </ot-dropdown>
         </div>
         <span id="folderName-@{folder.persistedId}"
               class="folder-name"
@@ -54,10 +72,6 @@
         @{folder.name}</span>
     </div>
 
-    <div class="menu"
-         id="menu-@{folder.persistedId}"
-         alt-folder-id="@{folder.persistedId}">
-    </div>
     <div class="children"
          id="children-@{folder.persistedId}"
          alt-folder-id="@{folder.persistedId}"></div>

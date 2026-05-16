@@ -9,28 +9,6 @@ export function handleFolderBeforeRequest({ app, event }) {
         return false
     }
 
-    if (
-        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
-    ) {
-        const folderId = event.detail.target.getAttribute(
-            Const.attributes.folderId,
-        )
-        const folder = new Folder(folderId)
-
-        if (folder.isMenuExpanded()) {
-            folder.closeContextMenu()
-            event.preventDefault()
-        } else {
-            document
-                .querySelectorAll("#rootFolderList .menu")
-                .forEach((menuEl) => {
-                    Folder.closeContextMenu(menuEl)
-                })
-        }
-
-        return true
-    }
-
     if (requestPath === `/htmx/folder/r/${app.context.getRepoId()}/children`) {
         const url = new URL(
             "https://dummy.com" + event.detail.pathInfo.finalRequestPath,
@@ -76,21 +54,6 @@ export function handleFolderAfterRequest({ app, event }) {
 
     if (event.detail.successful === false) {
         showErrorSnackBar(`Error for request to ${requestPath}. HTTP ${status}`)
-        return true
-    }
-
-    if (
-        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
-    ) {
-        const folder = new Folder(
-            event.target.getAttribute(Const.attributes.folderId),
-        )
-        folder.showContextMenu()
-
-        if (!folder.isExpanded() && !folder.isRoot) {
-            folder.htmxExpandChildrenAction()
-        }
-
         return true
     }
 

@@ -94,8 +94,4 @@ export function initializeFrontendStores({ Alpine }) {
             return this.view === Const.views.trashbin
         },
     })
-
-    Alpine.store(Const.state.imageDetailLoading, {
-        value: false,
-    })
 }

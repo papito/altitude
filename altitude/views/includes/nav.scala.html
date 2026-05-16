@@ -5,49 +5,32 @@
 
 @(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId)
 
-<div class="brand">
-    <a href="/">Altitude</a>
-</div>
-<div class="menu repository">
-@*    <a href="/"><i class="fas fa-database"></i><span>@{RequestContext.getRepository.name}</span></a>*@
-      <a href="/"><i class="fas fa-database"></i><span>Browse</span></a>
-</div>
+<a href="/" aria-label="Altitude home"><strong>Altitude</strong></a>
+
+<a href="/"
+   data-view="repository"><i class="fas fa-database"></i> Browse</a>
 
 @if(stats.getTriageAssetCount > 0) {
-    <div class="menu triage">
-        <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRIAGE}"><i class="fas fa-medkit"></i>
-            <span>Triage (@{stats.getTriageAssetCount})</span>
-        </a>
-    </div>
-  } else {
-    <div class="menu triage empty">
-        <i class="fas fa-medkit"></i><span>Triage (0)</span>
-    </div>
+    <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRIAGE}"
+       data-view="triage"
+       class="nav-triage"><i class="fas fa-medkit"></i> Triage (@{stats.getTriageAssetCount})</a>
+} else {
+    <span data-view="triage" class="nav-triage nav-empty"><i class="fas fa-medkit"></i> Triage (0)</span>
 }
 
 @if(stats.getRecycledAssetCount > 0) {
-    <div id="trash" class="menu trashbin">
-        <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRASHBIN}">
-            <i class="fas fa-trash"></i><span>Trash (@{stats.getRecycledAssetCount})</span>
-        </a>
-    </div>
-  } else {
-    <div id="trash" class="menu trashbin empty">
-        <i class="fas fa-trash"></i><span>Trash (0)</span>
-    </div>
-  }
+    <a id="trash"
+       href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRASHBIN}"
+       data-view="trashbin"
+       class="nav-trashbin"><i class="fas fa-trash"></i> Trash (@{stats.getRecycledAssetCount})</a>
+} else {
+    <span id="trash" data-view="trashbin" class="nav-trashbin nav-empty"><i class="fas fa-trash"></i> Trash (0)</span>
+}
 
-<div class="menu import">
-    <a href="/pipeline/r/@repoId"><i class="fas fa-plus-square">
-        </i><span>Import</span>
-    </a>
-</div>
-<div class="menu settings">
-    <a href=""><i class="fas fa-cog">
-        </i><span>Settings</span>
-    </a>
-</div>
-<div class="search">
-    <label for="search"></label>
-    <input id="search" type="text" name="search" placeholder="Search">
-</div>
+<a href="/pipeline/r/@repoId"
+   data-view="import"><i class="fas fa-plus-square"></i> Import</a>
+
+<a href=""
+   data-view="settings"><i class="fas fa-cog"></i> Settings</a>
+
+<input type="search" id="search" name="search" placeholder="Search" aria-label="Search assets">

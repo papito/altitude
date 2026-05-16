@@ -1,6 +1,8 @@
 export function closeModal() {
-    htmx.find("#modalContainer").style.display = "none"
-    htmx.find("#imageDetailModalContainer").style.display = "none"
+    const generalModal = htmx.find("#modalContainer")
+    const imageModal = htmx.find("#imageDetailModalContainer")
+    if (generalModal?.open) generalModal.close()
+    if (imageModal?.open) imageModal.close()
 }
 
 export function showModal({ minWidthPx, title }) {
@@ -10,7 +12,7 @@ export function showModal({ minWidthPx, title }) {
         htmx.find("#modalContent").style.width = `${minWidthPx}px`
     }
 
-    htmx.find("#modalContainer").style.display = "block"
+    htmx.find("#modalContainer").showModal()
 }
 
 export function showAssetDetailModal({ title, width, height }) {
@@ -28,7 +30,7 @@ export function showAssetDetailModal({ title, width, height }) {
         box.style.height = ""
     }
 
-    htmx.find("#imageDetailModalContainer").style.display = "grid"
+    htmx.find("#imageDetailModalContainer").showModal()
 }
 
 document.querySelectorAll(".close-modal").forEach((element) => {

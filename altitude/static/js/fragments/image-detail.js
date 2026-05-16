@@ -2,6 +2,11 @@ import { Const } from "../constants.js"
 import { showAssetDetailModal } from "../common/modal.js"
 import { setImgSrcAndWait } from "../search-results/detail-navigator.js"
 
+function setSpinner(visible) {
+    const spinner = document.getElementById("imageDetailSpinner")
+    if (spinner) spinner.hidden = !visible
+}
+
 export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
     if (fragmentEl.dataset.appImageDetailBound === "true") {
         return
@@ -14,7 +19,7 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
         return
     }
 
-    Alpine.store(Const.state.imageDetailLoading).value = true
+    setSpinner(true)
     ;(async () => {
         try {
             await setImgSrcAndWait({
@@ -35,7 +40,7 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
         } catch (error) {
             console.error("Error loading asset image", error)
         } finally {
-            Alpine.store(Const.state.imageDetailLoading).value = false
+            setSpinner(false)
         }
     })()
 }

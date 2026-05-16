@@ -57,21 +57,6 @@
         color: #fdda63;
     }
 
-    #peopleTypeFilter .radio-group {
-        display: flex;
-        justify-content: space-around;
-        width: 100%;
-    }
-
-    #peopleTypeFilter .radio-group label {
-        display: flex;
-        align-items: center;
-    }
-
-    #peopleTypeFilter .radio-group input[type="radio"] {
-        margin-right: 5px;
-    }
-
     #peopleTypeFilter {
         padding-top: var(--control-vertical-space);
         padding-bottom: var(--control-vertical-space);
@@ -79,7 +64,8 @@
 </style>
 
 <div id="peopleTypeFilter">
-    <div class="radio-group">
+    <fieldset>
+        <legend>Filter people</legend>
         <label>
             <input type="radio" @if(typeFilter == Const.PeopleTypeFilter.COMPLETE) {checked}
                    name="peopleTypeFilter"
@@ -124,7 +110,7 @@
                    hx-vals='{"@{Api.Field.People.TYPE_FILTER}": "@{Const.PeopleTypeFilter.ALL}"}'>
             All
         </label>
-    </div>
+    </fieldset>
 </div>
 
 <div id="peopleList">
@@ -164,9 +150,6 @@
 </div>
 
 <script type="module">
-    import { selectTab } from "/static/js/common/navigation.js"
-
-    selectTab("explorer", "peopleTab")
     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 </script>
 

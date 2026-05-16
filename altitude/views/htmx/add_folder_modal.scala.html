@@ -26,7 +26,7 @@
       hx-ext="json-enc">
 
     @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
-        <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
+        <div role="alert" data-variant="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
     }
 
     <div>
