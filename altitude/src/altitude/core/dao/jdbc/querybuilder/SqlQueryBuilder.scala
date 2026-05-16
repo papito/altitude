@@ -63,7 +63,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], val tableNa
 
     // SET binds, then WHERE binds
     val whereBindClauses = List(allClauses(SqlQueryBuilder.WHERE))
-    val bindVals = data.values.toList ::: whereBindClauses.foldLeft(List[Any]())((res, clause) => res ++ clause.bindVals)
+    val bindVals = data.values.toList ++ whereBindClauses.foldLeft(List[Any]())((res, clause) => res ++ clause.bindVals)
 
     SqlQuery(sql, bindVals)
 
@@ -119,7 +119,7 @@ class SqlQueryBuilder[QueryT <: Query](selColumnNames: List[String], val tableNa
           case _: String => res :+ value
           case _: Number => res :+ value
           case _: Boolean => res :+ value
-          case qParam: QueryParam => res ::: qParam.values.toList
+          case qParam: QueryParam => res ++ qParam.values.toList
           case _ => throw IllegalArgumentException(s"This type of parameter is not supported: $value")
     }
 

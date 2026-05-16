@@ -1,7 +1,5 @@
 package altitude.core.models
 
-import scala.language.implicitConversions
-
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
 

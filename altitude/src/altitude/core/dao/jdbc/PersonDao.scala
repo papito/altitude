@@ -2,8 +2,6 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 
-import scala.language.implicitConversions
-
 import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
@@ -166,7 +164,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                 WHERE person.id = face.person_id
                   AND face.asset_id IN ($placeHolders))
       """
-      updateByBySql(sql, assetIds.toList ::: assetIds.toList)
+      updateByBySql(sql, assetIds.toList ++ assetIds.toList)
     }
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
@@ -186,5 +184,5 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                 WHERE person.id = face.person_id
                   AND face.asset_id IN ($placeHolders))
       """
-      updateByBySql(sql, assetIds.toList ::: assetIds.toList)
+      updateByBySql(sql, assetIds.toList ++ assetIds.toList)
     }

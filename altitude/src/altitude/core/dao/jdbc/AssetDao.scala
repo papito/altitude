@@ -6,8 +6,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
 
-import scala.language.implicitConversions
-
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -26,7 +24,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override val sqlQueryBuilder = new SqlQueryBuilder[Query](columnsForSelect, tableName)
 
   override protected def makeModel(rec: Map[String, AnyRef]): Asset =
-    val assetType = new AssetType(
+    val assetType = AssetType(
       mediaType = rec(FieldConst.AssetType.MEDIA_TYPE).asInstanceOf[String],
       mediaSubtype = rec(FieldConst.AssetType.MEDIA_SUBTYPE).asInstanceOf[String],
       mime = rec(FieldConst.AssetType.MIME_TYPE).asInstanceOf[String]

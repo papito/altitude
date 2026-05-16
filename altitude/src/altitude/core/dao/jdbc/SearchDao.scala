@@ -23,13 +23,13 @@ object SearchDao:
             """
 abstract class SearchDao(override val config: Config) extends AssetDao(config) with altitude.core.dao.SearchDao:
   override def search(query: SearchQuery): SearchResult =
-    throw new NotImplementedError
+    throw NotImplementedError()
 
   protected def addSearchDocument(asset: Asset): Unit =
-    throw new NotImplementedError
+    throw NotImplementedError()
 
   protected def replaceSearchDocument(asset: Asset): Unit =
-    throw new NotImplementedError
+    throw NotImplementedError()
 
   override def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit =
     logger.debug(s"Indexing asset ${asset.persistedId} for search")

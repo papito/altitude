@@ -23,7 +23,7 @@ object FieldType:
         case "NUMBER" => FieldType.NUMBER
         case "BOOLEAN" => FieldType.BOOL
         case "DATETIME" => FieldType.DATETIME
-        case other => throw new IllegalArgumentException(s"Unknown FieldType: $other")
+        case other => throw IllegalArgumentException(s"Unknown FieldType: $other")
       }
     )
 

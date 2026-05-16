@@ -48,7 +48,7 @@ abstract class BaseService[Model <: BaseModel]:
     }
 
   def updateByQuery(query: Query, data: Map[String, Any]): Int =
-    if query.params.isEmpty then throw new RuntimeException("Cannot update [ALL] document with an empty Query")
+    if query.params.isEmpty then throw RuntimeException("Cannot update [ALL] document with an empty Query")
 
     // should not update ALL repositories by default
     val repoScopedQuery = query.withRepository()
@@ -82,7 +82,7 @@ abstract class BaseService[Model <: BaseModel]:
     }
 
   def deleteByQuery(query: Query): Int =
-    if query.params.isEmpty then throw new RuntimeException("Cannot delete [ALL] document with an empty Query")
+    if query.params.isEmpty then throw RuntimeException("Cannot delete [ALL] document with an empty Query")
 
     // should not delete from ALL repositories by default
     val repoScopedQuery = query.withRepository()

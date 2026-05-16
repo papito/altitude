@@ -19,5 +19,5 @@ case class ClauseComponents(elements: List[String] = List(), bindVals: List[Any]
 
   // scalastyle:off
   def +(that: ClauseComponents): ClauseComponents =
-    ClauseComponents(this.elements ::: that.elements, this.bindVals ::: that.bindVals)
+    ClauseComponents(this.elements ++ that.elements, this.bindVals ++ that.bindVals)
   // scalastyle:on

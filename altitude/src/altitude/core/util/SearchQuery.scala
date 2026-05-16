@@ -21,9 +21,9 @@ class SearchQuery(
     val searchSort: List[SearchSort] = List())
   extends Query(params = metadataFilters, rpp = rpp, page = page):
 
-  if sort.nonEmpty then throw new IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
+  if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
 
-  if searchSort.size > 1 then throw new IllegalArgumentException("Only one sort currently supported")
+  if searchSort.size > 1 then throw IllegalArgumentException("Only one sort currently supported")
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
   val isText: Boolean = text.isDefined
@@ -33,7 +33,7 @@ class SearchQuery(
     s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
-    new SearchQuery(
+    SearchQuery(
       text = text,
       folderIds = folderIds,
       personIds = personIds,
@@ -44,7 +44,7 @@ class SearchQuery(
     )
 
   def withFolderIds(ids: Set[String]): SearchQuery =
-    new SearchQuery(
+    SearchQuery(
       text = text,
       params = params,
       folderIds = ids,
@@ -56,7 +56,7 @@ class SearchQuery(
     )
 
   override def add(_params: (String, Any)*): SearchQuery =
-    new SearchQuery(
+    SearchQuery(
       text = text,
       params = params ++ _params,
       folderIds = folderIds,
