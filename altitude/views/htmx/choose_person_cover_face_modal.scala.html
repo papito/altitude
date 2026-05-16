@@ -1,0 +1,71 @@
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+@import altitude.core.models.Face
+@import altitude.core.Api
+
+@(person: Person, faces: List[Face], minWidth: Int, title: String)
+
+<style>
+    #faceSelector {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        row-gap: var(--control-vertical-space);
+    }
+
+    #faceSelector .info {
+        display: grid;
+        font-size: 1.1em;
+        color: var(--font-color-dim);
+        font-weight: 500;
+        letter-spacing: 1px;
+        place-items: center;
+    }
+
+    #faceSelector .faces {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(6, 1fr);
+        gap: var(--control-vertical-space)
+    }
+
+    #faceSelector .faces img {
+        border-radius: 25%;
+    }
+
+    #faceSelector .faces img:hover {
+        border: 1px solid var(--warning-font-color)
+        cursor: pointer;
+    }
+</style>
+
+<div id="faceSelector"
+     data-app-fragment="modal"
+     data-app-modal-title="@{title}"
+     data-app-modal-min-width="@{minWidth}"
+     data-app-modal-close-on-success="true"
+     data-app-modal-success-event="personCoverFaceSet"
+     data-app-modal-success-detail='{"@{ Api.Field.PERSON_ID }":"@{ person.persistedId }"}'
+     data-app-modal-success-detail-target-attr-face-id="alt-face-id">
+    <div class="info">
+        <div>
+            Best faces for <strong>@{person.name}</strong>
+        </div>
+    </div>
+
+    <div class="faces">
+        @for(face <- faces) {
+            <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{face.persistedId}"
+                 alt="Face option for @{person.name}"
+                 alt-face-id="@{face.persistedId}"
+                 hx-swap="innerHTML"
+                 hx-target="#person"
+                 hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/cover-image?@{Api.Field.FACE_ID}=@{face.persistedId}"
+                 hx-trigger="click"
+            >
+        }
+    </div>
+
+</div>
+
+

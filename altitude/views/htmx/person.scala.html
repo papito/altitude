@@ -1,0 +1,77 @@
+@import altitude.core.Const
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+@(person: Person)
+
+<style>
+    #person {
+        display: grid;
+        margin: 5px;
+        padding: 5px;
+        border-bottom: 1px solid var(--background-tertiary-color);
+        grid-template-columns: 100px 300px 1fr;
+    }
+
+    #person img {
+        border-radius: 25%;
+    }
+
+    #person .visual {
+        display: grid;
+        grid-auto-rows: auto;
+    }
+
+    #person .visual .cover {
+        cursor: pointer;
+    }
+
+    #person .meta {
+        display: grid;
+        align-self: center;
+    }
+
+    #person .meta .name {
+        font-size: 1.1em;
+    }
+
+    #person .name span  {
+        cursor: pointer;
+    }
+
+    #person .name span i {
+        padding-left: 10px;
+    }
+
+    #person .visibility-controls {
+        display: grid;
+        grid-template-rows: 1fr;
+        place-items: center;
+    }
+
+    #person .mark-hidden a, #person .mark-hidden i {
+        color: var(--warning-font-color);
+        text-decoration: none;
+    }
+
+    #person .mark-visible a, #person .mark-visible i {
+        color: var(--success-font-color);
+        text-decoration: none;
+    }
+
+    #person .mark-discarded, #person .mark-discarded i, #person .mark-discarded a {
+        color: var(--error-font-color);
+        text-decoration: none;
+    }
+
+    #person .visibility-controls i {
+        padding-right: 5px;
+    }
+</style>
+
+<div id="person" class="dropzone" alt-person-id="@{person.persistedId}">
+    @htmx.html.person_inner(person)
+</div>
+
+
+

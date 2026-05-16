@@ -1,0 +1,62 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+
+@(minWidth: Int, title: String)
+
+<style>
+  #viewSettingsModalForm {
+    display: grid;
+    grid-auto-rows: auto;
+    row-gap: var(--control-vertical-space);
+  }
+
+  #viewSettingsModalForm input[type="checkbox"] {
+    vertical-align: middle;
+  }
+</style>
+
+<!-- NOTE: The "value" here mirrors the ones in the search results grid, so these are
+     the classes we show/hide in the grid. -->
+
+<form id="viewSettingsModalForm"
+      data-app-fragment="modal"
+      data-app-modal-kind="view-settings"
+      data-app-modal-title="@{title}"
+      data-app-modal-min-width="@{minWidth}">
+  <div>
+    <input type="checkbox"
+           id="fileNameCheckbox"
+           value="fileName">
+    <label for="fileNameCheckbox">File Name</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="originalCreatedAtCheckbox"
+           value="originalCreatedAt">
+    <label for="originalCreatedAtCheckbox">Date/Time Created</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="importedAtCheckbox"
+           value="importedAt">
+    <label for="importedAtCheckbox">Date/Time Imported</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="dimensionsCheckbox"
+           value="dimensions">
+    <label for="dimensionsCheckbox">Media Dimensions</label>
+  </div>
+
+  <div>
+    <input type="checkbox"
+           id="fileSizeCheckbox"
+           value="fileSize">
+    <label for="fileSizeCheckbox">File Size</label>
+  </div>
+</form>
+
+

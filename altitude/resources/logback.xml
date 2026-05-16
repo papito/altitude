@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%boldWhite(%d{HH:mm:ss.SSS}) %gray(%X{USER}) %highlight(%-5level) [%cyan(%X{REQUEST_ID})]  %logger{36}:%M:%L - %highlight(%msg) %n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="DEBUG">
+        <appender-ref ref="STDOUT" />
+    </root>
+
+    <logger name="altitude.core" level="INFO" />
+    <logger name="org.xnio" level="WARN" />
+    <logger name="io.undertow" level="INFO" />
+    <logger name="org.apache.tika.config.TikaConfig" level="ERROR" />
+
+</configuration>

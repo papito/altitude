@@ -1,0 +1,88 @@
+@import altitude.core.RequestContext
+@import altitude.core.util.Util
+@import altitude.core.Api
+
+@(uploadId: String = Util.randomStr())
+
+<style>
+    #uploadForm {
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: calc(var(--control-vertical-space) * 1.5);
+    }
+
+    #uploadForm div {
+        text-align: center;
+    }
+
+    #uploadForm progress {
+        width: 100%;
+    }
+
+    #uploadForm input[type="file"] {
+        background-color: var(--background-form-color);
+        color: #FFFFFF;
+    }
+
+    #uploadForm input::file-selector-button {
+        color: #FFFFFF;
+        background-color: var(--background-form-color);
+    }
+
+    #uploadForm button {
+        font-size: 1.2em;
+    }
+
+
+    /* These elements are served by the server via websocket */
+    #statusText {
+        display: none;
+        color: var(--success-font-color);
+        font-weight: bold;
+        padding: 10px;
+        font-size: 1.1em;
+    }
+
+    #statusText.warning {
+        color: var(--warning-font-color);
+    }
+
+    #statusText span {
+        color: #FFFFFF;
+    }
+
+</style>
+
+<form id="uploadForm"
+      data-app-fragment="upload-form"
+      data-app-upload-cancel-url="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}/cancel"
+      hx-post="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}"
+      hx-encoding="multipart/form-data">
+    <div>
+        <input type="file" name="files" id="files" multiple>
+    </div>
+
+    <div id="stayOnPage" hidden>
+        Files are being uploaded - do not navigate from this page
+    </div>
+
+    <div id="progressBarControl" hidden>
+        <progress id='progressBar' value='0' max='100'></progress>
+    </div>
+
+    <div id="progressTextControl" hidden>
+    </div>
+
+    <div id="startUploadButtonControl">
+        <button class="action-button">Upload from computer</button>
+    </div>
+
+    <div id="abortUploadButtonControl" hidden>
+        <button id="abortButton"
+                type="button"
+                data-app-upload-abort
+                class="action-button error">Cancel
+        </button>
+    </div>
+</form>
+

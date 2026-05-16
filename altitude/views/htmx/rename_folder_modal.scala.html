@@ -1,0 +1,51 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+
+@(minWidth: Int, title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), id: String, existingName: Option[String] = None)
+@defining(formJson.obj.get(Api.Field.Folder.NAME).flatMap(_.strOpt)) { name =>
+
+<style>
+  #renameFolder input {
+    width: 100%;
+  }
+</style>
+
+<form action="#"
+      id="renameFolder"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-modal-min-width="@{minWidth}"
+      data-app-modal-autofocus-selector="#field-@{ Api.Field.Folder.NAME }"
+      data-app-modal-select-on-focus="true"
+      data-app-modal-close-on-success="true"
+      data-app-modal-success-action="close-folder-context-menu"
+      data-app-modal-folder-id="@{id}"
+      hx-swap="innerHTML"
+      hx-put="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/rename"
+      hx-trigger="submit"
+      hx-target="#folderName-@{id}"
+      hx-ext="json-enc">
+
+  @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
+    <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
+  }
+
+  <div>
+    <label for="@{ Api.Field.Folder.NAME }"></label>
+    <input type="text"
+           id="field-@{ Api.Field.Folder.NAME }"
+           name="@{ Api.Field.Folder.NAME }"
+           autocomplete="off"
+           placeholder="New folder name"
+           maxlength="@{ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
+           minlength="@{ Api.Constraints.MIN_FOLDER_NAME_LENGTH }"
+        @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
+           class="error"
+        }
+           value="@{ name.getOrElse(existingName.getOrElse("")) }">
+    <input type="hidden" name="@{ Api.Field.ID }" value="@{ id }">
+  </div>
+</form>
+
+
+}

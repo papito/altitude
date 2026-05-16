@@ -1,0 +1,11 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+@import altitude.core.Api
+@(person: Person)
+
+<span hx-trigger="click"
+      hx-swap="outerHTML"
+      hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/edit">
+            @{person.name}
+    <i class="fas fa-edit"></i></span>
+

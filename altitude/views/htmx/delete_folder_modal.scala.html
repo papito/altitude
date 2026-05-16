@@ -1,0 +1,31 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Folder
+@import altitude.core.Api
+
+@(folder: Folder, minWidth: Int, title: String)
+
+<style>
+    #modalContent {
+        display: grid;
+        grid-template-columns: 1fr;
+        place-items: center;
+    }
+</style>
+
+<button class="action-button error"
+        id="deleteFolder"
+        data-app-fragment="modal"
+        data-app-modal-title="@{title}"
+        data-app-modal-min-width="@{minWidth}"
+        data-app-modal-close-on-success="true"
+        data-app-modal-success-event="folderDeleted"
+        data-app-modal-success-detail='{"@{Api.Field.ID}":"@{folder.id}"}'
+        hx-swap="none"
+        hx-delete="/htmx/folder/r/@{RequestContext.getRepository.persistedId}"
+        hx-trigger="click"
+        hx-vars="{'@{Api.Field.ID}': '@{folder.id}'}"
+        hx-ext="json-enc">
+    Delete "<strong>@{folder.name}</strong>" and move assets into Recycle Bin
+</button>
+
+

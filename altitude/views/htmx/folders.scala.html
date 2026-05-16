@@ -1,0 +1,189 @@
+@import altitude.core.RequestContext
+@import altitude.core.Const
+@import altitude.core.models.Folder
+@import altitude.core.Api
+
+@(rootFolder: Folder)
+
+<style>
+    #rootFolderList .folder.root, .folder-list .children {
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: 4px;
+    }
+
+    #rootFolderList .folder .children {
+        position: relative;
+        margin-left: 20px;
+    }
+
+    #rootFolderList .folder {
+        display: grid;
+        align-items: center;
+        grid-auto-columns: auto;
+    }
+
+    #rootFolderList .folder .controls {
+        display: grid;
+        grid-template-columns: max-content 25px 1fr;
+        align-items: center;
+        touch-action: none;
+    }
+
+
+    #rootFolderList .folder .menu-ctrl {
+        display: grid;
+        padding-left: 6px;
+        place-items: center;
+    }
+
+    #rootFolderList .folder .menu-ctrl a {
+        font-size: 1.3em;
+        color: #FFFFFF;
+        text-decoration: none;
+    }
+
+    #rootFolderList .folder i {
+        font-size: 1.2em;
+    }
+
+    #rootFolderList .folder.root i {
+        color: #f8c98f;
+    }
+
+    #rootFolderList .folder:not(.root) i {
+        color: rgba(234, 231, 231, 0.98);
+    }
+
+    #rootFolderList .folder:not(.root) i.fa-folder-minus,
+    #rootFolderList .folder:not(.root):has(i.fa-folder-minus) .folder i {
+        color: var(--success-font-color);
+    }
+
+    #rootFolderList .folder .menu {
+        display: none;
+        padding: 5px 5px 5px 5px;
+        margin: 0 6px 6px 6px;
+        flex-wrap: wrap;
+        border-radius: 5px;
+        gap: 5px;
+        background-color: var(--background-form-color);
+    }
+
+    #rootFolderList .folder .menu span {
+        display: flex;
+        padding: 3px 6px;
+        cursor: pointer;
+        border: 1px solid gray;
+        border-radius: 5px;
+        font-size: .9em;
+    }
+
+    #rootFolderList .folder-name, #rootFolderList .folder.root i {
+        cursor: pointer;
+    }
+
+    #rootFolderList .folder-name.disabled {
+        cursor: default;
+        color: var(--faded-font-color);
+        pointer-events: none;
+    }
+
+    /* Override .draggable cursor for folders when in triage mode (indicated by disabled class on folder name) */
+    #rootFolderList .folder:has(.folder-name.disabled) .draggable,
+    #rootFolderList .folder:has(.folder-name.disabled) .drag-drop {
+        cursor: default !important;
+    }
+
+    #folderNavWarning {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: var(--control-vertical-space);
+        padding: 8px;
+        border-radius: 5px;
+        background-color: var(--warning-background-color);
+        color: var(--warning-font-color);
+        line-height: 1.4;
+        border: 1px solid var(--warning-font-color);
+        text-shadow: none;
+    }
+
+    #folderNavWarning i {
+        flex-shrink: 0;
+        font-size: 1.1em;
+    }
+
+</style>
+
+<div id="folderNavWarning"
+     x-data
+     x-show="$store.currentView.isTriageView() || $store.currentView.isTrashBinView()">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>Navigation in this view is disabled. You can only drag-and-drop assets and folders.</span>
+</div>
+
+<div id="rootFolderList" class="folder-list">
+    <div class="folder root"
+         id="folder-@{rootFolder.persistedId}"
+         alt-num-of-children="@{rootFolder.numOfChildren}"
+         alt-folder-id="@{rootFolder.persistedId}"
+         alt-parent-folder-id="@{rootFolder.persistedId}"
+         alt-is-root="true"
+         alt-expanded="true">
+
+        <div class="controls dropzone"
+             alt-folder-id="@{rootFolder.persistedId}">
+                <i class="fas fa-folder"
+                hx-target="#content"
+                hx-trigger="click"
+                hx-swap="innerHTML"
+                x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
+                hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true"></i>
+            <div class="menu-ctrl">
+                <a href="#"
+                   alt-folder-id="@{rootFolder.persistedId}"
+                   id="expand-folder-children-@{rootFolder.persistedId}"
+                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/context-menu"
+                   hx-swap="innerHTML"
+                   hx-target="#menu-@{rootFolder.persistedId}"
+                   hx-vals='{"folderId": "@{rootFolder.persistedId}"}'
+                   hx-trigger="click">&#10247;</a>
+            </div>
+            <span id="folderName-@{rootFolder.persistedId}"
+                  class="folder-name"
+                  x-data
+                  :class="{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }"
+                  hx-target="#content"
+                  hx-trigger="click"
+                  hx-swap="innerHTML"
+                  x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
+                  hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root
+            </span>
+        </div>
+
+        <div class="menu"
+             id="menu-@{rootFolder.persistedId}"
+             alt-folder-id="@{rootFolder.persistedId}">
+
+        </div>
+
+        <div class="children"
+             id="children-@{rootFolder.persistedId}"
+             alt-folder-id="@{rootFolder.persistedId}"
+             hx-swap="innerHTML"
+             hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/children"
+             hx-vals='{"parentId": "@{rootFolder.persistedId}"}'
+             hx-trigger="load">
+        </div>
+
+    </div>
+</div>
+
+<script type="module">
+    import { selectTab } from "/static/js/common/navigation.js"
+
+    selectTab("explorer", "foldersTab")
+    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+</script>
+

@@ -1,0 +1,33 @@
+@import altitude.core.RequestContext
+@import altitude.core.Const
+@import altitude.core.models.Asset
+@(asset: Asset)
+
+<style>
+    #imageDetailView {
+        display: grid;
+        place-items: center;
+    }
+
+    #imageDetailView img {
+        max-width: 100vw;
+        max-height: 100vh;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+    }
+</style>
+
+<div id="imageDetailView">
+    @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }") { imgUrl =>
+        <div data-app-fragment="image-detail"
+             data-app-image-detail-url="@{imgUrl}"
+             data-app-image-detail-title="@{ asset.fileName }"
+             data-app-image-detail-width="@{ asset.width }"
+             data-app-image-detail-height="@{ asset.height }"
+             data-app-image-detail-asset-id="@{ asset.persistedId }">
+            <img src="" alt="@{ asset.fileName }">
+        </div>
+    }
+</div>
+

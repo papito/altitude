@@ -1,0 +1,34 @@
+@import altitude.core.RequestContext
+@import altitude.core.Api
+@import altitude.core.models.Person
+
+@(person: Person, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@defining(formJson.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt)) { newName =>
+
+<form action="#"
+      id="editPersonName"
+      data-app-fragment="person-name-editor"
+      data-app-person-id="@{ person.persistedId }"
+      data-app-autofocus-selector="#field-@{ Api.Field.Person.NAME }"
+      data-app-select-on-focus="true"
+      data-app-restore-url="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/"
+      autocomplete="off"
+      hx-swap="outerHTML"
+      hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/edit"
+      hx-trigger="submit"
+      hx-ext="json-enc">
+
+    @if(fieldErrors.contains( Api.Field.Person.NAME)) {
+        <div class="error">@{ fieldErrors( Api.Field.Folder.NAME) }</div>
+    }
+
+    <input type="text"
+           id="field-@{ Api.Field.Person.NAME }"
+           name="@{ Api.Field.Person.NAME }"
+           value="@{ newName.getOrElse(person.name.getOrElse("")) }">
+    <input type="hidden" name="@{ Api.Field.ID }" value="@{ person.persistedId }">
+
+</form>
+
+
+}
