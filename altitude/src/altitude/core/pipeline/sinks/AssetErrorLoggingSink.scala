@@ -1,9 +1,6 @@
 // src/main/scala/software/altitude/core/pipeline/sinks/ErrorLoggingSink.scala
 package altitude.core.pipeline.sinks
 
-import altitude.core.pipeline.PipelineTypes
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalid
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import org.apache.pekko.Done
 import org.apache.pekko.stream.scaladsl.Sink
 import org.slf4j.Logger
@@ -11,7 +8,11 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 
-object AssetErrorLoggingSink {
+import altitude.core.pipeline.PipelineTypes
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalid
+import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+
+object AssetErrorLoggingSink:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def apply(): Sink[(TAssetOrInvalid, PipelineTypes.PipelineContext), Future[Done]] = Sink.foreach[TAssetOrInvalidWithContext] {
@@ -24,4 +25,3 @@ object AssetErrorLoggingSink {
         case Left(_) =>
       }
   }
-}

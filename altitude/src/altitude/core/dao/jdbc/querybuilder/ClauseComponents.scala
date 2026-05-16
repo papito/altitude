@@ -14,12 +14,10 @@ package altitude.core.dao.jdbc.querybuilder
  * @param bindVals
  *   List of values to be bound to the statements stored in the "elements" property.
  */
-case class ClauseComponents(elements: List[String] = List(), bindVals: List[Any] = List()) {
+case class ClauseComponents(elements: List[String] = List(), bindVals: List[Any] = List()):
   val isEmpty: Boolean = elements.isEmpty && bindVals.isEmpty
 
   // scalastyle:off
   def +(that: ClauseComponents): ClauseComponents =
-    ClauseComponents(this.elements ::: that.elements, this.bindVals ::: that.bindVals)
+    ClauseComponents(this.elements ++ that.elements, this.bindVals ++ that.bindVals)
   // scalastyle:on
-
-}

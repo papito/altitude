@@ -1,6 +1,10 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.Const as C
+import cask.Request
+import cask.model.Response
+import org.slf4j.Logger
+
+import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
@@ -12,9 +16,6 @@ import altitude.core.models.Folder
 import altitude.core.models.Repository
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
-import cask.Request
-import cask.model.Response
-import org.slf4j.Logger
 
 class FolderActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/folder"
@@ -109,9 +110,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
     try apiRequestValidator.validate(jsonIn)
     catch
       case validationException: ValidationException =>
-        return responseWithValidationErrors(
-          validationException.errors.toMap,
-          parentId = jsonIn(Api.Field.Folder.PARENT_ID).str)
+        return responseWithValidationErrors(validationException.errors.toMap, parentId = jsonIn(Api.Field.Folder.PARENT_ID).str)
 
     val folderName = jsonIn(Api.Field.Folder.NAME).str
     val parentId = jsonIn(Api.Field.Folder.PARENT_ID).str

@@ -1,5 +1,13 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
+import org.apache.pekko.stream.scaladsl.Source
+import org.scalatest.DoNotDiscover
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+
 import altitude.core.Altitude
 import altitude.core.NotFoundException
 import altitude.core.models.Asset
@@ -12,13 +20,6 @@ import altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
 import altitude.core.util.Query
-import altitude.test.IntegrationTestUtil
-import org.apache.pekko.stream.scaladsl.Source
-import org.scalatest.DoNotDiscover
-
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 
 @DoNotDiscover class PurgePipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -69,9 +70,8 @@ import scala.concurrent.duration.Duration
 
     // Create a map of personId to face object, for easier lookup
     // These are only the people in the deleted assets
-    val personIdToFaceMap: Map[String, List[Face]] = people.map {
-      person => person.persistedId -> testApp.service.person.getPersonFaces(person.persistedId)
-    }.toMap
+    val personIdToFaceMap: Map[String, List[Face]] =
+      people.map(person => person.persistedId -> testApp.service.person.getPersonFaces(person.persistedId)).toMap
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))

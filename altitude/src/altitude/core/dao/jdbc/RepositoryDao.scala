@@ -1,10 +1,9 @@
 package altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
+
 import altitude.core.FieldConst
 import altitude.core.models.Repository
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
-import com.typesafe.config.Config
 
 abstract class RepositoryDao(override val config: Config) extends BaseDao[Repository] with altitude.core.dao.RepositoryDao:
 
@@ -43,13 +42,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
     val fileStoreConfigJson = ujson.Obj()
     repo.fileStoreConfig.foreach { case (k, v) => fileStoreConfigJson(k) = v }
     val sqlVals: List[Any] =
-      List(
-        id,
-        repo.name,
-        repo.ownerAccountId,
-        repo.fileStoreType,
-        repo.rootFolderId,
-        ujson.write(fileStoreConfigJson))
+      List(id, repo.name, repo.ownerAccountId, repo.fileStoreType, repo.rootFolderId, ujson.write(fileStoreConfigJson))
 
     addRecord(sql, sqlVals)
     repo.copy(id = Some(id))

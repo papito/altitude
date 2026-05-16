@@ -1,9 +1,5 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.DuplicateException
-import altitude.core.models.Asset
-import altitude.core.models.MimedPreviewData
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
@@ -11,6 +7,11 @@ import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.must.Matchers.equal
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.should
+
+import altitude.core.Altitude
+import altitude.core.DuplicateException
+import altitude.core.models.Asset
+import altitude.core.models.MimedPreviewData
 
 @DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

@@ -1,10 +1,11 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.{ empty, shouldBe }
+
 import altitude.core.*
 import altitude.core.models.*
 import altitude.core.util.Query
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{shouldBe, empty}
 
 @DoNotDiscover class LibraryServiceRestoreTests(override val testApp: Altitude) extends IntegrationTestCore {
 

@@ -6,7 +6,7 @@ import altitude.core.models.Face
 import altitude.core.models.Repository
 import altitude.core.models.User
 
-object PipelineTypes {
+object PipelineTypes:
   case class PipelineContext(repository: Repository, account: User)
   case class InvalidAsset(payload: Asset, cause: Option[Throwable])
 
@@ -18,4 +18,3 @@ object PipelineTypes {
   type TAssetWithContext = (Asset, PipelineContext)
 
   type TFaceWithContext = (Face, PipelineContext)
-}

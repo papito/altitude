@@ -1,14 +1,11 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.Const as C
+import com.typesafe.config.Config
+
+import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Folder
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
-import com.typesafe.config.Config
-
-import scala.language.implicitConversions
 
 abstract class FolderDao(override val config: Config) extends BaseDao[Folder] with altitude.core.dao.FolderDao:
   final override val tableName = "folder"
@@ -23,7 +20,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
         case i: java.lang.Integer => i
         case l: java.lang.Long => l.toInt
         case _ =>
-          throw new IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
+          throw IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
     )
 
   override def getById(id: String): Folder =

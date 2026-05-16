@@ -1,4 +1,10 @@
 package altitude.core
+import cask.router.Decorator
+import org.bytedeco.javacpp.Loader
+import org.bytedeco.opencv.opencv_java
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
@@ -17,11 +23,6 @@ import altitude.core.routes.web.partial.SearchResultsController
 import altitude.core.routes.web.partial.SetupFormController
 import altitude.core.routes.web.partial.TrashActionController
 import altitude.core.routes.web.partial.ViewSettingsActionController
-import cask.router.Decorator
-import org.bytedeco.javacpp.Loader
-import org.bytedeco.opencv.opencv_java
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 
 object App extends cask.Main:
   /**

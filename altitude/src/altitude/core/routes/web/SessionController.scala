@@ -1,12 +1,13 @@
 package altitude.core.routes.web
 
-import altitude.core.App
-import altitude.core.Const
 import cask.Request
 import cask.model.Cookie
 import org.slf4j.Logger
 
-object SessionController {
+import altitude.core.App
+import altitude.core.Const
+
+object SessionController:
   val AUTH_COOKIE_NAME = "auth_token"
   val COOKIE_MAX_AGE_SECONDS: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS * 24 * 60 * 60 // 7 days
 
@@ -14,26 +15,23 @@ object SessionController {
    * Validates that a redirect URL is safe to use (prevents open redirect vulnerabilities). Only allows relative URLs that start
    * with / and don't contain //
    */
-  def isValidRedirectUrl(url: String): Boolean = {
+  def isValidRedirectUrl(url: String): Boolean =
     url.nonEmpty &&
-    url.startsWith("/") &&
-    !url.startsWith("//") &&
-    !url.contains("://") &&
-    !url.contains("\\")
-  }
-}
+      url.startsWith("/") &&
+      !url.startsWith("//") &&
+      !url.contains("://") &&
+      !url.contains("\\")
 
 class SessionController(using logger: Logger) extends cask.Routes:
   /** Display the login page */
   @cask.get("/login")
-  def loginPage(redirect: Option[String] = None): cask.Response[String] = {
+  def loginPage(redirect: Option[String] = None): cask.Response[String] =
     val payload = "<!doctype html>" + html.login(redirect)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-  }
 
   /** Process login form submission */
   @cask.postForm("/login")
-  def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] = {
+  def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] =
     logger.info(s"Login attempt for user: $login")
 
     App.altitude.service.user.loginAndSetUser(login, password) match {
@@ -74,11 +72,10 @@ class SessionController(using logger: Logger) extends cask.Routes:
           headers = Seq(("Content-Type", "text/html"))
         )
     }
-  }
 
   /** Logout - clears the auth cookie and invalidates the token */
   @cask.post("/logout")
-  def doLogout()(using request: Request): cask.Response[String] = {
+  def doLogout()(using request: Request): cask.Response[String] =
     // Extract token from cookie to invalidate it
     val cookies = request.exchange.getRequestCookies
     val tokenOpt = Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
@@ -105,11 +102,10 @@ class SessionController(using logger: Logger) extends cask.Routes:
           sameSite = "Strict"
         ))
     )
-  }
 
   /** API endpoint for logout (returns JSON) */
   @cask.post("/api/logout")
-  def apiLogout()(using request: Request): cask.Response[String] = {
+  def apiLogout()(using request: Request): cask.Response[String] =
     // Extract token from Authorization header or cookie
     val authHeader = Option(request.exchange.getRequestHeaders.getFirst("Authorization"))
     val tokenFromHeader = authHeader.filter(_.startsWith("Bearer ")).map(_.substring(7))
@@ -125,7 +121,8 @@ class SessionController(using logger: Logger) extends cask.Routes:
 
     val responseJson = ujson.Obj("success" -> true, "message" -> "Logged out successfully")
     cask.Response(
-      responseJson.toString,      statusCode = 200,
+      responseJson.toString,
+      statusCode = 200,
       headers = Seq(("Content-Type", "application/json")),
       cookies = Seq(
         Cookie(
@@ -138,6 +135,5 @@ class SessionController(using logger: Logger) extends cask.Routes:
           sameSite = "Strict"
         ))
     )
-  }
 
   initialize()

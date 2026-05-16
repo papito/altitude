@@ -2,14 +2,13 @@ package altitude.core.util
 
 import altitude.core.Api
 
-case class SearchSort(field: String, direction: SortDirection) {
+case class SearchSort(field: String, direction: SortDirection):
   def toJson: ujson.Obj = ujson.Obj(
     Api.Field.SearchSort.DIRECTION -> direction.toString,
     Api.Field.SearchSort.FIELD -> field
   )
 
   override def toString: String = s"SearchSort(field=$field, direction=${direction.id})"
-}
 
 class SearchQuery(
     val text: Option[String] = None,
@@ -20,25 +19,21 @@ class SearchQuery(
     rpp: Int = 0,
     page: Int = 1,
     val searchSort: List[SearchSort] = List())
-  extends Query(params = metadataFilters, rpp = rpp, page = page) {
+  extends Query(params = metadataFilters, rpp = rpp, page = page):
 
-  if (sort.nonEmpty) {
-    throw new IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
-  }
+  if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
 
-  if (searchSort.size > 1) {
-    throw new IllegalArgumentException("Only one sort currently supported")
-  }
+  if searchSort.size > 1 then throw IllegalArgumentException("Only one sort currently supported")
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
-  val isText: Boolean = text.nonEmpty
+  val isText: Boolean = text.isDefined
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
     s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
-    new SearchQuery(
+    SearchQuery(
       text = text,
       folderIds = folderIds,
       personIds = personIds,
@@ -49,7 +44,7 @@ class SearchQuery(
     )
 
   def withFolderIds(ids: Set[String]): SearchQuery =
-    new SearchQuery(
+    SearchQuery(
       text = text,
       params = params,
       folderIds = ids,
@@ -61,7 +56,7 @@ class SearchQuery(
     )
 
   override def add(_params: (String, Any)*): SearchQuery =
-    new SearchQuery(
+    SearchQuery(
       text = text,
       params = params ++ _params,
       folderIds = folderIds,
@@ -71,4 +66,3 @@ class SearchQuery(
       page = page,
       searchSort = searchSort
     )
-}

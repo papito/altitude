@@ -1,9 +1,9 @@
 package altitude.core
 
-object Const {
+object Const:
 
   /** CONFIGURATION */
-  object Conf {
+  object Conf:
     val TEST_DIR = "test.dir"
     val FS_DATA_DIR = "fs.data.dir"
     val DEFAULT_STORAGE_ENGINE = "storage.engine.default"
@@ -13,7 +13,6 @@ object Const {
     val POSTGRES_URL = "db.postgres.url"
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
-    val PERSON_MIN_FACES_THRESHOLD = "face.threshold"
 
     val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
     val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
@@ -22,20 +21,17 @@ object Const {
     val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
     val FACE_RECOGNITION_MAX_COMPARISONS_PER_PERSON = "face.recognition.max_comparisons_per_person"
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
-    val FACE_RECOGNITION_MIN_DETECTION_SCORE = "face.recognition.min_detection_score"
+    val FACE_DEBUG_ENABLED = "face.debug.enabled"
 
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"
-  }
 
-  object FaceRecognition {
+  object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3
-  }
 
-  object AssetView {
+  object AssetView:
     val PREVIEW_BOX_PIXELS = 200
-  }
 
   object DbEngineName:
     val SQLITE = "sqlite"
@@ -44,21 +40,18 @@ object Const {
   object StorageEngineName:
     val FS = "fs"
 
-  object Search {
+  object Search:
     val DEFAULT_RPP = 50
 
-    object View {
+    object View:
       val DEFAULT = "default"
       val TRIAGE = "triage"
       val TRASHBIN = "trashbin"
-    }
-  }
 
-  object Security {
+  object Security:
     val MEMBER_ME_COOKIE_EXPIRATION_DAYS = 7
-  }
 
-  object DataStore {
+  object DataStore:
     val CONTENT = "content"
     val PREVIEW = "preview"
     val FILE = "file"
@@ -67,19 +60,17 @@ object Const {
     val FACES = "faces"
     val REPOSITORIES = "repositories"
     val MODELS = "models"
-  }
 
-  object PeopleTypeFilter {
+  object PeopleTypeFilter:
     val ALL = "all"
     val HIDDEN = "hidden"
     val COMPLETE = "complete"
     val INCOMPLETE = "incomplete"
-  }
 
   /** MESSAGES */
-  object Msg {
+  object Msg:
 
-    object Err {
+    object Err:
       val VALUE_REQUIRED = "This field is required"
       val VALUE_CANNOT_BE_EMPTY = "Cannot be empty"
       val VALUE_TOO_LONG = "Value is longer than %s characters"
@@ -93,10 +84,8 @@ object Const {
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
-    }
-  }
 
-  object UI {
+  object UI:
     private val DEFAULT_MODAL_WIDTH = 400
 
     val ADD_FOLDER_MODAL_TITLE = "Add a folder"
@@ -116,5 +105,3 @@ object Const {
 
     val VIEW_SETTINGS_MODAL_TITLE = "View settings"
     val VIEW_SETTINGS_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-  }
-}

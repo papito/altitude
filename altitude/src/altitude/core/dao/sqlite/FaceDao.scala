@@ -1,14 +1,14 @@
 package altitude.core.dao.sqlite
 
+import com.typesafe.config.Config
+import java.sql.PreparedStatement
+
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
-import com.typesafe.config.Config
-
-import java.sql.PreparedStatement
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with SqliteOverrides:
 
@@ -58,7 +58,6 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       FROM vector_full_scan('face', 'features', vector_as_f32(?)) AS v
       JOIN face ON face.rowid = v.rowid
       WHERE face.repository_id = ?
-        AND detection_score >= ?
         AND v.distance < ?
       ORDER BY v.distance
       LIMIT ?;
@@ -66,9 +65,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
 
     val matchCount = config.getInt("face.recognition.match_count")
     val threshold = config.getDouble("face.recognition.cosine_distance_threshold")
-    val minDetectionScore = config.getDouble("face.recognition.min_detection_score")
 
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId, minDetectionScore, threshold, matchCount))
+      manyBySqlQuery(sql, List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId, threshold, matchCount))
 
     recs.map(makeModel)

@@ -1,16 +1,21 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.be
+import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+
+import scala.util.Random
+
 import altitude.core.Altitude
 import altitude.core.Const.FaceRecognition
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.util.Query
-import altitude.test.IntegrationTestUtil
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.be
-import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+import altitude.core.util.SearchQuery
+import altitude.core.util.Util
 
 @DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -71,11 +76,11 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
   }
 
   test("Faces are added to a person") {
-    val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     testApp.service.library.addImportAsset(importAsset1)
 
     // Add another face to the same person
-    val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
+    val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
     val importedAsset2: Asset = testApp.service.library.addImportAsset(importAsset2)
 
     val people = testApp.service.person.getPeopleForAsset(importedAsset2.persistedId)
@@ -130,8 +135,18 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
     val mergedBPersisted: Person = testApp.service.person.getById(mergedB.persistedId)
 
+    val mergedSearchTotal = testApp.service.library
+      .search(
+        new SearchQuery(
+          params = Map(altitude.core.FieldConst.Asset.IS_RECYCLED -> false),
+          personIds = Set(mergedB.persistedId)
+        )
+      )
+      .total
+
     // merged person should have the correct face number
     mergedBPersisted.numOfFaces should be(NEW_FACES_TOTAL)
+    mergedBPersisted.numOfFaces should be(mergedSearchTotal)
 
     // all face labels should be the same as the merged INTO person label
     val faces = testApp.service.person.getPersonFaces(mergedB.persistedId)
@@ -232,6 +247,32 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
     personC.name.get should be(mergedFromName)
   }
 
+  test("Merging of people in the same asset results in correct face counts") {
+    val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+
+    // two people  - one asset
+    val faces = testApp.service.faceDetection.extractFaces(importAsset.data)
+    faces.size should be(2)
+
+    val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
+    people.size should be(2)
+    people.head.numOfFaces should be(1)
+    people.last.numOfFaces should be(1)
+
+    // merge the two people
+    val mergedPerson: Person = testApp.service.person.merge(dest = people.head, source = people.last)
+
+    /**
+     * After the merge, there should be still oen asset and one person with one asset. This is technically not a real scenario -
+     * except for twins, one person cannot be in the image twice, but the use case is real. As same person gets merged into
+     * themselves across assets, the face count should not drift and reflect the actual search results
+     */
+    val mergedIntoPerson = testApp.service.person.getById(mergedPerson.persistedId)
+    // yes, two faces in DB, but only one asset will be returned when you query for the person
+    mergedIntoPerson.numOfFaces should be(1)
+  }
+
   test("Known person keeps the same when merged into Unknown") {
     // destination merge person is not named
     val personA: Person = testApp.service.person.addPerson(Person())
@@ -296,10 +337,12 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
     // recycle some assets
     val recycleCount = 2
-    allAssets.take(recycleCount).foreach(asset => testApp.service.library.recycleAssets(Set(asset.persistedId)))
+    val recycledAssetIds = allAssets.take(recycleCount).map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(recycledAssetIds)
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
+
     // The faces are still in DB, but they are not counted toward the person,
     // as they are in the trash bin until being Purged.
     testApp.service.person.getPersonFaces(person.persistedId).length should be(totalAssets)
@@ -318,17 +361,46 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
     // recycle some assets
     val recycleCount = 2
-    allAssets.take(recycleCount).foreach(asset => testApp.service.library.recycleAssets(Set(asset.persistedId)))
+    val recycledAssetIds = allAssets.take(recycleCount).map(_.persistedId).toSet
+    testApp.service.library.recycleAssets(recycledAssetIds)
 
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets - recycleCount)
 
-    // restore the assets (move from recycle)
-    allAssets.take(recycleCount).foreach {
-      asset => testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), testContext.repository.rootFolderId)
-    }
+    // restore the recycled assets
+    testApp.service.library.restoreRecycledAssets(recycledAssetIds)
 
+    // face counts should be back to the original number
     person = testApp.service.person.getById(person.persistedId)
     person.numOfFaces should be(totalAssets)
+  }
+
+  test("Moving triaged asset to a folder does not change person face counts") {
+    val person: Person = testApp.service.person.addPerson(Person())
+    val triagedAsset: Asset = testContext.persistAsset(isTriaged = true)
+
+    val face = Face(
+      id = Some(Util.randomStr(32)),
+      x1 = 10,
+      y1 = 10,
+      width = 30,
+      height = 30,
+      assetId = Some(triagedAsset.persistedId),
+      personId = Some(person.persistedId),
+      personLabel = Some(1),
+      detectionScore = 0.99,
+      checksum = Random.nextInt(),
+      features = Array.fill(128)(0.1f)
+    )
+
+    testApp.service.person.addFace(face, triagedAsset, person)
+
+    var persistedPerson = testApp.service.person.getById(person.persistedId)
+    persistedPerson.numOfFaces shouldBe 1
+
+    testApp.service.library.moveAssetsToFolder(Set(triagedAsset.persistedId), testContext.repository.rootFolderId)
+
+    persistedPerson = testApp.service.person.getById(person.persistedId)
+    persistedPerson.numOfFaces shouldBe 1
   }
 }

@@ -1,17 +1,13 @@
 package altitude.core.dao.jdbc
 
-import altitude.core.Const as C
+import com.typesafe.config.Config
+
+import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Person
 import altitude.core.service.PersonService
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
-import com.typesafe.config.Config
-
-import scala.collection.mutable
-import scala.language.implicitConversions
 
 abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 
@@ -45,7 +41,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     val personName = getPersonName(person, personSeqNum)
     val personSortName = getPersonSortName(person, personSeqNum)
-    val isNamed = person.name.nonEmpty
+    val isNamed = person.name.isDefined
 
     val id = BaseDao.genId
 
@@ -61,19 +57,13 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     person.copy(id = Some(id), name = Some(personName), isNamed = isNamed)
 
   protected def getPersonName(person: Person, sequenceNum: Long): String =
-    val name =
-      if person.name.nonEmpty then person.name.get
-      else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
-
-    name
+    if person.name.isDefined then person.name.get
+    else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
 
   // lowercase name or "unknown_0001" etc
   protected def getPersonSortName(person: Person, sequenceNum: Long): String =
-    val sortName =
-      if person.name.nonEmpty then person.name.get.toLowerCase()
-      else f"${PersonService.UNKNOWN_NAME_PREFIX.toLowerCase()} $sequenceNum%04d"
-
-    sortName
+    if person.name.isDefined then person.name.get.toLowerCase
+    else f"${PersonService.UNKNOWN_NAME_PREFIX.toLowerCase} $sequenceNum%04d"
 
   def getAll: Map[String, Person] =
     val sql = """SELECT *
@@ -86,15 +76,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
 
-    val lookup: mutable.Map[String, Person] = mutable.Map()
-
-    recs.foreach {
-      rec =>
-        val person: Person = makeModel(rec)
-        lookup += (person.persistedId -> person)
-    }
-
-    lookup.toMap
+    makePersonLookup(recs)
 
   def getAllNotDiscarded: Map[String, Person] =
     val sql = """SELECT *
@@ -108,15 +90,10 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
 
-    val lookup: mutable.Map[String, Person] = mutable.Map()
+    makePersonLookup(recs)
 
-    recs.foreach {
-      rec =>
-        val person: Person = makeModel(rec)
-        lookup += (person.persistedId -> person)
-    }
-
-    lookup.toMap
+  private def makePersonLookup(recs: List[Map[String, AnyRef]]): Map[String, Person] =
+    recs.map(makeModel).map(p => p.persistedId -> p).toMap
 
   def getAllAboveThreshold: List[Person] =
     val sql = """SELECT *
@@ -187,7 +164,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                 WHERE person.id = face.person_id
                   AND face.asset_id IN ($placeHolders))
       """
-      updateByBySql(sql, assetIds.toList ::: assetIds.toList)
+      updateByBySql(sql, assetIds.toList ++ assetIds.toList)
     }
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
@@ -207,5 +184,5 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
                 WHERE person.id = face.person_id
                   AND face.asset_id IN ($placeHolders))
       """
-      updateByBySql(sql, assetIds.toList ::: assetIds.toList)
+      updateByBySql(sql, assetIds.toList ++ assetIds.toList)
     }

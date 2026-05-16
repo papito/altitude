@@ -1,9 +1,10 @@
 package altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
+
 import altitude.core.FieldConst
 import altitude.core.models.AccountType
 import altitude.core.models.User
-import com.typesafe.config.Config
 
 abstract class UserDao(override val config: Config) extends BaseDao[User] with altitude.core.dao.UserDao:
   final override val tableName = "account"

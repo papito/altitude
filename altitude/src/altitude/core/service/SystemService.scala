@@ -1,5 +1,9 @@
 package altitude.core.service
 
+import java.sql.SQLException
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.RequestContext
@@ -8,51 +12,35 @@ import altitude.core.models.Repository
 import altitude.core.models.SystemMetadata
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
-import java.sql.SQLException
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 
-class SystemService(val app: Altitude) {
+class SystemService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val systemMetadataDao: SystemMetadataDao = app.DAO.systemMetadata
   protected val txManager: TransactionManager = app.txManager
 
-  def version: Int = {
+  def version: Int =
     txManager.withTransaction {
-      try {
-        readMetadata.version
-      } catch {
-        case ex: SQLException => {
-          /* Uncomment this if you get "current transaction is aborted, commands ignored until end of transaction block".
-             It means the select query failed when it should not have, but the exception itself is normal for new installations
-             AND tests (when there is no database yet). Seeing that error when running tests is annoying, so we just
-             swallow it here.
-           */
-          // println(ex)
-
-          0 // new installation
-        }
-        case ex: Exception => throw ex
-      }
+      try readMetadata.version
+      catch
+        case ex: SQLException =>
+          // Swallow - normal for new installations and tests with no DB yet
+          0
     }
-  }
 
-  def versionUp(): Unit = {
+  def versionUp(): Unit =
     val toVersion = version + 1
 
     txManager.withTransaction {
       systemMetadataDao.updateVersion(toVersion = toVersion)
     }
-  }
 
-  def readMetadata: SystemMetadata = {
+  def readMetadata: SystemMetadata =
     txManager.asReadOnly {
       systemMetadataDao.getById(SystemMetadataDao.SYSTEM_RECORD_ID.toString)
     }
-  }
 
-  def initializeSystem(repositoryName: String, adminModel: User, password: String): (User, Repository) = {
+  def initializeSystem(repositoryName: String, adminModel: User, password: String): (User, Repository) =
     logger.warn("INITIALIZING SYSTEM")
 
     txManager.withTransaction {
@@ -73,5 +61,3 @@ class SystemService(val app: Altitude) {
 
       (admin, repo)
     }
-  }
-}

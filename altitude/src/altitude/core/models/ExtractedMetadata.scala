@@ -6,23 +6,27 @@ object ExtractedMetadata:
   private type FieldValuesType = Map[String, String]
   private type MetadataType = Map[String, FieldValuesType]
 
-  given JsonCodec.ReadWriter[ExtractedMetadata] = JsonCodec.readwriter[ujson.Value].bimap(
-    (em: ExtractedMetadata) => {
-      val result = ujson.Obj()
-      em.data.foreach { case (dirName, fields) =>
-        val inner = ujson.Obj()
-        fields.foreach { case (k, v) => inner(k) = ujson.Str(v) }
-        result(dirName) = inner
-      }
-      result
-    },
-    (json: ujson.Value) =>
-      ExtractedMetadata(
-        json.obj.map { case (key, value) =>
-          key -> value.obj.map { case (fieldKey, fieldValue) => fieldKey -> fieldValue.str }.toMap
-        }.toMap
-      )
-  )
+  given JsonCodec.ReadWriter[ExtractedMetadata] = JsonCodec
+    .readwriter[ujson.Value]
+    .bimap(
+      (em: ExtractedMetadata) => {
+        val result = ujson.Obj()
+        em.data.foreach {
+          case (dirName, fields) =>
+            val inner = ujson.Obj()
+            fields.foreach { case (k, v) => inner(k) = ujson.Str(v) }
+            result(dirName) = inner
+        }
+        result
+      },
+      (json: ujson.Value) =>
+        ExtractedMetadata(
+          json.obj.map {
+            case (key, value) =>
+              key -> value.obj.map { case (fieldKey, fieldValue) => fieldKey -> fieldValue.str }.toMap
+          }.toMap
+        )
+    )
 
   given Conversion[ujson.Value, ExtractedMetadata] = json => JsonCodec.read[ExtractedMetadata](json)
 

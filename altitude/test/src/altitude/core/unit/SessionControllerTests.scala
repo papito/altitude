@@ -1,8 +1,9 @@
 package altitude.core.unit
 
+import org.scalatest.{ funsuite, DoNotDiscover }
+import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
+
 import altitude.core.routes.web.SessionController
-import org.scalatest.{DoNotDiscover, funsuite}
-import org.scalatest.matchers.should.Matchers.{shouldBe, shouldEqual}
 
 @DoNotDiscover class SessionControllerTests extends funsuite.AnyFunSuite {
 

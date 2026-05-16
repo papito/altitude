@@ -1,9 +1,10 @@
 package altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
+
 import altitude.core.FieldConst
 import altitude.core.models.UserToken
 import altitude.core.util.Util
-import com.typesafe.config.Config
 
 abstract class UserTokenDao(override val config: Config) extends BaseDao[UserToken] with altitude.core.dao.UserTokenDao:
   final override val tableName = "user_token"

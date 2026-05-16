@@ -1,11 +1,12 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.Const as C
-import altitude.core.routes.BaseController
-import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
+
+import altitude.core.{ Const => C }
+import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.requireLogin
 
 class ViewSettingsActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/view-settings"

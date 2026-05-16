@@ -1,5 +1,11 @@
 package altitude.core.integration
 
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.must.Matchers.contain
+import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.must.Matchers.not
+import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldNot }
+
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.NotFoundException
@@ -7,11 +13,6 @@ import altitude.core.ValidationException
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.*
 import altitude.core.util.Util
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.contain
-import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.must.Matchers.not
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldNot }
 
 @DoNotDiscover class UserMetadataServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 

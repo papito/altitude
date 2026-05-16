@@ -1,10 +1,11 @@
 package altitude.core.dao.jdbc
 
+import com.typesafe.config.Config
+import org.apache.commons.dbutils.QueryRunner
+
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Stat
-import com.typesafe.config.Config
-import org.apache.commons.dbutils.QueryRunner
 
 abstract class StatDao(override val config: Config) extends BaseDao[Stat] with altitude.core.dao.StatDao:
 

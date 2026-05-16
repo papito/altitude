@@ -1,14 +1,15 @@
 package altitude.test
 
-import altitude.core.Const as C
-import altitude.core.Altitude
-import altitude.core.models.ImportAsset
-import altitude.core.models.UserMetadata
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.imageio.ImageIO
 import org.apache.commons.io.FileUtils
+
+import altitude.core.Altitude
+import altitude.core.Const as C
+import altitude.core.models.ImportAsset
+import altitude.core.models.UserMetadata
 
 object IntegrationTestUtil {
 

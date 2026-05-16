@@ -1,6 +1,10 @@
 package altitude.core.routes.web.partial
 
-import altitude.core.Const as C
+import cask.Request
+import cask.model.Response
+import org.slf4j.Logger
+
+import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
@@ -11,9 +15,6 @@ import altitude.core.models.AccountType
 import altitude.core.models.User
 import altitude.core.routes.BaseController
 import altitude.core.routes.web.SessionController
-import cask.Request
-import cask.model.Response
-import org.slf4j.Logger
 
 class SetupFormController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"

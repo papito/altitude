@@ -1,9 +1,9 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
+
 import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
+import altitude.core.util.JsonCodec.given
 
 object Face:
   // For sorting faces by detection score automatically, highest score first

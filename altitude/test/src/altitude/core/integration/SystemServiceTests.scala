@@ -1,12 +1,13 @@
 package altitude.core.integration
 
+import altitude.test.TestFocus
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.shouldBe
+
 import altitude.core.Altitude
 import altitude.core.RequestContext
 import altitude.core.models.AccountType
 import altitude.core.util.Query
-import altitude.test.TestFocus
-import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
 
 @DoNotDiscover class SystemServiceTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 

@@ -4,7 +4,7 @@ import { dragged, dragMoveListener } from "../common/dragon-drop.js"
 export function bindFolderDragDrop({ dispatch }) {
     interact("#rootFolderList .drag-drop").draggable({
         inertia: true,
-        autoScroll: true,
+        autoScroll: { container: document.querySelector("#explorer") },
 
         listeners: {
             move: dragMoveListener,

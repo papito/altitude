@@ -11,87 +11,72 @@ import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
 import altitude.core.util.Query
 
-class FolderService(val app: Altitude) extends BaseService[Folder] {
+class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   override protected val dao: FolderDao = app.DAO.folder
 
-  def add(name: String, parentId: Option[String] = None): Folder = {
+  def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
-      val _parentId = if (parentId.isDefined) parentId.get else RequestContext.getRepository.rootFolderId
+      val _parentId = if parentId.isDefined then parentId.get else RequestContext.getRepository.rootFolderId
       val folder = Folder(name = name.trim, parentId = _parentId)
       app.service.folder.add(folder)
     }
-  }
 
-  override def add(folder: Folder): Folder = {
+  override def add(folder: Folder): Folder =
     txManager.withTransaction {
       super.add(folder)
     }
-  }
 
-  def getAll: List[Folder] = {
+  def getAll: List[Folder] =
     txManager.asReadOnly {
       val q: Query = new Query().withRepository()
       dao.query(q).records
     }
-  }
 
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
 
   /** Get children for the parent given, but only a single level - non-recursive */
-  def getChildren(rootId: String): List[Folder] = {
+  def getChildren(rootId: String): List[Folder] =
     txManager.asReadOnly {
       dao.getChildren(rootId)
     }
-  }
 
-  def getChildrenRecursive(rootId: String): List[Folder] = {
+  def getChildrenRecursive(rootId: String): List[Folder] =
     txManager.asReadOnly {
       dao.getChildrenRecursive(rootId)
     }
-  }
 
-  def getAncestors(folderId: String): List[Folder] = {
+  def getAncestors(folderId: String): List[Folder] =
     txManager.asReadOnly {
       dao.getAncestors(folderId)
     }
-  }
 
-  override def deleteById(id: String): Int = {
-    throw new NotImplementedError("Deleting a folder is handled by the library service")
-  }
+  override def deleteById(id: String): Int =
+    throw NotImplementedError("Deleting a folder is handled by the library service")
 
-  override def deleteByQuery(query: Query): Int = {
-    throw new NotImplementedError("Cannot delete folders by query")
-  }
+  override def deleteByQuery(query: Query): Int =
+    throw NotImplementedError("Cannot delete folders by query")
 
   /** Move a folder from one parent to another */
-  def move(folderBeingMovedId: String, destFolderId: String): (Folder, Folder) = {
-    if (isRootFolder(folderBeingMovedId)) {
-      throw IllegalOperationException("Cannot move the root folder")
-    }
+  def move(folderBeingMovedId: String, destFolderId: String): (Folder, Folder) =
+    if isRootFolder(folderBeingMovedId) then throw IllegalOperationException("Cannot move the root folder")
 
     logger.debug(s"Moving folder $folderBeingMovedId to $destFolderId")
 
     // cannot move into itself
-    if (folderBeingMovedId == destFolderId) {
+    if folderBeingMovedId == destFolderId then
       throw IllegalOperationException(s"Cannot move a folder into itself. ID: $folderBeingMovedId")
-    }
 
     txManager.withTransaction {
       // cannot move into own child
-      if (getAncestors(destFolderId).map(_.persistedId).contains(folderBeingMovedId)) {
+      if getAncestors(destFolderId).map(_.persistedId).contains(folderBeingMovedId) then
         throw DuplicateException(Some("Cannot move parent folder into a child node"))
-      }
 
       var destFolder: Option[Folder] = None
       // check that the destination folder exists
-      try {
-        destFolder = Some(getById(destFolderId))
-      } catch {
-        case _: NotFoundException => throw ValidationException(s"Destination folder ID $destFolderId does not exist")
-      }
+      try destFolder = Some(getById(destFolderId))
+      catch case _: NotFoundException => throw ValidationException(s"Destination folder ID $destFolderId does not exist")
 
       val folderBeingMoved: Folder = getById(folderBeingMovedId)
 
@@ -99,21 +84,13 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
         FieldConst.Folder.PARENT_ID -> destFolderId,
         FieldConst.Folder.NAME -> folderBeingMoved.name
       )
-      try {
-        updateById(folderBeingMovedId, data)
-      } catch {
-        case e: Exception =>
-          throw e
-      }
+      updateById(folderBeingMovedId, data)
 
       Tuple2(folderBeingMoved, destFolder.get)
     }
-  }
 
-  def rename(folderId: String, newName: String): Folder = {
-    if (isRootFolder(folderId)) {
-      throw IllegalOperationException("Cannot rename the root folder")
-    }
+  def rename(folderId: String, newName: String): Folder =
+    if isRootFolder(folderId) then throw IllegalOperationException("Cannot rename the root folder")
 
     txManager.withTransaction {
       val folder: Folder = getById(folderId)
@@ -127,18 +104,12 @@ class FolderService(val app: Altitude) extends BaseService[Folder] {
       updateById(folderId, data)
       folderForUpdate
     }
-  }
 
-  def setRecycledProp(folder: Folder, isRecycled: Boolean): Unit = {
-    if (folder.isRecycled == isRecycled) {
-      return
-    }
+  def setRecycledProp(folder: Folder, isRecycled: Boolean): Unit =
+    if folder.isRecycled == isRecycled then return
 
     txManager.withTransaction {
       logger.info(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
 
       dao.updateById(folder.persistedId, Map(FieldConst.Folder.IS_RECYCLED -> isRecycled))
     }
-  }
-
-}

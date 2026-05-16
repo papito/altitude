@@ -1,9 +1,10 @@
 package altitude.core.unit
 
+import altitude.test.TestFocus
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
+
 import altitude.core.models.Person
-import altitude.test.TestFocus
 
 @DoNotDiscover class PersonModelTests extends funsuite.AnyFunSuite with TestFocus {
 

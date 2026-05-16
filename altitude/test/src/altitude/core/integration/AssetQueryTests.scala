@@ -1,9 +1,10 @@
 package altitude.core.integration
 
-import altitude.core.Altitude
-import altitude.core.util.Query
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.shouldBe
+
+import altitude.core.Altitude
+import altitude.core.util.Query
 
 @DoNotDiscover class AssetQueryTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Empty search") {

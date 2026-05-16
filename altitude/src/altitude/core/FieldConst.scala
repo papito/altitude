@@ -1,6 +1,6 @@
 package altitude.core
 
-object FieldConst {
+object FieldConst:
   val ID = "id"
   val REPO_ID = "repository_id"
   val USER_ID = "user_id"
@@ -10,34 +10,30 @@ object FieldConst {
   val CREATED_AT = "created_at"
   val UPDATED_AT = "updated_at"
 
-  object SystemMetadata {
+  object SystemMetadata:
     val VERSION = "version"
     val IS_INITIALIZED = "is_initialized"
-  }
 
-  object Repository {
+  object Repository:
     val NAME = "name"
     val OWNER_ACCOUNT_ID = "owner_account_id"
     val ROOT_FOLDER_ID = "root_folder_id"
     val FILE_STORE_TYPE = "file_store_type"
     val FILES_STORE_CONFIG = "file_store_config"
-  }
 
-  object User {
+  object User:
     val EMAIL = "email"
     val NAME = "name"
     val PASSWORD_HASH = "password_hash"
     val ACCOUNT_TYPE = "account_type"
     val LAST_ACTIVE_REPO_ID = "last_active_repo_id"
-  }
 
-  object UserToken {
+  object UserToken:
     val ACCOUNT_ID = "account_id"
     val TOKEN = "token"
     val EXPIRES_AT = "expires_at"
-  }
 
-  object Face {
+  object Face:
     val X1 = "x1"
     val Y1 = "y1"
     val WIDTH = "width"
@@ -47,9 +43,8 @@ object FieldConst {
     val DETECTION_SCORE = "detection_score"
     val FEATURES = "features"
     val CHECKSUM = "checksum"
-  }
 
-  object Person {
+  object Person:
     val NAME = "name"
     val NAME_FOR_SORT = "name_for_sort"
     val COVER_FACE_ID = "cover_face_id"
@@ -59,9 +54,8 @@ object FieldConst {
     val IS_BAD_MATCH = "is_bad_match"
     val IS_NAMED = "is_named"
     val FACES = "faces"
-  }
 
-  object Asset {
+  object Asset:
     val CHECKSUM = "checksum"
     val ASSET_TYPE = "asset_type"
     val FOLDER_ID = "folder_id"
@@ -78,24 +72,21 @@ object FieldConst {
     val IS_PURGED = "is_purged"
     val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
     val ORIGINAL_CREATED_AT = "original_created_at"
-  }
 
-  object PublicMetadata {
+  object PublicMetadata:
     val DEVICE_MODEL = "device_model"
     val F_NUMBER = "f_number"
     val EXPOSURE_TIME = "exposure_time"
     val ISO = "iso"
     val FOCAL_LENGTH = "focal_length"
     val DATE_TIME_ORIGINAL = "date_time_original"
-  }
 
-  object AssetType {
+  object AssetType:
     val MIME_TYPE = "mime_type"
     val MEDIA_TYPE = "media_type"
     val MEDIA_SUBTYPE = "media_subtype"
-  }
 
-  object Folder {
+  object Folder:
     val NAME = "name"
     val NAME_LC = "name_lc"
     val PARENT_ID = "parent_id"
@@ -104,37 +95,30 @@ object FieldConst {
     val CHILDREN = "children"
     val IS_RECYCLED = "is_recycled"
 
-    object Name {
+    object Name:
       val ROOT = "root"
-    }
-    object Alias {
-      val ROOT = "root"
-    }
-  }
 
-  object MimedData {
+    object Alias:
+      val ROOT = "root"
+
+  object MimedData:
     val MIME_TYPE = "mime_type"
     val DATA = "data"
     val ASSET_ID = "asset_id"
-  }
 
-  object Stat {
+  object Stat:
     val DIMENSION = "dimension"
     val DIM_VAL = "dim_val"
-  }
 
-  object MetadataField {
+  object MetadataField:
     val NAME = "name"
     val NAME_LC = "name_lc"
     val FIELD_TYPE = "field_type"
     val FIELD = "field"
-  }
 
-  object SearchToken {
+  object SearchToken:
     val ASSET_ID = "asset_id"
     val FIELD_ID = "field_id"
     val FIELD_VALUE_KW = "field_value_kw"
     val FIELD_VALUE_NUM = "field_value_num"
     val FIELD_VALUE_BOOL = "field_value_bool"
-  }
-}

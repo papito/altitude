@@ -7,7 +7,7 @@ import altitude.core.models.MimedAssetData
 import altitude.core.models.MimedFaceData
 import altitude.core.models.MimedPreviewData
 
-trait FileStoreService {
+trait FileStoreService:
   def addAsset(assetWithData: AssetWithData): Unit
   def getAssetById(id: String): MimedAssetData
   def purgeAssetById(id: String): Unit
@@ -22,5 +22,3 @@ trait FileStoreService {
   def getAlignedFaceById(faceId: String): MimedFaceData
 
   def purgeFaceById(id: String): Unit
-
-}

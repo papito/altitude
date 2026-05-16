@@ -1,11 +1,12 @@
 package altitude.core.routes.web
 
-import altitude.core.App
-import altitude.core.routes.decorators.extractToken
-import altitude.core.routes.decorators.requireLogin
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
+
+import altitude.core.App
+import altitude.core.routes.decorators.extractToken
+import altitude.core.routes.decorators.requireLogin
 
 class IndexController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
   @cask.get("/")
@@ -19,7 +20,7 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     // this endpoint.
     val devUser = App.altitude.service.user.getDevUser
 
-    if devUser.nonEmpty then
+    if devUser.isDefined then
       logger.info(s"User authenticated: ${devUser.get.email}")
       return Response("", 302, Seq("Location" -> s"/r/${devUser.get.lastActiveRepoId.get}"), Nil)
 
@@ -50,7 +51,7 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
       newSearch: String = "false",
       personId: Option[String] = None,
       folderId: Option[String] = None,
-      params: cask.QueryParams /* allow unknown params */): cask.Response[String] =
+      params: cask.QueryParams /* allow unknown params */ ): cask.Response[String] =
     if !App.altitude.isInitialized then
       logger.warn("App is not initialized, redirecting to setup")
       Response("", 302, Seq("Location" -> "/setup"), Nil)

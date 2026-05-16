@@ -3,8 +3,8 @@ package altitude.core.util
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-object MurmurHash {
-  def hash32(data: Array[Byte], seed: Int = 0): Int = {
+object MurmurHash:
+  def hash32(data: Array[Byte], seed: Int = 0): Int =
     val c1 = 0xcc9e2d51
     val c2 = 0x1b873593
     val r1 = 15
@@ -30,7 +30,7 @@ object MurmurHash {
     }
 
     k1 = 0
-    if (buffer.remaining > 0) {
+    if buffer.remaining > 0 then
       for (i <- buffer.remaining - 1 to 0 by -1) {
         k1 ^= (buffer.get & 0xff) << (i * 8)
       }
@@ -38,7 +38,6 @@ object MurmurHash {
       k1 = Integer.rotateLeft(k1, r1)
       k1 *= c2
       h ^= k1
-    }
 
     h ^= length
     h ^= (h >>> 16)
@@ -48,5 +47,3 @@ object MurmurHash {
     h ^= (h >>> 16)
 
     h
-  }
-}

@@ -1,8 +1,5 @@
 package altitude.core.transactions
 
-import altitude.core.Const
-import altitude.core.Environment
-import altitude.core.RequestContext
 import com.typesafe.config.Config
 import java.sql.Connection
 import java.sql.DriverManager
@@ -11,16 +8,19 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
 
-object TransactionManager {
-  def apply(config: Config): TransactionManager = new TransactionManager(config)
-}
+import altitude.core.Const
+import altitude.core.Environment
+import altitude.core.RequestContext
 
-class TransactionManager(val config: Config) {
+object TransactionManager:
+  def apply(config: Config): TransactionManager = new TransactionManager(config)
+
+class TransactionManager(val config: Config):
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def connection(readOnly: Boolean): Connection = {
-    config.getString(Const.Conf.DB_ENGINE) match {
+  def connection(readOnly: Boolean): Connection =
+    config.getString(Const.Conf.DB_ENGINE) match
       case Const.DbEngineName.POSTGRES =>
         val props = new Properties
         val user = config.getString(Const.Conf.POSTGRES_USER)
@@ -31,12 +31,10 @@ class TransactionManager(val config: Config) {
         val conn = DriverManager.getConnection(url, props)
         logger.debug(s"Opening connection $conn. Read-only: $readOnly")
 
-        if (readOnly) {
-          conn.setReadOnly(true)
-        } else {
+        if readOnly then conn.setReadOnly(true)
+        else
           conn.setReadOnly(false)
           conn.setAutoCommit(false)
-        }
 
         conn
 
@@ -48,7 +46,7 @@ class TransactionManager(val config: Config) {
         val sqliteConfig: SQLiteConfig = new SQLiteConfig()
         sqliteConfig.enableLoadExtension(true)
 
-        val conn = if (readOnly) {
+        val conn = if readOnly then {
           // sqliteConfig.setReadOnly(true)
           val readConn = DriverManager.getConnection(url, sqliteConfig.toProperties)
 
@@ -75,54 +73,44 @@ class TransactionManager(val config: Config) {
         }
 
         conn
-    }
-  }
 
-  def withTransaction[A](f: => A): A = {
-    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
-      return f
-    }
+  def withTransaction[A](f: => A): A =
+    if RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed then return f
 
     RequestContext.conn.value = Some(connection(readOnly = false))
 
-    try {
+    try
       // actual function call
       val res: A = f
       commit()
       res
-    } catch {
+    catch
       case ex: Exception =>
         rollback()
         throw ex
-    } finally {
-      close()
-    }
-  }
+    finally close()
 
-  def withFaceVector[A](f: => A): A = {
+  def withFaceVector[A](f: => A): A =
     withTransaction {
       loadSqliteVectorExtension()
       f
     }
-  }
 
-  private def loadSqliteVectorExtension(): Unit = {
-    config.getString(Const.Conf.DB_ENGINE) match {
+  private def loadSqliteVectorExtension(): Unit =
+    config.getString(Const.Conf.DB_ENGINE) match
       case Const.DbEngineName.SQLITE =>
         val os = sys.props.getOrElse("os.name", "").toLowerCase
         val arch = sys.props.getOrElse("os.arch", "").toLowerCase
 
         val (platformDir, extName) =
-          if (os.contains("mac") || os.contains("darwin")) {
-            val dir = if (arch.contains("aarch64") || arch.contains("arm")) "macos-arm64" else "macos-x86"
+          if os.contains("mac") || os.contains("darwin") then
+            val dir = if arch.contains("aarch64") || arch.contains("arm") then "macos-arm64" else "macos-x86"
             (dir, "vector.dylib")
-          } else if (os.contains("win")) {
-            ("windows-x86", "vector.dll")
-          } else {
+          else if os.contains("win") then ("windows-x86", "vector.dll")
+          else
             // Linux / other Unix
-            val dir = if (arch.contains("aarch64") || arch.contains("arm")) "linux-arm64" else "linux-x86"
+            val dir = if arch.contains("aarch64") || arch.contains("arm") then "linux-arm64" else "linux-x86"
             (dir, "vector.so")
-          }
 
         logger.debug("Loading sqlite-vector extension for platform: " + platformDir)
         val vectorLibPath = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
@@ -142,42 +130,29 @@ class TransactionManager(val config: Config) {
 
       case _ =>
       // Not SQLite
-    }
-  }
 
-  def asReadOnly[A](f: => A): A = {
-    if (RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed) {
-      return f
-    }
+  def asReadOnly[A](f: => A): A =
+    if RequestContext.conn.value.isDefined && !RequestContext.conn.value.get.isClosed then return f
 
     RequestContext.conn.value = Some(connection(readOnly = true))
 
-    try {
-      f
-    } catch {
+    try f
+    catch
       case ex: Exception =>
         logger.error(s"Error (${ex.getClass.getName}): ${ex.getMessage}")
         throw ex
-    } finally {
-      close()
-    }
-  }
+    finally close()
 
-  private def rollback(): Unit = {
+  private def rollback(): Unit =
     RequestContext.conn.value.get.rollback()
-  }
 
-  def close(): Unit = {
-    if (RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed) {
+  def close(): Unit =
+    if RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed then
       logger.warn("Connection already closed")
       return
-    }
 
     RequestContext.conn.value.get.close()
     RequestContext.conn.value = None
-  }
 
-  def commit(): Unit = {
+  def commit(): Unit =
     RequestContext.conn.value.get.commit()
-  }
-}

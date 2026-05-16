@@ -1,5 +1,15 @@
 package altitude.core
 
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigValueFactory
+import java.io.File
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.FileUtils
+import org.apache.pekko.actor.typed.ActorSystem
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 import altitude.core.dao.jdbc.PersonDao
 import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
@@ -24,17 +34,8 @@ import altitude.core.service.UserService
 import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.TransactionManager
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigValueFactory
-import java.io.File
-import org.apache.commons.io.FilenameUtils
-import org.apache.commons.io.FileUtils
-import org.apache.pekko.actor.typed.ActorSystem
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 
-class Altitude(val dbEngineOverride: Option[String] = None) {
+class Altitude(val dbEngineOverride: Option[String] = None):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   logger.info(s"Environment is: ${Environment.CURRENT}")
 
@@ -99,14 +100,13 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
       }
 
     case _ =>
-      throw new RuntimeException("Unknown environment")
+      throw RuntimeException("Unknown environment")
 
   }
 
-  final def dataPath: String = {
+  final def dataPath: String =
     val dataDir: String = app.config.getString(Const.Conf.FS_DATA_DIR)
     FilenameUtils.concat(Environment.ROOT_PATH, dataDir)
-  }
 
   /** Heroically assemble SQLITE URL based on what we have */
   final private val sqliteRelDbPath = preConfig.getString(Const.Conf.REL_SQLITE_DB_PATH)
@@ -141,7 +141,7 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
   logger.info(s"File store type: $fileStoreType")
 
-  final val txManager: TransactionManager = new altitude.core.transactions.TransactionManager(app.config)
+  final val txManager: TransactionManager = TransactionManager(app.config)
 
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
@@ -150,67 +150,67 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     val systemMetadata: SystemMetadataDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.SystemMetadataDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.SystemMetadataDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val user: dao.UserDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val userToken: dao.UserTokenDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.UserTokenDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.UserTokenDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val repository: dao.RepositoryDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.postgres.RepositoryDao(app.config)
       case Const.DbEngineName.SQLITE => new dao.jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val asset: dao.AssetDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.postgres.AssetDao(app.config)
       case Const.DbEngineName.SQLITE => new dao.jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val folder: dao.FolderDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val metadataField: dao.UserMetadataFieldDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val search: dao.SearchDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.postgres.SearchDao(app.config)
       case Const.DbEngineName.SQLITE => new dao.sqlite.SearchDao(app.config)
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val person: dao.PersonDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new PersonDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new PersonDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val face: dao.FaceDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.postgres.FaceDao(app.config)
       case Const.DbEngineName.SQLITE => new dao.sqlite.FaceDao(app.config)
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
     val stats: dao.StatDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.StatDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw new IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
   }
 
@@ -228,34 +228,34 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
         }
     }
 
-    val system = new SystemService(app)
-    val paseto = new PasetoService(app)
-    val user = new UserService(app)
-    val repository = new RepositoryService(app)
-    val metadataExtractor = new MetadataExtractionService
-    val metadata = new UserMetadataService(app)
-    val library = new LibraryService(app)
-    val search = new SearchService(app)
-    val asset = new AssetService(app)
-    val folder = new FolderService(app)
-    val stats = new StatsService(app)
-    val person = new PersonService(app)
-    val faceDetection = new FaceDetectionService(app)
-    val faceRecognition = new FaceRecognitionService(app)
-    val importPipeline = new ImportPipelineService(app)
-    val purgePipeline = new PurgePipelineService(app)
-    val urlService = new UrlService()
+    val system: SystemService = SystemService(app)
+    val paseto: PasetoService = PasetoService(app)
+    val user: UserService = UserService(app)
+    val repository: RepositoryService = RepositoryService(app)
+    val metadataExtractor: MetadataExtractionService = MetadataExtractionService()
+    val metadata: UserMetadataService = UserMetadataService(app)
+    val library: LibraryService = LibraryService(app)
+    val search: SearchService = SearchService(app)
+    val asset: AssetService = AssetService(app)
+    val folder: FolderService = FolderService(app)
+    val stats: StatsService = StatsService(app)
+    val person: PersonService = PersonService(app)
+    val faceDetection: FaceDetectionService = FaceDetectionService(app)
+    val faceRecognition: FaceRecognitionService = FaceRecognitionService(app)
+    val importPipeline: ImportPipelineService = ImportPipelineService(app)
+    val purgePipeline: PurgePipelineService = PurgePipelineService(app)
+    val urlService: UrlService = UrlService()
 
     val fileStore: FileStoreService = fileStoreType match {
-      case Const.StorageEngineName.FS => new FileSystemStoreService(app)
+      case Const.StorageEngineName.FS => FileSystemStoreService(app)
       // S3-based wants to play as well
-      case _ => throw new NotImplementedError
+      case _ => throw NotImplementedError()
     }
   }
 
-  if (dataSourceType == Const.DbEngineName.SQLITE) {
+  if dataSourceType == Const.DbEngineName.SQLITE then {
     val dbFolder = new File(dataPath, "db")
-    if (!dbFolder.exists()) {
+    if !dbFolder.exists() then {
       logger.info("Creating the DB folder for SQLite: " + dbFolder)
       FileUtils.forceMkdir(dbFolder)
     }
@@ -267,39 +267,29 @@ class Altitude(val dbEngineOverride: Option[String] = None) {
     case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
   }
 
-  def setIsInitializedState(): Unit = {
+  def setIsInitializedState(): Unit =
     this.isInitialized = service.system.readMetadata.isInitialized
-    if (!this.isInitialized) {
-      logger.warn("Instance NOT YET INITIALIZED!")
-    }
-  }
+    if !this.isInitialized then logger.warn("Instance NOT YET INITIALIZED!")
 
-  def runMigrations(): Unit = {
-    if (Environment.CURRENT == Environment.Name.TEST) {
-      return
-    }
+  def runMigrations(): Unit =
+    if Environment.CURRENT == Environment.Name.TEST then return
 
-    if (service.migrationService.migrationRequired) {
+    if service.migrationService.migrationRequired then
       logger.warn("Migration is required!")
       service.migrationService.migrate()
-    }
-  }
 
-  def cleanup(): Unit = {
+  def cleanup(): Unit =
     logger.info("Cleaning up resources")
     service.importPipeline.shutdown()
     logger.info("Pipeline system terminated")
 
     // This is already done by default and will cause a warning
     // actorSystem.terminate()
-  }
 
   // id -> repository
   var repositoriesById: Map[String, Repository] = Map[String, Repository]()
 
-  def clearState(): Unit = {
+  def clearState(): Unit =
     repositoriesById = Map.empty
-  }
 
   logger.info("Altitude Server instance initialized")
-}

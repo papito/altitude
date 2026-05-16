@@ -1,9 +1,9 @@
 package altitude.core.models
 
 import java.time.LocalDateTime
+
 import altitude.core.util.JsonCodec
-import JsonCodec.given
-import JsonCodec.macroRW
+import altitude.core.util.JsonCodec.given
 
 object Repository:
   given JsonCodec.ReadWriter[Repository] = JsonCodec.macroRW
