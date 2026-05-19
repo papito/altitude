@@ -1,5 +1,5 @@
 import { Const } from "../constants.js"
-import { Folder } from "../models/folder.js"
+import { reloadFolderTree } from "../common/folder-tree.js"
 import {
     showErrorSnackBar,
     showSuccessSnackBar,
@@ -16,9 +16,16 @@ export function registerFolderListeners(app) {
             return
         }
 
-        const movedFolder = new Folder(movedFolderId)
-        const newParent = new Folder(newParentId)
-        const oldParent = movedFolder.parent()
+        // Capture the folder name before the DOM is rebuilt
+        const movedFolderNameEl = document.getElementById(
+            `folderName-${movedFolderId}`,
+        )
+        const movedFolderName = movedFolderNameEl?.innerText ?? movedFolderId
+
+        const newParentNameEl = document.getElementById(
+            `folderName-${newParentId}`,
+        )
+        const newParentName = newParentNameEl?.innerText ?? newParentId
 
         try {
             const response = await http.put(
@@ -30,53 +37,39 @@ export function registerFolderListeners(app) {
             )
 
             if (response.status === 200) {
-                movedFolder.closeContextMenu()
-                movedFolder.clearChildren()
-
-                newParent.incrementNumOfChildren()
-                oldParent.decrementNumOfChildren()
-
+                await reloadFolderTree(app.context.getRepoId())
                 showSuccessSnackBar(
-                    `Folder ${movedFolder.name()} moved into "${newParent.name()}"`,
+                    `Folder "${movedFolderName}" moved into "${newParentName}"`,
                 )
-
-                if (newParent.isExpanded()) {
-                    newParent.addChild(movedFolder)
-                    movedFolder.collapse()
-                } else {
-                    movedFolder.remove()
-                }
-
-                newParent.updateVisualState()
-                oldParent.updateVisualState()
             } else if (response.status === 409) {
                 showWarningSnackBar(response.data)
             } else {
                 showErrorSnackBar(
-                    `Error moving folder "${movedFolder.name()}". Status: ${response.status}`,
+                    `Error moving folder "${movedFolderName}". Status: ${response.status}`,
                 )
             }
         } catch (error) {
             showErrorSnackBar(
-                `Error moving folder "${movedFolder.name()}": ${getHttpErrorMessage(error)}`,
+                `Error moving folder "${movedFolderName}": ${getHttpErrorMessage(error)}`,
             )
         }
     })
 
-    document.body.addEventListener(Const.events.folderAdded, (event) => {
-        const parentFolder = new Folder(event.detail.parentId)
-        parentFolder.incrementNumOfChildren()
-        parentFolder.updateVisualState()
+    document.body.addEventListener(Const.events.folderAdded, async () => {
+        await reloadFolderTree(app.context.getRepoId())
     })
 
-    document.body.addEventListener(Const.events.folderDeleted, (event) => {
-        const folder = new Folder(event.detail.id)
-        const parent = folder.parent()
+    document.body.addEventListener(Const.events.folderDeleted, async (event) => {
+        // Capture name before the tree is rebuilt
+        const id = event.detail.id
+        const nameEl = document.getElementById(`folderName-${id}`)
+        const name = nameEl?.innerText ?? id
 
-        parent.decrementNumOfChildren()
-        parent.updateVisualState()
+        await reloadFolderTree(app.context.getRepoId())
+        showSuccessSnackBar(`Folder "${name}" deleted`)
+    })
 
-        showSuccessSnackBar(`Folder "${folder.name()}" deleted`)
-        folder.remove()
+    document.body.addEventListener(Const.events.folderRenamed, async () => {
+        await reloadFolderTree(app.context.getRepoId())
     })
 }

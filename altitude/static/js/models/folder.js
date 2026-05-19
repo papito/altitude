@@ -41,12 +41,10 @@ export class Folder {
     }
 
     clearChildren() {
-        const childEls = this.childrenEl.querySelectorAll(".folder")
-        childEls.forEach((child) => {
-            clearInnerNodes(child)
-            child.innerHTML = ""
-            child.style.display = "none"
-        })
+        // In the JSON-driven tree children are pre-rendered; just hide the container.
+        if (this.childrenEl) {
+            this.childrenEl.style.display = "none"
+        }
     }
 
     isMenuExpanded() {
@@ -108,7 +106,6 @@ export class Folder {
         }
 
         if (!this.isExpanded()) {
-            this.clearChildren()
             this.closeContextMenu()
 
             if (this.numOfChildren()) {
@@ -147,12 +144,18 @@ export class Folder {
     collapse() {
         console.debug("Setting folder " + this.name() + " to collapsed")
         this.element.removeAttribute(Const.attributes.expanded)
+        if (this.childrenEl && !this.isRoot) {
+            this.childrenEl.style.display = "none"
+        }
         this.updateVisualState()
     }
 
     expand() {
         console.debug("Setting folder " + this.name() + " to expanded")
         this.element.setAttribute(Const.attributes.expanded, "true")
+        if (this.childrenEl && !this.isRoot) {
+            this.childrenEl.style.display = ""
+        }
         this.updateVisualState()
     }
 

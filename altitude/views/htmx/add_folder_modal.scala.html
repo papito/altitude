@@ -19,9 +19,8 @@
       data-app-modal-success-event="folderAdded"
       data-app-modal-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
       alt-folder-id="@{parentId}"
-      hx-swap="innerHTML"
+      hx-swap="none"
       hx-post="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/add"
-      hx-target="#children-@{parentId}"
       hx-trigger="submit"
       hx-ext="json-enc">
 

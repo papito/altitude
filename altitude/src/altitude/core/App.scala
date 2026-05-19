@@ -6,6 +6,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import altitude.core.routes.api.AssetController
+import altitude.core.routes.api.FolderController
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.decorators
 import altitude.core.routes.web.ContentViewController
@@ -56,6 +57,7 @@ object App extends cask.Main:
   override def allRoutes: Seq[cask.Routes] = Seq(
     new HealthController,
     new AssetController,
+    new FolderController,
     new IndexController,
     new StaticController,
     new SessionController,

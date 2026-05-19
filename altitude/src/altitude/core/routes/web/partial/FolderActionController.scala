@@ -13,7 +13,6 @@ import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Folder
-import altitude.core.models.Repository
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
@@ -65,9 +64,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
   def showFoldersTab(repoId: String)(using request: Request): Response[String] =
-    val repo: Repository = RequestContext.getRepository
-    val rootFolder: Folder = App.altitude.service.folder.getById(repo.rootFolderId)
-    val payload = "<!doctype html>" + htmx.html.folders(rootFolder = rootFolder)
+    val payload = "<!doctype html>" + htmx.html.folders()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()

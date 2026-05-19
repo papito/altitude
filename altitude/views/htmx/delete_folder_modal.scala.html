@@ -19,11 +19,11 @@
         data-app-modal-min-width="@{minWidth}"
         data-app-modal-close-on-success="true"
         data-app-modal-success-event="folderDeleted"
-        data-app-modal-success-detail='{"@{Api.Field.ID}":"@{folder.id}"}'
+        data-app-modal-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'
         hx-swap="none"
         hx-delete="/htmx/folder/r/@{RequestContext.getRepository.persistedId}"
         hx-trigger="click"
-        hx-vars="{'@{Api.Field.ID}': '@{folder.id}'}"
+        hx-vars="{'@{Api.Field.ID}': '@{folder.persistedId}'}"
         hx-ext="json-enc">
     Delete "<strong>@{folder.name}</strong>" and move assets into Recycle Bin
 </button>

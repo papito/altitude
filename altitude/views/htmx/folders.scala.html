@@ -1,9 +1,6 @@
 @import altitude.core.RequestContext
-@import altitude.core.Const
-@import altitude.core.models.Folder
-@import altitude.core.Api
 
-@(rootFolder: Folder)
+@()
 
 <style>
     #rootFolderList .folder.root, .folder-list .children {
@@ -25,11 +22,11 @@
 
     #rootFolderList .folder .controls {
         display: grid;
-        grid-template-columns: max-content 25px 1fr;
+        /* icon | folder-name (grows) | ⋯ menu button */
+        grid-template-columns: max-content 1fr max-content;
         align-items: center;
         touch-action: none;
     }
-
 
     #rootFolderList .folder .menu-ctrl {
         display: grid;
@@ -123,67 +120,14 @@
     <span>Navigation in this view is disabled. You can only drag-and-drop assets and folders.</span>
 </div>
 
-<div id="rootFolderList" class="folder-list">
-    <div class="folder root"
-         id="folder-@{rootFolder.persistedId}"
-         alt-num-of-children="@{rootFolder.numOfChildren}"
-         alt-folder-id="@{rootFolder.persistedId}"
-         alt-parent-folder-id="@{rootFolder.persistedId}"
-         alt-is-root="true"
-         alt-expanded="true">
-
-        <div class="controls dropzone"
-             alt-folder-id="@{rootFolder.persistedId}">
-                <i class="fas fa-folder"
-                hx-target="#content"
-                hx-trigger="click"
-                hx-swap="innerHTML"
-                x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
-                hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true"></i>
-            <div class="menu-ctrl">
-                <a href="#"
-                   alt-folder-id="@{rootFolder.persistedId}"
-                   id="expand-folder-children-@{rootFolder.persistedId}"
-                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/context-menu"
-                   hx-swap="innerHTML"
-                   hx-target="#menu-@{rootFolder.persistedId}"
-                   hx-vals='{"folderId": "@{rootFolder.persistedId}"}'
-                   hx-trigger="click">&#10247;</a>
-            </div>
-            <span id="folderName-@{rootFolder.persistedId}"
-                  class="folder-name"
-                  x-data
-                  :class="{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }"
-                  hx-target="#content"
-                  hx-trigger="click"
-                  hx-swap="innerHTML"
-                  x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
-                  hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root
-            </span>
-        </div>
-
-        <div class="menu"
-             id="menu-@{rootFolder.persistedId}"
-             alt-folder-id="@{rootFolder.persistedId}">
-
-        </div>
-
-        <div class="children"
-             id="children-@{rootFolder.persistedId}"
-             alt-folder-id="@{rootFolder.persistedId}"
-             hx-swap="innerHTML"
-             hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/children"
-             hx-vals='{"parentId": "@{rootFolder.persistedId}"}'
-             hx-trigger="load">
-        </div>
-
-    </div>
-</div>
+<div id="rootFolderList" class="folder-list"></div>
 
 <script type="module">
     import { selectTab } from "/static/js/common/navigation.js"
+    import { reloadFolderTree } from "/static/js/common/folder-tree.js"
 
     selectTab("explorer", "foldersTab")
     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+    reloadFolderTree("@{ RequestContext.getRepository.persistedId }")
 </script>
 

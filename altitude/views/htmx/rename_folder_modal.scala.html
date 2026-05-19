@@ -18,12 +18,11 @@
       data-app-modal-autofocus-selector="#field-@{ Api.Field.Folder.NAME }"
       data-app-modal-select-on-focus="true"
       data-app-modal-close-on-success="true"
-      data-app-modal-success-action="close-folder-context-menu"
-      data-app-modal-folder-id="@{id}"
-      hx-swap="innerHTML"
+      data-app-modal-success-event="folderRenamed"
+      data-app-modal-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
+      hx-swap="none"
       hx-put="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/rename"
       hx-trigger="submit"
-      hx-target="#folderName-@{id}"
       hx-ext="json-enc">
 
   @if(fieldErrors.contains(Api.Field.Folder.NAME)) {

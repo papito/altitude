@@ -2,6 +2,11 @@ import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 
+/**
+ * Before a folder HTMX request fires, handle context-menu toggle logic:
+ * if the clicked folder's menu is already open, close it and cancel the request.
+ * Otherwise close all other open menus before proceeding.
+ */
 export function handleFolderBeforeRequest({ app, event }) {
     const requestPath = event.detail.pathInfo.requestPath
 
@@ -31,41 +36,14 @@ export function handleFolderBeforeRequest({ app, event }) {
         return true
     }
 
-    if (requestPath === `/htmx/folder/r/${app.context.getRepoId()}/children`) {
-        const url = new URL(
-            "https://dummy.com" + event.detail.pathInfo.finalRequestPath,
-        )
-        const folderId = url.searchParams.get("parentId")
-        const folder = new Folder(folderId)
-
-        if (folder.isRoot) {
-            return true
-        }
-
-        if (folder.isExpanded()) {
-            folder.collapse()
-            event.preventDefault()
-            return true
-        }
-
-        if (folder.numOfChildren() === 0) {
-            event.preventDefault()
-            const currentView = app.Alpine.store(Const.state.currentView)
-            if (currentView.isTriageView() || currentView.isTrashBinView()) {
-                return true
-            }
-
-            folder.folderNameEl().click()
-            return true
-        }
-
-        folder.expand()
-        return true
-    }
-
     return true
 }
 
+/**
+ * After a folder HTMX request completes, handle context-menu show logic.
+ * Expand/collapse is handled entirely by the JS DOM builder (folder-tree.js)
+ * click handlers now, so only the context-menu case is intercepted here.
+ */
 export function handleFolderAfterRequest({ app, event }) {
     const requestPath = event.detail.pathInfo.requestPath
     const status = event.detail.xhr.status
@@ -86,22 +64,6 @@ export function handleFolderAfterRequest({ app, event }) {
             event.target.getAttribute(Const.attributes.folderId),
         )
         folder.showContextMenu()
-
-        if (!folder.isExpanded() && !folder.isRoot) {
-            folder.htmxExpandChildrenAction()
-        }
-
-        return true
-    }
-
-    if (
-        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/children` ||
-        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/add`
-    ) {
-        const folder = new Folder(
-            event.target.getAttribute(Const.attributes.folderId),
-        )
-        folder.expand()
         return true
     }
 
