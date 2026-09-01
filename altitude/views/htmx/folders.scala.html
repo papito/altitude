@@ -22,15 +22,15 @@
 
     #rootFolderList .folder .controls {
         display: grid;
-        /* icon | folder-name (grows) | ⋯ menu button */
-        grid-template-columns: max-content 1fr max-content;
+        /* ⋯ menu button | icon | folder-name (grows) */
+        grid-template-columns: max-content max-content 1fr;
+        column-gap: 6px;
         align-items: center;
         touch-action: none;
     }
 
     #rootFolderList .folder .menu-ctrl {
         display: grid;
-        padding-left: 6px;
         place-items: center;
     }
 

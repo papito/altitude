@@ -13,7 +13,7 @@ This made state stale and hard to reason about.
 | 1 | Bug target | Stale state after folder move (manually-patched DOM attributes) |
 | 2 | Data loading | **Eager** — one JSON fetch returns the full tree; re-fetch after every mutation |
 | 3 | Client rendering | **Vanilla JS DOM builder** — produces identical DOM structure to old Twirl templates; preserves all CSS, drag-and-drop, and the `Folder` JS model |
-| 4 | Context menu placement | `icon \| folder-name (grows) \| ⋯` — always visible, right-pinned |
+| 4 | Context menu placement | `⋯ \| icon \| folder-name (grows)` — always visible, left-aligned in its own column |
 | 5 | After mutation | Re-fetch + re-render whole tree; **snapshot expanded IDs before, restore after** |
 | 6 | Backend scope | Keep all mutation endpoints as-is; add **one** new `GET /api/folder/r/:repoId/tree` endpoint |
 
@@ -31,7 +31,7 @@ This made state stale and hard to reason about.
 
 | File | Change |
 |------|--------|
-| `altitude/views/htmx/folders.scala.html` | Replaced entire Twirl-rendered tree with an empty `<div id="rootFolderList">` shell. Inline script calls `reloadFolderTree(repoId)` on load. CSS `.controls` grid updated to `max-content 1fr max-content` (icon \| name \| ⋯). |
+| `altitude/views/htmx/folders.scala.html` | Replaced entire Twirl-rendered tree with an empty `<div id="rootFolderList">` shell. Inline script calls `reloadFolderTree(repoId)` on load. CSS `.controls` grid updated to `max-content max-content 1fr` with a `column-gap` (⋯ \| icon \| name). |
 | `altitude/views/htmx/add_folder_modal.scala.html` | `hx-swap="none"`, removed `hx-target`. Success is handled by the existing `folderAdded` event → `reloadFolderTree()`. |
 | `altitude/views/htmx/rename_folder_modal.scala.html` | `hx-swap="none"`, dispatches new `folderRenamed` event instead of patching `#folderName-{id}` in place. |
 | `altitude/views/htmx/delete_folder_modal.scala.html` | **Bug fix:** replaced `@{folder.id}` (`Option[String]` → rendered as `Some(uuid)`) with `@{folder.persistedId}` so the `folderDeleted` event detail carries the real UUID. |

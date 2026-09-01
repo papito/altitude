@@ -120,12 +120,12 @@ function _buildRootControls(folder, repoId) {
     // Folder name
     const nameEl = _buildFolderNameEl(folder, repoId, "/ Root")
 
-    // ⋯ menu button (rightmost)
+    // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId)
 
+    controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(iconEl)
     controlsEl.appendChild(nameEl)
-    controlsEl.appendChild(menuCtrlEl)
 
     return controlsEl
 }
@@ -191,12 +191,12 @@ function _buildFolderControls(folder, repoId) {
         }
     })
 
-    // ⋯ menu button (rightmost)
+    // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId)
 
+    controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(expandLinkEl)
     controlsEl.appendChild(nameEl)
-    controlsEl.appendChild(menuCtrlEl)
 
     return controlsEl
 }
