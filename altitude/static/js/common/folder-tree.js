@@ -15,11 +15,18 @@ import { showErrorSnackBar } from "./snackbar.js"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
+// Monotonic reload counter: if another reload starts while a fetch is in
+// flight, the older response is discarded so a stale tree is never rendered.
+let _reloadSeq = 0
+
 export async function reloadFolderTree(repoId) {
+    const seq = ++_reloadSeq
     const expandedIds = _getExpandedFolderIds()
 
     try {
         const response = await http.get(`/api/folder/r/${repoId}/tree`)
+        if (seq !== _reloadSeq) return
+
         const treeData = response.data
 
         const container = document.getElementById("rootFolderList")
@@ -41,6 +48,9 @@ export async function reloadFolderTree(repoId) {
         // folders that no longer exist after the mutation).
         _restoreExpandedState(expandedIds)
     } catch (error) {
+        // A newer reload superseded this one - let it report its own outcome
+        if (seq !== _reloadSeq) return
+
         console.error("Failed to load folder tree", error)
         showErrorSnackBar("Failed to load folder tree")
     }

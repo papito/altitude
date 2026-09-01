@@ -187,12 +187,4 @@ export class Folder {
         }
         return false
     }
-
-    htmxExpandChildrenAction() {
-        console.debug("Triggering expand children action for " + this.name())
-        const expandFolderChildrenEl = htmx.find(
-            "#" + "expand-folder-children-" + this.id,
-        )
-        htmx.trigger(expandFolderChildrenEl, "click")
-    }
 }

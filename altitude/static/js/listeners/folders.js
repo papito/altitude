@@ -1,4 +1,5 @@
 import { Const } from "../constants.js"
+import { Folder } from "../models/folder.js"
 import { reloadFolderTree } from "../common/folder-tree.js"
 import {
     showErrorSnackBar,
@@ -55,8 +56,21 @@ export function registerFolderListeners(app) {
         }
     })
 
-    document.body.addEventListener(Const.events.folderAdded, async () => {
+    document.body.addEventListener(Const.events.folderAdded, async (event) => {
         await reloadFolderTree(app.context.getRepoId())
+
+        // Expand the parent so the newly added folder is visible
+        const parentId = event.detail.parentId
+        if (parentId) {
+            try {
+                const parent = new Folder(parentId)
+                if (!parent.isRoot && !parent.isExpanded()) {
+                    parent.expand()
+                }
+            } catch (_) {
+                // parent not present in the rebuilt tree - nothing to reveal
+            }
+        }
     })
 
     document.body.addEventListener(Const.events.folderDeleted, async (event) => {

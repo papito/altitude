@@ -5,6 +5,7 @@ import cask.Response
 import org.slf4j.Logger
 
 import altitude.core.App
+import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.models.Folder
 import altitude.core.routes.BaseController
@@ -30,17 +31,26 @@ class FolderController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/tree")
   def getFolderTree(repoId: String)(using request: Request): Response[String] =
     val rootFolderId = RequestContext.getRepository.rootFolderId
-    val json = buildFolderTreeJson(rootFolderId)
+
+    // One query for all folders in the repository - the tree is assembled in memory
+    val folders = App.altitude.service.folder.getAll.filterNot(_.isRecycled)
+
+    val rootFolder = folders
+      .find(_.persistedId == rootFolderId)
+      .getOrElse(throw NotFoundException(s"Root folder $rootFolderId not found"))
+
+    // The root folder is its own parent - keep it out of the index so it does not become its own child
+    val childrenByParentId: Map[String, List[Folder]] =
+      folders.filter(f => f.persistedId != f.parentId).groupBy(_.parentId)
+
+    val json = buildFolderTreeJson(rootFolder, childrenByParentId)
     cask.Response(json.toString, 200, Seq(("Content-Type", "application/json")))
 
-  /** Recursively build a ujson tree. Uses getById for each level (for correct numOfChildren) + getChildren to list children. */
-  private def buildFolderTreeJson(folderId: String): ujson.Obj =
-    val folder = App.altitude.service.folder.getById(folderId)
-    val children = App.altitude.service.folder.getChildren(folderId)
-    val childJsons: List[ujson.Obj] = children.map(c => buildFolderTreeJson(c.persistedId))
-
-    val childrenArr = ujson.Arr()
-    childJsons.foreach(childrenArr.arr.addOne)
+  private def buildFolderTreeJson(folder: Folder, childrenByParentId: Map[String, List[Folder]]): ujson.Obj =
+    val children = childrenByParentId
+      .getOrElse(folder.persistedId, Nil)
+      .sortBy(_.nameLowercase)
+    val childJsons = children.map(buildFolderTreeJson(_, childrenByParentId))
 
     ujson.Obj(
       "id" -> folder.persistedId,
@@ -48,8 +58,7 @@ class FolderController(using logger: Logger) extends BaseController:
       "name" -> folder.name,
       "numOfChildren" -> childJsons.length,
       "isRoot" -> (folder.persistedId == folder.parentId),
-      "children" -> childrenArr
+      "children" -> ujson.Arr.from(childJsons)
     )
 
   initialize()
-

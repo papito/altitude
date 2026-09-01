@@ -118,9 +118,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
         val message = ex.message.getOrElse("Folder name already exists at this level")
         return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), parentId = parentId)
 
-    val childFolders: List[Folder] = App.altitude.service.folder.getChildren(parentId)
-    val payload = "<!doctype html>" + htmx.html.folder_children(folders = childFolders)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    // The client reloads the folder tree off the "folderAdded" event - no markup needed here
+    cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/rename")
@@ -175,13 +174,6 @@ class FolderActionController(using logger: Logger) extends BaseController:
         return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)
 
     cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
-
-  @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/children")
-  def htmxFolderChildren(repoId: String, parentId: String)(using request: Request): Response[String] =
-    val childFolders: List[Folder] = App.altitude.service.folder.getChildren(parentId)
-    val payload = "<!doctype html>" + htmx.html.folder_children(folders = childFolders)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/move")
