@@ -925,11 +925,14 @@ function src_default(Alpine) {
           options.initialFocus = autofocusEl;
       }
       let trap = createFocusTrap(el, options);
+      let activationTimer;
       let undoInert = () => {
       };
       let undoDisableScrolling = () => {
       };
       const releaseFocus = () => {
+        // A released or removed trap must not activate from a pending timer.
+        clearTimeout(activationTimer);
         undoInert();
         undoInert = () => {
         };
@@ -948,7 +951,7 @@ function src_default(Alpine) {
             undoDisableScrolling = disableScrolling();
           if (modifiers.includes("inert"))
             undoInert = setInert(el);
-          setTimeout(() => {
+          activationTimer = setTimeout(() => {
             trap.activate();
           }, 15);
         }

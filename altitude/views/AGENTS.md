@@ -177,7 +177,8 @@ focus restoration on close (the element focused when the open was requested, els
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
 swaps once the user dismissed or replaced it. Visibility is bound through the Alpine `modal` store
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
-`js/app.js` contains focus and hides the page from assistive tech). Escape (`global.js`) closes the
+`js/app.js` contains focus and hides the page from assistive tech; its documented local patch
+cancels delayed activation when a trap is released or removed). Escape (`global.js`) closes the
 active modal and is consumed by it, so a background inline edit survives; general dialogs ignore
 backdrop clicks, asset detail closes on them. General-dialog width is CSS only
 (`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
@@ -194,6 +195,8 @@ replaced; only the still-active initiating dialog is closed or gets its form rep
 responses are recognised by their `HX-Retarget: this` / `HX-Reswap: outerHTML` headers
 (`BaseController.modalFormValidationResponse`): they replace the active form in place (values and
 errors kept, no success event) or, once the dialog is gone, are reported through the snackbar.
+`htmx:finally:request` clears operations left pending when a network failure skips
+`htmx:after:request`, reports the failure through the snackbar, and allows another submission.
 `js/listeners/modal.js` registers this wiring on `document`, because htmx dispatches lifecycle events
 on the document when the issuing element has already left the DOM.
 
@@ -201,6 +204,8 @@ Asset detail: `js/fragments/image-detail.js` opens the host with its spinner imm
 the image load to the detail coordinator, which gives each image request a token so only the latest
 request for the active open may change the image, box size, title, loading state, or current asset
 (rapid previous/next navigation, page fetches, and loads that finish after closing are ignored).
+The navigation origin is set to the requested asset before its image loads, so previous/next
+already uses the newly opened asset while the spinner is showing.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from

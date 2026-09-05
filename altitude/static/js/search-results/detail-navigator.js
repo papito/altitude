@@ -190,8 +190,8 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     }
 
     /**
-     * Loads `url` into the asset-detail image and, if this request is still current when the
-     * image arrives, applies the asset's size and title and marks it as the current asset.
+     * Makes `assetId` the navigation origin immediately, then loads its image. If the request
+     * is still current when the image arrives, applies the asset's size and title.
      */
     async function showImage({
         openId,
@@ -204,6 +204,8 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
         token = ++imageRequestToken,
     }) {
         const loading = Alpine.store(Const.state.imageDetailLoading)
+        // Navigation starts from the requested asset while its image is still loading.
+        Alpine.store(Const.state.shadowResults).currentAssetId = assetId
         loading.value = true
 
         try {

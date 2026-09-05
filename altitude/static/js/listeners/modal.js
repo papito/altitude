@@ -4,6 +4,7 @@ import {
 } from "../common/modal.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 import {
+    finalizeModalOperationRequest,
     settleModalOperation,
     trackModalOperationRequest,
 } from "../fragments/modal.js"
@@ -16,6 +17,11 @@ import {
  * the case for a dialog that was closed or replaced while its operation was in flight.
  */
 export function registerModalListeners(app) {
+    document.addEventListener(
+        "htmx:finally:request",
+        finalizeModalOperationRequest,
+    )
+
     document.addEventListener("htmx:before:request", (event) => {
         if (trackModalOpenRequest(event)) {
             return

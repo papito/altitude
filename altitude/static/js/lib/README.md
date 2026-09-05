@@ -22,3 +22,5 @@ pages with JSON forms, `hx-ws.js` by the import pipeline page, `hx-alpine-compat
 
 The focus plugin is registered with `Alpine.plugin(focus)` in `static/js/app.js` before Alpine starts;
 the modal hosts in `views/includes/html_common.scala.html` rely on its `x-trap` directive.
+`alpine-focus.esm.js` has a local patch that cancels delayed trap activation when the trap is
+released or its element is removed, preventing a closed dialog from intercepting Tab.

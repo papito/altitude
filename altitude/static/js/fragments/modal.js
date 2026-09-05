@@ -122,6 +122,13 @@ export function trackModalOperationRequest(event) {
     return true
 }
 
+/** Clear unfinished operations even when a network failure skipped `htmx:after:request`. */
+export function finalizeModalOperationRequest(event) {
+    if (pendingOperations.delete(event.detail.ctx)) {
+        showErrorSnackBar("The request did not complete. Please try again.")
+    }
+}
+
 export function isModalOperationRequest(event) {
     return pendingOperations.has(event.detail.ctx)
 }
