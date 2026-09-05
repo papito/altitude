@@ -12,7 +12,9 @@
  * - the identity of the latest "open a modal" request, so a slow response for an earlier open can
  *   never display a dialog after the user dismissed or replaced it,
  * - the identity of each displayed open (`openId`), so asynchronous work started for one open
- *   (form submissions, image loads) can tell whether that open is still the active one.
+ *   (form submissions, image loads) can tell whether that open is still the active one,
+ * - placement of a general dialog against page elements its fragment names (`anchors`), with the
+ *   host's default placement otherwise.
  *
  * `global.js` imports this module on every page, including pages without the hosts or the store,
  * so every entry point tolerates a missing store.
@@ -44,6 +46,13 @@ let pendingOpen = null
 
 // Where focus goes when the active modal closes.
 let returnFocus = null
+
+// The anchors of the displayed general-host open, or null when the box sits at the host's default
+// position. See `openModal`.
+let anchoredPlacement = null
+
+// Removes the window listener that keeps an anchored box placed; exists only while one is shown.
+let detachPlacementListeners = null
 
 export function createModalStore() {
     return {
@@ -93,6 +102,10 @@ export function isModalOpenActive(openId) {
  * On close, focus goes to `returnFocusSelector` - the control the fragment declares as the
  * relevant one to return to, chosen to survive the page update its operation triggers - or, without
  * one, back to the element that was focused when the open was requested.
+ *
+ * `anchors` (general host only) names two elements by selector: the box is centered horizontally
+ * on `x` and vertically on `y`, clamped to the viewport, instead of taking the host's default
+ * position. When an anchor is not displayed, the default position is used.
  */
 export function openModal({
     host,
@@ -100,6 +113,7 @@ export function openModal({
     focusSelector,
     selectOnFocus = false,
     returnFocusSelector,
+    anchors,
 }) {
     const store = modalStore()
     const openId = ++lastOpenId
@@ -110,6 +124,15 @@ export function openModal({
         fallbackSelector: returnFocusSelector,
     }
     pendingOpen = null
+
+    // Every open starts from the default placement. An anchored one is marked before the host is
+    // revealed, so the box is never painted at the default position (the host's CSS hides it until
+    // placed).
+    resetPlacement()
+    anchoredPlacement = getAnchoredPlacement({ host, anchors })
+    if (anchoredPlacement) {
+        getContainer(host).classList.add("anchored")
+    }
 
     console.debug(`Opening ${host} modal "${title}" (open ${openId})`)
 
@@ -122,6 +145,11 @@ export function openModal({
         store.activeHost = host
         store.title = title
         whenHostDisplayed(host, openId, () => {
+            // Placement first: a box that is still hidden cannot take focus
+            if (anchoredPlacement) {
+                attachAnchoredPlacement({ host, openId })
+            }
+
             placeInitialFocus({ host, focusSelector, selectOnFocus })
         })
     }
@@ -153,6 +181,9 @@ export function closeModal() {
     console.debug(`Closing ${store.activeHost} modal (open ${store.openId})`)
     store.activeHost = null
     store.title = ""
+    // Synchronously: Alpine hides the host in the same flush, and a `nextTick` reset would race an
+    // open that follows this close in the same task
+    resetPlacement()
 
     const focusTarget = returnFocus
     returnFocus = null
@@ -167,9 +198,7 @@ export function closeModal() {
  * falls back to its CSS size, which is what the host shows while the first image loads.
  */
 export function setAssetDetailSize({ width, height } = {}) {
-    const box = document.querySelector(
-        `#${hostContainerIds[ModalHost.assetDetail]} .modal-box`,
-    )
+    const box = getContainer(ModalHost.assetDetail).querySelector(".modal-box")
 
     if (width && height) {
         const maxW = window.innerWidth - 10
@@ -181,6 +210,148 @@ export function setAssetDetailSize({ width, height } = {}) {
         box.style.width = ""
         box.style.height = ""
     }
+}
+
+function getContainer(host) {
+    return document.getElementById(hostContainerIds[host])
+}
+
+/**
+ * The anchors of an open, or null for the default placement. Only the general host is placed this
+ * way, and a partial pair has no defined placement, so both are ignored with a warning.
+ */
+function getAnchoredPlacement({ host, anchors }) {
+    if (!anchors?.x && !anchors?.y) {
+        return null
+    }
+
+    if (host !== ModalHost.general || !anchors.x || !anchors.y) {
+        console.warn(
+            `Ignoring modal anchors for ${host}: both x and y selectors are required`,
+        )
+        return null
+    }
+
+    return { x: anchors.x, y: anchors.y }
+}
+
+/**
+ * Places the box against the open's anchors and keeps it placed through window resizes. When an
+ * anchor cannot be measured (the explorer is hidden, the tree was rebuilt), the box takes the
+ * host's default placement instead. Nothing tracks scrolling: the page is inert while a modal is
+ * open, and the Split.js divider cannot be dragged either, so no explorer resize can happen.
+ */
+function attachAnchoredPlacement({ host, openId }) {
+    const container = getContainer(host)
+    const box = container.querySelector(".modal-box")
+
+    if (!placeAnchoredBox({ container, box })) {
+        resetPlacement()
+        return
+    }
+
+    const onResize = () => {
+        if (isModalOpenActive(openId)) {
+            placeAnchoredBox({ container, box })
+        }
+    }
+    window.addEventListener("resize", onResize)
+
+    detachPlacementListeners = () => {
+        window.removeEventListener("resize", onResize)
+        detachPlacementListeners = null
+    }
+}
+
+/**
+ * Centers the box on the anchors and clamps it to the viewport, keeping `--modal-viewport-gap` to
+ * the edges. The box is absolutely positioned in the container, which covers the viewport, so
+ * viewport coordinates apply as-is, and the container's client size is the viewport less the
+ * scrollbar the container shows when the box is taller than the viewport. Returns whether the box
+ * was placed.
+ */
+function placeAnchoredBox({ container, box }) {
+    const xAnchor = measureAnchor(anchoredPlacement.x)
+    const yAnchor = measureAnchor(anchoredPlacement.y)
+
+    if (!xAnchor || !yAnchor) {
+        console.debug("Modal anchor not displayed; using the default placement")
+        return false
+    }
+
+    const gap = viewportGap()
+    const { width, height } = box.getBoundingClientRect()
+
+    // Vertical: centered on the anchor, kept `gap` from both edges; a box taller than the viewport
+    // starts at the top and scrolls inside the container
+    const maxTop = container.clientHeight - gap - height
+    const top =
+        maxTop < gap ? gap : clamp(yAnchor.centerY - height / 2, gap, maxTop)
+    box.style.top = `${Math.round(top)}px`
+
+    // Horizontal, after the vertical write so a scrollbar a tall box adds is already reflected in
+    // the container's client width
+    const maxLeft = Math.max(gap, container.clientWidth - gap - width)
+    const left = clamp(xAnchor.centerX - width / 2, gap, maxLeft)
+    box.style.left = `${Math.round(left)}px`
+
+    container.classList.add("placed")
+    return true
+}
+
+/**
+ * The center of an anchor's client box, which excludes its own scrollbar (the explorer scrolls
+ * its folder list), or null when the element is missing or not displayed.
+ */
+function measureAnchor(selector) {
+    const el = document.querySelector(selector)
+    const rect = el?.getBoundingClientRect()
+
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+        return null
+    }
+
+    // Inline elements report no client box; their border box is the next best thing
+    const width = el.clientWidth || rect.width
+    const height = el.clientHeight || rect.height
+
+    return {
+        centerX: rect.left + el.clientLeft + width / 2,
+        centerY: rect.top + el.clientTop + height / 2,
+    }
+}
+
+function viewportGap() {
+    const value = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+            "--modal-viewport-gap",
+        ),
+    )
+
+    return Number.isNaN(value) ? 10 : value
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max)
+}
+
+/**
+ * Back to the general host's default placement: its classes, the box's inline coordinates, and
+ * the resize listener. Tolerates pages without the host (see the module comment).
+ */
+function resetPlacement() {
+    detachPlacementListeners?.()
+    anchoredPlacement = null
+
+    const container = getContainer(ModalHost.general)
+    if (!container) {
+        return
+    }
+
+    container.classList.remove("anchored", "placed")
+    const box = container.querySelector(".modal-box")
+    box.style.top = ""
+    box.style.left = ""
 }
 
 /**

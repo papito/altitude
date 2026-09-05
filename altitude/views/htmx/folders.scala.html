@@ -52,10 +52,13 @@
         place-items: center;
     }
 
-    /* The ⋯ trigger keeps the look of the former link; the browser's focus ring marks keyboard focus */
+    /* The ⋯ trigger keeps the look of the former link. It never shows a focus ring: the modal owner
+       returns focus here when a folder dialog closes, and the ring that marked would read as a
+       stray highlight in the tree */
     #rootFolderList .folder .menu-ctrl > button {
         padding: 0;
         border: 0;
+        outline: none;
         background: none;
         font: inherit;
         font-size: 1.3em;

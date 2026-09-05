@@ -16,6 +16,8 @@
       data-app-modal-title="@{title}"
       data-app-modal-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
       data-app-modal-return-focus="#folderMenuCtrl-@{parentId}"
+      data-app-modal-anchor-x="#explorer"
+      data-app-modal-anchor-y="#folderMenuCtrl-@{parentId}"
       data-app-modal-success-event="folderAdded"
       data-app-modal-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
       alt-folder-id="@{parentId}"

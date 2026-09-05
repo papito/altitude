@@ -2,6 +2,12 @@
  * General dialog fragments (`data-app-fragment="modal"`): hydration into the shared modal owner,
  * and the lifecycle of the operations those dialogs submit.
  *
+ * A fragment may name where its dialog goes with `data-app-modal-anchor-x` and
+ * `data-app-modal-anchor-y`: selectors of the elements the box is centered on horizontally and
+ * vertically (the folder dialogs use the explorer and the folder's menu control). Without them the
+ * dialog takes the host's default position. A validation response that replaces the form in place
+ * is re-hydrated, which re-runs placement for the new form height.
+ *
  * An operation is tracked from `htmx:before:request` so that everything it needs later (which open
  * it belongs to, its success event and detail) is captured while the dialog is still in the DOM.
  * Its response is handled from `htmx:after:request` regardless of whether the dialog has since
@@ -36,6 +42,10 @@ export function hydrateModalFragment({ fragmentEl, context, dispatch }) {
         focusSelector: fragmentEl.dataset.appModalAutofocusSelector,
         selectOnFocus: fragmentEl.dataset.appModalSelectOnFocus === "true",
         returnFocusSelector: fragmentEl.dataset.appModalReturnFocus,
+        anchors: {
+            x: fragmentEl.dataset.appModalAnchorX,
+            y: fragmentEl.dataset.appModalAnchorY,
+        },
     })
 
     if (fragmentEl.dataset.appModalKind === "view-settings") {

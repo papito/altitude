@@ -205,11 +205,20 @@ cancels delayed activation when a trap is released or removed). Escape (`global.
 active modal and any open folder menu and is consumed by them, so a background inline edit
 survives; general dialogs ignore backdrop clicks, asset detail closes on them. General-dialog width is CSS only
 (`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
-image with `setAssetDetailSize()`.
+image with `setAssetDetailSize()`. General-dialog placement defaults to the host's CSS (box centered
+horizontally, `padding-top` from the top). A fragment may instead declare `data-app-modal-anchor-x`
+and `data-app-modal-anchor-y` selectors: `openModal({anchors})` then marks `#modalContainer`
+`.anchored` before the host is revealed (its CSS hides the box until placed, so it is never painted
+at the default position), and once the host is displayed centers the box horizontally on the first
+element and vertically on the second, clamped to the viewport by `--modal-viewport-gap` (a box taller
+than the viewport starts at the gap and scrolls inside the container), writing inline `top`/`left`
+on `.modal-box` and adding `.placed`. Placement is re-run on window resize and whenever the fragment
+is re-hydrated (a validation replacement changes the box height); an anchor that is missing or not
+displayed falls back to the default placement. Any open or close resets placement.
 
 General HTMX modal fragments opt in with `data-app-fragment="modal"` plus `data-app-modal-*`
 attributes on the fragment root (title, autofocus selector / select-on-focus, return-focus selector - the control focus goes to on close, chosen to survive the page update the dialog triggers -
-success event + detail, `close-on-success`, defaulting to true). `js/fragments/modal.js` opens the
+anchor-x / anchor-y placement selectors, success event + detail, `close-on-success`, defaulting to true). `js/fragments/modal.js` opens the
 host on hydration and tracks each operation the fragment submits from `htmx:before:request`
 (capturing the open it belongs to and its success metadata while the fragment is still in the DOM;
 a repeated submission while one is pending is dropped). When the response arrives it dispatches the
@@ -234,7 +243,10 @@ Arrow-key navigation works only while asset detail is active and no text field i
 **Folder context menus** — Each folder's ⋯ button is a real `button` with `popovertarget`
 pointing at a `popover="auto"` panel of action buttons (Add folder; Rename and Delete for non-root
 folders), all built with the tree by `js/common/folder-tree.js`, so opening a menu sends no request.
-Each action is its own HTMX request into `#modalContent` for the existing dialog. The browser owns
+Each action is its own HTMX request into `#modalContent` for the existing dialog; the three dialogs
+anchor themselves to `#explorer` (horizontally) and the row's `#folderMenuCtrl-{id}` (vertically),
+Delete using the folder's own control for placement and its parent's for return focus, which is what
+survives the deletion. The browser owns
 visibility: it toggles the panel from its trigger, closes it on any click outside, and keeps one
 open at a time because a folder's panel is never a DOM descendant of another folder's panel. The
 `folderMenu` component places the panel in the top layer against the trigger (below, flipping

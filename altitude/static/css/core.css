@@ -267,7 +267,9 @@ form input.error, form input.error:focus {
 /* MODAL */
 /*       */
 
-/* Both hosts start hidden inline and are shown by Alpine (`x-show`), which restores these display values */
+/* Both hosts start hidden inline and are shown by Alpine (`x-show`), which restores these display values.
+   The general host's default placement is the box centered horizontally (`.modal-box` margin) and
+   this padding from the top; see `.anchored` below for dialogs placed against page elements */
 #modalContainer {
     position: fixed;
     z-index: 4;
@@ -300,6 +302,19 @@ form input.error, form input.error:focus {
     border: var(--modal-border);
     border-radius: 5px;
     box-shadow: rgba(10, 0, 0, 0.66) 6px 6px 6px;
+}
+
+/* A general dialog may be placed against page elements its fragment names (`openModal` anchors in
+   js/common/modal.js). The owner positions the box in viewport coordinates, which apply as-is
+   because the container covers the viewport, and reveals it only once placed, so it is never
+   painted at the default position. */
+#modalContainer.anchored .modal-box {
+    position: absolute;
+    margin: 0;
+}
+
+#modalContainer.anchored:not(.placed) .modal-box {
+    visibility: hidden;
 }
 
 .modal-toolbar {
