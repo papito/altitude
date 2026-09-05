@@ -8,10 +8,30 @@ a migration plan before changing application code.
 
 ## Status
 
-Planning complete. Application code has not been changed for this migration.
-The numbered implementation units below can be reviewed and merged separately,
-in order. Recheck the relevant files before executing because other work may
-have changed them since this interview.
+Executed on 2026-09-05 (units 1-4, on branch `folder-refactor`, uncommitted). What was
+built diverges from the plan in these places:
+
+- The official Alpine UI Components modal source is behind a paywall
+  (https://alpinejs.dev/component/modal, $49 lifetime access) and its public demo
+  markup is marked as licensed. The hosts therefore use the official
+  `@alpinejs/focus` plugin (`x-trap.inert.noscroll`) with the same structure the
+  public Alpine documentation shows for a dialog (root `x-show`, panel `x-trap`,
+  close control, backdrop click on the wrapper). Provenance and versions are in
+  `altitude/static/js/lib/README.md`.
+- Escape is handled once, in `static/js/global.js`, rather than with a per-host
+  `x-on:keydown.escape`; the hosts have no keyboard handlers.
+- Validation replacement responses now use `HX-Reswap: outerHTML` (via
+  `BaseController.modalFormValidationResponse`); with `innerHTML` the
+  validated form was nested inside the submitting form.
+- `data-app-modal-return-focus` (a declared control that survives the page
+  update) takes precedence over the recorded opener on close, and the folder
+  tree rebuild preserves focus by element id, so folder dialogs return focus to
+  the folder's menu control (`#folderMenuCtrl-<id>`).
+- Asset detail opens immediately with its spinner and the image is loaded
+  afterwards, so dismissal is usable during loading; image loads and page
+  fetches carry request tokens.
+- The unused success-action metadata (`close-folder-context-menu`) and
+  `closeOnSuccess="true"` attributes were removed.
 
 ## Confirmed decisions
 

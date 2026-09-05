@@ -5,8 +5,8 @@
 - **HTMX 4** — server-driven HTML fragments, no SPA routing
 - **Alpine.js** — reactive state and UI behavior (`x-data`, `x-show`, `$store`)
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
-- Libraries are checked into `static/js/lib/` (htmx, Alpine, Split.js, interact.js, axios); versions
-  and sources are listed in `static/js/lib/README.md`
+- Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios);
+  versions and sources are listed in `static/js/lib/README.md`
 
 ## Template Layout
 
@@ -33,7 +33,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, and HTMX/search lifecycle wiring |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, HTMX/search lifecycle wiring, and the `document`-level modal request wiring |
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
@@ -90,6 +90,9 @@ Two-layer event bus, both on `document.body`:
   in `js/common/htmx-events.js` (`getRequestPath`, `getResponseStatus`, `isRequestSuccessful`,
   `getResponseText`, `getRequestTarget`) instead of touching the detail directly.
 - `htmx:after:request` fires when the response has arrived but **before** it is swapped in.
+  Cancelling it (`preventDefault()`) drops the swap. Once the issuing element has left the DOM, htmx
+  dispatches lifecycle events on `document` instead, so listeners that must see such late responses
+  (modal operations) go on `document`, not `document.body`.
   `htmx:after:settle` fires on the swap target once per swap with `detail.newContent`, the list of
   inserted nodes; `frontend-app.js` hydrates `data-app-fragment` roots from there.
 - Attribute inheritance is explicit: every element that issues a request declares its own
@@ -164,14 +167,41 @@ those responsibilities stay with HTMX and the custom event bus.
 
 ## UI Patterns
 
-**Modals** — Two containers live in `html_common.scala.html`. Load into `#modalContent` for general
-modals; load into `#imageDetailModalContent` for asset detail. Use `showModal()` /
-`showAssetDetailModal()` / `closeModal()` from `js/common/modal.js`. ESC key is wired globally in
-`global.js`. General HTMX modal fragments can opt into centralized hydration by adding
-`data-app-fragment="modal"` plus `data-app-modal-*` attributes (title, width, autofocus selector,
-success event/action metadata) on the fragment root; `js/fragments/` hydrators handle modal
-display, focus/select controls, dispatch success events, and close the modal after successful
-requests, while `js/frontend-app.js` remains the composition root that triggers hydration.
+**Modals** — Two hosts live in `html_common.scala.html`: load into `#modalContent` for general
+dialogs and into `#imageDetailModalContent` for asset detail. `js/common/modal.js` is the single owner
+of both: which host is active (one at a time — a new open replaces the active modal), the title,
+initial focus (the fragment's autofocus selector, else the close control, never a destructive action),
+focus restoration on close (the element focused when the open was requested, else the fragment's
+`data-app-modal-return-focus` selector), and identity: every displayed open has an `openId`
+(`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
+request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
+swaps once the user dismissed or replaced it. Visibility is bound through the Alpine `modal` store
+(`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
+`js/app.js` contains focus and hides the page from assistive tech). Escape (`global.js`) closes the
+active modal and is consumed by it, so a background inline edit survives; general dialogs ignore
+backdrop clicks, asset detail closes on them. General-dialog width is CSS only
+(`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
+image with `setAssetDetailSize()`.
+
+General HTMX modal fragments opt in with `data-app-fragment="modal"` plus `data-app-modal-*`
+attributes on the fragment root (title, autofocus selector / select-on-focus, return-focus selector - the control focus goes to on close, chosen to survive the page update the dialog triggers -
+success event + detail, `close-on-success`, defaulting to true). `js/fragments/modal.js` opens the
+host on hydration and tracks each operation the fragment submits from `htmx:before:request`
+(capturing the open it belongs to and its success metadata while the fragment is still in the DOM;
+a repeated submission while one is pending is dropped). When the response arrives it dispatches the
+success event exactly once and lets normal page updates through even if the dialog was closed or
+replaced; only the still-active initiating dialog is closed or gets its form replaced. Validation
+responses are recognised by their `HX-Retarget: this` / `HX-Reswap: outerHTML` headers
+(`BaseController.modalFormValidationResponse`): they replace the active form in place (values and
+errors kept, no success event) or, once the dialog is gone, are reported through the snackbar.
+`js/listeners/modal.js` registers this wiring on `document`, because htmx dispatches lifecycle events
+on the document when the issuing element has already left the DOM.
+
+Asset detail: `js/fragments/image-detail.js` opens the host with its spinner immediately and hands
+the image load to the detail coordinator, which gives each image request a token so only the latest
+request for the active open may change the image, box size, title, loading state, or current asset
+(rapid previous/next navigation, page fetches, and loads that finish after closing are ignored).
+Arrow-key navigation works only while asset detail is active and no text field is focused.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
@@ -208,10 +238,10 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/context.js` | `window.ctx` — repo ID and metadata field settings |
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes |
-| `static/js/common/modal.js` | `showModal`, `showAssetDetailModal`, `closeModal` |
+| `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
-| `views/includes/html_common.scala.html` | Snackbar + modal DOM containers |
+| `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
 | `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |
 

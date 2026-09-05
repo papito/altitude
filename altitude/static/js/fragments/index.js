@@ -14,15 +14,13 @@ export function hydrateAppFragments({ root, app }) {
             fragmentEl,
             context: app.context,
             dispatch: app.dispatch.bind(app),
-            closeFolderContextMenu: app.closeFolderContextMenu.bind(app),
         })
     })
 
     findFragmentRoots(root, "image-detail").forEach((fragmentEl) => {
         hydrateImageDetailFragment({
             fragmentEl,
-            Alpine: app.Alpine,
-            dispatch: app.dispatch.bind(app),
+            coordinator: app.searchDetailCoordinator,
         })
     })
 

@@ -42,3 +42,11 @@ export function getResponseText(event) {
 export function getRequestTarget(event) {
     return event.detail.ctx.target
 }
+
+/**
+ * The `HX-Retarget` response header, if the server redirected the swap to another target.
+ * Modal forms use `this` to replace themselves with a validated copy.
+ */
+export function getResponseRetarget(event) {
+    return event.detail.ctx.hx?.retarget
+}

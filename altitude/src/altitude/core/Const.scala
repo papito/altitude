@@ -85,23 +85,11 @@ object Const:
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
 
+  // Modal titles. Modal sizing is owned by CSS (`--modal-content-width` in core.css).
   object UI:
-    private val DEFAULT_MODAL_WIDTH = 400
-
     val ADD_FOLDER_MODAL_TITLE = "Add a folder"
-    val ADD_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
     val RENAME_FOLDER_MODAL_TITLE = "Rename folder"
-    val RENAME_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
     val DELETE_FOLDER_MODAL_TITLE = "Delete folder"
-    val DELETE_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
     val MERGE_PEOPLE_MODAL_TITLE = "Merge people"
-    val MERGE_PEOPLE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
     val CHANGE_PERSON_COVER_IMAGE_MODAL_TITLE = "Change cover image"
-    val CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
     val VIEW_SETTINGS_MODAL_TITLE = "View settings"
-    val VIEW_SETTINGS_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH

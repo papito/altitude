@@ -3,7 +3,8 @@
  *
  * Public API:
  *   reloadFolderTree(repoId) — fetch the full tree from the server, snapshot
- *   currently-expanded folder IDs, re-render, restore expanded state.
+ *   currently-expanded folder IDs and the focused tree control, re-render,
+ *   restore expanded state and focus.
  *
  * The DOM structure produced mirrors what the old Twirl templates generated so
  * that the existing Folder JS model, CSS, drag-and-drop wiring, and HTMX
@@ -32,6 +33,10 @@ export async function reloadFolderTree(repoId) {
         const container = document.getElementById("rootFolderList")
         if (!container) return
 
+        // Snapshot focus only now: it may have moved into the tree while the fetch was in flight
+        // (a dialog returning focus to a folder menu control as its operation completes)
+        const focusedId = _getFocusedTreeControlId()
+
         // Tear down and rebuild
         container.innerHTML = ""
         container.appendChild(_renderRootNode(treeData, repoId))
@@ -47,6 +52,11 @@ export async function reloadFolderTree(repoId) {
         // Restore previously-expanded folders (best-effort; silently skip
         // folders that no longer exist after the mutation).
         _restoreExpandedState(expandedIds)
+
+        // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
+        if (focusedId) {
+            document.getElementById(focusedId)?.focus()
+        }
     } catch (error) {
         // A newer reload superseded this one - let it report its own outcome
         if (seq !== _reloadSeq) return
@@ -67,6 +77,13 @@ function _getExpandedFolderIds() {
             if (id) ids.add(id)
         })
     return ids
+}
+
+function _getFocusedTreeControlId() {
+    const activeEl = document.activeElement
+    const container = document.getElementById("rootFolderList")
+
+    return container?.contains(activeEl) && activeEl.id ? activeEl.id : null
 }
 
 function _restoreExpandedState(expandedIds) {
@@ -241,6 +258,7 @@ function _buildMenuCtrl(folder, repoId) {
 
     const btnEl = document.createElement("a")
     btnEl.href = "#"
+    btnEl.id = `folderMenuCtrl-${folder.id}`
     btnEl.setAttribute("alt-folder-id", folder.id)
     btnEl.setAttribute("hx-get", `/htmx/folder/r/${repoId}/context-menu`)
     btnEl.setAttribute("hx-swap", "innerHTML")

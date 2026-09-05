@@ -2,28 +2,49 @@
 
 <div id="snackbar"></div>
 
-<!-- The wiring for closing the modal is in the modal.js file -->
+@* Modal hosts. Visibility, focus, and dismissal are owned by static/js/common/modal.js through the
+   Alpine `modal` store; `x-trap` comes from the @@alpinejs/focus plugin. General dialogs ignore
+   backdrop clicks; asset detail closes on them. *@
 
-<div id="modalContainer">
-    <div class="modal-box">
+<div id="modalContainer"
+     x-data
+     x-show="$store.modal.isActive('general')"
+     style="display: none"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="modalTitle">
+    <div class="modal-box"
+         x-trap.inert.noscroll.noreturn.noautofocus="$store.modal.isActive('general')">
         <div class="modal-toolbar">
-            <div class="modal-title">Title!</div>
-            <div class="close-modal"
-            >&times;</div>
+            <div class="modal-title" id="modalTitle" x-text="$store.modal.title"></div>
+            <button type="button"
+                    class="close-modal"
+                    aria-label="Close"
+                    x-on:click="$store.modal.close()">&times;</button>
         </div>
         <div id="modalContent">
         </div>
     </div>
 </div>
 
-<div id="imageDetailModalContainer">
-    <div class="modal-box">
+<div id="imageDetailModalContainer"
+     x-data
+     x-show="$store.modal.isActive('assetDetail')"
+     x-on:click.self="$store.modal.close()"
+     style="display: none"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="imageDetailModalTitle">
+    <div class="modal-box"
+         x-trap.inert.noscroll.noreturn.noautofocus="$store.modal.isActive('assetDetail')">
         <div class="modal-toolbar">
-            <div class="modal-title">Title!</div>
-            <div class="close-modal">&times;</div>
+            <div class="modal-title" id="imageDetailModalTitle" x-text="$store.modal.title"></div>
+            <button type="button"
+                    class="close-modal"
+                    aria-label="Close"
+                    x-on:click="$store.modal.close()">&times;</button>
         </div>
         <div id="imageDetailSpinner"
-            x-data
             x-show="$store.imageDetailLoading.value">
             <i class="fas fa-spinner fa-spin"></i>
         </div>
@@ -31,4 +52,3 @@
         </div>
     </div>
 </div>
-

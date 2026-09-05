@@ -1,37 +1,43 @@
+/**
+ * General dialog fragments (`data-app-fragment="modal"`): hydration into the shared modal owner,
+ * and the lifecycle of the operations those dialogs submit.
+ *
+ * An operation is tracked from `htmx:before:request` so that everything it needs later (which open
+ * it belongs to, its success event and detail) is captured while the dialog is still in the DOM.
+ * Its response is handled from `htmx:after:request` regardless of whether the dialog has since
+ * been closed or replaced: page updates and success events always happen, but only the still
+ * active initiating dialog may be closed or have its form replaced by the response.
+ */
 import { Const } from "../constants.js"
-import { closeModal, showModal } from "../common/modal.js"
-import { isRequestSuccessful } from "../common/htmx-events.js"
 import {
-    focusFragmentElement,
-    parseFragmentDetail,
-    parseFragmentTargetDetail,
-} from "./helpers.js"
+    closeModal,
+    getModalOpenId,
+    isModalOpenActive,
+    ModalHost,
+    openModal,
+} from "../common/modal.js"
+import {
+    getRequestPath,
+    getResponseRetarget,
+    getResponseStatus,
+    getResponseText,
+    isRequestSuccessful,
+} from "../common/htmx-events.js"
+import { showErrorSnackBar, showWarningSnackBar } from "../common/snackbar.js"
+import { parseFragmentDetail, parseFragmentTargetDetail } from "./helpers.js"
 
-export function hydrateModalFragment({
-    fragmentEl,
-    context,
-    dispatch,
-    closeFolderContextMenu,
-}) {
-    showModal({
-        minWidthPx: fragmentEl.dataset.appModalMinWidth,
+// htmx request context -> operation captured when the request was issued
+const pendingOperations = new Map()
+
+export function hydrateModalFragment({ fragmentEl, context, dispatch }) {
+    openModal({
+        host: ModalHost.general,
         title: fragmentEl.dataset.appModalTitle,
+        focusSelector: fragmentEl.dataset.appModalAutofocusSelector,
+        selectOnFocus: fragmentEl.dataset.appModalSelectOnFocus === "true",
+        returnFocusSelector: fragmentEl.dataset.appModalReturnFocus,
     })
 
-    initializeModalFragment({ fragmentEl, context, dispatch })
-    focusFragmentElement(
-        fragmentEl,
-        fragmentEl.dataset.appModalAutofocusSelector,
-        fragmentEl.dataset.appModalSelectOnFocus === "true",
-    )
-    bindModalFragment({
-        fragmentEl,
-        dispatch,
-        closeFolderContextMenu,
-    })
-}
-
-function initializeModalFragment({ fragmentEl, context, dispatch }) {
     if (fragmentEl.dataset.appModalKind === "view-settings") {
         initializeViewSettingsModalFragment({ fragmentEl, context, dispatch })
     }
@@ -81,73 +87,118 @@ function initializeViewSettingsModalFragment({
     })
 }
 
-function bindModalFragment({ fragmentEl, dispatch, closeFolderContextMenu }) {
-    if (fragmentEl.dataset.appModalBound === "true") {
-        return
+/**
+ * `htmx:before:request` hook: captures an operation issued from a modal fragment, or drops the
+ * request when that fragment already has one pending. Returns whether the request came from a
+ * modal fragment.
+ */
+export function trackModalOperationRequest(event) {
+    const ctx = event.detail.ctx
+    const fragmentEl = ctx.sourceElement?.closest?.(
+        '[data-app-fragment="modal"]',
+    )
+
+    if (!fragmentEl) {
+        return false
     }
 
-    fragmentEl.dataset.appModalBound = "true"
+    if (hasPendingOperation(fragmentEl)) {
+        console.debug("Dropping repeated submission while one is pending")
+        event.preventDefault()
+        return true
+    }
 
-    fragmentEl.addEventListener("htmx:after:request", (event) => {
-        if (!isRequestSuccessful(event)) {
-            return
-        }
-
-        handleModalFragmentSuccess({
-            fragmentEl,
-            event,
-            dispatch,
-            closeFolderContextMenu,
-        })
+    pendingOperations.set(ctx, {
+        openId: getModalOpenId(),
+        fragmentEl,
+        successEventKey: fragmentEl.dataset.appModalSuccessEvent,
+        successDetail: {
+            ...parseFragmentDetail(fragmentEl.dataset.appModalSuccessDetail),
+            ...parseFragmentTargetDetail(fragmentEl, ctx.sourceElement),
+        },
+        closeOnSuccess: fragmentEl.dataset.appModalCloseOnSuccess !== "false",
     })
+
+    return true
 }
 
-function handleModalFragmentSuccess({
-    fragmentEl,
-    event,
-    dispatch,
-    closeFolderContextMenu,
-}) {
-    dispatchModalFragmentSuccessEvent({ fragmentEl, event, dispatch })
-    runModalFragmentSuccessAction({ fragmentEl, closeFolderContextMenu })
+export function isModalOperationRequest(event) {
+    return pendingOperations.has(event.detail.ctx)
+}
 
-    if (fragmentEl.dataset.appModalCloseOnSuccess !== "false") {
+/**
+ * `htmx:after:request` hook: completes a tracked operation. Returns whether the event belonged to
+ * one. Runs before htmx swaps the response, so cancelling the event here is what keeps a stale
+ * response from touching a newer dialog.
+ */
+export function settleModalOperation(event, { dispatch }) {
+    const ctx = event.detail.ctx
+    const operation = pendingOperations.get(ctx)
+
+    if (!operation) {
+        return false
+    }
+
+    pendingOperations.delete(ctx)
+    const stillActive = isModalOpenActive(operation.openId)
+
+    if (!isRequestSuccessful(event)) {
+        // Error bodies are never swapped (htmx `noSwap` config), so feedback comes from here
+        showErrorSnackBar(
+            `Error for request to ${getRequestPath(event)}. HTTP ${getResponseStatus(event)}`,
+        )
+        return true
+    }
+
+    // A response retargeted at the submitting form is a validation replacement, not a completed
+    // operation: it swaps into the active dialog and is re-hydrated, or is reported and dropped.
+    if (getResponseRetarget(event)) {
+        if (!stillActive) {
+            event.preventDefault()
+            showWarningSnackBar(
+                extractValidationMessages(getResponseText(event)) ||
+                    "The request was rejected",
+            )
+        }
+        return true
+    }
+
+    dispatchSuccessEvent({ operation, dispatch })
+
+    if (stillActive && operation.closeOnSuccess) {
         closeModal()
     }
+
+    return true
 }
 
-function dispatchModalFragmentSuccessEvent({ fragmentEl, event, dispatch }) {
-    const eventKey = fragmentEl.dataset.appModalSuccessEvent
-    if (!eventKey) {
+function hasPendingOperation(fragmentEl) {
+    return [...pendingOperations.values()].some(
+        (operation) => operation.fragmentEl === fragmentEl,
+    )
+}
+
+function dispatchSuccessEvent({ operation, dispatch }) {
+    if (!operation.successEventKey) {
         return
     }
 
-    const eventName = Const.events[eventKey]
+    const eventName = Const.events[operation.successEventKey]
     if (!eventName) {
-        console.warn(`Unknown modal success event key: ${eventKey}`)
+        console.warn(
+            `Unknown modal success event key: ${operation.successEventKey}`,
+        )
         return
     }
 
-    dispatch(eventName, buildModalFragmentSuccessDetail({ fragmentEl, event }))
+    dispatch(eventName, operation.successDetail)
 }
 
-function buildModalFragmentSuccessDetail({ fragmentEl, event }) {
-    return {
-        ...parseFragmentDetail(fragmentEl.dataset.appModalSuccessDetail),
-        ...parseFragmentTargetDetail(fragmentEl, event),
-    }
-}
+function extractValidationMessages(responseText) {
+    const doc = new DOMParser().parseFromString(responseText, "text/html")
 
-function runModalFragmentSuccessAction({ fragmentEl, closeFolderContextMenu }) {
-    const action = fragmentEl.dataset.appModalSuccessAction
-    if (!action) {
-        return
-    }
-
-    if (action === "close-folder-context-menu") {
-        closeFolderContextMenu(fragmentEl.dataset.appModalFolderId)
-        return
-    }
-
-    console.warn(`Unknown modal success action: ${action}`)
+    return [...doc.querySelectorAll("div.error")]
+        .map((el) => el.textContent.trim())
+        .filter(Boolean)
+        .join(" ")
 }

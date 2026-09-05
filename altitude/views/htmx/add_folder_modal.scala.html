@@ -1,7 +1,7 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
 
-@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String, minWidth: Int, title: String)
+@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String, title: String)
 
 <style>
     #addFolder input {
@@ -9,14 +9,13 @@
     }
 </style>
 
-@* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) resolve to this form *@
+@* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="addFolder"
       data-app-fragment="modal"
       data-app-modal-title="@{title}"
-      data-app-modal-min-width="@{minWidth}"
       data-app-modal-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
-      data-app-modal-close-on-success="true"
+      data-app-modal-return-focus="#folderMenuCtrl-@{parentId}"
       data-app-modal-success-event="folderAdded"
       data-app-modal-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
       alt-folder-id="@{parentId}"

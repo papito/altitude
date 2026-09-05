@@ -2,7 +2,7 @@
 @import altitude.core.models.Folder
 @import altitude.core.Api
 
-@(folder: Folder, minWidth: Int, title: String)
+@(folder: Folder, title: String)
 
 <style>
     #modalContent {
@@ -16,8 +16,7 @@
         id="deleteFolder"
         data-app-fragment="modal"
         data-app-modal-title="@{title}"
-        data-app-modal-min-width="@{minWidth}"
-        data-app-modal-close-on-success="true"
+        data-app-modal-return-focus="#folderMenuCtrl-@{folder.parentId}"
         data-app-modal-success-event="folderDeleted"
         data-app-modal-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'
         hx-swap="none"

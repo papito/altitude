@@ -63,6 +63,7 @@ export let Const = {
         shadowResults: "shadowResults",
         searchUrl: "searchUrl",
         imageDetailLoading: "imageDetailLoading",
+        modal: "modal",
     },
 
     localStore: {

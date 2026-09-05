@@ -20,9 +20,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/add-folder")
-  def showAddFolderModal(repoId: String, parentId: String, minWidth: String)(using request: Request): Response[String] =
+  def showAddFolderModal(repoId: String, parentId: String)(using request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.add_folder_modal(
-      minWidth = C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
       title = C.UI.ADD_FOLDER_MODAL_TITLE,
       parentId = parentId
     )
@@ -30,11 +29,9 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/rename-folder")
-  def showRenameFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using
-      request: Request): Response[String] =
+  def showRenameFolderModal(repoId: String, id: String, parentId: Option[String] = None)(using request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
     val payload = "<!doctype html>" + htmx.html.rename_folder_modal(
-      minWidth = C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
       title = C.UI.RENAME_FOLDER_MODAL_TITLE,
       existingName = Some(folder.name),
       id = id
@@ -43,11 +40,9 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/delete-folder")
-  def showDeleteFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using
-      request: Request): Response[String] =
+  def showDeleteFolderModal(repoId: String, id: String, parentId: Option[String] = None)(using request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
     val payload = "<!doctype html>" + htmx.html.delete_folder_modal(
-      minWidth = C.UI.DELETE_FOLDER_MODAL_MIN_WIDTH,
       title = C.UI.DELETE_FOLDER_MODAL_TITLE,
       folder = folder
     )
@@ -87,21 +82,12 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
     def responseWithValidationErrors(errors: Map[String, String], parentId: String): Response[String] =
       val payload = "<!doctype html>" + htmx.html.add_folder_modal(
-        minWidth = C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
         title = C.UI.ADD_FOLDER_MODAL_TITLE,
         fieldErrors = errors,
         formJson = jsonIn,
         parentId = parentId
       )
-      // we want to change the folder modal to show the errors, not reload the folder list!
-      cask.Response(
-        payload,
-        200,
-        Seq(
-          ("Content-Type", "text/html"),
-          ("HX-Retarget", "this"),
-          ("HX-Reswap", "innerHTML")
-        ))
+      modalFormValidationResponse(payload)
 
     try apiRequestValidator.validate(jsonIn)
     catch
@@ -142,21 +128,12 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
     def responseWithValidationErrors(errors: Map[String, String], folderId: String): Response[String] =
       val payload = "<!doctype html>" + htmx.html.rename_folder_modal(
-        minWidth = C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
         title = C.UI.RENAME_FOLDER_MODAL_TITLE,
         fieldErrors = errors,
         formJson = jsonIn,
         id = folderId
       )
-      // we want to change the folder modal to show the errors, not reload the folder list!
-      cask.Response(
-        payload,
-        200,
-        Seq(
-          ("Content-Type", "text/html"),
-          ("HX-Retarget", "this"),
-          ("HX-Reswap", "innerHTML")
-        ))
+      modalFormValidationResponse(payload)
 
     try apiRequestValidator.validate(jsonIn)
     catch

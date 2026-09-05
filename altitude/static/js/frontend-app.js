@@ -1,5 +1,4 @@
 import { Const } from "./constants.js"
-import { Folder } from "./models/folder.js"
 import { showErrorSnackBar } from "./common/snackbar.js"
 import {
     getRequestPath,
@@ -9,6 +8,8 @@ import {
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
+import { isModalOperationRequest } from "./fragments/modal.js"
+import { isModalOpenRequest } from "./common/modal.js"
 import {
     handleFolderAfterRequest,
     handleFolderBeforeRequest,
@@ -94,6 +95,11 @@ export class FrontendApp {
         const requestPath = getRequestPath(event)
         const status = getResponseStatus(event)
 
+        // Modal opens and the operations submitted from modals are settled by `listeners/modal.js`
+        if (isModalOpenRequest(event) || isModalOperationRequest(event)) {
+            return
+        }
+
         if (handlePeopleAfterRequest({ app: this, event })) {
             return
         }
@@ -151,21 +157,6 @@ export class FrontendApp {
 
     hydrateFragments(root) {
         hydrateAppFragments({ root, app: this })
-    }
-
-    closeFolderContextMenu(folderId) {
-        if (!folderId) {
-            return
-        }
-
-        try {
-            new Folder(folderId).closeContextMenu()
-        } catch (error) {
-            console.debug(
-                `Unable to close folder context menu for ${folderId}`,
-                error,
-            )
-        }
     }
 
     dispatch(eventName, detail = {}) {

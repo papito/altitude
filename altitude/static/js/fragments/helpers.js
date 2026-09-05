@@ -52,9 +52,13 @@ export function parseFragmentDetail(jsonValue) {
     }
 }
 
+/**
+ * Success-detail values read from attributes of the element that issued the request, declared as
+ * `data-app-modal-success-detail-target-attr-<detail key>="<attribute name>"` on the fragment.
+ */
 export function parseFragmentTargetDetail(
     fragmentEl,
-    event,
+    sourceEl,
     keyPrefix = "appModalSuccessDetailTargetAttr",
 ) {
     const detail = {}
@@ -68,8 +72,7 @@ export function parseFragmentTargetDetail(
             key.slice(keyPrefix.length),
         )
 
-        detail[detailKey] =
-            event.target?.getAttribute?.(value) ?? detail[detailKey]
+        detail[detailKey] = sourceEl?.getAttribute?.(value) ?? detail[detailKey]
     })
 
     return detail

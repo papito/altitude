@@ -1,7 +1,7 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
 
-@(minWidth: Int, title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), id: String, existingName: Option[String] = None)
+@(title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), id: String, existingName: Option[String] = None)
 @defining(formJson.obj.get(Api.Field.Folder.NAME).flatMap(_.strOpt)) { name =>
 
 <style>
@@ -10,15 +10,14 @@
   }
 </style>
 
-@* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) resolve to this form *@
+@* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="renameFolder"
       data-app-fragment="modal"
       data-app-modal-title="@{title}"
-      data-app-modal-min-width="@{minWidth}"
       data-app-modal-autofocus-selector="#field-@{ Api.Field.Folder.NAME }"
       data-app-modal-select-on-focus="true"
-      data-app-modal-close-on-success="true"
+      data-app-modal-return-focus="#folderMenuCtrl-@{id}"
       data-app-modal-success-event="folderRenamed"
       data-app-modal-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
       hx-target="this"
