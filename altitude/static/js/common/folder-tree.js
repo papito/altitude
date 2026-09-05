@@ -242,10 +242,7 @@ function _buildMenuCtrl(folder, repoId) {
     const btnEl = document.createElement("a")
     btnEl.href = "#"
     btnEl.setAttribute("alt-folder-id", folder.id)
-    btnEl.setAttribute(
-        "hx-get",
-        `/htmx/folder/r/${repoId}/context-menu`,
-    )
+    btnEl.setAttribute("hx-get", `/htmx/folder/r/${repoId}/context-menu`)
     btnEl.setAttribute("hx-swap", "innerHTML")
     btnEl.setAttribute("hx-target", `#menu-${folder.id}`)
     btnEl.setAttribute("hx-vals", JSON.stringify({ folderId: folder.id }))
@@ -281,4 +278,3 @@ function _buildChildrenDiv(folder, repoId, isRoot) {
 
     return childrenEl
 }
-

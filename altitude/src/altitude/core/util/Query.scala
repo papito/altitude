@@ -17,26 +17,26 @@ object Query:
     def this(value: Any, paramType: ParamType, negate: Boolean) =
       this(Set(value), paramType, negate)
 
-  def EQUALS(value: Any) = QueryParam(Set(value), ParamType.EQ, negate = false)
-  def NOT_EQUALS(value: Any) = QueryParam(Set(value), ParamType.EQ, negate = true)
+  def EQUALS(value: Any): QueryParam = QueryParam(Set(value), ParamType.EQ, negate = false)
+  def NOT_EQUALS(value: Any): QueryParam = QueryParam(Set(value), ParamType.EQ, negate = true)
 
-  def LT(value: Any) = QueryParam(Set(value), ParamType.LT, negate = false)
-  def NOT_LT(value: Any) = QueryParam(Set(value), ParamType.LT, negate = true)
+  def LT(value: Any): QueryParam = QueryParam(Set(value), ParamType.LT, negate = false)
+  def NOT_LT(value: Any): QueryParam = QueryParam(Set(value), ParamType.LT, negate = true)
 
-  def LTE(value: Any) = QueryParam(Set(value), ParamType.LTE, negate = false)
-  def NOT_LTE(value: Any) = QueryParam(Set(value), ParamType.LTE, negate = true)
+  def LTE(value: Any): QueryParam = QueryParam(Set(value), ParamType.LTE, negate = false)
+  def NOT_LTE(value: Any): QueryParam = QueryParam(Set(value), ParamType.LTE, negate = true)
 
-  def GT(value: Any) = QueryParam(Set(value), ParamType.GT, negate = false)
-  def NOT_GT(value: Any) = QueryParam(Set(value), ParamType.GT, negate = true)
+  def GT(value: Any): QueryParam = QueryParam(Set(value), ParamType.GT, negate = false)
+  def NOT_GT(value: Any): QueryParam = QueryParam(Set(value), ParamType.GT, negate = true)
 
-  def GTE(value: Any) = QueryParam(Set(value), ParamType.GTE, negate = false)
-  def NOT_GTE(value: Any) = QueryParam(Set(value), ParamType.GTE, negate = true)
+  def GTE(value: Any): QueryParam = QueryParam(Set(value), ParamType.GTE, negate = false)
+  def NOT_GTE(value: Any): QueryParam = QueryParam(Set(value), ParamType.GTE, negate = true)
 
-  def RANGE(values: List[Any]) = QueryParam(values.toSet, ParamType.RANGE, negate = false)
-  def NOT_IN_RANGE(values: List[Any]) = QueryParam(values.toSet, ParamType.RANGE, negate = true)
+  def RANGE(values: List[Any]): QueryParam = QueryParam(values.toSet, ParamType.RANGE, negate = false)
+  def NOT_IN_RANGE(values: List[Any]): QueryParam = QueryParam(values.toSet, ParamType.RANGE, negate = true)
 
-  def OR(values: List[Any]) = QueryParam(values.toSet, ParamType.OR, negate = false)
-  def NOT_OR(values: List[Any]) = QueryParam(values.toSet, ParamType.OR, negate = true)
+  def OR(values: List[Any]): QueryParam = QueryParam(values.toSet, ParamType.OR, negate = false)
+  def NOT_OR(values: List[Any]): QueryParam = QueryParam(values.toSet, ParamType.OR, negate = true)
 
   def IN(values: Set[Any], negate: Boolean = false): QueryParam =
     // if only one value given - simplify this to be just an equals
@@ -44,11 +44,11 @@ object Query:
     else QueryParam(values, ParamType.IN, negate)
   def NOT_IN(values: Set[Any]): QueryParam = IN(values, negate = true)
 
-  def CONTAINS(value: Any) = QueryParam(Set(value), ParamType.CONTAINS, negate = false)
-  def NOT_CONTAINS(value: Any) = QueryParam(Set(value), ParamType.CONTAINS, negate = true)
+  def CONTAINS(value: Any): QueryParam = QueryParam(Set(value), ParamType.CONTAINS, negate = false)
+  def NOT_CONTAINS(value: Any): QueryParam = QueryParam(Set(value), ParamType.CONTAINS, negate = true)
 
-  def MATCHES(value: Any) = QueryParam(Set(value), ParamType.MATCHES, negate = false)
-  def NOT_MATCHES(value: Any) = QueryParam(Set(value), ParamType.MATCHES, negate = true)
+  def MATCHES(value: Any): QueryParam = QueryParam(Set(value), ParamType.MATCHES, negate = false)
+  def NOT_MATCHES(value: Any): QueryParam = QueryParam(Set(value), ParamType.MATCHES, negate = true)
 
 enum SortDirection(val id: Int):
   case ASC extends SortDirection(0)

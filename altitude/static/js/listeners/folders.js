@@ -73,15 +73,18 @@ export function registerFolderListeners(app) {
         }
     })
 
-    document.body.addEventListener(Const.events.folderDeleted, async (event) => {
-        // Capture name before the tree is rebuilt
-        const id = event.detail.id
-        const nameEl = document.getElementById(`folderName-${id}`)
-        const name = nameEl?.innerText ?? id
+    document.body.addEventListener(
+        Const.events.folderDeleted,
+        async (event) => {
+            // Capture name before the tree is rebuilt
+            const id = event.detail.id
+            const nameEl = document.getElementById(`folderName-${id}`)
+            const name = nameEl?.innerText ?? id
 
-        await reloadFolderTree(app.context.getRepoId())
-        showSuccessSnackBar(`Folder "${name}" deleted`)
-    })
+            await reloadFolderTree(app.context.getRepoId())
+            showSuccessSnackBar(`Folder "${name}" deleted`)
+        },
+    )
 
     document.body.addEventListener(Const.events.folderRenamed, async () => {
         await reloadFolderTree(app.context.getRepoId())

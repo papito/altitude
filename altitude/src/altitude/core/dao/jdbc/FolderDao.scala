@@ -2,7 +2,6 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 
-
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext

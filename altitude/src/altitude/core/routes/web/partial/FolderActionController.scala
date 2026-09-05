@@ -9,7 +9,6 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
-import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Folder

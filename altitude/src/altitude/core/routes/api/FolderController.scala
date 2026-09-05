@@ -17,15 +17,8 @@ class FolderController(using logger: Logger) extends BaseController:
   /**
    * Returns the full (non-recycled) folder tree for the current repository as JSON.
    *
-   * Response shape (recursive):
-   * {
-   *   "id": "uuid",
-   *   "parentId": "uuid",
-   *   "name": "folder name",
-   *   "numOfChildren": <count of direct non-recycled children>,
-   *   "isRoot": true | false,
-   *   "children": [ ... ]
-   * }
+   * Response shape (recursive): { "id": "uuid", "parentId": "uuid", "name": "folder name", "numOfChildren": <count of direct
+   * non-recycled children>, "isRoot": true | false, "children": [ ... ] }
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tree")

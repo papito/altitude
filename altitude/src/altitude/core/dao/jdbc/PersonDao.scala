@@ -2,7 +2,6 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 
-
 import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
@@ -187,4 +186,3 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
       """
       updateByBySql(sql, assetIds.toList ++ assetIds.toList)
     }
-

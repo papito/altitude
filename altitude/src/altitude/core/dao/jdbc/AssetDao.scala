@@ -6,7 +6,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
 
-
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
