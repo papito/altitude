@@ -7,8 +7,13 @@
  *   restore expanded state and focus.
  *
  * The DOM structure produced mirrors what the old Twirl templates generated so
- * that the existing Folder JS model, CSS, drag-and-drop wiring, and HTMX
- * context-menu loading all continue to work without modification.
+ * that the existing Folder JS model, CSS, and drag-and-drop wiring all continue
+ * to work without modification.
+ *
+ * Each folder's context menu is built here too, as a native `popover="auto"`
+ * panel next to its ⋯ trigger, so opening a menu needs no request; the actions
+ * themselves load their existing dialogs through HTMX. The `folderMenu` Alpine
+ * component (`alpine/components/folder-menu.js`) places and dismisses the panel.
  *
  * Indentation is not structural: every non-root `.folder` carries a `--depth`
  * CSS custom property, and its `.controls` row holds a `.trace` cell (between
@@ -47,12 +52,11 @@ export async function reloadFolderTree(repoId) {
         container.innerHTML = ""
         container.appendChild(_renderRootNode(treeData, repoId))
 
-        // Let HTMX and Alpine wire up the new elements
+        // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
+        // initializes the appended subtree, and an explicit `initTree` here would initialize
+        // every component a second time, duplicating their listeners.
         if (window.htmx) {
             htmx.process(container)
-        }
-        if (window.Alpine) {
-            window.Alpine.initTree(container)
         }
 
         // Restore previously-expanded folders (best-effort; silently skip
@@ -123,7 +127,6 @@ function _renderRootNode(folder, repoId) {
     folderEl.setAttribute("alt-expanded", "true")
 
     folderEl.appendChild(_buildRootControls(folder, repoId))
-    folderEl.appendChild(_buildMenuDiv(folder))
     folderEl.appendChild(_buildChildrenDiv(folder, repoId, true, 0))
 
     return folderEl
@@ -154,7 +157,7 @@ function _buildRootControls(folder, repoId) {
     const nameEl = _buildFolderNameEl(folder, repoId, "/ Root")
 
     // ⋯ menu button (leftmost column)
-    const menuCtrlEl = _buildMenuCtrl(folder, repoId)
+    const menuCtrlEl = _buildMenuCtrl(folder, repoId, "Root")
 
     controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(iconEl)
@@ -178,7 +181,6 @@ function _renderFolderNode(folder, repoId, depth) {
     folderEl.style.setProperty("--depth", depth)
 
     folderEl.appendChild(_buildFolderControls(folder, repoId))
-    folderEl.appendChild(_buildMenuDiv(folder))
     folderEl.appendChild(_buildChildrenDiv(folder, repoId, false, depth))
 
     return folderEl
@@ -228,7 +230,7 @@ function _buildFolderControls(folder, repoId) {
     })
 
     // ⋯ menu button (leftmost column)
-    const menuCtrlEl = _buildMenuCtrl(folder, repoId)
+    const menuCtrlEl = _buildMenuCtrl(folder, repoId, folder.name)
 
     // Dotted guide from the ⋯ button to the icon; its width is the row's indent
     const traceEl = document.createElement("span")
@@ -267,31 +269,95 @@ function _buildFolderNameEl(folder, repoId, label) {
     return el
 }
 
-function _buildMenuCtrl(folder, repoId) {
+/**
+ * Build the ⋯ menu cell: the trigger button and the native popover panel of
+ * actions it opens. Both keep their stable IDs (`folderMenuCtrl-<id>`,
+ * `menu-<id>`): tree rebuilds restore focus by ID, and the folder dialogs
+ * declare the trigger as their return-focus control.
+ *
+ * The cell is the `folderMenu` component's root, so the panel is a DOM child
+ * of the cell and never of another folder's panel; see the component for why
+ * that matters.
+ */
+function _buildMenuCtrl(folder, repoId, folderName) {
     const menuCtrlEl = document.createElement("div")
     menuCtrlEl.className = "menu-ctrl"
+    menuCtrlEl.setAttribute("x-data", "folderMenu")
+    menuCtrlEl.setAttribute("x-on:focusout", "handleFocusOut")
 
-    const btnEl = document.createElement("a")
-    btnEl.href = "#"
+    const panelId = `menu-${folder.id}`
+
+    const btnEl = document.createElement("button")
+    btnEl.type = "button"
     btnEl.id = `folderMenuCtrl-${folder.id}`
     btnEl.setAttribute("alt-folder-id", folder.id)
-    btnEl.setAttribute("hx-get", `/htmx/folder/r/${repoId}/context-menu`)
-    btnEl.setAttribute("hx-swap", "innerHTML")
-    btnEl.setAttribute("hx-target", `#menu-${folder.id}`)
-    btnEl.setAttribute("hx-vals", JSON.stringify({ folderId: folder.id }))
-    btnEl.setAttribute("hx-trigger", "click")
+    btnEl.setAttribute("popovertarget", panelId)
+    btnEl.setAttribute("aria-label", `Actions for folder ${folderName}`)
+    btnEl.setAttribute("x-ref", "trigger")
     btnEl.textContent = "⋯"
 
+    const panelEl = document.createElement("div")
+    panelEl.className = "folder-menu"
+    panelEl.id = panelId
+    panelEl.setAttribute("popover", "auto")
+    panelEl.setAttribute("alt-folder-id", folder.id)
+    panelEl.setAttribute("x-ref", "panel")
+    panelEl.setAttribute("x-on:beforetoggle", "handleBeforeToggle")
+    panelEl.setAttribute("x-on:toggle", "handleToggle")
+    panelEl.setAttribute("x-on:click", "handleActionClick")
+
+    _buildMenuActions(folder, repoId).forEach((actionEl) => {
+        panelEl.appendChild(actionEl)
+    })
+
     menuCtrlEl.appendChild(btnEl)
+    menuCtrlEl.appendChild(panelEl)
     return menuCtrlEl
 }
 
-function _buildMenuDiv(folder) {
-    const menuEl = document.createElement("div")
-    menuEl.className = "menu"
-    menuEl.id = `menu-${folder.id}`
-    menuEl.setAttribute("alt-folder-id", folder.id)
-    return menuEl
+/**
+ * The menu's action buttons, in their established order. Each one requests
+ * its existing dialog into the general modal host; the root folder can only
+ * gain children, so it offers Add folder alone.
+ */
+function _buildMenuActions(folder, repoId) {
+    const actions = [
+        {
+            label: "Add folder",
+            modal: "add-folder",
+            vals: { parentId: folder.id },
+        },
+    ]
+
+    if (!folder.isRoot) {
+        actions.push(
+            {
+                label: "Rename",
+                modal: "rename-folder",
+                vals: { id: folder.id },
+            },
+            {
+                label: "Delete",
+                modal: "delete-folder",
+                vals: { id: folder.id },
+            },
+        )
+    }
+
+    return actions.map(({ label, modal, vals }) => {
+        const actionEl = document.createElement("button")
+        actionEl.type = "button"
+        actionEl.setAttribute(
+            "hx-get",
+            `/htmx/folder/r/${repoId}/modals/${modal}`,
+        )
+        actionEl.setAttribute("hx-target", "#modalContent")
+        actionEl.setAttribute("hx-swap", "innerHTML")
+        actionEl.setAttribute("hx-trigger", "click")
+        actionEl.setAttribute("hx-vals", JSON.stringify(vals))
+        actionEl.textContent = label
+        return actionEl
+    })
 }
 
 function _buildChildrenDiv(folder, repoId, isRoot, depth) {

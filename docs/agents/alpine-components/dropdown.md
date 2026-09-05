@@ -49,4 +49,4 @@ and when keyboard focus leaves it, and focus returns to the button when Escape c
 
 ## Notes for Altitude
 
-The folder context menu in `folder_context_menu.scala.html` is server-rendered and toggled from `htmx-folders.js`; the close-on-focus-out and Escape handling here are the parts worth borrowing if it ever becomes an Alpine component.
+The folder context menu (`static/js/common/folder-tree.js` builds it; `static/js/alpine/components/folder-menu.js` coordinates it) is a native `popover="auto"` panel rather than this `x-show` dropdown: the browser owns visibility, outside-click dismissal, and the trigger relationship (`popovertarget`), while the close-on-focus-out idea from this lesson is kept in the component. Escape is handled once for the whole document in `global.js` instead of on the component root, so it works wherever focus is.

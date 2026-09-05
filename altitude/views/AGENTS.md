@@ -37,9 +37,9 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, nodes |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes an open folder menu from outside its component) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
-| `js/alpine/components/selectable.js` | asset grid multi-select |
+| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `folder-menu.js` (native popover folder menus); `index.js` registers them |
 
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
@@ -72,7 +72,9 @@ Const.attributes.dataSrc        // "alt-data-src"  (lazy-load image URL)
 
 The `Folder` class in `js/models/folder.js` is the canonical DOM abstraction for folder tree
 nodes. Construct it with an ID: `new Folder(id)` — it wraps `#folder-{id}`, `#children-{id}`,
-`#menu-{id}`, `#folderName-{id}`.
+`#folderName-{id}`. The folder tree, including each folder's ⋯ menu (`#folderMenuCtrl-{id}` opening
+the `#menu-{id}` popover), is rendered client-side by `js/common/folder-tree.js` from the JSON
+tree endpoint; those IDs are stable so tree rebuilds can restore focus and dialogs can return it.
 
 ## Event Flow
 
@@ -81,8 +83,8 @@ Two-layer event bus, both on `document.body`:
 1. **Custom DOM events** — string names in `Const.events`, dispatched via `new CustomEvent(...)`,
    handled in `event_handlers.js`. These are business-level actions (e.g. `FOLDER_MOVED_EVENT`).
 2. **HTMX lifecycle events** — `htmx:before:request` / `htmx:after:request` / `htmx:after:settle` —
-   handled in `htmx_event_handlers.js`. Used to toggle fold/expand state and short-circuit requests
-   when no server round-trip is needed.
+   handled by the listener modules. Used to settle modal requests, report failed requests, and
+   follow up on completed operations.
 
 ### HTMX 4 conventions
 
@@ -124,14 +126,12 @@ interact.js drag end / ondrop
           → on success: direct DOM mutation + snackbar + optional nav reload
 ```
 
-`htmx_event_handlers.js` sits on the **HTMX lifecycle** side of this, not the custom event side.
-It intercepts `htmx:before:request` to short-circuit requests the client can already resolve
-locally (e.g. collapsing a folder), and `htmx:after:request` to apply post-response state changes
-(e.g. marking a folder as expanded).
-
-In the current structure, that HTMX lifecycle logic is split by concern: folder-specific
-before/after request behavior lives in `js/listeners/htmx-folders.js`, while shared HTMX/search
-listener wiring remains in `js/listeners/htmx-search.js` and delegates back into `frontend-app.js`.
+The listener modules sit on the **HTMX lifecycle** side of this, not the custom event side.
+Folder expansion and the folder context menus involve no request at all: the tree renderer builds
+them, so `js/listeners/htmx-folders.js` only reports failed folder requests (the folders tab load)
+from `htmx:after:request`. Shared HTMX/search listener wiring (`htmx:after:request`,
+`htmx:after:settle`) lives in `js/listeners/htmx-search.js` and delegates back into
+`frontend-app.js`; the only `htmx:before:request` listener is the modal one on `document`.
 People-specific HTMX follow-up for discard actions and the inline person-name editor lives in
 `js/listeners/htmx-people-inline-editor.js`.
 
@@ -162,6 +162,14 @@ without those modules needing to know anything about the DOM structure.
   `Alpine.store(...).reset()` to clear selection, which in turn dispatches `deselectAll` so each
   component proxy deselects itself.
 
+### 3. Coordination around native UI
+`x-data="folderMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
+`alpine/components/folder-menu.js`) wraps each folder's ⋯ trigger and its native `popover="auto"`
+panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
+outside clicks); the component only places the panel, closes it when focus leaves, when an action
+is chosen, or when the page scrolls or the explorer resizes, and cleans up. Nothing binds `x-show`
+or an `open` flag to it. See **Folder context menus** below.
+
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
 
@@ -179,8 +187,8 @@ swaps once the user dismissed or replaced it. Visibility is bound through the Al
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
 `js/app.js` contains focus and hides the page from assistive tech; its documented local patch
 cancels delayed activation when a trap is released or removed). Escape (`global.js`) closes the
-active modal and is consumed by it, so a background inline edit survives; general dialogs ignore
-backdrop clicks, asset detail closes on them. General-dialog width is CSS only
+active modal and any open folder menu and is consumed by them, so a background inline edit
+survives; general dialogs ignore backdrop clicks, asset detail closes on them. General-dialog width is CSS only
 (`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
 image with `setAssetDetailSize()`.
 
@@ -207,6 +215,24 @@ request for the active open may change the image, box size, title, loading state
 The navigation origin is set to the requested asset before its image loads, so previous/next
 already uses the newly opened asset while the spinner is showing.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
+
+**Folder context menus** — Each folder's ⋯ button is a real `button` with `popovertarget`
+pointing at a `popover="auto"` panel of action buttons (Add folder; Rename and Delete for non-root
+folders), all built with the tree by `js/common/folder-tree.js`, so opening a menu sends no request.
+Each action is its own HTMX request into `#modalContent` for the existing dialog. The browser owns
+visibility: it toggles the panel from its trigger, closes it on any click outside, and keeps one
+open at a time because a folder's panel is never a DOM descendant of another folder's panel. The
+`folderMenu` component places the panel in the top layer against the trigger (below, flipping
+above when needed, clamped to the viewport, height-capped with internal scrolling when neither
+side fits), closes it when focus leaves, when an action is chosen (after htmx has handled the
+click; the modal owner then restores focus to `#folderMenuCtrl-{id}`), and on scroll, window
+resize, or explorer resize; it never tracks a moving trigger. `js/common/folder-menu.js` closes a
+menu from outside the component: Escape in `global.js` (focus returns to the trigger unless a modal
+was closed too) and the folder model when an ancestor collapses. Removing the tree removes the
+open panel and, through the component's `destroy`, its listeners. Styling lives in
+`views/htmx/folders.scala.html`; `display` is only set under `:popover-open`, because the hidden
+state relies on the browser's `display: none`. `.menu-ctrl` is excluded from folder dragging
+(`ignoreFrom` in `js/dragdrop/folders.js`).
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
@@ -246,6 +272,9 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
+| `static/js/alpine/components/folder-menu.js` | Alpine component coordinating a folder's native popover menu |
+| `static/js/common/folder-tree.js` | renders the folder tree and each folder's menu from the JSON tree endpoint |
+| `static/js/common/folder-menu.js` | closes an open folder menu from outside its component (Escape, ancestor collapse) |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
 | `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |

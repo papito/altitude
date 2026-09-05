@@ -3,6 +3,8 @@ import { dragged, dragMoveListener } from "../common/dragon-drop.js"
 
 export function bindFolderDragDrop({ dispatch }) {
     interact("#rootFolderList .drag-drop").draggable({
+        // The ⋯ trigger and its menu are controls, not drag handles
+        ignoreFrom: ".menu-ctrl",
         inertia: true,
         autoScroll: { container: document.querySelector("#explorer") },
 

@@ -52,10 +52,16 @@
         place-items: center;
     }
 
-    #rootFolderList .folder .menu-ctrl a {
+    /* The ⋯ trigger keeps the look of the former link; the browser's focus ring marks keyboard focus */
+    #rootFolderList .folder .menu-ctrl > button {
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
         font-size: 1.3em;
+        line-height: 1;
         color: #FFFFFF;
-        text-decoration: none;
+        cursor: pointer;
     }
 
     #rootFolderList .folder i {
@@ -75,23 +81,53 @@
         color: var(--success-font-color);
     }
 
-    #rootFolderList .folder .menu {
-        display: none;
-        padding: 5px 5px 5px 5px;
-        margin: 0 6px 6px 6px;
-        flex-wrap: wrap;
-        border-radius: 5px;
-        gap: 5px;
-        background-color: var(--background-form-color);
-    }
-
-    #rootFolderList .folder .menu span {
-        display: flex;
-        padding: 3px 6px;
-        cursor: pointer;
+    /* The context menu is a native popover in the top layer, so it takes no room in the tree and is
+       not clipped by the explorer. The browser centers popovers with auto margins and `inset: 0`;
+       both are reset so the coordinates the folderMenu component measures apply as-is. */
+    #rootFolderList .folder-menu {
+        position: fixed;
+        margin: 0;
+        inset: auto;
+        width: max-content;
+        /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
+        padding: 0;
         border: 1px solid gray;
         border-radius: 5px;
-        font-size: .9em;
+        color: inherit;
+        background-color: var(--modal-background-color);
+        text-shadow: none;
+        grid-template-columns: 1fr;
+        gap: 0;
+        /* Actions scroll inside the panel when the component caps its height */
+        overflow-y: auto;
+    }
+
+    /* Only the open state may set a display: the popover's hidden state relies on display: none.
+       (The component sets the same display inline for a moment to measure the panel before it opens.) */
+    #rootFolderList .folder-menu:popover-open {
+        display: grid;
+    }
+
+    #rootFolderList .folder-menu button {
+        display: flex;
+        padding: 10px 15px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        font-size: 1em;
+        text-align: left;
+    }
+
+    /* Divider between rows only, never above the first or below the last */
+    #rootFolderList .folder-menu button + button {
+        border-top: 1px solid gray;
+    }
+
+    /* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
+    #rootFolderList .folder-menu button:focus-visible {
+        outline-offset: -2px;
     }
 
     #rootFolderList .folder-name, #rootFolderList .folder.root i {

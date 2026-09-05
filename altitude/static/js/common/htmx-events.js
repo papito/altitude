@@ -15,13 +15,6 @@ export function getRequestPath(event) {
     return event.detail.ctx.request.action
 }
 
-/**
- * The requested URL without its query string, for exact route comparisons.
- */
-export function getRequestPathname(event) {
-    return new URL(getRequestPath(event), window.location.origin).pathname
-}
-
 export function getResponseStatus(event) {
     return event.detail.ctx.response?.status
 }

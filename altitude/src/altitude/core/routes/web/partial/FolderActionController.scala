@@ -49,13 +49,6 @@ class FolderActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/context-menu")
-  def showFolderContextMenu(repoId: String, folderId: String, parentId: Option[String] = None)(using
-      request: Request): Response[String] =
-    val payload = "<!doctype html>" + htmx.html.folder_context_menu(folderId = folderId)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-
-  @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
   def showFoldersTab(repoId: String)(using request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.folders()

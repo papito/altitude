@@ -12,7 +12,6 @@ import { isModalOperationRequest } from "./fragments/modal.js"
 import { isModalOpenRequest } from "./common/modal.js"
 import {
     handleFolderAfterRequest,
-    handleFolderBeforeRequest,
     isFolderRequest,
 } from "./listeners/htmx-folders.js"
 import { isTrashPurgeRequest } from "./listeners/htmx-routes.js"
@@ -79,16 +78,6 @@ export class FrontendApp {
 
     registerEventListeners() {
         registerAppEventListeners(this)
-    }
-
-    handleBeforeRequest(event) {
-        const requestPath = getRequestPath(event)
-
-        if (!isFolderRequest({ app: this, requestPath })) {
-            return
-        }
-
-        handleFolderBeforeRequest({ app: this, event })
     }
 
     handleAfterRequest(event) {

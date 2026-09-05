@@ -1,4 +1,4 @@
-import { clearInnerNodes } from "../common/nodes.js"
+import { closeOpenFolderMenu } from "../common/folder-menu.js"
 import { Const } from "../constants.js"
 
 export class Folder {
@@ -18,37 +18,8 @@ export class Folder {
             this.element.getAttribute(Const.attributes.isRoot) === "true"
     }
 
-    static closeContextMenu(menuEl) {
-        clearInnerNodes(menuEl)
-        menuEl.innerHTML = ""
-        menuEl.style.display = "none"
-    }
-    menuEl() {
-        return htmx.find("#menu-" + this.id)
-    }
-
     folderNameEl() {
         return htmx.find("#folderName-" + this.id)
-    }
-
-    closeContextMenu() {
-        Folder.closeContextMenu(this.menuEl())
-    }
-
-    showContextMenu() {
-        console.debug("Showing context menu for folder " + this.name())
-        this.menuEl().style.display = "flex"
-    }
-
-    clearChildren() {
-        // In the JSON-driven tree children are pre-rendered; just hide the container.
-        if (this.childrenEl) {
-            this.childrenEl.style.display = "none"
-        }
-    }
-
-    isMenuExpanded() {
-        return this.menuEl().querySelector("span") !== null
     }
 
     isExpanded() {
@@ -106,7 +77,11 @@ export class Folder {
         }
 
         if (!this.isExpanded()) {
-            this.closeContextMenu()
+            // Collapsing hides the descendants' triggers; an open descendant menu must not outlive its trigger
+            closeOpenFolderMenu({
+                reason: `ancestor ${this.name()} collapsed`,
+                within: this.childrenEl,
+            })
 
             if (this.numOfChildren()) {
                 console.debug("\tFolder is collapsed and has children")

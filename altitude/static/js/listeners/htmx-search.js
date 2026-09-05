@@ -30,8 +30,4 @@ export function registerHtmxAndSearchListeners(app) {
     document.body.addEventListener("htmx:after:settle", (event) => {
         app.handleAfterSettle(event)
     })
-
-    document.body.addEventListener("htmx:before:request", (event) => {
-        app.handleBeforeRequest(event)
-    })
 }
