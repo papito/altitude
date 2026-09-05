@@ -26,6 +26,10 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 `<script type="module">` blocks when the behavior can be hydrated centrally from
 `js/frontend-app.js`.
 
+`htmx/folders.scala.html` supplies the folder tab's styles, navigation warning, and empty
+`#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
+`reloadFolderTree(repoId)`; edit `js/common/folder-tree.js` for folder rows and action markup.
+
 ## JS Directory ↔ Template Mapping
 
 | JS directory | Template(s) it serves |
@@ -46,7 +50,7 @@ Legacy feature folders often used a consistent file split:
 - `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:before:request`, `htmx:after:request`)
 - `dragon-drop.js` — interact.js drag-and-drop wiring (now split into `js/dragdrop/` modules for batch, people/person, and folder-tree flows)
 
-## Alpine.js Stores (defined in `app.js`)
+## Alpine.js Stores (initialized in `js/frontend-app.js` and `js/stores/app-stores.js`)
 
 | Store key | Purpose |
 |---|---|
@@ -75,6 +79,17 @@ nodes. Construct it with an ID: `new Folder(id)` — it wraps `#folder-{id}`, `#
 `#folderName-{id}`. The folder tree, including each folder's ⋯ menu (`#folderMenuCtrl-{id}` opening
 the `#menu-{id}` popover), is rendered client-side by `js/common/folder-tree.js` from the JSON
 tree endpoint; those IDs are stable so tree rebuilds can restore focus and dialogs can return it.
+
+`reloadFolderTree(repoId)` discards superseded responses, restores expanded folder IDs, and
+captures the focused control immediately before replacing the tree so dialog-returned focus is
+preserved. It calls `htmx.process(container)` after insertion; Alpine's mutation observer
+initializes the new subtree. Do not also call `Alpine.initTree`, which duplicates initialization
+and listeners.
+
+Folder indentation comes from each non-root node's `--depth` and the `--folder-indent` variable
+in `htmx/folders.scala.html`. The `.trace` grid cell indents the icon and name while `.menu-ctrl`
+stays flush left at every depth; the root row omits the trace cell. Keep renderer markup and
+these grid rules in sync.
 
 ## Event Flow
 
@@ -137,10 +152,10 @@ People-specific HTMX follow-up for discard actions and the inline person-name ed
 
 ## Alpine.js Integration
 
-Alpine serves two distinct roles in this codebase:
+Alpine serves three distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
-Stores initialized from `js/stores/app-stores.js` hold data any module needs to read — the active
+Stores initialized in `js/frontend-app.js` and `js/stores/app-stores.js` hold shared data — the active
 repo ID, current view, and the set of selected assets. All access goes through `window.ctx`
 helpers or `Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
 
@@ -230,8 +245,11 @@ resize, or explorer resize; it never tracks a moving trigger. `js/common/folder-
 menu from outside the component: Escape in `global.js` (focus returns to the trigger unless a modal
 was closed too) and the folder model when an ancestor collapses. Removing the tree removes the
 open panel and, through the component's `destroy`, its listeners. Styling lives in
-`views/htmx/folders.scala.html`; `display` is only set under `:popover-open`, because the hidden
-state relies on the browser's `display: none`. `.menu-ctrl` is excluded from folder dragging
+`views/htmx/folders.scala.html`; CSS sets `display` only under `:popover-open`, because the hidden
+state relies on the browser's `display: none`. During `beforetoggle`, the component briefly sets
+inline `display: grid` to measure and position the hidden panel, then clears it before opening;
+keep the CSS `margin: 0` and `inset: auto` resets so those viewport coordinates apply correctly.
+`.menu-ctrl` is excluded from folder dragging
 (`ignoreFrom` in `js/dragdrop/folders.js`).
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from

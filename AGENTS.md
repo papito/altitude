@@ -2,6 +2,8 @@
 
 Avoid documentation drift. When related code is added, changed, or removed, update AGENTS.md, CLAUDE.md, and ARCHITECTURE.md if they exist.
 
+Read [altitude/AGENTS.md](altitude/AGENTS.md) for architecture and build/test commands. For frontend work, including JavaScript under `altitude/static/js/`, also read [altitude/views/AGENTS.md](altitude/views/AGENTS.md) for template, event, and component conventions.
+
 When adding features or modifying existing behavior, review nearby code comments and update them where needed.
 
 Always add comments for less than trivial logic, unless the comment is redundant with the code, and it's a simple getter/setter or similar.
@@ -26,6 +28,8 @@ Use the fewest props and the least markup needed to accomplish the task.
 Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified.
 
 Strongly prefer CSS Grid and Flexbox.
+
+The main stylesheet is `altitude/static/css/core.css`; reuse its `:root` variables. Component styles also live in Twirl partials, such as the folder tree and popover styles in `altitude/views/htmx/folders.scala.html`.
 
 Identify the main CSS file and use :root variables. Example:
 
