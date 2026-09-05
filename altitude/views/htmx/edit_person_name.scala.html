@@ -16,7 +16,7 @@
       hx-swap="outerHTML"
       hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/edit"
       hx-trigger="submit"
-      hx-ext="json-enc">
+      hx-json-enc>
 
     @if(fieldErrors.contains( Api.Field.Person.NAME)) {
         <div class="error">@{ fieldErrors( Api.Field.Folder.NAME) }</div>

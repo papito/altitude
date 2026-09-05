@@ -1,5 +1,6 @@
 import { Const } from "../constants.js"
 import { closeModal, showModal } from "../common/modal.js"
+import { isRequestSuccessful } from "../common/htmx-events.js"
 import {
     focusFragmentElement,
     parseFragmentDetail,
@@ -87,8 +88,8 @@ function bindModalFragment({ fragmentEl, dispatch, closeFolderContextMenu }) {
 
     fragmentEl.dataset.appModalBound = "true"
 
-    fragmentEl.addEventListener("htmx:afterRequest", (event) => {
-        if (event.detail.successful !== true) {
+    fragmentEl.addEventListener("htmx:after:request", (event) => {
+        if (!isRequestSuccessful(event)) {
             return
         }
 

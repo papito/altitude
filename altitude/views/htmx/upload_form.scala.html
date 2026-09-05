@@ -55,9 +55,8 @@
 
 <form id="uploadForm"
       data-app-fragment="upload-form"
-      data-app-upload-cancel-url="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}/cancel"
-      hx-post="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}"
-      hx-encoding="multipart/form-data">
+      data-app-upload-url="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}"
+      data-app-upload-cancel-url="/import/r/@{RequestContext.getRepository.persistedId}/upload/@{uploadId}/cancel">
     <div>
         <input type="file" name="files" id="files" multiple>
     </div>

@@ -11,7 +11,7 @@
 
 <div id="purgeRecycleBin">
     <button class="action-button error"
-            hx-swap="#content"
+            hx-swap="innerHTML"
             hx-target="#content"
             hx-confirm="This will PERMANENTLY delete all items in the recycle bin. Are you sure?"
             hx-delete="/htmx/trash/r/@{ RequestContext.getRepository.persistedId }/purge"

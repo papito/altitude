@@ -1,6 +1,13 @@
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
+import {
+    getRequestPath,
+    getRequestPathname,
+    getRequestTarget,
+    getResponseStatus,
+    isRequestSuccessful,
+} from "../common/htmx-events.js"
 
 /**
  * Before a folder HTMX request fires, handle context-menu toggle logic:
@@ -8,16 +15,14 @@ import { showErrorSnackBar } from "../common/snackbar.js"
  * Otherwise close all other open menus before proceeding.
  */
 export function handleFolderBeforeRequest({ app, event }) {
-    const requestPath = event.detail.pathInfo.requestPath
+    const requestPath = getRequestPath(event)
 
     if (!isFolderRequest({ app, requestPath })) {
         return false
     }
 
-    if (
-        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
-    ) {
-        const folderId = event.detail.target.getAttribute(
+    if (isFolderContextMenuRequest({ app, event })) {
+        const folderId = getRequestTarget(event).getAttribute(
             Const.attributes.folderId,
         )
         const folder = new Folder(folderId)
@@ -45,21 +50,20 @@ export function handleFolderBeforeRequest({ app, event }) {
  * click handlers now, so only the context-menu case is intercepted here.
  */
 export function handleFolderAfterRequest({ app, event }) {
-    const requestPath = event.detail.pathInfo.requestPath
-    const status = event.detail.xhr.status
+    const requestPath = getRequestPath(event)
 
     if (!isFolderRequest({ app, requestPath })) {
         return false
     }
 
-    if (event.detail.successful === false) {
-        showErrorSnackBar(`Error for request to ${requestPath}. HTTP ${status}`)
+    if (!isRequestSuccessful(event)) {
+        showErrorSnackBar(
+            `Error for request to ${requestPath}. HTTP ${getResponseStatus(event)}`,
+        )
         return true
     }
 
-    if (
-        requestPath === `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
-    ) {
+    if (isFolderContextMenuRequest({ app, event })) {
         const folder = new Folder(
             event.target.getAttribute(Const.attributes.folderId),
         )
@@ -72,4 +76,12 @@ export function handleFolderAfterRequest({ app, event }) {
 
 export function isFolderRequest({ app, requestPath }) {
     return requestPath.startsWith(`/htmx/folder/r/${app.context.getRepoId()}/`)
+}
+
+// Compared without the query string: the request carries the folder ID as a URL parameter
+function isFolderContextMenuRequest({ app, event }) {
+    return (
+        getRequestPathname(event) ===
+        `/htmx/folder/r/${app.context.getRepoId()}/context-menu`
+    )
 }

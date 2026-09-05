@@ -23,8 +23,7 @@
         hx-swap="none"
         hx-delete="/htmx/folder/r/@{RequestContext.getRepository.persistedId}"
         hx-trigger="click"
-        hx-vals='{"@{Api.Field.ID}": "@{folder.persistedId}"}'
-        hx-ext="json-enc">
+        hx-vals='{"@{Api.Field.ID}": "@{folder.persistedId}"}'>
     Delete "<strong>@{folder.name}</strong>" and move assets into Recycle Bin
 </button>
 

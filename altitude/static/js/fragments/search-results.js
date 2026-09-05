@@ -1,4 +1,9 @@
 import { Const } from "../constants.js"
+import {
+    getRequestPath,
+    getRequestTarget,
+    isRequestSuccessful,
+} from "../common/htmx-events.js"
 
 const placeholderImageData =
     "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
@@ -54,28 +59,28 @@ function bindSearchResultsInfiniteScroll({ assetsElement, app }) {
 
     assetsElement.dataset.appInfiniteScrollBound = "true"
 
-    assetsElement.addEventListener("htmx:beforeRequest", (event) => {
+    assetsElement.addEventListener("htmx:before:request", (event) => {
         if (!event.target.classList.contains("last-cell")) {
             return
         }
 
-        if (event.detail.target.getAttribute("data-hx-revealed")) {
+        if (getRequestTarget(event).getAttribute("data-hx-revealed")) {
             event.preventDefault()
         } else {
-            console.debug("Loading more: %s", event.detail.pathInfo.requestPath)
+            console.debug("Loading more: %s", getRequestPath(event))
         }
     })
 
-    assetsElement.addEventListener("htmx:afterRequest", (event) => {
+    assetsElement.addEventListener("htmx:after:request", (event) => {
         if (!event.target.classList.contains("last-cell")) {
             return
         }
 
-        event.detail.target.setAttribute("data-hx-revealed", "true")
+        getRequestTarget(event).setAttribute("data-hx-revealed", "true")
 
-        if (event.detail.successful) {
+        if (isRequestSuccessful(event)) {
             app.searchDetailCoordinator.appendShadowResultsForRequestPath(
-                event.detail.pathInfo.requestPath,
+                getRequestPath(event),
             )
         }
     })
@@ -90,15 +95,19 @@ function bindSearchResultsLazyLoad({ assetsElement, app }) {
 
     const observer = getLazyImageObserver(app)
 
-    assetsElement.addEventListener("htmx:load", (event) => {
-        const imgEl = event.target.querySelector("img")
-        if (imgEl) {
-            observer.observe(imgEl)
-        }
+    // Fires once per swap with the nodes htmx inserted - the next page of cells here
+    assetsElement.addEventListener("htmx:after:settle", (event) => {
+        event.detail.newContent.forEach((cellEl) => {
+            if (!(cellEl instanceof Element)) {
+                return
+            }
 
-        showOrHideAssetGridMetadata({
-            cellEl: event.target,
-            context: app.context,
+            const imgEl = cellEl.querySelector("img")
+            if (imgEl) {
+                observer.observe(imgEl)
+            }
+
+            showOrHideAssetGridMetadata({ cellEl, context: app.context })
         })
     })
 

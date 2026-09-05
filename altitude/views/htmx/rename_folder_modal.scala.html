@@ -10,6 +10,7 @@
   }
 </style>
 
+@* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) resolve to this form *@
 <form action="#"
       id="renameFolder"
       data-app-fragment="modal"
@@ -20,10 +21,11 @@
       data-app-modal-close-on-success="true"
       data-app-modal-success-event="folderRenamed"
       data-app-modal-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
+      hx-target="this"
       hx-swap="none"
       hx-put="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/rename"
       hx-trigger="submit"
-      hx-ext="json-enc">
+      hx-json-enc>
 
   @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
     <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>

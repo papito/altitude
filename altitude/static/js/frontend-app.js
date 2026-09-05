@@ -1,6 +1,11 @@
 import { Const } from "./constants.js"
 import { Folder } from "./models/folder.js"
 import { showErrorSnackBar } from "./common/snackbar.js"
+import {
+    getRequestPath,
+    getResponseStatus,
+    isRequestSuccessful,
+} from "./common/htmx-events.js"
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
@@ -54,8 +59,8 @@ export class FrontendApp {
          *
          * 1. `hydrateAppFragments()` only initializes fragment roots that already exist in the
          *    current DOM, so on first load it hydrates just the initial page content.
-         * 2. Fragments injected later by HTMX are handled separately in `handleAfterSwap()`,
-         *    which re-runs hydration for the newly swapped subtree only.
+         * 2. Fragments injected later by HTMX are handled separately in `handleAfterSettle()`,
+         *    which re-runs hydration for the newly swapped nodes only.
          * 3. Individual fragment hydrators are written to be idempotent (using `data-app-*`
          *    bound flags where needed), so re-hydrating overlapping DOM is harmless.
          */
@@ -76,7 +81,7 @@ export class FrontendApp {
     }
 
     handleBeforeRequest(event) {
-        const requestPath = event.detail.pathInfo.requestPath
+        const requestPath = getRequestPath(event)
 
         if (!isFolderRequest({ app: this, requestPath })) {
             return
@@ -86,8 +91,8 @@ export class FrontendApp {
     }
 
     handleAfterRequest(event) {
-        const requestPath = event.detail.pathInfo.requestPath
-        const status = event.detail.xhr.status
+        const requestPath = getRequestPath(event)
+        const status = getResponseStatus(event)
 
         if (handlePeopleAfterRequest({ app: this, event })) {
             return
@@ -99,7 +104,7 @@ export class FrontendApp {
         }
 
         if (isTrashPurgeRequest(requestPath)) {
-            if (event.detail.successful === false) {
+            if (!isRequestSuccessful(event)) {
                 showErrorSnackBar(
                     `Error for request to ${requestPath}. HTTP ${status}`,
                 )
@@ -125,14 +130,23 @@ export class FrontendApp {
         handlePeopleEscapeKeyPressed()
     }
 
-    handleHtmxLoad(event) {
-        if (event.target.id === "folderNavWarning") {
-            this.Alpine.initTree(event.target)
-        }
-    }
+    /**
+     * Runs once per swap with the nodes htmx just inserted: hydrate app fragments among
+     * them, and initialize Alpine on the folder nav warning so its `x-show` binding
+     * applies without waiting for Alpine's mutation observer.
+     */
+    handleAfterSettle(event) {
+        event.detail.newContent.forEach((node) => {
+            if (!(node instanceof Element)) {
+                return
+            }
 
-    handleAfterSwap(event) {
-        this.hydrateFragments(event.detail.target)
+            if (node.id === "folderNavWarning") {
+                this.Alpine.initTree(node)
+            }
+
+            this.hydrateFragments(node)
+        })
     }
 
     hydrateFragments(root) {

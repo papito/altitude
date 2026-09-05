@@ -4,6 +4,10 @@
 <link rel="stylesheet" href="/static/css/core.css">
 <link rel="stylesheet" href="/static/css/font-awesome.min.css">
 <link rel="stylesheet" href="/static/css/tabs.css">
+<!-- defaultTimeout: htmx 4 aborts requests after 60s by default; keep htmx 2's "no timeout" for
+     long-running actions such as purging the recycle bin.
+     noSwap: keep htmx 2's behavior of not swapping 4xx/5xx bodies; JS listeners report those via snackbar. -->
+<meta name="htmx-config" content='{"defaultTimeout": 0, "noSwap": [204, 304, "4xx", "5xx"]}'>
 <script src="/static/js/lib/htmx.min.js"></script>
 <script src="/static/js/lib/axios.min.js"></script>
 <script type="module" src="/static/js/global.js"></script>

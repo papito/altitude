@@ -1,38 +1,32 @@
 (function() {
-  let api
-  htmx.defineExtension('json-enc', {
-    init: function(apiRef) {
-      api = apiRef
+  let api;
+  
+  htmx.registerExtension('json-enc', {
+    init: function(internalAPI) {
+      api = internalAPI;
     },
-
-    onEvent: function(name, evt) {
-      if (name === 'htmx:configRequest') {
-        evt.detail.headers['Content-Type'] = 'application/json'
-      }
-    },
-
-    encodeParameters: function(xhr, parameters, elt) {
-      xhr.overrideMimeType('text/json')
-
-      const object = {}
-      parameters.forEach(function(value, key) {
-        if (Object.hasOwn(object, key)) {
-          if (!Array.isArray(object[key])) {
-            object[key] = [object[key]]
-          }
-          object[key].push(value)
+    
+    htmx_before_request: function(elt, detail) {
+      const value = api.attributeValue(elt, 'hx-json-enc');
+      if (value == null || value === 'false') return;
+      
+      detail.ctx.request.headers['Content-Type'] = 'application/json';
+      
+      const object = {};
+      for (let [key, value] of detail.ctx.request.body) {
+        if (key in object) {
+          object[key] = [].concat(object[key], value);
         } else {
-          object[key] = value
+          object[key] = value;
         }
-      })
-
-      const vals = api.getExpressionVars(elt)
-      Object.keys(object).forEach(function(key) {
-        // FormData encodes values as strings, restore hx-vals/hx-vars with their initial types
-        object[key] = Object.hasOwn(vals, key) ? vals[key] : object[key]
-      })
-
-      return (JSON.stringify(object))
+      }
+      
+      // Restore original types from hx-vals
+      if (detail.ctx.vals) {
+        Object.assign(object, detail.ctx.vals);
+      }
+      
+      detail.ctx.request.body = JSON.stringify(object);
     }
-  })
-})()
+  });
+})();

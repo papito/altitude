@@ -55,7 +55,10 @@
       </div>
 
       <div id="importLog">
-        <div hx-ext="ws" ws-connect="/import/status?userId=@{ RequestContext.getAccount.id.get }">
+        @* Each status message from the server is a full <div id="statusText"> that replaces the current one *@
+        <div hx-ws:connect="/import/status?userId=@{ RequestContext.getAccount.id.get }"
+             hx-target="#statusText"
+             hx-swap="outerHTML">
           <div id="statusText"></div>
         </div>
       </div>
@@ -63,7 +66,7 @@
 
     <footer></footer>
 
-    <script src="/static/js/lib/ws.js"></script>
+    <script src="/static/js/lib/hx-ws.js"></script>
     <script type="module" src="/static/js/upload-form-page.js"></script>
 
     <script type="module">
@@ -73,20 +76,26 @@
     </script>
 
     <script type="module">
-      htmx.on("htmx:wsOpen", function (evt) {
+      htmx.on("htmx:ws:after:connection", function () {
           console.debug("WS connection is OPEN")
       })
 
-      htmx.on("htmx:wsClose", function (evt) {
+      htmx.on("htmx:ws:close", function () {
           console.debug("WS connection is CLOSED")
       })
 
-      htmx.on("htmx:wsAfterMessage", function (evt) {
-          const statusTextEl = htmx.find("#statusText")
-          // sometimes empty pings come through
-          if (evt.detail.message && evt.detail.message !== "X") {
-              statusTextEl.style.display = "block"
+      // The server also sends plain-text frames ("connected" on open, keep-alive pings).
+      // Only markup is meant for the ticker - hx-ws would otherwise swap the raw text in.
+      htmx.on("htmx:ws:before:message:incoming", function (evt) {
+          if (!String(evt.detail.message.data).trimStart().startsWith("<")) {
+              evt.preventDefault()
           }
+      })
+
+      htmx.on("htmx:ws:after:message:incoming", function () {
+          // The swap above has already replaced the element by now
+          const statusTextEl = htmx.find("#statusText")
+          statusTextEl.style.display = "block"
 
           setTimeout(function () {
               statusTextEl.innerHTML = ""
