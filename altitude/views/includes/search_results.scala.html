@@ -156,6 +156,13 @@
     display: none;
   }
 
+  /* Hide triage marker while the cell is being dragged, and while the move it
+     triggered is still in flight - otherwise it blinks back on a successful drop */
+  #assets .cell .drag-drop.dragging .triage-marker,
+  #assets .cell.move-pending .drag-drop .triage-marker {
+    display: none;
+  }
+
 </style>
 
 <div data-app-fragment="search-results"
