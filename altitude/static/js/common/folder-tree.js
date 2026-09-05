@@ -9,6 +9,12 @@
  * The DOM structure produced mirrors what the old Twirl templates generated so
  * that the existing Folder JS model, CSS, drag-and-drop wiring, and HTMX
  * context-menu loading all continue to work without modification.
+ *
+ * Indentation is not structural: every non-root `.folder` carries a `--depth`
+ * CSS custom property, and its `.controls` row holds a `.trace` cell (between
+ * the ⋯ menu button and the icon) whose width is derived from `--depth`. The
+ * trace both indents the icon/name and draws the dotted guide back to the ⋯
+ * button, which stays flush left at every depth.
  */
 import { Folder } from "../models/folder.js"
 import { http } from "../http/client.js"
@@ -118,7 +124,7 @@ function _renderRootNode(folder, repoId) {
 
     folderEl.appendChild(_buildRootControls(folder, repoId))
     folderEl.appendChild(_buildMenuDiv(folder))
-    folderEl.appendChild(_buildChildrenDiv(folder, repoId, true))
+    folderEl.appendChild(_buildChildrenDiv(folder, repoId, true, 0))
 
     return folderEl
 }
@@ -159,18 +165,21 @@ function _buildRootControls(folder, repoId) {
 
 /**
  * Build a non-root folder node.
+ * `depth` is 1 for direct children of the root; the CSS derives the row's
+ * indent (the `.trace` width) from it.
  */
-function _renderFolderNode(folder, repoId) {
+function _renderFolderNode(folder, repoId, depth) {
     const folderEl = document.createElement("div")
     folderEl.classList.add("folder")
     folderEl.id = `folder-${folder.id}`
     folderEl.setAttribute("alt-num-of-children", folder.numOfChildren)
     folderEl.setAttribute("alt-folder-id", folder.id)
     folderEl.setAttribute("alt-parent-folder-id", folder.parentId)
+    folderEl.style.setProperty("--depth", depth)
 
     folderEl.appendChild(_buildFolderControls(folder, repoId))
     folderEl.appendChild(_buildMenuDiv(folder))
-    folderEl.appendChild(_buildChildrenDiv(folder, repoId, false))
+    folderEl.appendChild(_buildChildrenDiv(folder, repoId, false, depth))
 
     return folderEl
 }
@@ -221,7 +230,13 @@ function _buildFolderControls(folder, repoId) {
     // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId)
 
+    // Dotted guide from the ⋯ button to the icon; its width is the row's indent
+    const traceEl = document.createElement("span")
+    traceEl.className = "trace"
+
+    // ⋯ menu button | trace | icon | folder-name
     controlsEl.appendChild(menuCtrlEl)
+    controlsEl.appendChild(traceEl)
     controlsEl.appendChild(expandLinkEl)
     controlsEl.appendChild(nameEl)
 
@@ -279,7 +294,7 @@ function _buildMenuDiv(folder) {
     return menuEl
 }
 
-function _buildChildrenDiv(folder, repoId, isRoot) {
+function _buildChildrenDiv(folder, repoId, isRoot, depth) {
     const childrenEl = document.createElement("div")
     childrenEl.className = "children"
     childrenEl.id = `children-${folder.id}`
@@ -291,7 +306,7 @@ function _buildChildrenDiv(folder, repoId, isRoot) {
     }
 
     folder.children.forEach((child) => {
-        childrenEl.appendChild(_renderFolderNode(child, repoId))
+        childrenEl.appendChild(_renderFolderNode(child, repoId, depth + 1))
     })
 
     return childrenEl

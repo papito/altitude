@@ -3,6 +3,10 @@
 @()
 
 <style>
+    #rootFolderList {
+        --folder-indent: 20px;
+    }
+
     #rootFolderList .folder.root, .folder-list .children {
         display: grid;
         grid-auto-rows: auto;
@@ -11,7 +15,6 @@
 
     #rootFolderList .folder .children {
         position: relative;
-        margin-left: 20px;
     }
 
     #rootFolderList .folder {
@@ -22,11 +25,26 @@
 
     #rootFolderList .folder .controls {
         display: grid;
-        /* ⋯ menu button | icon | folder-name (grows) */
-        grid-template-columns: max-content max-content 1fr;
         column-gap: 6px;
         align-items: center;
         touch-action: none;
+    }
+
+    #rootFolderList .folder.root > .controls {
+        /* ⋯ menu button | icon | folder-name (grows) */
+        grid-template-columns: max-content max-content 1fr;
+    }
+
+    #rootFolderList .folder:not(.root) > .controls {
+        /* ⋯ menu button | dotted trace (= indent) | icon | folder-name (grows) */
+        grid-template-columns: max-content max-content max-content 1fr;
+    }
+
+    #rootFolderList .trace {
+        /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name
+           sit where a plain margin-left indent would put them while the ⋯ stays flush left */
+        width: calc(var(--depth) * var(--folder-indent) - 6px);
+        border-top: 2px double var(--panel-border-color);
     }
 
     #rootFolderList .folder .menu-ctrl {
