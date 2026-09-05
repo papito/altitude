@@ -59,7 +59,7 @@ libraries below are not vendored.
 ## Relevance to Altitude
 
 - The modal hosts in `views/includes/html_common.scala.html` follow the [Modal](modal.md) lesson;
-  see `plans/alpine-modal-migration.md` for the deliberate differences.
+  see `../../../plans/done/alpine-modal-migration.md` for the deliberate differences.
 - [Menu](headless-menu.md) and [Dropdown](dropdown.md) are the reference for a keyboard-navigable
   folder context menu; [Notifications](notifications.md) for a stacked snackbar; [Flatpickr](flatpickr.md)
   for a date filter in search.

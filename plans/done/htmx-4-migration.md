@@ -51,8 +51,8 @@ together.
 
 Applied to the working tree, not committed:
 
-- `altitude/static/js/lib/htmx.min.js` — 2.0.2 to 2.0.10.
-- `altitude/static/js/lib/json-enc.js` — htmx 1.x-era copy to
+- `../../altitude/static/js/lib/htmx.min.js` — 2.0.2 to 2.0.10.
+- `../../altitude/static/js/lib/json-enc.js` — htmx 1.x-era copy to
   `htmx-ext-json-enc@2.0.3`.
 - `altitude/static/js/lib/ws.js` — htmx 1.x-era copy to `htmx-ext-ws@2.0.4`.
 - `altitude/views/htmx/delete_folder_modal.scala.html:26` — `hx-vars` to
@@ -74,7 +74,7 @@ import status stream is still outstanding.
 - Phases land independently, each revertible on its own.
 - Phases 1 and 2 ship on htmx 2, against a working baseline, so they can be
   validated without a version jump confusing the result.
-- Continue vendoring into `altitude/static/js/lib/`. No bundler, no npm runtime
+- Continue vendoring into `../../altitude/static/js/lib`. No bundler, no npm runtime
   dependency.
 
 ## What breaks
@@ -91,8 +91,8 @@ listener) and `altitude/views/htmx/upload_form.scala.html:59-60` (`hx-post`
 plus `hx-encoding="multipart/form-data"`).
 
 The fix is to stop routing the upload through htmx. axios is already vendored at
-1.14.0 and already wrapped in `altitude/static/js/http/client.js`, which
-`AGENTS.md` names as the preferred client for non-htmx requests.
+1.14.0 and already wrapped in `../../altitude/static/js/http/client.js`, which
+`../../AGENTS.md` names as the preferred client for non-htmx requests.
 
 ### JSON encoding moves to a community extension
 
@@ -241,7 +241,7 @@ Each of these was checked against the codebase rather than assumed:
 
 ### Phase 1 — move the upload off htmx
 
-Rewrite `altitude/static/js/fragments/upload-form.js` to post through the shared
+Rewrite `../../altitude/static/js/fragments/upload-form.js` to post through the shared
 axios client with `onUploadProgress`, preserving the existing abort behavior and
 the cancel endpoint. Remove `hx-post` and `hx-encoding` from
 `upload_form.scala.html` once the JavaScript owns the request.
@@ -306,12 +306,12 @@ Keep `hx-alpine-compat`. It is a real integration, not a shim.
   swaps.
 - Whether to record vendored library versions somewhere. Nothing in the repo
   pinned a version, which is why two extension copies drifted several years
-  behind the core without it being visible. `README.md` and the nested
-  `AGENTS.md` files name htmx but pin no version.
+  behind the core without it being visible. `../../README.md` and the nested
+  `../../AGENTS.md` files name htmx but pin no version.
 
 ## Validation and documentation constraints
 
-Follow the repository's frontend guidance. `AGENTS.md` does not trigger the
+Follow the repository's frontend guidance. `../../AGENTS.md` does not trigger the
 integration-test red-green-refactor cycle for front-end-facing code, so these
 phases are verified by `make compile` plus manual browser checks. Phase 2's
 fallback and any change to the import status endpoint would be server work and
@@ -321,6 +321,6 @@ The paths that exercise the swapped extensions are the ones to smoke test: the
 five json-enc forms (add, rename and delete folder; edit person name; setup) and
 the import status stream on the pipeline page.
 
-Update the applicable `AGENTS.md` files when implementation lands. This document
+Update the applicable `../../AGENTS.md` files when implementation lands. This document
 describes intended work, not the running application, and should be kept
 distinct from documentation of current behavior.

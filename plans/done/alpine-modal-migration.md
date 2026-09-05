@@ -22,7 +22,7 @@ built diverges from the plan in these places:
   on the root; there is no separate overlay element and no `x-transition`, keeping the
   existing backdrop CSS; the backdrop click-to-close wrapper exists only on asset
   detail; `.noreturn.noautofocus` are added so the owner places and restores focus.
-  Provenance and versions are in `altitude/static/js/lib/README.md`.
+  Provenance and versions are in `../../altitude/static/js/lib/README.md`.
 - Escape is handled once, in `static/js/global.js`, rather than with a per-host
   `x-on:keydown.escape`; the hosts have no keyboard handlers.
 - Validation replacement responses now use `HX-Reswap: outerHTML` (via
@@ -73,15 +73,15 @@ built diverges from the plan in these places:
   It has image-dependent dimensions, asynchronous loading, a spinner, and
   previous/next navigation through the search results.
 - Both containers are declared in
-  `altitude/views/includes/html_common.scala.html`. Visibility and sizing are
-  controlled imperatively in `altitude/static/js/common/modal.js`.
-- `Const.UI` in `altitude/src/altitude/core/Const.scala` supplies titles and
+  `../../altitude/views/includes/html_common.scala.html`. Visibility and sizing are
+  controlled imperatively in `../../altitude/static/js/common/modal.js`.
+- `Const.UI` in `../../altitude/src/altitude/core/Const.scala` supplies titles and
   nominal minimum widths for the six general dialogs. All widths currently
   resolve to 400 pixels; the JavaScript applies that value as a content width,
   rather than a CSS minimum width. Asset detail uses asset dimensions instead.
 - Twirl and HTMX supply general dialog content. Declarative fragment metadata
   drives opening, initial focus, success events, and closing through
-  `altitude/static/js/fragments/modal.js`.
+  `../../altitude/static/js/fragments/modal.js`.
 - Merge submissions update `#content`, cover-face selections update `#person`,
   and folder success events refresh the folder tree. Request completion must
   preserve these page updates even when the initiating modal has been closed;
@@ -97,7 +97,7 @@ built diverges from the plan in these places:
 - Asynchronous image loading calls `showAssetDetailModal()` after completion.
   Closing or switching dialogs during loading needs explicit consideration.
 - The frontend uses checked-in libraries, native ES modules, and no bundler.
-  Main shared styling is in `altitude/static/css/core.css`.
+  Main shared styling is in `../../altitude/static/css/core.css`.
 
 ## Scope and implementation defaults
 
@@ -141,7 +141,7 @@ and checked-in-library approach. Record the selected versions and provenance.
 ## Implementation units
 
 1. **Move general-modal width ownership to CSS.** Add a shared width variable
-   in `altitude/static/css/core.css`, preserving the current 400px content
+   in `../../altitude/static/css/core.css`, preserving the current 400px content
    width on sufficiently wide screens and fitting the dialog, padding, and
    border within smaller viewports. Remove the width assignment from
    `static/js/common/modal.js` and width metadata consumption from
@@ -246,9 +246,9 @@ run `make test`. Frontend-only work is verified manually rather than adding
 implementation-mirroring tests. Documentation-only planning does not require
 compilation or tests.
 
-Update `altitude/views/AGENTS.md` for modal markup, sizing, dismissal, and
-hydration, and `altitude/AGENTS.md` for any changed module responsibilities.
-Review root `AGENTS.md` and update it if the implementation changes guidance
+Update `../../altitude/views/AGENTS.md` for modal markup, sizing, dismissal, and
+hydration, and `../../altitude/AGENTS.md` for any changed module responsibilities.
+Review root `../../AGENTS.md` and update it if the implementation changes guidance
 there. Update related `CLAUDE.md` and `ARCHITECTURE.md` files if they exist at
 execution time; neither was found during this interview. The interview resolved
 UI behavior rather than new domain terminology, so no `CONTEXT.md` glossary
