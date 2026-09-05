@@ -2,10 +2,11 @@
 
 ## Stack
 
-- **HTMX** — server-driven HTML fragments, no SPA routing
+- **HTMX 4** — server-driven HTML fragments, no SPA routing
 - **Alpine.js** — reactive state and UI behavior (`x-data`, `x-show`, `$store`)
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
-- Libraries are checked into `static/js/lib/` (htmx, Alpine, Split.js, interact.js)
+- Libraries are checked into `static/js/lib/` (htmx, Alpine, Split.js, interact.js, axios); versions
+  and sources are listed in `static/js/lib/README.md`
 
 ## Template Layout
 
@@ -42,7 +43,7 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
-- `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:beforeRequest`, `htmx:afterRequest`)
+- `htmx_event_handlers.js` — HTMX lifecycle listeners (`htmx:before:request`, `htmx:after:request`)
 - `dragon-drop.js` — interact.js drag-and-drop wiring (now split into `js/dragdrop/` modules for batch, people/person, and folder-tree flows)
 
 ## Alpine.js Stores (defined in `app.js`)
@@ -79,9 +80,28 @@ Two-layer event bus, both on `document.body`:
 
 1. **Custom DOM events** — string names in `Const.events`, dispatched via `new CustomEvent(...)`,
    handled in `event_handlers.js`. These are business-level actions (e.g. `FOLDER_MOVED_EVENT`).
-2. **HTMX lifecycle events** — `htmx:beforeRequest` / `htmx:afterRequest` — handled in
-   `htmx_event_handlers.js`. Used to toggle fold/expand state and short-circuit requests when no
-   server round-trip is needed.
+2. **HTMX lifecycle events** — `htmx:before:request` / `htmx:after:request` / `htmx:after:settle` —
+   handled in `htmx_event_handlers.js`. Used to toggle fold/expand state and short-circuit requests
+   when no server round-trip is needed.
+
+### HTMX 4 conventions
+
+- Lifecycle events carry the request context under `event.detail.ctx`. Read it through the helpers
+  in `js/common/htmx-events.js` (`getRequestPath`, `getResponseStatus`, `isRequestSuccessful`,
+  `getResponseText`, `getRequestTarget`) instead of touching the detail directly.
+- `htmx:after:request` fires when the response has arrived but **before** it is swapped in.
+  `htmx:after:settle` fires on the swap target once per swap with `detail.newContent`, the list of
+  inserted nodes; `frontend-app.js` hydrates `data-app-fragment` roots from there.
+- Attribute inheritance is explicit: every element that issues a request declares its own
+  `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
+- Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
+  boolean `hx-json-enc` attribute (`json-enc.js`); the import status stream uses `hx-ws:connect`
+  with an explicit `hx-target` / `hx-swap` on the connection element (`hx-ws.js`).
+- Global config (`defaultTimeout`, `noSwap`) is the `htmx-config` meta tag in
+  `views/includes/header_common.scala.html`; 4xx/5xx bodies are not swapped, listeners report them.
+- The file upload (`js/fragments/upload-form.js`) is **not** an HTMX request: it posts through the
+  shared axios client so `onUploadProgress` can drive the progress bar, then swaps the returned
+  fragment itself.
 
 Batch ops escalate a single-asset drag to a batch when selected assets exist: the
 `assetMoved`/`assetTrashed` handlers are now registered via `js/listeners/assets.js`,
@@ -102,8 +122,8 @@ interact.js drag end / ondrop
 ```
 
 `htmx_event_handlers.js` sits on the **HTMX lifecycle** side of this, not the custom event side.
-It intercepts `htmx:beforeRequest` to short-circuit requests the client can already resolve
-locally (e.g. collapsing a folder), and `htmx:afterRequest` to apply post-response state changes
+It intercepts `htmx:before:request` to short-circuit requests the client can already resolve
+locally (e.g. collapsing a folder), and `htmx:after:request` to apply post-response state changes
 (e.g. marking a folder as expanded).
 
 In the current structure, that HTMX lifecycle logic is split by concern: folder-specific
