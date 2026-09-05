@@ -49,9 +49,20 @@ Missing features:
 
 You will need:
 
-* Java 11+
-* Docker (for the Postgres container only)
-* NPM
+* Java 17 or up (21 recommended)
+* Docker (if using Postgres)
+* [Mill](https://mill-build.org/mill/cli/installation-ide.html)
+
+Download [w600k_r50.onnx](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx) and place it in `./altitude/altitude/resources/opencv/`
+
+### Developer settings
+
+`application-dev.conf.example` has all supported overrides to:
+
+* Enable Postgres as the data store.
+* Define dev user and disable login gate after each hot reload cycle.
+
+To enable, copy or rename the file as `application-dev.conf`
 
 ### Build & Run
 
