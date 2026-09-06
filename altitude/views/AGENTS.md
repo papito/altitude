@@ -358,7 +358,10 @@ results never moves the visible page.
 `localStorage`. The `viewSettingChanged` event applies visibility changes to
 `#assets .metadata > div.{fieldName}`. Call `showOrHideAssetGridMetadata` on initial load.
 
-**Nav refresh** — After any asset mutation, reload the nav to update counts:
+**Nav refresh** — After any successful asset mutation, reload the nav to update counts.
+Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
+calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
+from event listeners; it loads the nav fragment with:
 ```js
 htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", target: "nav" })
 ```
