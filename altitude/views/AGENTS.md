@@ -26,8 +26,8 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 `<script type="module">` blocks when the behavior can be hydrated centrally from
 `js/frontend-app.js`.
 
-`htmx/folders.scala.html` supplies the folder tab's styles, navigation warning, and empty
-`#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
+`htmx/folders.scala.html` supplies the folder tab's styles, the `#folderActions` host of the
+centered "Add folder" button, navigation warning, and empty `#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
 `reloadFolderTree(repoId)`; edit `js/common/folder-tree.js` for folder rows and action markup. The
 tree's interaction contract (expansion gestures, viewed-folder highlighting) is under **Folder tree
 expansion and viewed scope** below. `htmx/albums.scala.html` is the same shape for the Albums tab:
@@ -264,7 +264,8 @@ Arrow-key navigation works only while asset detail is active and no text field i
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
 for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
 `js/common/context-menu.js` as the tree or list is rendered, so opening a menu sends no request.
-The Add album buttons are the same component in a second shape (`buildDialogTriggerCtrl`,
+The Add album buttons and the "Add folder" button above the tree (`#addFolderBtn`, adding into
+the root) are the same component in a second shape (`buildDialogTriggerCtrl`,
 `.dialog-trigger-ctrl`): the button both toggles a panel with no actions and requests the add
 dialog into its host; the `dialog-only` panel stays invisible until the dialog arrives, opens
 below the button centered on it (`data-menu-align="center"` on the root), and hands focus back to
@@ -372,16 +373,17 @@ was hidden by the change (`focusAddAlbumControlIfFocusLost`).
 
 **Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` and
 `views/htmx/{rename,delete}_album_dialog.scala.html` are `data-app-fragment="inline-dialog"`
-fragments: the heading (`.dialog-title`, the modal title's type
-treatment) sits inside the fragment root so a validation replacement carries it, the name field has
-an explicit `size` (the panel stays `max-content` wide), and Delete's root is a wrapper around the
-heading and the confirm button. Add and Rename keep `hx-target="this"`, `hx-swap="none"`, and
+fragments: the heading (`.dialog-title`, the modal title's type treatment) sits inside the
+fragment root so a validation replacement carries it, except in the two add dialogs, whose field
+placeholder is the whole prompt; the name field has an explicit `size` (the panel stays
+`max-content` wide), and Delete's root is a wrapper around the heading and the confirm button. Add and Rename keep `hx-target="this"`, `hx-swap="none"`, and
 `hx-json-enc`. `js/fragments/inline-dialog.js` places initial focus (the declared selector with
 optional select, else the panel itself, so a held Enter from the menu cannot fire Delete; one Tab
 reaches the button) and registers the inline presentation with `dialog-operations.js`: an
 operation's dialog is active while that fragment is still in an open panel, and closing it closes
-the panel with focus on the declared return control (the entity's trigger; the parent's after a
-folder deletion, the "Add album" button after an album deletion). Dismissal follows the menu's rules with no confirmation; Escape returns focus to the
+the panel with focus on the declared return control (the parent's ⋯ after a folder deletion, the
+"Add album" button after an album deletion) or, when none is declared (the add dialogs), on the
+trigger that opened the panel. Dismissal follows the menu's rules with no confirmation; Escape returns focus to the
 trigger.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from

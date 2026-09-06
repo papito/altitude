@@ -111,6 +111,18 @@
         cursor: default !important;
     }
 
+    /* The add button sits centered at the top of the explorer; the control is built by
+       js/common/folder-tree.js. Scoped to the shown state like the album hosts */
+    #folderActions:not([hidden]) {
+        display: grid;
+        justify-items: center;
+        margin-bottom: var(--control-vertical-space);
+    }
+
+    #folderActions .action-button span {
+        margin-left: 5px;
+    }
+
     #folderNavWarning {
         display: flex;
         align-items: center;
@@ -131,6 +143,10 @@
     }
 
 </style>
+
+@* Host for the "Add folder" control (adds into the root), built by js/common/folder-tree.js; hidden
+   until the tree has loaded *@
+<div id="folderActions" hidden></div>
 
 <div id="folderNavWarning"
      x-data

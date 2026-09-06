@@ -1,10 +1,11 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
 
-@(title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
 @* Shown inline in a panel below whichever add button opened it; the dialog names no
-   return-focus control, so focus goes back to whichever button opened it. Return submits.
+   return-focus control, so focus goes back to whichever button opened it. Return submits; the field's
+   placeholder is the whole prompt, so there is no heading.
    hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="addAlbum"
@@ -16,8 +17,6 @@
       hx-post="/htmx/album/r/@{RequestContext.getRepository.persistedId}/add"
       hx-trigger="submit"
       hx-json-enc>
-
-    <h3 class="dialog-title">@{title}</h3>
 
     @if(fieldErrors.contains(Api.Field.Album.NAME)) {
         <div class="error">@{ fieldErrors(Api.Field.Album.NAME) }</div>

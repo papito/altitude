@@ -41,7 +41,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-album")
   def showAddAlbumDialog(repoId: String)(using request: Request): Response[String] =
-    val payload = "<!doctype html>" + htmx.html.add_album_dialog(title = C.UI.ADD_ALBUM_DIALOG_TITLE)
+    val payload = "<!doctype html>" + htmx.html.add_album_dialog()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
@@ -68,11 +68,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
 
     def responseWithValidationErrors(errors: Map[String, String]): Response[String] =
-      val payload = "<!doctype html>" + htmx.html.add_album_dialog(
-        title = C.UI.ADD_ALBUM_DIALOG_TITLE,
-        fieldErrors = errors,
-        formJson = jsonIn
-      )
+      val payload = "<!doctype html>" + htmx.html.add_album_dialog(fieldErrors = errors, formJson = jsonIn)
       dialogFormValidationResponse(payload)
 
     try nameValidator(required = List(Api.Field.Album.NAME)).validate(jsonIn)

@@ -244,3 +244,7 @@ albums were deleted, so the dev data is as it was apart from the schema migratio
 Follow-up on 2026-09-06 (user feedback): Add album became an inline popover dialog shown right
 below the Add album button, centered on it (no submit button, Return submits), the add button is centered at the top of the explorer,
 and it shows no focus ring when the dialog hands focus back. Verified in the browser as below.
+
+Follow-up on 2026-09-06 (user feedback): the add dialogs (album and folder) lost their headings, the
+field placeholder being the whole prompt, and the Folders tab gained a centered "Add folder" button
+above the tree, built with the album list's dialog-trigger control and adding into the root.

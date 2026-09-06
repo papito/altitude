@@ -110,7 +110,7 @@ export function buildContextMenuCtrl({
 
 /**
  * Builds a control whose button opens a panel holding one inline dialog and nothing else (the
- * Add album button). The click both toggles the panel (`popovertarget`) and requests the dialog
+ * Add album and Add folder buttons above their lists). The click both toggles the panel (`popovertarget`) and requests the dialog
  * into the panel's host; the `dialog-only` panel stays invisible until the dialog has arrived, so
  * the click never shows an empty box. The panel opens right below the button, centered on it
  * (`data-menu-align="center"`), and the dialog returns focus to the button.
@@ -122,6 +122,7 @@ export function buildDialogTriggerCtrl({
     label,
     iconClass,
     url,
+    vals = {},
     buttonClass,
 }) {
     const rootEl = _buildComponentRoot("dialog-trigger-ctrl")
@@ -129,7 +130,7 @@ export function buildDialogTriggerCtrl({
 
     const btnEl = _buildTrigger({ id: triggerId, panelId })
     btnEl.className = buttonClass
-    _requestDialogOnClick(btnEl, { url, dialogId, vals: {} })
+    _requestDialogOnClick(btnEl, { url, dialogId, vals })
 
     const iconEl = document.createElement("i")
     iconEl.className = iconClass

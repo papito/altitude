@@ -49,7 +49,7 @@ import {
     setAssetCount,
     sizeCountColumn,
 } from "./asset-count.js"
-import { buildContextMenuCtrl } from "./context-menu.js"
+import { buildContextMenuCtrl, buildDialogTriggerCtrl } from "./context-menu.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
@@ -133,6 +133,7 @@ function _renderTree(treeData, repoId) {
     container.innerHTML = ""
     container.appendChild(_renderRootNode(treeData, repoId))
     sizeCountColumn(container, COUNT_COLUMN_VARIABLE)
+    _ensureAddControl(treeData, repoId)
 
     // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
     // initializes the appended subtree, and an explicit `initTree` here would initialize
@@ -173,6 +174,34 @@ function _patchAssetCounts(folder) {
     }
 
     return folder.children.every(_patchAssetCounts)
+}
+
+/**
+ * Builds the "Add folder" control above the tree on the first render after the tab loads: the
+ * same control as the album list's add button, requesting the add dialog for the root folder.
+ * The host (`#folderActions`) lives outside the tree, so rebuilds leave it alone.
+ */
+function _ensureAddControl(rootFolder, repoId) {
+    const hostEl = document.getElementById("folderActions")
+    if (!hostEl || hostEl.childElementCount > 0) return
+
+    hostEl.appendChild(
+        buildDialogTriggerCtrl({
+            triggerId: "addFolderBtn",
+            panelId: "addFolderMenu",
+            dialogId: "addFolderDialog",
+            label: "Add folder",
+            iconClass: "fas fa-plus",
+            url: `/htmx/folder/r/${repoId}/dialogs/add-folder`,
+            vals: { parentId: rootFolder.id },
+            buttonClass: "action-button small",
+        }),
+    )
+    hostEl.hidden = false
+
+    if (window.htmx) {
+        htmx.process(hostEl)
+    }
 }
 
 // ─── snapshot helpers ────────────────────────────────────────────────────────
