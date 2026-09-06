@@ -26,8 +26,9 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 `<script type="module">` blocks when the behavior can be hydrated centrally from
 `js/frontend-app.js`.
 
-`htmx/folders.scala.html` supplies the folder tab's styles, the `#folderActions` host of the
-centered "Add folder" button, navigation warning, and empty `#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
+`htmx/folders.scala.html` supplies the folder tab's styles, the navigation warning, the
+`#folderActions` host of the centered "Add folder" button (below the warning), and the empty
+`#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
 `reloadFolderTree(repoId)`; edit `js/common/folder-tree.js` for folder rows and action markup. The
 tree's interaction contract (expansion gestures, viewed-folder highlighting) is under **Folder tree
 expansion and viewed scope** below. `htmx/albums.scala.html` is the same shape for the Albums tab:
