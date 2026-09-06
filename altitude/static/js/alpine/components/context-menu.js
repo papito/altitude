@@ -1,9 +1,9 @@
 /**
  * Alpine coordination for a folder's or an album's native popover menu.
  *
- * The component root is the `.menu-ctrl` cell built by `common/context-menu.js`: it holds the
- * meatball trigger (`x-ref="trigger"`, opening the panel with `popovertarget`) and the
- * `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
+ * The component root is the `.menu-ctrl` cell (or the Add album `.dialog-trigger-ctrl`) built by
+ * `common/context-menu.js`: it holds the trigger (`x-ref="trigger"`, opening the panel with
+ * `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
  * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
  * siblings: opening one closes any other, exactly as required.
  *
@@ -154,8 +154,7 @@ export function contextMenu() {
         },
 
         /**
-         * Places the panel against its trigger, before the browser shows it or after its content
-         * changed while open.
+         * Places the panel before the browser shows it or after its content changed while open.
          *
          * Before showing, the panel is hidden, so it is given its open-state display just long
          * enough to measure: its size depends only on its own styles, which are the same in and
@@ -167,9 +166,10 @@ export function contextMenu() {
          *
          * Vertical placement: below the trigger by default; above it when there is no room below;
          * when it fits on neither side, on the roomier side with its height capped so the content
-         * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge,
-         * shrunk to the viewport width if needed, then shifted left as far as it takes to stay
-         * inside the viewport, so every control stays reachable in narrow windows.
+         * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge, or
+         * centered on the trigger for a root with `data-menu-align="center"` (the Add album
+         * control); either way shrunk to the viewport width if needed, then shifted as far as it
+         * takes to stay inside the viewport, so every control stays reachable in narrow windows.
          */
         place() {
             const panel = this.$refs.panel
@@ -204,9 +204,13 @@ export function contextMenu() {
 
             // Re-measure the width: an internal scrollbar added by the height cap widens the panel
             const { width } = panel.getBoundingClientRect()
+            const alignedLeft =
+                this.$root.dataset.menuAlign === "center"
+                    ? trigger.left + (trigger.width - width) / 2
+                    : trigger.left
             const left = Math.max(
                 VIEWPORT_GAP,
-                Math.min(trigger.left, viewportWidth - VIEWPORT_GAP - width),
+                Math.min(alignedLeft, viewportWidth - VIEWPORT_GAP - width),
             )
 
             panel.style.top = `${top}px`

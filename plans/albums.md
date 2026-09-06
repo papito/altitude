@@ -38,10 +38,12 @@ the end for what was built and verified.
    (`folderMenuCtrl-<id>` / `albumMenuCtrl-<id>`, `menu-<id>` panels are unique per entity id).
 
 3. **The Add album dialog.** (a) Inline in a popover like Add folder (there is no menu to anchor it
-   to, so the button itself would have to open a panel and load the dialog), or (b) a modal dialog
-   into `#modalContent` like the people dialogs. **Chosen: (b).** Two different buttons open it
-   (the top one and the empty-state one); a modal needs nothing but `hx-get` on each and returns
-   focus through `data-app-dialog-return-focus`. Rename and Delete stay inline in the album's menu,
+   to, so the button itself opens a panel and loads the dialog), or (b) a modal dialog into
+   `#modalContent` like the people dialogs. First built as (b); **changed to (a) at the user's
+   request**: each add button is a `contextMenu` component whose panel holds only the dialog
+   (`buildDialogTriggerCtrl`), opened right below the button (first centered in the explorer, then
+   moved under the button at the user's request), submitted with Return, and handing focus back to
+   the button with no focus ring. Rename and Delete stay inline in the album's menu,
    exactly like folders.
 
 4. **Deleting an album.** (a) Soft delete with `is_recycled` like folders, or (b) hard delete.
@@ -238,3 +240,7 @@ Validation:
 
 The dev asset recycled during verification (`DSC_0092.JPG`) was restored afterwards, and the test
 albums were deleted, so the dev data is as it was apart from the schema migration.
+
+Follow-up on 2026-09-06 (user feedback): Add album became an inline popover dialog shown right
+below the Add album button, centered on it (no submit button, Return submits), the add button is centered at the top of the explorer,
+and it shows no focus ring when the dialog hands focus back. Verified in the browser as below.

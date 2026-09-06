@@ -40,48 +40,33 @@
         color: var(--success-font-color);
     }
 
-    #albumActions {
+    /* The add button sits centered at the top of the explorer. Both rules are scoped to the shown
+       state, because a display of their own would override the `hidden` attribute the renderer toggles */
+    #albumActions:not([hidden]) {
+        display: grid;
+        justify-items: center;
         margin-bottom: var(--control-vertical-space);
     }
 
-    /* Empty state: the one control, centered in the explorer. The rule is scoped to the shown state,
-       because a display of its own would override the `hidden` attribute the renderer toggles */
+    /* Empty state: the one control, centered in the explorer */
     #noAlbums:not([hidden]) {
         display: grid;
         place-items: center;
         min-height: 60vh;
     }
 
-    #noAlbums .action-button span {
+    #albumActions .action-button span, #noAlbums .action-button span {
         margin-left: 5px;
     }
 </style>
 
-@* Both add buttons open the same modal dialog. The list renderer shows one or the other: the top
-   button normally, the centered one while there are no albums; both stay hidden until the list has loaded *@
-<div id="albumActions" hidden>
-    <button type="button"
-            id="addAlbumBtn"
-            class="action-button small"
-            hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/dialogs/add-album"
-            hx-target="#modalContent"
-            hx-swap="innerHTML"
-            hx-trigger="click">
-        <i class="fas fa-plus"></i><span>Add album</span>
-    </button>
-</div>
+@* Hosts for the two add controls, built by js/common/album-list.js (each is a context menu component
+   whose button opens the add dialog in a panel right below it). The renderer shows one or
+   the other: the top button normally, the centered one while there are no albums; both stay hidden
+   until the list has loaded *@
+<div id="albumActions" hidden></div>
 
-<div id="noAlbums" hidden>
-    <button type="button"
-            id="addFirstAlbumBtn"
-            class="action-button"
-            hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/dialogs/add-album"
-            hx-target="#modalContent"
-            hx-swap="innerHTML"
-            hx-trigger="click">
-        <i class="fas fa-plus"></i><span>Add your first album</span>
-    </button>
-</div>
+<div id="noAlbums" hidden></div>
 
 <div id="albumList" class="album-list"></div>
 

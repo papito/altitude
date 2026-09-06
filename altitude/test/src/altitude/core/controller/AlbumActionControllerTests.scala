@@ -21,7 +21,9 @@ import altitude.core.models.Album
         val tab = requests.get(s"$host/htmx/album/r/$repoId/tab", cookies = testContext.cookies, check = false)
         tab.statusCode shouldBe 200
         tab.text() should include("""id="albumList"""")
-        tab.text() should include("Add your first album")
+        // The add controls are built client-side into these hosts
+        tab.text() should include("""id="albumActions"""")
+        tab.text() should include("""id="noAlbums"""")
 
         val add = requests.get(s"$host/htmx/album/r/$repoId/dialogs/add-album", cookies = testContext.cookies, check = false)
         add.statusCode shouldBe 200

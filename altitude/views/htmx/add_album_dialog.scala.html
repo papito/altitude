@@ -3,29 +3,21 @@
 
 @(title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-<style>
-    #addAlbum {
-        display: grid;
-        row-gap: var(--control-vertical-space);
-    }
-</style>
-
-@* A modal dialog: two different buttons open it (the top "Add album" and the empty-state one), so it is not
-   anchored to a menu like the folder dialogs. hx-target="this" lets the server's "HX-Retarget: this"
-   (validation errors) replace this form in place. Focus returns to the top button, which the list
-   renderer shows once the first album exists *@
+@* Shown inline in a panel below whichever add button opened it; the dialog names no
+   return-focus control, so focus goes back to whichever button opened it. Return submits.
+   hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="addAlbum"
-      data-app-fragment="modal"
-      data-app-modal-title="@{title}"
+      data-app-fragment="inline-dialog"
       data-app-dialog-autofocus-selector="#field@{ Api.Field.Album.NAME }"
-      data-app-dialog-return-focus="#addAlbumBtn"
       data-app-dialog-success-event="albumAdded"
       hx-target="this"
       hx-swap="none"
       hx-post="/htmx/album/r/@{RequestContext.getRepository.persistedId}/add"
       hx-trigger="submit"
       hx-json-enc>
+
+    <h3 class="dialog-title">@{title}</h3>
 
     @if(fieldErrors.contains(Api.Field.Album.NAME)) {
         <div class="error">@{ fieldErrors(Api.Field.Album.NAME) }</div>
@@ -45,9 +37,5 @@
                placeholder="New album name"
                maxlength="@{ Api.Constraints.MAX_ALBUM_NAME_LENGTH }"
                minlength="@{ Api.Constraints.MIN_ALBUM_NAME_LENGTH }">
-    </div>
-
-    <div>
-        <button type="submit" class="action-button">Add</button>
     </div>
 </form>

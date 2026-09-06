@@ -185,7 +185,7 @@ form input.error, form input.error:focus {
 
 /* The ⋯ trigger keeps the look of a plain link. It never shows a focus ring: dialogs return focus
    here when they close, and the ring that marked would read as a stray highlight in the list */
-.menu-ctrl > button {
+.menu-trigger {
     padding: 0;
     border: 0;
     outline: none;
@@ -222,6 +222,18 @@ form input.error, form input.error:focus {
    (The component sets the same display inline for a moment to measure the panel before it opens.) */
 .context-menu:popover-open {
     display: grid;
+}
+
+/* A panel holding only a dialog (the Add album control) opens on the click that requests the
+   dialog, so it stays invisible until the dialog has arrived rather than showing an empty box */
+.context-menu.dialog-only:not(:has(.dialog:not([hidden]))) {
+    visibility: hidden;
+}
+
+/* A button that opens a dialog-only panel takes focus back when the dialog closes; like the ⋯
+   trigger it shows no ring for that */
+.dialog-trigger-ctrl > button {
+    outline: none;
 }
 
 .context-menu .actions button {

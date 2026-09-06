@@ -231,9 +231,9 @@ the dialog itself are `data-app-dialog-*` on the fragment root, whatever its pre
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), success event + detail (+ `success-detail-target-attr-*`
 read from the issuing element), and `close-on-success`, defaulting to true. Attributes that describe
-the modal host are `data-app-modal-*`: title and kind. The three folder dialogs and the album
-rename/delete dialogs are **inline dialogs** (`data-app-fragment="inline-dialog"`, see **Context
-menus**); the add-album, people, and view-settings dialogs are modal dialogs.
+the modal host are `data-app-modal-*`: title and kind. The three folder dialogs and the three album
+dialogs are **inline dialogs** (`data-app-fragment="inline-dialog"`, see **Context menus**); the
+people and view-settings dialogs are modal dialogs.
 
 General HTMX modal fragments opt in with `data-app-fragment="modal"`; `js/fragments/modal.js` opens the
 host on hydration and registers the modal presentation with `js/fragments/dialog-operations.js`, which
@@ -260,10 +260,15 @@ The navigation origin is set to the requested asset before its image loads, so p
 already uses the newly opened asset while the spinner is showing.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
 
-**Context menus** — Each folder's or album's ⋯ button (its **trigger**) is a real `button` with
-`popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}` for a folder,
-`#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in `js/common/context-menu.js`
-as the tree or list is rendered, so opening a menu sends no request. The panel shows either its
+**Context menus** — Each folder's or album's ⋯ button (its **trigger**, `.menu-trigger`) is a real
+`button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
+for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
+`js/common/context-menu.js` as the tree or list is rendered, so opening a menu sends no request.
+The Add album buttons are the same component in a second shape (`buildDialogTriggerCtrl`,
+`.dialog-trigger-ctrl`): the button both toggles a panel with no actions and requests the add
+dialog into its host; the `dialog-only` panel stays invisible until the dialog arrives, opens
+below the button centered on it (`data-menu-align="center"` on the root), and hands focus back to
+the button, which shows no focus ring for it. The panel shows either its
 **actions** (`.actions`: Add folder; Rename and Delete for non-root folders; Rename and Delete for
 an album) or one **inline dialog** in its dialog host (`.dialog`, `#menuDialog-{id}` /
 `#albumMenuDialog-{id}`). Each action is an HTMX request for its
@@ -278,7 +283,8 @@ browser owns visibility: it toggles the panel from its trigger, closes it on any
 keeps one open at a time because a panel is never a DOM descendant of another entity's panel.
 The `contextMenu` component places the panel in the top layer against the trigger (below,
 flipping above when needed, clamped to the viewport, height-capped with internal scrolling when
-neither side fits), closes it when focus leaves and on scroll, window resize, or explorer resize;
+neither side fits; left-aligned with the trigger, or centered on it for a `data-menu-align="center"`
+root); it closes the panel when focus leaves and on scroll, window resize, or explorer resize;
 it never tracks a moving trigger. The panel carries `tabindex="-1"`, so a click on a dialog's
 heading, label, or padding moves focus to the panel rather than out of it; a validation swap that
 removes the focused field (`htmx-swapping` on the form) is not focus leaving either.
@@ -356,9 +362,10 @@ does not change, and the album counts are patched in place (`refreshAlbumCounts`
 While an album's results are displayed (`searchParams.albumId`, mirrored by `data-results-album-id`
 on the results fragment, which marks the row `alt-viewed-scope` and colors its icon green) the batch
 footer offers "Remove from album", which deletes the memberships of the selected assets and removes
-their cells. Add is a modal dialog (`add_album_dialog.scala.html`) opened by the top `#addAlbumBtn`
-or, while there are no albums, by the centered `#addFirstAlbumBtn`; the renderer shows one or the
-other. Rename and Delete are inline dialogs in the album's menu; deleting the viewed album runs a
+their cells. Add is an inline dialog (`add_album_dialog.scala.html`, submitted with Return) in a panel right
+below the button that opened it: the top `#addAlbumBtn` (centered above the list) or, while
+there are no albums, by the centered `#addFirstAlbumBtn`; the renderer builds both controls into
+their hosts and shows one or the other. Rename and Delete are inline dialogs in the album's menu; deleting the viewed album runs a
 search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDeleted` reload the
 list, which restores focus by ID, or to the visible add button when the dialog's return control
 was hidden by the change (`focusAddAlbumControlIfFocusLost`).

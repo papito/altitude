@@ -4,7 +4,8 @@
  * Public API:
  *   reloadAlbumList(repoId) — fetch every album from the server, re-render, restore focus, and
  *   show the right add control: the top "Add album" button normally, the centered empty-state
- *   button while there are no albums.
+ *   button while there are no albums. Each add button opens the add dialog in a popover panel
+ *   right below it (`buildDialogTriggerCtrl`).
  *   refreshAlbumCounts(repoId) — fetch the list and patch only the asset counts in place; falls
  *   back to a full render when the list gained an album the DOM does not have.
  *   setViewedAlbum(albumId) — mark the album whose results are displayed (green icon).
@@ -21,7 +22,7 @@ import {
     setAssetCount,
     sizeCountColumn,
 } from "./asset-count.js"
-import { buildContextMenuCtrl } from "./context-menu.js"
+import { buildContextMenuCtrl, buildDialogTriggerCtrl } from "./context-menu.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
@@ -132,6 +133,7 @@ function _render(albums, repoId) {
         ...albums.map((album) => _buildAlbumRow(album, repoId)),
     )
     sizeCountColumn(container, COUNT_COLUMN_VARIABLE)
+    _ensureAddControls(repoId)
     _showAddControl(albums.length === 0)
 
     // Let HTMX wire up the new elements. Alpine's mutation observer initializes the appended
@@ -149,6 +151,48 @@ function _render(albums, repoId) {
     // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
     if (focusedId) {
         document.getElementById(focusedId)?.focus()
+    }
+}
+
+/**
+ * Builds the two add controls into their hosts on the first render after the tab loads. They are
+ * built here rather than in the tab template because they are context menu components like the
+ * rows' menus; the hosts (`#albumActions`, `#noAlbums`) only decide which one is shown.
+ */
+function _ensureAddControls(repoId) {
+    const actionsEl = document.getElementById("albumActions")
+    if (actionsEl.childElementCount > 0) return
+
+    const url = `/htmx/album/r/${repoId}/dialogs/add-album`
+
+    actionsEl.appendChild(
+        buildDialogTriggerCtrl({
+            triggerId: "addAlbumBtn",
+            panelId: "addAlbumMenu",
+            dialogId: "addAlbumDialog",
+            label: "Add album",
+            iconClass: "fas fa-plus",
+            url,
+            buttonClass: "action-button small",
+        }),
+    )
+
+    const noAlbumsEl = document.getElementById("noAlbums")
+    noAlbumsEl.appendChild(
+        buildDialogTriggerCtrl({
+            triggerId: "addFirstAlbumBtn",
+            panelId: "addFirstAlbumMenu",
+            dialogId: "addFirstAlbumDialog",
+            label: "Add your first album",
+            iconClass: "fas fa-plus",
+            url,
+            buttonClass: "action-button",
+        }),
+    )
+
+    if (window.htmx) {
+        htmx.process(actionsEl)
+        htmx.process(noAlbumsEl)
     }
 }
 
