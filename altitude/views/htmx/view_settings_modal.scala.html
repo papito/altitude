@@ -1,7 +1,7 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
 
-@(minWidth: Int, title: String)
+@(title: String)
 
 <style>
   #viewSettingsModalForm {
@@ -21,8 +21,7 @@
 <form id="viewSettingsModalForm"
       data-app-fragment="modal"
       data-app-modal-kind="view-settings"
-      data-app-modal-title="@{title}"
-      data-app-modal-min-width="@{minWidth}">
+      data-app-modal-title="@{title}">
   <div>
     <input type="checkbox"
            id="fileNameCheckbox"

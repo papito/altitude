@@ -1,5 +1,4 @@
 @import altitude.core.Const
-@import altitude.core.Api
 @import altitude.core.RequestContext
 @import altitude.core.models.Person
 @import altitude.core.Const.FaceRecognition
@@ -13,7 +12,7 @@
         <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}"
              hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
              hx-target="#modalContent"
-             hx-vals='{"@{Api.Modal.MIN_WIDTH}": @{Const.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH}, "personId": "@{person.persistedId}"}'
+             hx-vals='{"personId": "@{person.persistedId}"}'
              hx-trigger="click"
              draggable="false">
     </div>

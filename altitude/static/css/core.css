@@ -8,8 +8,13 @@
 
     --form-border: 2px solid #646161;
 
-    --modal-border: 2px solid rgba(129, 128, 128, 0.98);
+    --modal-border-width: 2px;
+    --modal-border: var(--modal-border-width) solid rgba(129, 128, 128, 0.98);
     --modal-background-color: #3b3b3b;
+    /* General dialogs: content width on wide screens, and the gap kept to the viewport edges on narrow ones */
+    --modal-content-width: 400px;
+    --modal-content-padding: 15px;
+    --modal-viewport-gap: 10px;
 
     --result-border: 1px solid #837c7c;
 
@@ -262,8 +267,9 @@ form input.error, form input.error:focus {
 /* MODAL */
 /*       */
 
+/* Both hosts start hidden inline and are shown by Alpine (`x-show`), which restores these display values.
+   The general host places the box centered horizontally (`.modal-box` margin) and this padding from the top */
 #modalContainer {
-    display: none;
     position: fixed;
     z-index: 4;
     padding-top: 100px;
@@ -275,8 +281,15 @@ form input.error, form input.error:focus {
     background-color: rgba(0,0,0,0.4);
 }
 
+/* Fixed content width, shrunk on narrow viewports so the box (content + its border) keeps
+   --modal-viewport-gap to each viewport edge; the box itself is sized by its content */
 #modalContent {
-    padding: 15px;
+    box-sizing: border-box;
+    width: min(
+        calc(var(--modal-content-width) + 2 * var(--modal-content-padding)),
+        calc(100vw - 2 * (var(--modal-viewport-gap) + var(--modal-border-width)))
+    );
+    padding: var(--modal-content-padding);
 }
 
 .modal-box {
@@ -299,16 +312,23 @@ form input.error, form input.error:focus {
 }
 
 .close-modal {
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
     font-size: 1.6em;
     font-weight: bold;
-    padding-right: .4em;
+    line-height: 1;
+    padding: 0 .4em 0 0;
 }
 
+/* Focus is shown by the color change alone, not the default button outline */
 .close-modal:hover,
 .close-modal:focus {
     color: var(--warning-font-color);
     text-decoration: none;
     cursor: pointer;
+    outline: none;
 }
 
 .modal-title {
@@ -319,7 +339,7 @@ form input.error, form input.error:focus {
 }
 
 #imageDetailModalContainer {
-    display: none;
+    display: grid;
     place-items: center;
     position: fixed;
     z-index: 4;
@@ -337,6 +357,11 @@ form input.error, form input.error:focus {
     background-color: transparent;
     box-shadow: none;
     border-radius: 0;
+}
+
+/* The fragment's image has no source until the coordinator loads it */
+#imageDetailModalContent img[src=""] {
+    visibility: hidden;
 }
 
 #imageDetailSpinner {

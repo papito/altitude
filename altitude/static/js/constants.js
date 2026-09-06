@@ -6,6 +6,7 @@ export let Const = {
     },
     events: {
         folderMoved: "FOLDER_MOVED_EVENT",
+        folderRenamed: "FOLDER_RENAMED_EVENT",
         batchAssetsMoved: "BATCH_ASSETS_MOVED_EVENT",
         batchAssetsRecycled: "BATCH_ASSETS_RECYCLED_EVENT",
         batchAssetsPurged: "BATCH_ASSETS_PURGED_EVENT",
@@ -39,6 +40,7 @@ export let Const = {
      */
     attributes: {
         expanded: "alt-expanded",
+        viewedScope: "alt-viewed-scope",
         isRoot: "alt-is-root",
         numOfChildren: "alt-num-of-children",
         parentFolderId: "alt-parent-folder-id",
@@ -62,6 +64,7 @@ export let Const = {
         shadowResults: "shadowResults",
         searchUrl: "searchUrl",
         imageDetailLoading: "imageDetailLoading",
+        modal: "modal",
     },
 
     localStore: {

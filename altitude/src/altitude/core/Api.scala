@@ -18,12 +18,6 @@ object Api:
     val MAX_FOLDER_NAME_LENGTH = 250
     val MIN_FOLDER_NAME_LENGTH = 1
 
-  object Modal:
-    val MIN_WIDTH = "minWidth"
-    val TITLE = "title"
-    val FIELD_ERRORS = "fieldErrors"
-    val FORM_JSON = "formJson"
-
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"

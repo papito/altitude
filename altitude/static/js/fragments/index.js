@@ -1,5 +1,6 @@
 import { findFragmentRoots } from "./helpers.js"
 import { hydrateModalFragment } from "./modal.js"
+import { hydrateInlineDialogFragment } from "./inline-dialog.js"
 import { hydrateImageDetailFragment } from "./image-detail.js"
 import { hydratePersonNameEditorFragment } from "./person-name-editor.js"
 import { hydrateSearchResultsFragment } from "./search-results.js"
@@ -14,15 +15,17 @@ export function hydrateAppFragments({ root, app }) {
             fragmentEl,
             context: app.context,
             dispatch: app.dispatch.bind(app),
-            closeFolderContextMenu: app.closeFolderContextMenu.bind(app),
         })
+    })
+
+    findFragmentRoots(root, "inline-dialog").forEach((fragmentEl) => {
+        hydrateInlineDialogFragment({ fragmentEl })
     })
 
     findFragmentRoots(root, "image-detail").forEach((fragmentEl) => {
         hydrateImageDetailFragment({
             fragmentEl,
-            Alpine: app.Alpine,
-            dispatch: app.dispatch.bind(app),
+            coordinator: app.searchDetailCoordinator,
         })
     })
 

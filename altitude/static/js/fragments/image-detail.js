@@ -1,8 +1,12 @@
-import { Const } from "../constants.js"
-import { showAssetDetailModal } from "../common/modal.js"
-import { setImgSrcAndWait } from "../search-results/detail-navigator.js"
+import { ModalHost, openModal } from "../common/modal.js"
 
-export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
+/**
+ * Asset detail fragment (`data-app-fragment="image-detail"`): opens the asset-detail host right
+ * away, with its loading indicator, and hands the image load to the detail coordinator. The
+ * coordinator only applies the result if this open is still active and the load was not
+ * superseded by previous/next navigation.
+ */
+export function hydrateImageDetailFragment({ fragmentEl, coordinator }) {
     if (fragmentEl.dataset.appImageDetailBound === "true") {
         return
     }
@@ -14,28 +18,18 @@ export function hydrateImageDetailFragment({ fragmentEl, Alpine, dispatch }) {
         return
     }
 
-    Alpine.store(Const.state.imageDetailLoading).value = true
-    ;(async () => {
-        try {
-            await setImgSrcAndWait({
-                Alpine,
-                img: imgEl,
-                url: fragmentEl.dataset.appImageDetailUrl,
-            })
+    const openId = openModal({
+        host: ModalHost.assetDetail,
+        title: fragmentEl.dataset.appImageDetailTitle,
+    })
 
-            showAssetDetailModal({
-                title: fragmentEl.dataset.appImageDetailTitle,
-                width: Number(fragmentEl.dataset.appImageDetailWidth),
-                height: Number(fragmentEl.dataset.appImageDetailHeight),
-            })
-
-            dispatch(Const.events.detailShown, {
-                assetId: fragmentEl.dataset.appImageDetailAssetId,
-            })
-        } catch (error) {
-            console.error("Error loading asset image", error)
-        } finally {
-            Alpine.store(Const.state.imageDetailLoading).value = false
-        }
-    })()
+    coordinator.showImage({
+        openId,
+        imgEl,
+        url: fragmentEl.dataset.appImageDetailUrl,
+        title: fragmentEl.dataset.appImageDetailTitle,
+        width: Number(fragmentEl.dataset.appImageDetailWidth),
+        height: Number(fragmentEl.dataset.appImageDetailHeight),
+        assetId: fragmentEl.dataset.appImageDetailAssetId,
+    })
 }

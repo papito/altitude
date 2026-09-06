@@ -1,4 +1,5 @@
 import { Const } from "../constants.js"
+import { createModalStore } from "../common/modal.js"
 
 export function initializeFrontendStores({ Alpine }) {
     Alpine.store(Const.state.selectedAssets, {
@@ -98,4 +99,6 @@ export function initializeFrontendStores({ Alpine }) {
     Alpine.store(Const.state.imageDetailLoading, {
         value: false,
     })
+
+    Alpine.store(Const.state.modal, createModalStore())
 }

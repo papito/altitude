@@ -1,46 +1,79 @@
 @import altitude.core.RequestContext
-@import altitude.core.Const
-@import altitude.core.models.Folder
-@import altitude.core.Api
 
-@(rootFolder: Folder)
+@()
 
 <style>
+    #rootFolderList {
+        --folder-indent: 20px;
+        /* One vertical rhythm for the whole tree: the same gap separates sibling rows and separates
+           a folder's own row from its children, so nesting never tightens the spacing */
+        --folder-row-gap: 8px;
+        /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name). The trace
+           subtracts it, so both uses must be the same value */
+        --folder-control-gap: 6px;
+    }
+
     #rootFolderList .folder.root, .folder-list .children {
         display: grid;
         grid-auto-rows: auto;
-        grid-row-gap: 4px;
+        grid-row-gap: var(--folder-row-gap);
     }
 
     #rootFolderList .folder .children {
         position: relative;
-        margin-left: 20px;
     }
 
     #rootFolderList .folder {
         display: grid;
         align-items: center;
         grid-auto-columns: auto;
+        /* The rows here are this folder's controls and its children block; a collapsed or empty
+           children block is `display: none`, so it is not a grid item and adds no gap */
+        grid-row-gap: var(--folder-row-gap);
     }
 
     #rootFolderList .folder .controls {
         display: grid;
-        grid-template-columns: max-content 25px 1fr;
+        column-gap: var(--folder-control-gap);
         align-items: center;
         touch-action: none;
     }
 
+    #rootFolderList .folder.root > .controls {
+        /* ⋯ menu button | icon | folder-name (grows) */
+        grid-template-columns: max-content max-content 1fr;
+    }
+
+    #rootFolderList .folder:not(.root) > .controls {
+        /* ⋯ menu button | dotted trace (= indent) | icon | folder-name (grows) */
+        grid-template-columns: max-content max-content max-content 1fr;
+    }
+
+    #rootFolderList .trace {
+        /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name
+           sit where a plain margin-left indent would put them while the ⋯ stays flush left */
+        width: calc(var(--depth) * var(--folder-indent) - var(--folder-control-gap));
+        border-top: 2px double var(--panel-border-color);
+    }
 
     #rootFolderList .folder .menu-ctrl {
         display: grid;
-        padding-left: 6px;
         place-items: center;
     }
 
-    #rootFolderList .folder .menu-ctrl a {
+    /* The ⋯ trigger keeps the look of the former link. It never shows a focus ring: the modal owner
+       returns focus here when a folder dialog closes, and the ring that marked would read as a
+       stray highlight in the tree */
+    #rootFolderList .folder .menu-ctrl > button {
+        padding: 0;
+        border: 0;
+        outline: none;
+        background: none;
+        font: inherit;
         font-size: 1.3em;
+        line-height: 1;
         color: #FFFFFF;
-        text-decoration: none;
+        cursor: pointer;
     }
 
     #rootFolderList .folder i {
@@ -55,28 +88,89 @@
         color: rgba(234, 231, 231, 0.98);
     }
 
-    #rootFolderList .folder:not(.root) i.fa-folder-minus,
-    #rootFolderList .folder:not(.root):has(i.fa-folder-minus) .folder i {
+    /* The icon control is a real button (Enter/Space work, no page jump) that keeps only the icon's look and
+       place in the grid. Unlike the ⋯ trigger it keeps the default focus ring: focus lands here from the
+       keyboard, and from a collapse that hid the focused control */
+    #rootFolderList .folder .expand-ctrl {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    /* Green marks the viewed scope: the folder whose results are displayed and every descendant, since the
+       results include the whole subtree. Expansion plays no part. The marker sits on the viewed folder's
+       node alone (see js/common/viewed-folder-scope.js); its descendants are DOM descendants, so this one
+       rule covers root, branches, and leaves in the subtree, and never an icon in a menu or dialog */
+    #rootFolderList .folder[alt-viewed-scope] .folder-icon {
         color: var(--success-font-color);
     }
 
-    #rootFolderList .folder .menu {
-        display: none;
-        padding: 5px 5px 5px 5px;
-        margin: 0 6px 6px 6px;
-        flex-wrap: wrap;
-        border-radius: 5px;
-        gap: 5px;
-        background-color: var(--background-form-color);
-    }
-
-    #rootFolderList .folder .menu span {
-        display: flex;
-        padding: 3px 6px;
-        cursor: pointer;
+    /* The context menu is a native popover in the top layer, so it takes no room in the tree and is
+       not clipped by the explorer. The browser centers popovers with auto margins and `inset: 0`;
+       both are reset so the coordinates the folderMenu component measures apply as-is. */
+    #rootFolderList .folder-menu {
+        position: fixed;
+        margin: 0;
+        inset: auto;
+        width: max-content;
+        /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
+        padding: 0;
         border: 1px solid gray;
         border-radius: 5px;
-        font-size: .9em;
+        color: inherit;
+        background-color: var(--modal-background-color);
+        text-shadow: none;
+        grid-template-columns: 1fr;
+        gap: 0;
+        /* Actions scroll inside the panel when the component caps its height */
+        overflow-y: auto;
+    }
+
+    /* Only the open state may set a display: the popover's hidden state relies on display: none.
+       (The component sets the same display inline for a moment to measure the panel before it opens.) */
+    #rootFolderList .folder-menu:popover-open {
+        display: grid;
+    }
+
+    #rootFolderList .folder-menu .actions button {
+        display: flex;
+        padding: 10px 15px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        font-size: 1em;
+        text-align: left;
+    }
+
+    /* Divider between rows only, never above the first or below the last */
+    #rootFolderList .folder-menu .actions button + button {
+        border-top: 1px solid gray;
+    }
+
+    /* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
+    #rootFolderList .folder-menu .actions button:focus-visible {
+        outline-offset: -2px;
+    }
+
+    /* Dialog state: the panel shows one inline dialog (add, rename, or delete folder) in place of
+       its actions. The dialog keeps the modal's content padding; its heading keeps the modal
+       title's type treatment (see .modal-title in core.css) without the toolbar. */
+    #rootFolderList .folder-menu .dialog {
+        padding: var(--modal-content-padding);
+    }
+
+    #rootFolderList .folder-menu .dialog-title {
+        margin: 0 0 var(--control-vertical-space);
+        font-size: 1.1em;
+        font-weight: bold;
+        text-transform: capitalize;
     }
 
     #rootFolderList .folder-name, #rootFolderList .folder.root i {
@@ -123,67 +217,14 @@
     <span>Navigation in this view is disabled. You can only drag-and-drop assets and folders.</span>
 </div>
 
-<div id="rootFolderList" class="folder-list">
-    <div class="folder root"
-         id="folder-@{rootFolder.persistedId}"
-         alt-num-of-children="@{rootFolder.numOfChildren}"
-         alt-folder-id="@{rootFolder.persistedId}"
-         alt-parent-folder-id="@{rootFolder.persistedId}"
-         alt-is-root="true"
-         alt-expanded="true">
-
-        <div class="controls dropzone"
-             alt-folder-id="@{rootFolder.persistedId}">
-                <i class="fas fa-folder"
-                hx-target="#content"
-                hx-trigger="click"
-                hx-swap="innerHTML"
-                x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
-                hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true"></i>
-            <div class="menu-ctrl">
-                <a href="#"
-                   alt-folder-id="@{rootFolder.persistedId}"
-                   id="expand-folder-children-@{rootFolder.persistedId}"
-                   hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/context-menu"
-                   hx-swap="innerHTML"
-                   hx-target="#menu-@{rootFolder.persistedId}"
-                   hx-vals='{"folderId": "@{rootFolder.persistedId}"}'
-                   hx-trigger="click">&#10247;</a>
-            </div>
-            <span id="folderName-@{rootFolder.persistedId}"
-                  class="folder-name"
-                  x-data
-                  :class="{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }"
-                  hx-target="#content"
-                  hx-trigger="click"
-                  hx-swap="innerHTML"
-                  x-on:click="if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }"
-                  hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.FOLDER_ID}=@{rootFolder.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">/ Root
-            </span>
-        </div>
-
-        <div class="menu"
-             id="menu-@{rootFolder.persistedId}"
-             alt-folder-id="@{rootFolder.persistedId}">
-
-        </div>
-
-        <div class="children"
-             id="children-@{rootFolder.persistedId}"
-             alt-folder-id="@{rootFolder.persistedId}"
-             hx-swap="innerHTML"
-             hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/children"
-             hx-vals='{"parentId": "@{rootFolder.persistedId}"}'
-             hx-trigger="load">
-        </div>
-
-    </div>
-</div>
+<div id="rootFolderList" class="folder-list"></div>
 
 <script type="module">
     import { selectTab } from "/static/js/common/navigation.js"
+    import { reloadFolderTree } from "/static/js/common/folder-tree.js"
 
     selectTab("explorer", "foldersTab")
     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+    reloadFolderTree("@{ RequestContext.getRepository.persistedId }")
 </script>
 

@@ -1,7 +1,12 @@
 import { Const } from "../constants.js"
+import {
+    getRequestPath,
+    getResponseText,
+    isRequestSuccessful,
+} from "../common/htmx-events.js"
 
 export function handlePeopleAfterRequest({ app, event }) {
-    const requestPath = event.detail.pathInfo.requestPath
+    const requestPath = getRequestPath(event)
     const discardPersonElement = getDiscardPersonElement(event)
     const personNameEditorElement = getPersonNameEditorElement(event)
 
@@ -17,7 +22,7 @@ export function handlePeopleAfterRequest({ app, event }) {
     }
 
     if (isDiscardPersonRequest({ app, requestPath, discardPersonElement })) {
-        if (event.detail.successful === false) {
+        if (!isRequestSuccessful(event)) {
             return true
         }
 
@@ -83,16 +88,18 @@ function handlePersonNameEditAfterRequest({
     event,
     personNameEditorElement,
 }) {
-    if (event.detail.successful === false) {
+    if (!isRequestSuccessful(event)) {
         return
     }
 
-    if (event.detail.xhr.responseText.includes('id="editPersonName"')) {
+    const responseText = getResponseText(event)
+
+    if (responseText.includes('id="editPersonName"')) {
         return
     }
 
     const responseEl = document.createElement("div")
-    responseEl.innerHTML = event.detail.xhr.responseText
+    responseEl.innerHTML = responseText
     const newPersonName = responseEl.textContent?.trim() || ""
 
     app.dispatch(Const.events.personNameEdited, {

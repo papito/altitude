@@ -153,7 +153,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val payload = "<!doctype html>" + includes.html.search_results(
         results = results,
         person = maybePerson.orNull,
-        view = view
+        view = view,
+        folderId = folderId
       )
       cask.Response(
         payload,

@@ -23,19 +23,11 @@ export function registerHtmxAndSearchListeners(app) {
         app.handleEscapeKeyPressed()
     })
 
-    document.body.addEventListener("htmx:afterRequest", (event) => {
+    document.body.addEventListener("htmx:after:request", (event) => {
         app.handleAfterRequest(event)
     })
 
-    document.body.addEventListener("htmx:afterSwap", (event) => {
-        app.handleAfterSwap(event)
-    })
-
-    document.body.addEventListener("htmx:beforeRequest", (event) => {
-        app.handleBeforeRequest(event)
-    })
-
-    document.body.addEventListener("htmx:load", (event) => {
-        app.handleHtmxLoad(event)
+    document.body.addEventListener("htmx:after:settle", (event) => {
+        app.handleAfterSettle(event)
     })
 }

@@ -3,6 +3,9 @@ import { dragged, dragMoveListener } from "../common/dragon-drop.js"
 
 export function bindFolderDragDrop({ dispatch }) {
     interact("#rootFolderList .drag-drop").draggable({
+        // The ⋯ trigger with its menu and the icon control are controls, not drag handles; a
+        // drag starting on the icon would break its single/double-click expansion gestures
+        ignoreFrom: ".menu-ctrl, .expand-ctrl",
         inertia: true,
         autoScroll: { container: document.querySelector("#explorer") },
 

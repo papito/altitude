@@ -1,29 +1,24 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
 
-@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String, minWidth: Int, title: String)
+@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String, title: String)
 
-<style>
-    #addFolder input {
-        width: 100%;
-    }
-</style>
-
+@* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="addFolder"
-      data-app-fragment="modal"
-      data-app-modal-title="@{title}"
-      data-app-modal-min-width="@{minWidth}"
-      data-app-modal-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
-      data-app-modal-close-on-success="true"
-      data-app-modal-success-event="folderAdded"
-      data-app-modal-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
+      data-app-fragment="inline-dialog"
+      data-app-dialog-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
+      data-app-dialog-return-focus="#folderMenuCtrl-@{parentId}"
+      data-app-dialog-success-event="folderAdded"
+      data-app-dialog-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
       alt-folder-id="@{parentId}"
-      hx-swap="innerHTML"
+      hx-target="this"
+      hx-swap="none"
       hx-post="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/add"
-      hx-target="#children-@{parentId}"
       hx-trigger="submit"
-      hx-ext="json-enc">
+      hx-json-enc>
+
+    <h3 class="dialog-title">@{title}</h3>
 
     @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
         <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
@@ -38,6 +33,7 @@
             }
                name="@{ Api.Field.Folder.NAME }"
                autocomplete="off"
+               size="30"
                value='@{ formJson.obj.get(Api.Field.Folder.NAME).flatMap(_.strOpt).getOrElse("") }'
                placeholder="New folder name"
                maxlength="@{ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
@@ -46,4 +42,3 @@
         <input type="hidden" name="@{ Api.Field.Folder.PARENT_ID }" value="@{ parentId }">
     </div>
 </form>
-

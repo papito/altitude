@@ -4,9 +4,11 @@ import org.scalatest.Suites
 
 import altitude.core.controller.AssetControllerTests
 import altitude.core.controller.ContentViewControllerTests
+import altitude.core.controller.FolderActionControllerTests
 import altitude.core.controller.HealthControllerTests
 import altitude.core.controller.IndexControllerTests
 import altitude.core.controller.LoginControllerTests
+import altitude.core.controller.PeopleActionControllerTests
 
 abstract class AllControllerTestSuites
   extends Suites(
@@ -14,5 +16,7 @@ abstract class AllControllerTestSuites
     new IndexControllerTests(),
     new AssetControllerTests(),
     new LoginControllerTests(),
-    new ContentViewControllerTests()
+    new ContentViewControllerTests(),
+    new FolderActionControllerTests(),
+    new PeopleActionControllerTests()
   )

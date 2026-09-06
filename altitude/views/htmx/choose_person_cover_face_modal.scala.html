@@ -4,7 +4,7 @@
 @import altitude.core.models.Face
 @import altitude.core.Api
 
-@(person: Person, faces: List[Face], minWidth: Int, title: String)
+@(person: Person, faces: List[Face], title: String)
 
 <style>
     #faceSelector {
@@ -42,11 +42,9 @@
 <div id="faceSelector"
      data-app-fragment="modal"
      data-app-modal-title="@{title}"
-     data-app-modal-min-width="@{minWidth}"
-     data-app-modal-close-on-success="true"
-     data-app-modal-success-event="personCoverFaceSet"
-     data-app-modal-success-detail='{"@{ Api.Field.PERSON_ID }":"@{ person.persistedId }"}'
-     data-app-modal-success-detail-target-attr-face-id="alt-face-id">
+     data-app-dialog-success-event="personCoverFaceSet"
+     data-app-dialog-success-detail='{"@{ Api.Field.PERSON_ID }":"@{ person.persistedId }"}'
+     data-app-dialog-success-detail-target-attr-face-id="alt-face-id">
     <div class="info">
         <div>
             Best faces for <strong>@{person.name}</strong>

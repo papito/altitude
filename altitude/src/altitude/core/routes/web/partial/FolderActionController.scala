@@ -9,11 +9,9 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
-import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Folder
-import altitude.core.models.Repository
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
@@ -21,53 +19,39 @@ class FolderActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/folder"
 
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/modals/add-folder")
-  def showAddFolderModal(repoId: String, parentId: String, minWidth: String)(using request: Request): Response[String] =
-    val payload = "<!doctype html>" + htmx.html.add_folder_modal(
-      minWidth = C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
-      title = C.UI.ADD_FOLDER_MODAL_TITLE,
+  @cask.get(f"/$prefix/r/:repoId/dialogs/add-folder")
+  def showAddFolderDialog(repoId: String, parentId: String)(using request: Request): Response[String] =
+    val payload = "<!doctype html>" + htmx.html.add_folder_dialog(
+      title = C.UI.ADD_FOLDER_DIALOG_TITLE,
       parentId = parentId
     )
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/modals/rename-folder")
-  def showRenameFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using
-      request: Request): Response[String] =
+  @cask.get(f"/$prefix/r/:repoId/dialogs/rename-folder")
+  def showRenameFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
-    val payload = "<!doctype html>" + htmx.html.rename_folder_modal(
-      minWidth = C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
-      title = C.UI.RENAME_FOLDER_MODAL_TITLE,
+    val payload = "<!doctype html>" + htmx.html.rename_folder_dialog(
+      title = C.UI.RENAME_FOLDER_DIALOG_TITLE,
       existingName = Some(folder.name),
       id = id
     )
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/modals/delete-folder")
-  def showDeleteFolderModal(repoId: String, id: String, minWidth: String, parentId: Option[String] = None)(using
-      request: Request): Response[String] =
+  @cask.get(f"/$prefix/r/:repoId/dialogs/delete-folder")
+  def showDeleteFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
-    val payload = "<!doctype html>" + htmx.html.delete_folder_modal(
-      minWidth = C.UI.DELETE_FOLDER_MODAL_MIN_WIDTH,
-      title = C.UI.DELETE_FOLDER_MODAL_TITLE,
+    val payload = "<!doctype html>" + htmx.html.delete_folder_dialog(
+      title = C.UI.DELETE_FOLDER_DIALOG_TITLE,
       folder = folder
     )
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/context-menu")
-  def showFolderContextMenu(repoId: String, folderId: String, parentId: Option[String] = None)(using
-      request: Request): Response[String] =
-    val payload = "<!doctype html>" + htmx.html.folder_context_menu(folderId = folderId)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-
-  @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
   def showFoldersTab(repoId: String)(using request: Request): Response[String] =
-    val repo: Repository = RequestContext.getRepository
-    val rootFolder: Folder = App.altitude.service.folder.getById(repo.rootFolderId)
-    val payload = "<!doctype html>" + htmx.html.folders(rootFolder = rootFolder)
+    val payload = "<!doctype html>" + htmx.html.folders()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
@@ -90,22 +74,13 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val jsonIn: ujson.Obj = dataScrubber.scrub(unscrubbedJson.get)
 
     def responseWithValidationErrors(errors: Map[String, String], parentId: String): Response[String] =
-      val payload = "<!doctype html>" + htmx.html.add_folder_modal(
-        minWidth = C.UI.ADD_FOLDER_MODAL_MIN_WIDTH,
-        title = C.UI.ADD_FOLDER_MODAL_TITLE,
+      val payload = "<!doctype html>" + htmx.html.add_folder_dialog(
+        title = C.UI.ADD_FOLDER_DIALOG_TITLE,
         fieldErrors = errors,
         formJson = jsonIn,
         parentId = parentId
       )
-      // we want to change the folder modal to show the errors, not reload the folder list!
-      cask.Response(
-        payload,
-        200,
-        Seq(
-          ("Content-Type", "text/html"),
-          ("HX-Retarget", "this"),
-          ("HX-Reswap", "innerHTML")
-        ))
+      dialogFormValidationResponse(payload)
 
     try apiRequestValidator.validate(jsonIn)
     catch
@@ -121,9 +96,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
         val message = ex.message.getOrElse("Folder name already exists at this level")
         return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), parentId = parentId)
 
-    val childFolders: List[Folder] = App.altitude.service.folder.getChildren(parentId)
-    val payload = "<!doctype html>" + htmx.html.folder_children(folders = childFolders)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    // The client reloads the folder tree off the "folderAdded" event - no markup needed here
+    cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/rename")
@@ -146,22 +120,13 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val jsonIn: ujson.Obj = dataScrubber.scrub(unscrubbedJson.get)
 
     def responseWithValidationErrors(errors: Map[String, String], folderId: String): Response[String] =
-      val payload = "<!doctype html>" + htmx.html.rename_folder_modal(
-        minWidth = C.UI.RENAME_FOLDER_MODAL_MIN_WIDTH,
-        title = C.UI.RENAME_FOLDER_MODAL_TITLE,
+      val payload = "<!doctype html>" + htmx.html.rename_folder_dialog(
+        title = C.UI.RENAME_FOLDER_DIALOG_TITLE,
         fieldErrors = errors,
         formJson = jsonIn,
         id = folderId
       )
-      // we want to change the folder modal to show the errors, not reload the folder list!
-      cask.Response(
-        payload,
-        200,
-        Seq(
-          ("Content-Type", "text/html"),
-          ("HX-Retarget", "this"),
-          ("HX-Reswap", "innerHTML")
-        ))
+      dialogFormValidationResponse(payload)
 
     try apiRequestValidator.validate(jsonIn)
     catch
@@ -178,13 +143,6 @@ class FolderActionController(using logger: Logger) extends BaseController:
         return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)
 
     cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
-
-  @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/children")
-  def htmxFolderChildren(repoId: String, parentId: String)(using request: Request): Response[String] =
-    val childFolders: List[Folder] = App.altitude.service.folder.getChildren(parentId)
-    val payload = "<!doctype html>" + htmx.html.folder_children(folders = childFolders)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/move")

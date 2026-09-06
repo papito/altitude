@@ -85,23 +85,12 @@ object Const:
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
 
+  // Dialog titles: the folder dialogs show inline in the folder menu, the others in the modal host,
+  // whose sizing is owned by CSS (`--modal-content-width` in core.css).
   object UI:
-    private val DEFAULT_MODAL_WIDTH = 400
-
-    val ADD_FOLDER_MODAL_TITLE = "Add a folder"
-    val ADD_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
-    val RENAME_FOLDER_MODAL_TITLE = "Rename folder"
-    val RENAME_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
-    val DELETE_FOLDER_MODAL_TITLE = "Delete folder"
-    val DELETE_FOLDER_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
-    val MERGE_PEOPLE_MODAL_TITLE = "Merge people"
-    val MERGE_PEOPLE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
-    val CHANGE_PERSON_COVER_IMAGE_MODAL_TITLE = "Change cover image"
-    val CHANGE_PERSON_COVER_IMAGE_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
-
-    val VIEW_SETTINGS_MODAL_TITLE = "View settings"
-    val VIEW_SETTINGS_MODAL_MIN_WIDTH: Int = DEFAULT_MODAL_WIDTH
+    val ADD_FOLDER_DIALOG_TITLE = "Add a folder"
+    val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
+    val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
+    val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
+    val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
+    val VIEW_SETTINGS_DIALOG_TITLE = "View settings"

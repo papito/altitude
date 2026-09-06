@@ -15,8 +15,7 @@ class ViewSettingsActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/modals/view-settings")
   def showUpdateViewSettingsModal(repoId: String)(using request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.view_settings_modal(
-      minWidth = C.UI.VIEW_SETTINGS_MODAL_MIN_WIDTH,
-      title = C.UI.VIEW_SETTINGS_MODAL_TITLE
+      title = C.UI.VIEW_SETTINGS_DIALOG_TITLE
     )
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 

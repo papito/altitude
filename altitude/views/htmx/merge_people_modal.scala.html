@@ -3,7 +3,7 @@
 @import altitude.core.models.Person
 @import altitude.core.Api
 
-@(minWidth: Int, title: String, mergeSourcePerson: Person, mergeDestPerson: Person)
+@(title: String, mergeSourcePerson: Person, mergeDestPerson: Person)
 
 <style>
     #mergePeople {
@@ -42,10 +42,8 @@
       id="mergePeople"
       data-app-fragment="modal"
       data-app-modal-title="@{title}"
-      data-app-modal-min-width="@{minWidth}"
-      data-app-modal-close-on-success="true"
-      data-app-modal-success-event="personMerged"
-      data-app-modal-success-detail='{"@{Api.Field.Person.MERGE_SOURCE_ID}":"@{ mergeSourcePerson.persistedId }","@{Api.Field.Person.MERGE_DEST_ID}":"@{ mergeDestPerson.persistedId }"}'
+      data-app-dialog-success-event="personMerged"
+      data-app-dialog-success-detail='{"@{Api.Field.Person.MERGE_SOURCE_ID}":"@{ mergeSourcePerson.persistedId }","@{Api.Field.Person.MERGE_DEST_ID}":"@{ mergeDestPerson.persistedId }"}'
       hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/src/@{mergeSourcePerson.persistedId}/dest/@{mergeDestPerson.persistedId}"
       hx-trigger="submit"
       hx-target="#content"
