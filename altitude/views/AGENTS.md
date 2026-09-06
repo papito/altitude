@@ -235,10 +235,12 @@ A **dialog** is a server-rendered form that completes one user action, hydrated 
 the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), success event + detail (+ `success-detail-target-attr-*`
-read from the issuing element), and `close-on-success`, defaulting to true. Attributes that describe
-the modal host are `data-app-modal-*`: title and kind. The three folder dialogs and the three album
-dialogs are **inline dialogs** (`data-app-fragment="inline-dialog"`, see **Context menus**); the
-people and view-settings dialogs are modal dialogs.
+read from the issuing element), `close-on-success`, defaulting to true, and `kind`, naming wiring a
+dialog needs beyond its form (only the view settings checkboxes, hydrated in
+`js/fragments/inline-dialog.js`). The one attribute that describes the modal host is
+`data-app-modal-title`. The three folder dialogs, the three album dialogs, and the view settings
+dialog are **inline dialogs** (`data-app-fragment="inline-dialog"`, see **Context menus**); the
+people dialogs are modal dialogs.
 
 General HTMX modal fragments opt in with `data-app-fragment="modal"`; `js/fragments/modal.js` opens the
 host on hydration and registers the modal presentation with `js/fragments/dialog-operations.js`, which
@@ -269,12 +271,16 @@ Arrow-key navigation works only while asset detail is active and no text field i
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
 for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
 `js/common/context-menu.js` as the tree or list is rendered, so opening a menu sends no request.
-The Add album buttons and the "Add folder" button above the tree (`#addFolderBtn`, adding into
-the root) are the same component in a second shape (`buildDialogTriggerCtrl`,
-`.dialog-trigger-ctrl`): the button both toggles a panel with no actions and requests the add
-dialog into its host; the `dialog-only` panel stays invisible until the dialog arrives, opens
+The Add album buttons, the "Add folder" button above the tree (`#addFolderBtn`, adding into
+the root), and the ⚙ View button above the results grid (`#viewSettingsBtn`, built by
+`js/fragments/search-results.js` into the `#viewSettingsActions` host the results template supplies)
+are the same component in a second shape (`buildDialogTriggerCtrl`,
+`.dialog-trigger-ctrl`): the button both toggles a panel with no actions and requests its one
+dialog into the host; the `dialog-only` panel stays invisible until the dialog arrives, opens
 below the button centered on it (`data-menu-align="center"` on the root), and hands focus back to
-the button, which shows no focus ring for it. The panel shows either its
+the button, which shows no focus ring for it (`.dialog-trigger-ctrl > button` drops the outline, and
+`.action-button` glows only on `:focus-visible`, never after a mouse click). View settings submits
+nothing - each checkbox applies as it changes - so only a dismissal closes that panel. The panel shows either its
 **actions** (`.actions`: Add folder; Rename and Delete for non-root folders; Rename and Delete for
 an album) or one **inline dialog** in its dialog host (`.dialog`, `#menuDialog-{id}` /
 `#albumMenuDialog-{id}`). Each action is an HTMX request for its
@@ -304,7 +310,10 @@ convention. Removing the tree or list removes the open panel and, through the co
 `beforetoggle`, the component briefly sets inline `display: grid` to measure and position the
 hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
 those viewport coordinates apply correctly. `.menu-ctrl` and the icon control `.expand-ctrl` are
-excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags.
+excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags. A panel lives inside whatever container holds
+its trigger, so no stylesheet may reach into one with a descendant selector: `#searchControl > div`
+in `search_results.scala.html` is scoped to direct children for exactly that reason, since an ID
+selector outranks `.context-menu:popover-open` and would leave the closed panel displayed.
 
 **Folder tree expansion and viewed scope** — In a non-root row the icon and the name have separate
 jobs: the name navigates (a search for the folder's results, disabled in triage and trash),

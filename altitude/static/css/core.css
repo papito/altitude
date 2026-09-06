@@ -148,7 +148,9 @@ form input.error, form input.error:focus {
     font-size: 1em;
 }
 
-.action-button:hover, .action-button:focus {
+/* `:focus-visible`, not `:focus`: a control that opens a dialog takes focus back when it closes, and
+   a plain `:focus` glow would be left sitting on the button the user clicked with a mouse */
+.action-button:hover, .action-button:focus-visible {
     box-shadow: var(--box-shadow);
 }
 

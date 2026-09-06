@@ -10,7 +10,11 @@
  * active while that same fragment is still in an open panel, and closing it closes the panel,
  * handing focus to the control the dialog declares (the entity's ⋯ button, or another control
  * that survives a deletion).
+ *
+ * A dialog that needs wiring beyond the form itself names it with `data-app-dialog-kind`; the view
+ * settings dialog is the only one, and it submits nothing at all.
  */
+import { Const } from "../constants.js"
 import { closeContextMenu } from "../common/context-menu.js"
 import { registerDialogKind } from "./dialog-operations.js"
 import { focusFragmentElement } from "./helpers.js"
@@ -46,7 +50,7 @@ registerDialogKind("inline-dialog", {
  * or else to the panel itself, so a held or repeated Enter from the menu cannot activate a
  * destructive control; one Tab reaches it.
  */
-export function hydrateInlineDialogFragment({ fragmentEl }) {
+export function hydrateInlineDialogFragment({ fragmentEl, context, dispatch }) {
     const panel = fragmentEl.closest(OPEN_PANEL_SELECTOR)
 
     if (!panel) {
@@ -65,4 +69,53 @@ export function hydrateInlineDialogFragment({ fragmentEl }) {
     } else {
         panel.focus()
     }
+
+    if (fragmentEl.dataset.appDialogKind === "view-settings") {
+        initializeViewSettingsFragment({ fragmentEl, context, dispatch })
+    }
+}
+
+/**
+ * The view settings dialog: each checkbox is one grid metadata field, seeded from the fields the
+ * context holds and applied the moment it changes, so the dialog never submits anything and the
+ * panel stays open for as long as the user keeps it there.
+ */
+function initializeViewSettingsFragment({ fragmentEl, context, dispatch }) {
+    const showFields = context.getGridMetadataFields()
+
+    fragmentEl
+        .querySelectorAll('input[type="checkbox"]')
+        .forEach((checkboxEl) => {
+            checkboxEl.checked = showFields.has(checkboxEl.value)
+        })
+
+    if (fragmentEl.dataset.appViewSettingsBound === "true") {
+        return
+    }
+
+    fragmentEl.dataset.appViewSettingsBound = "true"
+
+    fragmentEl.addEventListener("change", (event) => {
+        const checkboxEl = event.target
+        if (
+            !(checkboxEl instanceof HTMLInputElement) ||
+            checkboxEl.type !== "checkbox"
+        ) {
+            return
+        }
+
+        const fieldName = checkboxEl.value
+        const checked = checkboxEl.checked
+
+        if (checked) {
+            context.addGridMetadataField(fieldName)
+        } else {
+            context.removeGridMetadataField(fieldName)
+        }
+
+        dispatch(Const.events.viewSettingChanged, {
+            fieldName,
+            checked,
+        })
+    })
 }

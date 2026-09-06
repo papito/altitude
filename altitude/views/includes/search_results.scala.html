@@ -16,7 +16,10 @@
     grid-template-columns: .5fr 1fr 1fr;
   }
 
-  #searchControl div {
+  /* Direct children only: as a descendant selector this would also match the View control's popover
+     panel, and an ID selector outranks `.context-menu:popover-open`, so the closed panel would be
+     forced back to display: grid and stay on screen. */
+  #searchControl > div {
     display: grid;
     place-items: center;
   }
@@ -196,15 +199,9 @@
       <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.count"></span>
     </div>
   </div>
-  <div>
-    <button class="action-button small"
-            hx-get="/htmx/view-settings/r/@{RequestContext.getRepository.persistedId}/modals/view-settings"
-            hx-target="#modalContent"
-            hx-trigger="click">
-      <i class="fas fa-cog"></i>
-      <span>View</span>
-    </button>
-  </div>
+  @* The ⚙ View control is a dialog-trigger context menu, built into this host by
+     js/fragments/search-results.js like the Add album and Add folder controls *@
+  <div id="viewSettingsActions"></div>
 
   <div class="sort">
     @* The selected option is the effective sort the server used; changing it goes through the search funnel, which

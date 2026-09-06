@@ -1,27 +1,25 @@
-@import altitude.core.Api
-@import altitude.core.RequestContext
-
-@(title: String)
-
 <style>
-  #viewSettingsModalForm {
+  #viewSettingsForm {
     display: grid;
     grid-auto-rows: auto;
     row-gap: var(--control-vertical-space);
   }
 
-  #viewSettingsModalForm input[type="checkbox"] {
+  #viewSettingsForm input[type="checkbox"] {
     vertical-align: middle;
   }
 </style>
 
-<!-- NOTE: The "value" here mirrors the ones in the search results grid, so these are
-     the classes we show/hide in the grid. -->
+@* Shown inline in the panel below the ⚙ View button, which holds nothing else. Each checkbox applies
+   immediately and there is no submit, so nothing closes the panel from the inside; it is dismissed
+   like any context menu. The dialog has no heading: its labels are the whole content.
 
-<form id="viewSettingsModalForm"
-      data-app-fragment="modal"
-      data-app-modal-kind="view-settings"
-      data-app-modal-title="@{title}">
+   NOTE: The "value" here mirrors the ones in the search results grid, so these are
+   the classes we show/hide in the grid. *@
+
+<form id="viewSettingsForm"
+      data-app-fragment="inline-dialog"
+      data-app-dialog-kind="view-settings">
   <div>
     <input type="checkbox"
            id="fileNameCheckbox"
@@ -57,5 +55,3 @@
     <label for="fileSizeCheckbox">File Size</label>
   </div>
 </form>
-
-

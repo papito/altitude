@@ -87,8 +87,9 @@ object Const:
       val INVALID_CONTENT_TYPE = "Invalid content type"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
-  // others in the modal host, whose sizing is owned by CSS (`--modal-content-width` in core.css).
-  // The add dialogs have no title: their one field's placeholder says what they do.
+  // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
+  // core.css). The add dialogs have no title: their one field's placeholder says what they do, and
+  // the inline view-settings dialog has none either: its checkbox labels are the whole content.
   object UI:
     val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
     val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
@@ -96,4 +97,3 @@ object Const:
     val DELETE_ALBUM_DIALOG_TITLE = "Delete album"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
-    val VIEW_SETTINGS_DIALOG_TITLE = "View settings"

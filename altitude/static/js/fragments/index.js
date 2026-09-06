@@ -12,15 +12,15 @@ export function hydrateAppFragments({ root, app }) {
     })
 
     findFragmentRoots(root, "modal").forEach((fragmentEl) => {
-        hydrateModalFragment({
+        hydrateModalFragment({ fragmentEl })
+    })
+
+    findFragmentRoots(root, "inline-dialog").forEach((fragmentEl) => {
+        hydrateInlineDialogFragment({
             fragmentEl,
             context: app.context,
             dispatch: app.dispatch.bind(app),
         })
-    })
-
-    findFragmentRoots(root, "inline-dialog").forEach((fragmentEl) => {
-        hydrateInlineDialogFragment({ fragmentEl })
     })
 
     findFragmentRoots(root, "image-detail").forEach((fragmentEl) => {

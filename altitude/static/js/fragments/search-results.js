@@ -1,6 +1,7 @@
 import { Const } from "../constants.js"
 import { setViewedAlbum } from "../common/album-list.js"
 import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
+import { buildDialogTriggerCtrl } from "../common/context-menu.js"
 import { runSearch } from "../search-results/search.js"
 import { bindBoxSelection } from "../search-results/box-selection.js"
 
@@ -21,6 +22,7 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
     app.Alpine.store(Const.state.shadowResults).reset()
 
     syncViewedScope(fragmentEl)
+    ensureViewSettingsControl(fragmentEl)
 
     // Also discards the previous grid's controller, and any box it was still drawing
     bindBoxSelection({ assetsElement, contentElement })
@@ -56,6 +58,39 @@ function syncViewedScope(fragmentEl) {
         folderId: hasScope ? resultsFolderId : null,
     })
     setViewedAlbum(hasScope ? resultsAlbumId : null)
+}
+
+/**
+ * Builds the ⚙ View control into its host, the same dialog-trigger context menu as the Add album and
+ * Add folder buttons: it toggles a panel holding only the view settings dialog, which it requests
+ * into that panel. Built here rather than in the template because it is a context menu component,
+ * like the folder and album menus; the template only supplies the host.
+ *
+ * The whole results fragment is re-swapped on every search, so the host arrives empty and the
+ * control is built again; the guard keeps a re-hydration of the same DOM from building a second one.
+ */
+function ensureViewSettingsControl(fragmentEl) {
+    const hostEl = fragmentEl.querySelector("#viewSettingsActions")
+
+    if (!hostEl || hostEl.childElementCount > 0) {
+        return
+    }
+
+    hostEl.appendChild(
+        buildDialogTriggerCtrl({
+            triggerId: "viewSettingsBtn",
+            panelId: "viewSettingsMenu",
+            dialogId: "viewSettingsDialog",
+            label: "View",
+            iconClass: "fas fa-cog",
+            url: `/htmx/view-settings/r/${fragmentEl.dataset.resultsRepoId}/dialogs/view-settings`,
+            buttonClass: "action-button small",
+        }),
+    )
+
+    if (window.htmx) {
+        htmx.process(hostEl)
+    }
 }
 
 export function handleViewSettingChanged({ event, context }) {
