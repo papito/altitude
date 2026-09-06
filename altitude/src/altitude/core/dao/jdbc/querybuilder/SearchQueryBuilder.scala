@@ -78,6 +78,7 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       folderFilter(searchQuery) +
       metadataFilter(searchQuery) +
       personFilter(searchQuery) +
+      albumFilter(searchQuery) +
       searchDocumentJoin(searchQuery) +
       searchParameterJoin(searchQuery)
 
@@ -111,6 +112,24 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
         """
       ),
       bindVals = searchQuery.personIds.toList
+    )
+
+  /** Restricts the results to the assets the given albums point at */
+  private def albumFilter(searchQuery: SearchQuery): ClauseComponents =
+    if searchQuery.albumIds.isEmpty then return ClauseComponents()
+
+    val albumIdPlaceholders: String = List.fill(searchQuery.albumIds.size)("?").mkString(", ")
+
+    ClauseComponents(
+      elements = List(
+        s"""
+          asset.id IN (
+            SELECT album_asset.asset_id
+              FROM album_asset
+             WHERE album_asset.album_id IN ($albumIdPlaceholders))
+        """
+      ),
+      bindVals = searchQuery.albumIds.toList
     )
 
   private def metadataFilter(searchQuery: SearchQuery): ClauseComponents =

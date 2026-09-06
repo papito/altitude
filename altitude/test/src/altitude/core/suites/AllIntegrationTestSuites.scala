@@ -15,6 +15,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new RepositoryServiceTests(testApp),
     new AssetImportServiceTests(testApp),
     new FolderServiceTests(testApp),
+    new AlbumServiceTests(testApp),
     new FileStoreServiceTests(testApp),
     new StatsServiceTests(testApp),
     new UserServiceTests(testApp),

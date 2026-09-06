@@ -1,6 +1,7 @@
 import {
     dragged,
     dragMoveListener,
+    dropzoneListeners,
     setFixedPositionWhileDragging,
 } from "../common/dragon-drop.js"
 import { Const } from "../constants.js"
@@ -172,27 +173,8 @@ interact("#trash").dropzone({
     accept: "#assets .drag-drop, #batchOps .drag-drop",
     overlap: 0.2,
 
-    ondropactivate: function (event) {
-        event.target.classList.add("drop-active")
-    },
-    ondragenter: function (event) {
+    ...dropzoneListeners((event) => {
         const draggableElement = event.relatedTarget
-        const dropzoneElement = event.target
-
-        dropzoneElement.classList.add("drop-target")
-        draggableElement.classList.add("can-drop")
-    },
-    ondragleave: function (event) {
-        event.target.classList.remove("drop-target")
-        event.relatedTarget.classList.remove("can-drop")
-    },
-    ondrop: function (event) {
-        const draggableElement = event.relatedTarget
-        const dropzoneElement = event.target
-
-        dropzoneElement.classList.remove("drop-active")
-        dropzoneElement.classList.remove("drop-target")
-        draggableElement.classList.remove("can-drop")
 
         const trashedFolderId = draggableElement.getAttribute(
             Const.attributes.folderId,
@@ -208,43 +190,27 @@ interact("#trash").dropzone({
 
         if (trashedFolderId) {
             console.debug(`Trashed folder ${trashedFolderId}`)
-            const trashedFolderEvent = new CustomEvent(
-                Const.events.folderTrashed,
-                {
-                    detail: {
-                        trashedFolderId: trashedFolderId,
-                    },
-                },
+            document.body.dispatchEvent(
+                new CustomEvent(Const.events.folderTrashed, {
+                    detail: { trashedFolderId },
+                }),
             )
-
-            document.body.dispatchEvent(trashedFolderEvent)
         }
 
         if (trashedAssetId) {
             console.debug(`Trashed asset ${trashedAssetId}`)
-            const trashedAssetEvent = new CustomEvent(
-                Const.events.assetTrashed,
-                {
-                    detail: {
-                        assetId: trashedAssetId,
-                    },
-                },
+            document.body.dispatchEvent(
+                new CustomEvent(Const.events.assetTrashed, {
+                    detail: { assetId: trashedAssetId },
+                }),
             )
-
-            document.body.dispatchEvent(trashedAssetEvent)
         }
 
         if (isBatchMover) {
             console.debug(`Batch recycling assets`)
-            const batchTrashedEvent = new CustomEvent(
-                Const.events.batchAssetsRecycled,
+            document.body.dispatchEvent(
+                new CustomEvent(Const.events.batchAssetsRecycled),
             )
-            document.body.dispatchEvent(batchTrashedEvent)
         }
-    },
-
-    ondropdeactivate: function (event) {
-        event.target.classList.remove("drop-active")
-        event.target.classList.remove("drop-target")
-    },
+    }),
 })

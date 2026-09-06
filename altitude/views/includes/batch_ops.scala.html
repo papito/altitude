@@ -39,7 +39,7 @@
 
 <div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
     <div class="container">
-        <!-- Default view: Move, Recycle, Deselect All -->
+        <!-- Default view: Move, Recycle, Remove from album (in an album), Deselect All -->
         <template x-if="!$store.currentView.isTrashBinView()">
             <div class="container">
                 <div class="control batch-mover">
@@ -48,6 +48,12 @@
                 <div class="control batch-recycler">
                     <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
                 </div>
+                <!-- While an album's results are displayed: drop the selected assets from that album (the assets themselves are untouched) -->
+                <template x-if="$store.searchParams.albumId">
+                    <div class="control">
+                        <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromAlbum)"><i class="fas fa-minus-circle"></i>Remove from album&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                    </div>
+                </template>
                 <div class="control">
                     <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
                 </div>

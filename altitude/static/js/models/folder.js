@@ -15,7 +15,7 @@
  * Expansion never changes which folders are highlighted as the viewed scope
  * (`common/viewed-folder-scope.js`): that follows the displayed search results.
  */
-import { closeOpenFolderMenu } from "../common/folder-menu.js"
+import { closeOpenContextMenu } from "../common/context-menu.js"
 import { Const } from "../constants.js"
 
 export class Folder {
@@ -107,7 +107,7 @@ export class Folder {
 
         // Hiding the descendants hides their menu triggers too; the open menu (at most one) must
         // not outlive its trigger. One search of the subtree finds it.
-        closeOpenFolderMenu({
+        closeOpenContextMenu({
             reason: `ancestor ${this.name()} collapsed`,
             within: this.childrenEl,
         })

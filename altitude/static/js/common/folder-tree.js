@@ -14,7 +14,7 @@
  * beneath it, with triaged and recycled assets excluded. A zero renders empty.
  * The root row shows no count; the nav already carries the repository total.
  * The count column is exactly as wide as the widest count in the tree, so the
- * icons of sibling rows line up; see `_sizeCountColumn`.
+ * icons of sibling rows line up (`sizeCountColumn` in `common/asset-count.js`).
  *
  * The DOM structure produced mirrors what the old Twirl templates generated so
  * that the existing Folder JS model, CSS, and drag-and-drop wiring all continue
@@ -27,12 +27,13 @@
  * model (`models/folder.js`) owns the expansion state the control changes.
  * Expansion needs no request: the tree endpoint returns every folder.
  *
- * Each folder's context menu is built here too, as a native `popover="auto"`
- * panel next to its ⋯ trigger, so opening a menu needs no request. The panel
- * holds its actions and an empty dialog host: an action loads its dialog into
- * the host through HTMX, and the panel then shows the dialog in place of the
- * actions. The `folderMenu` Alpine component (`alpine/components/folder-menu.js`)
- * places the panel, switches it between the two, and dismisses it.
+ * Each folder's context menu is built with the tree too, as a native
+ * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu.js`, shared
+ * with the album list), so opening a menu needs no request. The panel holds its
+ * actions and an empty dialog host: an action loads its dialog into the host
+ * through HTMX, and the panel then shows the dialog in place of the actions. The
+ * `contextMenu` Alpine component (`alpine/components/context-menu.js`) places
+ * the panel, switches it between the two, and dismisses it.
  *
  * Indentation is not structural: every non-root `.folder` carries a `--depth`
  * CSS custom property, and its `.controls` row holds a `.trace` cell (between
@@ -43,9 +44,17 @@
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { http } from "../http/client.js"
+import {
+    buildAssetCountEl,
+    setAssetCount,
+    sizeCountColumn,
+} from "./asset-count.js"
+import { buildContextMenuCtrl } from "./context-menu.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
+
+const COUNT_COLUMN_VARIABLE = "--folder-count-column"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
@@ -91,7 +100,10 @@ export async function refreshFolderCounts(repoId) {
         if (!document.getElementById("rootFolderList")) return
 
         if (_patchAssetCounts(response.data)) {
-            _sizeCountColumn(document.getElementById("rootFolderList"))
+            sizeCountColumn(
+                document.getElementById("rootFolderList"),
+                COUNT_COLUMN_VARIABLE,
+            )
         } else {
             _renderTree(response.data, repoId)
         }
@@ -120,7 +132,7 @@ function _renderTree(treeData, repoId) {
     // Tear down and rebuild
     container.innerHTML = ""
     container.appendChild(_renderRootNode(treeData, repoId))
-    _sizeCountColumn(container)
+    sizeCountColumn(container, COUNT_COLUMN_VARIABLE)
 
     // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
     // initializes the appended subtree, and an explicit `initTree` here would initialize
@@ -157,39 +169,10 @@ function _patchAssetCounts(folder) {
         const el = document.getElementById(`folder-count-${folder.id}`)
         if (!el) return false
 
-        _setAssetCount(el, folder.numOfAssets)
+        setAssetCount(el, folder.numOfAssets)
     }
 
     return folder.children.every(_patchAssetCounts)
-}
-
-/**
- * Sets the list's `--folder-count-column` to the width of the widest count in the tree. Every row
- * is its own grid, so CSS alone cannot give them one shared column width. Collapsed rows are
- * `display: none` and would measure as zero, so each distinct count text is measured in a probe
- * appended to the list instead, which also picks up the cell's own font size.
- */
-function _sizeCountColumn(container) {
-    const texts = new Set(
-        [...container.querySelectorAll(".asset-count")]
-            .map((el) => el.textContent)
-            .filter(Boolean),
-    )
-
-    const probe = document.createElement("span")
-    probe.className = "asset-count"
-    probe.style.position = "absolute"
-    probe.style.visibility = "hidden"
-    container.appendChild(probe)
-
-    let width = 0
-    for (const text of texts) {
-        probe.textContent = text
-        width = Math.max(width, probe.getBoundingClientRect().width)
-    }
-    probe.remove()
-
-    container.style.setProperty("--folder-count-column", `${width}px`)
 }
 
 // ─── snapshot helpers ────────────────────────────────────────────────────────
@@ -331,25 +314,13 @@ function _buildFolderControls(folder, repoId) {
     // ⋯ menu button | trace | asset count | icon | folder-name
     controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(traceEl)
-    controlsEl.appendChild(_buildAssetCountEl(folder))
+    controlsEl.appendChild(
+        buildAssetCountEl(`folder-count-${folder.id}`, folder.numOfAssets),
+    )
     controlsEl.appendChild(iconCtrlEl)
     controlsEl.appendChild(nameEl)
 
     return controlsEl
-}
-
-// The count cell keeps a stable ID so `refreshFolderCounts` can patch it without a rebuild
-function _buildAssetCountEl(folder) {
-    const el = document.createElement("span")
-    el.id = `folder-count-${folder.id}`
-    el.className = "asset-count"
-    _setAssetCount(el, folder.numOfAssets)
-    return el
-}
-
-// Zero counts render empty, never "(0)"
-function _setAssetCount(el, numOfAssets) {
-    el.textContent = numOfAssets > 0 ? `(${numOfAssets})` : ""
 }
 
 /**
@@ -492,76 +463,12 @@ function _makeSearchTrigger(el, folderId) {
 }
 
 /**
- * Build the ⋯ menu cell: the trigger button and the native popover panel it
- * opens, holding the actions and the dialog host. All keep stable IDs
- * (`folderMenuCtrl-<id>`, `menu-<id>`, `menuDialog-<id>`): tree rebuilds
- * restore focus by ID, the actions target the dialog host, and the folder
- * dialogs declare the trigger as their return-focus control. The panel is
- * focusable (`tabindex="-1"`) so a click on non-interactive dialog content
- * keeps focus inside it, and so a dialog can rest focus on the panel itself.
- *
- * The cell is the `folderMenu` component's root, so the panel is a DOM child
- * of the cell and never of another folder's panel; see the component for why
- * that matters.
+ * The folder's ⋯ menu cell (see `buildContextMenuCtrl`). The IDs are stable across rebuilds:
+ * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel,
+ * `menuDialog-<id>` the dialog host the actions target. Each action requests its dialog into that
+ * host; the root folder can only gain children, so it offers Add folder alone.
  */
 function _buildMenuCtrl(folder, repoId, folderName) {
-    const menuCtrlEl = document.createElement("div")
-    menuCtrlEl.className = "menu-ctrl"
-    menuCtrlEl.setAttribute("x-data", "folderMenu")
-    menuCtrlEl.setAttribute("x-on:focusout", "handleFocusOut")
-
-    const panelId = `menu-${folder.id}`
-    const dialogId = `menuDialog-${folder.id}`
-
-    const btnEl = document.createElement("button")
-    btnEl.type = "button"
-    btnEl.id = `folderMenuCtrl-${folder.id}`
-    btnEl.setAttribute("alt-folder-id", folder.id)
-    btnEl.setAttribute("popovertarget", panelId)
-    btnEl.setAttribute("aria-label", `Actions for folder ${folderName}`)
-    btnEl.setAttribute("x-ref", "trigger")
-    btnEl.textContent = "⋯"
-
-    const panelEl = document.createElement("div")
-    panelEl.className = "folder-menu"
-    panelEl.id = panelId
-    panelEl.setAttribute("popover", "auto")
-    panelEl.setAttribute("tabindex", "-1")
-    panelEl.setAttribute("alt-folder-id", folder.id)
-    panelEl.setAttribute("x-ref", "panel")
-    panelEl.setAttribute("x-on:beforetoggle", "handleBeforeToggle")
-    panelEl.setAttribute("x-on:toggle", "handleToggle")
-    panelEl.setAttribute("x-on:htmx:before:request", "handleBeforeRequest")
-    panelEl.setAttribute("x-on:htmx:after:request", "handleAfterRequest")
-    panelEl.setAttribute("x-on:htmx:after:settle", "handleAfterSettle")
-
-    const actionsEl = document.createElement("div")
-    actionsEl.className = "actions"
-    actionsEl.setAttribute("x-ref", "actions")
-    _buildMenuActions(folder, repoId, dialogId).forEach((actionEl) => {
-        actionsEl.appendChild(actionEl)
-    })
-
-    const dialogEl = document.createElement("div")
-    dialogEl.className = "dialog"
-    dialogEl.id = dialogId
-    dialogEl.setAttribute("x-ref", "dialog")
-    dialogEl.hidden = true
-
-    panelEl.appendChild(actionsEl)
-    panelEl.appendChild(dialogEl)
-
-    menuCtrlEl.appendChild(btnEl)
-    menuCtrlEl.appendChild(panelEl)
-    return menuCtrlEl
-}
-
-/**
- * The menu's action buttons, in their established order. Each one requests
- * its dialog into the panel's own dialog host; the root folder can only gain
- * children, so it offers Add folder alone.
- */
-function _buildMenuActions(folder, repoId, dialogId) {
     const actions = [
         {
             label: "Add folder",
@@ -585,19 +492,18 @@ function _buildMenuActions(folder, repoId, dialogId) {
         )
     }
 
-    return actions.map(({ label, dialog, vals }) => {
-        const actionEl = document.createElement("button")
-        actionEl.type = "button"
-        actionEl.setAttribute(
-            "hx-get",
-            `/htmx/folder/r/${repoId}/dialogs/${dialog}`,
-        )
-        actionEl.setAttribute("hx-target", `#${dialogId}`)
-        actionEl.setAttribute("hx-swap", "innerHTML")
-        actionEl.setAttribute("hx-trigger", "click")
-        actionEl.setAttribute("hx-vals", JSON.stringify(vals))
-        actionEl.textContent = label
-        return actionEl
+    return buildContextMenuCtrl({
+        triggerId: `folderMenuCtrl-${folder.id}`,
+        panelId: `menu-${folder.id}`,
+        dialogId: `menuDialog-${folder.id}`,
+        ariaLabel: `Actions for folder ${folderName}`,
+        entityAttr: Const.attributes.folderId,
+        entityId: folder.id,
+        actions: actions.map(({ label, dialog, vals }) => ({
+            label,
+            url: `/htmx/folder/r/${repoId}/dialogs/${dialog}`,
+            vals,
+        })),
     })
 }
 

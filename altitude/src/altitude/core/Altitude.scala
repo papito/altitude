@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import altitude.core.dao.jdbc.PersonDao
 import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
+import altitude.core.service.AlbumService
 import altitude.core.service.AssetService
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
@@ -133,7 +134,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
    */
   var isInitialized = false
 
-  final private val schemaVersion = 1
+  final private val schemaVersion = 2
 
   final val dataSourceType: String = config.getString(Const.Conf.DB_ENGINE)
   logger.info(s"Datasource type: $dataSourceType")
@@ -180,6 +181,12 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val folder: dao.FolderDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val album: dao.AlbumDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.AlbumDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.AlbumDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
@@ -238,6 +245,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val search: SearchService = SearchService(app)
     val asset: AssetService = AssetService(app)
     val folder: FolderService = FolderService(app)
+    val album: AlbumService = AlbumService(app)
     val stats: StatsService = StatsService(app)
     val person: PersonService = PersonService(app)
     val faceDetection: FaceDetectionService = FaceDetectionService(app)

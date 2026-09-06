@@ -146,6 +146,24 @@ CREATE INDEX folder_01 ON folder (repository_id, parent_id);
 CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_lc);
 CREATE INDEX folder_03 ON folder (is_recycled, parent_id);
 
+CREATE TABLE album (
+  id CHAR(36) PRIMARY KEY,
+  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  name_lc VARCHAR(255) NOT NULL
+) INHERITS (_core);
+
+CREATE UNIQUE INDEX album_01 ON album (repository_id, name_lc);
+
+CREATE TABLE album_asset (
+  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  album_id CHAR(36) NOT NULL REFERENCES album (id) ON DELETE CASCADE,
+  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE
+) INHERITS (_core);
+
+CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
+CREATE INDEX album_asset_02 ON album_asset (asset_id);
+
 CREATE TABLE metadata_parameter (
   repository_id CHAR(36) REFERENCES repository (id),
   asset_id CHAR(36) REFERENCES asset (id) ON DELETE CASCADE,

@@ -12,11 +12,14 @@ export function createAssetActions({
     context,
     reloadNav,
     reloadFolderCounts,
+    reloadAlbumCounts,
 }) {
-    // Every successful mutation refreshes both the nav counts and the folder tree counts
+    // Every successful mutation refreshes the nav counts, the folder tree counts, and the album
+    // counts (recycling drops an asset from its albums)
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()
+        reloadAlbumCounts()
     }
 
     function removeTriageStyling(assetIds) {
@@ -221,10 +224,77 @@ export function createAssetActions({
         }
     }
 
+    function albumName(albumId) {
+        return (
+            document.getElementById(`albumName-${albumId}`)?.textContent ??
+            "album"
+        )
+    }
+
+    /**
+     * Albums only point at assets: adding leaves the assets where they are, so the grid does not
+     * change. Assets already in the album are skipped by the server, hence the warning when the
+     * drop added nothing.
+     */
+    async function addAssetsToAlbum({ albumId, assetIds }) {
+        const payload = { albumId, assetIds }
+
+        try {
+            const response = await http.put(
+                `/api/album/r/${context.getRepoId()}/assets`,
+                payload,
+            )
+            const added = response.data.added
+
+            if (added === 0) {
+                showWarningSnackBar(`Already in album "${albumName(albumId)}"`)
+            } else {
+                showSuccessSnackBar(
+                    `${added > 1 ? `${added} assets` : "Asset"} added to album "${albumName(albumId)}"`,
+                )
+            }
+
+            if (shouldResetSelectedAssets(assetIds)) {
+                Alpine.store(Const.state.selectedAssets).reset()
+            }
+
+            reloadAlbumCounts()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error adding assets to album: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
+    /** Removes the pointers only; the assets leave the displayed album results and nothing else */
+    async function removeAssetsFromAlbum({ albumId, assetIds }) {
+        const payload = { albumId, assetIds }
+
+        try {
+            await http.delete(`/api/album/r/${context.getRepoId()}/assets`, {
+                data: payload,
+            })
+
+            showSuccessSnackBar(
+                `${assetIds.length > 1 ? "Assets" : "Asset"} removed from album "${albumName(albumId)}"`,
+            )
+
+            removeAssetsFromGrid(assetIds)
+            Alpine.store(Const.state.selectedAssets).reset()
+            reloadAlbumCounts()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error removing assets from album: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
     return {
         moveAssets,
         recycleAssets,
         purgeAssets,
         restoreAssets,
+        addAssetsToAlbum,
+        removeAssetsFromAlbum,
     }
 }

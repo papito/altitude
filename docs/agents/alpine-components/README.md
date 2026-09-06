@@ -60,8 +60,8 @@ libraries below are not vendored.
 
 - The modal hosts in `views/includes/html_common.scala.html` follow the [Modal](modal.md) lesson;
   see `../../../plans/done/alpine-modal-migration.md` for the deliberate differences.
-- The folder context menu is a native HTML popover coordinated by core Alpine
-  (`static/js/alpine/components/folder-menu.js`); see the Altitude notes in [Dropdown](dropdown.md)
+- The folder and album context menus are native HTML popovers coordinated by core Alpine
+  (`static/js/alpine/components/context-menu.js`); see the Altitude notes in [Dropdown](dropdown.md)
   and [Popover](headless-popover.md). [Menu](headless-menu.md) remains the reference if it ever
   needs roving arrow-key focus; [Notifications](notifications.md) for a stacked snackbar;
   [Flatpickr](flatpickr.md) for a date filter in search.

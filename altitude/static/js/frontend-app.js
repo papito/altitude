@@ -1,4 +1,5 @@
 import { Const } from "./constants.js"
+import { refreshAlbumCounts } from "./common/album-list.js"
 import { refreshFolderCounts } from "./common/folder-tree.js"
 import { showErrorSnackBar } from "./common/snackbar.js"
 import {
@@ -12,9 +13,9 @@ import { hydrateAppFragments } from "./fragments/index.js"
 import { isDialogOperationRequest } from "./fragments/dialog-operations.js"
 import { isModalOpenRequest } from "./common/modal.js"
 import {
-    handleFolderAfterRequest,
-    isFolderRequest,
-} from "./listeners/htmx-folders.js"
+    handleExplorerAfterRequest,
+    isExplorerRequest,
+} from "./listeners/htmx-explorer.js"
 import {
     isSearchRequest,
     isTrashPurgeRequest,
@@ -38,6 +39,7 @@ export class FrontendApp {
             context,
             reloadNav: this.reloadNav.bind(this),
             reloadFolderCounts: this.reloadFolderCounts.bind(this),
+            reloadAlbumCounts: this.reloadAlbumCounts.bind(this),
         })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
             Alpine,
@@ -98,8 +100,8 @@ export class FrontendApp {
             return
         }
 
-        if (isFolderRequest({ app: this, requestPath })) {
-            handleFolderAfterRequest({ app: this, event })
+        if (isExplorerRequest({ app: this, requestPath })) {
+            handleExplorerAfterRequest({ event })
             return
         }
 
@@ -115,6 +117,7 @@ export class FrontendApp {
             // asset mutation refreshes them so the rule has no exceptions to remember
             this.reloadNav()
             this.reloadFolderCounts()
+            this.reloadAlbumCounts()
             return
         }
 
@@ -165,5 +168,9 @@ export class FrontendApp {
 
     reloadFolderCounts() {
         refreshFolderCounts(this.context.getRepoId())
+    }
+
+    reloadAlbumCounts() {
+        refreshAlbumCounts(this.context.getRepoId())
     }
 }

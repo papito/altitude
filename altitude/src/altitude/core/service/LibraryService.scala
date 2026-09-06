@@ -249,6 +249,9 @@ class LibraryService(val app: Altitude):
         app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
 
         app.service.person.recycleFacesForAssets(assetIds)
+
+        // Albums only point at assets; a recycled asset leaves every album and a restore does not bring it back
+        app.service.album.removeAssetsFromAllAlbums(assetsToRecycle.map(_.persistedId).toSet)
     }
 
   def purgeRecycleBin(): Unit =

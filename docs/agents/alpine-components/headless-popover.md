@@ -46,9 +46,9 @@ Internal to the directive; no `x-data` needed for the basic case.
 
 ## Notes for Altitude
 
-The folder context menu does not use this plugin (`@alpinejs/ui` is not vendored). It is a native
+The folder and album context menus do not use this plugin (`@alpinejs/ui` is not vendored). It is a native
 HTML `popover="auto"` panel opened by a `popovertarget` button, with a small core-Alpine component
-(`static/js/alpine/components/folder-menu.js`) for placement, focus-out and scroll/resize
+(`static/js/alpine/components/context-menu.js`) for placement, focus-out and scroll/resize
 dismissal, and cleanup; the browser provides the toggle, outside-click dismissal, and one-open-at-
 a-time behavior this component's group variant would otherwise supply. The same panel also hosts
 the folder dialogs (`static/js/fragments/inline-dialog.js`): an action's HTMX response replaces the

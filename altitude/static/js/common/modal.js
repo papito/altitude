@@ -21,7 +21,7 @@
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { closeOpenFolderMenu } from "./folder-menu.js"
+import { closeOpenContextMenu } from "./context-menu.js"
 
 export const ModalHost = {
     general: "general",
@@ -97,8 +97,8 @@ export function isModalOpenActive(openId) {
  * relevant one to return to, chosen to survive the page update its operation triggers - or, without
  * one, back to the element that was focused when the open was requested.
  *
- * An open folder menu, whichever state it is in, is closed first, so a modal never appears over
- * one.
+ * An open context menu (folder or album), whichever state it is in, is closed first, so a modal
+ * never appears over one.
  */
 export function openModal({
     host,
@@ -107,7 +107,7 @@ export function openModal({
     selectOnFocus = false,
     returnFocusSelector,
 }) {
-    closeOpenFolderMenu({ reason: "modal opening" })
+    closeOpenContextMenu({ reason: "modal opening" })
 
     const store = modalStore()
     const openId = ++lastOpenId

@@ -1,4 +1,5 @@
 import { Const } from "../constants.js"
+import { setViewedAlbum } from "../common/album-list.js"
 import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 import { runSearch } from "../search-results/search.js"
 import { bindBoxSelection } from "../search-results/box-selection.js"
@@ -19,7 +20,7 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
     app.Alpine.store(Const.state.resultsTotal).set(resultsTotal)
     app.Alpine.store(Const.state.shadowResults).reset()
 
-    syncViewedFolderScope(fragmentEl)
+    syncViewedScope(fragmentEl)
 
     // Also discards the previous grid's controller, and any box it was still drawing
     bindBoxSelection({ assetsElement, contentElement })
@@ -38,21 +39,23 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
 }
 
 /**
- * The folder tree highlights the folder scope of the results now displayed. The fragment carries the
- * scope the server resolved, which is what is on screen - not what the search store now asks for, so
- * a superseded or failed navigation never moves the highlight. Triage and trash results have no
- * folder scope, whatever folder is still in the search parameters.
+ * The folder tree highlights the folder scope of the results now displayed, and the album list the
+ * album. The fragment carries the scope the server resolved, which is what is on screen - not what
+ * the search store now asks for, so a superseded or failed navigation never moves the highlight.
+ * Triage and trash results have no folder or album scope, whatever is still in the search parameters.
  */
-function syncViewedFolderScope(fragmentEl) {
-    const { resultsRepoId, resultsView, resultsFolderId } = fragmentEl.dataset
-    const hasFolderScope =
+function syncViewedScope(fragmentEl) {
+    const { resultsRepoId, resultsView, resultsFolderId, resultsAlbumId } =
+        fragmentEl.dataset
+    const hasScope =
         resultsView !== Const.views.triage &&
         resultsView !== Const.views.trashbin
 
     setViewedFolderScope({
         repoId: resultsRepoId,
-        folderId: hasFolderScope ? resultsFolderId : null,
+        folderId: hasScope ? resultsFolderId : null,
     })
+    setViewedAlbum(hasScope ? resultsAlbumId : null)
 }
 
 export function handleViewSettingChanged({ event, context }) {

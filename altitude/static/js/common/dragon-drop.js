@@ -54,3 +54,36 @@ export function setFixedPositionWhileDragging(event) {
 
     target.parentNode.insertBefore(placeholder, target)
 }
+
+/**
+ * The drop-target highlighting every dropzone shares: `drop-active` on the zone while a
+ * compatible drag is in progress, `drop-target` on the zone and `can-drop` on the dragged element
+ * while it hovers. `ondrop` runs after the classes are cleared.
+ */
+export function dropzoneListeners(ondrop) {
+    return {
+        ondropactivate: (event) => {
+            event.target.classList.add("drop-active")
+        },
+
+        ondragenter: (event) => {
+            event.target.classList.add("drop-target")
+            event.relatedTarget.classList.add("can-drop")
+        },
+
+        ondragleave: (event) => {
+            event.target.classList.remove("drop-target")
+            event.relatedTarget.classList.remove("can-drop")
+        },
+
+        ondrop: (event) => {
+            event.target.classList.remove("drop-active", "drop-target")
+            event.relatedTarget.classList.remove("can-drop")
+            ondrop(event)
+        },
+
+        ondropdeactivate: (event) => {
+            event.target.classList.remove("drop-active", "drop-target")
+        },
+    }
+}
