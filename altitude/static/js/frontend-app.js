@@ -8,7 +8,7 @@ import {
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
-import { isModalOperationRequest } from "./fragments/modal.js"
+import { isDialogOperationRequest } from "./fragments/dialog-operations.js"
 import { isModalOpenRequest } from "./common/modal.js"
 import {
     handleFolderAfterRequest,
@@ -84,8 +84,8 @@ export class FrontendApp {
         const requestPath = getRequestPath(event)
         const status = getResponseStatus(event)
 
-        // Modal opens and the operations submitted from modals are settled by `listeners/modal.js`
-        if (isModalOpenRequest(event) || isModalOperationRequest(event)) {
+        // Modal opens and the operations submitted from dialogs are settled by `listeners/dialogs.js`
+        if (isModalOpenRequest(event) || isDialogOperationRequest(event)) {
             return
         }
 

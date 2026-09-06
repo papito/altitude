@@ -7,7 +7,9 @@
  * `:popover-open` and changed only through the popover API, never through inline styles.
  *
  * Callers outside the component that must close a menu (the document-level Escape handler in
- * `global.js`, the folder model when an ancestor collapses) go through `closeOpenFolderMenu()`.
+ * `global.js`, the folder model when an ancestor collapses) go through `closeOpenFolderMenu()`;
+ * an inline dialog that completed its operation (`fragments/inline-dialog.js`) closes its own
+ * panel through `closeFolderMenu()`.
  * Because at most one auto popover of this kind is open at a time, "the open menu" is a single
  * panel.
  */
@@ -17,7 +19,7 @@ const OPEN_MENU_SELECTOR = ".folder-menu:popover-open"
 
 /**
  * The meatball control that opens `panel`. Dialogs return focus to this control by the same ID
- * convention (`data-app-modal-return-focus="#folderMenuCtrl-<id>"`).
+ * convention (`data-app-dialog-return-focus="#folderMenuCtrl-<id>"`).
  */
 export function getFolderMenuTrigger(panel) {
     const folderId = panel.getAttribute(Const.attributes.folderId)
@@ -26,10 +28,14 @@ export function getFolderMenuTrigger(panel) {
 }
 
 /**
- * Hides `panel` if it is open, optionally moving focus back to its trigger. Returns whether a
- * menu was closed. `reason` is logged so a surprising dismissal can be traced.
+ * Hides `panel` if it is open, optionally moving focus to `focusTarget`, by default the panel's
+ * trigger (a completed dialog operation names the control that survives it instead). Returns
+ * whether a menu was closed. `reason` is logged so a surprising dismissal can be traced.
  */
-export function closeFolderMenu(panel, { reason, returnFocus = false }) {
+export function closeFolderMenu(
+    panel,
+    { reason, returnFocus = false, focusTarget = null },
+) {
     if (!panel?.matches(":popover-open")) {
         return false
     }
@@ -40,7 +46,8 @@ export function closeFolderMenu(panel, { reason, returnFocus = false }) {
     panel.hidePopover()
 
     if (returnFocus) {
-        getFolderMenuTrigger(panel)?.focus()
+        const target = focusTarget ?? getFolderMenuTrigger(panel)
+        target?.focus()
     }
 
     return true

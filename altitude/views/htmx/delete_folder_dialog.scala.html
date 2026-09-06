@@ -1,0 +1,25 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Folder
+@import altitude.core.Api
+
+@(folder: Folder, title: String)
+
+@* The dialog shows in the folder's own menu, which exists while it is open, but focus returns to
+   the parent's menu control, which is what survives the deletion *@
+<div id="deleteFolder"
+     data-app-fragment="inline-dialog"
+     data-app-dialog-return-focus="#folderMenuCtrl-@{folder.parentId}"
+     data-app-dialog-success-event="folderDeleted"
+     data-app-dialog-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'>
+
+    <h3 class="dialog-title">@{title}</h3>
+
+    <button type="button"
+            class="action-button error"
+            hx-swap="none"
+            hx-delete="/htmx/folder/r/@{RequestContext.getRepository.persistedId}"
+            hx-trigger="click"
+            hx-vals='{"@{Api.Field.ID}": "@{folder.persistedId}"}'>
+        Delete "<strong>@{folder.name}</strong>" and move assets into Recycle Bin
+    </button>
+</div>

@@ -6,10 +6,10 @@ import {
 } from "../common/htmx-events.js"
 
 /**
- * Reports a failed folder HTMX request. The folder requests still issued through HTMX are the
- * folders tab load and the dialog opens from a folder menu; the latter are settled by the modal
- * listeners before this runs, so in practice this covers the tab. Folder expansion and the context
- * menus need no request at all: the tree renderer (`common/folder-tree.js`) builds both.
+ * Reports a failed folder HTMX request: the folders tab load, or a folder menu action loading its
+ * inline dialog into the menu panel (the operations the dialogs submit are settled by the dialog
+ * listeners before this runs). Folder expansion and the context menus need no request at all:
+ * the tree renderer (`common/folder-tree.js`) builds both.
  */
 export function handleFolderAfterRequest({ event }) {
     if (isRequestSuccessful(event)) {

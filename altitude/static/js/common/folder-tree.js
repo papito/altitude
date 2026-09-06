@@ -11,9 +11,11 @@
  * to work without modification.
  *
  * Each folder's context menu is built here too, as a native `popover="auto"`
- * panel next to its ⋯ trigger, so opening a menu needs no request; the actions
- * themselves load their existing dialogs through HTMX. The `folderMenu` Alpine
- * component (`alpine/components/folder-menu.js`) places and dismisses the panel.
+ * panel next to its ⋯ trigger, so opening a menu needs no request. The panel
+ * holds its actions and an empty dialog host: an action loads its dialog into
+ * the host through HTMX, and the panel then shows the dialog in place of the
+ * actions. The `folderMenu` Alpine component (`alpine/components/folder-menu.js`)
+ * places the panel, switches it between the two, and dismisses it.
  *
  * Indentation is not structural: every non-root `.folder` carries a `--depth`
  * CSS custom property, and its `.controls` row holds a `.trace` cell (between
@@ -270,10 +272,13 @@ function _buildFolderNameEl(folder, repoId, label) {
 }
 
 /**
- * Build the ⋯ menu cell: the trigger button and the native popover panel of
- * actions it opens. Both keep their stable IDs (`folderMenuCtrl-<id>`,
- * `menu-<id>`): tree rebuilds restore focus by ID, and the folder dialogs
- * declare the trigger as their return-focus control.
+ * Build the ⋯ menu cell: the trigger button and the native popover panel it
+ * opens, holding the actions and the dialog host. All keep stable IDs
+ * (`folderMenuCtrl-<id>`, `menu-<id>`, `menuDialog-<id>`): tree rebuilds
+ * restore focus by ID, the actions target the dialog host, and the folder
+ * dialogs declare the trigger as their return-focus control. The panel is
+ * focusable (`tabindex="-1"`) so a click on non-interactive dialog content
+ * keeps focus inside it, and so a dialog can rest focus on the panel itself.
  *
  * The cell is the `folderMenu` component's root, so the panel is a DOM child
  * of the cell and never of another folder's panel; see the component for why
@@ -286,6 +291,7 @@ function _buildMenuCtrl(folder, repoId, folderName) {
     menuCtrlEl.setAttribute("x-on:focusout", "handleFocusOut")
 
     const panelId = `menu-${folder.id}`
+    const dialogId = `menuDialog-${folder.id}`
 
     const btnEl = document.createElement("button")
     btnEl.type = "button"
@@ -300,15 +306,30 @@ function _buildMenuCtrl(folder, repoId, folderName) {
     panelEl.className = "folder-menu"
     panelEl.id = panelId
     panelEl.setAttribute("popover", "auto")
+    panelEl.setAttribute("tabindex", "-1")
     panelEl.setAttribute("alt-folder-id", folder.id)
     panelEl.setAttribute("x-ref", "panel")
     panelEl.setAttribute("x-on:beforetoggle", "handleBeforeToggle")
     panelEl.setAttribute("x-on:toggle", "handleToggle")
-    panelEl.setAttribute("x-on:click", "handleActionClick")
+    panelEl.setAttribute("x-on:htmx:before:request", "handleBeforeRequest")
+    panelEl.setAttribute("x-on:htmx:after:request", "handleAfterRequest")
+    panelEl.setAttribute("x-on:htmx:after:settle", "handleAfterSettle")
 
-    _buildMenuActions(folder, repoId).forEach((actionEl) => {
-        panelEl.appendChild(actionEl)
+    const actionsEl = document.createElement("div")
+    actionsEl.className = "actions"
+    actionsEl.setAttribute("x-ref", "actions")
+    _buildMenuActions(folder, repoId, dialogId).forEach((actionEl) => {
+        actionsEl.appendChild(actionEl)
     })
+
+    const dialogEl = document.createElement("div")
+    dialogEl.className = "dialog"
+    dialogEl.id = dialogId
+    dialogEl.setAttribute("x-ref", "dialog")
+    dialogEl.hidden = true
+
+    panelEl.appendChild(actionsEl)
+    panelEl.appendChild(dialogEl)
 
     menuCtrlEl.appendChild(btnEl)
     menuCtrlEl.appendChild(panelEl)
@@ -317,14 +338,14 @@ function _buildMenuCtrl(folder, repoId, folderName) {
 
 /**
  * The menu's action buttons, in their established order. Each one requests
- * its existing dialog into the general modal host; the root folder can only
- * gain children, so it offers Add folder alone.
+ * its dialog into the panel's own dialog host; the root folder can only gain
+ * children, so it offers Add folder alone.
  */
-function _buildMenuActions(folder, repoId) {
+function _buildMenuActions(folder, repoId, dialogId) {
     const actions = [
         {
             label: "Add folder",
-            modal: "add-folder",
+            dialog: "add-folder",
             vals: { parentId: folder.id },
         },
     ]
@@ -333,25 +354,25 @@ function _buildMenuActions(folder, repoId) {
         actions.push(
             {
                 label: "Rename",
-                modal: "rename-folder",
+                dialog: "rename-folder",
                 vals: { id: folder.id },
             },
             {
                 label: "Delete",
-                modal: "delete-folder",
+                dialog: "delete-folder",
                 vals: { id: folder.id },
             },
         )
     }
 
-    return actions.map(({ label, modal, vals }) => {
+    return actions.map(({ label, dialog, vals }) => {
         const actionEl = document.createElement("button")
         actionEl.type = "button"
         actionEl.setAttribute(
             "hx-get",
-            `/htmx/folder/r/${repoId}/modals/${modal}`,
+            `/htmx/folder/r/${repoId}/dialogs/${dialog}`,
         )
-        actionEl.setAttribute("hx-target", "#modalContent")
+        actionEl.setAttribute("hx-target", `#${dialogId}`)
         actionEl.setAttribute("hx-swap", "innerHTML")
         actionEl.setAttribute("hx-trigger", "click")
         actionEl.setAttribute("hx-vals", JSON.stringify(vals))

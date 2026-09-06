@@ -15,12 +15,12 @@ Feature logic is split into focused ES module folders instead of accumulating in
 
 - `static/js/stores/` — Alpine store initialization (`app-stores.js`)
 - `static/js/alpine/components/` — Alpine components (`selectable.js`, `folder-menu.js`), registered from its `index.js` before Alpine starts
-- `static/js/fragments/` — declarative HTMX fragment hydration (`data-app-fragment="..."`)
+- `static/js/fragments/` — declarative HTMX fragment hydration (`data-app-fragment="..."`), including the operation lifecycle shared by modal and inline dialogs (`dialog-operations.js`)
 - `static/js/listeners/` — `document.body` custom-event and HTMX lifecycle wiring
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
 - `static/js/search-results/` — shadow-results/detail navigation and image-detail coordination
 - `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
-- `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree`, including each folder's native popover context menu, so no menu markup comes from the server
+- `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree`, including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel
 - `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)
 
 `frontend-app.js` should stay the composition root: it initializes context stores, creates the

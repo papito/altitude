@@ -36,12 +36,12 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
-| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, image-detail, and inline editor fragments |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, HTMX/search lifecycle wiring, and the `document`-level modal request wiring |
+| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, inline-dialog, image-detail, and inline editor fragments, plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, HTMX/search lifecycle wiring, and the `document`-level dialog request wiring (`dialogs.js`) |
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes an open folder menu from outside its component) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes a folder menu from outside its component) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements |
 | `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `folder-menu.js` (native popover folder menus); `index.js` registers them |
 
@@ -109,7 +109,7 @@ Two-layer event bus, both on `document.body`:
 - `htmx:after:request` fires when the response has arrived but **before** it is swapped in.
   Cancelling it (`preventDefault()`) drops the swap. Once the issuing element has left the DOM, htmx
   dispatches lifecycle events on `document` instead, so listeners that must see such late responses
-  (modal operations) go on `document`, not `document.body`.
+  (dialog operations) go on `document`, not `document.body`.
   `htmx:after:settle` fires on the swap target once per swap with `detail.newContent`, the list of
   inserted nodes; `frontend-app.js` hydrates `data-app-fragment` roots from there.
 - Attribute inheritance is explicit: every element that issues a request declares its own
@@ -146,7 +146,7 @@ Folder expansion and the folder context menus involve no request at all: the tre
 them, so `js/listeners/htmx-folders.js` only reports failed folder requests (the folders tab load)
 from `htmx:after:request`. Shared HTMX/search listener wiring (`htmx:after:request`,
 `htmx:after:settle`) lives in `js/listeners/htmx-search.js` and delegates back into
-`frontend-app.js`; the only `htmx:before:request` listener is the modal one on `document`.
+`frontend-app.js`; the only `htmx:before:request` listener is the dialog one on `document`.
 People-specific HTMX follow-up for discard actions and the inline person-name editor lives in
 `js/listeners/htmx-people-inline-editor.js`.
 
@@ -181,9 +181,10 @@ without those modules needing to know anything about the DOM structure.
 `x-data="folderMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
 `alpine/components/folder-menu.js`) wraps each folder's ⋯ trigger and its native `popover="auto"`
 panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
-outside clicks); the component only places the panel, closes it when focus leaves, when an action
-is chosen, or when the page scrolls or the explorer resizes, and cleans up. Nothing binds `x-show`
-or an `open` flag to it. See **Folder context menus** below.
+outside clicks); the component only places the panel, switches it between its actions and the
+inline dialog an action loads, closes it when focus leaves or when the page scrolls or the explorer
+resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
+menus** below.
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
@@ -195,7 +196,7 @@ dialogs and into `#imageDetailModalContent` for asset detail. `js/common/modal.j
 of both: which host is active (one at a time — a new open replaces the active modal), the title,
 initial focus (the fragment's autofocus selector, else the close control, never a destructive action),
 focus restoration on close (the element focused when the open was requested, else the fragment's
-`data-app-modal-return-focus` selector), and identity: every displayed open has an `openId`
+`data-app-dialog-return-focus` selector), and identity: every displayed open has an `openId`
 (`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
 swaps once the user dismissed or replaced it. Visibility is bound through the Alpine `modal` store
@@ -205,31 +206,35 @@ cancels delayed activation when a trap is released or removed). Escape (`global.
 active modal and any open folder menu and is consumed by them, so a background inline edit
 survives; general dialogs ignore backdrop clicks, asset detail closes on them. General-dialog width is CSS only
 (`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
-image with `setAssetDetailSize()`. General-dialog placement defaults to the host's CSS (box centered
-horizontally, `padding-top` from the top). A fragment may instead declare `data-app-modal-anchor-x`
-and `data-app-modal-anchor-y` selectors: `openModal({anchors})` then marks `#modalContainer`
-`.anchored` before the host is revealed (its CSS hides the box until placed, so it is never painted
-at the default position), and once the host is displayed centers the box horizontally on the first
-element and vertically on the second, clamped to the viewport by `--modal-viewport-gap` (a box taller
-than the viewport starts at the gap and scrolls inside the container), writing inline `top`/`left`
-on `.modal-box` and adding `.placed`. Placement is re-run on window resize and whenever the fragment
-is re-hydrated (a validation replacement changes the box height); an anchor that is missing or not
-displayed falls back to the default placement. Any open or close resets placement.
+image with `setAssetDetailSize()`. General-dialog placement is the host's CSS (box centered
+horizontally, `padding-top` from the top). Opening any modal closes an open folder menu first, so a
+modal never appears over one.
 
-General HTMX modal fragments opt in with `data-app-fragment="modal"` plus `data-app-modal-*`
-attributes on the fragment root (title, autofocus selector / select-on-focus, return-focus selector - the control focus goes to on close, chosen to survive the page update the dialog triggers -
-anchor-x / anchor-y placement selectors, success event + detail, `close-on-success`, defaulting to true). `js/fragments/modal.js` opens the
-host on hydration and tracks each operation the fragment submits from `htmx:before:request`
-(capturing the open it belongs to and its success metadata while the fragment is still in the DOM;
-a repeated submission while one is pending is dropped). When the response arrives it dispatches the
-success event exactly once and lets normal page updates through even if the dialog was closed or
+A **dialog** is a server-rendered form that completes one user action, hydrated from its
+`data-app-fragment` kind; a **modal dialog** is one shown in the modal host. Attributes that describe
+the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
+selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
+survive the page update the dialog triggers), success event + detail (+ `success-detail-target-attr-*`
+read from the issuing element), and `close-on-success`, defaulting to true. Attributes that describe
+the modal host are `data-app-modal-*`: title and kind. The three folder dialogs are **inline
+dialogs** (`data-app-fragment="inline-dialog"`, see **Folder context menus**); the people and
+view-settings dialogs are modal dialogs.
+
+General HTMX modal fragments opt in with `data-app-fragment="modal"`; `js/fragments/modal.js` opens the
+host on hydration and registers the modal presentation with `js/fragments/dialog-operations.js`, which
+tracks each operation any dialog submits from `htmx:before:request` (capturing a handle to the dialog
+it belongs to - for a modal, its open - and its success metadata while the fragment is still in the
+DOM; a repeated submission while one is pending is dropped). When the response arrives it dispatches
+the success event exactly once and lets normal page updates through even if the dialog was closed or
 replaced; only the still-active initiating dialog is closed or gets its form replaced. Validation
-responses are recognised by their `HX-Retarget: this` / `HX-Reswap: outerHTML` headers
-(`BaseController.modalFormValidationResponse`): they replace the active form in place (values and
-errors kept, no success event) or, once the dialog is gone, are reported through the snackbar.
+responses are recognised by their `HX-Retarget: this` / `HX-Reswap: outerHTML settle:0` headers
+(`BaseController.dialogFormValidationResponse`; the immediate settle keeps htmx's settle step from
+copying the old field's empty value attribute over the submitted value): they replace the active
+form in place (values and errors kept, no success event) or, once the dialog is gone, are reported
+through the snackbar.
 `htmx:finally:request` clears operations left pending when a network failure skips
 `htmx:after:request`, reports the failure through the snackbar, and allows another submission.
-`js/listeners/modal.js` registers this wiring on `document`, because htmx dispatches lifecycle events
+`js/listeners/dialogs.js` registers this wiring on `document`, because htmx dispatches lifecycle events
 on the document when the issuing element has already left the DOM.
 
 Asset detail: `js/fragments/image-detail.js` opens the host with its spinner immediately and hands
@@ -240,29 +245,49 @@ The navigation origin is set to the requested asset before its image loads, so p
 already uses the newly opened asset while the spinner is showing.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
 
-**Folder context menus** — Each folder's ⋯ button is a real `button` with `popovertarget`
-pointing at a `popover="auto"` panel of action buttons (Add folder; Rename and Delete for non-root
-folders), all built with the tree by `js/common/folder-tree.js`, so opening a menu sends no request.
-Each action is its own HTMX request into `#modalContent` for the existing dialog; the three dialogs
-anchor themselves to `#explorer` (horizontally) and the row's `#folderMenuCtrl-{id}` (vertically),
-Delete using the folder's own control for placement and its parent's for return focus, which is what
-survives the deletion. The browser owns
-visibility: it toggles the panel from its trigger, closes it on any click outside, and keeps one
-open at a time because a folder's panel is never a DOM descendant of another folder's panel. The
-`folderMenu` component places the panel in the top layer against the trigger (below, flipping
-above when needed, clamped to the viewport, height-capped with internal scrolling when neither
-side fits), closes it when focus leaves, when an action is chosen (after htmx has handled the
-click; the modal owner then restores focus to `#folderMenuCtrl-{id}`), and on scroll, window
-resize, or explorer resize; it never tracks a moving trigger. `js/common/folder-menu.js` closes a
-menu from outside the component: Escape in `global.js` (focus returns to the trigger unless a modal
-was closed too) and the folder model when an ancestor collapses. Removing the tree removes the
-open panel and, through the component's `destroy`, its listeners. Styling lives in
-`views/htmx/folders.scala.html`; CSS sets `display` only under `:popover-open`, because the hidden
-state relies on the browser's `display: none`. During `beforetoggle`, the component briefly sets
-inline `display: grid` to measure and position the hidden panel, then clears it before opening;
-keep the CSS `margin: 0` and `inset: auto` resets so those viewport coordinates apply correctly.
-`.menu-ctrl` is excluded from folder dragging
+**Folder context menus** — Each folder's ⋯ button (its **trigger**) is a real `button` with
+`popovertarget` pointing at a `popover="auto"` panel (`#menu-{id}`), all built with the tree by
+`js/common/folder-tree.js`, so opening a menu sends no request. The panel shows either its
+**actions** (`.actions`: Add folder; Rename and Delete for non-root folders) or one **inline
+dialog** in its dialog host (`.dialog`, `#menuDialog-{id}`). Each action is an HTMX request for its
+dialog into that host; the response replaces the actions (they stay in the DOM, hidden, so their
+htmx wiring survives) until the panel closes, which discards the dialog and shows the actions again.
+Only the response to the request the open panel is waiting for may show: the component records the
+panel's own open request from `htmx:before:request` and cancels, in `htmx:after:request`, any
+response for the host that is not that request or arrives while the panel is closed; failed loads
+are reported by `js/listeners/htmx-folders.js`. After every swap into the host (the load, or a
+validation replacement of the form) the component re-places the panel for its new height. The
+browser owns visibility: it toggles the panel from its trigger, closes it on any click outside, and
+keeps one open at a time because a folder's panel is never a DOM descendant of another folder's
+panel. The `folderMenu` component places the panel in the top layer against the trigger (below,
+flipping above when needed, clamped to the viewport, height-capped with internal scrolling when
+neither side fits), closes it when focus leaves and on scroll, window resize, or explorer resize;
+it never tracks a moving trigger. The panel carries `tabindex="-1"`, so a click on a dialog's
+heading, label, or padding moves focus to the panel rather than out of it; a validation swap that
+removes the focused field (`htmx-swapping` on the form) is not focus leaving either.
+`js/common/folder-menu.js` closes a menu from outside the component: Escape in `global.js` (focus
+returns to the trigger unless a modal was closed too), the folder model when an ancestor collapses,
+`openModal`, and a completed inline-dialog operation (`closeFolderMenu` with the declared return
+control). Removing the tree removes the open panel and, through the component's `destroy`, its
+listeners. Styling lives in `views/htmx/folders.scala.html`; CSS sets `display` only under
+`:popover-open`, because the hidden state relies on the browser's `display: none`. During
+`beforetoggle`, the component briefly sets inline `display: grid` to measure and position the
+hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
+those viewport coordinates apply correctly. `.menu-ctrl` is excluded from folder dragging
 (`ignoreFrom` in `js/dragdrop/folders.js`).
+
+**Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` are
+`data-app-fragment="inline-dialog"` fragments: the heading (`.dialog-title`, the modal title's type
+treatment) sits inside the fragment root so a validation replacement carries it, the name field has
+an explicit `size` (the panel stays `max-content` wide), and Delete's root is a wrapper around the
+heading and the confirm button. Add and Rename keep `hx-target="this"`, `hx-swap="none"`, and
+`hx-json-enc`. `js/fragments/inline-dialog.js` places initial focus (the declared selector with
+optional select, else the panel itself, so a held Enter from the menu cannot fire Delete; one Tab
+reaches the button) and registers the inline presentation with `dialog-operations.js`: an
+operation's dialog is active while that fragment is still in an open panel, and closing it closes
+the panel with focus on the declared return control (the folder's trigger, or the parent's after a
+deletion). Dismissal follows the menu's rules with no confirmation; Escape returns focus to the
+trigger.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
@@ -300,11 +325,13 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes |
 | `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
+| `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
+| `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a folder menu panel |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
 | `static/js/alpine/components/folder-menu.js` | Alpine component coordinating a folder's native popover menu |
 | `static/js/common/folder-tree.js` | renders the folder tree and each folder's menu from the JSON tree endpoint |
-| `static/js/common/folder-menu.js` | closes an open folder menu from outside its component (Escape, ancestor collapse) |
+| `static/js/common/folder-menu.js` | closes a folder menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
 | `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |

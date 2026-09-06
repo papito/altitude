@@ -9,7 +9,7 @@ import altitude.core.models.Folder
 
 @DoNotDiscover class FolderActionControllerTests extends ControllerTestCore {
 
-  test("Add folder modal renders without a width parameter") {
+  test("Add folder dialog renders") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -17,7 +17,7 @@ import altitude.core.models.Folder
     withServer(App) {
       host =>
         val response = requests.get(
-          s"$host/htmx/folder/r/$repoId/modals/add-folder",
+          s"$host/htmx/folder/r/$repoId/dialogs/add-folder",
           params = Map("parentId" -> testContext.repository.rootFolderId),
           cookies = testContext.cookies,
           check = false)
@@ -27,7 +27,7 @@ import altitude.core.models.Folder
     }
   }
 
-  test("Rename folder modal renders without a width parameter") {
+  test("Rename folder dialog renders") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -37,7 +37,7 @@ import altitude.core.models.Folder
         val folder: Folder = testApp.service.folder.add("to-rename")
 
         val response = requests.get(
-          s"$host/htmx/folder/r/$repoId/modals/rename-folder",
+          s"$host/htmx/folder/r/$repoId/dialogs/rename-folder",
           params = Map("id" -> folder.persistedId),
           cookies = testContext.cookies,
           check = false)
@@ -48,7 +48,7 @@ import altitude.core.models.Folder
     }
   }
 
-  test("Delete folder modal renders without a width parameter") {
+  test("Delete folder dialog renders") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -58,7 +58,7 @@ import altitude.core.models.Folder
         val folder: Folder = testApp.service.folder.add("to-delete")
 
         val response = requests.get(
-          s"$host/htmx/folder/r/$repoId/modals/delete-folder",
+          s"$host/htmx/folder/r/$repoId/dialogs/delete-folder",
           params = Map("id" -> folder.persistedId),
           cookies = testContext.cookies,
           check = false)
@@ -69,7 +69,7 @@ import altitude.core.models.Folder
     }
   }
 
-  test("Add folder validation error replaces the modal form in place") {
+  test("Add folder validation error replaces the dialog form in place") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -90,13 +90,13 @@ import altitude.core.models.Folder
 
         response.statusCode shouldBe 200
         response.headers("hx-retarget") shouldBe Seq("this")
-        response.headers("hx-reswap") shouldBe Seq("outerHTML")
+        response.headers("hx-reswap") shouldBe Seq("outerHTML settle:0")
         response.text() should include("""id="addFolder"""")
         response.text() should include("""class="error"""")
     }
   }
 
-  test("Rename folder validation error replaces the modal form in place") {
+  test("Rename folder validation error replaces the dialog form in place") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -118,7 +118,7 @@ import altitude.core.models.Folder
 
         response.statusCode shouldBe 200
         response.headers("hx-retarget") shouldBe Seq("this")
-        response.headers("hx-reswap") shouldBe Seq("outerHTML")
+        response.headers("hx-reswap") shouldBe Seq("outerHTML settle:0")
         response.text() should include("""id="renameFolder"""")
         response.text() should include("""class="error"""")
     }

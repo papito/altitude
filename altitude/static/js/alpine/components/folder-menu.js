@@ -3,15 +3,21 @@
  *
  * The component root is the `.menu-ctrl` cell built by `common/folder-tree.js`: it holds the
  * meatball trigger (`x-ref="trigger"`, opening the panel with `popovertarget`) and the
- * `popover="auto"` panel of action buttons (`x-ref="panel"`). Keeping the root that small means a
- * child folder's menu is never a DOM descendant of its ancestor's panel, so the browser treats the
- * menus as siblings: opening one closes any other, exactly as required.
+ * `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
+ * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
+ * siblings: opening one closes any other, exactly as required.
+ *
+ * The panel has two states. It shows its actions (`x-ref="actions"`) until one of them loads its
+ * inline dialog into the dialog host (`x-ref="dialog"`); the dialog then shows in place of the
+ * actions until the panel closes, which discards the dialog and shows the actions again. The
+ * actions stay in the DOM throughout, so their htmx wiring is never lost.
  *
  * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
  * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component
- * adds only what native popovers lack: placement against the trigger, dismissal when keyboard
- * focus leaves, dismissal when an action is chosen, dismissal on scroll or resize, and cleanup.
- * Escape is handled once for the whole document in `global.js`.
+ * adds only what native popovers lack: placement against the trigger (again when a dialog changes
+ * the panel's height), the switch between actions and dialog, dismissal when keyboard focus
+ * leaves, dismissal on scroll or resize, and cleanup. Escape is handled once for the whole
+ * document in `global.js`.
  */
 import { Const } from "../../constants.js"
 import { closeFolderMenu } from "../../common/folder-menu.js"
@@ -21,11 +27,17 @@ import { closeFolderMenu } from "../../common/folder-menu.js"
 const VIEWPORT_GAP = 8
 
 export function folderMenu() {
+    // The request loading a dialog into this panel, from `htmx:before:request` until its response
+    // is handled or the panel closes. Closure state rather than component data: an htmx request
+    // context has no reactive consumers.
+    let dialogRequest = null
+
     return {
         // Removes the listeners and observer that exist only while the menu is open
         detachOpenListeners: null,
 
         destroy() {
+            dialogRequest = null
             this.detachOpenListeners?.()
         },
 
@@ -58,15 +70,28 @@ export function folderMenu() {
                 this.attachOpenListeners()
             } else {
                 this.detachOpenListeners?.()
+                dialogRequest = null
+                this.showActions()
             }
         },
 
         /**
          * Tab or Shift+Tab leaving the trigger and its panel closes the menu. Focus is left where
-         * it went; a menu must never pull it back from the control the user moved to.
+         * it went; a menu must never pull it back from the control the user moved to. A click on
+         * non-interactive dialog content (heading, label, padding) moves focus to the panel
+         * itself, which is inside the root, so it keeps the menu open.
+         *
+         * A validation response replaces the dialog's form while its field has focus: htmx marks
+         * the form `htmx-swapping`, removes it (the browser reports the field losing focus with
+         * nowhere to go), and focuses the field's copy in the same task. That is not focus
+         * leaving, so it keeps the menu open too.
          */
         handleFocusOut(event) {
-            if (!this.isOpen() || this.$root.contains(event.relatedTarget)) {
+            if (
+                !this.isOpen() ||
+                this.$root.contains(event.relatedTarget) ||
+                event.target.closest(".htmx-swapping")
+            ) {
                 return
             }
 
@@ -74,37 +99,82 @@ export function folderMenu() {
         },
 
         /**
-         * Choosing an action closes the menu so it cannot remain above the dialog it opens. This
-         * runs as the click bubbles up from the action button, after htmx has already handled it
-         * there, and hiding the panel leaves the button in the DOM, so the dialog request is
-         * unaffected. The modal owner restores focus when the dialog closes; until then focus
-         * rests on the trigger rather than on a hidden button. Clicks on the panel's own padding
-         * are not actions and keep the menu open.
+         * A request targeting the dialog host is an action loading its dialog: remember it as
+         * the one whose response may show. Requests submitted from the dialog itself target the
+         * dialog, not the host, and are the dialog operation tracker's concern.
          */
-        handleActionClick(event) {
-            if (!event.target.closest("button")) {
-                return
-            }
+        handleBeforeRequest(event) {
+            const ctx = event.detail.ctx
 
-            this.close("action chosen", { returnFocus: true })
+            if (ctx.target === this.$refs.dialog) {
+                dialogRequest = ctx
+            }
         },
 
         /**
-         * Places the panel against its trigger, before the browser shows it.
+         * Runs before htmx swaps a response into the dialog host. Only the response to the
+         * request the open panel is waiting for may show; one for a panel that has closed since
+         * (and possibly reopened) is dropped, so a late dialog never appears over the actions. A
+         * failed load is reported by the folder request listener.
+         */
+        handleAfterRequest(event) {
+            const ctx = event.detail.ctx
+
+            if (ctx.target !== this.$refs.dialog) {
+                return
+            }
+
+            if (!this.isOpen() || ctx !== dialogRequest) {
+                console.debug(
+                    `Dropping dialog response for closed or reopened folder menu ${this.folderId}`,
+                )
+                event.preventDefault()
+                return
+            }
+
+            dialogRequest = null
+        },
+
+        /**
+         * A dialog has been swapped into the host (loaded, or replaced by its validation copy):
+         * show it instead of the actions and place the panel again for its new height. The
+         * fragment hydrator that runs next, from the body-level settle listener, gives the dialog
+         * focus.
+         */
+        handleAfterSettle(event) {
+            if (!this.$refs.dialog.contains(event.target)) {
+                return
+            }
+
+            this.$refs.actions.hidden = true
+            this.$refs.dialog.hidden = false
+            this.place()
+        },
+
+        /** Back to the actions state, discarding any dialog the host holds. */
+        showActions() {
+            this.$refs.dialog.replaceChildren()
+            this.$refs.dialog.hidden = true
+            this.$refs.actions.hidden = false
+        },
+
+        /**
+         * Places the panel against its trigger, before the browser shows it or after its content
+         * changed while open.
          *
-         * The panel is hidden at that point, so it is given its open-state display just long
+         * Before showing, the panel is hidden, so it is given its open-state display just long
          * enough to measure: its size depends only on its own styles, which are the same in and
          * out of the top layer. Once shown, the panel is a fixed-position element in the top
          * layer, whose containing block is the viewport whatever its ancestors do, so viewport
          * coordinates from `getBoundingClientRect()` apply directly; the explorer's scrolling,
          * clipping, and drag transforms cannot affect it. Any menu closes when the page scrolls
-         * or resizes, so the position is computed once per open and never tracked.
+         * or resizes, so the position is never tracked.
          *
          * Vertical placement: below the trigger by default; above it when there is no room below;
-         * when it fits on neither side, on the roomier side with its height capped so the actions
-         * scroll inside the panel. Horizontal placement: aligned with the trigger's left edge,
+         * when it fits on neither side, on the roomier side with its height capped so the content
+         * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge,
          * shrunk to the viewport width if needed, then shifted left as far as it takes to stay
-         * inside the viewport, so every action stays reachable in narrow windows.
+         * inside the viewport, so every control stays reachable in narrow windows.
          */
         place() {
             const panel = this.$refs.panel
@@ -112,7 +182,7 @@ export function folderMenu() {
             const viewportWidth = document.documentElement.clientWidth
             const viewportHeight = document.documentElement.clientHeight
 
-            // Measure the panel free of the constraints an earlier open may have applied
+            // Measure the panel free of the constraints an earlier placement may have applied
             panel.style.display = "grid"
             panel.style.maxHeight = ""
             panel.style.maxWidth = `${viewportWidth - 2 * VIEWPORT_GAP}px`

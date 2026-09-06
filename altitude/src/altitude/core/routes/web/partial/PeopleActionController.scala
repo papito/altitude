@@ -42,7 +42,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val person: Person = App.altitude.service.person.getById(personId)
     val topFaces = App.altitude.service.person.getPersonFaces(person.persistedId, limit = 24)
     val payload = "<!doctype html>" + htmx.html.choose_person_cover_face_modal(
-      title = C.UI.CHANGE_PERSON_COVER_IMAGE_MODAL_TITLE,
+      title = C.UI.CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE,
       person = person,
       faces = topFaces
     )
@@ -138,7 +138,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       else (requestedDestPerson, requestedSourcePerson)
 
     val payload = "<!doctype html>" + htmx.html.merge_people_modal(
-      title = C.UI.MERGE_PEOPLE_MODAL_TITLE,
+      title = C.UI.MERGE_PEOPLE_DIALOG_TITLE,
       mergeSourcePerson = sourcePerson,
       mergeDestPerson = destPerson
     )

@@ -58,4 +58,7 @@ the trigger on close.
 This is the component the modal hosts in `views/includes/html_common.scala.html` follow. Differences
 are documented in `../../../plans/done/alpine-modal-migration.md`: shared `modal` store instead of a local `open`,
 Escape handled once in `global.js`, no overlay element or transitions, backdrop click only for asset
-detail, and `.noreturn.noautofocus` so `js/common/modal.js` places and restores focus itself.
+detail, and `.noreturn.noautofocus` so `js/common/modal.js` places and restores focus itself. Only the
+people and view-settings dialogs are modal; the three folder dialogs show inline in the folder menu
+popover instead (`static/js/fragments/inline-dialog.js`), sharing the modal's operation lifecycle
+through `static/js/fragments/dialog-operations.js`.

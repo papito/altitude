@@ -111,7 +111,7 @@
         display: grid;
     }
 
-    #rootFolderList .folder-menu button {
+    #rootFolderList .folder-menu .actions button {
         display: flex;
         padding: 10px 15px;
         cursor: pointer;
@@ -124,13 +124,27 @@
     }
 
     /* Divider between rows only, never above the first or below the last */
-    #rootFolderList .folder-menu button + button {
+    #rootFolderList .folder-menu .actions button + button {
         border-top: 1px solid gray;
     }
 
     /* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
-    #rootFolderList .folder-menu button:focus-visible {
+    #rootFolderList .folder-menu .actions button:focus-visible {
         outline-offset: -2px;
+    }
+
+    /* Dialog state: the panel shows one inline dialog (add, rename, or delete folder) in place of
+       its actions. The dialog keeps the modal's content padding; its heading keeps the modal
+       title's type treatment (see .modal-title in core.css) without the toolbar. */
+    #rootFolderList .folder-menu .dialog {
+        padding: var(--modal-content-padding);
+    }
+
+    #rootFolderList .folder-menu .dialog-title {
+        margin: 0 0 var(--control-vertical-space);
+        font-size: 1.1em;
+        font-weight: bold;
+        text-transform: capitalize;
     }
 
     #rootFolderList .folder-name, #rootFolderList .folder.root i {
