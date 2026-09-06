@@ -18,6 +18,9 @@ object Api:
     val MAX_FOLDER_NAME_LENGTH = 250
     val MIN_FOLDER_NAME_LENGTH = 1
 
+    val MAX_ALBUM_NAME_LENGTH = 250
+    val MIN_ALBUM_NAME_LENGTH = 1
+
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
@@ -49,8 +52,9 @@ object Api:
     val PATH_POS = "pos"
     val CHILD_DIR = "dir"
 
-    object ALBUM:
-      val ALBUMS = "albums"
+    object Album:
+      val ALBUM_ID = "albumId"
+      val NAME = "name"
 
     object Asset:
       val ASSET = "asset"
@@ -106,6 +110,7 @@ object Api:
       val PAGE = "p"
       val FOLDER_ID = "folderId"
       val PERSON_ID = "personId"
+      val ALBUM_ID = "albumId"
       val VIEW = "view"
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"

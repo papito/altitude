@@ -14,13 +14,14 @@ The frontend is now organized around a thin composition root in `static/js/front
 Feature logic is split into focused ES module folders instead of accumulating in one large file:
 
 - `static/js/stores/` — Alpine store initialization (`app-stores.js`), including the search parameter set (`search-params.js`)
-- `static/js/alpine/components/` — Alpine components (`selectable.js`, `folder-menu.js`), registered from its `index.js` before Alpine starts
+- `static/js/alpine/components/` — Alpine components (`selectable.js`, `context-menu.js`), registered from its `index.js` before Alpine starts
 - `static/js/fragments/` — declarative HTMX fragment hydration (`data-app-fragment="..."`), including the operation lifecycle shared by modal and inline dialogs (`dialog-operations.js`)
 - `static/js/listeners/` — `document.body` custom-event and HTMX lifecycle wiring
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
 - `static/js/search-results/` — the single search funnel (`search.js`), its declarative `data-app-search` triggers (`search-triggers.js`), shadow-results/detail navigation and image-detail coordination, asset drag/drop (`dragon-drop.js`), and box selection (`box-selection.js`, built on the vendored Viselect in `static/js/lib/`, committing through the existing `selectable` component). Both gestures swallow the click that follows them through `click-suppression.js`
-- `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
+- `static/js/dragdrop/` — interact.js binding modules for batch, people, folder, and album drag/drop; the drop-target highlighting they share is `dropzoneListeners` in `static/js/common/dragon-drop.js`
 - `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree` (assembled by `FolderService.getTree`, which also rolls up each folder's recursive `numOfAssets`), including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel. After asset mutations `refreshFolderCounts` patches the counts in place. Branch expansion (single-click one level, double-click all levels, collapse resets descendants) and the green viewed-folder highlight are specified in `views/AGENTS.md` under **Folder tree expansion and viewed scope**
+- `static/js/common/album-list.js` — renders the flat album list client-side from `/api/album/r/:repoId/list` (`AlbumController`), with the same menu (`common/context-menu.js`, shared with the folder tree) and count cell (`common/asset-count.js`); `refreshAlbumCounts` patches the counts in place after membership changes and asset mutations. Albums are pointers only: see **Albums** in `views/AGENTS.md`
 - `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)
 
 `frontend-app.js` should stay the composition root: it initializes context stores, creates the
@@ -81,6 +82,14 @@ object Folder:
 `JsonCodec` emits snake_case field names. DAOs build typed models from result rows in `makeModel`, so services and DAOs exchange models, not JSON. JSON APIs that need a different shape (camelCase, derived fields such as the folder tree's `isRoot`) build their `ujson.Obj` by hand in the controller.
 
 `FolderService.getTree` assembles the folder tree in memory from one folder query and one per-folder asset count query (`AssetDao.countByFolder`), filling `children`, `numOfChildren`, and the recursive `numOfAssets` on every node; `FolderController` only serializes it.
+
+## Albums
+
+An `Album` is a flat, repository-scoped, uniquely named (case-insensitive) list of pointers to assets: the `album` table plus the `album_asset` membership table, which has no model of its own and is written only through `AlbumDao`. An asset can be in any number of albums. Nothing album-related touches an asset: adding to, removing from, renaming, or deleting an album (a hard delete; memberships cascade) changes membership rows only. The reverse direction is `LibraryService.recycleAssets`, which drops recycled assets from every album in the same transaction (so folder deletion does too); restoring does not re-add them, and purging deletes the asset row, whose foreign key cascades. `Album.numOfAssets` is computed on read (`AlbumDao.getAll`). Searching within an album is the `albumIds` filter of `SearchQuery` (`asset.id IN (SELECT asset_id FROM album_asset ...)`), reached through the `albumId` search parameter.
+
+## Schema migrations
+
+`schemaVersion` in `Altitude.scala` is the current version. A fresh database (version 0) runs `migrations/<engine>/all.sql` once and is stamped with the current version; an existing database runs `migrations/<engine>/<version>.sql` for each version it is behind, in every environment (dev included), so a development database keeps its data. A schema change therefore means: bump `schemaVersion`, add both `<version>.sql` files, and add the same statements to both `all.sql` files.
 
 ## Config & Environments
 

@@ -1,9 +1,9 @@
 /**
- * Alpine coordination for a folder's native popover menu.
+ * Alpine coordination for a folder's or an album's native popover menu.
  *
- * The component root is the `.menu-ctrl` cell built by `common/folder-tree.js`: it holds the
- * meatball trigger (`x-ref="trigger"`, opening the panel with `popovertarget`) and the
- * `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
+ * The component root is the `.menu-ctrl` cell (or the Add album `.dialog-trigger-ctrl`) built by
+ * `common/context-menu.js`: it holds the trigger (`x-ref="trigger"`, opening the panel with
+ * `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
  * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
  * siblings: opening one closes any other, exactly as required.
  *
@@ -19,14 +19,13 @@
  * leaves, dismissal on scroll or resize, and cleanup. Escape is handled once for the whole
  * document in `global.js`.
  */
-import { Const } from "../../constants.js"
-import { closeFolderMenu } from "../../common/folder-menu.js"
+import { closeContextMenu } from "../../common/context-menu.js"
 
 // Minimum distance kept between the panel and the viewport edges when it has to be shifted,
 // flipped, or shrunk
 const VIEWPORT_GAP = 8
 
-export function folderMenu() {
+export function contextMenu() {
     // The request loading a dialog into this panel, from `htmx:before:request` until its response
     // is handled or the panel closes. Closure state rather than component data: an htmx request
     // context has no reactive consumers.
@@ -41,16 +40,12 @@ export function folderMenu() {
             this.detachOpenListeners?.()
         },
 
-        get folderId() {
-            return this.$refs.panel.getAttribute(Const.attributes.folderId)
-        },
-
         isOpen() {
             return this.$refs.panel.matches(":popover-open")
         },
 
         close(reason, { returnFocus = false } = {}) {
-            closeFolderMenu(this.$refs.panel, { reason, returnFocus })
+            closeContextMenu(this.$refs.panel, { reason, returnFocus })
         },
 
         /**
@@ -66,7 +61,7 @@ export function folderMenu() {
 
         handleToggle(event) {
             if (event.newState === "open") {
-                console.debug(`Opened folder menu for ${this.folderId}`)
+                console.debug(`Opened context menu ${this.$refs.panel.id}`)
                 this.attachOpenListeners()
             } else {
                 this.detachOpenListeners?.()
@@ -126,7 +121,7 @@ export function folderMenu() {
 
             if (!this.isOpen() || ctx !== dialogRequest) {
                 console.debug(
-                    `Dropping dialog response for closed or reopened folder menu ${this.folderId}`,
+                    `Dropping dialog response for closed or reopened context menu ${this.$refs.panel.id}`,
                 )
                 event.preventDefault()
                 return
@@ -159,8 +154,7 @@ export function folderMenu() {
         },
 
         /**
-         * Places the panel against its trigger, before the browser shows it or after its content
-         * changed while open.
+         * Places the panel before the browser shows it or after its content changed while open.
          *
          * Before showing, the panel is hidden, so it is given its open-state display just long
          * enough to measure: its size depends only on its own styles, which are the same in and
@@ -172,9 +166,10 @@ export function folderMenu() {
          *
          * Vertical placement: below the trigger by default; above it when there is no room below;
          * when it fits on neither side, on the roomier side with its height capped so the content
-         * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge,
-         * shrunk to the viewport width if needed, then shifted left as far as it takes to stay
-         * inside the viewport, so every control stays reachable in narrow windows.
+         * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge, or
+         * centered on the trigger for a root with `data-menu-align="center"` (the Add album
+         * control); either way shrunk to the viewport width if needed, then shifted as far as it
+         * takes to stay inside the viewport, so every control stays reachable in narrow windows.
          */
         place() {
             const panel = this.$refs.panel
@@ -209,9 +204,13 @@ export function folderMenu() {
 
             // Re-measure the width: an internal scrollbar added by the height cap widens the panel
             const { width } = panel.getBoundingClientRect()
+            const alignedLeft =
+                this.$root.dataset.menuAlign === "center"
+                    ? trigger.left + (trigger.width - width) / 2
+                    : trigger.left
             const left = Math.max(
                 VIEWPORT_GAP,
-                Math.min(trigger.left, viewportWidth - VIEWPORT_GAP - width),
+                Math.min(alignedLeft, viewportWidth - VIEWPORT_GAP - width),
             )
 
             panel.style.top = `${top}px`

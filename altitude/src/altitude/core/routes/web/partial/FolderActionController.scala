@@ -21,15 +21,13 @@ class FolderActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-folder")
   def showAddFolderDialog(repoId: String, parentId: String)(using request: Request): Response[String] =
-    val payload = "<!doctype html>" + htmx.html.add_folder_dialog(
-      title = C.UI.ADD_FOLDER_DIALOG_TITLE,
-      parentId = parentId
-    )
+    val payload = "<!doctype html>" + htmx.html.add_folder_dialog(parentId = parentId)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-folder")
-  def showRenameFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using request: Request): Response[String] =
+  def showRenameFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using
+      request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
     val payload = "<!doctype html>" + htmx.html.rename_folder_dialog(
       title = C.UI.RENAME_FOLDER_DIALOG_TITLE,
@@ -40,7 +38,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-folder")
-  def showDeleteFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using request: Request): Response[String] =
+  def showDeleteFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using
+      request: Request): Response[String] =
     val folder: Folder = App.altitude.service.folder.getById(id)
     val payload = "<!doctype html>" + htmx.html.delete_folder_dialog(
       title = C.UI.DELETE_FOLDER_DIALOG_TITLE,
@@ -75,7 +74,6 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
     def responseWithValidationErrors(errors: Map[String, String], parentId: String): Response[String] =
       val payload = "<!doctype html>" + htmx.html.add_folder_dialog(
-        title = C.UI.ADD_FOLDER_DIALOG_TITLE,
         fieldErrors = errors,
         formJson = jsonIn,
         parentId = parentId

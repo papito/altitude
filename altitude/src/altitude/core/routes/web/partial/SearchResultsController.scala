@@ -41,6 +41,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       sort: String = s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}",
       folderId: Option[String] = None,
       personId: Option[String] = None,
+      albumId: Option[String] = None,
       isContinuousScroll: Boolean = false)(using request: Request): Response[String] =
 
     // The sort argument is the field name with the direction appended as a single digit, e.g. "filename0"
@@ -62,6 +63,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       rpp = rpp,
       folderIds = folderId.toSet,
       personIds = personId.toSet,
+      albumIds = albumId.toSet,
       page = p,
       searchSort = List(searchSort)
     )
@@ -109,14 +111,15 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         results = results,
         person = maybePerson.orNull,
         view = view,
-        folderId = folderId
+        folderId = folderId,
+        albumId = albumId
       )
       cask.Response(
         payload,
         200,
         Seq(
           ("Content-Type", "text/html"),
-          ("HX-Replace-Url", browserViewUrl(view, sort, q, folderId, personId, request))
+          ("HX-Replace-Url", browserViewUrl(view, sort, q, folderId, personId, albumId, request))
         ))
 
   /**
@@ -130,11 +133,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       q: Option[String],
       folderId: Option[String],
       personId: Option[String],
+      albumId: Option[String],
       request: Request): String =
     val params = Seq(
       Option.when(view != Const.Search.View.DEFAULT)(Api.Field.Search.VIEW -> view),
       folderId.map(Api.Field.Search.FOLDER_ID -> _),
       personId.map(Api.Field.Search.PERSON_ID -> _),
+      albumId.map(Api.Field.Search.ALBUM_ID -> _),
       q.map(Api.Field.Search.QUERY_TEXT -> _),
       Some(Api.Field.Search.SORT -> sort)
     ).flatten

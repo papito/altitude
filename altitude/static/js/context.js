@@ -27,6 +27,11 @@ export const context = {
         return Alpine.store(Const.state.searchParams).folderId
     },
 
+    /** The album whose assets are being browsed, or null when no album filter is active */
+    getCurrentAlbumId: function () {
+        return Alpine.store(Const.state.searchParams).albumId
+    },
+
     loadMetadataFieldViewSettingsFromStore: function () {
         // localStorage stores the grid-visible metadata fields as a comma-separated list
         const savedGridMetadataFields = localStorage.getItem(

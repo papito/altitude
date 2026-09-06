@@ -5,6 +5,7 @@ import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import altitude.core.routes.api.AlbumController
 import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.FolderController
 import altitude.core.routes.api.HealthController
@@ -56,6 +57,7 @@ object App extends cask.Main:
 
   override def allRoutes: Seq[cask.Routes] = Seq(
     new HealthController,
+    new AlbumController,
     new AssetController,
     new FolderController,
     new IndexController,

@@ -2,6 +2,8 @@ package altitude.core.suites
 
 import org.scalatest.Suites
 
+import altitude.core.controller.AlbumActionControllerTests
+import altitude.core.controller.AlbumControllerTests
 import altitude.core.controller.AssetControllerTests
 import altitude.core.controller.ContentViewControllerTests
 import altitude.core.controller.FolderActionControllerTests
@@ -20,5 +22,7 @@ abstract class AllControllerTestSuites
     new ContentViewControllerTests(),
     new FolderActionControllerTests(),
     new FolderControllerTests(),
+    new AlbumActionControllerTests(),
+    new AlbumControllerTests(),
     new PeopleActionControllerTests()
   )

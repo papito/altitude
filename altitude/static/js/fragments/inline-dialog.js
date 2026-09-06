@@ -1,24 +1,25 @@
 /**
- * Inline dialog fragments (`data-app-fragment="inline-dialog"`): the three folder dialogs, shown
- * inside the open folder menu panel in place of its actions, with no backdrop and no focus trap.
+ * Inline dialog fragments (`data-app-fragment="inline-dialog"`): the folder dialogs and the album
+ * rename/delete dialogs, shown inside the open context menu panel in place of its actions, with
+ * no backdrop and no focus trap.
  *
- * The `folderMenu` component (`alpine/components/folder-menu.js`) owns the panel: placement, the
- * switch between actions and dialog, dismissal, and cleanup. This module only gives the dialog
+ * The `contextMenu` component (`alpine/components/context-menu.js`) owns the panel: placement,
+ * the switch between actions and dialog, dismissal, and cleanup. This module only gives the dialog
  * its initial focus and registers the inline presentation with the dialog operation tracker
  * (`dialog-operations.js`): an operation belongs to the dialog it was submitted from, which is
  * active while that same fragment is still in an open panel, and closing it closes the panel,
- * handing focus to the control the dialog declares (the folder's ⋯ button, or its parent's after
- * a deletion).
+ * handing focus to the control the dialog declares (the entity's ⋯ button, or another control
+ * that survives a deletion).
  */
-import { closeFolderMenu } from "../common/folder-menu.js"
+import { closeContextMenu } from "../common/context-menu.js"
 import { registerDialogKind } from "./dialog-operations.js"
 import { focusFragmentElement } from "./helpers.js"
 
-const OPEN_PANEL_SELECTOR = ".folder-menu:popover-open"
+const OPEN_PANEL_SELECTOR = ".context-menu:popover-open"
 
 registerDialogKind("inline-dialog", {
     createHandle: (fragmentEl) => {
-        const panel = fragmentEl.closest(".folder-menu")
+        const panel = fragmentEl.closest(".context-menu")
 
         return {
             isActive: () =>
@@ -30,7 +31,7 @@ registerDialogKind("inline-dialog", {
                     returnFocusSelector &&
                     document.querySelector(returnFocusSelector)
 
-                closeFolderMenu(panel, {
+                closeContextMenu(panel, {
                     reason: "dialog operation completed",
                     returnFocus: true,
                     focusTarget: declared || undefined,
@@ -49,7 +50,7 @@ export function hydrateInlineDialogFragment({ fragmentEl }) {
     const panel = fragmentEl.closest(OPEN_PANEL_SELECTOR)
 
     if (!panel) {
-        console.warn("Inline dialog outside an open folder menu; ignoring it")
+        console.warn("Inline dialog outside an open context menu; ignoring it")
         return
     }
 

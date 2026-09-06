@@ -16,6 +16,7 @@ class SearchQuery(
     val metadataFilters: Map[String, Any] = Map(),
     val folderIds: Set[String] = Set(),
     val personIds: Set[String] = Set(),
+    val albumIds: Set[String] = Set(),
     rpp: Int = 0,
     page: Int = 1,
     val searchSort: List[SearchSort] = List())
@@ -30,13 +31,14 @@ class SearchQuery(
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
-    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, rpp=$rpp, page=$page)"
+    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, rpp=$rpp, page=$page)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
     SearchQuery(
       text = text,
       folderIds = folderIds,
       personIds = personIds,
+      albumIds = albumIds,
       metadataFilters = metadataFilters ++ _filters,
       rpp = rpp,
       page = page,
@@ -49,6 +51,7 @@ class SearchQuery(
       params = params,
       folderIds = ids,
       personIds = personIds,
+      albumIds = albumIds,
       metadataFilters = metadataFilters,
       rpp = rpp,
       page = page,
@@ -61,6 +64,7 @@ class SearchQuery(
       params = params ++ _params,
       folderIds = folderIds,
       personIds = personIds,
+      albumIds = albumIds,
       metadataFilters = metadataFilters,
       rpp = rpp,
       page = page,

@@ -1,0 +1,25 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Album
+@import altitude.core.Api
+
+@(album: Album, title: String)
+
+@* Shown inline in the album's menu, which goes away with the album, so focus returns to the
+   "Add album" button; the list renderer moves it to the empty-state button if that was the last album *@
+<div id="deleteAlbum"
+     data-app-fragment="inline-dialog"
+     data-app-dialog-return-focus="#addAlbumBtn"
+     data-app-dialog-success-event="albumDeleted"
+     data-app-dialog-success-detail='{"@{Api.Field.ID}":"@{album.persistedId}"}'>
+
+    <h3 class="dialog-title">@{title}</h3>
+
+    <button type="button"
+            class="action-button error"
+            hx-swap="none"
+            hx-delete="/htmx/album/r/@{RequestContext.getRepository.persistedId}"
+            hx-trigger="click"
+            hx-vals='{"@{Api.Field.ID}": "@{album.persistedId}"}'>
+        Delete "<strong>@{album.name}</strong>" (its assets are not affected)
+    </button>
+</div>

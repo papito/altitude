@@ -1,0 +1,40 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+
+@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+
+@* Shown inline in a panel below whichever add button opened it; the dialog names no
+   return-focus control, so focus goes back to whichever button opened it. Return submits; the field's
+   placeholder is the whole prompt, so there is no heading.
+   hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
+<form action="#"
+      id="addAlbum"
+      data-app-fragment="inline-dialog"
+      data-app-dialog-autofocus-selector="#field@{ Api.Field.Album.NAME }"
+      data-app-dialog-success-event="albumAdded"
+      hx-target="this"
+      hx-swap="none"
+      hx-post="/htmx/album/r/@{RequestContext.getRepository.persistedId}/add"
+      hx-trigger="submit"
+      hx-json-enc>
+
+    @if(fieldErrors.contains(Api.Field.Album.NAME)) {
+        <div class="error">@{ fieldErrors(Api.Field.Album.NAME) }</div>
+    }
+
+    <div>
+        <label for="@{ Api.Field.Album.NAME }"></label>
+        <input type="text"
+               id="field@{ Api.Field.Album.NAME }"
+            @if(fieldErrors.contains(Api.Field.Album.NAME)) {
+               class="error"
+            }
+               name="@{ Api.Field.Album.NAME }"
+               autocomplete="off"
+               size="30"
+               value='@{ formJson.obj.get(Api.Field.Album.NAME).flatMap(_.strOpt).getOrElse("") }'
+               placeholder="New album name"
+               maxlength="@{ Api.Constraints.MAX_ALBUM_NAME_LENGTH }"
+               minlength="@{ Api.Constraints.MIN_ALBUM_NAME_LENGTH }">
+    </div>
+</form>

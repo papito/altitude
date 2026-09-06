@@ -26,26 +26,30 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 `<script type="module">` blocks when the behavior can be hydrated centrally from
 `js/frontend-app.js`.
 
-`htmx/folders.scala.html` supplies the folder tab's styles, navigation warning, and empty
+`htmx/folders.scala.html` supplies the folder tab's styles, the navigation warning, the
+`#folderActions` host of the centered "Add folder" button (below the warning), and the empty
 `#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
 `reloadFolderTree(repoId)`; edit `js/common/folder-tree.js` for folder rows and action markup. The
 tree's interaction contract (expansion gestures, viewed-folder highlighting) is under **Folder tree
-expansion and viewed scope** below.
+expansion and viewed scope** below. `htmx/albums.scala.html` is the same shape for the Albums tab:
+styles, the two add buttons, and the empty `#albumList` host that `js/common/album-list.js` renders
+(see **Albums** below). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
+`.asset-count`) live in `core.css`.
 
 ## JS Directory ↔ Template Mapping
 
 | JS directory | Template(s) it serves |
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
-| `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
+| `js/dragdrop/` | interact.js binding modules for batch ops, people, folder-tree, and album drag/drop flows |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, inline-dialog, image-detail, and inline editor fragments, plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, HTMX/search lifecycle wiring, and the `document`-level dialog request wiring (`dialogs.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, people, assets, HTMX/search lifecycle wiring (`htmx-explorer.js` reports failed folder/album tab and dialog loads), and the `document`-level dialog request wiring (`dialogs.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`), plus search/detail coordination helpers such as detail navigation, image loading, drag/drop (`dragon-drop.js`), box selection (`box-selection.js`), and the post-gesture click swallow they share (`click-suppression.js`) used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes a folder menu from outside its component), viewed-folder-scope (highlights the folder whose results are displayed) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), context-menu (builds the ⋯ menu of a folder or album and closes one from outside its component), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `folder-menu.js` (native popover folder menus); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `context-menu.js` (native popover menus of folders and albums); `index.js` registers them |
 
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
@@ -71,6 +75,7 @@ class-based selectors. All attribute names are defined in `Const.attributes` (`c
 
 ```js
 Const.attributes.folderId       // "alt-folder-id"
+Const.attributes.albumId        // "alt-album-id"
 Const.attributes.assetId        // "alt-asset-id"
 Const.attributes.numOfChildren  // "alt-num-of-children"
 Const.attributes.expanded       // "alt-expanded"
@@ -151,8 +156,8 @@ interact.js drag end / ondrop
 
 The listener modules sit on the **HTMX lifecycle** side of this, not the custom event side.
 Folder expansion and the folder context menus involve no request at all: the tree renderer builds
-them, so `js/listeners/htmx-folders.js` only reports failed folder requests (the folders tab load)
-from `htmx:after:request`. Shared HTMX/search listener wiring (`htmx:after:request`,
+them, so `js/listeners/htmx-explorer.js` only reports failed folder and album requests (a tab load, a
+dialog load) from `htmx:after:request`. Shared HTMX/search listener wiring (`htmx:after:request`,
 `htmx:after:settle`) lives in `js/listeners/htmx-search.js` and delegates back into
 `frontend-app.js`; the only `htmx:before:request` listener is the dialog one on `document`.
 People-specific HTMX follow-up for discard actions and the inline person-name editor lives in
@@ -189,9 +194,9 @@ it has no selection state of its own.
   component proxy deselects itself.
 
 ### 3. Coordination around native UI
-`x-data="folderMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
-`alpine/components/folder-menu.js`) wraps each folder's ⋯ trigger and its native `popover="auto"`
-panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
+`x-data="contextMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
+`alpine/components/context-menu.js`) wraps each folder's or album's ⋯ trigger and its native
+`popover="auto"` panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
 outside clicks); the component only places the panel, switches it between its actions and the
 inline dialog an action loads, closes it when focus leaves or when the page scrolls or the explorer
 resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
@@ -214,11 +219,11 @@ swaps once the user dismissed or replaced it. Visibility is bound through the Al
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
 `js/app.js` contains focus and hides the page from assistive tech; its documented local patch
 cancels delayed activation when a trap is released or removed). Escape (`global.js`) closes the
-active modal and any open folder menu and is consumed by them, so a background inline edit
+active modal and any open context menu and is consumed by them, so a background inline edit
 survives; general dialogs ignore backdrop clicks, asset detail closes on them. General-dialog width is CSS only
 (`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
 image with `setAssetDetailSize()`. General-dialog placement is the host's CSS (box centered
-horizontally, `padding-top` from the top). Opening any modal closes an open folder menu first, so a
+horizontally, `padding-top` from the top). Opening any modal closes an open context menu first, so a
 modal never appears over one.
 
 A **dialog** is a server-rendered form that completes one user action, hydrated from its
@@ -227,9 +232,9 @@ the dialog itself are `data-app-dialog-*` on the fragment root, whatever its pre
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), success event + detail (+ `success-detail-target-attr-*`
 read from the issuing element), and `close-on-success`, defaulting to true. Attributes that describe
-the modal host are `data-app-modal-*`: title and kind. The three folder dialogs are **inline
-dialogs** (`data-app-fragment="inline-dialog"`, see **Folder context menus**); the people and
-view-settings dialogs are modal dialogs.
+the modal host are `data-app-modal-*`: title and kind. The three folder dialogs and the three album
+dialogs are **inline dialogs** (`data-app-fragment="inline-dialog"`, see **Context menus**); the
+people and view-settings dialogs are modal dialogs.
 
 General HTMX modal fragments opt in with `data-app-fragment="modal"`; `js/fragments/modal.js` opens the
 host on hydration and registers the modal presentation with `js/fragments/dialog-operations.js`, which
@@ -256,31 +261,41 @@ The navigation origin is set to the requested asset before its image loads, so p
 already uses the newly opened asset while the spinner is showing.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
 
-**Folder context menus** — Each folder's ⋯ button (its **trigger**) is a real `button` with
-`popovertarget` pointing at a `popover="auto"` panel (`#menu-{id}`), all built with the tree by
-`js/common/folder-tree.js`, so opening a menu sends no request. The panel shows either its
-**actions** (`.actions`: Add folder; Rename and Delete for non-root folders) or one **inline
-dialog** in its dialog host (`.dialog`, `#menuDialog-{id}`). Each action is an HTMX request for its
+**Context menus** — Each folder's or album's ⋯ button (its **trigger**, `.menu-trigger`) is a real
+`button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
+for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
+`js/common/context-menu.js` as the tree or list is rendered, so opening a menu sends no request.
+The Add album buttons and the "Add folder" button above the tree (`#addFolderBtn`, adding into
+the root) are the same component in a second shape (`buildDialogTriggerCtrl`,
+`.dialog-trigger-ctrl`): the button both toggles a panel with no actions and requests the add
+dialog into its host; the `dialog-only` panel stays invisible until the dialog arrives, opens
+below the button centered on it (`data-menu-align="center"` on the root), and hands focus back to
+the button, which shows no focus ring for it. The panel shows either its
+**actions** (`.actions`: Add folder; Rename and Delete for non-root folders; Rename and Delete for
+an album) or one **inline dialog** in its dialog host (`.dialog`, `#menuDialog-{id}` /
+`#albumMenuDialog-{id}`). Each action is an HTMX request for its
 dialog into that host; the response replaces the actions (they stay in the DOM, hidden, so their
 htmx wiring survives) until the panel closes, which discards the dialog and shows the actions again.
 Only the response to the request the open panel is waiting for may show: the component records the
 panel's own open request from `htmx:before:request` and cancels, in `htmx:after:request`, any
 response for the host that is not that request or arrives while the panel is closed; failed loads
-are reported by `js/listeners/htmx-folders.js`. After every swap into the host (the load, or a
+are reported by `js/listeners/htmx-explorer.js`. After every swap into the host (the load, or a
 validation replacement of the form) the component re-places the panel for its new height. The
 browser owns visibility: it toggles the panel from its trigger, closes it on any click outside, and
-keeps one open at a time because a folder's panel is never a DOM descendant of another folder's
-panel. The `folderMenu` component places the panel in the top layer against the trigger (below,
+keeps one open at a time because a panel is never a DOM descendant of another entity's panel.
+The `contextMenu` component places the panel in the top layer against the trigger (below,
 flipping above when needed, clamped to the viewport, height-capped with internal scrolling when
-neither side fits), closes it when focus leaves and on scroll, window resize, or explorer resize;
+neither side fits; left-aligned with the trigger, or centered on it for a `data-menu-align="center"`
+root); it closes the panel when focus leaves and on scroll, window resize, or explorer resize;
 it never tracks a moving trigger. The panel carries `tabindex="-1"`, so a click on a dialog's
 heading, label, or padding moves focus to the panel rather than out of it; a validation swap that
 removes the focused field (`htmx-swapping` on the form) is not focus leaving either.
-`js/common/folder-menu.js` closes a menu from outside the component: Escape in `global.js` (focus
+`js/common/context-menu.js` closes a menu from outside the component: Escape in `global.js` (focus
 returns to the trigger unless a modal was closed too), the folder model when an ancestor collapses,
-`openModal`, and a completed inline-dialog operation (`closeFolderMenu` with the declared return
-control). Removing the tree removes the open panel and, through the component's `destroy`, its
-listeners. Styling lives in `views/htmx/folders.scala.html`; CSS sets `display` only under
+`openModal`, and a completed inline-dialog operation (`closeContextMenu` with the declared return
+control); the trigger is found as the `[popovertarget]` button in the panel's cell, not by an ID
+convention. Removing the tree or list removes the open panel and, through the component's
+`destroy`, its listeners. Styling lives in `core.css`; CSS sets `display` only under
 `:popover-open`, because the hidden state relies on the browser's `display: none`. During
 `beforetoggle`, the component briefly sets inline `display: grid` to measure and position the
 hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
@@ -299,10 +314,11 @@ children container, and `aria-expanded`, which the model keeps in step with the
 sends no request.
 
 **Folder asset counts** — Every non-root row shows its folder's asset count in a `.asset-count`
-cell (`#folder-count-{id}`) placed before the icon, dimmed in parentheses. The count is recursive:
+cell (`#folder-count-{id}`, built by `js/common/asset-count.js`) placed before the icon, dimmed in
+parentheses. The count is recursive:
 the folder's own sorted assets plus those of every folder beneath it. Triaged and recycled assets are
 excluded, and a zero renders as an empty cell, never `(0)`. The root row (labelled `/`) shows no count (the nav
-carries the repository total), though the tree JSON still reports `numOfAssets` for it. Every row is its own grid, so after each render `folder-tree.js` measures the widest count and sets
+carries the repository total), though the tree JSON still reports `numOfAssets` for it. Every row is its own grid, so after each render `sizeCountColumn` measures the widest count and sets
 `--folder-count-column` (declared in `views/htmx/folders.scala.html`) on the list to that width; the
 column is then uniform across rows and sibling icons stay aligned whether or not a row shows a count.
 The server computes the counts on every tree fetch (`FolderService.getTree`); nothing is stored.
@@ -336,17 +352,39 @@ displayed, so a superseded or failed navigation never moves it. So the highlight
 pagination, is absent in triage and trash or without a folder in scope, and is reapplied by every
 tree rebuild; deleting the viewed folder removes it without selecting the parent.
 
-**Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` are
-`data-app-fragment="inline-dialog"` fragments: the heading (`.dialog-title`, the modal title's type
-treatment) sits inside the fragment root so a validation replacement carries it, the name field has
-an explicit `size` (the panel stays `max-content` wide), and Delete's root is a wrapper around the
-heading and the confirm button. Add and Rename keep `hx-target="this"`, `hx-swap="none"`, and
+**Albums** — The Albums tab (`views/htmx/albums.scala.html`) is a flat list rendered by
+`js/common/album-list.js` from the JSON list endpoint, one `.album` row (`#album-{id}`,
+`alt-album-id`) per album: menu | `.asset-count` (`#album-count-{id}`, column sized like the folder
+one through `--album-count-column`) | icon | name, with icon and name as `data-app-search-album-id`
+triggers and the row's `.controls` a drop zone (`js/dragdrop/albums.js`) for a single asset or the
+batch mover. Albums hold pointers only: a drop adds memberships (`PUT /api/album/r/:repoId/assets`,
+`assetActions.addAssetsToAlbum`; assets already in the album are skipped and reported), the grid
+does not change, and the album counts are patched in place (`refreshAlbumCounts`, also called by
+`refreshCounts` after every asset mutation, because recycling drops an asset from its albums).
+While an album's results are displayed (`searchParams.albumId`, mirrored by `data-results-album-id`
+on the results fragment, which marks the row `alt-viewed-scope` and colors its icon green) the batch
+footer offers "Remove from album", which deletes the memberships of the selected assets and removes
+their cells. Add is an inline dialog (`add_album_dialog.scala.html`, submitted with Return) in a panel right
+below the button that opened it: the top `#addAlbumBtn` (centered above the list) or, while
+there are no albums, by the centered `#addFirstAlbumBtn`; the renderer builds both controls into
+their hosts and shows one or the other. Rename and Delete are inline dialogs in the album's menu; deleting the viewed album runs a
+search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDeleted` reload the
+list, which restores focus by ID, or to the visible add button when the dialog's return control
+was hidden by the change (`focusAddAlbumControlIfFocusLost`).
+
+**Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` and
+`views/htmx/{rename,delete}_album_dialog.scala.html` are `data-app-fragment="inline-dialog"`
+fragments: the heading (`.dialog-title`, the modal title's type treatment) sits inside the
+fragment root so a validation replacement carries it, except in the two add dialogs, whose field
+placeholder is the whole prompt; the name field has an explicit `size` (the panel stays
+`max-content` wide), and Delete's root is a wrapper around the heading and the confirm button. Add and Rename keep `hx-target="this"`, `hx-swap="none"`, and
 `hx-json-enc`. `js/fragments/inline-dialog.js` places initial focus (the declared selector with
 optional select, else the panel itself, so a held Enter from the menu cannot fire Delete; one Tab
 reaches the button) and registers the inline presentation with `dialog-operations.js`: an
 operation's dialog is active while that fragment is still in an open panel, and closing it closes
-the panel with focus on the declared return control (the folder's trigger, or the parent's after a
-deletion). Dismissal follows the menu's rules with no confirmation; Escape returns focus to the
+the panel with focus on the declared return control (the parent's ⋯ after a folder deletion, the
+"Add album" button after an album deletion) or, when none is declared (the add dialogs), on the
+trigger that opened the panel. Dismissal follows the menu's rules with no confirmation; Escape returns focus to the
 trigger.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
@@ -415,9 +453,11 @@ Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 it re-fetches the tree JSON and patches each `#folder-count-{id}` in place, leaving expansion, focus,
 and open menus alone. If the response holds a folder the DOM lacks (restoring assets can un-recycle
 their folders), it falls back to a full render. Folder operations (add, rename, move, delete) keep
-using `reloadFolderTree`, which renders fresh counts as part of the rebuild.
+using `reloadFolderTree`, which renders fresh counts as part of the rebuild. `app.reloadAlbumCounts()`
+does the same for the album list (`refreshAlbumCounts`), and fetches nothing while another explorer
+tab is active.
 
-Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js`,
+Asset move/recycle/purge/restore and album membership UI flows are implemented in `js/assets/asset-actions.js`,
 and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
@@ -434,17 +474,19 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
 | `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
-| `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a folder menu panel |
+| `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a context menu panel |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through `selectable` on release |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
-| `static/js/alpine/components/folder-menu.js` | Alpine component coordinating a folder's native popover menu |
+| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's or album's native popover menu |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request — and `currentSearchUrl` |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
-| `static/js/common/folder-menu.js` | closes a folder menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
+| `static/js/common/context-menu.js` | builds the ⋯ menu cell of a folder or album; closes a menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
+| `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
+| `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
 | `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |
@@ -456,9 +498,9 @@ continuous scroll, the shadow results behind asset detail — goes through **one
 `runSearch` in `js/search-results/search.js`. A caller supplies only the parameter it knows about;
 the `searchParams` store supplies the rest. Nothing else builds a URL for `/htmx/search/r/:repoId`.
 
-`js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `q`, `sort`,
-`rpp`, `p`) and the rules for combining them: choosing a folder clears the person and vice versa, a
-view clears both, and any change other than paging returns to page 1. A parameter still at its
+`js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`, `q`,
+`sort`, `rpp`, `p`) and the rules for combining them: choosing a folder, a person, or an album
+clears the other two, a view clears all three, and any change other than paging returns to page 1. A parameter still at its
 default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 

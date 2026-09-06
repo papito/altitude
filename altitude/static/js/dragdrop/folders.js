@@ -1,5 +1,9 @@
 import { Const } from "../constants.js"
-import { dragged, dragMoveListener } from "../common/dragon-drop.js"
+import {
+    dragged,
+    dragMoveListener,
+    dropzoneListeners,
+} from "../common/dragon-drop.js"
 
 export function bindFolderDragDrop({ dispatch }) {
     interact("#rootFolderList .drag-drop").draggable({
@@ -19,24 +23,7 @@ export function bindFolderDragDrop({ dispatch }) {
         accept: "#rootFolderList .drag-drop, #assets .drag-drop, #batchOps .drag-drop",
         overlap: 0.2,
 
-        ondropactivate: (event) => {
-            event.target.classList.add("drop-active")
-        },
-
-        ondragenter: (event) => {
-            const draggableElement = event.relatedTarget
-            const dropzoneElement = event.target
-
-            dropzoneElement.classList.add("drop-target")
-            draggableElement.classList.add("can-drop")
-        },
-
-        ondragleave: (event) => {
-            event.target.classList.remove("drop-target")
-            event.relatedTarget.classList.remove("can-drop")
-        },
-
-        ondrop: (event) => {
+        ...dropzoneListeners((event) => {
             const draggableElement = event.relatedTarget
             const dropzoneElement = event.target
             const movedFolderId = draggableElement.getAttribute(
@@ -50,10 +37,6 @@ export function bindFolderDragDrop({ dispatch }) {
             const newParentId = dropzoneElement.getAttribute(
                 Const.attributes.folderId,
             )
-
-            dropzoneElement.classList.remove("drop-active")
-            dropzoneElement.classList.remove("drop-target")
-            draggableElement.classList.remove("can-drop")
 
             if (movedFolderId) {
                 console.debug(`Moved folder ${movedFolderId} to ${newParentId}`)
@@ -77,11 +60,6 @@ export function bindFolderDragDrop({ dispatch }) {
                     folderId: newParentId,
                 })
             }
-        },
-
-        ondropdeactivate: (event) => {
-            event.target.classList.remove("drop-active")
-            event.target.classList.remove("drop-target")
-        },
+        }),
     })
 }

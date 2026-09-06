@@ -173,6 +173,114 @@ form input.error, form input.error:focus {
     margin-left: 5px;
 }
 
+/*                                             */
+/* CONTEXT MENUS (folder tree and album list)  */
+/*                                             */
+
+/* The ⋯ cell built by js/common/context-menu.js: the trigger and its native popover panel */
+.menu-ctrl {
+    display: grid;
+    place-items: center;
+}
+
+/* The ⋯ trigger keeps the look of a plain link. It never shows a focus ring: dialogs return focus
+   here when they close, and the ring that marked would read as a stray highlight in the list */
+.menu-trigger {
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: none;
+    font: inherit;
+    font-size: 1.3em;
+    line-height: 1;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+/* The menu is a native popover in the top layer, so it takes no room in the list and is not
+   clipped by the explorer. The browser centers popovers with auto margins and `inset: 0`; both
+   are reset so the coordinates the contextMenu component measures apply as-is. */
+.context-menu {
+    position: fixed;
+    margin: 0;
+    inset: auto;
+    width: max-content;
+    /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
+    padding: 0;
+    border: 1px solid gray;
+    border-radius: 5px;
+    color: inherit;
+    background-color: var(--modal-background-color);
+    text-shadow: none;
+    grid-template-columns: 1fr;
+    gap: 0;
+    /* Actions scroll inside the panel when the component caps its height */
+    overflow-y: auto;
+}
+
+/* Only the open state may set a display: the popover's hidden state relies on display: none.
+   (The component sets the same display inline for a moment to measure the panel before it opens.) */
+.context-menu:popover-open {
+    display: grid;
+}
+
+/* A panel holding only a dialog (the Add album control) opens on the click that requests the
+   dialog, so it stays invisible until the dialog has arrived rather than showing an empty box */
+.context-menu.dialog-only:not(:has(.dialog:not([hidden]))) {
+    visibility: hidden;
+}
+
+/* A button that opens a dialog-only panel takes focus back when the dialog closes; like the ⋯
+   trigger it shows no ring for that */
+.dialog-trigger-ctrl > button {
+    outline: none;
+}
+
+.context-menu .actions button {
+    display: flex;
+    padding: 10px 15px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 1em;
+    text-align: left;
+}
+
+/* Divider between rows only, never above the first or below the last */
+.context-menu .actions button + button {
+    border-top: 1px solid gray;
+}
+
+/* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
+.context-menu .actions button:focus-visible {
+    outline-offset: -2px;
+}
+
+/* Dialog state: the panel shows one inline dialog (add, rename, or delete) in place of its
+   actions. The dialog keeps the modal's content padding; its heading keeps the modal title's
+   type treatment (see .modal-title) without the toolbar. */
+.context-menu .dialog {
+    padding: var(--modal-content-padding);
+}
+
+.context-menu .dialog-title {
+    margin: 0 0 var(--control-vertical-space);
+    font-size: 1.1em;
+    font-weight: bold;
+    text-transform: capitalize;
+}
+
+/* Asset count on a folder or album row, right-aligned against the icon; zero counts render empty
+   (js/common/asset-count.js) */
+.asset-count {
+    justify-self: end;
+    color: var(--font-color-dim);
+    font-size: .9em;
+    white-space: nowrap;
+}
+
 /*          */
 /* MESSAGES */
 /*          */

@@ -101,6 +101,13 @@ object FieldConst:
     object Alias:
       val ROOT = "root"
 
+  object Album:
+    val NAME = "name"
+    val NAME_LC = "name_lc"
+    val NUM_OF_ASSETS = "num_of_assets"
+    val ALBUM_ID = "album_id"
+    val ASSET_ID = "asset_id"
+
   object MimedData:
     val MIME_TYPE = "mime_type"
     val DATA = "data"

@@ -12,6 +12,7 @@ const DEFAULTS = {
     view: Const.views.repository,
     folderId: null,
     personId: null,
+    albumId: null,
     q: null,
     sort: null,
     rpp: null,
@@ -21,15 +22,16 @@ const DEFAULTS = {
 /**
  * What changing one parameter does to the others.
  *
- * Choosing a folder and choosing a person are both "look somewhere else", so each clears the other;
- * a view is a different place again and clears both. Everything else narrows or reorders what is
- * already in scope. This table is what the server's old `newSearch=true` flag used to express, and
- * it is the whole reason a widget can send just the one parameter it knows about.
+ * Choosing a folder, a person, or an album are all "look somewhere else", so each clears the other
+ * two; a view is a different place again and clears all three. Everything else narrows or reorders
+ * what is already in scope. This table is what the server's old `newSearch=true` flag used to
+ * express, and it is the whole reason a widget can send just the one parameter it knows about.
  */
 const CLEARS = {
-    view: ["folderId", "personId"],
-    folderId: ["personId"],
-    personId: ["folderId"],
+    view: ["folderId", "personId", "albumId"],
+    folderId: ["personId", "albumId"],
+    personId: ["folderId", "albumId"],
+    albumId: ["folderId", "personId"],
 }
 
 const NUMERIC = new Set(["p", "rpp"])

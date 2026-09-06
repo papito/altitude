@@ -28,11 +28,9 @@ class SystemService(val app: Altitude):
           0
     }
 
-  def versionUp(): Unit =
-    val toVersion = version + 1
-
+  def setVersion(version: Int): Unit =
     txManager.withTransaction {
-      systemMetadataDao.updateVersion(toVersion = toVersion)
+      systemMetadataDao.updateVersion(toVersion = version)
     }
 
   def readMetadata: SystemMetadata =

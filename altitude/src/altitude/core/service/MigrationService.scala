@@ -7,7 +7,6 @@ import scala.io.Source
 
 import altitude.core.Altitude
 import altitude.core.Const
-import altitude.core.Environment
 import altitude.core.RequestContext
 import altitude.core.transactions.TransactionManager
 
@@ -16,15 +15,10 @@ abstract class MigrationService(val app: Altitude):
 
   protected val txManager: TransactionManager = app.txManager
   protected val CURRENT_VERSION: Int
-
-  private def migrateVersion(version: Int): Unit =
-    version match {
-      case 1 => v1()
-    }
-
-  private def v1(): Unit = {}
-
   protected val MIGRATIONS_DIR: String
+
+  /** Code that must run once a version's schema change is committed. No version needs any so far. */
+  private def migrateVersion(version: Int): Unit = ()
 
   private def executeCommand(command: String): Unit =
     val stmt = RequestContext.getConn.createStatement()
@@ -42,17 +36,15 @@ abstract class MigrationService(val app: Altitude):
 
     stmt.close()
 
-  private def runMigration(version: Int): Unit =
-    val sqlCommands = parseMigrationCommands(version)
+  private def runSqlScript(path: String): Unit =
+    logger.info(s"Running migration script: $path")
+    val resourceUrl = getClass.getResource(path)
+    val source = Source.fromURL(resourceUrl)
+    val commands = source.mkString
+    source.close()
 
     txManager.withTransaction {
-      executeCommand(sqlCommands)
-    }
-
-    // must have schema changes committed
-    txManager.withTransaction {
-      migrateVersion(version)
-      app.service.system.versionUp()
+      executeCommand(commands)
     }
 
   def migrationRequired: Boolean =
@@ -63,35 +55,27 @@ abstract class MigrationService(val app: Altitude):
     logger.info(s"Migration required? : $isRequired")
     isRequired
 
+  /**
+   * A fresh database (version 0) gets the whole current schema from `all.sql` in one step and is stamped with the current
+   * version. An existing database is brought forward one version at a time with `<version>.sql`, in every environment, so a
+   * development database keeps its data across schema changes just as a production one does.
+   */
   def migrate(): Unit =
     val oldVersion = app.service.system.version
     logger.warn("!!!! MIGRATING !!!!")
     logger.info(s"From version $oldVersion to $CURRENT_VERSION")
-    for (version <- oldVersion + 1 to CURRENT_VERSION) {
-      runMigration(version)
-    }
 
-  private def parseMigrationCommands(version: Int): String =
-    logger.info(s"RUNNING MIGRATION TO VERSION ^^$version^^")
+    if oldVersion == 0 then
+      runSqlScript(s"$MIGRATIONS_DIR/all.sql")
+      txManager.withTransaction {
+        app.service.system.setVersion(CURRENT_VERSION)
+      }
+    else
+      for version <- oldVersion + 1 to CURRENT_VERSION do
+        runSqlScript(s"$MIGRATIONS_DIR/$version.sql")
 
-    val entireSchemaPath = s"$MIGRATIONS_DIR/all.sql"
-
-    /**
-     * We load the entire schema as the one and only migration in the following cases:
-     *   1. In test and dev environments 2. When initiating version 1 in prod
-     */
-    val path = Environment.CURRENT match {
-      case Environment.Name.TEST | Environment.Name.DEV => entireSchemaPath
-      case Environment.Name.PROD =>
-        if version == 1 then entireSchemaPath
-        else s"$MIGRATIONS_DIR/$version.sql"
-    }
-
-    logger.info(s"Migration path: $path")
-    val resourceUrl = getClass.getResource(path)
-    val source = Source.fromURL(resourceUrl)
-
-    val commands = source.mkString
-    source.close()
-
-    commands
+        // must have schema changes committed
+        txManager.withTransaction {
+          migrateVersion(version)
+          app.service.system.setVersion(version)
+        }

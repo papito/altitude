@@ -1,14 +1,80 @@
 @import altitude.core.RequestContext
-@import altitude.core.Const
 
-<div id="albumList">
-    ALBUMS
-</div>
+@()
+
+<style>
+    #albumList {
+        /* One vertical rhythm between album rows */
+        --album-row-gap: 8px;
+        /* Horizontal gap between the cells of a row (⋯ button, count, icon, name) */
+        --album-control-gap: 6px;
+        /* The asset count's slot. js/common/album-list.js sets this to the width of the widest count
+           after every render, so the icons line up whether or not a row shows a count */
+        --album-count-column: max-content;
+
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: var(--album-row-gap);
+    }
+
+    #albumList .album .controls {
+        /* ⋯ menu button | asset count | icon | album-name (grows) */
+        display: grid;
+        grid-template-columns: max-content var(--album-count-column) max-content 1fr;
+        column-gap: var(--album-control-gap);
+        align-items: center;
+        touch-action: none;
+    }
+
+    #albumList .album i {
+        font-size: 1.2em;
+        color: rgba(234, 231, 231, 0.98);
+    }
+
+    #albumList .album-name, #albumList .album-icon {
+        cursor: pointer;
+    }
+
+    /* Green marks the viewed album: the one whose results are displayed (see js/common/album-list.js) */
+    #albumList .album[alt-viewed-scope] .album-icon {
+        color: var(--success-font-color);
+    }
+
+    /* The add button sits centered at the top of the explorer. Both rules are scoped to the shown
+       state, because a display of their own would override the `hidden` attribute the renderer toggles */
+    #albumActions:not([hidden]) {
+        display: grid;
+        justify-items: center;
+        margin-bottom: var(--control-vertical-space);
+    }
+
+    /* Empty state: the one control, centered in the explorer */
+    #noAlbums:not([hidden]) {
+        display: grid;
+        place-items: center;
+        min-height: 60vh;
+    }
+
+    #albumActions .action-button span, #noAlbums .action-button span {
+        margin-left: 5px;
+    }
+</style>
+
+@* Hosts for the two add controls, built by js/common/album-list.js (each is a context menu component
+   whose button opens the add dialog in a panel right below it). The renderer shows one or
+   the other: the top button normally, the centered one while there are no albums; both stay hidden
+   until the list has loaded *@
+<div id="albumActions" hidden></div>
+
+<div id="noAlbums" hidden></div>
+
+<div id="albumList" class="album-list"></div>
 
 <script type="module">
     import { selectTab } from "/static/js/common/navigation.js"
+    import { reloadAlbumList } from "/static/js/common/album-list.js"
 
     selectTab("explorer", "albumsTab")
     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+    reloadAlbumList("@{ RequestContext.getRepository.persistedId }")
 </script>
-

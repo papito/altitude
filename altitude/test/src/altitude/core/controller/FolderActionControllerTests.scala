@@ -20,7 +20,8 @@ import altitude.core.models.Folder
           s"$host/htmx/folder/r/$repoId/dialogs/add-folder",
           params = Map("parentId" -> testContext.repository.rootFolderId),
           cookies = testContext.cookies,
-          check = false)
+          check = false
+        )
 
         response.statusCode shouldBe 200
         response.text() should include("""id="addFolder"""")
@@ -86,7 +87,8 @@ import altitude.core.models.Folder
           headers = Map("Content-Type" -> "application/json"),
           data = ujson.write(payload),
           cookies = testContext.cookies,
-          check = false)
+          check = false
+        )
 
         response.statusCode shouldBe 200
         response.headers("hx-retarget") shouldBe Seq("this")
@@ -114,7 +116,8 @@ import altitude.core.models.Folder
           headers = Map("Content-Type" -> "application/json"),
           data = ujson.write(payload),
           cookies = testContext.cookies,
-          check = false)
+          check = false
+        )
 
         response.statusCode shouldBe 200
         response.headers("hx-retarget") shouldBe Seq("this")

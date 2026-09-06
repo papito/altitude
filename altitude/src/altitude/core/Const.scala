@@ -86,12 +86,14 @@ object Const:
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
 
-  // Dialog titles: the folder dialogs show inline in the folder menu, the others in the modal host,
-  // whose sizing is owned by CSS (`--modal-content-width` in core.css).
+  // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
+  // others in the modal host, whose sizing is owned by CSS (`--modal-content-width` in core.css).
+  // The add dialogs have no title: their one field's placeholder says what they do.
   object UI:
-    val ADD_FOLDER_DIALOG_TITLE = "Add a folder"
     val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
     val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
+    val RENAME_ALBUM_DIALOG_TITLE = "Rename album"
+    val DELETE_ALBUM_DIALOG_TITLE = "Delete album"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
     val VIEW_SETTINGS_DIALOG_TITLE = "View settings"
