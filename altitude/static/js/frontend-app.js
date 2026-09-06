@@ -14,7 +14,10 @@ import {
     handleFolderAfterRequest,
     isFolderRequest,
 } from "./listeners/htmx-folders.js"
-import { isTrashPurgeRequest } from "./listeners/htmx-routes.js"
+import {
+    isSearchRequest,
+    isTrashPurgeRequest,
+} from "./listeners/htmx-routes.js"
 import {
     handlePeopleAfterRequest,
     handlePeopleEscapeKeyPressed,
@@ -107,6 +110,13 @@ export class FrontendApp {
             }
 
             this.reloadNav()
+            return
+        }
+
+        // A page continuous scroll asks for has no visible control behind it, so a failure
+        // would otherwise pass unnoticed; a box selection in progress keeps what it has loaded
+        if (isSearchRequest(requestPath) && !isRequestSuccessful(event)) {
+            showErrorSnackBar(`Error loading search results. HTTP ${status}`)
         }
     }
 

@@ -5,31 +5,23 @@ import {
 } from "../common/dragon-drop.js"
 import { Const } from "../constants.js"
 import { Alpine } from "../lib/alpine.esm.min.js"
+import { suppressNextClick } from "./click-suppression.js"
 
-// Suppress the spurious click that the browser fires after a drag ends.
-// Using capture phase ensures this runs before HTMX/Alpine click listeners.
-let dragWasPerformed = false
+const assetDraggable = interact("#assets .drag-drop")
 
-document.addEventListener(
-    "click",
-    function (e) {
-        if (dragWasPerformed) {
-            e.stopImmediatePropagation()
-            e.preventDefault()
-            dragWasPerformed = false
-        }
-    },
-    true,
+// A Shift-drag over a thumbnail is an additive box selection (see box-selection.js), so no asset
+// drag may start while Shift is held
+assetDraggable.actionChecker((pointer, event, action) =>
+    pointer.shiftKey ? null : action,
 )
 
-interact("#assets .drag-drop").draggable({
+assetDraggable.draggable({
     inertia: true,
     autoScroll: true,
 
     listeners: {
         move: dragMoveListener,
         start: function (event) {
-            dragWasPerformed = false
             const assetId = event.target.getAttribute(Const.attributes.assetId)
 
             const selectedAssetsStore = Alpine.store(Const.state.selectedAssets)
@@ -167,11 +159,8 @@ interact("#assets .drag-drop").draggable({
 
             target.classList.remove("dragging")
 
-            // Set the flag to suppress the spurious click the browser fires after pointerup
-            dragWasPerformed = true
-            setTimeout(() => {
-                dragWasPerformed = false
-            }, 300)
+            // The browser fires a click after pointerup; it must not reach the thumbnail
+            suppressNextClick()
 
             // Call the common dragged function for final cleanup
             dragged(event)

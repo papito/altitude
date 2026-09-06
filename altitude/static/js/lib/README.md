@@ -15,6 +15,7 @@ this table whenever a file is replaced. `.prettierignore` excludes this director
 | `axios.min.js`        | axios                             | 1.14.0                 | https://www.npmjs.com/package/axios                                                                              |
 | `interact.min.js`     | interact.js                       | 1.10.27                | https://www.npmjs.com/package/interactjs                                                                         |
 | `split.es.js`         | Split.js                          | not recorded           | https://www.npmjs.com/package/split.js                                                                           |
+| `viselect.esm.js`     | Viselect (`@viselect/vanilla`)    | 3.9.0                  | `dist/viselect.mjs` in https://registry.npmjs.org/@viselect/vanilla/-/vanilla-3.9.0.tgz, byte-identical; renamed to `.js` so it is served as JavaScript. Its MIT license is `viselect.LICENSE` |
 
 htmx configuration lives in the `htmx-config` meta tag in `views/includes/header_common.scala.html`.
 Extensions activate by script inclusion (`hx-ext` no longer exists): `json-enc.js` is loaded by the

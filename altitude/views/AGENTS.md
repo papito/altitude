@@ -5,8 +5,8 @@
 - **HTMX 4** — server-driven HTML fragments, no SPA routing
 - **Alpine.js** — reactive state and UI behavior (`x-data`, `x-show`, `$store`)
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
-- Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios);
-  versions and sources are listed in `static/js/lib/README.md`
+- Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
+  Viselect for box selection); versions and sources are listed in `static/js/lib/README.md`
 
 ## Template Layout
 
@@ -40,7 +40,7 @@ expansion and viewed scope** below.
 | `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, inline-dialog, image-detail, and inline editor fragments, plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, HTMX/search lifecycle wiring, and the `document`-level dialog request wiring (`dialogs.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`), plus search/detail coordination helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`), plus search/detail coordination helpers such as detail navigation, image loading, drag/drop (`dragon-drop.js`), box selection (`box-selection.js`), and the post-gesture click swallow they share (`click-suppression.js`) used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes a folder menu from outside its component), viewed-folder-scope (highlights the folder whose results are displayed) |
@@ -172,7 +172,10 @@ so Twirl can reference it by name) creates a reactive object for each asset cell
 the `selectedAssets` store holds a `Map<id, componentProxy>`. This means external JS — drag
 handlers, service calls — can reach into individual asset cells and mutate their reactive state
 (`.drag()`, `.drop()`, `.deselect()`) imperatively, causing Alpine to update CSS class bindings
-without those modules needing to know anything about the DOM structure.
+without those modules needing to know anything about the DOM structure. Box selection
+(`js/search-results/box-selection.js`) reaches a cell's component the other way, through
+`Alpine.$data(cellEl)`, and calls `toggle()` on the ones the box touched that are not yet selected;
+it has no selection state of its own.
 
 ### Data flow summary
 
@@ -343,10 +346,41 @@ trigger.
 load next in `data-app-search-next-page`. An `IntersectionObserver` in
 `js/fragments/search-results.js` watches it and requests that page through `runSearch`, appending
 the result after the cell; the cell is unobserved and loses the attribute as it fires, so scrolling
-back over it loads nothing again. Images use `alt-data-src` instead of `src`; the same centralized
-search-results fragment hydrator binds infinite scroll, lazy image loading, and metadata visibility
-for `data-app-fragment="search-results"`, and sets the viewed folder scope from the fragment's
-`data-results-*` metadata.
+back over it loads nothing again. A page the server rejects is reported through the snackbar by
+`FrontendApp.handleAfterRequest` (`isSearchRequest` in `js/listeners/htmx-routes.js`), since no
+visible control is behind the request. Images use `alt-data-src` instead of `src`; the same centralized
+search-results fragment hydrator binds infinite scroll, lazy image loading, metadata visibility, and
+box selection for `data-app-fragment="search-results"`, and sets the viewed folder scope from the
+fragment's `data-results-*` metadata. When a loaded image scrolls out of view and is swapped for the
+transparent 1x1 placeholder, its rendered size is kept as inline `width`/`height`, so the thumbnail
+box a box selection hit-tests against stays where the image was (the cell's row is fixed, so the
+layout is the same either way).
+
+**Box selection** — Dragging a rectangle over the grid selects the thumbnails it touches
+(`js/search-results/box-selection.js`, one controller per displayed grid, created and replaced by the
+search-results hydrator). The vendored Viselect (`lib/viselect.esm.js`) owns the gesture: it draws
+the rectangle inside its own fixed, clipped container on `<body>` (styled by `.selection-area` in
+`includes/search_results.scala.html`), autoscrolls `#content` within 32px of its top and bottom
+edges, and keeps the list of thumbnails inside the rectangle; it adds no classes and changes no
+state. Nothing visible changes during the drag. On release the box goes through the existing
+selection code only: `selectedAssets.reset()` for a replacement box, then `toggle()` on each touched
+component that is not yet selected. The hit target is the `.drag-drop` div, whose box is exactly the
+rendered thumbnail, and any overlap counts (`intersect: "touch"`). Rules: a plain drag from empty grid
+space (padding, gaps, a cell's metadata) replaces the selection; a Shift-drag from anywhere in the
+grid, thumbnails included, adds to it, with Shift read when the button goes down (`dragon-drop.js`
+declines to start an asset drag while Shift is held, via interact's `actionChecker`); a plain drag
+over a thumbnail is still an asset drag; a press without movement past 10px is a click and does
+nothing. Escape, the window losing focus, the page being hidden, or the grid being replaced discard
+the box without touching the selection. The click the browser fires on release, or on the release
+after a cancellation, is swallowed through `click-suppression.js`, the same helper asset drags use.
+Viselect only re-evaluates the rectangle, and starts its scroll loop, from a `mousemove`; the
+controller therefore replays the last pointer position as a synthetic `mousemove` when a page is
+appended, an image loads, the panel resizes, or a frame finds the pointer resting in an edge band
+with room left to scroll. That adapter is version-bound (3.9.0) and commented in place; the library
+file stays unchanged. Candidates are snapshotted on release, so a page arriving afterwards changes
+nothing; a failed page is reported by the snackbar and what was loaded remains selectable. Viselect
+decides once, when the drag starts, whether the container can scroll, so a box begun while the first
+page fits without a scrollbar does not autoscroll in that gesture.
 
 **Detail navigation** — Shadow-results syncing, next/previous navigation, paged JSON fetching,
 and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`. Its
@@ -386,6 +420,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a folder menu panel |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
+| `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through `selectable` on release |
+| `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/folder-menu.js` | Alpine component coordinating a folder's native popover menu |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request — and `currentSearchUrl` |

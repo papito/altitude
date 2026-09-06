@@ -1,6 +1,7 @@
 import { Const } from "../constants.js"
 import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 import { runSearch } from "../search-results/search.js"
+import { bindBoxSelection } from "../search-results/box-selection.js"
 
 const placeholderImageData =
     "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
@@ -19,6 +20,9 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
     app.Alpine.store(Const.state.shadowResults).reset()
 
     syncViewedFolderScope(fragmentEl)
+
+    // Also discards the previous grid's controller, and any box it was still drawing
+    bindBoxSelection({ assetsElement, contentElement })
 
     if (!assetsElement) {
         return
@@ -215,12 +219,27 @@ function getLazyImageObserver(app) {
             }
 
             if (imgEl.hasAttribute(Const.attributes.dataSrc)) {
+                keepRenderedSize(imgEl)
                 imgEl.src = placeholderImageData
             }
         })
     }, observerOptions)
 
     return app.lazyImageObserver
+}
+
+/**
+ * The placeholder is a transparent 1x1 pixel, which would shrink the thumbnail box to nothing
+ * once it replaces a loaded image. The box is what a box selection hit-tests against, and it
+ * must stay where the image was so a rectangle drawn over scrolled-away cells still finds them.
+ * The cell's row is fixed, so the grid layout is unchanged either way. An image that never
+ * loaded has no size to keep.
+ */
+function keepRenderedSize(imgEl) {
+    if (imgEl.naturalWidth > 1 && imgEl.offsetWidth > 0) {
+        imgEl.style.width = `${imgEl.offsetWidth}px`
+        imgEl.style.height = `${imgEl.offsetHeight}px`
+    }
 }
 
 function applyGridMetadataVisibilityToAllCells({ assetsElement, context }) {

@@ -50,9 +50,18 @@
     box-shadow: 0 -2px 2px 0 rgba(44, 43, 43, 0.75);
   }
 
+  /* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail:
+     the target a box selection hit-tests against (js/search-results/box-selection.js) */
   #assets .drag-drop {
     position: relative;
     cursor: pointer;
+  }
+
+  /* The box-selection rectangle. Viselect draws it inside its own fixed, clipped container on
+     <body>; only its look is styled here */
+  .selection-area {
+    border: var(--result-border);
+    pointer-events: none;
   }
 
   #assets .cell .drag-drop.selected .checkmark::before {
