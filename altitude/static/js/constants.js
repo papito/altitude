@@ -40,6 +40,7 @@ export let Const = {
      */
     attributes: {
         expanded: "alt-expanded",
+        viewedScope: "alt-viewed-scope",
         isRoot: "alt-is-root",
         numOfChildren: "alt-num-of-children",
         parentFolderId: "alt-parent-folder-id",

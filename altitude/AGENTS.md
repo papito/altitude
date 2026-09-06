@@ -20,7 +20,7 @@ Feature logic is split into focused ES module folders instead of accumulating in
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
 - `static/js/search-results/` — shadow-results/detail navigation and image-detail coordination
 - `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
-- `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree`, including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel
+- `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree`, including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel. Branch expansion (single-click one level, double-click all levels, collapse resets descendants) and the green viewed-folder highlight are specified in `views/AGENTS.md` under **Folder tree expansion and viewed scope**
 - `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)
 
 `frontend-app.js` should stay the composition root: it initializes context stores, creates the

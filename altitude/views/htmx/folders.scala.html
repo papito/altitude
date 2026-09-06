@@ -5,12 +5,18 @@
 <style>
     #rootFolderList {
         --folder-indent: 20px;
+        /* One vertical rhythm for the whole tree: the same gap separates sibling rows and separates
+           a folder's own row from its children, so nesting never tightens the spacing */
+        --folder-row-gap: 8px;
+        /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name). The trace
+           subtracts it, so both uses must be the same value */
+        --folder-control-gap: 6px;
     }
 
     #rootFolderList .folder.root, .folder-list .children {
         display: grid;
         grid-auto-rows: auto;
-        grid-row-gap: 4px;
+        grid-row-gap: var(--folder-row-gap);
     }
 
     #rootFolderList .folder .children {
@@ -21,11 +27,14 @@
         display: grid;
         align-items: center;
         grid-auto-columns: auto;
+        /* The rows here are this folder's controls and its children block; a collapsed or empty
+           children block is `display: none`, so it is not a grid item and adds no gap */
+        grid-row-gap: var(--folder-row-gap);
     }
 
     #rootFolderList .folder .controls {
         display: grid;
-        column-gap: 6px;
+        column-gap: var(--folder-control-gap);
         align-items: center;
         touch-action: none;
     }
@@ -43,7 +52,7 @@
     #rootFolderList .trace {
         /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name
            sit where a plain margin-left indent would put them while the ⋯ stays flush left */
-        width: calc(var(--depth) * var(--folder-indent) - 6px);
+        width: calc(var(--depth) * var(--folder-indent) - var(--folder-control-gap));
         border-top: 2px double var(--panel-border-color);
     }
 
@@ -79,8 +88,25 @@
         color: rgba(234, 231, 231, 0.98);
     }
 
-    #rootFolderList .folder:not(.root) i.fa-folder-minus,
-    #rootFolderList .folder:not(.root):has(i.fa-folder-minus) .folder i {
+    /* The icon control is a real button (Enter/Space work, no page jump) that keeps only the icon's look and
+       place in the grid. Unlike the ⋯ trigger it keeps the default focus ring: focus lands here from the
+       keyboard, and from a collapse that hid the focused control */
+    #rootFolderList .folder .expand-ctrl {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    /* Green marks the viewed scope: the folder whose results are displayed and every descendant, since the
+       results include the whole subtree. Expansion plays no part. The marker sits on the viewed folder's
+       node alone (see js/common/viewed-folder-scope.js); its descendants are DOM descendants, so this one
+       rule covers root, branches, and leaves in the subtree, and never an icon in a menu or dialog */
+    #rootFolderList .folder[alt-viewed-scope] .folder-icon {
         color: var(--success-font-color);
     }
 

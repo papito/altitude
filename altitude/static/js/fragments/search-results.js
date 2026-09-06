@@ -4,6 +4,7 @@ import {
     getRequestTarget,
     isRequestSuccessful,
 } from "../common/htmx-events.js"
+import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 
 const placeholderImageData =
     "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
@@ -21,6 +22,8 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
     app.Alpine.store(Const.state.resultsTotal).set(resultsTotal)
     app.Alpine.store(Const.state.shadowResults).reset()
 
+    syncViewedFolderScope(fragmentEl)
+
     if (!assetsElement) {
         return
     }
@@ -32,6 +35,24 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
         context: app.context,
     })
     app.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
+}
+
+/**
+ * The folder tree highlights the folder scope of the results now displayed. The fragment carries
+ * the scope the server resolved after combining the request with the browser URL (the clicked
+ * folder or the request URL alone would miss a folder carried over by sorting). Triage and trash
+ * results have no folder scope, whatever folder the URL still names.
+ */
+function syncViewedFolderScope(fragmentEl) {
+    const { resultsRepoId, resultsView, resultsFolderId } = fragmentEl.dataset
+    const hasFolderScope =
+        resultsView !== Const.views.triage &&
+        resultsView !== Const.views.trashbin
+
+    setViewedFolderScope({
+        repoId: resultsRepoId,
+        folderId: hasFolderScope ? resultsFolderId : null,
+    })
 }
 
 export function handleViewSettingChanged({ event, context }) {

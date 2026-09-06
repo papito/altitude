@@ -28,7 +28,9 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 
 `htmx/folders.scala.html` supplies the folder tab's styles, navigation warning, and empty
 `#rootFolderList` host. Its module script selects the tab, sets the repository context, and calls
-`reloadFolderTree(repoId)`; edit `js/common/folder-tree.js` for folder rows and action markup.
+`reloadFolderTree(repoId)`; edit `js/common/folder-tree.js` for folder rows and action markup. The
+tree's interaction contract (expansion gestures, viewed-folder highlighting) is under **Folder tree
+expansion and viewed scope** below.
 
 ## JS Directory ↔ Template Mapping
 
@@ -41,8 +43,8 @@ controllers as `"<!doctype html>" + template(...)`. They regularly include inlin
 | `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes a folder menu from outside its component) |
-| `js/models/folder.js` | DOM wrapper for folder tree elements |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes a folder menu from outside its component), viewed-folder-scope (highlights the folder whose results are displayed) |
+| `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `folder-menu.js` (native popover folder menus); `index.js` registers them |
 
 Legacy feature folders often used a consistent file split:
@@ -71,6 +73,7 @@ Const.attributes.folderId       // "alt-folder-id"
 Const.attributes.assetId        // "alt-asset-id"
 Const.attributes.numOfChildren  // "alt-num-of-children"
 Const.attributes.expanded       // "alt-expanded"
+Const.attributes.viewedScope    // "alt-viewed-scope" (on the folder node whose results are displayed)
 Const.attributes.dataSrc        // "alt-data-src"  (lazy-load image URL)
 ```
 
@@ -80,11 +83,14 @@ nodes. Construct it with an ID: `new Folder(id)` — it wraps `#folder-{id}`, `#
 the `#menu-{id}` popover), is rendered client-side by `js/common/folder-tree.js` from the JSON
 tree endpoint; those IDs are stable so tree rebuilds can restore focus and dialogs can return it.
 
-`reloadFolderTree(repoId)` discards superseded responses, restores expanded folder IDs, and
-captures the focused control immediately before replacing the tree so dialog-returned focus is
-preserved. It calls `htmx.process(container)` after insertion; Alpine's mutation observer
-initializes the new subtree. Do not also call `Alpine.initTree`, which duplicates initialization
-and listeners.
+`reloadFolderTree(repoId)` discards superseded responses and snapshots the expanded folder IDs and
+the focused control immediately before replacing the tree, so a gesture made or focus returned by a
+dialog while the request was in flight is not undone by an older snapshot. Expansion is restored top
+down through the folder model: a surviving branch is re-expanded only when its parent is expanded,
+so a folder moved beneath a collapsed parent is normalized to collapsed, and a folder that lost its
+last child gets a plain icon. The latest viewed scope is reapplied independently of that snapshot.
+It calls `htmx.process(container)` after insertion; Alpine's mutation observer initializes the new
+subtree. Do not also call `Alpine.initTree`, which duplicates initialization and listeners.
 
 Folder indentation comes from each non-root node's `--depth` and the `--folder-indent` variable
 in `htmx/folders.scala.html`. The `.trace` grid cell indents the icon and name while `.menu-ctrl`
@@ -273,8 +279,47 @@ listeners. Styling lives in `views/htmx/folders.scala.html`; CSS sets `display` 
 `:popover-open`, because the hidden state relies on the browser's `display: none`. During
 `beforetoggle`, the component briefly sets inline `display: grid` to measure and position the
 hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
-those viewport coordinates apply correctly. `.menu-ctrl` is excluded from folder dragging
-(`ignoreFrom` in `js/dragdrop/folders.js`).
+those viewport coordinates apply correctly. `.menu-ctrl` and the icon control `.expand-ctrl` are
+excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags.
+
+**Folder tree expansion and viewed scope** — In a non-root row the icon and the name have separate
+jobs: the name navigates (an HTMX request for the folder's results, disabled in triage and trash),
+and the icon sits in a native `button` (`#expand-folder-children-{id}`, icon `#folder-icon-{id}`,
+class `.expand-ctrl`) built by `js/common/folder-tree.js`. A **branch** is a non-root folder with
+child folders; only branches carry expansion state, root is always expanded with no gestures, and a
+leaf keeps a plain `fa-folder` icon with no indicator even when it holds assets (its button
+navigates like the name). A branch's button carries an accessible name, `aria-controls` for its
+children container, and `aria-expanded`, which the model keeps in step with the
+`fa-folder-plus`/`fa-folder-minus` glyph; Enter and Space are single-click activations. Expansion
+sends no request.
+
+| Target and starting state | Single-click | Double-click |
+|---|---|---|
+| Collapsed branch icon (`fa-folder-plus`) | Reveal direct children only | Expand all levels in this branch |
+| Partly or fully expanded branch icon (`fa-folder-minus`) | Close the branch and reset descendants | Close the branch and reset descendants |
+| Folder name | Navigate to the folder | No expansion action |
+| Plain root or leaf icon (`fa-folder`) | Navigate to the folder | No expansion action |
+
+`js/models/folder.js` owns the state: `expand()` (one level), `expandAll()`, and `collapse()`, which
+also collapses every descendant branch (the **reset invariant**: a reopened branch shows one level;
+descendant expansion never lingers hidden). Collapsing closes an open descendant menu and, if focus
+was inside the hidden content, moves it to the collapsing branch's button. The renderer's gesture
+handler acts on the first click immediately, ignores the later clicks of a pointer multi-click
+sequence (`event.detail` above 1), and applies the double-click action from the state captured
+before the first click; the comment on `_bindBranchGestures` explains why. Initial rendering shows
+root and its direct children with every branch collapsed; nothing is persisted.
+
+Green (`--success-font-color`) marks the **viewed scope**: the folder whose results are displayed
+and all its descendants, because the results cover that subtree. It has nothing to do with
+expansion. `js/common/viewed-folder-scope.js` keeps the scope of the displayed results and marks
+that one folder node with `alt-viewed-scope`; the CSS in `htmx/folders.scala.html` colors every
+`.folder-icon` under the node (root and leaves included, hidden descendants too) and no icon in a
+menu or dialog. The search-results fragment carries `data-results-repo-id`, `data-results-view`,
+and `data-results-folder-id`, resolved by `SearchResultsController` after combining the request
+with the browser URL, and `js/fragments/search-results.js` sets the scope when the fragment is
+hydrated. So the highlight changes only for results actually displayed, survives sorting and
+pagination, is absent in triage and trash or without a folder in scope, and is reapplied by every
+tree rebuild; deleting the viewed folder removes it without selecting the parent.
 
 **Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` are
 `data-app-fragment="inline-dialog"` fragments: the heading (`.dialog-title`, the modal title's type
@@ -295,7 +340,8 @@ trigger.
 **Infinite scroll + lazy load** — The last `.cell` gets class `last-cell`; HTMX fires on
 `intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; the centralized
 search-results fragment hydrator in `js/fragments/search-results.js` binds infinite scroll,
-lazy image loading, and metadata visibility for `data-app-fragment="search-results"`.
+lazy image loading, and metadata visibility for `data-app-fragment="search-results"`, and sets the
+viewed folder scope from the fragment's `data-results-*` metadata.
 
 **Detail navigation** — Shadow-results syncing, next/previous navigation, paged JSON fetching,
 and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`.
@@ -323,7 +369,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/app.js` | thin bootstrap that exposes `initApp()` and starts `FrontendApp` |
 | `static/js/context.js` | `window.ctx` — repo ID and metadata field settings |
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
-| `static/js/models/folder.js` | DOM wrapper around folder tree nodes |
+| `static/js/models/folder.js` | DOM wrapper around folder tree nodes; owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
+| `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
 | `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a folder menu panel |

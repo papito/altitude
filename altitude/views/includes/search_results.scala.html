@@ -4,7 +4,7 @@
 @import altitude.core.util.SearchResult
 @import altitude.core.util.SearchSort
 @import altitude.core.models.Person
-@(results: SearchResult, person: Person = null, view: String)
+@(results: SearchResult, person: Person = null, view: String, folderId: Option[String] = None)
 @defining(results.sort.head) { sort =>
 
 <style>
@@ -165,8 +165,13 @@
 
 </style>
 
+@* The effective scope of these results, as resolved by the server after combining the request with the
+   browser URL; the folder tree highlights the viewed folder from it (js/fragments/search-results.js) *@
 <div data-app-fragment="search-results"
-     data-results-total="@{results.total}">
+     data-results-total="@{results.total}"
+     data-results-repo-id="@{RequestContext.getRepository.persistedId}"
+     data-results-view="@{view}"
+     data-results-folder-id="@{folderId.getOrElse("")}">
 
 @if(person != null) {
 @htmx.html.person(person)

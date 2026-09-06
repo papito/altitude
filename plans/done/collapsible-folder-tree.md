@@ -16,8 +16,25 @@ changing application code.
 ## Status
 
 Design interview complete on 2026-09-05; viewed-folder highlighting added to
-the plan the same day. Ready for implementation; no application code has been
-changed for this plan.
+the plan the same day. Implemented and verified in the browser on 2026-09-05;
+see **Verification results** at the end.
+
+Implementation notes that differ from or refine the task text:
+
+- The viewed-scope marker (`alt-viewed-scope`) is set on the viewed folder's
+  node only. Its descendants are DOM descendants, so one CSS rule colors the
+  whole subtree; adding or moving a folder into or out of the subtree is
+  therefore colored by position with no per-descendant marking.
+- The results fragment carries `data-results-repo-id`, `data-results-view`,
+  and `data-results-folder-id`; the server view name for the repository view
+  is `default`, so the client treats every view other than triage and trash
+  as having a folder scope.
+- Second and later clicks of a pointer multi-click sequence are recognized by
+  `event.detail` (1 for the first click, 0 for keyboard activation).
+- Unused folder-model methods (`incrementNumOfChildren`,
+  `decrementNumOfChildren`, `updateVisualState`, `addChild`, `remove`) were
+  removed while the model was rewritten; the tree is rebuilt from JSON after
+  every mutation, so nothing called them.
 
 ## Confirmed decisions
 
@@ -319,3 +336,43 @@ Use A → B → C → D, a second child under A, and an unrelated sibling of A.
 - Check a deeper/wider tree for correct indentation, green only within the
   viewed scope, responsive subtree operations, and absence of per-descendant
   console noise. Menu/dialog icons keep their own styling.
+
+## Verification results (2026-09-05)
+
+`make compile` passed (only pre-existing unused-import warnings from generated
+Twirl code). ESLint and Prettier passed on the changed JS. Verified in Chrome
+against the dev server with the tree Root → lol (2; 3 → 4) and Root → lol2 →
+1 → 2 → 3, using lol2 → 1 → 2 → 3 as A → B → C → D and lol as the unrelated
+sibling. The browser tab was hidden, so pointer gestures were driven by
+dispatching the browser's own event sequence (click `detail` 1, click
+`detail` 2, `dblclick`; `detail` 0 for keyboard activation) and results were
+read from the DOM and computed styles.
+
+- Gestures: single-click opens one level; collapse resets descendants, so a
+  reopened A shows B collapsed with a plus icon; double-click on collapsed A
+  opens every level; double-click on a fully or partly open A closes
+  everything; a following single-click opens one level; a triple-click adds
+  no extra toggle; keyboard clicks are single toggles; gestures on B leave A
+  and the sibling unchanged; `aria-expanded` tracked every change. Root has
+  no control; leaf controls carry no `aria-expanded`. No network requests
+  were made by any expansion.
+- Highlighting: viewing D, C, B, A, root, and a sibling leaf colored exactly
+  the viewed subtree each time, ancestors never; collapsing and expanding
+  while viewing a folder changed no colors; a sort change kept the scope; the
+  leaf icon and root icon navigated; no icons exist inside tree menus to be
+  affected. Direct page load with a folder URL highlighted that subtree with
+  collapsed defaults. Triage view: no highlight, names disabled, warning
+  shown, branches expand, leaf icon does not navigate.
+- Mutations (with throwaway folders, since removed): adding a first child
+  expanded the leaf into a green minus-icon branch; an expanded folder moved
+  into a collapsed parent came back collapsed, and the parent's next click
+  revealed one level; rename kept expansion and scope; deleting the last
+  child restored the plain icon; deleting the viewed folder removed the
+  highlight without selecting the parent. Collapsing an ancestor closed an
+  open descendant menu and moved focus to the ancestor's icon control.
+- Races: expanding during a pending tree reload survived the rebuild;
+  navigating during a pending reload left the new folder highlighted.
+- Drag: interact.js `ignoreFrom` is `.menu-ctrl, .expand-ctrl`; a real
+  pointer drag could not be performed in the hidden tab.
+- Not exercised: real Enter/Space keypresses (keyboard-generated clicks were
+  simulated with `detail` 0) and a real pointer drag on the icon.

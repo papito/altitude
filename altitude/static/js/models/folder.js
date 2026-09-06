@@ -1,3 +1,20 @@
+/**
+ * DOM wrapper for one folder-tree node (`#folder-<id>`) and the single owner of its expansion
+ * state. The tree renderer (`common/folder-tree.js`) builds the nodes; everything that opens or
+ * closes them goes through this class.
+ *
+ * A **branch** is a non-root folder with child folders. Only a branch ever carries the
+ * `alt-expanded` state: root is always expanded and has no expansion gestures, and a leaf has
+ * nothing to expand, even when it holds assets.
+ *
+ * Reset invariant: collapsing a branch also collapses every descendant branch. A closed branch can
+ * therefore never silently retain expansion that would reappear on its next single-click:
+ * reopening it with `expand()` reveals its direct children only, and `expandAll()` opens every
+ * level. Every branch operation walks the selected subtree once.
+ *
+ * Expansion never changes which folders are highlighted as the viewed scope
+ * (`common/viewed-folder-scope.js`): that follows the displayed search results.
+ */
 import { closeOpenFolderMenu } from "../common/folder-menu.js"
 import { Const } from "../constants.js"
 
@@ -14,6 +31,8 @@ export class Folder {
         this.id = id
         this.iconEl = htmx.find("#folder-icon-" + this.id)
         this.childrenEl = htmx.find("#children-" + this.id)
+        // The branch control wrapping the icon; root has none
+        this.expandCtrlEl = htmx.find("#expand-folder-children-" + this.id)
         this.isRoot =
             this.element.getAttribute(Const.attributes.isRoot) === "true"
     }
@@ -36,77 +55,8 @@ export class Folder {
         )
     }
 
-    incrementNumOfChildren() {
-        console.debug(
-            "Incrementing # of children for  " +
-                this.name() +
-                ". New value: " +
-                this.numOfChildren(),
-        )
-        console.debug("\tOld value: " + this.numOfChildren())
-        this.element.setAttribute(
-            Const.attributes.numOfChildren,
-            this.numOfChildren() + 1,
-        )
-        console.debug("\tNew value: " + this.numOfChildren())
-    }
-
-    decrementNumOfChildren() {
-        const newValue = this.numOfChildren() - 1
-
-        console.debug(
-            "Decrementing # of children for  " +
-                this.name() +
-                ". New value: " +
-                newValue,
-        )
-        console.debug("\tOld value: " + this.numOfChildren())
-        this.element.setAttribute(
-            Const.attributes.numOfChildren,
-            newValue.toString(),
-        )
-        console.debug("\tNew value: " + newValue)
-    }
-
-    updateVisualState() {
-        console.debug("Updating visual state for folder " + this.name())
-        console.debug("\tNumber of children: " + this.numOfChildren())
-
-        if (this.isRoot) {
-            return
-        }
-
-        if (!this.isExpanded()) {
-            // Collapsing hides the descendants' triggers; an open descendant menu must not outlive its trigger
-            closeOpenFolderMenu({
-                reason: `ancestor ${this.name()} collapsed`,
-                within: this.childrenEl,
-            })
-
-            if (this.numOfChildren()) {
-                console.debug("\tFolder is collapsed and has children")
-                this.iconEl.classList.remove("fa-folder-minus")
-                this.iconEl.classList.add("fa-folder-plus")
-            } else {
-                console.debug("\tFolder is collapsed and has no children")
-                this.iconEl.classList.remove("fa-folder-plus")
-                this.iconEl.classList.remove("fa-folder-minus")
-                this.iconEl.classList.add("fa-folder")
-            }
-        }
-
-        if (this.isExpanded()) {
-            if (this.numOfChildren()) {
-                console.debug("\tFolder is expanded and has children")
-                this.iconEl.classList.remove("fa-folder-plus")
-                this.iconEl.classList.add("fa-folder-minus")
-            } else {
-                console.debug("\tFolder is expanded and has no children")
-                this.iconEl.classList.remove("fa-folder-plus")
-                this.iconEl.classList.remove("fa-folder-minus")
-                this.iconEl.classList.add("fa-folder")
-            }
-        }
+    isBranch() {
+        return !this.isRoot && this.numOfChildren() > 0
     }
 
     parent() {
@@ -116,31 +66,67 @@ export class Folder {
         return new Folder(parentId)
     }
 
-    collapse() {
-        console.debug("Setting folder " + this.name() + " to collapsed")
-        this.element.removeAttribute(Const.attributes.expanded)
-        if (this.childrenEl && !this.isRoot) {
-            this.childrenEl.style.display = "none"
-        }
-        this.updateVisualState()
-    }
-
+    /**
+     * Reveals this branch's direct children. Descendant branches keep the collapsed state the
+     * reset invariant left them in. Nothing happens for root or a leaf.
+     */
     expand() {
-        console.debug("Setting folder " + this.name() + " to expanded")
-        this.element.setAttribute(Const.attributes.expanded, "true")
-        if (this.childrenEl && !this.isRoot) {
-            this.childrenEl.style.display = ""
+        if (!this.isBranch()) {
+            return
         }
-        this.updateVisualState()
+
+        this._setExpanded(true)
+        console.debug(`Expanded folder ${this.name()}`)
     }
 
-    remove() {
-        this.element.remove()
+    /**
+     * Reveals every level of this branch: this folder and each descendant branch. Nothing happens
+     * for root or a leaf.
+     */
+    expandAll() {
+        if (!this.isBranch()) {
+            return
+        }
+
+        const descendants = this._descendantBranches()
+        this._setExpanded(true)
+        descendants.forEach((branch) => branch._setExpanded(true))
+        console.debug(
+            `Expanded folder ${this.name()} with ${descendants.length} descendant branch(es)`,
+        )
     }
 
-    addChild(folder) {
-        // NOTE: increment/decrement of children must be done by the caller, NOT here
-        this.childrenEl.appendChild(folder.element)
+    /**
+     * Closes this branch and resets every descendant branch (the reset invariant). Nothing happens
+     * for root or a leaf.
+     */
+    collapse() {
+        if (!this.isBranch()) {
+            return
+        }
+
+        // Hiding the descendants hides their menu triggers too; the open menu (at most one) must
+        // not outlive its trigger. One search of the subtree finds it.
+        closeOpenFolderMenu({
+            reason: `ancestor ${this.name()} collapsed`,
+            within: this.childrenEl,
+        })
+
+        // Focus must not be left in hidden content (the closed menu returns it to its trigger,
+        // which is about to be hidden as well); this branch's control takes it instead
+        const focusWasInside = this.childrenEl.contains(document.activeElement)
+
+        const descendants = this._descendantBranches()
+        descendants.forEach((branch) => branch._setExpanded(false))
+        this._setExpanded(false)
+
+        if (focusWasInside) {
+            this.expandCtrlEl?.focus()
+        }
+
+        console.debug(
+            `Collapsed folder ${this.name()}, resetting ${descendants.length} descendant branch(es)`,
+        )
     }
 
     /**
@@ -161,5 +147,37 @@ export class Folder {
             currentId = parentId
         }
         return false
+    }
+
+    /**
+     * Every branch below this folder, found in one walk of its subtree. Folder nodes are the
+     * `.folder` elements carrying a folder ID (the controls and children containers carry the ID
+     * too, but are not nodes); leaves are dropped since they hold no expansion state.
+     */
+    _descendantBranches() {
+        return Array.from(
+            this.childrenEl.querySelectorAll(
+                `.folder[${Const.attributes.folderId}]`,
+            ),
+        )
+            .map((el) => new Folder(el.getAttribute(Const.attributes.folderId)))
+            .filter((folder) => folder.isBranch())
+    }
+
+    /**
+     * The one place a branch's state changes: the `alt-expanded` flag, the visibility of its
+     * children, its plus/minus glyph, and the `aria-expanded` of its control move together.
+     */
+    _setExpanded(expanded) {
+        if (expanded) {
+            this.element.setAttribute(Const.attributes.expanded, "true")
+        } else {
+            this.element.removeAttribute(Const.attributes.expanded)
+        }
+
+        this.childrenEl.style.display = expanded ? "" : "none"
+        this.iconEl.classList.toggle("fa-folder-minus", expanded)
+        this.iconEl.classList.toggle("fa-folder-plus", !expanded)
+        this.expandCtrlEl?.setAttribute("aria-expanded", String(expanded))
     }
 }
