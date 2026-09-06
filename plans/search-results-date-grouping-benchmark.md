@@ -1,5 +1,10 @@
 # Date grouping query experiment
 
+This report preserves the earlier experiment. The current
+[implementation plan](search-results-date-grouping.md) uses engineering judgment
+for both engines and requires no further benchmarking. Functional validation
+remains required; the timings below are historical evidence, not completion gates.
+
 ## Scope and method
 
 Run during design on 2026-09-06 using the project's cached Xerial SQLite JDBC
