@@ -19,12 +19,12 @@ export const context = {
     },
 
     /**
-     * Returns the folder ID currently being browsed, parsed from the browser URL's
-     * "folderId" query parameter. Returns null if no folder filter is active.
+     * The folder currently being browsed, or null when no folder filter is active. Read from the
+     * search parameters rather than the address bar, which only catches up once the server has
+     * replied.
      */
     getCurrentFolderId: function () {
-        const params = new URLSearchParams(window.location.search)
-        return params.get("folderId")
+        return Alpine.store(Const.state.searchParams).folderId
     },
 
     loadMetadataFieldViewSettingsFromStore: function () {

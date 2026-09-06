@@ -48,7 +48,6 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
   def repositoryView(
       repoId: String,
       view: Option[String] = None,
-      newSearch: String = "false",
       personId: Option[String] = None,
       folderId: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ ): cask.Response[String] =

@@ -13,12 +13,12 @@
 The frontend is now organized around a thin composition root in `static/js/frontend-app.js`.
 Feature logic is split into focused ES module folders instead of accumulating in one large file:
 
-- `static/js/stores/` — Alpine store initialization (`app-stores.js`)
+- `static/js/stores/` — Alpine store initialization (`app-stores.js`), including the search parameter set (`search-params.js`)
 - `static/js/alpine/components/` — Alpine components (`selectable.js`, `folder-menu.js`), registered from its `index.js` before Alpine starts
 - `static/js/fragments/` — declarative HTMX fragment hydration (`data-app-fragment="..."`), including the operation lifecycle shared by modal and inline dialogs (`dialog-operations.js`)
 - `static/js/listeners/` — `document.body` custom-event and HTMX lifecycle wiring
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
-- `static/js/search-results/` — shadow-results/detail navigation and image-detail coordination
+- `static/js/search-results/` — the single search funnel (`search.js`), its declarative `data-app-search` triggers (`search-triggers.js`), and shadow-results/detail navigation and image-detail coordination
 - `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
 - `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree`, including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel. Branch expansion (single-click one level, double-click all levels, collapse resets descendants) and the green viewed-folder highlight are specified in `views/AGENTS.md` under **Folder tree expansion and viewed scope**
 - `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)

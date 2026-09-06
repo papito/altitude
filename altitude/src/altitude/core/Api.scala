@@ -109,7 +109,6 @@ object Api:
       val VIEW = "view"
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
-      val IS_NEW_SEARCH = "newSearch"
 
     object SearchSort:
       val DIRECTION = "direction"

@@ -107,17 +107,6 @@ export class FrontendApp {
             }
 
             this.reloadNav()
-            return
-        }
-
-        if (status !== 200 || !requestPath.startsWith("/htmx/search/r")) {
-            return
-        }
-
-        this.Alpine.store(Const.state.searchUrl).set(requestPath)
-
-        if (!event.target.classList?.contains("last-cell")) {
-            this.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
         }
     }
 

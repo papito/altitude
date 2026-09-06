@@ -35,6 +35,7 @@ import { Folder } from "../models/folder.js"
 import { http } from "../http/client.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
+import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,10 @@ export async function reloadFolderTree(repoId) {
         if (window.htmx) {
             htmx.process(container)
         }
+
+        // The tree is built after the folders tab has already settled, so it is not covered by the
+        // fragment hydration that binds every other search trigger
+        bindSearchTriggers(container)
 
         _restoreExpandedState(expandedIds)
 
@@ -177,20 +182,10 @@ function _buildRootControls(folder, repoId) {
     const iconEl = document.createElement("i")
     iconEl.id = `folder-icon-${folder.id}`
     iconEl.className = "fas fa-folder folder-icon"
-    iconEl.setAttribute("hx-target", "#content")
-    iconEl.setAttribute("hx-trigger", "click")
-    iconEl.setAttribute("hx-swap", "innerHTML")
-    iconEl.setAttribute(
-        "x-on:click",
-        "if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }",
-    )
-    iconEl.setAttribute(
-        "hx-get",
-        `/htmx/search/r/${repoId}?folderId=${folder.id}&newSearch=true`,
-    )
+    _makeSearchTrigger(iconEl, folder.id)
 
     // Folder name
-    const nameEl = _buildFolderNameEl(folder, repoId, "/ Root")
+    const nameEl = _buildFolderNameEl(folder, "/ Root")
 
     // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, "Root")
@@ -227,7 +222,7 @@ function _buildFolderControls(folder, repoId) {
     controlsEl.classList.add("controls", "drag-drop", "dropzone")
     controlsEl.setAttribute("alt-folder-id", folder.id)
 
-    const nameEl = _buildFolderNameEl(folder, repoId, folder.name)
+    const nameEl = _buildFolderNameEl(folder, folder.name)
     const iconCtrlEl = _buildFolderIconCtrl(folder, nameEl)
 
     // ⋯ menu button (leftmost column)
@@ -284,13 +279,8 @@ function _buildFolderIconCtrl(folder, nameEl) {
             event.preventDefault()
             event.stopPropagation()
 
-            const currentView = window.Alpine?.store(Const.state.currentView)
-            if (
-                !currentView?.isTriageView() &&
-                !currentView?.isTrashBinView()
-            ) {
-                nameEl.click()
-            }
+            // The name is a search trigger; it decides for itself whether the current view allows it
+            nameEl.click()
         })
     }
 
@@ -366,7 +356,7 @@ function _findFolder(folderId) {
     }
 }
 
-function _buildFolderNameEl(folder, repoId, label) {
+function _buildFolderNameEl(folder, label) {
     const el = document.createElement("span")
     el.id = `folderName-${folder.id}`
     el.className = "folder-name"
@@ -375,19 +365,19 @@ function _buildFolderNameEl(folder, repoId, label) {
         ":class",
         "{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }",
     )
-    el.setAttribute(
-        "x-on:click",
-        "if ($store.currentView.isTriageView() || $store.currentView.isTrashBinView()) { $event.stopPropagation(); $event.preventDefault(); return false; }",
-    )
-    el.setAttribute("hx-target", "#content")
-    el.setAttribute("hx-trigger", "click")
-    el.setAttribute("hx-swap", "innerHTML")
-    el.setAttribute(
-        "hx-get",
-        `/htmx/search/r/${repoId}?folderId=${folder.id}&newSearch=true`,
-    )
+    _makeSearchTrigger(el, folder.id)
     el.textContent = label
     return el
+}
+
+/**
+ * Navigating to a folder is a search like any other: the element declares the one parameter it
+ * knows about and `search-results/search-triggers.js` combines it with the rest of the current
+ * search. That hydrator also owns the rule that folder navigation does nothing in triage and trash.
+ */
+function _makeSearchTrigger(el, folderId) {
+    el.setAttribute("data-app-search", "click")
+    el.setAttribute("data-app-search-folder-id", folderId)
 }
 
 /**

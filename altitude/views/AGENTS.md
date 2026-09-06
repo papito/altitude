@@ -40,7 +40,7 @@ expansion and viewed scope** below.
 | `js/dragdrop/` | interact.js binding modules for batch ops, people, and folder-tree drag/drop flows |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, inline-dialog, image-detail, and inline editor fragments, plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, people, assets, HTMX/search lifecycle wiring, and the `document`-level dialog request wiring (`dialogs.js`) |
-| `js/search-results/` | search/detail coordination and helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`), plus search/detail coordination helpers such as detail navigation, image loading, and drag/drop used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree and each folder's menu), folder-menu (closes a folder menu from outside its component), viewed-folder-scope (highlights the folder whose results are displayed) |
@@ -57,7 +57,8 @@ Legacy feature folders often used a consistent file split:
 | Store key | Purpose |
 |---|---|
 | `Const.state.selectedAssets` | `Map` of currently selected asset IDs for batch ops |
-| `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin` |
+| `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
+| `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
 | `Const.context.repoId` | Active repo ID — set from Twirl via `window.ctx.setRepoId(...)` |
 | `Const.context.gridMetadataFields` | `Set` of metadata field names shown in the grid; persisted in `localStorage` |
 
@@ -283,7 +284,7 @@ those viewport coordinates apply correctly. `.menu-ctrl` and the icon control `.
 excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags.
 
 **Folder tree expansion and viewed scope** — In a non-root row the icon and the name have separate
-jobs: the name navigates (an HTMX request for the folder's results, disabled in triage and trash),
+jobs: the name navigates (a search for the folder's results, disabled in triage and trash),
 and the icon sits in a native `button` (`#expand-folder-children-{id}`, icon `#folder-icon-{id}`,
 class `.expand-ctrl`) built by `js/common/folder-tree.js`. A **branch** is a non-root folder with
 child folders; only branches carry expansion state, root is always expanded with no gestures, and a
@@ -315,9 +316,10 @@ expansion. `js/common/viewed-folder-scope.js` keeps the scope of the displayed r
 that one folder node with `alt-viewed-scope`; the CSS in `htmx/folders.scala.html` colors every
 `.folder-icon` under the node (root and leaves included, hidden descendants too) and no icon in a
 menu or dialog. The search-results fragment carries `data-results-repo-id`, `data-results-view`,
-and `data-results-folder-id`, resolved by `SearchResultsController` after combining the request
-with the browser URL, and `js/fragments/search-results.js` sets the scope when the fragment is
-hydrated. So the highlight changes only for results actually displayed, survives sorting and
+and `data-results-folder-id`, which `SearchResultsController` resolved from the parameters it was
+sent, and `js/fragments/search-results.js` sets the scope when the fragment is hydrated. It reads
+those attributes rather than the `searchParams` store on purpose: the highlight must follow what is
+displayed, so a superseded or failed navigation never moves it. So the highlight changes only for results actually displayed, survives sorting and
 pagination, is absent in triage and trash or without a folder in scope, and is reapplied by every
 tree rebuild; deleting the viewed folder removes it without selecting the parent.
 
@@ -337,14 +339,19 @@ trigger.
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Auto-dismisses after 3 s.
 
-**Infinite scroll + lazy load** — The last `.cell` gets class `last-cell`; HTMX fires on
-`intersect` to load `?page=N`. Images use `alt-data-src` instead of `src`; the centralized
-search-results fragment hydrator in `js/fragments/search-results.js` binds infinite scroll,
-lazy image loading, and metadata visibility for `data-app-fragment="search-results"`, and sets the
-viewed folder scope from the fragment's `data-results-*` metadata.
+**Infinite scroll + lazy load** — The last `.cell` gets class `last-cell` and carries the page to
+load next in `data-app-search-next-page`. An `IntersectionObserver` in
+`js/fragments/search-results.js` watches it and requests that page through `runSearch`, appending
+the result after the cell; the cell is unobserved and loses the attribute as it fires, so scrolling
+back over it loads nothing again. Images use `alt-data-src` instead of `src`; the same centralized
+search-results fragment hydrator binds infinite scroll, lazy image loading, and metadata visibility
+for `data-app-fragment="search-results"`, and sets the viewed folder scope from the fragment's
+`data-results-*` metadata.
 
 **Detail navigation** — Shadow-results syncing, next/previous navigation, paged JSON fetching,
-and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`.
+and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`. Its
+JSON fetches use `currentSearchUrl({ p })`, which leaves the store alone, so paging the shadow
+results never moves the visible page.
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)` to persist to
@@ -377,9 +384,48 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
 | `static/js/alpine/components/folder-menu.js` | Alpine component coordinating a folder's native popover menu |
+| `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
+| `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request — and `currentSearchUrl` |
+| `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/common/folder-tree.js` | renders the folder tree and each folder's menu from the JSON tree endpoint |
 | `static/js/common/folder-menu.js` | closes a folder menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
 | `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |
+
+## Search parameters
+
+Every search in the app — the initial load, folder and person navigation, the sort dropdown,
+continuous scroll, the shadow results behind asset detail — goes through **one** function,
+`runSearch` in `js/search-results/search.js`. A caller supplies only the parameter it knows about;
+the `searchParams` store supplies the rest. Nothing else builds a URL for `/htmx/search/r/:repoId`.
+
+`js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `q`, `sort`,
+`rpp`, `p`) and the rules for combining them: choosing a folder clears the person and vice versa, a
+view clears both, and any change other than paging returns to page 1. A parameter still at its
+default is left out of the request, so a default is never spelled out on both sides — except
+`view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
+
+The browser URL is authoritative exactly once, at page load: `index.scala.html` seeds the store from
+`window.location.search`, so a bookmarked or shared search still opens. After that the store is the
+source of truth and the friendly URL the server pushes back (`HX-Replace-Url`) is only a projection
+of it — never read back. The server correspondingly reads nothing but its own query parameters; it
+does not merge with `HX-Current-URL`, and there is no "new search" flag.
+
+Triggers are declarative and hydrated centrally by `bindSearchTriggers`, called from
+`js/fragments/index.js` (and from `reloadFolderTree`, which builds its rows after the folders tab
+has settled):
+
+```html
+<a data-app-search="click" data-app-search-person-id="abc">          <!-- literal parameter -->
+<select data-app-search="change" data-app-search-from-value="sort">  <!-- parameter from the element's value -->
+```
+
+The hydrator also owns the rule that folder navigation does nothing in triage and trash, so that
+guard lives in one place rather than in markup.
+
+Per-request flags that must not be remembered (`isContinuousScroll`) are passed as `transient` and
+are serialized into that one request only. A server-side action that should change what is
+displayed reports it as a custom event and lets JS run the search — as the people merge does with
+`personMerged` — rather than redirecting to a search URL of its own.
 

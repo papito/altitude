@@ -3,7 +3,6 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Asset
 @import altitude.core.util.SearchResult
-@import altitude.core.Api
 
 @(isContinuousScroll: Boolean = false, p: Int, results: SearchResult)
 
@@ -15,14 +14,14 @@
 
     @if(idx == results.records.length - 1 && results.hasMoreResults) {
 
-        @* Last cell is special because it tells HTMX to load the next page *@
+        @* Last cell is special: it carries the page to load next. An IntersectionObserver in
+           js/fragments/search-results.js watches it and requests that page through the search funnel,
+           which supplies every other search parameter from the `searchParams` store. *@
         <div id="asset-@{asset.persistedId}"
              class="cell last-cell"
              alt-folder-id="@{asset.folderId}"
              @if(asset.isTriaged){alt-is-triaged="true"}
-             hx-trigger="intersect"
-             hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.PAGE}=@{nextPage}&@{Api.Field.Search.IS_CONTINUOUS_SCROLL}=true"
-             hx-swap="afterend">
+             data-app-search-next-page="@{nextPage}">
     } else {
         <div class="cell" id="asset-@{asset.persistedId}" alt-folder-id="@{asset.folderId}" @if(asset.isTriaged){alt-is-triaged="true"}>
     }

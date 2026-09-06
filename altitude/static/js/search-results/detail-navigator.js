@@ -8,6 +8,7 @@ import {
 } from "../common/modal.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
+import { currentSearchUrl } from "./search.js"
 
 // Pending load listeners per image element, removed when a newer `src` supersedes the load
 const pendingImageLoads = new WeakMap()
@@ -52,15 +53,10 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     let shadowResultsSyncToken = 0
     let imageRequestToken = 0
 
-    async function syncShadowResultsFromSearchUrl() {
-        const searchUrl = Alpine.store(Const.state.searchUrl).url
-        if (!searchUrl) {
-            return
-        }
-
+    async function syncShadowResults() {
         const token = ++shadowResultsSyncToken
         const store = Alpine.store(Const.state.shadowResults)
-        const data = await fetchSearchResultsJson(searchUrl)
+        const data = await fetchSearchResultsJson(currentSearchUrl())
 
         if (!data || token !== shadowResultsSyncToken) {
             return
@@ -69,9 +65,9 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
         store.replace(data.ids, data.page, data.totalPages)
     }
 
-    async function appendShadowResultsForRequestPath(requestPath) {
+    async function appendShadowResultsPage(page) {
         const store = Alpine.store(Const.state.shadowResults)
-        const data = await fetchSearchResultsJson(requestPath)
+        const data = await fetchSearchResultsJson(currentSearchUrl({ p: page }))
 
         if (!data) {
             return
@@ -85,10 +81,7 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     async function fetchSearchResultsJson(url) {
         try {
             const response = await http.get(url, {
-                headers: {
-                    "Content-Type": "application/json",
-                    "HX-Current-URL": window.location.href,
-                },
+                headers: { "Content-Type": "application/json" },
             })
 
             return response.data
@@ -171,15 +164,7 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     }
 
     async function fetchShadowSearchResultsPage(pageNum) {
-        const searchUrl = Alpine.store(Const.state.searchUrl).url
-        if (!searchUrl) {
-            return null
-        }
-
-        const url = new URL(searchUrl, window.location.origin)
-        url.searchParams.set("p", pageNum)
-
-        return await fetchSearchResultsJson(url.toString())
+        return await fetchSearchResultsJson(currentSearchUrl({ p: pageNum }))
     }
 
     /**
@@ -282,8 +267,8 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     }
 
     return {
-        syncShadowResultsFromSearchUrl,
-        appendShadowResultsForRequestPath,
+        syncShadowResults,
+        appendShadowResultsPage,
         fetchSearchResultsJson,
         handleShowNext,
         handleShowPrevious,

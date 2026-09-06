@@ -62,7 +62,7 @@ export let Const = {
         currentView: "currentView",
         resultsTotal: "resultsTotal",
         shadowResults: "shadowResults",
-        searchUrl: "searchUrl",
+        searchParams: "searchParams",
         imageDetailLoading: "imageDetailLoading",
         modal: "modal",
     },

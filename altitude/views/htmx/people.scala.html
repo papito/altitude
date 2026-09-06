@@ -136,10 +136,8 @@
                  alt-person-id="@{person.persistedId}">
                 <div class="image">
                     <a href="#"
-                       hx-target="#content"
-                       hx-trigger="click"
-                       hx-swap="innerHTML"
-                       hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.PERSON_ID}=@{person.persistedId}&@{Api.Field.Search.IS_NEW_SEARCH}=true">
+                       data-app-search="click"
+                       data-app-search-person-id="@{person.persistedId}">
                     <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}">
                     </a>
                 </div>
@@ -149,10 +147,8 @@
                            @if(!person.isNamed) {
                            class="unknown"
                            }
-                           hx-target="#content"
-                           hx-trigger="click"
-                           hx-swap="innerHTML"
-                        hx-get="/htmx/search/r/@{RequestContext.getRepository.persistedId}?@{Api.Field.Search.PERSON_ID}=@{person.persistedId}">
+                           data-app-search="click"
+                           data-app-search-person-id="@{person.persistedId}">
                             @{person.name.get} <span>(@{person.numOfFaces})</span>
                         </a>
                     </span>

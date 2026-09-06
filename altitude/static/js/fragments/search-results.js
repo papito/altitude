@@ -1,10 +1,6 @@
 import { Const } from "../constants.js"
-import {
-    getRequestPath,
-    getRequestTarget,
-    isRequestSuccessful,
-} from "../common/htmx-events.js"
 import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
+import { runSearch } from "../search-results/search.js"
 
 const placeholderImageData =
     "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
@@ -34,14 +30,14 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
         assetsElement,
         context: app.context,
     })
-    app.searchDetailCoordinator.syncShadowResultsFromSearchUrl()
+    app.searchDetailCoordinator.syncShadowResults()
 }
 
 /**
- * The folder tree highlights the folder scope of the results now displayed. The fragment carries
- * the scope the server resolved after combining the request with the browser URL (the clicked
- * folder or the request URL alone would miss a folder carried over by sorting). Triage and trash
- * results have no folder scope, whatever folder the URL still names.
+ * The folder tree highlights the folder scope of the results now displayed. The fragment carries the
+ * scope the server resolved, which is what is on screen - not what the search store now asks for, so
+ * a superseded or failed navigation never moves the highlight. Triage and trash results have no
+ * folder scope, whatever folder is still in the search parameters.
  */
 function syncViewedFolderScope(fragmentEl) {
     const { resultsRepoId, resultsView, resultsFolderId } = fragmentEl.dataset
@@ -73,38 +69,80 @@ export function handleViewSettingChanged({ event, context }) {
     })
 }
 
+/**
+ * INFINITE SCROLL
+ *
+ * The last cell of a page carries the page to load next. When it comes into view we request that
+ * page through the search funnel, which supplies the rest of the current search, and append the
+ * result after the cell. Each cell fires once: it is unobserved as soon as it does, so scrolling
+ * back up over it loads nothing again.
+ */
 function bindSearchResultsInfiniteScroll({ assetsElement, app }) {
-    if (assetsElement.dataset.appInfiniteScrollBound === "true") {
+    const observer = getNextPageObserver(app)
+
+    if (assetsElement.dataset.appInfiniteScrollBound !== "true") {
+        assetsElement.dataset.appInfiniteScrollBound = "true"
+
+        // Fires once per swap with the nodes htmx inserted - the next page's own last cell among them
+        assetsElement.addEventListener("htmx:after:settle", (event) => {
+            event.detail.newContent.forEach((node) => {
+                observeLastCell({ root: node, observer })
+            })
+        })
+    }
+
+    observeLastCell({ root: assetsElement, observer })
+}
+
+function observeLastCell({ root, observer }) {
+    if (!(root instanceof Element)) {
         return
     }
 
-    assetsElement.dataset.appInfiniteScrollBound = "true"
+    // A cell that has already loaded its page keeps the class but loses the attribute, so only the
+    // one page still to be loaded is ever picked up
+    const selector = ".last-cell[data-app-search-next-page]"
 
-    assetsElement.addEventListener("htmx:before:request", (event) => {
-        if (!event.target.classList.contains("last-cell")) {
-            return
-        }
+    if (root.matches(selector)) {
+        observer.observe(root)
+    }
 
-        if (getRequestTarget(event).getAttribute("data-hx-revealed")) {
-            event.preventDefault()
-        } else {
-            console.debug("Loading more: %s", getRequestPath(event))
-        }
+    root.querySelectorAll(selector).forEach((cellEl) =>
+        observer.observe(cellEl),
+    )
+}
+
+function getNextPageObserver(app) {
+    if (app.nextPageObserver) {
+        return app.nextPageObserver
+    }
+
+    app.nextPageObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) {
+                return
+            }
+
+            const lastCellEl = entry.target
+            const nextPage = Number(lastCellEl.dataset.appSearchNextPage)
+
+            // One request per cell, whatever the scroll does afterwards
+            app.nextPageObserver.unobserve(lastCellEl)
+            delete lastCellEl.dataset.appSearchNextPage
+
+            console.debug("Loading more: page %s", nextPage)
+
+            runSearch({
+                transient: { p: nextPage, isContinuousScroll: true },
+                target: lastCellEl,
+                swap: "afterend",
+            }).then(() => {
+                app.searchDetailCoordinator.appendShadowResultsPage(nextPage)
+            })
+        })
     })
 
-    assetsElement.addEventListener("htmx:after:request", (event) => {
-        if (!event.target.classList.contains("last-cell")) {
-            return
-        }
-
-        getRequestTarget(event).setAttribute("data-hx-revealed", "true")
-
-        if (isRequestSuccessful(event)) {
-            app.searchDetailCoordinator.appendShadowResultsForRequestPath(
-                getRequestPath(event),
-            )
-        }
-    })
+    return app.nextPageObserver
 }
 
 function bindSearchResultsLazyLoad({ assetsElement, app }) {

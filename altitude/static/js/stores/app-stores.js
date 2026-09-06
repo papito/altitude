@@ -1,5 +1,6 @@
 import { Const } from "../constants.js"
 import { createModalStore } from "../common/modal.js"
+import { createSearchParamsStore } from "./search-params.js"
 
 export function initializeFrontendStores({ Alpine }) {
     Alpine.store(Const.state.selectedAssets, {
@@ -40,13 +41,8 @@ export function initializeFrontendStores({ Alpine }) {
         },
     })
 
-    Alpine.store(Const.state.searchUrl, {
-        url: null,
-
-        set(url) {
-            this.url = url
-        },
-    })
+    // The whole search parameter set; every search request is built from it (search-results/search.js)
+    Alpine.store(Const.state.searchParams, createSearchParamsStore())
 
     Alpine.store(Const.state.shadowResults, {
         items: [],
@@ -76,6 +72,11 @@ export function initializeFrontendStores({ Alpine }) {
         },
     })
 
+    /**
+     * The view as a behaviour, for `x-show` / `:class` bindings. Derived from `searchParams.view`,
+     * which is the parameter itself, and written once at page load - the view only ever changes by
+     * navigating to a new page.
+     */
     Alpine.store(Const.state.currentView, {
         view: null,
 

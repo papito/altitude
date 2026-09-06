@@ -10,7 +10,6 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
-import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Face
@@ -152,7 +151,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
-    cask.Redirect(s"/htmx/search/r/${RequestContext.getRepository.persistedId}?${Api.Field.Search.PERSON_ID}=$destPersonId")
+
+    cask.Response("", 204, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")

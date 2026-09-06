@@ -44,7 +44,8 @@ object Const:
     val DEFAULT_RPP = 50
 
     object View:
-      val DEFAULT = "default"
+      // Matches `Const.views.repository` in static/js/constants.js - the client sends this verbatim
+      val DEFAULT = "repository"
       val TRIAGE = "triage"
       val TRASHBIN = "trashbin"
 

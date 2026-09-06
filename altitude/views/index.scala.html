@@ -147,6 +147,7 @@
       import { highlightNav } from "/static/js/common/navigation.js"
       import { Const } from "/static/js/constants.js"
       import { initApp } from "/static/js/app.js"
+      import { runSearch } from "/static/js/search-results/search.js"
 
       function loadView() {
           initApp()
@@ -154,10 +155,14 @@
           window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
           /**
-           * Highlight the correct tab
+           * The browser URL is authoritative exactly once, here: it seeds the search parameters
+           * (a bookmarked or shared search, or the view the nav links navigated to). From now on
+           * the store is the source of truth and every search goes through `runSearch`.
            */
-          const urlParams = new URLSearchParams(window.location.search)
-          const view = urlParams.get("view") || "repository"
+          const searchParams = Alpine.store(Const.state.searchParams)
+          searchParams.seedFromLocation()
+
+          const view = searchParams.view
           highlightNav(view)
           Alpine.store(Const.state.currentView).setViewName(view)
 
@@ -220,18 +225,9 @@
           }
 
           /**
-           * Perform search on load - default one or the one specified in the URL
+           * Perform search on load - the default one, or the one the URL asked for
            */
-          const searchUrl =
-              "/htmx/search/r/" +
-              window.ctx.getRepoId() +
-              (window.location.search || "") +
-              fragment
-
-          htmx.ajax("get", searchUrl, {
-              swap: "innerHTML",
-              target: "#content",
-          })
+          runSearch()
       }
 
       document.addEventListener("DOMContentLoaded", loadView)

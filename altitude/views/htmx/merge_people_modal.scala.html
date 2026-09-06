@@ -46,8 +46,7 @@
       data-app-dialog-success-detail='{"@{Api.Field.Person.MERGE_SOURCE_ID}":"@{ mergeSourcePerson.persistedId }","@{Api.Field.Person.MERGE_DEST_ID}":"@{ mergeDestPerson.persistedId }"}'
       hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/src/@{mergeSourcePerson.persistedId}/dest/@{mergeDestPerson.persistedId}"
       hx-trigger="submit"
-      hx-target="#content"
-      hx-swap="innerHTML">
+      hx-swap="none">
     <div class="people-to-merge">
         <div class="person-to-merge">
             <div>

@@ -1,5 +1,6 @@
 import { Const } from "../constants.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
+import { runSearch } from "../search-results/search.js"
 
 export function registerPeopleListeners(app) {
     document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
@@ -30,6 +31,9 @@ export function registerPeopleListeners(app) {
         }
 
         showSuccessSnackBar("Person merged successfully")
+
+        // The merge itself returns no content - showing the destination person is a search like any other
+        runSearch({ params: { personId: event.detail.mergeDestId } })
     })
 
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
