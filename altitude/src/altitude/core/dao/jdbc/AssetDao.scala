@@ -201,3 +201,23 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     logger.debug(s"New metadata -> $newMetadata")
 
     setUserMetadata(assetId, newMetadata)
+
+  override def countByFolder(): Map[String, Int] =
+    // Mirrors the search predicate (SearchQueryBuilder): a folder's count must match what clicking it shows
+    val sql = s"""
+      SELECT ${FieldConst.Asset.FOLDER_ID}, COUNT(*) AS ${FieldConst.Folder.NUM_OF_ASSETS}
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_RECYCLED} = ?
+         AND ${FieldConst.Asset.IS_TRIAGED} = ?
+         AND ${FieldConst.Asset.IS_PURGED} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?
+       GROUP BY ${FieldConst.Asset.FOLDER_ID}
+    """
+
+    val values =
+      List(RequestContext.getRepository.persistedId, nativeBool(false), nativeBool(false), nativeBool(false), nativeBool(true))
+
+    manyBySqlQuery(sql, values).map {
+      rec => rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String] -> getIntField(rec(FieldConst.Folder.NUM_OF_ASSETS))
+    }.toMap

@@ -20,7 +20,7 @@ Feature logic is split into focused ES module folders instead of accumulating in
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)
 - `static/js/search-results/` — the single search funnel (`search.js`), its declarative `data-app-search` triggers (`search-triggers.js`), shadow-results/detail navigation and image-detail coordination, asset drag/drop (`dragon-drop.js`), and box selection (`box-selection.js`, built on the vendored Viselect in `static/js/lib/`, committing through the existing `selectable` component). Both gestures swallow the click that follows them through `click-suppression.js`
 - `static/js/dragdrop/` — interact.js binding modules for batch, people, and folder drag/drop
-- `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree`, including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel. Branch expansion (single-click one level, double-click all levels, collapse resets descendants) and the green viewed-folder highlight are specified in `views/AGENTS.md` under **Folder tree expansion and viewed scope**
+- `static/js/common/folder-tree.js` — renders the folder tree client-side from `/api/folder/r/:repoId/tree` (assembled by `FolderService.getTree`, which also rolls up each folder's recursive `numOfAssets`), including each folder's native popover context menu, so no menu markup comes from the server; the menu's actions load the folder dialogs inline into the menu panel. After asset mutations `refreshFolderCounts` patches the counts in place. Branch expansion (single-click one level, double-click all levels, collapse resets descendants) and the green viewed-folder highlight are specified in `views/AGENTS.md` under **Folder tree expansion and viewed scope**
 - `static/js/http/client.js` — shared axios client for non-HTMX HTTP requests; prefer this over raw `fetch()` and only override `validateStatus` on the specific calls that intentionally handle non-2xx responses (for example `409`)
 
 `frontend-app.js` should stay the composition root: it initializes context stores, creates the
@@ -70,16 +70,17 @@ Pekko Streams pipeline in `service/ImportPipelineService.scala` and `pipeline/fl
 
 ## Models
 
-All models extend `BaseModel` and use Play JSON with snake_case:
+All models extend `BaseModel` and are case classes with a upickle `JsonCodec` read/writer plus a `ujson.Value` conversion in their companion:
 
 ```scala
-object Asset:
-  implicit val config: JsonConfiguration = JsonConfiguration(SnakeCase)
-  implicit val format: OFormat[Asset]     = Json.format[Asset]
-  implicit def fromJson(json: JsValue): Asset = Json.fromJson[Asset](json).get
+object Folder:
+  given JsonCodec.ReadWriter[Folder] = JsonCodec.macroRW
+  given Conversion[ujson.Value, Folder] = json => JsonCodec.read[Folder](json)
 ```
 
-DAO methods pass `JsObject` across the service↔DAO boundary; services convert to typed models via the implicit `fromJson`.
+`JsonCodec` emits snake_case field names. DAOs build typed models from result rows in `makeModel`, so services and DAOs exchange models, not JSON. JSON APIs that need a different shape (camelCase, derived fields such as the folder tree's `isRoot`) build their `ujson.Obj` by hand in the controller.
+
+`FolderService.getTree` assembles the folder tree in memory from one folder query and one per-folder asset count query (`AssetDao.countByFolder`), filling `children`, `numOfChildren`, and the recursive `numOfAssets` on every node; `FolderController` only serializes it.
 
 ## Config & Environments
 

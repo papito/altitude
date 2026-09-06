@@ -1,2 +1,0 @@
-# copy this file into application-dev.conf to override the default SQLITE setting
-db.engine=postgres

@@ -7,12 +7,15 @@ import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldEqual, s
 import scala.language.reflectiveCalls
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
+import altitude.core.models.Asset
 import altitude.core.models.Folder
+import altitude.core.models.Repository
 
 @DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -308,5 +311,196 @@ import altitude.core.models.Folder
     intercept[IllegalOperationException] {
       testApp.service.folder.rename(RequestContext.getRepository.rootFolderId, folder1.name)
     }
+  }
+
+  /** Flattens a tree into a folder id -> recursive asset count lookup, for asserting on `getTree` results */
+  private def assetCounts(tree: Folder): Map[String, Int] =
+    tree.children.flatMap(assetCounts).toMap + (tree.persistedId -> tree.numOfAssets)
+
+  private def treeCounts: Map[String, Int] = assetCounts(testApp.service.folder.getTree)
+
+  private def rootFolderId: String = RequestContext.getRepository.rootFolderId
+
+  test("Folder tree is assembled from the root with children sorted by name") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    val deleted: Folder = testApp.service.folder.add("deleted")
+    testApp.service.library.deleteFolderById(deleted.persistedId)
+
+    val tree: Folder = testApp.service.folder.getTree
+    tree.persistedId shouldEqual rootFolderId
+    tree.children.map(_.name) shouldEqual List(f.folder1.name, f.folder2.name)
+    tree.numOfChildren shouldEqual 2
+
+    val folder1 = tree.children.head
+    folder1.children.map(_.name) shouldEqual List(f.folder1_1.name, f.folder1_2.name)
+    folder1.numOfChildren shouldEqual 2
+    folder1.children.last.numOfChildren shouldEqual 0
+
+    assetCounts(tree).keySet shouldNot contain(deleted.persistedId)
+  }
+
+  test("Folder tree asset counts roll up recursively") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    val folder3: Folder = testApp.service.folder.add("folder3")
+
+    testContext.persistAsset(folder = Some(f.folder1_1_1_1))
+    testContext.persistAsset(folder = Some(f.folder1_1_1_1))
+    testContext.persistAsset(folder = Some(f.folder1_1_1_2))
+    testContext.persistAsset(folder = Some(f.folder1_2))
+    testContext.persistAsset(folder = Some(f.folder2_1))
+    testContext.persistAsset(folder = Some(f.folder2_1))
+    testContext.persistAsset(folder = Some(f.folder2_1))
+    testContext.persistAsset()
+
+    val counts = treeCounts
+    counts(f.folder1_1_1_1.persistedId) shouldEqual 2
+    counts(f.folder1_1_1_2.persistedId) shouldEqual 1
+    counts(f.folder1_1_1.persistedId) shouldEqual 3
+    counts(f.folder1_1.persistedId) shouldEqual 3
+    counts(f.folder1_2.persistedId) shouldEqual 1
+    counts(f.folder1.persistedId) shouldEqual 4
+    counts(f.folder2_1.persistedId) shouldEqual 3
+    counts(f.folder2.persistedId) shouldEqual 3
+    counts(folder3.persistedId) shouldEqual 0
+    counts(rootFolderId) shouldEqual 8
+  }
+
+  test("Triaged assets do not count toward any folder") {
+    testContext.persistAsset(isTriaged = true)
+    testContext.persistAsset(isTriaged = true)
+
+    treeCounts(rootFolderId) shouldEqual 0
+  }
+
+  test("Recycling and restoring an asset updates folder counts") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    val asset: Asset = testContext.persistAsset(folder = Some(f.folder1_1))
+
+    treeCounts(f.folder1_1.persistedId) shouldEqual 1
+
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+    val recycledCounts = treeCounts
+    recycledCounts(f.folder1_1.persistedId) shouldEqual 0
+    recycledCounts(f.folder1.persistedId) shouldEqual 0
+    recycledCounts(rootFolderId) shouldEqual 0
+
+    testApp.service.library.restoreRecycledAssets(Set(asset.persistedId))
+    val restoredCounts = treeCounts
+    restoredCounts(f.folder1_1.persistedId) shouldEqual 1
+    restoredCounts(f.folder1.persistedId) shouldEqual 1
+    restoredCounts(rootFolderId) shouldEqual 1
+  }
+
+  test("Moving an asset between folders updates folder counts") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    val asset: Asset = testContext.persistAsset(folder = Some(f.folder1_2))
+
+    testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), f.folder2_1.persistedId)
+
+    val counts = treeCounts
+    counts(f.folder1_2.persistedId) shouldEqual 0
+    counts(f.folder1.persistedId) shouldEqual 0
+    counts(f.folder2_1.persistedId) shouldEqual 1
+    counts(f.folder2.persistedId) shouldEqual 1
+    counts(rootFolderId) shouldEqual 1
+  }
+
+  test("Sorting a triaged asset into a folder updates folder counts") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    val asset: Asset = testContext.persistAsset(isTriaged = true)
+
+    treeCounts(rootFolderId) shouldEqual 0
+
+    testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), f.folder1.persistedId)
+
+    val counts = treeCounts
+    counts(f.folder1.persistedId) shouldEqual 1
+    counts(rootFolderId) shouldEqual 1
+  }
+
+  test("Moving a folder subtree carries its asset counts") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    testContext.persistAsset(folder = Some(f.folder1_1))
+    testContext.persistAsset(folder = Some(f.folder1_1_1))
+    testContext.persistAsset(folder = Some(f.folder1_1_1_1))
+    testContext.persistAsset(folder = Some(f.folder2))
+
+    testApp.service.folder.move(f.folder1_1.persistedId, f.folder2.persistedId)
+
+    val counts = treeCounts
+    counts(f.folder1.persistedId) shouldEqual 0
+    counts(f.folder1_1.persistedId) shouldEqual 3
+    counts(f.folder2.persistedId) shouldEqual 4
+    counts(rootFolderId) shouldEqual 4
+  }
+
+  test("Deleting a folder drops its subtree from the counts") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    testContext.persistAsset(folder = Some(f.folder1_1))
+    testContext.persistAsset(folder = Some(f.folder1_1_1))
+    testContext.persistAsset(folder = Some(f.folder1_1_1_2))
+    testContext.persistAsset(folder = Some(f.folder1_2))
+
+    testApp.service.library.deleteFolderById(f.folder1_1.persistedId)
+
+    val counts = treeCounts
+    counts.keySet shouldNot contain(f.folder1_1.persistedId)
+    counts(f.folder1.persistedId) shouldEqual 1
+    counts(rootFolderId) shouldEqual 1
+  }
+
+  test("Purging recycled assets leaves folder counts unchanged") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    testContext.persistAsset(folder = Some(f.folder1_1))
+    val asset: Asset = testContext.persistAsset(folder = Some(f.folder1_1))
+
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+    val countsBefore = treeCounts
+    countsBefore(f.folder1_1.persistedId) shouldEqual 1
+
+    testApp.service.library.purgeSelectedAssets(Set(asset.persistedId))
+    treeCounts shouldEqual countsBefore
+  }
+
+  test("Assets not yet through the pipeline do not count toward any folder") {
+    // see folderHierarchyFixture for folder hierarchy breakdown
+    val f = folderHierarchyFixture
+    val asset: Asset = testContext.persistAsset(folder = Some(f.folder1))
+    treeCounts(f.folder1.persistedId) shouldEqual 1
+
+    // Raw SQL bypasses the DAO, so the engine's own boolean literal is required
+    val nativeFalse: Any = testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES => false
+      case Const.DbEngineName.SQLITE => 0
+    }
+    testApp.txManager.withTransaction {
+      update("UPDATE asset SET is_pipeline_processed = ? WHERE id = ?", nativeFalse, asset.persistedId)
+    }
+
+    val counts = treeCounts
+    counts(f.folder1.persistedId) shouldEqual 0
+    counts(rootFolderId) shouldEqual 0
+  }
+
+  test("Folder counts are scoped to the context repository") {
+    val firstRepo: Repository = testContext.repository
+    testContext.persistAsset()
+
+    val secondRepo: Repository = testContext.persistRepository()
+    switchContextRepo(secondRepo)
+    testContext.persistAsset(repository = Some(secondRepo))
+    testContext.persistAsset(repository = Some(secondRepo))
+    treeCounts(secondRepo.rootFolderId) shouldEqual 2
+
+    switchContextRepo(firstRepo)
+    treeCounts(firstRepo.rootFolderId) shouldEqual 1
   }
 }

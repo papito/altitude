@@ -15,7 +15,7 @@ Add per-folder asset counts to the folder tree:
 
 ## Status
 
-Design complete on 2026-09-06. Not yet implemented.
+Implemented on 2026-09-06. Backend tests green on SQLite (`make test-sqlite`, `make test-controllers`); Postgres suite not run locally. Verified in the browser: counts render before the icons, in-place patching on move/recycle/restore, and the full-rebuild fallback when restoring an asset whose folder had been deleted.
 
 ## Background
 
@@ -41,7 +41,7 @@ removed in commit `5cf0eea8` as too error-prone. `FieldConst.Folder.NUM_OF_ASSET
   already excludes half-imported rows from every search, so a folder's count
   must match what clicking it shows. `is_purged` is redundant by construction
   (only recycled rows are flagged) but harmless.
-- **Root row shows the repository total** (all sorted assets).
+- **Root row shows no count.** Originally it showed the repository total; removed on 2026-09-06 at the user's request. The JSON still carries `numOfAssets` on the root.
 - **Zero counts are hidden.** No `(0)`.
 - **After asset operations** (move/triage sort, recycle, restore, purge) the
   counts are **patched in place** in the DOM, with no tree teardown. Folder

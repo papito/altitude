@@ -1,4 +1,5 @@
 import { Const } from "./constants.js"
+import { refreshFolderCounts } from "./common/folder-tree.js"
 import { showErrorSnackBar } from "./common/snackbar.js"
 import {
     getRequestPath,
@@ -36,6 +37,7 @@ export class FrontendApp {
             Alpine,
             context,
             reloadNav: this.reloadNav.bind(this),
+            reloadFolderCounts: this.reloadFolderCounts.bind(this),
         })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
             Alpine,
@@ -109,7 +111,10 @@ export class FrontendApp {
                 return
             }
 
+            // Purging only touches recycled assets, which the counts already exclude, but every
+            // asset mutation refreshes them so the rule has no exceptions to remember
             this.reloadNav()
+            this.reloadFolderCounts()
             return
         }
 
@@ -156,5 +161,9 @@ export class FrontendApp {
             swap: "innerHTML",
             target: "nav",
         })
+    }
+
+    reloadFolderCounts() {
+        refreshFolderCounts(this.context.getRepoId())
     }
 }

@@ -8,9 +8,13 @@
         /* One vertical rhythm for the whole tree: the same gap separates sibling rows and separates
            a folder's own row from its children, so nesting never tightens the spacing */
         --folder-row-gap: 8px;
-        /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name). The trace
+        /* Horizontal gap between the cells of a row (⋯ button, trace, count, icon, name). The trace
            subtracts it, so both uses must be the same value */
         --folder-control-gap: 6px;
+        /* The asset count's slot. js/common/folder-tree.js sets this to the width of the widest count
+           in the tree after every render, so sibling icons line up whether or not a row shows a count.
+           Every row is its own grid, so CSS alone cannot share the column width between them */
+        --folder-count-column: max-content;
     }
 
     #rootFolderList .folder.root, .folder-list .children {
@@ -40,20 +44,29 @@
     }
 
     #rootFolderList .folder.root > .controls {
-        /* ⋯ menu button | icon | folder-name (grows) */
+        /* ⋯ menu button | icon | folder-name (grows). The root shows no asset count */
         grid-template-columns: max-content max-content 1fr;
     }
 
     #rootFolderList .folder:not(.root) > .controls {
-        /* ⋯ menu button | dotted trace (= indent) | icon | folder-name (grows) */
-        grid-template-columns: max-content max-content max-content 1fr;
+        /* ⋯ menu button | dotted trace (= indent) | asset count | icon | folder-name (grows) */
+        grid-template-columns: max-content max-content var(--folder-count-column) max-content 1fr;
     }
 
     #rootFolderList .trace {
-        /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name
-           sit where a plain margin-left indent would put them while the ⋯ stays flush left */
+        /* Spans this depth's indent minus the grid gap on its count side, so the count/icon/name
+           sit where a plain margin-left indent would put them while the ⋯ stays flush left. The
+           count slot adds the same constant offset to every row, so relative indentation holds */
         width: calc(var(--depth) * var(--folder-indent) - var(--folder-control-gap));
         border-top: 2px double var(--panel-border-color);
+    }
+
+    /* Recursive asset count on non-root rows, right-aligned against the icon; zero counts render empty */
+    #rootFolderList .asset-count {
+        justify-self: end;
+        color: var(--font-color-dim);
+        font-size: .9em;
+        white-space: nowrap;
     }
 
     #rootFolderList .folder .menu-ctrl {

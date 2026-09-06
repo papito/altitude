@@ -56,6 +56,12 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected def getBooleanField(value: AnyRef): Boolean
 
+  // Aggregates such as COUNT(*) come back as Long on Postgres and Integer on SQLite
+  protected def getIntField(value: AnyRef): Int = value match
+    case i: java.lang.Integer => i
+    case l: java.lang.Long => l.toInt
+    case _ => throw IllegalArgumentException(s"Invalid type for integer field: $value")
+
   protected def getNextVal(tableName: String): AnyRef
 
   private def queryRunner = new QueryRunner()

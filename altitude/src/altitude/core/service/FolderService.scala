@@ -33,6 +33,42 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       dao.query(q).records
     }
 
+  /**
+   * The non-recycled folder tree rooted at the repository root, children sorted by name, with `numOfChildren` and the recursive
+   * `numOfAssets` populated on every node. Loaded with one folder query and one per-folder asset count query.
+   */
+  def getTree: Folder =
+    txManager.asReadOnly {
+      val folders = getAll.filterNot(_.isRecycled)
+
+      val rootFolder = folders
+        .find(_.persistedId == contextRepo.rootFolderId)
+        .getOrElse(throw NotFoundException(s"Root folder ${contextRepo.rootFolderId} not found"))
+
+      // The root folder is its own parent - keep it out of the index so it does not become its own child
+      val childrenByParentId = folders.filter(f => f.persistedId != f.parentId).groupBy(_.parentId)
+
+      // Assets in recycled folders never surface here: deleting a folder recycles its assets in the same transaction
+      val directCounts = app.service.asset.countByFolder()
+
+      assembleTree(rootFolder, childrenByParentId, directCounts)
+    }
+
+  /** Post-order pass: a folder's asset count is its own assets plus those of its assembled children */
+  private def assembleTree(
+      folder: Folder,
+      childrenByParentId: Map[String, List[Folder]],
+      directCounts: Map[String, Int]): Folder =
+    val children = childrenByParentId
+      .getOrElse(folder.persistedId, Nil)
+      .sortBy(_.nameLowercase)
+      .map(assembleTree(_, childrenByParentId, directCounts))
+
+    folder.copy(
+      children = children,
+      numOfChildren = children.length,
+      numOfAssets = directCounts.getOrElse(folder.persistedId, 0) + children.map(_.numOfAssets).sum)
+
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
 

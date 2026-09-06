@@ -83,6 +83,7 @@ nodes. Construct it with an ID: `new Folder(id)` — it wraps `#folder-{id}`, `#
 `#folderName-{id}`. The folder tree, including each folder's ⋯ menu (`#folderMenuCtrl-{id}` opening
 the `#menu-{id}` popover), is rendered client-side by `js/common/folder-tree.js` from the JSON
 tree endpoint; those IDs are stable so tree rebuilds can restore focus and dialogs can return it.
+Each node of the tree JSON carries `numOfChildren` and `numOfAssets` (see **Folder asset counts**).
 
 `reloadFolderTree(repoId)` discards superseded responses and snapshots the expanded folder IDs and
 the focused control immediately before replacing the tree, so a gesture made or focus returned by a
@@ -297,6 +298,15 @@ children container, and `aria-expanded`, which the model keeps in step with the
 `fa-folder-plus`/`fa-folder-minus` glyph; Enter and Space are single-click activations. Expansion
 sends no request.
 
+**Folder asset counts** — Every non-root row shows its folder's asset count in a `.asset-count`
+cell (`#folder-count-{id}`) placed before the icon, dimmed in parentheses. The count is recursive:
+the folder's own sorted assets plus those of every folder beneath it. Triaged and recycled assets are
+excluded, and a zero renders as an empty cell, never `(0)`. The root row (labelled `/`) shows no count (the nav
+carries the repository total), though the tree JSON still reports `numOfAssets` for it. Every row is its own grid, so after each render `folder-tree.js` measures the widest count and sets
+`--folder-count-column` (declared in `views/htmx/folders.scala.html`) on the list to that width; the
+column is then uniform across rows and sibling icons stay aligned whether or not a row shows a count.
+The server computes the counts on every tree fetch (`FolderService.getTree`); nothing is stored.
+
 | Target and starting state | Single-click | Double-click |
 |---|---|---|
 | Collapsed branch icon (`fa-folder-plus`) | Reveal direct children only | Expand all levels in this branch |
@@ -400,6 +410,13 @@ from event listeners; it loads the nav fragment with:
 htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", target: "nav" })
 ```
 
+Asset mutations (move, recycle, purge, restore, sorting from triage) also call
+`app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
+it re-fetches the tree JSON and patches each `#folder-count-{id}` in place, leaving expansion, focus,
+and open menus alone. If the response holds a folder the DOM lacks (restoring assets can un-recycle
+their folders), it falls back to a full render. Folder operations (add, rename, move, delete) keep
+using `reloadFolderTree`, which renders fresh counts as part of the rebuild.
+
 Asset move/recycle/purge/restore UI flows are now implemented in `js/assets/asset-actions.js`,
 and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
@@ -426,7 +443,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request — and `currentSearchUrl` |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
-| `static/js/common/folder-tree.js` | renders the folder tree and each folder's menu from the JSON tree endpoint |
+| `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/folder-menu.js` | closes a folder menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |

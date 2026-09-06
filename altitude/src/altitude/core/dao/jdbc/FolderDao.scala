@@ -16,11 +16,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
       name = rec(FieldConst.Folder.NAME).asInstanceOf[String],
       parentId = rec(FieldConst.Folder.PARENT_ID).asInstanceOf[String],
       isRecycled = getBooleanField(rec(FieldConst.Folder.IS_RECYCLED)),
-      numOfChildren = rec.getOrElse(FieldConst.Folder.NUM_OF_CHILDREN, 0L) match
-        case i: java.lang.Integer => i
-        case l: java.lang.Long => l.toInt
-        case _ =>
-          throw IllegalArgumentException(s"Invalid type for NUM_OF_CHILDREN: ${rec(FieldConst.Folder.NUM_OF_CHILDREN)}")
+      numOfChildren = rec.get(FieldConst.Folder.NUM_OF_CHILDREN).map(getIntField).getOrElse(0)
     )
 
   override def getById(id: String): Folder =

@@ -7,7 +7,18 @@ import {
 } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
 
-export function createAssetActions({ Alpine, context, reloadNav }) {
+export function createAssetActions({
+    Alpine,
+    context,
+    reloadNav,
+    reloadFolderCounts,
+}) {
+    // Every successful mutation refreshes both the nav counts and the folder tree counts
+    function refreshCounts() {
+        reloadNav()
+        reloadFolderCounts()
+    }
+
     function removeTriageStyling(assetIds) {
         for (const assetId of assetIds) {
             const cellEl = htmx.find(`#asset-${assetId}`)
@@ -114,7 +125,7 @@ export function createAssetActions({ Alpine, context, reloadNav }) {
                 Alpine.store(Const.state.selectedAssets).reset()
             }
 
-            reloadNav()
+            refreshCounts()
         } catch (error) {
             showErrorSnackBar(
                 `Error moving assets: ${getHttpErrorMessage(error)}`,
@@ -145,7 +156,7 @@ export function createAssetActions({ Alpine, context, reloadNav }) {
                 Alpine.store(Const.state.selectedAssets).reset()
             }
 
-            reloadNav()
+            refreshCounts()
         } catch (error) {
             showErrorSnackBar(
                 `Error moving assets to trash: ${getHttpErrorMessage(error)}`,
@@ -168,7 +179,7 @@ export function createAssetActions({ Alpine, context, reloadNav }) {
 
             removeAssetsFromGrid(assetIds)
             Alpine.store(Const.state.selectedAssets).reset()
-            reloadNav()
+            refreshCounts()
         } catch (error) {
             showErrorSnackBar(
                 `Error purging assets: ${getHttpErrorMessage(error)}`,
@@ -202,7 +213,7 @@ export function createAssetActions({ Alpine, context, reloadNav }) {
 
             removeAssetsFromGrid(assetIds)
             Alpine.store(Const.state.selectedAssets).reset()
-            reloadNav()
+            refreshCounts()
         } catch (error) {
             showErrorSnackBar(
                 `Error restoring assets: ${getHttpErrorMessage(error)}`,

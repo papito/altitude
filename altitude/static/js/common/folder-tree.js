@@ -5,6 +5,16 @@
  *   reloadFolderTree(repoId) — fetch the full tree from the server, snapshot
  *   currently-expanded folder IDs and the focused tree control, re-render,
  *   restore expanded state, the viewed folder scope, and focus.
+ *   refreshFolderCounts(repoId) — fetch the tree and patch only the asset
+ *   counts in place, keeping the rendered DOM; falls back to a full render when
+ *   the tree gained a folder the DOM does not have.
+ *
+ * Every non-root row shows its folder's recursive asset count (`.asset-count`,
+ * before the icon): the folder's own sorted assets plus those of every folder
+ * beneath it, with triaged and recycled assets excluded. A zero renders empty.
+ * The root row shows no count; the nav already carries the repository total.
+ * The count column is exactly as wide as the widest count in the tree, so the
+ * icons of sibling rows line up; see `_sizeCountColumn`.
  *
  * The DOM structure produced mirrors what the old Twirl templates generated so
  * that the existing Folder JS model, CSS, and drag-and-drop wiring all continue
@@ -26,7 +36,7 @@
  *
  * Indentation is not structural: every non-root `.folder` carries a `--depth`
  * CSS custom property, and its `.controls` row holds a `.trace` cell (between
- * the ⋯ menu button and the icon) whose width is derived from `--depth`. The
+ * the ⋯ menu button and the count) whose width is derived from `--depth`. The
  * trace both indents the icon/name and draws the dotted guide back to the ⋯
  * button, which stays flush left at every depth.
  */
@@ -50,44 +60,7 @@ export async function reloadFolderTree(repoId) {
         const response = await http.get(`/api/folder/r/${repoId}/tree`)
         if (seq !== _reloadSeq) return
 
-        const treeData = response.data
-
-        const container = document.getElementById("rootFolderList")
-        if (!container) return
-
-        // Snapshot expansion and focus only now, immediately before the DOM is replaced: both may
-        // have changed while the fetch was in flight (a branch expanded or collapsed; a dialog
-        // returning focus to a folder menu control as its operation completes), and an older
-        // snapshot would undo that
-        const expandedIds = _getExpandedFolderIds()
-        const focusedId = _getFocusedTreeControlId()
-
-        // Tear down and rebuild
-        container.innerHTML = ""
-        container.appendChild(_renderRootNode(treeData, repoId))
-
-        // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
-        // initializes the appended subtree, and an explicit `initTree` here would initialize
-        // every component a second time, duplicating their listeners.
-        if (window.htmx) {
-            htmx.process(container)
-        }
-
-        // The tree is built after the folders tab has already settled, so it is not covered by the
-        // fragment hydration that binds every other search trigger
-        bindSearchTriggers(container)
-
-        _restoreExpandedState(expandedIds)
-
-        // The highlight follows the displayed results, not the tree: the latest scope is applied
-        // even if a navigation changed it while this request was pending, and it is independent
-        // of the expansion snapshot
-        applyViewedFolderScope()
-
-        // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
-        if (focusedId) {
-            document.getElementById(focusedId)?.focus()
-        }
+        _renderTree(response.data, repoId)
     } catch (error) {
         // A newer reload superseded this one - let it report its own outcome
         if (seq !== _reloadSeq) return
@@ -95,6 +68,128 @@ export async function reloadFolderTree(repoId) {
         console.error("Failed to load folder tree", error)
         showErrorSnackBar("Failed to load folder tree")
     }
+}
+
+// Same guard for count refreshes, which never replace the DOM unless they have to
+let _countsSeq = 0
+
+/**
+ * Re-fetches the tree after an asset mutation and patches each row's asset count in place, so
+ * expansion, focus, and open menus are untouched. A full reload started meanwhile carries fresh
+ * counts itself, so this one stands down. Restoring assets can un-recycle their folders; if the
+ * response holds a folder the DOM lacks, the tree is rendered in full instead.
+ */
+export async function refreshFolderCounts(repoId) {
+    const seq = ++_countsSeq
+    const reloadSeqAtStart = _reloadSeq
+
+    try {
+        const response = await http.get(`/api/folder/r/${repoId}/tree`)
+        if (seq !== _countsSeq || reloadSeqAtStart !== _reloadSeq) return
+
+        // Another explorer tab is active: the next render of the folders tab fetches fresh counts
+        if (!document.getElementById("rootFolderList")) return
+
+        if (_patchAssetCounts(response.data)) {
+            _sizeCountColumn(document.getElementById("rootFolderList"))
+        } else {
+            _renderTree(response.data, repoId)
+        }
+    } catch (error) {
+        if (seq !== _countsSeq || reloadSeqAtStart !== _reloadSeq) return
+
+        console.error("Failed to refresh folder counts", error)
+        showErrorSnackBar("Failed to refresh folder counts")
+    }
+}
+
+/**
+ * Replaces the rendered tree with `treeData`, preserving expansion, the viewed scope, and focus.
+ */
+function _renderTree(treeData, repoId) {
+    const container = document.getElementById("rootFolderList")
+    if (!container) return
+
+    // Snapshot expansion and focus only now, immediately before the DOM is replaced: both may
+    // have changed while the fetch was in flight (a branch expanded or collapsed; a dialog
+    // returning focus to a folder menu control as its operation completes), and an older
+    // snapshot would undo that
+    const expandedIds = _getExpandedFolderIds()
+    const focusedId = _getFocusedTreeControlId()
+
+    // Tear down and rebuild
+    container.innerHTML = ""
+    container.appendChild(_renderRootNode(treeData, repoId))
+    _sizeCountColumn(container)
+
+    // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
+    // initializes the appended subtree, and an explicit `initTree` here would initialize
+    // every component a second time, duplicating their listeners.
+    if (window.htmx) {
+        htmx.process(container)
+    }
+
+    // The tree is built after the folders tab has already settled, so it is not covered by the
+    // fragment hydration that binds every other search trigger
+    bindSearchTriggers(container)
+
+    _restoreExpandedState(expandedIds)
+
+    // The highlight follows the displayed results, not the tree: the latest scope is applied
+    // even if a navigation changed it while this request was pending, and it is independent
+    // of the expansion snapshot
+    applyViewedFolderScope()
+
+    // Keep keyboard focus on the rebuilt copy of the control that had it, if it still exists
+    if (focusedId) {
+        document.getElementById(focusedId)?.focus()
+    }
+}
+
+/**
+ * Writes each folder's count into its rendered row. Returns false as soon as a folder has no row,
+ * leaving the caller to render in full; rows with no folder in the JSON are left alone, since
+ * folder operations always reload the whole tree.
+ */
+function _patchAssetCounts(folder) {
+    // The root row has no count cell
+    if (!folder.isRoot) {
+        const el = document.getElementById(`folder-count-${folder.id}`)
+        if (!el) return false
+
+        _setAssetCount(el, folder.numOfAssets)
+    }
+
+    return folder.children.every(_patchAssetCounts)
+}
+
+/**
+ * Sets the list's `--folder-count-column` to the width of the widest count in the tree. Every row
+ * is its own grid, so CSS alone cannot give them one shared column width. Collapsed rows are
+ * `display: none` and would measure as zero, so each distinct count text is measured in a probe
+ * appended to the list instead, which also picks up the cell's own font size.
+ */
+function _sizeCountColumn(container) {
+    const texts = new Set(
+        [...container.querySelectorAll(".asset-count")]
+            .map((el) => el.textContent)
+            .filter(Boolean),
+    )
+
+    const probe = document.createElement("span")
+    probe.className = "asset-count"
+    probe.style.position = "absolute"
+    probe.style.visibility = "hidden"
+    container.appendChild(probe)
+
+    let width = 0
+    for (const text of texts) {
+        probe.textContent = text
+        width = Math.max(width, probe.getBoundingClientRect().width)
+    }
+    probe.remove()
+
+    container.style.setProperty("--folder-count-column", `${width}px`)
 }
 
 // ─── snapshot helpers ────────────────────────────────────────────────────────
@@ -185,11 +280,12 @@ function _buildRootControls(folder, repoId) {
     _makeSearchTrigger(iconEl, folder.id)
 
     // Folder name
-    const nameEl = _buildFolderNameEl(folder, "/ Root")
+    const nameEl = _buildFolderNameEl(folder, "/")
 
     // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, "Root")
 
+    // ⋯ menu button | icon | folder-name (no asset count on the root row)
     controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(iconEl)
     controlsEl.appendChild(nameEl)
@@ -228,17 +324,32 @@ function _buildFolderControls(folder, repoId) {
     // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, folder.name)
 
-    // Dotted guide from the ⋯ button to the icon; its width is the row's indent
+    // Dotted guide from the ⋯ button to the count; its width is the row's indent
     const traceEl = document.createElement("span")
     traceEl.className = "trace"
 
-    // ⋯ menu button | trace | icon | folder-name
+    // ⋯ menu button | trace | asset count | icon | folder-name
     controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(traceEl)
+    controlsEl.appendChild(_buildAssetCountEl(folder))
     controlsEl.appendChild(iconCtrlEl)
     controlsEl.appendChild(nameEl)
 
     return controlsEl
+}
+
+// The count cell keeps a stable ID so `refreshFolderCounts` can patch it without a rebuild
+function _buildAssetCountEl(folder) {
+    const el = document.createElement("span")
+    el.id = `folder-count-${folder.id}`
+    el.className = "asset-count"
+    _setAssetCount(el, folder.numOfAssets)
+    return el
+}
+
+// Zero counts render empty, never "(0)"
+function _setAssetCount(el, numOfAssets) {
+    el.textContent = numOfAssets > 0 ? `(${numOfAssets})` : ""
 }
 
 /**

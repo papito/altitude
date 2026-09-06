@@ -129,3 +129,8 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     txManager.asReadOnly {
       dao.getAssetsToMove(assetIds, folderId)
     }
+
+  def countByFolder(): Map[String, Int] =
+    txManager.asReadOnly {
+      dao.countByFolder()
+    }
