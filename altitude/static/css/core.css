@@ -11,6 +11,7 @@
     --modal-border-width: 2px;
     --modal-border: var(--modal-border-width) solid rgba(129, 128, 128, 0.98);
     --modal-background-color: #3b3b3b;
+    --modal-close-color: #fff;
     /* General dialogs: content width on wide screens, and the gap kept to the viewport edges on narrow ones */
     --modal-content-width: 400px;
     --modal-content-padding: 15px;
@@ -419,24 +420,18 @@ form input.error, form input.error:focus {
     border-bottom: 1px solid #44495e;
 }
 
+/* Keep the X white without an outline, including when the modal focuses it on open. */
 .close-modal {
     background: none;
     border: 0;
-    color: inherit;
+    outline: none;
+    color: var(--modal-close-color);
     font: inherit;
     font-size: 1.6em;
     font-weight: bold;
     line-height: 1;
     padding: 0 .4em 0 0;
-}
-
-/* Focus is shown by the color change alone, not the default button outline */
-.close-modal:hover,
-.close-modal:focus {
-    color: var(--warning-font-color);
-    text-decoration: none;
     cursor: pointer;
-    outline: none;
 }
 
 .modal-title {

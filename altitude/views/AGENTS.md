@@ -226,6 +226,10 @@ image with `setAssetDetailSize()`. General-dialog placement is the host's CSS (b
 horizontally, `padding-top` from the top). Opening any modal closes an open context menu first, so a
 modal never appears over one.
 
+Both modal hosts use `.close-modal` in `core.css`: the X stays white (`--modal-close-color`)
+at rest, on hover, and on focus, with no focus outline (the modal may focus it on open).
+Folder and album inline dialogs have no X; they follow the context menu's dismissal rules.
+
 A **dialog** is a server-rendered form that completes one user action, hydrated from its
 `data-app-fragment` kind; a **modal dialog** is one shown in the modal host. Attributes that describe
 the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
