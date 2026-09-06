@@ -9,7 +9,7 @@ function _showSnackbar({ type = "success", message }) {
     elSnackbar.classList.remove("warning")
     elSnackbar.classList.remove("error")
 
-    elSnackbar.innerHTML = message
+    elSnackbar.textContent = message
     elSnackbar.classList.add("show")
 
     if (type === "error") {
@@ -26,7 +26,7 @@ function _showSnackbar({ type = "success", message }) {
 
     state.snackbarTimeout = setTimeout(function () {
         elSnackbar.classList.remove("show")
-        elSnackbar.innerHTML = ""
+        elSnackbar.textContent = ""
     }, 3000)
 }
 

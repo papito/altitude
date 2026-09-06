@@ -388,7 +388,8 @@ trigger that opened the panel. Dismissal follows the menu's rules with no confir
 trigger.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
-`js/common/snackbar.js`. Auto-dismisses after 3 s.
+`js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
+user-supplied names and server errors, without HTML markup or pre-escaping. Auto-dismisses after 3 s.
 
 **Infinite scroll + lazy load** — The last `.cell` gets class `last-cell` and carries the page to
 load next in `data-app-search-next-page`. An `IntersectionObserver` in
