@@ -7,11 +7,14 @@ import {
     setAssetDetailSize,
 } from "../common/modal.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
+import { loadNextPage } from "../fragments/search-results.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
-import { currentSearchUrl } from "./search.js"
 
 // Pending load listeners per image element, removed when a newer `src` supersedes the load
 const pendingImageLoads = new WeakMap()
+
+// A cell of the results grid is `#asset-<id>` (htmx/result_cell.scala.html)
+const CELL_ID_PREFIX = "asset-"
 
 export function setImgSrcAndWait({ img, url }) {
     pendingImageLoads.get(img)?.()
@@ -42,59 +45,49 @@ export function setImgSrcAndWait({ img, url }) {
 }
 
 /**
- * Coordinates the shadow search results (asset IDs mirroring the grid, fetched as JSON) with
- * previous/next navigation and image loading inside the asset-detail modal.
+ * Coordinates previous/next navigation and image loading inside the asset-detail modal.
+ *
+ * The results grid is the modal's source of truth: next and previous move between the grid's
+ * `.cell`s in document order, skipping the date headers of a grouped grid, and a cell removed from
+ * the grid drops out of navigation with it. At the end of the loaded grid, next loads the following
+ * page exactly as the scroll observer does (`loadNextPage`) and continues into it; at the true end,
+ * and at the first cell, nothing happens.
  *
  * Every image request gets its own token. Only the latest request for the still-active
  * asset-detail open may change the image, box size, title, loading state, or dispatch
  * `detailShown`; superseded or orphaned completions are ignored, and none can reopen a modal.
  */
 export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
-    let shadowResultsSyncToken = 0
+    // The asset the modal shows, or is loading: where navigation starts from
+    let currentAssetId = null
     let imageRequestToken = 0
-
-    async function syncShadowResults() {
-        const token = ++shadowResultsSyncToken
-        const store = Alpine.store(Const.state.shadowResults)
-        const data = await fetchSearchResultsJson(currentSearchUrl())
-
-        if (!data || token !== shadowResultsSyncToken) {
-            return
-        }
-
-        store.replace(data.ids, data.page, data.totalPages)
-    }
-
-    async function appendShadowResultsPage(page) {
-        const store = Alpine.store(Const.state.shadowResults)
-        const data = await fetchSearchResultsJson(currentSearchUrl({ p: page }))
-
-        if (!data) {
-            return
-        }
-
-        store.append(data.ids)
-        store.page = data.page
-        store.totalPages = data.totalPages
-    }
-
-    async function fetchSearchResultsJson(url) {
-        try {
-            const response = await http.get(url, {
-                headers: { "Content-Type": "application/json" },
-            })
-
-            return response.data
-        } catch (error) {
-            console.error(
-                `Error fetching search results: ${getHttpErrorMessage(error)}`,
-            )
-            return null
-        }
-    }
 
     function isAssetDetailActive() {
         return getActiveModalHost() === ModalHost.assetDetail
+    }
+
+    function currentCellEl() {
+        return currentAssetId
+            ? document.getElementById(`${CELL_ID_PREFIX}${currentAssetId}`)
+            : null
+    }
+
+    /** The nearest `.cell` among the siblings in `direction`, past any date header */
+    function siblingCellOf(cellEl, direction) {
+        let el = cellEl[direction]
+
+        while (el && !el.classList.contains("cell")) {
+            el = el[direction]
+        }
+
+        return el
+    }
+
+    function showCell(cellEl) {
+        const assetId = cellEl.id.slice(CELL_ID_PREFIX.length)
+
+        currentAssetId = assetId
+        loadAssetDetail(assetId)
     }
 
     async function handleShowNext() {
@@ -103,68 +96,49 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
         }
 
         const openId = getModalOpenId()
-        const store = Alpine.store(Const.state.shadowResults)
-        const currentIdx = store.items.indexOf(store.currentAssetId)
-        const nextId =
-            currentIdx !== -1 && currentIdx + 1 < store.items.length
-                ? store.items[currentIdx + 1]
-                : null
+        const originId = currentAssetId
+        const cellEl = currentCellEl()
 
-        if (nextId) {
-            store.currentAssetId = nextId
-            loadAssetDetail(nextId)
+        if (!cellEl) {
             return
         }
 
-        if (store.page < store.totalPages) {
-            const nextPage = store.page + 1
-            const data = await fetchShadowSearchResultsPage(nextPage)
+        let nextCellEl = siblingCellOf(cellEl, "nextElementSibling")
 
-            // The page may have been fetched for a detail view that is no longer showing
-            if (!data || !isModalOpenActive(openId)) {
+        if (!nextCellEl) {
+            // The end of the loaded grid: the current cell is its last, and carries the continuation
+            // if there is one. The page may still be arriving for a detail view that moved on.
+            try {
+                await loadNextPage(cellEl)
+            } catch (error) {
+                console.error("Error loading the next page of results", error)
                 return
             }
 
-            store.append(data.ids)
-            store.page = nextPage
-            store.totalPages = data.totalPages
-            dispatch(Const.events.showNext)
+            if (!isModalOpenActive(openId) || currentAssetId !== originId) {
+                return
+            }
+
+            nextCellEl = siblingCellOf(cellEl, "nextElementSibling")
+        }
+
+        if (nextCellEl) {
+            showCell(nextCellEl)
         }
     }
 
-    async function handleShowPrevious() {
+    function handleShowPrevious() {
         if (!isAssetDetailActive()) {
             return
         }
 
-        const openId = getModalOpenId()
-        const store = Alpine.store(Const.state.shadowResults)
-        const currentIdx = store.items.indexOf(store.currentAssetId)
-        const previousId = currentIdx > 0 ? store.items[currentIdx - 1] : null
+        const cellEl = currentCellEl()
+        const previousCellEl =
+            cellEl && siblingCellOf(cellEl, "previousElementSibling")
 
-        if (previousId) {
-            store.currentAssetId = previousId
-            loadAssetDetail(previousId)
-            return
+        if (previousCellEl) {
+            showCell(previousCellEl)
         }
-
-        if (store.page > 1) {
-            const previousPage = store.page - 1
-            const data = await fetchShadowSearchResultsPage(previousPage)
-
-            if (!data || !isModalOpenActive(openId)) {
-                return
-            }
-
-            store.prepend(data.ids)
-            store.page = previousPage
-            store.totalPages = data.totalPages
-            dispatch(Const.events.showPrevious)
-        }
-    }
-
-    async function fetchShadowSearchResultsPage(pageNum) {
-        return await fetchSearchResultsJson(currentSearchUrl({ p: pageNum }))
     }
 
     /**
@@ -190,7 +164,7 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     }) {
         const loading = Alpine.store(Const.state.imageDetailLoading)
         // Navigation starts from the requested asset while its image is still loading.
-        Alpine.store(Const.state.shadowResults).currentAssetId = assetId
+        currentAssetId = assetId
         loading.value = true
 
         try {
@@ -267,12 +241,8 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
     }
 
     return {
-        syncShadowResults,
-        appendShadowResultsPage,
-        fetchSearchResultsJson,
         handleShowNext,
         handleShowPrevious,
-        fetchShadowSearchResultsPage,
         showImage,
         loadAssetDetail,
     }

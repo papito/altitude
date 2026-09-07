@@ -234,10 +234,10 @@
   <div id="viewSettingsActions"></div>
 
   <div class="group">
-    @* The selected option is the effective grouping the server used. Each option carries the two parameters it sets, for the
-       search funnel to read off the selected option (data-app-search-from-selected-option). That trigger source is not bound
-       yet: it comes with the frontend unit of plans/search-results-date-grouping-ui.md, until then a change re-runs the
-       current search. *@
+    @* The selected option is the effective grouping the server used. Each option carries the two parameters it sets, which
+       the search funnel reads off the selected option (data-app-search-from-selected-option, js/search-results/search-triggers.js)
+       and combines with every other search parameter in the `searchParams` store. Grouping is a reorder, like the sort: it
+       survives a change of folder, person, album or view. *@
     <select id="groupOptions"
             class="sort-dropdown"
             data-app-search="change"

@@ -12,7 +12,6 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.SearchCursorException
-import altitude.core.models.Asset
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
@@ -39,8 +38,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * fragment, so replacing the URL does not switch the explorer tab.
    *
    * With `groupBy`, the grid is grouped by date: a header opens each day, and the page is continued by the `after` cursor the
-   * last cell carries (`data-app-search-after`), never by page number. Grouped results are HTML only; the detail modal walks the
-   * grid itself. `parseGroupedQuery` validates the request.
+   * last cell carries (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
+   *
+   * Results are HTML only: the detail modal walks the rendered grid, so nothing asks for them as JSON, and a JSON request is
+   * refused.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId")
@@ -66,6 +67,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       (contentType != null && contentType.contains("application/json")) ||
         (accept != null && accept.contains("application/json"))
 
+    if isJsonFormat then
+      return cask.Response(
+        ujson.write(ujson.Obj("error" -> "Search results are available as HTML only")),
+        400,
+        Seq(("Content-Type", "application/json")))
+
     // Where are we? Triage? Recycle? etc.
     val queryParams: Map[String, Any] = view match
       case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
@@ -74,8 +81,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
 
     if groupBy.isDefined || groupDirection.isDefined || after.isDefined then
-      if isJsonFormat then return badRequest("Grouped results are available as HTML only", isJsonFormat)
-
       val searchQuery =
         parseGroupedQuery(
           queryParams,
@@ -90,14 +95,14 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           groupDirection,
           after,
           isContinuousScroll) match
-          case Left(message) => return badRequest(message, isJsonFormat)
+          case Left(message) => return badRequest(message)
           case Right(query) => query
 
       logger.info(s"GROUPED QUERY: ${searchQuery.toString}")
 
       val results: GroupedSearchResult =
         try App.altitude.service.library.searchGrouped(searchQuery)
-        catch case ex: SearchCursorException => return badRequest(ex.getMessage, isJsonFormat)
+        catch case ex: SearchCursorException => return badRequest(ex.getMessage)
 
       if isContinuousScroll then
         // The continuation ran dry: results are live, and the images past the cursor may be gone by now
@@ -141,15 +146,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     logger.info(s"QUERY: ${searchQuery.toString}")
 
     val results = App.altitude.service.library.search(searchQuery)
-
-    if isJsonFormat then
-      val assets = results.records.map(r => r: Asset)
-      val jsonPayload = ujson.Obj(
-        "ids" -> assets.map(_.persistedId),
-        "page" -> page,
-        "totalPages" -> results.totalPages
-      )
-      return cask.Response(ujson.write(jsonPayload), 200, Seq(("Content-Type", "application/json")))
 
     if isContinuousScroll then
       // no more pages
@@ -248,10 +244,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       .filter(_ => Const.Search.SORT_FIELDS.contains(field))
       .map(direction => SearchSort(field = field, direction = direction))
 
-  /** A 400 in the format of the request: `{"error": ...}` for JSON, the plain message for HTML (the snackbar reports the status) */
-  private def badRequest(message: String, isJsonFormat: Boolean): Response[String] =
-    if isJsonFormat then cask.Response(ujson.write(ujson.Obj("error" -> message)), 400, Seq(("Content-Type", "application/json")))
-    else cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
+  /** A plain-text 400; the snackbar reports the status, since no visible control is behind a continuation */
+  private def badRequest(message: String): Response[String] =
+    cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
 
   private def html(payload: Html, headers: (String, String)*): Response[String] =
     cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)

@@ -68,7 +68,6 @@ export let Const = {
         selectedAssets: "selectedAssets",
         currentView: "currentView",
         resultsTotal: "resultsTotal",
-        shadowResults: "shadowResults",
         searchParams: "searchParams",
         imageDetailLoading: "imageDetailLoading",
         modal: "modal",

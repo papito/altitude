@@ -3,7 +3,7 @@
 ## Original goals
 
 Let the user see search results grouped by the day they were taken, on top of the
-backend delivered by [search-results-date-grouping.md](done/search-results-date-grouping.md)
+backend delivered by [search-results-date-grouping.md](search-results-date-grouping.md)
 (uncommitted on `feature/grouping` as of 2026-09-06). Each group is introduced by a
 date header reading like **Saturday, January 2, 2025**. Continuous scrolling, sorting,
 selection, drag and drop, and detail navigation keep working inside a grouped grid.
@@ -12,8 +12,11 @@ selection, drag and drop, and detail navigation keep working inside a grouped gr
 
 Planned on 2026-09-06. Units 1 to 3 (backend) implemented on 2026-09-07 and reshaped the same
 day after a review of the whole branch; the contract is documented in
-[altitude/AGENTS.md](../altitude/AGENTS.md) under "Search results and date grouping". Units 4
-and 5 (frontend, docs) remain.
+[altitude/AGENTS.md](../../altitude/AGENTS.md) under "Search results and date grouping". Units 4
+and 5 (frontend, docs) implemented on 2026-09-07: the search route is now HTML only, with a 400
+for any JSON request, grouped or not. The modal offers no recycle action, so the "recycle from the
+modal" check in Verification has no path in the UI; a current cell that leaves the grid while the
+modal is open simply ends navigation.
 
 Amended on 2026-09-07, twice. First: the shadow results behind detail navigation were to be read
 from the rendered cells instead of a second JSON request per page. Then, after the review: the
@@ -37,7 +40,7 @@ Settled with the user on 2026-09-06 (alternatives in the last section):
 | Persistence | Grouping is a search parameter like sort: in the `searchParams` store and the bookmarkable URL. **Not** remembered in `localStorage`. |
 | Scope | Grouping applies in every view (library, triage, trash) and every scope (folder, person, album); it is a reorder, so choosing a folder keeps it, exactly as sort behaves. |
 
-Domain terms are in [CONTEXT.md](../CONTEXT.md): Date Taken, Date Imported, Date Group.
+Domain terms are in [CONTEXT.md](../../CONTEXT.md): Date Taken, Date Imported, Date Group.
 
 ## How it fits the current architecture
 
@@ -69,8 +72,8 @@ carries the groups (`AssetDateGroup`: day, full count, assets), `total: Option[I
 and `continuesDay`. `Util.humanReadableDate` formats the headers. A grouped search has no page
 number: `p` with `groupBy` is a 400, and `after` must come with `isContinuousScroll`.
 
-Still to remove, once the frontend no longer needs it: the ungrouped JSON branch of the route
-(`ids`/`page`/`totalPages`), used today only by the shadow results.
+The ungrouped JSON branch of the route (`ids`/`page`/`totalPages`), which only the shadow results
+used, was removed with the frontend unit; the route answers any JSON request with a 400.
 
 ## Templates (done)
 

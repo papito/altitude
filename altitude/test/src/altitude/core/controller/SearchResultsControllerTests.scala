@@ -2,13 +2,13 @@ package altitude.core.controller
 
 import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual }
+import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.models.Asset
 
-/** The grouped HTML grid of the search results route, its continuation by cursor, and the untouched ungrouped behavior next to it */
+/** The grouped HTML grid of the search results route, its continuation by cursor, and the untouched ungrouped grid next to it */
 @DoNotDiscover class SearchResultsControllerTests extends ControllerTestCore {
 
   private val jsonHeaders = Map("Accept" -> "application/json")
@@ -136,7 +136,7 @@ import altitude.core.models.Asset
     }
   }
 
-  test("Invalid grouped requests are 400 errors in the format of the request") {
+  test("Invalid grouped requests are plain-text 400 errors") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -182,11 +182,6 @@ import altitude.core.models.Asset
             (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))
         otherPageSize.statusCode shouldBe 200
 
-        // Grouped results are the HTML grid only
-        val json = search(host, repoId, grouped)
-        json.statusCode shouldBe 400
-        json.headers("content-type").head should include("application/json")
-        ujson.read(json.text())("error").str should include("HTML")
     }
   }
 
@@ -213,7 +208,7 @@ import altitude.core.models.Asset
     }
   }
 
-  test("Ungrouped HTML and JSON results are unchanged") {
+  test("Ungrouped HTML results are unchanged, and results are HTML only") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -230,21 +225,20 @@ import altitude.core.models.Asset
         page should include("""data-app-search-group-by="" data-app-search-group-direction="" selected""")
         page.contains("""class="date-group"""") shouldBe false // the style block names it; no header is rendered
 
-        val json = search(host, repoId, Map(Api.Field.Search.PAGE -> "1"))
-        json.statusCode shouldBe 200
-        val payload = ujson.read(json.text())
-        payload("ids").arr.map(_.str).toList shouldEqual List(asset.persistedId)
-        payload("page").num shouldBe 1
-        payload("totalPages").num shouldBe 1
-        payload.obj.contains("groups") shouldBe false
-
-        // Past the last page; identity encoding because the client cannot read a compressed empty body
-        val scroll = search(
-          host,
-          repoId,
-          Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"),
-          headers = Map("Accept-Encoding" -> "identity"))
+        // Past the last page
+        val scroll = htmlSearch(host, repoId, Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))
         scroll.statusCode shouldBe 204
+
+        // Nothing asks for results as JSON any more: the detail modal walks the grid
+        for (params <- Seq(Map(Api.Field.Search.PAGE -> "1"), Map(Api.Field.Search.GROUP_BY -> "dateTaken"))) {
+          val json = search(host, repoId, params)
+          json.statusCode shouldBe 400
+          json.headers("content-type").head should include("application/json")
+          ujson.read(json.text())("error").str should include("HTML")
+        }
+
+        val legacy = search(host, repoId, Map(), headers = Map("Content-Type" -> "application/json"))
+        legacy.statusCode shouldBe 400
     }
   }
 }

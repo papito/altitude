@@ -2,8 +2,8 @@
 
 ## Original goals
 
-- The Albums tab exists (`altitude/views/index.scala.html`, `#albumsTab`) but its body only says
-  "ALBUMS" (`altitude/views/htmx/albums.scala.html`).
+- The Albums tab exists (`../../altitude/views/index.scala.html`, `#albumsTab`) but its body only says
+  "ALBUMS" (`../../altitude/views/htmx/albums.scala.html`).
 - With no albums, a single centered button in the explorer says "Add your first album" (Font
   Awesome plus icon). Otherwise an "Add album" button sits at the top of the explorer.
 - Model the behavior after folders, except:
@@ -183,7 +183,7 @@ CREATE INDEX album_asset_02 ON album_asset (asset_id);
 
 ## Docs (anti-drift rule)
 
-`altitude/AGENTS.md`, `altitude/views/AGENTS.md`, `docs/agents/alpine-components/{README,
+`../../altitude/AGENTS.md`, `../../altitude/views/AGENTS.md`, `docs/agents/alpine-components/{README,
 dropdown,headless-popover}.md`: the shared context menu, the album list module, the `albumId`
 search parameter, the migration rules.
 

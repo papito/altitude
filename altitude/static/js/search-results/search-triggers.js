@@ -11,6 +11,8 @@ import { runSearch } from "./search.js"
  *
  *   data-app-search-<param>="<value>"     a literal, e.g. `data-app-search-person-id="abc"`
  *   data-app-search-from-value="<param>"  take <param> from the element's own value (the sort select)
+ *   data-app-search-from-selected-option  take every data-app-search-<param> literal of the selected
+ *                                         <option> (the Group select, whose options set two parameters)
  *
  * Everything else - the folder you are in, the sort you picked - comes from the `searchParams`
  * store, so markup never has to spell out a whole search.
@@ -18,14 +20,18 @@ import { runSearch } from "./search.js"
 const PREFIX = "appSearch"
 const EVENT_KEY = "appSearch"
 const FROM_VALUE_KEY = "appSearchFromValue"
+const FROM_SELECTED_OPTION_KEY = "appSearchFromSelectedOption"
 const BOUND_KEY = "appSearchBound"
 
 // Attributes that configure the trigger rather than naming a search parameter
 const RESERVED_KEYS = new Set([
     EVENT_KEY,
     FROM_VALUE_KEY,
+    FROM_SELECTED_OPTION_KEY,
     BOUND_KEY,
-    "appSearchNextPage", // the last cell's page, read by the infinite-scroll observer
+    // The last cell's continuation, read by the infinite-scroll observer (js/fragments/search-results.js)
+    "appSearchNextPage",
+    "appSearchAfter",
 ])
 
 /** Binds every search trigger in `root` (and `root` itself). Idempotent, so re-hydration is safe. */
@@ -71,20 +77,34 @@ function triggerElements(root) {
 }
 
 function searchParamsOf(triggerEl) {
+    const params = literalParamsOf(triggerEl)
+
+    const fromValue = triggerEl.dataset[FROM_VALUE_KEY]
+    if (fromValue) {
+        params[fromValue] = triggerEl.value
+    }
+
+    if (FROM_SELECTED_OPTION_KEY in triggerEl.dataset) {
+        const optionEl = triggerEl.selectedOptions?.[0]
+        if (optionEl) {
+            Object.assign(params, literalParamsOf(optionEl))
+        }
+    }
+
+    return params
+}
+
+/** The `data-app-search-<param>` literals of `el`, keyed by parameter name */
+function literalParamsOf(el) {
     const params = {}
 
-    Object.entries(triggerEl.dataset).forEach(([key, value]) => {
+    Object.entries(el.dataset).forEach(([key, value]) => {
         if (!key.startsWith(PREFIX) || RESERVED_KEYS.has(key)) {
             return
         }
 
         params[datasetKeySuffixToDetailKey(key.slice(PREFIX.length))] = value
     })
-
-    const fromValue = triggerEl.dataset[FROM_VALUE_KEY]
-    if (fromValue) {
-        params[fromValue] = triggerEl.value
-    }
 
     return params
 }

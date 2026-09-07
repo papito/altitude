@@ -43,3 +43,7 @@ Identify the main CSS file and use :root variables. Example:
     --background-tertiary-color: rgb(75, 75, 87);
 }
 ```
+
+### Database migrations
+
+DO NOT add new migrations or bump the version number. All changes go into all.sql for both Postgres and Sqlite - as original table/index defintions as if it were a fresh schema (no ALTER).

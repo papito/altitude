@@ -15,6 +15,8 @@ const DEFAULTS = {
     albumId: null,
     q: null,
     sort: null,
+    groupBy: null,
+    groupDirection: null,
     rpp: null,
     p: 1,
 }
@@ -24,8 +26,9 @@ const DEFAULTS = {
  *
  * Choosing a folder, a person, or an album are all "look somewhere else", so each clears the other
  * two; a view is a different place again and clears all three. Everything else narrows or reorders
- * what is already in scope. This table is what the server's old `newSearch=true` flag used to
- * express, and it is the whole reason a widget can send just the one parameter it knows about.
+ * what is already in scope - the date grouping, like the sort, survives all of them. This table is
+ * what the server's old `newSearch=true` flag used to express, and it is the whole reason a widget
+ * can send just the one parameter it knows about.
  */
 const CLEARS = {
     view: ["folderId", "personId", "albumId"],
@@ -85,16 +88,23 @@ export function applySearchParamChanges(current, changes) {
  * The query string for `params`, with `overrides` layered on top. Parameters still at their default
  * are left out, and the order is fixed, so the same search always produces the same URL.
  *
- * An override that is not a search parameter (`isContinuousScroll`) is appended as-is: those are
- * per-request flags that must never end up in the store.
+ * An override that is not a search parameter (`isContinuousScroll`, the `after` cursor) is appended
+ * as-is: those are per-request flags that must never end up in the store.
+ *
+ * A grouped search has no page number - it is continued by cursor - so `p` is left out whenever
+ * `groupBy` is set: the server rejects the pair, and a `p` seeded from a hand-edited URL would
+ * otherwise turn the whole search into a 400.
  */
 export function serializeSearchParams(params, overrides = {}) {
     const query = new URLSearchParams()
+    const effective = (name) =>
+        name in overrides ? overrides[name] : params[name]
+    const isGrouped = !isOmitted("groupBy", effective("groupBy"))
 
     PARAM_NAMES.forEach((name) => {
-        const value = name in overrides ? overrides[name] : params[name]
+        const value = effective(name)
 
-        if (isOmitted(name, value)) {
+        if (isOmitted(name, value) || (name === "p" && isGrouped)) {
             return
         }
 
