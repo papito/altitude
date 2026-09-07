@@ -1,10 +1,14 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.RowProcessor
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -23,6 +27,7 @@ import altitude.core.models.BaseModel
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.SortValue
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
@@ -53,6 +58,15 @@ abstract class BaseDao[Model <: BaseModel]:
   protected val exifDateTimeFormatterPattern: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
 
   protected def nativeBool(value: Boolean): Any
+
+  /** Bind value for a wall-clock timestamp column (no zone): stored and read back verbatim, never converted through an instant */
+  protected def nativeLocalDateTime(value: LocalDateTime): Any
+
+  /** Bind value for an instant column: the UTC moment, independent of the JVM or server zone */
+  protected def nativeUtcTimestamp(value: OffsetDateTime): Any
+
+  /** Converts result set rows to maps; engines override it to read temporal columns without an instant round trip */
+  protected def rowProcessor: RowProcessor = new BasicRowProcessor()
 
   protected def getBooleanField(value: AnyRef): Boolean
 
@@ -140,7 +154,10 @@ abstract class BaseDao[Model <: BaseModel]:
     BaseDao.incrReadQueryCount()
     logger.debug(s"SELECT SQL: $sql with values: $values")
     val res =
-      queryRunner.query(RequestContext.getConn, sql, new MapListHandler(), values.map(_.asInstanceOf[Object])*).asScala.toList
+      queryRunner
+        .query(RequestContext.getConn, sql, new MapListHandler(rowProcessor), values.map(_.asInstanceOf[Object])*)
+        .asScala
+        .toList
     res.map(_.asScala.toMap[String, AnyRef])
 
   def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] =
@@ -154,7 +171,10 @@ abstract class BaseDao[Model <: BaseModel]:
     logger.debug(s"SELECT SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")
     val runner: QueryRunner = new QueryRunner()
     val res =
-      runner.query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(), sqlQuery.bindValues*).asScala.toList
+      runner
+        .query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(rowProcessor), sqlQuery.bindValues*)
+        .asScala
+        .toList
     logger.debug(s"Found ${res.length} records")
     val recs = res.map(_.asScala.toMap[String, AnyRef])
     recs.map(makeModel)
@@ -201,3 +221,9 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def makeModel(rec: Map[String, AnyRef]): Model
 
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
+
+  /** A calendar-day column, as the engine's day expression returns it */
+  protected def getDateField(value: AnyRef): LocalDate
+
+  /** A sort-key column, typed so it can be bound back for comparison exactly as stored */
+  protected def getSortValueField(value: AnyRef): SortValue

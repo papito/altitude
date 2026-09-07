@@ -14,9 +14,11 @@ import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.IdSearchResult
 import altitude.core.util.MurmurHash
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
@@ -88,23 +90,35 @@ class LibraryService(val app: Altitude):
 
   def search(query: SearchQuery): SearchResult =
     txManager.asReadOnly {
-      val _query: SearchQuery =
-        if query.folderIds.nonEmpty then
-          if query.folderIds.size > 1 then throw IllegalOperationException("Currently cannot search in multiple folders at once")
-
-          val folderId = query.folderIds.head
-
-          // If the root folder is selected, treat it as "no folder filter" so that
-          // triaged assets (which have an empty folderId) are included — matching the default view.
-          if app.service.folder.isRootFolder(folderId) then query.withFolderIds(Set.empty)
-          else
-            val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
-            val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
-            query.withFolderIds(allFolderIds)
-        else query
-
-      app.service.search.search(_query)
+      app.service.search.search(withResolvedFolderScope(query))
     }
+
+  /**
+   * A grouped page of matching asset IDs (no asset data), with date groups and counts. A cursor is accepted only for the search
+   * it was issued for, fingerprinted as requested: a folder filter by the folder given, since its descendants are resolved afresh
+   * on every page.
+   */
+  def searchIds(query: SearchQuery): IdSearchResult =
+    txManager.asReadOnly {
+      val scope = SearchCursor.scopeFingerprint(query, RequestContext.getRepository.persistedId, app.dataSourceType)
+      query.cursor.foreach(_.requireScope(scope, query.rpp))
+      app.service.search.searchIds(withResolvedFolderScope(query), scope)
+    }
+
+  /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */
+  private def withResolvedFolderScope(query: SearchQuery): SearchQuery =
+    if query.folderIds.isEmpty then return query
+    if query.folderIds.size > 1 then throw IllegalOperationException("Currently cannot search in multiple folders at once")
+
+    val folderId = query.folderIds.head
+
+    // If the root folder is selected, treat it as "no folder filter" so that
+    // triaged assets (which have an empty folderId) are included — matching the default view.
+    if app.service.folder.isRootFolder(folderId) then query.withFolderIds(Set.empty)
+    else
+      val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
+      val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
+      query.withFolderIds(allFolderIds)
 
   /** Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. */
   def deleteFolderById(id: String): Unit =
@@ -322,14 +336,18 @@ class LibraryService(val app: Altitude):
         app.service.asset.pruneDanglingAssets()
     }
 
+  /** Runs the operation in every repository's context, then restores the caller's own repository context */
   def forEachRepository(operation: Repository => Unit): Unit =
+    val callerRepository = RequestContext.repository.value
+
     txManager.withTransaction {
       val repositories = app.DAO.repository.getAll
 
-      repositories.foreach {
-        repository =>
-          RequestContext.repository.value = Some(repository)
-          operation(repository)
-          RequestContext.repository.value = None
-      }
+      try
+        repositories.foreach {
+          repository =>
+            RequestContext.repository.value = Some(repository)
+            operation(repository)
+        }
+      finally RequestContext.repository.value = callerRepository
     }

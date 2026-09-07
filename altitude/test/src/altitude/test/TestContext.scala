@@ -4,11 +4,17 @@ import altitude.test.IntegrationTestUtil.generateRandomImagBytesBgr
 import altitude.test.IntegrationTestUtil.generateRandomImagBytesGray
 import java.lang.Thread.sleep
 import java.net.HttpCookie
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import org.apache.commons.dbutils.QueryRunner
 
 import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const as C
+import altitude.core.RequestContext
+import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.models.AccountType
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -165,6 +171,28 @@ class TestContext(val testApp: Altitude) {
     assets = assets ::: persistedAsset :: Nil
 
     persistedAsset
+  }
+
+  /** Rewrites an asset's capture time (camera wall-clock) and import time (an instant) in each engine's storage form */
+  def setAssetDates(assetId: String, taken: LocalDateTime, imported: OffsetDateTime): Unit = {
+    val (takenValue, importedValue): (Any, Any) = testApp.dataSourceType match {
+      case C.DbEngineName.SQLITE =>
+        (
+          taken.format(SqliteOverrides.DATETIME_FORMATTER),
+          imported.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER))
+      case C.DbEngineName.POSTGRES => (taken, imported)
+      case _ => throw new IllegalArgumentException("Unsupported data source type")
+    }
+
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET original_created_at = ?, created_at = ? WHERE id = ?",
+        takenValue.asInstanceOf[Object],
+        importedValue.asInstanceOf[Object],
+        assetId
+      )
+    }
   }
 
   def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {

@@ -1,9 +1,10 @@
 # Date grouping query experiment
 
-This report preserves the earlier experiment. The current
-[implementation plan](search-results-date-grouping.md) uses engineering judgment
-for both engines and requires no further benchmarking. Functional validation
-remains required; the timings below are historical evidence, not completion gates.
+This report preserves the earlier experiment. The
+[implementation plan](search-results-date-grouping.md) records the re-verification
+done at implementation time on both engines (index shape, null placement, day-count
+shape, planner steering) in its Status section; the timings below are historical
+evidence, not completion gates.
 
 ## Scope and method
 

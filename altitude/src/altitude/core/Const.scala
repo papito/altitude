@@ -42,6 +42,16 @@ object Const:
 
   object Search:
     val DEFAULT_RPP = 50
+    // Grouped JSON pages are bounded: they carry counts for every day on the page
+    val MAX_GROUPED_RPP = 500
+
+    // The sort fields the results UI offers; a grouped request may sort by nothing else
+    val SORT_FIELDS: Set[String] = Set(
+      FieldConst.Asset.ORIGINAL_CREATED_AT,
+      FieldConst.CREATED_AT,
+      FieldConst.Asset.FILENAME,
+      FieldConst.Asset.SIZE_BYTES,
+      FieldConst.Asset.AREA_SIZE)
 
     object View:
       // Matches `Const.views.repository` in static/js/constants.js - the client sends this verbatim

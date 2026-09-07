@@ -2,11 +2,15 @@ package altitude.core.dao
 
 import altitude.core.models.Asset
 import altitude.core.models.UserMetadataField
+import altitude.core.util.IdSearchPage
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
 trait SearchDao:
   def search(query: SearchQuery): SearchResult
+
+  /** One ordered page of matching asset IDs with their date group and count data, for a grouped query */
+  def searchIds(query: SearchQuery): IdSearchPage
 
   def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit
 

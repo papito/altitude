@@ -51,7 +51,7 @@ All three global decorators are applied in `App.mainDecorators`: `compress → r
 ## DAO / Service Layer
 
 - `BaseService` wraps every DAO call in `txManager.withTransaction{}` (writes) or `txManager.asReadOnly{}` (reads). Controllers call services; services call DAOs — never skip a layer.
-- `BaseDao` (JDBC) has abstract methods (`jsonFunc`, `nativeBool`, `getBooleanField`, `getDateTimeField`, `forUpdate`) filled in by `PostgresOverrides` or `SqliteOverrides` traits.
+- `BaseDao` (JDBC) has abstract methods (`jsonFunc`, `nativeBool`, `nativeLocalDateTime`, `nativeUtcTimestamp`, `getBooleanField`, `getDateTimeField`, `getDateField`, `getSortValueField`, `forUpdate`) filled in by `PostgresOverrides` or `SqliteOverrides` traits. `rowProcessor` is how result rows become maps: `PostgresOverrides` reads `timestamp`, `timestamptz` and `date` columns as `java.time` values so a wall-clock timestamp never round-trips through an instant in the JVM zone.
 - DB-specific DAO overrides live in `dao/postgres/` and `dao/sqlite/`. The JDBC base lives in `dao/jdbc/`.
 - Face vector search requires `txManager.withFaceVector{}` (loads SQLite vector extension before querying).
 
@@ -87,9 +87,34 @@ object Folder:
 
 An `Album` is a flat, repository-scoped, uniquely named (case-insensitive) list of pointers to assets: the `album` table plus the `album_asset` membership table, which has no model of its own and is written only through `AlbumDao`. An asset can be in any number of albums. Nothing album-related touches an asset: adding to, removing from, renaming, or deleting an album (a hard delete; memberships cascade) changes membership rows only. The reverse direction is `LibraryService.recycleAssets`, which drops recycled assets from every album in the same transaction (so folder deletion does too); restoring does not re-add them, and purging deletes the asset row, whose foreign key cascades. `Album.numOfAssets` is computed on read (`AlbumDao.getAll`). Searching within an album is the `albumIds` filter of `SearchQuery` (`asset.id IN (SELECT asset_id FROM album_asset ...)`), reached through the `albumId` search parameter.
 
+## Search results and date grouping
+
+Two search paths share one definition of "what matches": `LibraryService.search` (full `Asset` records for the HTML grid and the legacy `ids`/`page`/`totalPages` JSON) and `LibraryService.searchIds` (a grouped page of IDs, no asset data). Both resolve the folder scope the same way (`withResolvedFolderScope`: the root folder means no folder filter, any other folder means itself plus its current descendants) and then use the engine's `SearchDao`, whose `SearchQueryBuilder` builds every predicate (repository, view flags, pipeline completion, text, folders, people, albums, metadata filters with their `GROUP BY asset.id` deduplication) once for both.
+
+`SearchQuery.grouping` (`SearchGrouping(GroupBy.DateTaken | DateImported, direction)`) turns a query into a grouped one. `SearchQueryBuilder.buildIdSearchSql` emits **one statement** per page: a materialized `candidates` slice (`LIMIT rpp + 1` to detect continuation), the `page`, the `total` count over all matches, and `day_counts` as one correlated count per distinct day on the page; everything is ordered by day, then the sort, then `asset.id`. The engine-specific `AssetSearchQueryBuilder`s supply the day expression (`date(col)` on SQLite; `original_created_at::date` and `(created_at AT TIME ZONE 'UTC')::date` on PostgreSQL), null placement, and on SQLite a unary `+` on the secondary sort term so the planner keeps the grouping day index. The DAO returns typed `IdSearchRow`s (`SortValue` keeps the sort key exactly as stored); `SearchService.searchIds` assembles `IdSearchGroup` ranges and the next cursor; the controller serializes.
+
+Paging is by page number (`p`, an offset) or by cursor (`after`): `SearchCursor` is an opaque Base64URL token holding the last returned image's day, sort value and ID, the next page's sequence number, the page size, and a fingerprint of the search as requested (engine, repository, filters, grouping, ordering). `LibraryService.searchIds` recomputes the fingerprint and rejects a mismatch with `SearchCursorException`; a cursor supplies a position only, never access or SQL. Results are live: a cursor continues from values, so deleting its anchor or inserting before it neither skips nor repeats the remaining images, while counts always describe the current matching set.
+
+The contract on `GET /htmx/search/r/:repoId` (JSON negotiation via `Accept` or the legacy `Content-Type: application/json`; grouped requests in HTML mode are a 400):
+
+| Parameter | Values |
+|---|---|
+| `groupBy` | `dateTaken` (capture day, the camera's calendar date) or `dateImported` (import day in UTC). Anything else, including empty, is a 400. |
+| `groupDirection` | `asc` or `desc` (default). Needs `groupBy`. |
+| `sort` | Field plus direction digit, one of the results UI's fields (`Const.Search.SORT_FIELDS`). Applies within each day. |
+| `rpp` | 1 to `Const.Search.MAX_GROUPED_RPP` (500); default 50. |
+| `p` | Positive page number for direct access. |
+| `after` | The previous response's `nextCursor`. Not together with `p`; rejected for another search or page size. |
+
+Response: `ids` (flat, in page order), `page`, `total`, `totalPages`, `groupBy`, `groupDirection`, `groups` as `{date, startIndex, length, total}` ranges over `ids` (contiguous, covering the whole list; `total` is the whole day's match count), and `nextCursor` (`null` at the end). A valid empty page is a 200 with empty lists and accurate totals. Errors are `{"error": "..."}` with status 400.
+
+Date storage behind this: `original_created_at` is the camera's wall-clock time with no zone (PostgreSQL `TIMESTAMP WITHOUT TIME ZONE`, SQLite `yyyy-MM-dd HH:mm:ss` text) and is parsed and bound as a `LocalDateTime` with no instant conversion, so its calendar day never depends on the JVM or server zone. `created_at` on assets is bound explicitly in UTC by `AssetDao.add` (an `OffsetDateTime` on PostgreSQL, UTC text on SQLite) instead of relying on the engine default. Missing or unreadable capture metadata still falls back to the local import time. The indexes `asset_search_date_taken` / `asset_search_date_imported` are `(repository_id, is_recycled, is_pipeline_processed, <day expression>, <raw timestamp>)`: the day gives seeks and per-day counts, the trailing timestamp makes a same-field grouping and sort read in index order. Nulls sort where each engine puts them (no `NULLS LAST`, which would forfeit index-ordered reads); a legacy SQLite row with a null `created_at` has no import day and is left out of Date Imported grouping and its totals.
+
 ## Schema migrations
 
 `schemaVersion` in `Altitude.scala` is the current version. A fresh database (version 0) runs `migrations/<engine>/all.sql` once and is stamped with the current version; an existing database runs `migrations/<engine>/<version>.sql` for each version it is behind, in every environment (dev included), so a development database keeps its data. A schema change therefore means: bump `schemaVersion`, add both `<version>.sql` files, and add the same statements to both `all.sql` files.
+
+Before running a PostgreSQL script, `MigrationService` pins the session `TimeZone` to the JVM default zone (the zone pgJDBC decodes and encodes with), so a script converting between timestamp types (`3.sql` turns `original_created_at` into a wall-clock `timestamp`) preserves every value's current local representation regardless of the server default.
 
 ## Config & Environments
 
@@ -108,11 +133,12 @@ make watch                # hot-reload dev server (ENV=dev)
 make lint                 # scalafmt + scalafix + prettier/eslint
 make test-sqlite          # safe: no Postgres needed
 make test-controllers     # safe: controller-only tests
+make test-psql            # integration tests against the Postgres test container (docker compose, port 5433)
 make test-focused-sqlite  # run tests tagged `Focused` against SQLite only
 make publish              # fat JAR → target/
 ```
 
-> **Do not run `make test`** (requires a live Postgres container). Use `make test-sqlite` and `make test-controllers`.
+> **Do not run `make test`** (requires a live Postgres container). Use `make test-sqlite` and `make test-controllers`, and `make test-psql` when the `altitude-core-postgres-test` container is up.
 > **Do not run tests if only the frontend was changed** (Twirl templates, CSS, JS, HTML) — these can be manually verified in the browser without running the full test suite.
 
 To focus a test, tag it with the `Focused` tag:
@@ -122,7 +148,7 @@ test("my wip test", Focused) { ... }
 
 ## Test Structure
 
-Integration tests extend `IntegrationTestCore`. `beforeEach` auto-creates a fresh repository and file-store directory. Tests run against both DB engines via `SqliteSuiteBundle` / `PostgresSuiteBundle` without code changes.
+Integration tests extend `IntegrationTestCore`. `beforeEach` auto-creates a fresh repository and file-store directory. Tests run against both DB engines via `SqliteSuiteBundle` / `PostgresSuiteBundle` without code changes. `TestContext.setAssetDates` rewrites an asset's capture and import timestamps in each engine's storage form for date-dependent fixtures. Controller tests run against SQLite through a real HTTP server (`ControllerTestCore`).
 
 ## Key Files to Know
 

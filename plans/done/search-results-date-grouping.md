@@ -10,12 +10,35 @@ plan; frontend changes and feature implementation are outside this planning task
 
 ## Status
 
-The behavior and scope questions are resolved. The engineering design below is
-ready for implementation review, with explicit SQLite and PostgreSQL paths.
-Numbered units describe future changes, not work already implemented. Earlier
-SQLite experiments are retained as background evidence. No further benchmarking
-is required: use the query/index design below and engineering judgment. Functional
-integration and controller validation remain implementation checks for both engines.
+**Implemented (backend), 2026-09-06.** All five units below are done and verified
+on both engines: `make test-unit`, `make test-sqlite`, `make test-psql` (against the
+`altitude-core-postgres-test` container) and `make test-controllers`. The
+implemented contract is documented in [altitude/AGENTS.md](../../altitude/AGENTS.md)
+under "Search results and date grouping". Frontend work remains out of scope.
+
+Before implementing, the SQL design was re-verified empirically on both engines at
+100,000 and 1,000,000 rows (schema-shaped fixtures, `EXPLAIN QUERY PLAN` /
+`EXPLAIN ANALYZE`, medians of five runs). Decisions that differ from the design
+text below, and why:
+
+| Decision | Outcome |
+| --- | --- |
+| Index shape | `(repository_id, is_recycled, is_pipeline_processed, <day expr>, <raw timestamp>)` instead of `(..., <day expr> DESC, id ASC)`. Smaller (SQLite 4.5 MB vs 6.2 MB, PostgreSQL 7.6 MB vs 11 MB per index at 100k), index-only day counts, and a same-field grouping/sort reads in index order (first page 0.1 ms vs 52 ms on SQLite, 0.05 ms vs 3.7 ms on PostgreSQL). With the `DESC, id` shape SQLite's planner also picked the wrong index for first pages (52-72 ms vs 3.5-13 ms). |
+| Null placement | No `NULLS LAST`: on PostgreSQL it forces a sequential scan and top-N sort (137 ms at 1M vs 0.1 ms), on SQLite it forfeits the index-ordered block sort. Nulls sort where each engine puts them natively and the cursor comparison honors that placement. Only a legacy SQLite `created_at` can be null; such a row has no import day and is excluded from Date Imported grouping and its totals rather than reported as a `date: null` group. |
+| Day counts | One correlated count per distinct page day, in a materialized CTE. The `IN (...) OR ... IS NULL` shape stopped using the index for the nullable column on SQLite (15-170 ms vs 6-63 ms), and an unmaterialized CTE re-ran the count per page row. |
+| SQLite secondary sort | Unary `+` on the sort term when it is the other date source's column; without it SQLite picks that source's index and sorts every row (291 ms vs 3.9 ms at 1M). |
+| PostgreSQL import day | `(created_at AT TIME ZONE 'UTC')::date` directly in the index: `timezone(text, timestamptz)` is IMMUTABLE, no wrapper function needed. |
+| Inclusive day bound | Kept; the OR-only shape costs 13-600 ms per page on SQLite. |
+
+Representative complete-statement medians (page + overall count + day counts,
+cursor at 80% depth, `rpp` 50): SQLite 3.5-6 ms at 100k and 43-63 ms at 1M;
+PostgreSQL 8 ms at 100k and 43 ms at 1M. The exact overall count is the dominant
+cost at 1M on both engines; page retrieval alone stays under 1 ms. Offset paging
+at that depth is 60-180 ms (100k) and 0.6-2.1 s (1M); the window-count variant
+1.3-3.4 s at 1M. Cursor traversal was checked to equal the complete order at
+both sizes.
+
+The earlier planning text follows unchanged as the design record.
 
 ## Agreed behavior
 

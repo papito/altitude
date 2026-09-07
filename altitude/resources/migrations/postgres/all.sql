@@ -73,12 +73,21 @@ CREATE TABLE asset (
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
   is_purged BOOLEAN NOT NULL DEFAULT FALSE,
   is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
-  -- area size of the image in pixels (width * height)
-  original_created_at TIMESTAMP WITH TIME ZONE NOT NULL
+  -- EXIF DateTimeOriginal (camera wall-clock time, no zone), defaults to the local import time if none
+  original_created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
 CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processed);
+-- Date grouping for search results: the calendar day followed by the raw timestamp, so a day range or a day-count probe
+-- seeks directly and a grouped, date-sorted page reads in index order. Capture day is the camera's calendar date;
+-- import day is the UTC date (timezone(text, timestamptz) is IMMUTABLE, so it can be indexed).
+CREATE INDEX asset_search_date_taken ON asset (
+  repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
+);
+CREATE INDEX asset_search_date_imported ON asset (
+  repository_id, is_recycled, is_pipeline_processed, ((created_at AT TIME ZONE 'UTC')::date), created_at
+);
 
 CREATE SEQUENCE person_label;
 

@@ -9,6 +9,8 @@ import altitude.core.models.Asset
 import altitude.core.models.FieldType
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.IdSearchResult
+import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
@@ -36,6 +38,43 @@ class SearchService(val app: Altitude):
 
   def search(query: SearchQuery): SearchResult =
     searchDao.search(query)
+
+  /**
+   * A grouped page of matching asset IDs: the DAO returns typed rows and counts, the groups and the continuation cursor are
+   * assembled here. The cursor points at the last returned image and carries the scope fingerprint of the search as requested.
+   */
+  def searchIds(query: SearchQuery, scopeFingerprint: String): IdSearchResult =
+    val started = System.currentTimeMillis
+    val page = searchDao.searchIds(query)
+
+    val nextCursor = Option.when(page.hasMore) {
+      val last = page.rows.last
+      SearchCursor(
+        day = last.day,
+        sortValue = last.sortValue,
+        id = last.id,
+        nextPage = query.page + 1,
+        rpp = query.rpp,
+        scope = scopeFingerprint)
+    }
+
+    val result = IdSearchResult(
+      ids = page.rows.map(_.id),
+      groups = IdSearchResult.groupsOf(page.rows),
+      total = page.total,
+      rpp = query.rpp,
+      page = query.page,
+      grouping = query.grouping.get,
+      sort = query.searchSort.head,
+      nextCursor = nextCursor
+    )
+
+    logger.debug(
+      s"Grouped ID search by ${result.grouping.by} ${result.grouping.direction}, sorted ${result.sort}: " +
+        s"${result.ids.length} images in ${result.groups.length} groups of ${result.total} matching, " +
+        s"page ${result.page}, in ${System.currentTimeMillis - started}ms")
+
+    result
 
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
     // some fields are not eligible for parameterized search

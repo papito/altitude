@@ -7,7 +7,10 @@ import org.apache.commons.dbutils.QueryRunner
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.jdbc.querybuilder.SearchQueryBuilder
 import altitude.core.models._
+import altitude.core.util.IdSearchPage
+import altitude.core.util.IdSearchRow
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
@@ -22,8 +25,47 @@ object SearchDao:
                  VALUES (?, ?, ?, ?, ?, ?)
             """
 abstract class SearchDao(override val config: Config) extends AssetDao(config) with altitude.core.dao.SearchDao:
-  override def search(query: SearchQuery): SearchResult =
-    throw NotImplementedError()
+  /** The engine's search SQL builder, selecting the columns its asset model is built from */
+  protected def assetSearchQueryBuilder: SearchQueryBuilder
+
+  override def search(searchQuery: SearchQuery): SearchResult =
+    val sqlQuery = assetSearchQueryBuilder.buildSelectSql(query = searchQuery)
+    val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
+    val total: Int = count(recs)
+
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+    if recs.nonEmpty then logger.debug(recs.map(_.toString).mkString("\n"))
+
+    SearchResult(
+      records = recs.map(makeModel),
+      total = total,
+      rpp = searchQuery.rpp,
+      page = searchQuery.page,
+      sort = searchQuery.searchSort)
+
+  // Narrow rows only: no asset model, no metadata JSON
+  override def searchIds(query: SearchQuery): IdSearchPage =
+    val sqlQuery = assetSearchQueryBuilder.buildIdSearchSql(query)
+    val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
+
+    // The overall count is joined to the page, so a page past the last image is one summary row with a null asset ID
+    val summary = recs.head
+    val rows = recs
+      .filter(_("id") != null)
+      .map {
+        rec =>
+          IdSearchRow(
+            id = rec("id").asInstanceOf[String],
+            day = getDateField(rec("day")),
+            sortValue = getSortValueField(rec("sort_value")),
+            dayTotal = getIntField(rec("day_total"))
+          )
+      }
+
+    IdSearchPage(
+      rows = rows,
+      total = getIntField(summary("total")),
+      hasMore = getIntField(summary("candidate_count")) > query.rpp)
 
   protected def addSearchDocument(asset: Asset): Unit =
     throw NotImplementedError()
