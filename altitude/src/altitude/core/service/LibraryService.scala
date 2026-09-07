@@ -14,7 +14,7 @@ import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.transactions.TransactionManager
-import altitude.core.util.IdSearchResult
+import altitude.core.util.GroupedSearchResult
 import altitude.core.util.MurmurHash
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
@@ -94,15 +94,14 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * A grouped page of matching asset IDs (no asset data), with date groups and counts. A cursor is accepted only for the search
-   * it was issued for, fingerprinted as requested: a folder filter by the folder given, since its descendants are resolved afresh
-   * on every page.
+   * A grouped page with its assets, for the grouped grid. A cursor is accepted only for the search it was issued for,
+   * fingerprinted as requested: a folder filter by the folder given, since its descendants are resolved afresh on every page.
    */
-  def searchIds(query: SearchQuery): IdSearchResult =
+  def searchGrouped(query: SearchQuery): GroupedSearchResult =
     txManager.asReadOnly {
       val scope = SearchCursor.scopeFingerprint(query, RequestContext.getRepository.persistedId, app.dataSourceType)
-      query.cursor.foreach(_.requireScope(scope, query.rpp))
-      app.service.search.searchIds(withResolvedFolderScope(query), scope)
+      query.cursor.foreach(_.requireScope(scope))
+      app.service.search.searchGrouped(withResolvedFolderScope(query), scope)
     }
 
   /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */

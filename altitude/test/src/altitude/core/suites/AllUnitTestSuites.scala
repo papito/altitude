@@ -12,6 +12,7 @@ import altitude.core.unit.SearchSqlQueryTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlQueryTests
 import altitude.core.unit.UrlServiceTests
+import altitude.core.unit.UtilTests
 
 abstract class AllUnitTestSuites
   extends Suites(
@@ -24,5 +25,6 @@ abstract class AllUnitTestSuites
     new SearchQueryModelTests,
     new PersonModelTests,
     new SessionControllerTests,
-    new UrlServiceTests
+    new UrlServiceTests,
+    new UtilTests
   )

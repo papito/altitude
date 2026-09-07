@@ -32,9 +32,9 @@ class SearchQuery(
   if grouping.isDefined && searchSort.isEmpty then throw IllegalArgumentException("A grouped search requires a sort")
   if grouping.isDefined && rpp < 1 then throw IllegalArgumentException("A grouped search requires a page size")
 
-  // A cursor continues a grouped search from a position; the page it yields is the cursor's sequence number, not an offset
+  // A grouped search starts at its first page and is continued from a position, never by page number
+  if grouping.isDefined && page != 1 then throw IllegalArgumentException("A grouped search is continued by cursor, not by page")
   if cursor.isDefined && grouping.isEmpty then throw IllegalArgumentException("A cursor requires a grouped search")
-  if cursor.exists(_.nextPage != page) then throw IllegalArgumentException("The page must be the cursor's next page")
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
   val isText: Boolean = text.isDefined

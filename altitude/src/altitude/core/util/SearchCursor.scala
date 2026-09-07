@@ -11,11 +11,12 @@ import altitude.core.SearchCursorException
 import altitude.core.util.Query.QueryParam
 
 /**
- * Where a grouped search continues from: the last returned image's position (day, sort value, ID), the sequence number of the
- * next page, the page size, and a fingerprint of the search the cursor belongs to. It is an opaque, versioned token to the client
- * and supplies only a position: every request re-applies authorization and every filter, and the values are bound, never inlined.
+ * Where a grouped search continues from: the last returned image's position (day, sort value, ID) and a fingerprint of the search
+ * the cursor belongs to. It is an opaque, versioned token to the client and supplies only a position: every request re-applies
+ * authorization and every filter, and the values are bound, never inlined. The page size is not part of it, so a continuation may
+ * ask for a different one.
  */
-case class SearchCursor(day: LocalDate, sortValue: SortValue, id: String, nextPage: Int, rpp: Int, scope: String):
+case class SearchCursor(day: LocalDate, sortValue: SortValue, id: String, scope: String):
 
   def encode: String =
     val json = ujson.Obj(
@@ -23,19 +24,16 @@ case class SearchCursor(day: LocalDate, sortValue: SortValue, id: String, nextPa
       "d" -> day.toString,
       "s" -> SearchCursor.sortValueToJson(sortValue),
       "i" -> id,
-      "p" -> nextPage,
-      "n" -> rpp,
       "f" -> scope
     )
     Base64.getUrlEncoder.withoutPadding.encodeToString(ujson.write(json).getBytes(StandardCharsets.UTF_8))
 
-  /** A cursor continues only the search it was issued for, at the page size it was issued with */
-  def requireScope(currentScope: String, currentRpp: Int): Unit =
-    if scope != currentScope || rpp != currentRpp then
-      throw SearchCursorException("The cursor does not belong to this search and page size")
+  /** A cursor continues only the search it was issued for */
+  def requireScope(currentScope: String): Unit =
+    if scope != currentScope then throw SearchCursorException("The cursor does not belong to this search")
 
 object SearchCursor:
-  private val VERSION = 1
+  private val VERSION = 2
 
   def decode(token: String): SearchCursor =
     try
@@ -45,8 +43,6 @@ object SearchCursor:
         day = LocalDate.parse(json("d").str),
         sortValue = sortValueFromJson(json("s")),
         id = json("i").str,
-        nextPage = json("p").num.toInt,
-        rpp = json("n").num.toInt,
         scope = json("f").str
       )
     catch

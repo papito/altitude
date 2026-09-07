@@ -408,7 +408,10 @@ user-supplied names and server errors, without HTML markup or pre-escaping. Auto
 load next in `data-app-search-next-page`. An `IntersectionObserver` in
 `js/fragments/search-results.js` watches it and requests that page through `runSearch`, appending
 the result after the cell; the cell is unobserved and loses the attribute as it fires, so scrolling
-back over it loads nothing again. A page the server rejects is reported through the snackbar by
+back over it loads nothing again. A grouped grid (`htmx/results_grid_grouped.scala.html`, a sticky
+`.date-group` header per day) puts the encoded cursor of the next page in `data-app-search-after`
+on its last cell instead; the observer does not follow that attribute yet (the frontend unit of
+`plans/search-results-date-grouping-ui.md`). A page the server rejects is reported through the snackbar by
 `FrontendApp.handleAfterRequest` (`isSearchRequest` in `js/listeners/htmx-routes.js`), since no
 visible control is behind the request. Images use `alt-data-src` instead of `src`; the same centralized
 search-results fragment hydrator binds infinite scroll, lazy image loading, metadata visibility, and
@@ -502,8 +505,10 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
-| `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
-| `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls; the controller passes in the rendered grid partial |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids; a page's last cell carries the next page number or the cursor |
+| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by page number |
+| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a date header per day, infinite-scroll trigger by cursor |
 
 ## Search parameters
 
@@ -517,6 +522,12 @@ the `searchParams` store supplies the rest. Nothing else builds a URL for `/htmx
 clears the other two, a view clears all three, and any change other than paging returns to page 1. A parameter still at its
 default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
+
+The server also understands `groupBy` and `groupDirection` (date grouping, reflected by the Group
+dropdown in `search_results.scala.html`) and the transient `after` cursor that continues a grouped
+page. The store does not carry them yet, and the dropdown's `data-app-search-from-selected-option`
+trigger source is not bound, so choosing an option re-runs the current search; both come with the
+frontend unit of `plans/search-results-date-grouping-ui.md`.
 
 The browser URL is authoritative exactly once, at page load: `index.scala.html` seeds the store from
 `window.location.search`, so a bookmarked or shared search still opens. After that the store is the

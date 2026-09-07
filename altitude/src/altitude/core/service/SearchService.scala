@@ -9,7 +9,7 @@ import altitude.core.models.Asset
 import altitude.core.models.FieldType
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
-import altitude.core.util.IdSearchResult
+import altitude.core.util.GroupedSearchResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
@@ -40,39 +40,32 @@ class SearchService(val app: Altitude):
     searchDao.search(query)
 
   /**
-   * A grouped page of matching asset IDs: the DAO returns typed rows and counts, the groups and the continuation cursor are
-   * assembled here. The cursor points at the last returned image and carries the scope fingerprint of the search as requested.
+   * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
+   * points at the last returned image and carries the scope fingerprint of the search as requested.
    */
-  def searchIds(query: SearchQuery, scopeFingerprint: String): IdSearchResult =
+  def searchGrouped(query: SearchQuery, scopeFingerprint: String): GroupedSearchResult =
     val started = System.currentTimeMillis
-    val page = searchDao.searchIds(query)
+    val page = searchDao.searchGrouped(query)
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
-      SearchCursor(
-        day = last.day,
-        sortValue = last.sortValue,
-        id = last.id,
-        nextPage = query.page + 1,
-        rpp = query.rpp,
-        scope = scopeFingerprint)
+      SearchCursor(day = last.day, sortValue = last.sortValue, id = last.asset.persistedId, scope = scopeFingerprint)
     }
 
-    val result = IdSearchResult(
-      ids = page.rows.map(_.id),
-      groups = IdSearchResult.groupsOf(page.rows),
+    val result = GroupedSearchResult(
+      groups = GroupedSearchResult.groupsOf(page.rows),
       total = page.total,
-      rpp = query.rpp,
-      page = query.page,
       grouping = query.grouping.get,
       sort = query.searchSort.head,
-      nextCursor = nextCursor
+      nextCursor = nextCursor,
+      continuesDay = query.cursor.map(_.day)
     )
 
     logger.debug(
-      s"Grouped ID search by ${result.grouping.by} ${result.grouping.direction}, sorted ${result.sort}: " +
-        s"${result.ids.length} images in ${result.groups.length} groups of ${result.total} matching, " +
-        s"page ${result.page}, in ${System.currentTimeMillis - started}ms")
+      s"Grouped search by ${result.grouping.by} ${result.grouping.direction}, sorted ${result.sort}: " +
+        s"${result.assets.length} images in ${result.groups.length} groups" +
+        result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
+        s", in ${System.currentTimeMillis - started}ms")
 
     result
 

@@ -9,7 +9,7 @@ import altitude.core.{ Altitude, Const, FieldConst, RequestContext }
 import altitude.core.models.*
 import altitude.core.util.*
 
-/** Grouped ID search: date groups with full-day totals, page ranges, and counts that honor every search filter */
+/** Grouped search: date groups with full-day totals, page contents, and counts that honor every search filter */
 @DoNotDiscover class SearchGroupingTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   private val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
@@ -34,14 +34,14 @@ import altitude.core.util.*
       direction: SortDirection = SortDirection.DESC,
       sort: SearchSort = byFilename,
       rpp: Int = 50,
-      page: Int = 1,
+      cursor: Option[SearchCursor] = None,
       text: Option[String] = None,
       params: Map[String, Any] = Map(FieldConst.Asset.IS_RECYCLED -> false),
       metadataFilters: Map[String, Any] = Map(),
       folderIds: Set[String] = Set(),
       personIds: Set[String] = Set(),
-      albumIds: Set[String] = Set()): IdSearchResult =
-    testApp.service.library.searchIds(
+      albumIds: Set[String] = Set()): GroupedSearchResult =
+    testApp.service.library.searchGrouped(
       new SearchQuery(
         text = text,
         params = params,
@@ -50,10 +50,16 @@ import altitude.core.util.*
         personIds = personIds,
         albumIds = albumIds,
         rpp = rpp,
-        page = page,
         searchSort = List(sort),
-        grouping = Some(SearchGrouping(by, direction))
+        grouping = Some(SearchGrouping(by, direction)),
+        cursor = cursor
       ))
+
+  /** The page as (day, the day's full count, the asset IDs on the page) per group, in page order */
+  private def summary(result: GroupedSearchResult): List[(LocalDate, Int, List[String])] =
+    result.groups.map(group => (group.date, group.total, group.assets.map(_.persistedId)))
+
+  private def ids(result: GroupedSearchResult): List[String] = result.assets.map(_.persistedId)
 
   private def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
     val original = TimeZone.getDefault
@@ -62,33 +68,36 @@ import altitude.core.util.*
     finally TimeZone.setDefault(original)
   }
 
-  test("A page is grouped by capture day with full-day totals and contiguous ranges") {
+  test("Pages are grouped by capture day with full-day totals and continued by cursor to the end") {
     val a1 = persistDated("2026-09-06T10:00:00", "a1.jpg")
     val a2 = persistDated("2026-09-06T09:00:00", "a2.jpg")
     val a3 = persistDated("2026-09-06T23:59:59", "a3.jpg")
     val b1 = persistDated("2026-09-05T08:00:00", "b1.jpg")
     val b2 = persistDated("2026-09-05T07:00:00", "b2.jpg")
 
-    val page1 = grouped(rpp = 2, page = 1)
-    page1.ids shouldEqual List(a1.persistedId, a2.persistedId)
-    page1.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 2, 3))
-    page1.total shouldBe 5
-    page1.totalPages shouldBe 3
-    page1.page shouldBe 1
+    val page1 = grouped(rpp = 2)
+    summary(page1) shouldEqual List((day("2026-09-06"), 3, List(a1.persistedId, a2.persistedId)))
+    page1.assets.map(_.fileName) shouldEqual List("a1.jpg", "a2.jpg")
+    page1.total shouldBe Some(5)
+    page1.continuesDay shouldBe None
+    page1.nextCursor.isDefined shouldBe true
 
-    val page2 = grouped(rpp = 2, page = 2)
-    page2.ids shouldEqual List(a3.persistedId, b1.persistedId)
-    page2.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 3), IdSearchGroup(day("2026-09-05"), 1, 1, 2))
+    // A continuation completes the day and opens the next one; it knows the day it continues and skips the overall count
+    val page2 = grouped(rpp = 2, cursor = page1.nextCursor)
+    summary(page2) shouldEqual List((day("2026-09-06"), 3, List(a3.persistedId)), (day("2026-09-05"), 2, List(b1.persistedId)))
+    page2.continuesDay shouldBe Some(day("2026-09-06"))
+    page2.total shouldBe None
 
-    val page3 = grouped(rpp = 2, page = 3)
-    page3.ids shouldEqual List(b2.persistedId)
-    page3.groups shouldEqual List(IdSearchGroup(day("2026-09-05"), 0, 1, 2))
+    val page3 = grouped(rpp = 2, cursor = page2.nextCursor)
+    summary(page3) shouldEqual List((day("2026-09-05"), 2, List(b2.persistedId)))
+    page3.nextCursor shouldBe None
 
-    val page4 = grouped(rpp = 2, page = 4)
-    page4.ids shouldBe empty
-    page4.groups shouldBe empty
-    page4.total shouldBe 5
-    page4.totalPages shouldBe 3
+    // Nothing matches: an empty first page with a zero count
+    val none = grouped(text = Some("nothing"))
+    none.isEmpty shouldBe true
+    none.assets shouldBe empty
+    none.total shouldBe Some(0)
+    none.nextCursor shouldBe None
   }
 
   test("Group direction and the sort within a day are independent") {
@@ -98,12 +107,13 @@ import altitude.core.util.*
     val b2 = persistDated("2026-09-05T07:00:00", "b2.jpg")
 
     val oldestFirst = grouped(direction = SortDirection.ASC, sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC))
-    oldestFirst.ids shouldEqual List(b2.persistedId, b1.persistedId, a2.persistedId, a1.persistedId)
-    oldestFirst.groups shouldEqual List(IdSearchGroup(day("2026-09-05"), 0, 2, 2), IdSearchGroup(day("2026-09-06"), 2, 2, 2))
+    summary(oldestFirst) shouldEqual List(
+      (day("2026-09-05"), 2, List(b2.persistedId, b1.persistedId)),
+      (day("2026-09-06"), 2, List(a2.persistedId, a1.persistedId)))
 
     val newestFirstByTime =
       grouped(direction = SortDirection.DESC, sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.ASC))
-    newestFirstByTime.ids shouldEqual List(a2.persistedId, a1.persistedId, b2.persistedId, b1.persistedId)
+    ids(newestFirstByTime) shouldEqual List(a2.persistedId, a1.persistedId, b2.persistedId, b1.persistedId)
   }
 
   test("Capture days follow the camera's calendar date under any JVM time zone") {
@@ -112,9 +122,7 @@ import altitude.core.util.*
     List("Pacific/Kiritimati", "Etc/GMT+12", "UTC").foreach {
       zone =>
         withJvmTimeZone(zone) {
-          val result = grouped()
-          result.ids shouldEqual List(asset.persistedId)
-          result.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 1))
+          summary(grouped()) shouldEqual List((day("2026-09-06"), 1, List(asset.persistedId)))
         }
     }
   }
@@ -135,8 +143,9 @@ import altitude.core.util.*
       zone =>
         withJvmTimeZone(zone) {
           val result = grouped(by = GroupBy.DateImported, sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-          result.ids shouldEqual List(late.persistedId, early.persistedId)
-          result.groups shouldEqual List(IdSearchGroup(day("2026-09-07"), 0, 1, 1), IdSearchGroup(day("2026-09-06"), 1, 1, 1))
+          summary(result) shouldEqual List(
+            (day("2026-09-07"), 1, List(late.persistedId)),
+            (day("2026-09-06"), 1, List(early.persistedId)))
         }
     }
   }
@@ -144,15 +153,22 @@ import altitude.core.util.*
   test("A day larger than the page spans pages with the same total") {
     val assets = (1 to 7).map(n => persistDated("2026-09-06T10:00:00", f"img$n%02d.jpg"))
 
-    val pages = (1 to 3).map(p => grouped(rpp = 3, page = p))
-    pages.map(_.ids).flatten shouldEqual assets.map(_.persistedId)
-    pages.map(_.groups) shouldEqual Seq(
-      List(IdSearchGroup(day("2026-09-06"), 0, 3, 7)),
-      List(IdSearchGroup(day("2026-09-06"), 0, 3, 7)),
-      List(IdSearchGroup(day("2026-09-06"), 0, 1, 7)))
+    val page1 = grouped(rpp = 3)
+    val page2 = grouped(rpp = 3, cursor = page1.nextCursor)
+    val page3 = grouped(rpp = 3, cursor = page2.nextCursor)
+    val pages = List(page1, page2, page3)
+
+    pages.flatMap(ids) shouldEqual assets.map(_.persistedId)
+    pages.map(_.groups.map(group => (group.date, group.total, group.assets.length))) shouldEqual List(
+      List((day("2026-09-06"), 7, 3)),
+      List((day("2026-09-06"), 7, 3)),
+      List((day("2026-09-06"), 7, 1)))
+    page2.continuesDay shouldBe Some(day("2026-09-06"))
+    page3.continuesDay shouldBe Some(day("2026-09-06"))
+    page3.nextCursor shouldBe None
   }
 
-  test("Text, metadata, folder, album and person filters bound both the IDs and every count") {
+  test("Text, metadata, folder, album and person filters bound both the assets and every count") {
     val keywords = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
     val rating = testApp.service.metadata.addField(UserMetadataField(name = "rating", fieldType = FieldType.NUMBER))
     val both = UserMetadata(Map(keywords.persistedId -> Set("beach", "sunset"), rating.persistedId -> Set("5")))
@@ -166,29 +182,29 @@ import altitude.core.util.*
     val elsewhere = persistDated("2026-09-06T12:00:00", "a3.jpg", metadata = keywordOnly)
     val older = persistDated("2026-09-05T12:00:00", "b1.jpg", metadata = both)
 
-    // Two matching metadata values per asset must not duplicate an ID or inflate a count
+    // Two matching metadata values per asset must not duplicate an asset or inflate a count
     val byMetadata = grouped(metadataFilters = Map(keywords.persistedId -> "beach", rating.persistedId -> 5))
-    byMetadata.ids shouldEqual List(inSub.persistedId, inFolder.persistedId, older.persistedId)
-    byMetadata.total shouldBe 3
-    byMetadata.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 2, 2), IdSearchGroup(day("2026-09-05"), 2, 1, 1))
+    summary(byMetadata) shouldEqual List(
+      (day("2026-09-06"), 2, List(inSub.persistedId, inFolder.persistedId)),
+      (day("2026-09-05"), 1, List(older.persistedId)))
+    byMetadata.total shouldBe Some(3)
 
     val byText = grouped(text = Some("sunset"))
-    byText.ids shouldEqual List(inSub.persistedId, inFolder.persistedId, older.persistedId)
-    byText.total shouldBe 3
+    ids(byText) shouldEqual List(inSub.persistedId, inFolder.persistedId, older.persistedId)
+    byText.total shouldBe Some(3)
 
     val byFolder = grouped(folderIds = Set(folder.persistedId))
-    byFolder.ids shouldEqual List(inSub.persistedId, inFolder.persistedId)
-    byFolder.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 2, 2))
+    summary(byFolder) shouldEqual List((day("2026-09-06"), 2, List(inSub.persistedId, inFolder.persistedId)))
 
     val bySubFolder = grouped(folderIds = Set(subFolder.persistedId), text = Some("beach"))
-    bySubFolder.ids shouldEqual List(inSub.persistedId)
-    bySubFolder.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 1))
+    summary(bySubFolder) shouldEqual List((day("2026-09-06"), 1, List(inSub.persistedId)))
 
     val album = testApp.service.album.add("album")
     testApp.service.album.addAssets(album.persistedId, Set(elsewhere.persistedId, older.persistedId))
     val byAlbum = grouped(albumIds = Set(album.persistedId))
-    byAlbum.ids shouldEqual List(elsewhere.persistedId, older.persistedId)
-    byAlbum.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 1), IdSearchGroup(day("2026-09-05"), 1, 1, 1))
+    summary(byAlbum) shouldEqual List(
+      (day("2026-09-06"), 1, List(elsewhere.persistedId)),
+      (day("2026-09-05"), 1, List(older.persistedId)))
 
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person)
@@ -198,9 +214,8 @@ import altitude.core.util.*
       LocalDateTime.parse("2026-09-04T09:00:00"),
       OffsetDateTime.parse("2026-09-04T09:00:00Z"))
     val byPerson = grouped(personIds = Set(person.persistedId))
-    byPerson.ids shouldEqual List(withFace.persistedId)
-    byPerson.groups shouldEqual List(IdSearchGroup(day("2026-09-04"), 0, 1, 1))
-    byPerson.total shouldBe 1
+    summary(byPerson) shouldEqual List((day("2026-09-04"), 1, List(withFace.persistedId)))
+    byPerson.total shouldBe Some(1)
   }
 
   test("Root folder scope, view and repository isolation bound the counts") {
@@ -214,12 +229,11 @@ import altitude.core.util.*
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
 
     val rootScope = grouped(folderIds = Set(testContext.repository.rootFolderId))
-    rootScope.ids should contain theSameElementsAs List(sorted.persistedId, triaged.persistedId)
+    ids(rootScope) should contain theSameElementsAs List(sorted.persistedId, triaged.persistedId)
     rootScope.groups.map(_.total) shouldEqual List(2)
 
     val trash = grouped(params = Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false))
-    trash.ids shouldEqual List(recycled.persistedId)
-    trash.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 1))
+    summary(trash) shouldEqual List((day("2026-09-06"), 1, List(recycled.persistedId)))
 
     // Another repository's asset on the same day is invisible to this repository's counts
     val otherUser = testContext.persistUser(Some(testContext.makeUser()))
@@ -231,13 +245,13 @@ import altitude.core.util.*
       foreign.persistedId,
       LocalDateTime.parse("2026-09-06T13:00:00"),
       OffsetDateTime.parse("2026-09-06T13:00:00Z"))
-    grouped().groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 1))
+    summary(grouped()) shouldEqual List((day("2026-09-06"), 1, List(foreign.persistedId)))
 
     switchContextRepo(testContext.repositories.head)
     switchContextUser(testContext.users.head)
     val home = grouped()
-    home.total shouldBe 2
-    home.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 2, 2))
+    home.total shouldBe Some(2)
+    home.groups.map(group => (group.date, group.total, group.assets.length)) shouldEqual List((day("2026-09-06"), 2, 2))
   }
 
   test("A grouped page is one statement regardless of the number of days on it") {
@@ -247,6 +261,7 @@ import altitude.core.util.*
     val result = grouped(rpp = 10)
     RequestContext.readQueryCount.value - before shouldBe 1
     result.groups.length shouldBe 4
+    result.assets.length shouldBe 4
   }
 
   test("A legacy null import time leaves import-day grouping but keeps its capture day") {
@@ -258,14 +273,13 @@ import altitude.core.util.*
       }
 
       val byImport = grouped(by = GroupBy.DateImported, sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-      byImport.ids shouldEqual List(dated.persistedId)
-      byImport.total shouldBe 1
-      byImport.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 1, 1))
+      summary(byImport) shouldEqual List((day("2026-09-06"), 1, List(dated.persistedId)))
+      byImport.total shouldBe Some(1)
 
       val byCapture = grouped(by = GroupBy.DateTaken, sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-      byCapture.ids should contain theSameElementsAs List(dated.persistedId, undated.persistedId)
-      byCapture.total shouldBe 2
-      byCapture.groups shouldEqual List(IdSearchGroup(day("2026-09-06"), 0, 2, 2))
+      ids(byCapture) should contain theSameElementsAs List(dated.persistedId, undated.persistedId)
+      byCapture.total shouldBe Some(2)
+      byCapture.groups.map(group => (group.date, group.total, group.assets.length)) shouldEqual List((day("2026-09-06"), 2, 2))
     }
   }
 }

@@ -42,7 +42,7 @@ object Const:
 
   object Search:
     val DEFAULT_RPP = 50
-    // Grouped JSON pages are bounded: they carry counts for every day on the page
+    // Grouped pages are bounded: they carry counts for every day on the page
     val MAX_GROUPED_RPP = 500
 
     // The sort fields the results UI offers; a grouped request may sort by nothing else

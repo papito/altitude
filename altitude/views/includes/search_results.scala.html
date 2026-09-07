@@ -1,10 +1,15 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
-@import altitude.core.util.SearchResult
+@import altitude.core.util.GroupBy
+@import altitude.core.util.SearchGrouping
 @import altitude.core.util.SearchSort
+@import altitude.core.util.SortDirection
 @import altitude.core.models.Person
-@(results: SearchResult, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None)
-@defining(results.sort.head) { sort =>
+
+@* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
+   controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
+   `grouping`) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. *@
+@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None)
 
 <style>
   #searchControl {
@@ -13,7 +18,7 @@
     border: 1px solid var(--background-tertiary-color);
     border-radius: 5px;
     display: grid;
-    grid-template-columns: .5fr 1fr 1fr;
+    grid-template-columns: .5fr 1fr 1fr 1fr;
   }
 
   /* Direct children only: as a descendant selector this would also match the View control's popover
@@ -104,6 +109,31 @@
     flex-wrap: wrap;
     flex-direction: row;
     justify-content: center;
+    /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
+    isolation: isolate;
+  }
+
+  /* A date header of a grouped grid spans the whole row and sticks to the top of the scrolling #content pane. Every header
+     sticks at the same offset, so the next day's header paints over the previous one as it arrives - which reads as a
+     replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+  #assets .date-group {
+    flex-basis: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 8px 6px;
+    font-weight: bold;
+    font-size: 1.1em;
+    background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+  }
+
+  #assets .date-group .count {
+    color: var(--faded-font-color);
+    font-weight: normal;
+    font-size: smaller;
   }
 
   #assets .cell {
@@ -179,7 +209,7 @@
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js) *@
 <div data-app-fragment="search-results"
-     data-results-total="@{results.total}"
+     data-results-total="@{total}"
      data-results-repo-id="@{RequestContext.getRepository.persistedId}"
      data-results-view="@{view}"
      data-results-folder-id="@{folderId.getOrElse("")}"
@@ -202,6 +232,36 @@
   @* The ⚙ View control is a dialog-trigger context menu, built into this host by
      js/fragments/search-results.js like the Add album and Add folder controls *@
   <div id="viewSettingsActions"></div>
+
+  <div class="group">
+    @* The selected option is the effective grouping the server used. Each option carries the two parameters it sets, for the
+       search funnel to read off the selected option (data-app-search-from-selected-option). That trigger source is not bound
+       yet: it comes with the frontend unit of plans/search-results-date-grouping-ui.md, until then a change re-runs the
+       current search. *@
+    <select id="groupOptions"
+            class="sort-dropdown"
+            data-app-search="change"
+            data-app-search-from-selected-option>
+
+      <option data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {selected}>
+        No grouping
+      </option>
+
+      <option data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {selected}>
+        Date Taken (Newest first)
+      </option>
+      <option data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {selected}>
+        Date Taken (Oldest first)
+      </option>
+
+      <option data-app-search-group-by="dateImported" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateImported, SortDirection.DESC))) {selected}>
+        Date Imported (Newest first)
+      </option>
+      <option data-app-search-group-by="dateImported" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateImported, SortDirection.ASC))) {selected}>
+        Date Imported (Oldest first)
+      </option>
+    </select>
+  </div>
 
   <div class="sort">
     @* The selected option is the effective sort the server used; changing it goes through the search funnel, which
@@ -250,9 +310,6 @@
 </div>
 
 <div id="assets" x-data>
-  @htmx.html.results_grid(isContinuousScroll = false, p = 1, results = results)
+  @grid
 </div>
 </div>
-
-}
-

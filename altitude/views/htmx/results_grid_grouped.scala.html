@@ -1,0 +1,24 @@
+@import altitude.core.util.GroupedSearchResult
+@import altitude.core.util.Util
+
+@* The grouped grid: each day's header, then its cells; the page's last cell carries the cursor of the next page when there is
+   one. The header is skipped for the first group when it continues the day the previous page ended on (`continuesDay`), so the
+   new cells land after that page's last cell and read as the same group. *@
+@(results: GroupedSearchResult, isContinuousScroll: Boolean = false)
+
+@defining(results.assets.lastOption.map(_.persistedId)) { lastId =>
+@for((group, groupIdx) <- results.groups.zipWithIndex) {
+@if(!(groupIdx == 0 && results.continuesDay.contains(group.date))) {
+<div class="date-group" data-group-date="@{group.date}">
+  <time datetime="@{group.date}">@{Util.humanReadableDate(group.date)}</time>
+  <span class="count">@{group.total}</span>
+</div>
+}
+@for(asset <- group.assets) {
+@htmx.html.result_cell(
+    asset = asset,
+    isContinuousScroll = isContinuousScroll,
+    nextCursor = results.nextCursor.filter(_ => lastId.contains(asset.persistedId)).map(_.encode))
+}
+}
+}

@@ -134,7 +134,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
    */
   var isInitialized = false
 
-  final private val schemaVersion = 3
+  final private val schemaVersion = 2
 
   final val dataSourceType: String = config.getString(Const.Conf.DB_ENGINE)
   logger.info(s"Datasource type: $dataSourceType")

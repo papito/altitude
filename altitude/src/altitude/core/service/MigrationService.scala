@@ -1,6 +1,5 @@
 package altitude.core.service
 
-import java.util.TimeZone
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -10,19 +9,6 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.RequestContext
 import altitude.core.transactions.TransactionManager
-
-object MigrationService:
-  /**
-   * The JVM zone ID as PostgreSQL spells it, mirroring pgJDBC's startup conversion: IANA IDs pass through, while a fixed-offset
-   * "GMT+hh:mm" flips its sign because PostgreSQL reads such offsets the POSIX way.
-   */
-  def postgresTimeZone(jvmZoneId: String): String =
-    if jvmZoneId.length <= 3 || !jvmZoneId.startsWith("GMT") then jvmZoneId
-    else
-      jvmZoneId.charAt(3) match
-        case '+' => "GMT-" + jvmZoneId.substring(4)
-        case '-' => "GMT+" + jvmZoneId.substring(4)
-        case _ => jvmZoneId
 
 abstract class MigrationService(val app: Altitude):
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -58,25 +44,8 @@ abstract class MigrationService(val app: Altitude):
     source.close()
 
     txManager.withTransaction {
-      pinSessionTimeZoneToJvm()
       executeCommand(commands)
     }
-
-  /**
-   * Conversions between timestamp types in a PostgreSQL migration must use the zone the application decoded the values with: the
-   * JVM default zone, which pgJDBC also sends at connection start. Pin it explicitly (SET LOCAL semantics) so neither the server
-   * default nor a URL override can change what a migration script's `current_setting('TimeZone')` means.
-   */
-  private def pinSessionTimeZoneToJvm(): Unit =
-    app.dataSourceType match
-      case Const.DbEngineName.POSTGRES =>
-        val zone = MigrationService.postgresTimeZone(TimeZone.getDefault.getID)
-        logger.info(s"Migration session time zone pinned to the JVM zone [$zone]")
-        val stmt = RequestContext.getConn.prepareStatement("SELECT set_config('TimeZone', ?, true)")
-        stmt.setString(1, zone)
-        stmt.execute()
-        stmt.close()
-      case _ => ()
 
   def migrationRequired: Boolean =
     logger.info("Checking if migration is required")

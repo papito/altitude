@@ -95,12 +95,15 @@ footer {
 /* CONTENT */
 /*         */
 
+/* The tint is a variable so the sticky date headers of the results grid can paint the same one over the page background */
 #content.triage {
-    background-color: rgba(55, 122, 28, 0.07);
+    --view-tint: rgba(55, 122, 28, 0.07);
+    background-color: var(--view-tint);
 }
 
 #content.trashbin {
-    background-color: rgba(206, 125, 10, 0.05);
+    --view-tint: rgba(206, 125, 10, 0.05);
+    background-color: var(--view-tint);
 }
 
 

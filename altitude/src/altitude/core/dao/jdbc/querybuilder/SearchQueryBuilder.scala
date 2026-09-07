@@ -4,6 +4,7 @@ import java.time.LocalDate
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.jdbc.BaseDao
 import altitude.core.util.GroupBy
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
@@ -91,16 +92,18 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     SqlQuery(sql, bindVals)
 
   /**
-   * One statement for a grouped page of asset IDs: the ordered page slice, the count of every match, and the full-day count of
-   * each day on the page. All three branches share the exact same FROM/WHERE/GROUP BY/HAVING, so counts can never drift from the
-   * IDs. The page slice fetches one row past the page to detect continuation. Every branch is materialized: the candidates
-   * because they are read twice, the counts so the day count runs once per distinct day, not once per page row.
+   * One statement for a grouped page: the ordered page slice joined back to its asset rows, the full-day count of each day on the
+   * page and, on a first page, the count of every match. Every branch shares the exact same FROM/WHERE/GROUP BY/HAVING, so counts
+   * can never drift from the rows. The candidates slice is narrow (ID, day, sort key) and fetches one row past the page to detect
+   * continuation; only the page's rows are joined to the asset table. Every branch is materialized: the candidates because they
+   * are read twice, the counts so the day count runs once per distinct day, not once per page row.
    *
-   * Ordering is day, then the sort, then the ID as a deterministic tiebreaker. Nulls fall where the engine puts them natively; an
-   * explicit NULLS clause would forfeit index-ordered reads on both engines.
+   * A page reached by cursor skips the overall count: it is the dominant cost of the statement on a large library, and the footer
+   * total was set by the first page. Ordering is day, then the sort, then the ID as a deterministic tiebreaker. Nulls fall where
+   * the engine puts them natively; an explicit NULLS clause would forfeit index-ordered reads on both engines.
    */
-  def buildIdSearchSql(query: SearchQuery): SqlQuery =
-    val grouping = query.grouping.getOrElse(throw IllegalArgumentException("An ID search needs a grouping"))
+  def buildGroupedSearchSql(query: SearchQuery): SqlQuery =
+    val grouping = query.grouping.getOrElse(throw IllegalArgumentException("A grouped search needs a grouping"))
     val sort = query.searchSort.head
     val clauses = compileClauses(query)
     val day = dayExpression(grouping.by)
@@ -122,35 +125,46 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
       s"$dayTerm ${grouping.direction}, $sortTerm ${sort.direction}, $idTerm ASC"
 
     val candidatesOrder = orderBy(day, secondarySortExpression(sort, grouping), s"$tableName.${FieldConst.ID}")
-    // A cursor continues from a position; a page number is an offset
+    // A cursor continues from a position; without one this is the first page
     val continuation = query.cursor.map(cursorPredicate(_, grouping, sort, day)).getOrElse(ClauseComponents())
-    val offset = if query.cursor.isDefined then "" else s" OFFSET ${(query.page - 1) * query.rpp}"
     val candidatesWhere = matchWhere + continuation
+    val isFirstPage = query.cursor.isEmpty
+
+    // The columns the asset model is built from, minus the generic builder's window count, which this statement replaces
+    val assetColumns = selColumnNames
+      .filterNot(_ == BaseDao.totalRecsWindowFunction)
+      .map(column => if column == "*" then s"$tableName.*" else column)
+
+    val totalCte =
+      if isFirstPage then
+        s", total AS MATERIALIZED (SELECT count(*) AS n FROM (${matching(s"$tableName.${FieldConst.ID}", matchWhere)}) AS m)"
+      else ""
+    val totalColumn = if isFirstPage then ", t.n AS total" else ""
+    val totalJoin = if isFirstPage then "CROSS JOIN total AS t" else ""
 
     val sql = s"""
       WITH candidates AS MATERIALIZED (
         ${matching(s"$tableName.${FieldConst.ID} AS id, $day AS day, $tableName.${sort.field} AS sort_value", candidatesWhere)}
         ORDER BY $candidatesOrder
-        LIMIT ${query.rpp + 1}$offset
+        LIMIT ${query.rpp + 1}
       ), page AS MATERIALIZED (
         SELECT id, day, sort_value FROM candidates ORDER BY ${orderBy("day", "sort_value", "id")} LIMIT ${query.rpp}
-      ), total AS MATERIALIZED (
-        SELECT count(*) AS n FROM (${matching(s"$tableName.${FieldConst.ID}", matchWhere)}) AS m
       ), day_counts AS MATERIALIZED (
         SELECT p.day AS day,
                (SELECT count(*) FROM (${matching(s"$tableName.${FieldConst.ID}", matchWhere + ClauseComponents(List(s"$day = p.day")))}) AS m) AS n
           FROM (SELECT DISTINCT day FROM page) AS p
-      )
-      SELECT p.id AS id, p.day AS day, p.sort_value AS sort_value, t.n AS total, d.n AS day_total,
-             (SELECT count(*) FROM candidates) AS candidate_count
-        FROM total AS t
-             LEFT JOIN page AS p ON 1 = 1
+      )$totalCte
+      SELECT ${assetColumns.mkString(", ")}, p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
+             (SELECT count(*) FROM candidates) AS candidate_count$totalColumn
+        FROM page AS p
+             JOIN $tableName ON $tableName.${FieldConst.ID} = p.id
              LEFT JOIN day_counts AS d ON d.day = p.day
+             $totalJoin
        ORDER BY ${orderBy("p.day", "p.sort_value", "p.id")}
     """
 
-    // Bind values in order of appearance: candidates, total, day_counts
-    SqlQuery(sql, candidatesWhere.bindVals ++ matchWhere.bindVals ++ matchWhere.bindVals)
+    // Bind values in order of appearance: candidates, day_counts, total
+    SqlQuery(sql, candidatesWhere.bindVals ++ matchWhere.bindVals ++ (if isFirstPage then matchWhere.bindVals else Nil))
 
   /**
    * Rows strictly after the cursor's anchor in page order, as lexicographic comparisons with independent directions: an earlier

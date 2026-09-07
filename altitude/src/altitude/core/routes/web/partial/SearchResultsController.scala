@@ -3,6 +3,7 @@ package altitude.core.routes.web.partial
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
+import play.twirl.api.Html
 
 import scala.util.Try
 
@@ -16,7 +17,7 @@ import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.GroupBy
-import altitude.core.util.IdSearchResult
+import altitude.core.util.GroupedSearchResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchQuery
@@ -37,8 +38,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
    *
-   * With `groupBy`, the response is the grouped JSON contract instead: matching asset IDs (no asset data) with their date groups
-   * and counts, continued either by page number or by the `after` cursor of the previous response. See `groupedJson`.
+   * With `groupBy`, the grid is grouped by date: a header opens each day, and the page is continued by the `after` cursor the
+   * last cell carries (`data-app-search-after`), never by page number. Grouped results are HTML only; the detail modal walks the
+   * grid itself. `parseGroupedQuery` validates the request.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId")
@@ -72,20 +74,49 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
 
     if groupBy.isDefined || groupDirection.isDefined || after.isDefined then
-      if !isJsonFormat then return badRequest("Grouped results are available as JSON only")
+      if isJsonFormat then return badRequest("Grouped results are available as HTML only", isJsonFormat)
 
-      return groupedJson(
-        queryParams = queryParams,
-        rpp = rpp,
-        p = p,
-        q = q,
-        sort = sort,
-        folderId = folderId,
-        personId = personId,
-        albumId = albumId,
-        groupBy = groupBy,
-        groupDirection = groupDirection,
-        after = after
+      val searchQuery =
+        parseGroupedQuery(
+          queryParams,
+          rpp,
+          p,
+          q,
+          sort,
+          folderId,
+          personId,
+          albumId,
+          groupBy,
+          groupDirection,
+          after,
+          isContinuousScroll) match
+          case Left(message) => return badRequest(message, isJsonFormat)
+          case Right(query) => query
+
+      logger.info(s"GROUPED QUERY: ${searchQuery.toString}")
+
+      val results: GroupedSearchResult =
+        try App.altitude.service.library.searchGrouped(searchQuery)
+        catch case ex: SearchCursorException => return badRequest(ex.getMessage, isJsonFormat)
+
+      if isContinuousScroll then
+        // The continuation ran dry: results are live, and the images past the cursor may be gone by now
+        if results.isEmpty then return noContent
+
+        return html(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true))
+
+      return html(
+        includes.html.search_results(
+          total = results.total.getOrElse(0),
+          sort = results.sort,
+          grouping = Some(results.grouping),
+          grid = htmx.html.results_grid_grouped(results = results),
+          person = personOf(personId),
+          view = view,
+          folderId = folderId,
+          albumId = albumId
+        ),
+        ("HX-Replace-Url", browserViewUrl(view, sort, q, folderId, personId, albumId, groupBy, groupDirection, request))
       )
 
     val page = p.getOrElse(1)
@@ -122,49 +153,39 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if isContinuousScroll then
       // no more pages
-      if page > results.totalPages then return cask.Response("", 204, Seq(("Content-Type", "text/html")))
+      if page > results.totalPages then return noContent
 
       /** This is a request for another page of search results for continuous scroll. */
-      val payload = "<!doctype html>" + htmx.html.results_grid(
-        results = results,
-        p = page,
-        isContinuousScroll = true
-      )
-      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-    else
-      /**
-       * This is a new request (first page) for search results.
-       *
-       * We may need to add more entities, depending on what is needed, for example if it's a person view.
-       */
-      val maybePerson: Option[Person] = personId.map(id => App.altitude.service.person.getById(id): Person)
+      return html(htmx.html.results_grid(results = results, p = page, isContinuousScroll = true))
 
-      val payload = "<!doctype html>" + includes.html.search_results(
-        results = results,
-        person = maybePerson.orNull,
+    /**
+     * This is a new request (first page) for search results.
+     *
+     * We may need to add more entities, depending on what is needed, for example if it's a person view.
+     */
+    html(
+      includes.html.search_results(
+        total = results.total,
+        sort = searchSort,
+        grouping = None,
+        grid = htmx.html.results_grid(isContinuousScroll = false, p = page, results = results),
+        person = personOf(personId),
         view = view,
         folderId = folderId,
         albumId = albumId
-      )
-      cask.Response(
-        payload,
-        200,
-        Seq(
-          ("Content-Type", "text/html"),
-          ("HX-Replace-Url", browserViewUrl(view, sort, q, folderId, personId, albumId, request))
-        ))
+      ),
+      (
+        "HX-Replace-Url",
+        browserViewUrl(view, sort, q, folderId, personId, albumId, groupBy = None, groupDirection = None, request))
+    )
 
   /**
-   * The grouped JSON contract. Every parameter is validated up front and a problem is a 400 with `{"error": ...}`:
+   * A grouped request, validated up front. A problem is the message of a 400:
    *   - `groupBy` is `dateTaken` or `dateImported`; `groupDirection` (`asc`/`desc`, default `desc`) and `after` need it
    *   - `sort` is one of the results UI's fields with a direction digit; `rpp` is 1 to the grouped maximum
-   *   - `p` is a positive page number, or `after` is the previous response's `nextCursor` (never both)
-   *
-   * The response is `ids` (a flat list, for the existing navigation), `page`, `total`, `totalPages`, the effective `groupBy` and
-   * `groupDirection`, `groups` as contiguous ranges over `ids` with each day's full match count, and `nextCursor` (null at the
-   * end). A valid empty page is a 200 with empty lists and accurate totals.
+   *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
-  private def groupedJson(
+  private def parseGroupedQuery(
       queryParams: Map[String, Any],
       rpp: Int,
       p: Option[Int],
@@ -175,72 +196,47 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId: Option[String],
       groupBy: Option[String],
       groupDirection: Option[String],
-      after: Option[String]): Response[String] =
+      after: Option[String],
+      isContinuousScroll: Boolean): Either[String, SearchQuery] =
 
-    val grouping: SearchGrouping = groupBy.flatMap(GroupBy.fromApiValue) match
-      case None if groupBy.isEmpty => return badRequest(s"${Api.Field.Search.GROUP_BY} is required")
-      case None => return badRequest(s"Unknown ${Api.Field.Search.GROUP_BY} value")
-      case Some(by) =>
-        val direction = groupDirection.map(parseDirection) match
-          case None => SortDirection.DESC
-          case Some(Some(direction)) => direction
-          case Some(None) => return badRequest(s"${Api.Field.Search.GROUP_DIRECTION} must be asc or desc")
-        SearchGrouping(by, direction)
+    val by: GroupBy = groupBy.map(GroupBy.fromApiValue) match
+      case None => return Left(s"${Api.Field.Search.GROUP_BY} is required")
+      case Some(None) => return Left(s"Unknown ${Api.Field.Search.GROUP_BY} value")
+      case Some(Some(by)) => by
+
+    val direction: SortDirection = groupDirection.map(parseDirection) match
+      case None => SortDirection.DESC
+      case Some(None) => return Left(s"${Api.Field.Search.GROUP_DIRECTION} must be asc or desc")
+      case Some(Some(direction)) => direction
 
     val searchSort = parseSort(sort) match
+      case None => return Left("Unknown sort")
       case Some(searchSort) => searchSort
-      case None => return badRequest("Unknown sort")
 
     if rpp < 1 || rpp > Const.Search.MAX_GROUPED_RPP then
-      return badRequest(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_GROUPED_RPP}")
-    if p.exists(_ < 1) then return badRequest(s"${Api.Field.Search.PAGE} must be a positive page number")
-    if after.isDefined && p.isDefined then
-      return badRequest(s"Use either ${Api.Field.Search.AFTER} or ${Api.Field.Search.PAGE}, not both")
+      return Left(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_GROUPED_RPP}")
+    if p.isDefined then
+      return Left(s"${Api.Field.Search.PAGE} is not used by a grouped search, which is continued with ${Api.Field.Search.AFTER}")
 
     val cursor: Option[SearchCursor] =
       try after.map(SearchCursor.decode)
-      catch case ex: SearchCursorException => return badRequest(ex.getMessage)
+      catch case ex: SearchCursorException => return Left(ex.getMessage)
 
-    val searchQuery = new SearchQuery(
-      params = queryParams,
-      text = q,
-      rpp = rpp,
-      folderIds = folderId.toSet,
-      personIds = personId.toSet,
-      albumIds = albumId.toSet,
-      page = cursor.map(_.nextPage).orElse(p).getOrElse(1),
-      searchSort = List(searchSort),
-      grouping = Some(grouping),
-      cursor = cursor
-    )
+    if cursor.isDefined && !isContinuousScroll then
+      return Left(s"${Api.Field.Search.AFTER} continues the results: send it with ${Api.Field.Search.IS_CONTINUOUS_SCROLL}")
 
-    logger.info(s"GROUPED QUERY: ${searchQuery.toString}")
-
-    val result: IdSearchResult =
-      try App.altitude.service.library.searchIds(searchQuery)
-      catch case ex: SearchCursorException => return badRequest(ex.getMessage)
-
-    cask.Response(ujson.write(toJson(result)), 200, Seq(("Content-Type", "application/json")))
-
-  // Hand-built rather than a model codec: the API is camelCase and the cursor is an opaque token
-  private def toJson(result: IdSearchResult): ujson.Obj =
-    ujson.Obj(
-      "ids" -> result.ids,
-      "page" -> result.page,
-      "total" -> result.total,
-      "totalPages" -> result.totalPages,
-      "groupBy" -> result.grouping.by.apiValue,
-      "groupDirection" -> result.grouping.direction.toString.toLowerCase,
-      "groups" -> ujson.Arr.from(result.groups.map {
-        group =>
-          ujson.Obj(
-            "date" -> group.date.toString,
-            "startIndex" -> group.startIndex,
-            "length" -> group.length,
-            "total" -> group.total)
-      }),
-      "nextCursor" -> result.nextCursor.map(cursor => ujson.Str(cursor.encode)).getOrElse(ujson.Null)
-    )
+    Right(
+      new SearchQuery(
+        params = queryParams,
+        text = q,
+        rpp = rpp,
+        folderIds = folderId.toSet,
+        personIds = personId.toSet,
+        albumIds = albumId.toSet,
+        searchSort = List(searchSort),
+        grouping = Some(SearchGrouping(by, direction)),
+        cursor = cursor
+      ))
 
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))
@@ -252,13 +248,23 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       .filter(_ => Const.Search.SORT_FIELDS.contains(field))
       .map(direction => SearchSort(field = field, direction = direction))
 
-  private def badRequest(message: String): Response[String] =
-    cask.Response(ujson.write(ujson.Obj("error" -> message)), 400, Seq(("Content-Type", "application/json")))
+  /** A 400 in the format of the request: `{"error": ...}` for JSON, the plain message for HTML (the snackbar reports the status) */
+  private def badRequest(message: String, isJsonFormat: Boolean): Response[String] =
+    if isJsonFormat then cask.Response(ujson.write(ujson.Obj("error" -> message)), 400, Seq(("Content-Type", "application/json")))
+    else cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
+
+  private def html(payload: Html, headers: (String, String)*): Response[String] =
+    cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)
+
+  private def noContent: Response[String] = cask.Response("", 204, Seq(("Content-Type", "text/html")))
+
+  private def personOf(personId: Option[String]): Person =
+    personId.map(id => App.altitude.service.person.getById(id): Person).orNull
 
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
-   * order, so the same search always yields the same URL. `p` and `rpp` are left out on purpose - a shared link opens at the
-   * first page.
+   * order, so the same search always yields the same URL. `p`, `rpp` and `after` are left out on purpose - a shared link opens at
+   * the first page.
    */
   private def browserViewUrl(
       view: String,
@@ -267,6 +273,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       folderId: Option[String],
       personId: Option[String],
       albumId: Option[String],
+      groupBy: Option[String],
+      groupDirection: Option[String],
       request: Request): String =
     val params = Seq(
       Option.when(view != Const.Search.View.DEFAULT)(Api.Field.Search.VIEW -> view),
@@ -274,7 +282,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId.map(Api.Field.Search.PERSON_ID -> _),
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
       q.map(Api.Field.Search.QUERY_TEXT -> _),
-      Some(Api.Field.Search.SORT -> sort)
+      Some(Api.Field.Search.SORT -> sort),
+      groupBy.map(Api.Field.Search.GROUP_BY -> _),
+      groupDirection.map(Api.Field.Search.GROUP_DIRECTION -> _)
     ).flatten
 
     App.altitude.service.urlService

@@ -67,8 +67,8 @@ import altitude.core.util.*
     assets.sorted(dayOrdering.orElse(sortOrdering).orElse(byId)).map(_.id)
   }
 
-  private def firstPage(grouping: SearchGrouping, sort: SearchSort, rpp: Int, text: Option[String] = None): IdSearchResult =
-    testApp.service.library.searchIds(
+  private def firstPage(grouping: SearchGrouping, sort: SearchSort, rpp: Int, text: Option[String] = None): GroupedSearchResult =
+    testApp.service.library.searchGrouped(
       new SearchQuery(
         text = text,
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -81,32 +81,31 @@ import altitude.core.util.*
       grouping: SearchGrouping,
       sort: SearchSort,
       rpp: Int,
-      text: Option[String] = None): IdSearchResult =
-    testApp.service.library.searchIds(
+      text: Option[String] = None): GroupedSearchResult =
+    testApp.service.library.searchGrouped(
       new SearchQuery(
         text = text,
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
         rpp = rpp,
-        page = cursor.nextPage,
         searchSort = List(sort),
         grouping = Some(grouping),
         cursor = Some(cursor)
       ))
 
+  private def ids(result: GroupedSearchResult): List[String] = result.assets.map(_.persistedId)
+
   /** Walks every page through encoded cursors, as a client would, and returns the IDs in order */
   private def traverse(grouping: SearchGrouping, sort: SearchSort, rpp: Int): List[String] = {
     var page = firstPage(grouping, sort, rpp)
-    var ids = page.ids
-    var pages = 1
+    var walked = ids(page)
     while (page.nextCursor.isDefined) {
       val cursor = SearchCursor.decode(page.nextCursor.get.encode)
       cursor shouldEqual page.nextCursor.get
       page = continue(cursor, grouping, sort, rpp)
-      page.page shouldBe pages + 1
-      ids = ids ++ page.ids
-      pages += 1
+      page.continuesDay shouldBe Some(cursor.day)
+      walked = walked ++ ids(page)
     }
-    ids
+    walked
   }
 
   test("Cursor traversal matches the complete order for every grouping, sort field and direction") {
@@ -138,20 +137,20 @@ import altitude.core.util.*
     val expected = expectedOrder(assets, grouping, sort)
 
     val page1 = firstPage(grouping, sort, rpp = 5)
-    page1.ids shouldEqual expected.take(5)
+    ids(page1) shouldEqual expected.take(5)
     page1.nextCursor.get.id shouldBe expected(4)
-    page1.nextCursor.get.nextPage shouldBe 2
-    page1.nextCursor.get.rpp shouldBe 5
+    page1.total shouldBe Some(12)
 
-    val page3 = continue(continue(page1.nextCursor.get, grouping, sort, 5).nextCursor.get, grouping, sort, 5)
-    page3.ids shouldEqual expected.drop(10)
+    // A continuation skips the overall count; the first page set it
+    val page2 = continue(page1.nextCursor.get, grouping, sort, 5)
+    page2.total shouldBe None
+    val page3 = continue(page2.nextCursor.get, grouping, sort, 5)
+    ids(page3) shouldEqual expected.drop(10)
     page3.nextCursor shouldBe None
-    page3.total shouldBe 12
-    page3.totalPages shouldBe 3
 
     // Exactly a full last page still needs one more request to learn that it was the last
     val exact = firstPage(grouping, sort, rpp = 12)
-    exact.ids shouldEqual expected
+    ids(exact) shouldEqual expected
     exact.nextCursor shouldBe None
   }
 
@@ -167,18 +166,18 @@ import altitude.core.util.*
     // The anchor leaves the result set
     testApp.service.library.recycleAssets(Set(cursor.id))
     val afterDelete = continue(cursor, grouping, sort, 5)
-    afterDelete.ids shouldEqual expected.slice(5, 10)
-    afterDelete.total shouldBe 11
+    ids(afterDelete) shouldEqual expected.slice(5, 10)
+    firstPage(grouping, sort, rpp = 5).total shouldBe Some(11)
 
-    // An image sorting before the anchor appears; the remaining pages are unchanged and the totals are live
+    // An image sorting before the anchor appears; the remaining pages are unchanged and the counts are live
     persistDated("2026-09-06T09:00:00", "img00.jpg")
     val afterInsert = continue(cursor, grouping, sort, 5)
-    afterInsert.ids shouldEqual expected.slice(5, 10)
-    afterInsert.total shouldBe 12
+    ids(afterInsert) shouldEqual expected.slice(5, 10)
+    firstPage(grouping, sort, rpp = 5).total shouldBe Some(12)
     afterInsert.nextCursor.isDefined shouldBe true
   }
 
-  test("A cursor is rejected for a different scope, ordering or page size, and when malformed") {
+  test("A cursor is rejected for a different scope or ordering, and when malformed") {
     fixture()
     val grouping = SearchGrouping(GroupBy.DateTaken)
     val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
@@ -190,16 +189,17 @@ import altitude.core.util.*
     intercept[SearchCursorException](continue(cursor, grouping, SearchSort(FieldConst.CREATED_AT, SortDirection.ASC), rpp = 5))
     intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.DateTaken, SortDirection.ASC), sort, rpp = 5))
     intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.DateImported), sort, rpp = 5))
-    intercept[SearchCursorException](continue(cursor, grouping, sort, rpp = 6))
+
+    // The page size is not part of the position: a continuation may ask for another one
+    ids(continue(cursor, grouping, sort, rpp = 6)).length shouldBe 6
 
     val folder = testApp.service.folder.add("scoped")
     intercept[SearchCursorException] {
-      testApp.service.library.searchIds(
+      testApp.service.library.searchGrouped(
         new SearchQuery(
           params = Map(FieldConst.Asset.IS_RECYCLED -> false),
           folderIds = Set(folder.persistedId),
           rpp = 5,
-          page = cursor.nextPage,
           searchSort = List(sort),
           grouping = Some(grouping),
           cursor = Some(cursor)
@@ -211,7 +211,7 @@ import altitude.core.util.*
     intercept[SearchCursorException](SearchCursor.decode(""))
 
     // The same search continues
-    continue(cursor, grouping, sort, rpp = 5).ids.length shouldBe 5
+    ids(continue(cursor, grouping, sort, rpp = 5)).length shouldBe 5
   }
 
   test("A cursor continues correctly through legacy null import times") {
@@ -243,7 +243,7 @@ import altitude.core.util.*
       val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
       val walked = traverse(byImport, sort, rpp = 4)
       walked should contain theSameElementsAs assets.filterNot(_.id == undated.id).map(_.id)
-      firstPage(byImport, sort, rpp = 4).total shouldBe 11
+      firstPage(byImport, sort, rpp = 4).total shouldBe Some(11)
     }
   }
 }

@@ -6,7 +6,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
 import altitude.core.{ Altitude, Const }
-import altitude.core.models.{ Album, Asset, Folder, PublicMetadata }
+import altitude.core.models.{ Asset, PublicMetadata }
 
 /**
  * Date storage semantics behind date grouping: a capture timestamp is the camera's wall-clock time and must survive storage
@@ -87,67 +87,5 @@ import altitude.core.models.{ Album, Asset, Folder, PublicMetadata }
 
     val nowUtc = LocalDateTime.now(ZoneOffset.UTC)
     Duration.between(storedUtc, nowUtc).abs().getSeconds should be <= 30L
-  }
-
-  test("Upgrading a version 2 database adds the date indexes and preserves stored data") {
-    val folder: Folder = testApp.service.folder.add("dated")
-    val album: Album = testApp.service.album.add("dated album")
-    val inFolder: Asset = testContext.persistAsset(folder = Some(folder))
-    // A time the version 2 schema can represent: on PostgreSQL that schema held instants, so a DST-gap wall time is out of scope
-    val captured: Asset = addAssetWithCaptureTime(Some("2024:03:10 23:59:59"))
-    testApp.service.album.addAssets(album.persistedId, Set(inFolder.persistedId, captured.persistedId))
-
-    def rawDates(): List[(String, String)] = testApp.txManager.asReadOnly {
-      query("SELECT id, original_created_at, created_at FROM asset ORDER BY id").map {
-        rec => (rec("original_created_at").toString, rec("created_at").toString)
-      }
-    }
-    val datesBefore = rawDates()
-
-    // Roll the schema back to the version 2 shape
-    testApp.txManager.withTransaction {
-      update("DROP INDEX asset_search_date_taken")
-      update("DROP INDEX asset_search_date_imported")
-      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-        update(
-          "ALTER TABLE asset ALTER COLUMN original_created_at TYPE TIMESTAMP WITH TIME ZONE " +
-            "USING original_created_at AT TIME ZONE current_setting('TimeZone')")
-      }
-      update("UPDATE system SET version = 2")
-    }
-    testApp.service.system.version shouldBe 2
-
-    testApp.service.migrationService.migrate()
-
-    testApp.service.system.version shouldBe 3
-
-    val indexNames = testApp.txManager.asReadOnly {
-      testApp.dataSourceType match {
-        case Const.DbEngineName.SQLITE =>
-          query("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'asset_search_date_%' ORDER BY name")
-            .map(_("name").toString)
-        case Const.DbEngineName.POSTGRES =>
-          query(
-            "SELECT indexname AS name FROM pg_indexes WHERE tablename = 'asset' AND indexname LIKE 'asset_search_date_%' ORDER BY indexname")
-            .map(_("name").toString)
-      }
-    }
-    indexNames shouldEqual List("asset_search_date_imported", "asset_search_date_taken")
-
-    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-      val columnType = testApp.txManager.asReadOnly {
-        query(
-          "SELECT data_type FROM information_schema.columns WHERE table_name = 'asset' AND column_name = 'original_created_at'")
-          .head("data_type")
-          .toString
-      }
-      columnType shouldBe "timestamp without time zone"
-    }
-
-    rawDates() shouldEqual datesBefore
-    (testApp.service.asset.getById(captured.persistedId): Asset).originalCreatedAt shouldEqual Some(
-      LocalDateTime.of(2024, 3, 10, 23, 59, 59))
-    (testApp.service.asset.getById(inFolder.persistedId): Asset).folderId shouldBe folder.persistedId
-    testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(inFolder.persistedId, captured.persistedId)
   }
 }

@@ -38,6 +38,14 @@ at that depth is 60-180 ms (100k) and 0.6-2.1 s (1M); the window-count variant
 1.3-3.4 s at 1M. Cursor traversal was checked to equal the complete order at
 both sizes.
 
+Reshaped on 2026-09-07 after review, before the frontend: grouped results are HTML only and the
+JSON contract described below was removed; paging is by cursor only, with no page number or page
+ordinal; one statement returns the page's full asset rows, with the overall count on the first page
+only. The current contract is in [altitude/AGENTS.md](../../altitude/AGENTS.md). Also on 2026-09-07:
+no incremental migration. The column type and the indexes are in `all.sql` only, the schema
+version stays 2, and the database is created from scratch; the `3.sql` scripts, the session
+time-zone pinning in `MigrationService` and the upgrade test were removed.
+
 The earlier planning text follows unchanged as the design record.
 
 ## Agreed behavior
