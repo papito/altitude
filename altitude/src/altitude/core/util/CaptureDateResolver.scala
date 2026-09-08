@@ -55,7 +55,22 @@ object CaptureDateResolver:
           date <- field("GPS", "GPS Date Stamp")
           time <- field("GPS", "GPS Time-Stamp")
         yield s"$date ${time.trim.stripSuffix(" UTC")}",
-        GpsTimestamp)
+        GpsTimestamp) ++ filenameCandidates(inputs.fileName)
+
+  // Anchor at the start and require a boundary after seconds: incidental digit runs are too weak to infer a capture time.
+  private val filenamePatterns = List(
+    """(?i)^(?:(?:IMG|VID|PXL|MVIMG|Screenshot|signal|photo)[_ -]?)?(\d{4})(\d{2})(\d{2})[_T -](\d{2})(\d{2})(\d{2})(?=$|[._ -])""".r,
+    """^(\d{4})-(\d{2})-(\d{2})[ _T-](\d{2})[-.:](\d{2})[-.:](\d{2})(?=$|[._ -])""".r
+  )
+
+  /** Filename guesses rank below every metadata source and pass the same strict calendar and plausibility checks. */
+  private def filenameCandidates(fileName: String): List[CaptureDate] =
+    filenamePatterns.flatMap(_.findFirstMatchIn(fileName)).flatMap {
+      matched =>
+        val raw =
+          s"${matched.group(1)}-${matched.group(2)}-${matched.group(3)}T${matched.group(4)}:${matched.group(5)}:${matched.group(6)}"
+        WallClockParser.parse(raw).map(CaptureDate(_, CaptureDateSource.FileName))
+    }
 
 /** Parses the wall clock a metadata string spells. Parsed offsets are discarded, never converted to the server zone. */
 private[core] object WallClockParser:

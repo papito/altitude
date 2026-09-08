@@ -116,4 +116,38 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     CaptureDateSource.fromDbValue("future_source") shouldBe None
     intercept[Exception](JsonCodec.read[CaptureDateSource]("\"future_source\""))
   }
+
+  test("Filename dates accept narrow camera and timestamp patterns as the last rung") {
+    val expected = Some(CaptureDate(LocalDateTime.of(2024, 7, 4, 8, 9, 10), CaptureDateSource.FileName))
+    val names = List(
+      "IMG_20240704_080910.jpg",
+      "VID20240704_080910.mp4",
+      "PXL_20240704_080910.123.MP.jpg",
+      "MVIMG_20240704_080910.jpg",
+      "Screenshot 20240704 080910.png",
+      "signal-20240704-080910.png",
+      "photo_20240704_080910.jpg",
+      "20240704T080910.png",
+      "2024-07-04 08.09.10.png",
+      "2024-07-04_08-09-10.png"
+    )
+    names.foreach(name => CaptureDateResolver.resolve(CaptureDateInputs(ExtractedMetadata(), name), ceiling) shouldBe expected)
+    val metadataFirst = original("2020:01:01 12:00:00").copy(fileName = names.head)
+    CaptureDateResolver.resolve(metadataFirst, ceiling).map(_.source) shouldBe Some(CaptureDateSource.ExifOriginal)
+    CaptureDateResolver.resolve(original("1970:01:01 00:00:00").copy(fileName = names.head), ceiling) shouldBe expected
+  }
+
+  test("Filename dates reject incidental digit runs, malformed dates, sentinels and future clocks") {
+    List(
+      "order20240704_080910.jpg",
+      "20240704080910.jpg",
+      "20240704.jpg",
+      "12345678.png",
+      "IMG_20240704_08091099.jpg",
+      "IMG_20240230_010203.jpg",
+      "IMG_19700101_000000.jpg",
+      "IMG_20990101_000000.jpg"
+    )
+      .foreach(name => CaptureDateResolver.resolve(CaptureDateInputs(ExtractedMetadata(), name), ceiling) shouldBe None)
+  }
 }
