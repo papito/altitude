@@ -2,7 +2,10 @@ package altitude.test
 
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
+import java.nio.charset.StandardCharsets
+import java.util.zip.CRC32
 import javax.imageio.ImageIO
 import org.apache.commons.io.FileUtils
 
@@ -75,6 +78,32 @@ object IntegrationTestUtil {
     val byteArrayOutputStream = new ByteArrayOutputStream()
     ImageIO.write(bufferedImage, "png", byteArrayOutputStream)
     byteArrayOutputStream.toByteArray
+  }
+
+  /** Insert a valid PNG text chunk just before IEND; repeated calls preserve earlier chunks and their order. */
+  def pngWithTextChunk(bytes: Array[Byte], key: String, value: String): Array[Byte] = {
+    val payload = (key + "\u0000" + value).getBytes(StandardCharsets.ISO_8859_1)
+    pngWithChunk(bytes, "tEXt", payload)
+  }
+
+  /** Uncompressed international text includes compression, language and translated-key fields before the UTF-8 value. */
+  def pngWithInternationalTextChunk(bytes: Array[Byte], key: String, value: String): Array[Byte] =
+    pngWithChunk(bytes, "iTXt", (key + "\u0000\u0000\u0000\u0000\u0000" + value).getBytes(StandardCharsets.UTF_8))
+
+  private def pngWithChunk(bytes: Array[Byte], kind: String, payload: Array[Byte]): Array[Byte] = {
+    val chunkType = kind.getBytes(StandardCharsets.US_ASCII)
+    val crc = new CRC32()
+    crc.update(chunkType)
+    crc.update(payload)
+    val output = new ByteArrayOutputStream()
+    val data = new DataOutputStream(output)
+    data.write(bytes, 0, bytes.length - 12)
+    data.writeInt(payload.length)
+    data.write(chunkType)
+    data.write(payload)
+    data.writeInt(crc.getValue.toInt)
+    data.write(bytes, bytes.length - 12, 12)
+    output.toByteArray
   }
 
   def generateRandomImagBytesGray(): Array[Byte] = {

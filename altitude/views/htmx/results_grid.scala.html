@@ -1,4 +1,5 @@
 @import altitude.core.util.SearchResult
+@import altitude.core.FieldConst
 
 @* The ungrouped grid: the page's cells, the last of which carries the number of the next page when there is one *@
 @(isContinuousScroll: Boolean = false, p: Int, results: SearchResult)
@@ -7,5 +8,6 @@
 @htmx.html.result_cell(
     asset = results.records(idx),
     isContinuousScroll = isContinuousScroll,
+    showNoDate = results.sort.headOption.exists(_.field == FieldConst.Asset.ORIGINAL_CREATED_AT),
     nextPage = Option.when(idx == results.records.length - 1 && results.hasMoreResults)(p + 1))
 }

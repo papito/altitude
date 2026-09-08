@@ -1,7 +1,10 @@
 package altitude.core.service
 
 import com.drew.imaging.ImageMetadataReader
+import com.drew.lang.KeyValuePair
 import com.drew.metadata.Directory
+import com.drew.metadata.png.PngDirectory
+import com.drew.metadata.xmp.XmpDirectory
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import org.apache.tika.detect.DefaultDetector
@@ -28,8 +31,21 @@ class MetadataExtractionService:
 
       for (directory: Directory <- rawMetadata.getDirectories.asScala) {
         for (tag <- directory.getTags.asScala) {
-          extractedMetadata.addValue(directory.getName, tag.getTagName, sanitizeString(tag.getDescription))
+          // Each PNG text chunk is a separate directory with the same name. Keep its keys instead of overwriting Textual Data.
+          if directory.isInstanceOf[PngDirectory] && tag.getTagType == PngDirectory.TAG_TEXTUAL_DATA then
+            directory.getObject(PngDirectory.TAG_TEXTUAL_DATA).asInstanceOf[java.util.List[KeyValuePair]].asScala.foreach {
+              pair => extractedMetadata.addValue(directory.getName, pair.getKey, sanitizeString(pair.getValue.toString))
+            }
+          else extractedMetadata.addValue(directory.getName, tag.getTagName, sanitizeString(tag.getDescription))
         }
+        // XMP's ordinary tags contain only the property count; the replayable property paths live in a separate map.
+        directory match
+          case xmp: XmpDirectory =>
+            xmp.getXmpProperties.asScala.foreach {
+              case (key, value) =>
+                extractedMetadata.addValue(directory.getName, key, sanitizeString(value))
+            }
+          case _ => ()
       }
 
       extractedMetadata

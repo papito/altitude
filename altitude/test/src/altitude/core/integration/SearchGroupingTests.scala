@@ -14,7 +14,7 @@ import altitude.core.util.*
 
   private val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
 
-  private def day(iso: String): LocalDate = LocalDate.parse(iso)
+  private def day(iso: String): Option[LocalDate] = Some(LocalDate.parse(iso))
 
   /** An asset taken at the given camera time and imported at noon UTC the same day, named so filename order is predictable */
   private def persistDated(
@@ -25,7 +25,10 @@ import altitude.core.util.*
     val asset = testContext.persistAsset(folder = folder, metadata = metadata)
     testApp.service.asset.rename(asset.persistedId, filename)
     val takenAt = LocalDateTime.parse(taken)
-    testContext.setAssetDates(asset.persistedId, takenAt, OffsetDateTime.of(takenAt.toLocalDate.atTime(12, 0), ZoneOffset.UTC))
+    testContext.setAssetDates(
+      asset.persistedId,
+      Some(takenAt),
+      OffsetDateTime.of(takenAt.toLocalDate.atTime(12, 0), ZoneOffset.UTC))
     asset
   }
 
@@ -56,10 +59,84 @@ import altitude.core.util.*
       ))
 
   /** The page as (day, the day's full count, the asset IDs on the page) per group, in page order */
-  private def summary(result: GroupedSearchResult): List[(LocalDate, Int, List[String])] =
+  private def summary(result: GroupedSearchResult): List[(Option[LocalDate], Int, List[String])] =
     result.groups.map(group => (group.date, group.total, group.assets.map(_.persistedId)))
 
   private def ids(result: GroupedSearchResult): List[String] = result.assets.map(_.persistedId)
+
+  test("Assets without a capture date remain in grouped results") {
+    val undated = testContext.persistAsset()
+    testApp.txManager.withTransaction {
+      update("UPDATE asset SET original_created_at = NULL WHERE id = ?", undated.persistedId)
+    }
+    val result = grouped()
+    ids(result) shouldEqual List(undated.persistedId)
+    result.total shouldBe Some(1)
+    result.groups.head.total shouldBe 1
+    result.groups.head.date shouldBe None
+  }
+
+  private def nullDaysFirst(direction: SortDirection): Boolean =
+    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) direction == SortDirection.DESC else direction == SortDirection.ASC
+
+  private def persistUndated(filename: String, folder: Option[Folder] = None, metadata: UserMetadata = UserMetadata()): Asset = {
+    val asset = persistDated("2026-09-06T10:00:00", filename, folder, metadata)
+    testContext.setAssetDates(asset.persistedId, None, OffsetDateTime.parse("2026-09-06T12:00:00Z"))
+    asset
+  }
+
+  test("The No date group follows native ordering and every filter bounds its count") {
+    val folder = testApp.service.folder.add("undated")
+    val keyword = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
+    val metadata = UserMetadata(Map(keyword.persistedId -> Set("beach", "sunset")))
+    val unknown = persistUndated("a.jpg", Some(folder), metadata)
+    val other = persistUndated("b.jpg")
+    val dated = List(
+      persistDated("2026-09-05T10:00:00", "c.jpg"),
+      persistDated("2026-09-06T10:00:00", "d.jpg"),
+      persistDated("2026-09-06T11:00:00", "e.jpg"))
+    for (direction <- SortDirection.values.toList) {
+      val page = grouped(direction = direction)
+      page.total shouldBe Some(5)
+      val nullGroup = (None, 2, List(unknown.persistedId, other.persistedId))
+      (if (nullDaysFirst(direction)) summary(page).head else summary(page).last) shouldEqual nullGroup
+      ids(page) should contain theSameElementsAs (unknown :: other :: dated).map(_.persistedId)
+      val filtered = grouped(
+        direction = direction,
+        folderIds = Set(folder.persistedId),
+        text = Some("sunset"),
+        metadataFilters = Map(keyword.persistedId -> "beach"))
+      summary(filtered) shouldEqual List((None, 1, List(unknown.persistedId)))
+      filtered.total shouldBe Some(1)
+    }
+  }
+
+  test("The No date group spans full pages with one consistent count") {
+    val assets = (1 to 5).map(n => persistUndated(s"$n.jpg"))
+    for (direction <- SortDirection.values.toList) {
+      val first = grouped(direction = direction, rpp = 2)
+      val second = grouped(direction = direction, rpp = 2, cursor = first.nextCursor)
+      val third = grouped(direction = direction, rpp = 2, cursor = second.nextCursor)
+      val pages = List(first, second, third)
+      pages.flatMap(ids) shouldEqual assets.map(_.persistedId)
+      pages.map(_.groups.map(g => (g.date, g.total, g.assets.size))) shouldEqual
+        List(List((None, 5, 2)), List((None, 5, 2)), List((None, 5, 1)))
+      second.continuesGroup shouldBe true
+      third.continuesGroup shouldBe true
+      third.nextCursor shouldBe None
+    }
+  }
+
+  test("Undated assets retain their UTC import day when sorted by capture time") {
+    val dated = persistDated("2026-09-06T10:00:00", "a.jpg")
+    val undated = persistUndated("b.jpg")
+    for (direction <- SortDirection.values.toList) {
+      val page = grouped(by = GroupBy.DateImported, sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, direction))
+      val order = if (nullDaysFirst(direction)) List(undated, dated) else List(dated, undated)
+      summary(page) shouldEqual List((day("2026-09-06"), 2, order.map(_.persistedId)))
+      page.total shouldBe Some(2)
+    }
+  }
 
   private def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
     val original = TimeZone.getDefault
@@ -79,13 +156,13 @@ import altitude.core.util.*
     summary(page1) shouldEqual List((day("2026-09-06"), 3, List(a1.persistedId, a2.persistedId)))
     page1.assets.map(_.fileName) shouldEqual List("a1.jpg", "a2.jpg")
     page1.total shouldBe Some(5)
-    page1.continuesDay shouldBe None
+    page1.continuesGroup shouldBe false
     page1.nextCursor.isDefined shouldBe true
 
     // A continuation completes the day and opens the next one; it knows the day it continues and skips the overall count
     val page2 = grouped(rpp = 2, cursor = page1.nextCursor)
     summary(page2) shouldEqual List((day("2026-09-06"), 3, List(a3.persistedId)), (day("2026-09-05"), 2, List(b1.persistedId)))
-    page2.continuesDay shouldBe Some(day("2026-09-06"))
+    page2.continuesGroup shouldBe true
     page2.total shouldBe None
 
     val page3 = grouped(rpp = 2, cursor = page2.nextCursor)
@@ -132,11 +209,11 @@ import altitude.core.util.*
     val early = testContext.persistAsset()
     testContext.setAssetDates(
       late.persistedId,
-      LocalDateTime.parse("2020-01-01T00:00:00"),
+      Some(LocalDateTime.parse("2020-01-01T00:00:00")),
       OffsetDateTime.parse("2026-09-07T00:30:00Z"))
     testContext.setAssetDates(
       early.persistedId,
-      LocalDateTime.parse("2020-01-01T00:00:00"),
+      Some(LocalDateTime.parse("2020-01-01T00:00:00")),
       OffsetDateTime.parse("2026-09-06T23:30:00Z"))
 
     List("America/New_York", "Pacific/Kiritimati", "UTC").foreach {
@@ -163,8 +240,8 @@ import altitude.core.util.*
       List((day("2026-09-06"), 7, 3)),
       List((day("2026-09-06"), 7, 3)),
       List((day("2026-09-06"), 7, 1)))
-    page2.continuesDay shouldBe Some(day("2026-09-06"))
-    page3.continuesDay shouldBe Some(day("2026-09-06"))
+    page2.continuesGroup shouldBe true
+    page3.continuesGroup shouldBe true
     page3.nextCursor shouldBe None
   }
 
@@ -211,7 +288,7 @@ import altitude.core.util.*
     val withFace = testContext.assets.last
     testContext.setAssetDates(
       withFace.persistedId,
-      LocalDateTime.parse("2026-09-04T09:00:00"),
+      Some(LocalDateTime.parse("2026-09-04T09:00:00")),
       OffsetDateTime.parse("2026-09-04T09:00:00Z"))
     val byPerson = grouped(personIds = Set(person.persistedId))
     summary(byPerson) shouldEqual List((day("2026-09-04"), 1, List(withFace.persistedId)))
@@ -223,7 +300,7 @@ import altitude.core.util.*
     val triaged = testContext.persistAsset(isTriaged = true)
     testContext.setAssetDates(
       triaged.persistedId,
-      LocalDateTime.parse("2026-09-06T11:00:00"),
+      Some(LocalDateTime.parse("2026-09-06T11:00:00")),
       OffsetDateTime.parse("2026-09-06T11:00:00Z"))
     val recycled = persistDated("2026-09-06T12:00:00", "a3.jpg")
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
@@ -243,7 +320,7 @@ import altitude.core.util.*
     val foreign = testContext.persistAsset(repository = Some(otherRepo), user = Some(otherUser))
     testContext.setAssetDates(
       foreign.persistedId,
-      LocalDateTime.parse("2026-09-06T13:00:00"),
+      Some(LocalDateTime.parse("2026-09-06T13:00:00")),
       OffsetDateTime.parse("2026-09-06T13:00:00Z"))
     summary(grouped()) shouldEqual List((day("2026-09-06"), 1, List(foreign.persistedId)))
 

@@ -27,7 +27,8 @@ class AssetSearchQueryBuilder(sqlColsForSelect: List[String]) extends SearchQuer
   override protected def secondarySortExpression(sort: SearchSort, grouping: SearchGrouping): String =
     if sort.field == grouping.by.field then s"$tableName.${sort.field}" else s"+$tableName.${sort.field}"
 
-  override protected def isNullableTimestamp(field: String): Boolean = field == FieldConst.CREATED_AT
+  override protected def isNullableTimestamp(field: String): Boolean =
+    field == FieldConst.CREATED_AT || field == FieldConst.Asset.ORIGINAL_CREATED_AT
 
   // SQLite orders NULL before every value
   override protected def nullsFirst(direction: SortDirection): Boolean = direction == SortDirection.ASC

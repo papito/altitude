@@ -44,7 +44,8 @@ trait SqliteOverrides:
     Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_PARSER))
 
   // date() returns ISO text; it is never converted through a JVM zone
-  override protected def getDateField(value: AnyRef): LocalDate = LocalDate.parse(value.asInstanceOf[String])
+  override protected def getDateField(value: AnyRef): Option[LocalDate] =
+    Option(value).map(v => LocalDate.parse(v.asInstanceOf[String]))
 
   // Timestamps stay in their stored text form so a cursor compares them exactly as the column stores them
   override protected def getSortValueField(value: AnyRef): SortValue = value match

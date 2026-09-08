@@ -73,8 +73,10 @@ CREATE TABLE asset (
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
   is_purged BOOLEAN NOT NULL DEFAULT FALSE,
   is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
-  -- EXIF DateTimeOriginal (camera wall-clock time, no zone), defaults to the local import time if none
-  original_created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+  -- Camera wall-clock time, with no zone. NULL means unknown and forms the native-position "No date" group.
+  original_created_at TIMESTAMP WITHOUT TIME ZONE,
+  -- CaptureDateSource.dbValue: which metadata rung won; NULL when no capture time was resolved.
+  original_created_at_source VARCHAR(32)
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);

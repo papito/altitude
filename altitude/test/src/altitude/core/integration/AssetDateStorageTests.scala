@@ -1,12 +1,15 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
 import java.time.{ Duration, LocalDateTime, ZoneOffset }
 import java.util.TimeZone
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
 import altitude.core.{ Altitude, Const }
-import altitude.core.models.{ Asset, PublicMetadata }
+import altitude.core.models.{ Asset, CaptureDateSource, ExtractedMetadata, PublicMetadata }
+import altitude.core.models.{ ImportAsset, UserMetadata }
+import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, SortDirection }
 
 /**
  * Date storage semantics behind date grouping: a capture timestamp is the camera's wall-clock time and must survive storage
@@ -15,7 +18,12 @@ import altitude.core.models.{ Asset, PublicMetadata }
 @DoNotDiscover class AssetDateStorageTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   private def addAssetWithCaptureTime(dateTimeOriginal: Option[String]): Asset = {
-    val asset = testContext.makeAsset().copy(publicMetadata = PublicMetadata(dateTimeOriginal = dateTimeOriginal))
+    val asset = testContext
+      .makeAsset()
+      .copy(
+        originalCreatedAt = dateTimeOriginal.map(raw => LocalDateTime.parse(raw.replace(':', '-').take(10) + "T" + raw.drop(11))),
+        originalCreatedAtSource = dateTimeOriginal.map(_ => CaptureDateSource.ExifOriginal)
+      )
     val persisted = testApp.txManager.withTransaction {
       testApp.DAO.asset.add(asset)
     }
@@ -55,18 +63,52 @@ import altitude.core.models.{ Asset, PublicMetadata }
     }
   }
 
-  test("Missing or invalid capture metadata falls back to the local import time") {
-    val before = LocalDateTime.now().minusSeconds(5)
+  test("Missing capture dates stay null and public metadata cannot supply one") {
     val missing = addAssetWithCaptureTime(None)
-    val invalid = addAssetWithCaptureTime(Some("not a date"))
-    val after = LocalDateTime.now().plusSeconds(5)
-
-    List(missing, invalid).foreach {
-      asset =>
-        asset.originalCreatedAt.isDefined shouldBe true
-        asset.originalCreatedAt.get.isAfter(before) shouldBe true
-        asset.originalCreatedAt.get.isBefore(after) shouldBe true
+    missing.originalCreatedAt shouldBe None
+    missing.originalCreatedAtSource shouldBe None
+    for (displayDate <- List("2024:07:04 08:09:10", "not a date")) {
+      val untrusted = testContext.makeAsset().copy(publicMetadata = PublicMetadata(dateTimeOriginal = Some(displayDate)))
+      val inserted = testApp.txManager.withTransaction(testApp.DAO.asset.add(untrusted))
+      val reread = testApp.service.asset.getById(inserted.persistedId)
+      reread.originalCreatedAt shouldBe None
+      reread.originalCreatedAtSource shouldBe None
     }
+  }
+
+  test("The import result carries the resolved capture time and its persisted provenance") {
+    for (
+      (file, expected) <- List(
+        "images/cactus.jpg" -> LocalDateTime.of(2011, 5, 16, 17, 46, 24),
+        "images/exif/DSCF1160.JPG" -> LocalDateTime.of(2008, 4, 17, 11, 12, 2))
+    ) {
+      val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset(file))
+      imported.originalCreatedAt shouldBe Some(expected)
+      imported.originalCreatedAtSource shouldBe Some(CaptureDateSource.ExifOriginal)
+      val reread = testApp.service.asset.getById(imported.persistedId)
+      reread.originalCreatedAt shouldBe imported.originalCreatedAt
+      reread.originalCreatedAtSource shouldBe imported.originalCreatedAtSource
+      reread.toJson("original_created_at_source").str shouldBe "exif_original"
+      val raw = testApp.txManager.asReadOnly {
+        query("SELECT original_created_at_source FROM asset WHERE id = ?", imported.persistedId).head(
+          "original_created_at_source")
+      }
+      raw shouldBe "exif_original"
+    }
+  }
+
+  test("Metadata extraction merges upstream inputs and preserves them through storage") {
+    val seeded = ExtractedMetadata(
+      Map(
+        "Altitude Import" -> Map("File System Created" -> "2020-01-01"),
+        "PNG-IHDR" -> Map("Image Width" -> "wrong", "Upstream Note" -> "retained")))
+    val data = testContext.makeAssetWithData(Some(testContext.makeAsset().copy(extractedMetadata = seeded)))
+    val imported = testApp.service.library.addAsset(data)
+    val reread = testApp.service.asset.getById(imported.persistedId)
+    reread.extractedMetadata.getFieldValues("Altitude Import").get("File System Created") shouldBe Some("2020-01-01")
+    reread.extractedMetadata.getFieldValues("PNG-IHDR").get("Upstream Note") shouldBe Some("retained")
+    reread.extractedMetadata.getFieldValues("PNG-IHDR").get("Image Width") shouldBe Some("150")
+    seeded.getFieldValues("PNG-IHDR").get("Image Width") shouldBe Some("wrong")
   }
 
   test("Import timestamp is written in UTC regardless of the JVM time zone") {
@@ -87,5 +129,34 @@ import altitude.core.models.{ Asset, PublicMetadata }
 
     val nowUtc = LocalDateTime.now(ZoneOffset.UTC)
     Duration.between(storedUtc, nowUtc).abs().getSeconds should be <= 30L
+  }
+
+  test("A PNG creation-time chunk is resolved and persisted through the real import") {
+    val data = IntegrationTestUtil.pngWithTextChunk(
+      IntegrationTestUtil.generateRandomImagBytesBgr(),
+      "Creation Time",
+      "Thu, 4 Jul 2024 08:09:10 GMT")
+    val imported =
+      testApp.service.library.addImportAsset(ImportAsset(fileName = "cactus.png", data = data, metadata = UserMetadata()))
+    imported.originalCreatedAt shouldBe Some(LocalDateTime.of(2024, 7, 4, 8, 9, 10))
+    imported.originalCreatedAtSource shouldBe Some(CaptureDateSource.PngCreationTime)
+    val reread = testApp.service.asset.getById(imported.persistedId)
+    reread.originalCreatedAt shouldBe imported.originalCreatedAt
+    reread.originalCreatedAtSource shouldBe imported.originalCreatedAtSource
+    reread.extractedMetadata.getFieldValues("PNG-tEXt").get("Creation Time") shouldBe Some("Thu, 4 Jul 2024 08:09:10 GMT")
+  }
+
+  test("An imported image without date metadata belongs to the No date group") {
+    val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/3.png"))
+    imported.originalCreatedAt shouldBe None
+    imported.originalCreatedAtSource shouldBe None
+    val grouped = testApp.service.library.searchGrouped(
+      new SearchQuery(
+        rpp = 50,
+        searchSort = List(SearchSort("filename", SortDirection.ASC)),
+        grouping = Some(SearchGrouping(GroupBy.DateTaken))))
+    grouped.groups.map(_.date) shouldBe List(None)
+    grouped.assets.map(_.persistedId) shouldBe List(imported.persistedId)
+    grouped.total shouldBe Some(1)
   }
 }

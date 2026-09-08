@@ -5,7 +5,7 @@ import java.time.LocalDate
 import altitude.core.models.Asset
 
 /** One page row of a grouped search, as the DAO reads it: the asset with its day, its sort key as stored, and its day's count */
-case class GroupedSearchRow(asset: Asset, day: LocalDate, sortValue: SortValue, dayTotal: Int)
+case class GroupedSearchRow(asset: Asset, day: Option[LocalDate], sortValue: SortValue, dayTotal: Int)
 
 /**
  * What one grouped search statement returns: the ordered page rows, whether a further match exists past the page and, on a first
@@ -14,12 +14,11 @@ case class GroupedSearchRow(asset: Asset, day: LocalDate, sortValue: SortValue, 
 case class GroupedSearchPage(rows: List[GroupedSearchRow], total: Option[Int], hasMore: Boolean)
 
 /** One day of a grouped page: its calendar day, its full match count across all pages, and its assets on this page */
-case class AssetDateGroup(date: LocalDate, total: Int, assets: List[Asset])
+case class AssetDateGroup(date: Option[LocalDate], total: Int, assets: List[Asset])
 
 /**
  * A grouped page with its assets in page order: what the grouped grid renders. `total` is present on a first page only.
- * `continuesDay` is the day the previous page ended on when this page was reached by cursor, so the grid knows its first group
- * continues a day that is already open.
+ * `continuesGroup` says the first group continues the previous page's last group, including the undated group (date = None).
  */
 case class GroupedSearchResult(
     groups: List[AssetDateGroup],
@@ -27,7 +26,7 @@ case class GroupedSearchResult(
     grouping: SearchGrouping,
     sort: SearchSort,
     nextCursor: Option[SearchCursor],
-    continuesDay: Option[LocalDate]):
+    continuesGroup: Boolean):
   val assets: List[Asset] = groups.flatMap(_.assets)
   val isEmpty: Boolean = groups.isEmpty
 

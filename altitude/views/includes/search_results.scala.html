@@ -178,11 +178,10 @@
     color: var(--faded-font-color);
   }
 
-  #assets .cell .drag-drop .triage-marker {
+  #assets .cell .drag-drop .triage-marker,
+  #assets .cell .drag-drop .no-date-marker {
     position: absolute;
     bottom: 8px;
-    right: 8px;
-    background-color: var(--success-background-color);
     color: white;
     font-size: 10px;
     font-weight: bold;
@@ -192,15 +191,27 @@
     letter-spacing: 1px;
   }
 
+  #assets .cell .drag-drop .triage-marker {
+    right: 8px;
+    background-color: var(--success-background-color);
+  }
+
+  #assets .cell .drag-drop .no-date-marker {
+    left: 8px;
+    background-color: var(--warning-background-color);
+  }
+
   /* Hide triage marker when in triage view (all items are triaged there) */
   #content.triage #assets .cell .drag-drop .triage-marker {
     display: none;
   }
 
-  /* Hide triage marker while the cell is being dragged, and while the move it
+  /* Hide cell badges while the cell is being dragged, and while the move it
      triggered is still in flight - otherwise it blinks back on a successful drop */
   #assets .cell .drag-drop.dragging .triage-marker,
-  #assets .cell.move-pending .drag-drop .triage-marker {
+  #assets .cell.move-pending .drag-drop .triage-marker,
+  #assets .cell .drag-drop.dragging .no-date-marker,
+  #assets .cell.move-pending .drag-drop .no-date-marker {
     display: none;
   }
 

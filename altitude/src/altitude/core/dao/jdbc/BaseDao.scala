@@ -4,7 +4,6 @@ import com.typesafe.config.Config
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
 import java.util.UUID
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.QueryRunner
@@ -54,8 +53,6 @@ abstract class BaseDao[Model <: BaseModel]:
 
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
-
-  protected val exifDateTimeFormatterPattern: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
 
   protected def nativeBool(value: Boolean): Any
 
@@ -223,7 +220,7 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
 
   /** A calendar-day column, as the engine's day expression returns it */
-  protected def getDateField(value: AnyRef): LocalDate
+  protected def getDateField(value: AnyRef): Option[LocalDate]
 
   /** A sort-key column, typed so it can be bound back for comparison exactly as stored */
   protected def getSortValueField(value: AnyRef): SortValue

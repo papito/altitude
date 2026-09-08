@@ -24,6 +24,77 @@ import altitude.core.util.*
   RequestContext.repository.value = Some(repo)
   RequestContext.account.value = None
 
+  test("Date Imported grouped SQL preserves the existing statements") {
+    val builders =
+      List("sqlite" -> new SqliteAssetSearchQueryBuilder(List("*")), "postgres" -> new PostgresAssetSearchQueryBuilder(List("*")))
+    for {
+      (engine, builder) <- builders
+      direction <- SortDirection.values.toList
+      continuation <- List(false, true)
+    } {
+      val cursor = Option.when(continuation)(
+        SearchCursor(Some(java.time.LocalDate.parse("2026-09-06")), SortValue.Text("image.jpg"), "id", "scope"))
+      val query = new SearchQuery(
+        params = Map("is_recycled" -> false),
+        rpp = 50,
+        searchSort = List(SearchSort("filename", SortDirection.ASC)),
+        grouping = Some(SearchGrouping(GroupBy.DateImported, direction)),
+        cursor = cursor
+      )
+      val sql = builder.buildGroupedSearchSql(query)
+      val resource = getClass.getResourceAsStream(s"/sql/date-imported-$engine-$direction-$continuation.sql")
+      val expected =
+        try new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+        finally resource.close()
+      sql.sqlAsStringCompact shouldBe expected
+      sql.sqlAsStringCompact.count(_ == '?') shouldBe sql.bindValues.size
+    }
+  }
+
+  test("Date Taken uses guarded null slices and separate indexable day counts") {
+    val builders =
+      List("sqlite" -> new SqliteAssetSearchQueryBuilder(List("*")), "postgres" -> new PostgresAssetSearchQueryBuilder(List("*")))
+    for {
+      (engine, builder) <- builders
+      direction <- SortDirection.values.toList
+      position <- List("first", "dated", "undated")
+      field <- List("original_created_at", "filename")
+    } {
+      val day = if (engine == "sqlite") "date(asset.original_created_at)" else "asset.original_created_at::date"
+      val cursor = Option.when(position != "first")(
+        SearchCursor(
+          Option.when(position == "dated")(java.time.LocalDate.parse("2026-09-06")),
+          if (field == "original_created_at") SortValue.Null else SortValue.Text("image.jpg"),
+          "id",
+          "scope"
+        ))
+      val query = new SearchQuery(
+        params = Map("is_recycled" -> false),
+        rpp = 50,
+        folderIds = Set("folder"),
+        metadataFilters = Map("tag" -> "beach"),
+        searchSort = List(SearchSort(field, SortDirection.ASC)),
+        grouping = Some(SearchGrouping(GroupBy.DateTaken, direction)),
+        cursor = cursor
+      )
+      val sql = builder.buildGroupedSearchSql(query)
+      val text = sql.sqlAsStringCompact
+      val leads = if (engine == "sqlite") direction == SortDirection.ASC else direction == SortDirection.DESC
+      text.contains("undated AS MATERIALIZED") shouldBe (position == "dated" && !leads)
+      text.contains(
+        "LIMIT CASE WHEN (SELECT count(*) FROM dated) > 50 THEN 0 ELSE 51 END") shouldBe (position == "dated" && !leads)
+      text.contains("FROM page WHERE day IS NOT NULL") shouldBe true
+      text.contains("FROM page WHERE day IS NULL") shouldBe true
+      text.contains("OR (d.day IS NULL AND p.day IS NULL)") shouldBe true
+      text.contains("NULLS FIRST") shouldBe false
+      text.contains("NULLS LAST") shouldBe false
+      text.count(_ == '?') shouldBe sql.bindValues.size
+      if (position == "undated" && field == "original_created_at") {
+        text.contains(if (leads) s"($day IS NOT NULL OR asset.id > ?)" else s"$day IS NULL AND asset.id > ?") shouldBe true
+      }
+    }
+  }
+
   test("Basic WHERE SQL asset query is built correctly") {
     val builder = new SqliteAssetSearchQueryBuilder(List("*"))
     val q = new SearchQuery()
@@ -74,7 +145,7 @@ import altitude.core.util.*
     val q = new SearchQuery(text = Some("my text"), searchSort = List(SearchSort("sort_field", SortDirection.ASC)))
 
     val sqlQuery = builder.buildSelectSql(q)
-    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND asset.is_pipeline_processed = ? AND search_document.asset_id = asset.id ) AS asset ORDER BY asset.sort_field ASC"
+    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, search_document WHERE asset.repository_id = ? AND search_document.repository_id = ? AND body MATCH ? AND asset.is_pipeline_processed = ? AND search_document.asset_id = asset.id ) AS asset ORDER BY asset.sort_field ASC, asset.id ASC"
     sqlQuery.bindValues.size shouldBe 4
   }
 
@@ -106,7 +177,7 @@ import altitude.core.util.*
 
     val sqlQuery = builder.buildSelectSql(q)
 
-    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, metadata_parameter WHERE asset.repository_id = ? AND metadata_parameter.repository_id = ? AND asset.string_param = ? AND asset.num_param = ? AND asset.is_pipeline_processed = ? AND ((field_id = ? AND field_value_kw = ?) OR (field_id = ? AND field_value_num = ?) OR (field_id = ? AND field_value_bool = ?)) AND metadata_parameter.asset_id = asset.id GROUP BY asset.id HAVING count(asset.id) >= 3 ) AS asset ORDER BY asset.sort_field ASC"
+    sqlQuery.sqlAsStringCompact shouldBe "SELECT *, count(*) OVER() AS total FROM ( SELECT asset.* FROM asset, metadata_parameter WHERE asset.repository_id = ? AND metadata_parameter.repository_id = ? AND asset.string_param = ? AND asset.num_param = ? AND asset.is_pipeline_processed = ? AND ((field_id = ? AND field_value_kw = ?) OR (field_id = ? AND field_value_num = ?) OR (field_id = ? AND field_value_bool = ?)) AND metadata_parameter.asset_id = asset.id GROUP BY asset.id HAVING count(asset.id) >= 3 ) AS asset ORDER BY asset.sort_field ASC, asset.id ASC"
     sqlQuery.bindValues.size shouldBe 11
 
   }

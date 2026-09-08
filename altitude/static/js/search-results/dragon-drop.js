@@ -36,9 +36,10 @@ assetDraggable.draggable({
             const clone = target.cloneNode(true)
             clone.id = "dragCloneStandIn"
             // The stand-in lives on <body>, outside `#assets`, so the
-            // triage marker loses its pill styling and would render as
+            // cell badges lose their pill styling and would render as
             // stray text
             clone.querySelector(".triage-marker")?.remove()
+            clone.querySelector(".no-date-marker")?.remove()
             clone.style.position = "fixed"
             clone.style.pointerEvents = "none"
             clone.style.left = `${position.left}px`

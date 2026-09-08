@@ -69,8 +69,10 @@ CREATE TABLE asset (
   is_triaged TINYINT NOT NULL DEFAULT 0,
   is_purged TINYINT NOT NULL DEFAULT 0,
   is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
-  -- EXIF DateTimeOriginal, defaults to Now() if none
-  original_created_at DATETIME NOT NULL,
+  -- Camera wall-clock time, with no zone. NULL means unknown and forms the native-position "No date" group.
+  original_created_at DATETIME,
+  -- CaptureDateSource.dbValue: which metadata rung won; NULL when no capture time was resolved.
+  original_created_at_source TEXT,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE

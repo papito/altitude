@@ -16,6 +16,7 @@ import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.MurmurHash
+import altitude.core.util.NullDays
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SearchCursor
@@ -100,7 +101,12 @@ class LibraryService(val app: Altitude):
   def searchGrouped(query: SearchQuery): GroupedSearchResult =
     txManager.asReadOnly {
       val scope = SearchCursor.scopeFingerprint(query, RequestContext.getRepository.persistedId, app.dataSourceType)
-      query.cursor.foreach(_.requireScope(scope))
+      query.cursor.foreach {
+        cursor =>
+          cursor.requireScope(scope)
+          if cursor.day.isEmpty && query.grouping.get.by.nullDays == NullDays.Excluded then
+            throw SearchCursorException("A null-day cursor cannot continue Date Imported grouping")
+      }
       app.service.search.searchGrouped(withResolvedFolderScope(query), scope)
     }
 

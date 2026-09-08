@@ -17,7 +17,7 @@ import altitude.core.models.Asset
     val asset = testContext.persistAsset()
     testApp.service.asset.rename(asset.persistedId, filename)
     val takenAt = LocalDateTime.parse(taken)
-    testContext.setAssetDates(asset.persistedId, takenAt, OffsetDateTime.of(takenAt, ZoneOffset.UTC))
+    testContext.setAssetDates(asset.persistedId, Some(takenAt), OffsetDateTime.of(takenAt, ZoneOffset.UTC))
     asset
   }
 
@@ -29,6 +29,69 @@ import altitude.core.models.Asset
     search(host, repoId, params, headers = Map("Accept-Encoding" -> "identity"))
 
   private def cell(asset: Asset): String = s"""id="asset-${asset.persistedId}""""
+
+  private def persistUndated(filename: String): Asset = {
+    val asset = persistDated("2026-09-06T10:00:00", filename)
+    testContext.setAssetDates(asset.persistedId, None, OffsetDateTime.parse("2026-09-06T12:00:00Z"))
+    asset
+  }
+
+  test("The No date header crosses a page boundary and is not repeated on continuation") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val older = persistDated("2026-09-05T10:00:00", "a.jpg")
+        val newer = persistDated("2026-09-06T10:00:00", "b.jpg")
+        val first = persistUndated("c.jpg")
+        val second = persistUndated("d.jpg")
+        // Controller tests use SQLite: null days trail DESC and lead ASC.
+        val params = Map("groupBy" -> "dateTaken", "groupDirection" -> "desc", "rpp" -> "3", "sort" -> "filename0")
+        val page = htmlSearch(host, repoId, params).text()
+        ordered(page, cell(newer), cell(older))
+        ordered(page, cell(older), header(""))
+        ordered(page, header(""), cell(first))
+        page should include("<span>No date</span>")
+        page should include("""<span class="count">2</span>""")
+        page.contains("""<time datetime="">""") shouldBe false
+        val next = htmlSearch(host, repoId, params ++ Map("after" -> cursorOf(page).head, "isContinuousScroll" -> "true")).text()
+        next should include(cell(second))
+        next.contains("""class="date-group"""") shouldBe false
+        cursorOf(next) shouldBe Nil
+        val ascending = htmlSearch(host, repoId, params + ("groupDirection" -> "asc")).text()
+        ordered(ascending, header(""), cell(first))
+        ordered(ascending, cell(second), cell(older))
+    }
+  }
+
+  test("The no date badge follows the effective capture sort on grouped and ungrouped pages") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val dated = persistDated("2026-09-06T10:00:00", "a.jpg")
+        val undated = persistUndated("b.jpg")
+        for {
+          grouping <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"), Map("groupBy" -> "dateImported"))
+          sort <- List("original_created_at1", "created_at1", "filename0")
+        } {
+          val page = htmlSearch(host, repoId, grouping + ("sort" -> sort)).text()
+          // Match rendered elements; class names also occur inside the response's style block.
+          val badge = """<div class="no-date-marker">no date</div>"""
+          page.contains(badge) shouldBe (sort == "original_created_at1")
+          page.contains("""alt-has-no-date="true"""") shouldBe (sort == "original_created_at1")
+          val datedCell = page.substring(page.indexOf(cell(dated))).takeWhile(_ != '<')
+          datedCell.contains("alt-has-no-date") shouldBe false
+          if (sort == "original_created_at1") {
+            val undatedCell = page.substring(page.indexOf(cell(undated)))
+            undatedCell.takeWhile(_ != '<') should include("""alt-has-no-date="true"""")
+            undatedCell should include(badge)
+          }
+        }
+    }
+  }
 
   private def header(day: String): String = s"""data-group-date="$day""""
 

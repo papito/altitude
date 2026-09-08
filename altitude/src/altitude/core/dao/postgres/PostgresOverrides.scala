@@ -54,7 +54,7 @@ trait PostgresOverrides:
       case timeStamp: java.sql.Timestamp => Some(timeStamp.toLocalDateTime)
       case other => throw IllegalArgumentException(s"Invalid type for date/time field: $other")
 
-  override protected def getDateField(value: AnyRef): LocalDate = value.asInstanceOf[LocalDate]
+  override protected def getDateField(value: AnyRef): Option[LocalDate] = Option(value.asInstanceOf[LocalDate])
 
   override protected def getSortValueField(value: AnyRef): SortValue = value match
     case null => SortValue.Null

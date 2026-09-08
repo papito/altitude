@@ -1,10 +1,8 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
-import java.time.format.DateTimeParseException
 import org.apache.commons.dbutils.QueryRunner
 
 import altitude.core.FieldConst
@@ -12,6 +10,7 @@ import altitude.core.RequestContext
 import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
+import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
@@ -47,6 +46,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),
       originalCreatedAt = getDateTimeField(rec.get(FieldConst.Asset.ORIGINAL_CREATED_AT)),
+      originalCreatedAtSource =
+        Option(rec(FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE)).flatMap(value => CaptureDateSource.fromDbValue(value.toString)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
@@ -81,29 +82,20 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
-             ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT},
+             ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
              ${FieldConst.CREATED_AT},
              ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
       case Some(id) => id
       case None => BaseDao.genId
 
-    // The camera's wall-clock capture time, kept as-is; missing or unreadable metadata falls back to the local import time
-    val originalDateTime: LocalDateTime = asset.publicMetadata.dateTimeOriginal match
-      case Some(dateTime) =>
-        try LocalDateTime.parse(dateTime, exifDateTimeFormatterPattern)
-        catch
-          case _: DateTimeParseException =>
-            logger.warn(s"DateTimeParseException. Failed to parse dateTimeOriginal [$dateTime] for asset with id [$id]")
-            LocalDateTime.now()
-          case _: Exception =>
-            logger.error(s"Unknown exception. Failed to parse dateTimeOriginal [$dateTime] for asset with id [$id]")
-            LocalDateTime.now()
-      case None => LocalDateTime.now()
+    // Resolution belongs to the pipeline. Unknown capture times and their provenance are bound as SQL NULL.
+    val capture: Any = asset.originalCreatedAt.map(nativeLocalDateTime).orNull
+    val captureSource: Any = asset.originalCreatedAtSource.map(_.dbValue).orNull
 
     val sqlVals: List[Any] = List(
       id,
@@ -117,7 +109,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.assetType.mime,
       asset.folderId,
       asset.isTriaged,
-      nativeLocalDateTime(originalDateTime),
+      capture,
+      captureSource,
       // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone
       nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)),
       asset.width,

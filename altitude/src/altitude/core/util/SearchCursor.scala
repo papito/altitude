@@ -16,12 +16,12 @@ import altitude.core.util.Query.QueryParam
  * authorization and every filter, and the values are bound, never inlined. The page size is not part of it, so a continuation may
  * ask for a different one.
  */
-case class SearchCursor(day: LocalDate, sortValue: SortValue, id: String, scope: String):
+case class SearchCursor(day: Option[LocalDate], sortValue: SortValue, id: String, scope: String):
 
   def encode: String =
     val json = ujson.Obj(
       "v" -> SearchCursor.VERSION,
-      "d" -> day.toString,
+      "d" -> day.map(d => ujson.Str(d.toString)).getOrElse(ujson.Null),
       "s" -> SearchCursor.sortValueToJson(sortValue),
       "i" -> id,
       "f" -> scope
@@ -33,14 +33,14 @@ case class SearchCursor(day: LocalDate, sortValue: SortValue, id: String, scope:
     if scope != currentScope then throw SearchCursorException("The cursor does not belong to this search")
 
 object SearchCursor:
-  private val VERSION = 2
+  private val VERSION = 3
 
   def decode(token: String): SearchCursor =
     try
       val json = ujson.read(new String(Base64.getUrlDecoder.decode(token), StandardCharsets.UTF_8))
       if json("v").num.toInt != VERSION then throw SearchCursorException("Unsupported cursor version")
       SearchCursor(
-        day = LocalDate.parse(json("d").str),
+        day = json("d").strOpt.map(LocalDate.parse),
         sortValue = sortValueFromJson(json("s")),
         id = json("i").str,
         scope = json("f").str

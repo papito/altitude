@@ -2,6 +2,7 @@ package altitude.core.dao.postgres.querybuilder
 
 import java.time.LocalDate
 
+import altitude.core.FieldConst
 import altitude.core.dao.jdbc.querybuilder.ClauseComponents
 import altitude.core.dao.jdbc.querybuilder.SearchQueryBuilder
 import altitude.core.util.GroupBy
@@ -25,8 +26,8 @@ class AssetSearchQueryBuilder(sqlColsForSelect: List[String]) extends SearchQuer
   override protected def secondarySortExpression(sort: SearchSort, grouping: SearchGrouping): String =
     s"$tableName.${sort.field}"
 
-  // Every timestamp the search sorts or groups by is NOT NULL on PostgreSQL
-  override protected def isNullableTimestamp(field: String): Boolean = false
+  // Capture time is unknown when no metadata rung succeeds; import time is always present.
+  override protected def isNullableTimestamp(field: String): Boolean = field == FieldConst.Asset.ORIGINAL_CREATED_AT
 
   // PostgreSQL orders NULL after every value
   override protected def nullsFirst(direction: SortDirection): Boolean = direction == SortDirection.DESC

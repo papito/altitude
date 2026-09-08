@@ -19,6 +19,7 @@ import altitude.core.models.AccountType
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
+import altitude.core.models.CaptureDateSource
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
 import altitude.core.models.Folder
@@ -104,7 +105,9 @@ class TestContext(val testApp: Altitude) {
       folder: Option[Folder] = None,
       userMetadata: UserMetadata = UserMetadata(),
       isTriaged: Boolean = false,
-      isRecycled: Boolean = false): Asset = {
+      isRecycled: Boolean = false,
+      originalCreatedAt: Option[LocalDateTime] = None,
+      originalCreatedAtSource: Option[CaptureDateSource] = None): Asset = {
     if (repository.isEmpty && repositories.isEmpty) {
       throw new RuntimeException("Cannot make an asset without a repository previously created")
     }
@@ -130,7 +133,9 @@ class TestContext(val testApp: Altitude) {
       userMetadata = userMetadata,
       sizeBytes = TestContext.ASSET_SIZE,
       isTriaged = isTriaged,
-      isRecycled = isRecycled
+      isRecycled = isRecycled,
+      originalCreatedAt = originalCreatedAt,
+      originalCreatedAtSource = originalCreatedAtSource
     )
   }
 
@@ -174,22 +179,23 @@ class TestContext(val testApp: Altitude) {
   }
 
   /** Rewrites an asset's capture time (camera wall-clock) and import time (an instant) in each engine's storage form */
-  def setAssetDates(assetId: String, taken: LocalDateTime, imported: OffsetDateTime): Unit = {
+  def setAssetDates(assetId: String, taken: Option[LocalDateTime], imported: OffsetDateTime): Unit = {
     val (takenValue, importedValue): (Any, Any) = testApp.dataSourceType match {
       case C.DbEngineName.SQLITE =>
         (
-          taken.format(SqliteOverrides.DATETIME_FORMATTER),
+          taken.map(_.format(SqliteOverrides.DATETIME_FORMATTER)).orNull,
           imported.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER))
-      case C.DbEngineName.POSTGRES => (taken, imported)
+      case C.DbEngineName.POSTGRES => (taken.orNull, imported)
       case _ => throw new IllegalArgumentException("Unsupported data source type")
     }
 
     testApp.txManager.withTransaction {
       new QueryRunner().update(
         RequestContext.getConn,
-        "UPDATE asset SET original_created_at = ?, created_at = ? WHERE id = ?",
+        "UPDATE asset SET original_created_at = ?, created_at = ?, original_created_at_source = ? WHERE id = ?",
         takenValue.asInstanceOf[Object],
         importedValue.asInstanceOf[Object],
+        taken.map(_ => "exif_original").orNull,
         assetId
       )
     }

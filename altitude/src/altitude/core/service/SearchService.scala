@@ -52,13 +52,14 @@ class SearchService(val app: Altitude):
       SearchCursor(day = last.day, sortValue = last.sortValue, id = last.asset.persistedId, scope = scopeFingerprint)
     }
 
+    val groups = GroupedSearchResult.groupsOf(page.rows)
     val result = GroupedSearchResult(
-      groups = GroupedSearchResult.groupsOf(page.rows),
+      groups = groups,
       total = page.total,
       grouping = query.grouping.get,
       sort = query.searchSort.head,
       nextCursor = nextCursor,
-      continuesDay = query.cursor.map(_.day)
+      continuesGroup = query.cursor.exists(cursor => groups.headOption.exists(_.date == cursor.day))
     )
 
     logger.debug(

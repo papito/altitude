@@ -2,7 +2,7 @@ package altitude.core.integration
 
 import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ contain, should, shouldBe, shouldEqual, theSameElementsAs }
+import org.scalatest.matchers.should.Matchers.{ be, contain, should, shouldBe, shouldEqual, theSameElementsAs }
 
 import altitude.core.{ Altitude, Const, FieldConst, SearchCursorException }
 import altitude.core.util.*
@@ -11,7 +11,7 @@ import altitude.core.util.*
 @DoNotDiscover class SearchCursorTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   /** What a fixture asset was given, so the expected order can be computed independently of SQL */
-  private case class Dated(id: String, taken: LocalDateTime, imported: OffsetDateTime, filename: String)
+  private case class Dated(id: String, taken: Option[LocalDateTime], imported: OffsetDateTime, filename: String)
 
   private val sortFields =
     List(
@@ -27,12 +27,23 @@ import altitude.core.util.*
     val takenAt = LocalDateTime.parse(taken)
     // Imported an hour after capture, as a UTC instant
     val importedAt = OffsetDateTime.of(takenAt.plusHours(1), ZoneOffset.UTC)
-    testContext.setAssetDates(asset.persistedId, takenAt, importedAt)
-    Dated(asset.persistedId, takenAt, importedAt, filename)
+    testContext.setAssetDates(asset.persistedId, Some(takenAt), importedAt)
+    Dated(asset.persistedId, Some(takenAt), importedAt, filename)
+  }
+
+  private def nullsFirst(direction: SortDirection): Boolean =
+    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) direction == SortDirection.DESC else direction == SortDirection.ASC
+
+  private def persistUndated(filename: String): Dated = {
+    val asset = testContext.persistAsset()
+    testApp.service.asset.rename(asset.persistedId, filename)
+    val imported = OffsetDateTime.parse("2026-09-06T12:00:00Z")
+    testContext.setAssetDates(asset.persistedId, None, imported)
+    Dated(asset.persistedId, None, imported, filename)
   }
 
   /** Four days, three images each, with ties on every sort key so the ID tiebreaker is exercised */
-  private def fixture(): List[Dated] = List(
+  private def fixture(includeUndated: Boolean = true): List[Dated] = List(
     persistDated("2026-09-06T10:00:00", "img01.jpg"),
     persistDated("2026-09-06T10:00:00", "img01.jpg"),
     persistDated("2026-09-06T11:00:00", "img02.jpg"),
@@ -45,25 +56,38 @@ import altitude.core.util.*
     persistDated("2026-09-03T07:00:00", "img09.jpg"),
     persistDated("2026-09-03T07:30:00", "img00.jpg"),
     persistDated("2026-09-03T07:30:00", "img00.jpg")
-  )
+  ) ++ (if (includeUndated)
+          List(
+            persistUndated("img01.jpg"),
+            persistUndated("img01.jpg"),
+            persistUndated("img00.jpg"),
+            persistUndated("img09.jpg")
+          )
+        else Nil)
 
   private def expectedOrder(assets: List[Dated], grouping: SearchGrouping, sort: SearchSort): List[String] = {
-    def day(a: Dated): LocalDate = grouping.by match {
-      case GroupBy.DateTaken => a.taken.toLocalDate
-      case GroupBy.DateImported => a.imported.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate
+    def day(a: Dated): Option[String] = grouping.by match {
+      case GroupBy.DateTaken => a.taken.map(_.toLocalDate.toString)
+      case GroupBy.DateImported => Some(a.imported.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate.toString)
     }
-    // Every asset in the fixture has the same size and area, so those sorts fall through to the ID
-    def sortKey(a: Dated): String = sort.field match {
-      case FieldConst.Asset.ORIGINAL_CREATED_AT => a.taken.toString
-      case FieldConst.CREATED_AT => a.imported.withOffsetSameInstant(ZoneOffset.UTC).toString
-      case FieldConst.Asset.FILENAME => a.filename
-      case _ => ""
+    // Equal size and area leave those sorts to the ID. Nulls are ranked independently at each ordering level.
+    def sortKey(a: Dated): Option[String] = sort.field match {
+      case FieldConst.Asset.ORIGINAL_CREATED_AT => a.taken.map(_.toString)
+      case FieldConst.CREATED_AT => Some(a.imported.withOffsetSameInstant(ZoneOffset.UTC).toString)
+      case FieldConst.Asset.FILENAME => Some(a.filename)
+      case _ => Some("")
     }
-    val byDay: Ordering[Dated] = Ordering.by[Dated, String](a => day(a).toString)
-    val bySort: Ordering[Dated] = Ordering.by[Dated, String](sortKey)
-    val byId: Ordering[Dated] = Ordering.by[Dated, String](_.id)
-    val dayOrdering = if (grouping.direction == SortDirection.DESC) byDay.reverse else byDay
-    val sortOrdering = if (sort.direction == SortDirection.DESC) bySort.reverse else bySort
+    def nativeOrder(direction: SortDirection): Ordering[Option[String]] = new Ordering[Option[String]] {
+      override def compare(a: Option[String], b: Option[String]): Int = (a, b) match {
+        case (None, None) => 0
+        case (None, _) => if (nullsFirst(direction)) -1 else 1
+        case (_, None) => if (nullsFirst(direction)) 1 else -1
+        case (Some(x), Some(y)) => if (direction == SortDirection.ASC) x.compareTo(y) else y.compareTo(x)
+      }
+    }
+    val dayOrdering = Ordering.by[Dated, Option[String]](day)(nativeOrder(grouping.direction))
+    val sortOrdering = Ordering.by[Dated, Option[String]](sortKey)(nativeOrder(sort.direction))
+    val byId = Ordering.by[Dated, String](_.id)
     assets.sorted(dayOrdering.orElse(sortOrdering).orElse(byId)).map(_.id)
   }
 
@@ -102,7 +126,9 @@ import altitude.core.util.*
       val cursor = SearchCursor.decode(page.nextCursor.get.encode)
       cursor shouldEqual page.nextCursor.get
       page = continue(cursor, grouping, sort, rpp)
-      page.continuesDay shouldBe Some(cursor.day)
+      page.continuesGroup shouldBe page.groups.headOption.exists(_.date == cursor.day)
+      page.assets.nonEmpty shouldBe true
+      walked.size should be < 100
       walked = walked ++ ids(page)
     }
     walked
@@ -125,9 +151,12 @@ import altitude.core.util.*
       }
     }
 
-    // A page size of one puts every image at an anchor position
-    traverse(SearchGrouping(GroupBy.DateTaken), SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC), rpp = 1) shouldEqual
-      expectedOrder(assets, SearchGrouping(GroupBy.DateTaken), SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
+    // Every position becomes an anchor, including both boundaries and every tie inside the null group.
+    for (direction <- SortDirection.values.toList; field <- sortFields; sortDirection <- SortDirection.values.toList) {
+      val grouping = SearchGrouping(GroupBy.DateTaken, direction)
+      val sort = SearchSort(field, sortDirection)
+      traverse(grouping, sort, rpp = 1) shouldEqual expectedOrder(assets, grouping, sort)
+    }
   }
 
   test("The cursor points at the last returned image and ends with the results") {
@@ -139,17 +168,19 @@ import altitude.core.util.*
     val page1 = firstPage(grouping, sort, rpp = 5)
     ids(page1) shouldEqual expected.take(5)
     page1.nextCursor.get.id shouldBe expected(4)
-    page1.total shouldBe Some(12)
+    page1.total shouldBe Some(16)
 
     // A continuation skips the overall count; the first page set it
     val page2 = continue(page1.nextCursor.get, grouping, sort, 5)
     page2.total shouldBe None
     val page3 = continue(page2.nextCursor.get, grouping, sort, 5)
-    ids(page3) shouldEqual expected.drop(10)
-    page3.nextCursor shouldBe None
+    ids(page3) shouldEqual expected.slice(10, 15)
+    val page4 = continue(page3.nextCursor.get, grouping, sort, 5)
+    ids(page4) shouldEqual expected.drop(15)
+    page4.nextCursor shouldBe None
 
     // Exactly a full last page still needs one more request to learn that it was the last
-    val exact = firstPage(grouping, sort, rpp = 12)
+    val exact = firstPage(grouping, sort, rpp = 16)
     ids(exact) shouldEqual expected
     exact.nextCursor shouldBe None
   }
@@ -167,13 +198,13 @@ import altitude.core.util.*
     testApp.service.library.recycleAssets(Set(cursor.id))
     val afterDelete = continue(cursor, grouping, sort, 5)
     ids(afterDelete) shouldEqual expected.slice(5, 10)
-    firstPage(grouping, sort, rpp = 5).total shouldBe Some(11)
+    firstPage(grouping, sort, rpp = 5).total shouldBe Some(15)
 
     // An image sorting before the anchor appears; the remaining pages are unchanged and the counts are live
     persistDated("2026-09-06T09:00:00", "img00.jpg")
     val afterInsert = continue(cursor, grouping, sort, 5)
     ids(afterInsert) shouldEqual expected.slice(5, 10)
-    firstPage(grouping, sort, rpp = 5).total shouldBe Some(12)
+    firstPage(grouping, sort, rpp = 5).total shouldBe Some(16)
     afterInsert.nextCursor.isDefined shouldBe true
   }
 
@@ -206,6 +237,18 @@ import altitude.core.util.*
         ))
     }
 
+    val nullCursor = cursor.copy(day = None, sortValue = SortValue.Null)
+    SearchCursor.decode(nullCursor.encode) shouldBe nullCursor
+    val oldJson =
+      ujson.read(new String(java.util.Base64.getUrlDecoder.decode(cursor.encode), java.nio.charset.StandardCharsets.UTF_8))
+    oldJson("v") = 2
+    val oldToken = java.util.Base64.getUrlEncoder.withoutPadding
+      .encodeToString(ujson.write(oldJson).getBytes(java.nio.charset.StandardCharsets.UTF_8))
+    intercept[SearchCursorException](SearchCursor.decode(oldToken)).getMessage shouldBe "Unsupported cursor version"
+    val importGrouping = SearchGrouping(GroupBy.DateImported)
+    val importCursor = firstPage(importGrouping, sort, 5).nextCursor.get.copy(day = None)
+    intercept[SearchCursorException](continue(importCursor, importGrouping, sort, 5))
+
     intercept[SearchCursorException](SearchCursor.decode("not a cursor"))
     intercept[SearchCursorException](SearchCursor.decode("e30")) // {}
     intercept[SearchCursorException](SearchCursor.decode(""))
@@ -216,7 +259,7 @@ import altitude.core.util.*
 
   test("A cursor continues correctly through legacy null import times") {
     if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
-      val assets = fixture()
+      val assets = fixture(includeUndated = false)
       val undated = assets(2)
       testApp.txManager.withTransaction {
         update("UPDATE asset SET created_at = NULL WHERE id = ?", undated.id)
@@ -227,10 +270,11 @@ import altitude.core.util.*
       List(SortDirection.ASC, SortDirection.DESC).foreach {
         direction =>
           val sort = SearchSort(FieldConst.CREATED_AT, direction)
-          val dayOfUndated = assets.filter(_.taken.toLocalDate == undated.taken.toLocalDate)
+          val dayOfUndated = assets.filter(_.taken.map(_.toLocalDate) == undated.taken.map(_.toLocalDate))
           val others = expectedOrder(dayOfUndated.filterNot(_.id == undated.id), grouping, sort)
           val expectedDay = if (direction == SortDirection.ASC) undated.id :: others else others :+ undated.id
-          val rest = expectedOrder(assets.filterNot(a => a.taken.toLocalDate == undated.taken.toLocalDate), grouping, sort)
+          val rest =
+            expectedOrder(assets.filterNot(a => a.taken.map(_.toLocalDate) == undated.taken.map(_.toLocalDate)), grouping, sort)
 
           withClue(s"$sort: ") {
             traverse(grouping, sort, rpp = 1) shouldEqual expectedDay ++ rest
