@@ -74,7 +74,7 @@ import altitude.core.models.Asset
         val dated = persistDated("2026-09-06T10:00:00", "a.jpg")
         val undated = persistUndated("b.jpg")
         for {
-          grouping <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"), Map("groupBy" -> "dateImported"))
+          grouping <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"))
           sort <- List("original_created_at1", "created_at1", "filename0")
         } {
           val page = htmlSearch(host, repoId, grouping + ("sort" -> sort)).text()
@@ -174,7 +174,7 @@ import altitude.core.models.Asset
     }
   }
 
-  test("Grouped HTML honors the view and the import day") {
+  test("Grouped HTML honors the view") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -186,14 +186,14 @@ import altitude.core.models.Asset
         testApp.service.library.recycleAssets(Set(recycled.persistedId))
 
         val trash =
-          htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateImported", Api.Field.Search.VIEW -> "trashbin"))
+          htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateTaken", Api.Field.Search.VIEW -> "trashbin"))
         trash.statusCode shouldBe 200
         val trashPage = trash.text()
         ordered(trashPage, header("2026-09-06"), cell(recycled))
         trashPage.contains(cell(kept)) shouldBe false
-        trashPage should include("""data-app-search-group-by="dateImported" data-app-search-group-direction="desc" selected""")
+        trashPage should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
 
-        val library = htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateImported")).text()
+        val library = htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateTaken")).text()
         ordered(library, header("2026-09-06"), cell(kept))
         library.contains(cell(recycled)) shouldBe false
     }
@@ -219,6 +219,7 @@ import altitude.core.models.Asset
         }
 
         rejected(Map(Api.Field.Search.GROUP_BY -> "date")) should include("groupBy")
+        rejected(Map(Api.Field.Search.GROUP_BY -> "dateImported")) should include("groupBy")
         rejected(Map(Api.Field.Search.GROUP_BY -> "")) should include("groupBy")
         rejected(Map(Api.Field.Search.GROUP_DIRECTION -> "asc")) should include("groupBy")
         rejected(grouped + (Api.Field.Search.GROUP_DIRECTION -> "up")) should include("groupDirection")
@@ -234,10 +235,8 @@ import altitude.core.models.Asset
 
         // A cursor belongs to one search; the page size is not part of it
         rejected(
-          Map(
-            Api.Field.Search.GROUP_BY -> "dateImported",
-            Api.Field.Search.AFTER -> cursor,
-            Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")) should include("cursor")
+          grouped + (Api.Field.Search.GROUP_DIRECTION -> "asc") + (Api.Field.Search.AFTER -> cursor) +
+            (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")) should include("cursor")
         val otherPageSize = htmlSearch(
           host,
           repoId,

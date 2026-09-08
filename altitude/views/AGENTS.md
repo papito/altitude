@@ -547,7 +547,7 @@ returns to page 1. Grouping is a reorder like the sort and survives all of those
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
-`groupBy` (`dateTaken` or `dateImported`) with `groupDirection` (`asc`/`desc`) groups the grid by
+`groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
 day; the Group dropdown in `search_results.scala.html` sets both from its selected option, and "No
 grouping" sets both to empty, which the store normalizes to `null`. A grouped search has no page
 number: the serializer leaves `p` out whenever `groupBy` is set (the server rejects the pair), and

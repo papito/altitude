@@ -80,14 +80,10 @@ CREATE TABLE asset (
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
 CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processed);
--- Date grouping for search results: the calendar day followed by the raw timestamp, so a day range or a day-count probe
--- seeks directly and a grouped, date-sorted page reads in index order. Both are wall-clock text: camera-local for
--- original_created_at, UTC for created_at.
+-- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
+-- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at
-);
-CREATE INDEX asset_search_date_imported ON asset (
-  repository_id, is_recycled, is_pipeline_processed, date(created_at), created_at
 );
 
 CREATE TABLE person_label (

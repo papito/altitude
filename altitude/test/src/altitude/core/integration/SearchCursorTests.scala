@@ -2,7 +2,7 @@ package altitude.core.integration
 
 import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ be, contain, should, shouldBe, shouldEqual, theSameElementsAs }
+import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
 import altitude.core.{ Altitude, Const, FieldConst, SearchCursorException }
 import altitude.core.util.*
@@ -66,10 +66,7 @@ import altitude.core.util.*
         else Nil)
 
   private def expectedOrder(assets: List[Dated], grouping: SearchGrouping, sort: SearchSort): List[String] = {
-    def day(a: Dated): Option[String] = grouping.by match {
-      case GroupBy.DateTaken => a.taken.map(_.toLocalDate.toString)
-      case GroupBy.DateImported => Some(a.imported.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate.toString)
-    }
+    def day(a: Dated): Option[String] = a.taken.map(_.toLocalDate.toString)
     // Equal size and area leave those sorts to the ID. Nulls are ranked independently at each ordering level.
     def sortKey(a: Dated): Option[String] = sort.field match {
       case FieldConst.Asset.ORIGINAL_CREATED_AT => a.taken.map(_.toString)
@@ -138,12 +135,11 @@ import altitude.core.util.*
     val assets = fixture()
 
     for {
-      by <- GroupBy.values.toList
       groupDirection <- SortDirection.values.toList
       field <- sortFields
       sortDirection <- SortDirection.values.toList
     } {
-      val grouping = SearchGrouping(by, groupDirection)
+      val grouping = SearchGrouping(GroupBy.DateTaken, groupDirection)
       val sort = SearchSort(field, sortDirection)
       val expected = expectedOrder(assets, grouping, sort)
       withClue(s"$grouping $sort: ") {
@@ -219,7 +215,6 @@ import altitude.core.util.*
       continue(cursor, grouping, SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC), rpp = 5))
     intercept[SearchCursorException](continue(cursor, grouping, SearchSort(FieldConst.CREATED_AT, SortDirection.ASC), rpp = 5))
     intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.DateTaken, SortDirection.ASC), sort, rpp = 5))
-    intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.DateImported), sort, rpp = 5))
 
     // The page size is not part of the position: a continuation may ask for another one
     ids(continue(cursor, grouping, sort, rpp = 6)).length shouldBe 6
@@ -245,9 +240,6 @@ import altitude.core.util.*
     val oldToken = java.util.Base64.getUrlEncoder.withoutPadding
       .encodeToString(ujson.write(oldJson).getBytes(java.nio.charset.StandardCharsets.UTF_8))
     intercept[SearchCursorException](SearchCursor.decode(oldToken)).getMessage shouldBe "Unsupported cursor version"
-    val importGrouping = SearchGrouping(GroupBy.DateImported)
-    val importCursor = firstPage(importGrouping, sort, 5).nextCursor.get.copy(day = None)
-    intercept[SearchCursorException](continue(importCursor, importGrouping, sort, 5))
 
     intercept[SearchCursorException](SearchCursor.decode("not a cursor"))
     intercept[SearchCursorException](SearchCursor.decode("e30")) // {}
@@ -257,7 +249,7 @@ import altitude.core.util.*
     ids(continue(cursor, grouping, sort, rpp = 5)).length shouldBe 5
   }
 
-  test("A cursor continues correctly through legacy null import times") {
+  test("A cursor continues correctly through a legacy null import time") {
     if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
       val assets = fixture(includeUndated = false)
       val undated = assets(2)
@@ -281,13 +273,6 @@ import altitude.core.util.*
             traverse(grouping, sort, rpp = 2) shouldEqual expectedDay ++ rest
           }
       }
-
-      // Grouped by import day it has no day and is left out, consistently across pages
-      val byImport = SearchGrouping(GroupBy.DateImported)
-      val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
-      val walked = traverse(byImport, sort, rpp = 4)
-      walked should contain theSameElementsAs assets.filterNot(_.id == undated.id).map(_.id)
-      firstPage(byImport, sort, rpp = 4).total shouldBe Some(11)
     }
   }
 }

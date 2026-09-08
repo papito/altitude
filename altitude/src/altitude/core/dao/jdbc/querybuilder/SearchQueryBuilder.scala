@@ -6,7 +6,6 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.util.GroupBy
-import altitude.core.util.NullDays
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
 import altitude.core.util.SearchCursor
@@ -109,14 +108,9 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     val clauses = compileClauses(query)
     val day = dayExpression(grouping.by)
 
-    val nullable = isNullableTimestamp(grouping.by.field)
-    val ownGroup = nullable && grouping.by.nullDays == NullDays.OwnGroup
-    // Missing capture times have their own group; legacy missing import times stay outside every page and count.
-    val dayPresent =
-      if nullable && grouping.by.nullDays == NullDays.Excluded then
-        ClauseComponents(List(s"$tableName.${grouping.by.field} IS NOT NULL"))
-      else ClauseComponents()
-    val matchWhere = clauses(SqlQueryBuilder.WHERE) + dayPresent
+    // A grouping timestamp the schema lets be null gives its rows their own group, at the engine's native null position
+    val ownGroup = isNullableTimestamp(grouping.by.field)
+    val matchWhere = clauses(SqlQueryBuilder.WHERE)
     val from = fromStr(clauses(SqlQueryBuilder.FROM))
     val groupBy = groupByStr(clauses(SqlQueryBuilder.GROUP_BY))
     val having = havingStr(clauses(SqlQueryBuilder.HAVING))

@@ -12,27 +12,31 @@ shape below was chosen from).
 
 ## What "a day" is
 
-Grouping is by calendar day, taken from one of two asset columns
+Grouping is by calendar day, taken from one asset column
 (`core/util/SearchGrouping.scala`):
 
-| API value      | Column                      | Meaning                        |
-| -------------- | --------------------------- | ------------------------------ |
-| `dateTaken`    | `asset.original_created_at` | EXIF capture time, camera wall-clock |
-| `dateImported` | `asset.created_at`          | Import time, an instant        |
+| API value   | Column                      | Meaning                              |
+| ----------- | --------------------------- | ------------------------------------ |
+| `dateTaken` | `asset.original_created_at` | EXIF capture time, camera wall-clock |
+
+`GroupBy` is an enum with one case rather than a bare flag: the day column and
+the API value belong together, and another grouping dimension would be one more
+case. Grouping by import day (`asset.created_at`) existed and was removed — an
+import dumps a whole archive into one or two day groups, which says nothing
+about the photos. Import time remains available as a *sort*.
 
 A day only means something if the timestamp is not re-projected through a zone,
 so capture time is stored **without** one. On PostgreSQL `original_created_at`
 was changed from `TIMESTAMP WITH TIME ZONE` to `TIMESTAMP WITHOUT TIME ZONE`;
-its day is `original_created_at::date`. Import time stays an instant and its day
-is taken in UTC. On SQLite both are wall-clock text (camera-local, and UTC
-respectively), so the day is plain `date(col)` with no modifier.
+its day is `original_created_at::date`. On SQLite it is wall-clock text, so the
+day is plain `date(col)` with no modifier.
 
 To keep pgJDBC from handing wall-clock columns back as `java.sql.Timestamp` —
 which represents an instant in the JVM zone, and would shift a value sitting in
 the server's DST gap — `PostgresOverrides` installs a `RowProcessor` that reads
 temporal columns as `LocalDateTime` / `OffsetDateTime` / `LocalDate`.
 
-Each date source has its own index: the visibility predicate, then the day
+The capture day has its own index: the visibility predicate, then the day
 expression, then the raw timestamp. A day range or a single-day count probe
 seeks straight into it, and a grouped page ordered by that day reads in index
 order.
@@ -41,18 +45,15 @@ order.
 -- postgres (resources/migrations/postgres/all.sql)
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at);
-CREATE INDEX asset_search_date_imported ON asset (
-  repository_id, is_recycled, is_pipeline_processed, ((created_at AT TIME ZONE 'UTC')::date), created_at);
 
 -- sqlite (resources/migrations/sqlite/all.sql): same shape
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at);
-CREATE INDEX asset_search_date_imported ON asset (
-  repository_id, is_recycled, is_pipeline_processed, date(created_at), created_at);
 ```
 
-`(created_at AT TIME ZONE 'UTC')::date` is `IMMUTABLE`, which is what makes the
-import-day index legal on PostgreSQL.
+Both engines index NULL entries, so an undated asset — one no metadata rung
+produced a capture time for — is a seek away by `IS NULL`, and a prefix scan
+crosses into that block in index order along with every dated day.
 
 ## Ordering
 
@@ -159,13 +160,13 @@ SELECT asset.id, asset.filename, ..., p.day AS day, p.sort_value AS sort_value, 
 ```
 
 - **`+asset.filename`** — the unary plus keeps the term from matching any index.
-  Without it SQLite's planner is tempted into the *other* date column's index and
-  then sorts every matching row. PostgreSQL needs no such hint
+  Without it SQLite's planner is tempted away from the day index by an indexable
+  sort term, and then sorts every matching row. PostgreSQL needs no such hint
   (`secondarySortExpression` is overridden per engine).
-- **Nullable import times.** SQLite's `created_at` can be null on legacy rows, so
-  grouping by import date also appends `asset.created_at IS NOT NULL` — a row
-  with no timestamp has no day to belong to. Every timestamp PostgreSQL groups or
-  sorts by is `NOT NULL`.
+- **Nullable import times.** SQLite's `created_at` can be null on legacy rows.
+  Nothing groups by it, but it is a valid *sort* column, so `isNullableTimestamp`
+  still lists it: the cursor comparison has to honor where SQLite places those
+  nulls within a day.
 
 ### Why it is shaped this way
 
@@ -224,7 +225,7 @@ Grouped parameters:
 
 | Parameter          | Notes                                                    |
 | ------------------ | -------------------------------------------------------- |
-| `groupBy`          | `dateTaken` \| `dateImported` — presence turns grouping on |
+| `groupBy`          | `dateTaken` — presence turns grouping on                  |
 | `groupDirection`   | `asc` \| `desc`, default `desc`                            |
 | `sort`             | field name + direction digit, e.g. `filename0`; must be one of `Const.Search.SORT_FIELDS` |
 | `rpp`              | 1 … `Const.Search.MAX_GROUPED_RPP` (500)                  |

@@ -33,7 +33,6 @@ import altitude.core.util.*
   }
 
   private def grouped(
-      by: GroupBy = GroupBy.DateTaken,
       direction: SortDirection = SortDirection.DESC,
       sort: SearchSort = byFilename,
       rpp: Int = 50,
@@ -54,7 +53,7 @@ import altitude.core.util.*
         albumIds = albumIds,
         rpp = rpp,
         searchSort = List(sort),
-        grouping = Some(SearchGrouping(by, direction)),
+        grouping = Some(SearchGrouping(GroupBy.DateTaken, direction)),
         cursor = cursor
       ))
 
@@ -127,17 +126,6 @@ import altitude.core.util.*
     }
   }
 
-  test("Undated assets retain their UTC import day when sorted by capture time") {
-    val dated = persistDated("2026-09-06T10:00:00", "a.jpg")
-    val undated = persistUndated("b.jpg")
-    for (direction <- SortDirection.values.toList) {
-      val page = grouped(by = GroupBy.DateImported, sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, direction))
-      val order = if (nullDaysFirst(direction)) List(undated, dated) else List(dated, undated)
-      summary(page) shouldEqual List((day("2026-09-06"), 2, order.map(_.persistedId)))
-      page.total shouldBe Some(2)
-    }
-  }
-
   private def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
     val original = TimeZone.getDefault
     TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
@@ -200,29 +188,6 @@ import altitude.core.util.*
       zone =>
         withJvmTimeZone(zone) {
           summary(grouped()) shouldEqual List((day("2026-09-06"), 1, List(asset.persistedId)))
-        }
-    }
-  }
-
-  test("Import days follow UTC under any JVM time zone") {
-    val late = testContext.persistAsset()
-    val early = testContext.persistAsset()
-    testContext.setAssetDates(
-      late.persistedId,
-      Some(LocalDateTime.parse("2020-01-01T00:00:00")),
-      OffsetDateTime.parse("2026-09-07T00:30:00Z"))
-    testContext.setAssetDates(
-      early.persistedId,
-      Some(LocalDateTime.parse("2020-01-01T00:00:00")),
-      OffsetDateTime.parse("2026-09-06T23:30:00Z"))
-
-    List("America/New_York", "Pacific/Kiritimati", "UTC").foreach {
-      zone =>
-        withJvmTimeZone(zone) {
-          val result = grouped(by = GroupBy.DateImported, sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-          summary(result) shouldEqual List(
-            (day("2026-09-07"), 1, List(late.persistedId)),
-            (day("2026-09-06"), 1, List(early.persistedId)))
         }
     }
   }
@@ -341,7 +306,7 @@ import altitude.core.util.*
     result.assets.length shouldBe 4
   }
 
-  test("A legacy null import time leaves import-day grouping but keeps its capture day") {
+  test("A legacy null import time keeps its capture day") {
     if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
       val dated = persistDated("2026-09-06T10:00:00", "a1.jpg")
       val undated = persistDated("2026-09-06T11:00:00", "a2.jpg")
@@ -349,11 +314,8 @@ import altitude.core.util.*
         update("UPDATE asset SET created_at = NULL WHERE id = ?", undated.persistedId)
       }
 
-      val byImport = grouped(by = GroupBy.DateImported, sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-      summary(byImport) shouldEqual List((day("2026-09-06"), 1, List(dated.persistedId)))
-      byImport.total shouldBe Some(1)
-
-      val byCapture = grouped(by = GroupBy.DateTaken, sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
+      // The row is grouped by its capture day and counted like any other; sorted by import time it sits where SQLite puts nulls
+      val byCapture = grouped(sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
       ids(byCapture) should contain theSameElementsAs List(dated.persistedId, undated.persistedId)
       byCapture.total shouldBe Some(2)
       byCapture.groups.map(group => (group.date, group.total, group.assets.length)) shouldEqual List((day("2026-09-06"), 2, 2))

@@ -18,15 +18,13 @@ class AssetSearchQueryBuilder(sqlColsForSelect: List[String]) extends SearchQuer
       ClauseComponents(elements = List(s"$searchDocumentTable.tsv @@ to_tsquery(?)"), bindVals = List(searchQuery.text.get))
     else ClauseComponents()
 
-  // Capture time is a wall-clock `timestamp`; import time is an instant whose calendar day is taken in UTC
-  override protected def dayExpression(groupBy: GroupBy): String = groupBy match
-    case GroupBy.DateTaken => s"$tableName.${groupBy.field}::date"
-    case GroupBy.DateImported => s"($tableName.${groupBy.field} AT TIME ZONE 'UTC')::date"
+  // Capture time is a wall-clock `timestamp` with no zone, so its calendar day is a plain cast
+  override protected def dayExpression(groupBy: GroupBy): String = s"$tableName.${groupBy.field}::date"
 
   override protected def secondarySortExpression(sort: SearchSort, grouping: SearchGrouping): String =
     s"$tableName.${sort.field}"
 
-  // Capture time is unknown when no metadata rung succeeds; import time is always present.
+  // Capture time is the only nullable timestamp: it is unknown when no metadata rung succeeds.
   override protected def isNullableTimestamp(field: String): Boolean = field == FieldConst.Asset.ORIGINAL_CREATED_AT
 
   // PostgreSQL orders NULL after every value

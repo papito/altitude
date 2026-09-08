@@ -177,7 +177,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   /**
    * A grouped request, validated up front. A problem is the message of a 400:
-   *   - `groupBy` is `dateTaken` or `dateImported`; `groupDirection` (`asc`/`desc`, default `desc`) and `after` need it
+   *   - `groupBy` is `dateTaken`; `groupDirection` (`asc`/`desc`, default `desc`) and `after` need it
    *   - `sort` is one of the results UI's fields with a direction digit; `rpp` is 1 to the grouped maximum
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */

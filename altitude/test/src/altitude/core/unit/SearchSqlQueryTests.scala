@@ -24,33 +24,6 @@ import altitude.core.util.*
   RequestContext.repository.value = Some(repo)
   RequestContext.account.value = None
 
-  test("Date Imported grouped SQL preserves the existing statements") {
-    val builders =
-      List("sqlite" -> new SqliteAssetSearchQueryBuilder(List("*")), "postgres" -> new PostgresAssetSearchQueryBuilder(List("*")))
-    for {
-      (engine, builder) <- builders
-      direction <- SortDirection.values.toList
-      continuation <- List(false, true)
-    } {
-      val cursor = Option.when(continuation)(
-        SearchCursor(Some(java.time.LocalDate.parse("2026-09-06")), SortValue.Text("image.jpg"), "id", "scope"))
-      val query = new SearchQuery(
-        params = Map("is_recycled" -> false),
-        rpp = 50,
-        searchSort = List(SearchSort("filename", SortDirection.ASC)),
-        grouping = Some(SearchGrouping(GroupBy.DateImported, direction)),
-        cursor = cursor
-      )
-      val sql = builder.buildGroupedSearchSql(query)
-      val resource = getClass.getResourceAsStream(s"/sql/date-imported-$engine-$direction-$continuation.sql")
-      val expected =
-        try new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
-        finally resource.close()
-      sql.sqlAsStringCompact shouldBe expected
-      sql.sqlAsStringCompact.count(_ == '?') shouldBe sql.bindValues.size
-    }
-  }
-
   test("Date Taken uses guarded null slices and separate indexable day counts") {
     val builders =
       List("sqlite" -> new SqliteAssetSearchQueryBuilder(List("*")), "postgres" -> new PostgresAssetSearchQueryBuilder(List("*")))

@@ -17,16 +17,17 @@ class AssetSearchQueryBuilder(sqlColsForSelect: List[String]) extends SearchQuer
     if searchQuery.isText then ClauseComponents(elements = List("body MATCH ?"), bindVals = List(searchQuery.text.get))
     else ClauseComponents()
 
-  // The stored text is already wall-clock time in the right zone (camera-local or UTC): no modifier
+  // The stored text is already the camera's wall-clock time: no modifier
   override protected def dayExpression(groupBy: GroupBy): String = s"date($tableName.${groupBy.field})"
 
   /**
-   * Sorting by the other date source's column tempts SQLite's planner into that source's index, which then sorts every matching
-   * row; the unary plus keeps the term from being matched against any index, leaving the grouping day index in charge.
+   * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort
+   * every matching row; the unary plus keeps any non-grouping term from being matched, leaving the day index in charge.
    */
   override protected def secondarySortExpression(sort: SearchSort, grouping: SearchGrouping): String =
     if sort.field == grouping.by.field then s"$tableName.${sort.field}" else s"+$tableName.${sort.field}"
 
+  // Capture time is null when no metadata rung succeeds; import time only on legacy rows, and only ever as a sort column
   override protected def isNullableTimestamp(field: String): Boolean =
     field == FieldConst.CREATED_AT || field == FieldConst.Asset.ORIGINAL_CREATED_AT
 
