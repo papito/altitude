@@ -1,6 +1,7 @@
 package altitude.core.pipeline.flows
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
@@ -11,7 +12,8 @@ import altitude.core.models.Asset
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
-import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver }
+import altitude.core.util.CaptureDateInputs
+import altitude.core.util.CaptureDateResolver
 
 object ExtractMetadataFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =

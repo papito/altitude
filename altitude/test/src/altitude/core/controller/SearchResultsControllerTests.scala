@@ -53,7 +53,7 @@ import altitude.core.models.Asset
         ordered(page, cell(older), header(""))
         ordered(page, header(""), cell(first))
         page should include("<span>No date</span>")
-        page should include("""<span class="count">2</span>""")
+        page should include("""<span class="count" data-count="2">(2 items)</span>""")
         page.contains("""<time datetime="">""") shouldBe false
         val next = htmlSearch(host, repoId, params ++ Map("after" -> cursorOf(page).head, "isContinuousScroll" -> "true")).text()
         next should include(cell(second))
@@ -133,7 +133,7 @@ import altitude.core.models.Asset
 
         // The one day on the page: its header with the whole day's count, then its cells in sort order; the footer total
         page1 should include("""<time datetime="2026-09-06">Sunday, September 6, 2026</time>""")
-        page1 should include("""<span class="count">3</span>""")
+        page1 should include("""<span class="count" data-count="3">(3 items)</span>""")
         page1 should include("""data-results-total="4"""")
         page1.contains(header("2026-09-05")) shouldBe false
         ordered(page1, header("2026-09-06"), cell(a1))

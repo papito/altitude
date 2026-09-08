@@ -108,7 +108,9 @@
     display: flex;
     flex-wrap: wrap;
     flex-direction: row;
-    justify-content: center;
+    /* Cells fill each row from the left, so a group's short last row lines up under the rest of it
+       and under its header rather than floating in the middle of the pane */
+    justify-content: flex-start;
     /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
     isolation: isolate;
   }
@@ -122,7 +124,7 @@
     top: 0;
     z-index: 1;
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
     padding: 8px 6px;
     font-weight: bold;
@@ -130,10 +132,26 @@
     background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
   }
 
+  /* The gap between groups. It hangs off the header rather than the cells above it, so the first
+     group still starts flush against the controls, and a group continued onto the next page - which
+     repeats no header - gains no gap in its middle */
+  #assets .date-group:not(:first-child) {
+    margin-top: 20px;
+  }
+
   #assets .date-group .count {
     color: var(--faded-font-color);
     font-weight: normal;
     font-size: smaller;
+  }
+
+  /* Selects the day's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
+  #assets .date-group .group-checkmark {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--success-background-color);
   }
 
   #assets .cell {

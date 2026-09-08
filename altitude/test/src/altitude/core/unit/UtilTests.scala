@@ -15,4 +15,11 @@ import altitude.core.util.Util
     Util.humanReadableDate(LocalDate.parse("2025-01-02")) shouldEqual "Thursday, January 2, 2025"
     Util.humanReadableDate(LocalDate.parse("2024-12-25")) shouldEqual "Wednesday, December 25, 2024"
   }
+
+  test("A date group's match count reads as a parenthesized item count, singular for one") {
+    Util.humanReadableItemCount(0) shouldEqual "(0 items)"
+    Util.humanReadableItemCount(1) shouldEqual "(1 item)"
+    Util.humanReadableItemCount(2) shouldEqual "(2 items)"
+    Util.humanReadableItemCount(342) shouldEqual "(342 items)"
+  }
 }

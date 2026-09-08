@@ -7,6 +7,7 @@ import {
 } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
+import { notifyGridSelectionChanged } from "../alpine/components/selectable.js"
 
 export function createAssetActions({
     Alpine,
@@ -76,6 +77,7 @@ export function createAssetActions({
         }
 
         if (removedCount > 0) {
+            notifyGridSelectionChanged()
             Alpine.store(Const.state.resultsTotal).decrement(removedCount)
         }
     }

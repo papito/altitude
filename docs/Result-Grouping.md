@@ -292,9 +292,9 @@ request is shared rather than issued twice.
 
 ## Date headers
 
-A header (`.date-group`) is rendered before each day's cells with the day's
-**full** match count — across every page, loaded or not — and sticks to the top
-of the scrolling pane.
+A header (`.date-group`) is rendered before each day's cells with a checkbox over
+the day, the day itself, and the day's **full** match count — across every page,
+loaded or not — read as `(3 items)`. It sticks to the top of the scrolling pane.
 
 Two details make headers work across page boundaries:
 
@@ -307,7 +307,17 @@ Two details make headers work across page boundaries:
   (found by walking back over siblings, which crosses page boundaries precisely
   because a continued day repeats no header), and the header disappears at zero.
   A header whose loaded cells are all gone but whose count is still positive
-  stays — that day still has matches on pages not yet fetched.
+  stays — that day still has matches on pages not yet fetched. The text is
+  rendered by the server (`Util.humanReadableItemCount`) and rebuilt by the
+  client from `data-count`, which holds the number on its own.
+
+The header's checkbox selects the day's *loaded* cells as a set
+(`static/js/alpine/components/date-group-selectable.js`), through each cell's own
+`selectable` component. Selecting a day never fetches the pages it has not
+reached yet, so a day still scrolling in reads as indeterminate rather than fully
+checked however much of it is selected. Since a group owns no element of its own,
+its cells are the header's following siblings up to the next header — the same
+flat structure that lets a continued day append cells with no header.
 
 ## Where things live
 
@@ -324,7 +334,7 @@ Two details make headers work across page boundaries:
 | Group assembly, next cursor | `core/service/SearchService.scala` |
 | Route, validation | `core/routes/web/partial/SearchResultsController.scala` |
 | Templates | `views/htmx/results_grid_grouped.scala.html`, `views/htmx/result_cell.scala.html`, `views/includes/search_results.scala.html` |
-| Client | `static/js/search-results/{search,search-triggers,date-groups}.js`, `static/js/stores/search-params.js`, `static/js/fragments/search-results.js` |
+| Client | `static/js/search-results/{search,search-triggers,date-groups}.js`, `static/js/alpine/components/date-group-selectable.js`, `static/js/stores/search-params.js`, `static/js/fragments/search-results.js` |
 
 Tests: `test/.../integration/SearchGroupingTests.scala`,
 `SearchCursorTests.scala`, `AssetDateStorageTests.scala`, and

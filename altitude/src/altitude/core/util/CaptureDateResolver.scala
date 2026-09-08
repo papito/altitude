@@ -1,13 +1,19 @@
 package altitude.core.util
 
-import java.time.{ Duration, LocalDate, LocalDateTime }
-import java.time.format.{ DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle }
-import java.time.temporal.{ ChronoField, ChronoUnit }
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+import java.time.format.ResolverStyle
+import java.time.temporal.ChronoField
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 import scala.util.Try
 
-import altitude.core.models.{ CaptureDateSource, ExtractedMetadata }
+import altitude.core.models.CaptureDateSource
+import altitude.core.models.ExtractedMetadata
 
 case class CaptureDate(at: LocalDateTime, source: CaptureDateSource)
 

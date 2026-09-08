@@ -49,7 +49,7 @@ styles, the two add buttons, and the empty `#albumList` host that `js/common/alb
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), context-menu (builds the ⋯ menu of a folder or album and closes one from outside its component), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `context-menu.js` (native popover menus of folders and albums); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select), `date-group-selectable.js` (a date header's checkbox over its day's cells) and `context-menu.js` (native popover menus of folders and albums); `index.js` registers them |
 
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
@@ -417,8 +417,10 @@ A page the server rejects is reported through the snackbar by `FrontendApp.handl
 (`isSearchRequest` in `js/listeners/htmx-routes.js`), since no visible control is behind the request.
 
 **Date headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each day with a
-`.date-group` header: a `<time datetime="yyyy-MM-dd">` with the server-formatted day (**Saturday,
-January 2, 2025**) and the day's full match count across every page in `.count`. The header spans
+`.date-group` header: a checkbox over the day, a `<time datetime="yyyy-MM-dd">` with the
+server-formatted day (**Saturday, January 2, 2025**), and the day's full match count across every
+page in `.count` — as text (**(3 items)**, **(1 item)**) with the number itself in `data-count`,
+which is what the client reads and decrements. The header spans
 the row and is `position: sticky` at the top of `#content` (CSS only, in
 `includes/search_results.scala.html`; `#assets` is an isolation root so the drag stand-in still
 paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
@@ -427,7 +429,27 @@ group. The one client-side change to a header is its count: `removeAssetsFromGri
 (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` from
 `js/search-results/date-groups.js` before a cell leaves, which walks back to the nearest header,
 takes one off, and removes the header at zero; a header whose loaded cells are all gone but whose
-count is positive stays, since the day has matches on pages not loaded yet. Headers are never
+count is positive stays, since the day has matches on pages not loaded yet.
+
+The header's checkbox is `x-data="initDateGroupSelectable()"`
+(`js/alpine/components/date-group-selectable.js`). Its set is the day's cells *in the grid*, read off
+the DOM as the header's following siblings up to the next header — a group owns no element of its
+own, which is what lets a continued day append cells with no header of its own. Clicking it selects
+or deselects them through each cell's own `selectable` component, the same path a click on a
+thumbnail's checkmark takes; it never writes to the `selectedAssets` store and never fetches the
+day's unloaded pages. It shows checked only when the whole day is both loaded and selected, and the
+indeterminate dash otherwise, so a day still scrolling in never reads as fully selected. `paint()`
+writes that state into the box: it is the box's `x-effect`, and the box's `change` handler calls it
+again after `toggle()`, since a click that changes neither count re-runs no effect. The click is not
+cancelled on purpose: the browser restores a cancelled checkbox's `checked` and `indeterminate` once
+the click is dispatched, after the microtask Alpine runs effects in, so a `@click.prevent` box would
+show its pre-click state. It recounts
+on `Const.events.gridSelectionChanged`, which `selectable`'s `toggle()` and `deselect()` announce on
+every selection change (so a Shift-click, a box selection and Deselect All all reach it),
+`removeAssetsFromGrid` announces when cells leave, and `bindDateGroupSelectionSync`
+(`js/search-results/date-groups.js`) announces when continuous scroll appends a page into a day
+already on screen. Recounts are coalesced per microtask, so a box selection over hundreds of cells
+recounts each header once. Headers are never
 selectable (box selection targets `[alt-asset-id]`), never draggable, and carry no `img` or
 `.metadata`, so lazy loading and metadata visibility skip them. Images use `alt-data-src` instead of `src`; the same centralized
 search-results fragment hydrator binds infinite scroll, lazy image loading, metadata visibility, and
@@ -513,7 +535,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a context menu panel |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
-| `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
+| `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection, and the `gridSelectionChanged` announcement every selection change makes |
+| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a date header's checkbox: selects its day's loaded cells as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through `selectable` on release |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's or album's native popover menu |
@@ -521,7 +544,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells and image loading in the asset-detail modal |
-| `static/js/search-results/date-groups.js` | keeps a date header's count current as cells leave the grid |
+| `static/js/search-results/date-groups.js` | keeps a date header's count current as cells leave the grid, and re-announces the selection when a page is appended |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu.js` | builds the ⋯ menu cell of a folder or album; closes a menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
 | `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |

@@ -4,6 +4,7 @@ import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 import { buildDialogTriggerCtrl } from "../common/context-menu.js"
 import { runSearch } from "../search-results/search.js"
 import { bindBoxSelection } from "../search-results/box-selection.js"
+import { bindDateGroupSelectionSync } from "../search-results/date-groups.js"
 
 const placeholderImageData =
     "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
@@ -32,6 +33,7 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
 
     bindSearchResultsInfiniteScroll({ assetsElement })
     bindSearchResultsLazyLoad({ assetsElement, app })
+    bindDateGroupSelectionSync({ assetsElement })
     applyGridMetadataVisibilityToAllCells({
         assetsElement,
         context: app.context,

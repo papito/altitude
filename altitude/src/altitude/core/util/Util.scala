@@ -48,6 +48,12 @@ object Util:
   /** A calendar day as a date group header reads it, "Sunday, September 6, 2026". No zone is involved: the day is the day */
   def humanReadableDate(date: LocalDate): String = date.format(dateFormatter)
 
+  /**
+   * A date group's match count as its header reads it, "(3 items)". The client rebuilds the same text as the count falls
+   * (`itemCountText` in js/search-results/date-groups.js); the two have to agree.
+   */
+  def humanReadableItemCount(count: Int): String = if count == 1 then "(1 item)" else s"($count items)"
+
   def humanReadableByteCount(bytes: Long): String =
     if bytes <= 0 then return "0 B"
 
