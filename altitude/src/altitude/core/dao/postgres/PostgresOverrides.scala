@@ -7,8 +7,10 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
+import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.util.SortValue
 
 object PostgresOverrides:
@@ -32,6 +34,12 @@ object PostgresOverrides:
 
 trait PostgresOverrides:
   this: BaseDao[?] =>
+
+  override protected val dialect: Dialect = AltitudePostgresDialect
+
+  // An instant is shown in the JVM zone, as `getDateTimeField` does for the raw paths
+  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
+    value.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime
 
   override protected def jsonFunc = "CAST(? as jsonb)"
 

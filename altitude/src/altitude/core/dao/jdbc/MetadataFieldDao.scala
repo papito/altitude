@@ -1,9 +1,12 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.MetadataFieldRow
 import altitude.core.models.FieldType
 import altitude.core.models.UserMetadataField
 
@@ -12,6 +15,12 @@ abstract class MetadataFieldDao(override val config: Config)
   with altitude.core.dao.UserMetadataFieldDao:
 
   final override val tableName = "metadata_field"
+
+  final override type Row[T[_]] = MetadataFieldRow[T]
+  final override protected def table: Table[Row] = MetadataFieldRow
+
+  override protected def toModel(row: MetadataFieldRow[Sc]): UserMetadataField =
+    UserMetadataField(id = Option(row.id), name = row.name, fieldType = FieldType.valueOf(row.fieldType))
 
   override protected def makeModel(rec: Map[String, AnyRef]): UserMetadataField =
     UserMetadataField(

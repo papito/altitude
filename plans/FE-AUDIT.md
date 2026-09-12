@@ -2,9 +2,9 @@
 
 Audited on 2026-09-07 against branch `feature/grouping` at commit `a9bfd3ba`.
 
-Scope: everything under `altitude/static/` (56 application modules, ~5,000 lines, ~216 KB
+Scope: everything under `../altitude/static` (56 application modules, ~5,000 lines, ~216 KB
 unminified; vendored libraries ~340 KB JS + 74 KB CSS), all 35 Twirl templates under
-`altitude/views/`, the two AGENTS guides, `build.mill`, the lint and formatter configuration, and
+`../altitude/views`, the two AGENTS guides, `../build.mill`, the lint and formatter configuration, and
 the controllers that produce the HTMX partials. Every file was read in full. Claims marked
 **verified** were checked by running a command or reading library source; claims marked **likely**
 are inferred from the code and should be confirmed in a browser before acting on them.
@@ -190,9 +190,9 @@ Separately, `/static` is served with no caching or versioning strategy (**verifi
 
 ### 3.7 No tests, inert lint
 
-- `package.json` has no test script, and there is no JS test file anywhere in the repository.
-- **Verified:** ESLint 9 reads only `eslint.config.js`, which contains `settings` and nothing
-  else; `npx eslint --print-config` on `app.js` reports `"rules": {}`. The older `.eslintrc.json`
+- `../package.json` has no test script, and there is no JS test file anywhere in the repository.
+- **Verified:** ESLint 9 reads only `../eslint.config.js`, which contains `settings` and nothing
+  else; `npx eslint --print-config` on `app.js` reports `"rules": {}`. The older `../.eslintrc.json`
   is ignored, and it names `eslint-plugin-html`, which is not installed. `npm run lint` currently
   cannot fail.
 - The Scala side has 32 controller tests that pin the HTTP contract. Nothing pins the client's
@@ -418,8 +418,8 @@ Not the audit's question, but each was verified while reading and is cheap to fi
 
 ### Prioritized roadmap
 
-1. **Repair the safety net (half a day).** Port the rules from `.eslintrc.json` into
-   `eslint.config.js` (or delete the old file), add `no-unused-vars`, `no-undef` with `htmx`,
+1. **Repair the safety net (half a day).** Port the rules from `../.eslintrc.json` into
+   `../eslint.config.js` (or delete the old file), add `no-unused-vars`, `no-undef` with `htmx`,
    `interact`, `Alpine` as globals, and `import/no-cycle`. Add a test runner (Node's built-in
    `node:test` with `jsdom`, or Vitest) and cover the pure modules first: `search-params.js`,
    `fragments/helpers.js`, `date-groups.js`, `click-suppression.js`, `asset-count.js`. Then a

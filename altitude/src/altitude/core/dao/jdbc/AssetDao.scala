@@ -4,10 +4,12 @@ import com.typesafe.config.Config
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import org.apache.commons.dbutils.QueryRunner
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
-import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
+import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
@@ -20,7 +22,33 @@ import altitude.core.util.QueryResult
 abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude.core.dao.AssetDao:
   final override val tableName = "asset"
 
-  override val sqlQueryBuilder = new SqlQueryBuilder[Query](columnsForSelect, tableName)
+  final override type Row[T[_]] = AssetRow[T]
+  final override protected def table: Table[Row] = AssetRow
+
+  override protected def toModel(row: AssetRow[Sc]): Asset =
+    val assetType = AssetType(mediaType = row.mediaType, mediaSubtype = row.mediaSubtype, mime = row.mimeType)
+
+    Asset(
+      id = Option(row.id),
+      userId = row.userId,
+      fileName = row.filename,
+      checksum = row.checksum,
+      assetType = assetType,
+      width = row.width,
+      height = row.height,
+      sizeBytes = row.sizeBytes,
+      extractedMetadata = getJsonFromColumn(row.extractedMetadata.orNull): ExtractedMetadata,
+      publicMetadata = getJsonFromColumn(row.publicMetadata.orNull): PublicMetadata,
+      userMetadata = getJsonFromColumn(row.userMetadata.orNull): UserMetadata,
+      folderId = row.folderId.trim,
+      isRecycled = row.isRecycled,
+      isTriaged = row.isTriaged,
+      isPipelineProcessed = row.isPipelineProcessed,
+      originalCreatedAt = row.originalCreatedAt,
+      originalCreatedAtSource = row.originalCreatedAtSource.flatMap(CaptureDateSource.fromDbValue),
+      createdAt = row.createdAt.map(toLocalDateTime),
+      updatedAt = row.updatedAt.map(toLocalDateTime)
+    )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Asset =
     val assetType = AssetType(
@@ -53,16 +81,16 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     )
 
   override def queryNotRecycled(q: Query): QueryResult[Asset] =
-    this.query(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository(), sqlQueryBuilder)
+    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository())
 
   override def queryTriaged(q: Query): QueryResult[Asset] =
-    this.query(q.add(FieldConst.Asset.IS_TRIAGED -> true).withRepository(), sqlQueryBuilder)
+    queryRecords(q.add(FieldConst.Asset.IS_TRIAGED -> true).withRepository())
 
   override def queryRecycled(q: Query): QueryResult[Asset] =
-    this.query(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository(), sqlQueryBuilder)
+    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository())
 
   override def queryAll(q: Query): QueryResult[Asset] =
-    this.query(q.withRepository(), sqlQueryBuilder)
+    queryRecords(q.withRepository())
 
   override def getUserMetadata(assetId: String): Option[UserMetadata] =
     val sql = s"""

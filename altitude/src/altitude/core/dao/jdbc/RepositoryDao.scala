@@ -1,22 +1,38 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
+import altitude.core.dao.sql.tables.RepositoryRow
 import altitude.core.models.Repository
 
 abstract class RepositoryDao(override val config: Config) extends BaseDao[Repository] with altitude.core.dao.RepositoryDao:
 
   final override val tableName = "repository"
 
-  override protected def makeModel(rec: Map[String, AnyRef]): Repository =
-    val fileStoreConfigCol = rec(FieldConst.Repository.FILES_STORE_CONFIG)
-    val fileStoreConfigJsonStr: String =
-      if fileStoreConfigCol == null then "{}"
-      else fileStoreConfigCol.asInstanceOf[String]
+  final override type Row[T[_]] = RepositoryRow[T]
+  final override protected def table: Table[Row] = RepositoryRow
 
-    val fileStoreConfigJson = ujson.read(fileStoreConfigJsonStr).asInstanceOf[ujson.Obj]
-    val fileStoreConfig = fileStoreConfigJson.obj.map { case (k, v) => k -> v.str }.toMap
+  override protected def toModel(row: RepositoryRow[Sc]): Repository =
+    Repository(
+      id = Option(row.id),
+      name = row.name,
+      ownerAccountId = row.ownerAccountId,
+      rootFolderId = row.rootFolderId,
+      fileStoreType = row.fileStoreType,
+      fileStoreConfig = fileStoreConfigOf(row.fileStoreConfig.orNull),
+      createdAt = row.createdAt.map(toLocalDateTime),
+      updatedAt = row.updatedAt.map(toLocalDateTime)
+    )
+
+  private def fileStoreConfigOf(column: AnyRef): Map[String, String] =
+    val json = ujson.read(if column == null then "{}" else column.toString).asInstanceOf[ujson.Obj]
+    json.obj.map { case (k, v) => k -> v.str }.toMap
+
+  override protected def makeModel(rec: Map[String, AnyRef]): Repository =
+    val fileStoreConfig = fileStoreConfigOf(rec(FieldConst.Repository.FILES_STORE_CONFIG))
 
     Repository(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),

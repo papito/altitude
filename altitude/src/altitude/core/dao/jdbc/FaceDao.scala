@@ -1,9 +1,12 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.FaceRow
 import altitude.core.models.Face
 
 abstract class FaceDao(override val config: Config) extends BaseDao[Face] with altitude.core.dao.FaceDao:
@@ -11,6 +14,24 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
   def searchClosestFaceMatches(features: Array[Float]): List[Face]
 
   final override val tableName = "face"
+
+  final override type Row[T[_]] = FaceRow[T]
+  final override protected def table: Table[Row] = FaceRow
+
+  // The feature vector is never carried back out of the database, so the row class does not even select it
+  override protected def toModel(row: FaceRow[Sc]): Face =
+    Face(
+      id = Option(row.id),
+      x1 = row.x1,
+      y1 = row.y1,
+      width = row.width,
+      height = row.height,
+      assetId = Option(row.assetId),
+      personId = Option(row.personId),
+      detectionScore = row.detectionScore,
+      features = Array[Float](),
+      checksum = row.checksum
+    )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Face =
     Face(

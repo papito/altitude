@@ -16,6 +16,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
   def twirlVersion: T[String] = _twirlVersion
 
   private val caskVersion = "0.9.7"
+  private val scalaSqlVersion = "0.3.2"
   
   private val logbackVersion = "1.5.16"
   private val pekkoVersion = "1.1.2"
@@ -51,6 +52,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     mvn"com.lihaoyi::cask:$caskVersion",
     mvn"com.lihaoyi::ujson:3.3.1",
     mvn"com.lihaoyi::upickle:3.3.1",
+    mvn"com.lihaoyi::scalasql:$scalaSqlVersion",
     mvn"ch.qos.logback:logback-classic:$logbackVersion",
 
     mvn"com.typesafe:config:1.4.3",

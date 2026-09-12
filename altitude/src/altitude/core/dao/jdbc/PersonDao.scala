@@ -1,17 +1,34 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.models.Person
 import altitude.core.service.PersonService
 
 abstract class PersonDao(override val config: Config) extends BaseDao[Person] with altitude.core.dao.PersonDao:
 
   final override val tableName = "person"
+
+  final override type Row[T[_]] = PersonRow[T]
+  final override protected def table: Table[Row] = PersonRow
+
+  override protected def toModel(row: PersonRow[Sc]): Person =
+    Person(
+      id = Option(row.id),
+      isHidden = row.isHidden,
+      isBadMatch = row.isBadMatch,
+      isNamed = row.isNamed,
+      name = Option(row.name),
+      coverFaceId = row.coverFaceId,
+      numOfFaces = row.numOfFaces
+    )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Person =
     Person(

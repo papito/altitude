@@ -81,7 +81,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
     }
 
   private def getPasswordHashByEmailSafe(email: String): Option[String] =
-    try Some(getPasswordHashByEmail(email))
+    try Some(dao.getPasswordHashByEmail(email))
     catch
       case _: altitude.core.NotFoundException =>
         // User doesn't exist - this is expected, return None
@@ -90,16 +90,6 @@ class UserService(val app: Altitude) extends BaseService[User]:
         // Unexpected error - log it but still return None to prevent timing attacks
         logger.warn(s"Unexpected error while retrieving password hash for email: ${e.getMessage}")
         None
-
-  private def getPasswordHashByEmail(email: String): String =
-    val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
-    val sqlQuery = dao.sqlQueryBuilder.buildSelectSql(query)
-
-    /* Since the user model does not explicitly store the hashed password,
-       we need to do a low-level query to get the password hash */
-    val userRec: Map[String, AnyRef] = dao.executeAndGetOne(sqlQuery.sqlAsString, sqlQuery.bindValues)
-
-    userRec(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]
 
   def getByToken(token: String): Option[User] =
     getUserFromToken(token)

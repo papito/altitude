@@ -7,8 +7,10 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
+import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.util.SortValue
 
 object SqliteOverrides:
@@ -25,6 +27,11 @@ object SqliteOverrides:
 
 trait SqliteOverrides:
   this: BaseDao[?] =>
+
+  override protected val dialect: Dialect = AltitudeSqliteDialect
+
+  // An instant is stored as its UTC wall clock and handed back verbatim, as `getDateTimeField` does for the raw paths
+  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime = value.toLocalDateTime
 
   override protected def jsonFunc = "?"
 
