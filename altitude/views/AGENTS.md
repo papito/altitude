@@ -44,12 +44,12 @@ styles, the two add buttons, and the empty `#albumList` host that `js/common/alb
 | `js/dragdrop/` | interact.js binding modules for batch ops, people, folder-tree, and album drag/drop flows |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`) such as modal, inline-dialog, image-detail, and inline editor fragments, plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, people, assets, HTMX/search lifecycle wiring (`htmx-explorer.js` reports failed folder/album tab and dialog loads), and the `document`-level dialog request wiring (`dialogs.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`), plus search/detail coordination helpers such as detail navigation, image loading, drag/drop (`dragon-drop.js`), box selection (`box-selection.js`), and the post-gesture click swallow they share (`click-suppression.js`) used by fragment hydrators and grid views |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`), plus search/detail coordination helpers such as detail navigation over the grid and image loading (`detail-navigator.js`), the date headers' counts (`date-groups.js`), drag/drop (`dragon-drop.js`), box selection (`box-selection.js`), and the post-gesture click swallow they share (`click-suppression.js`) used by fragment hydrators and grid views |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, minimal context-store setup, and delegation into asset/dragdrop/fragment/listener/search modules |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), context-menu (builds the ⋯ menu of a folder or album and closes one from outside its component), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select) and `context-menu.js` (native popover menus of folders and albums); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `selectable.js` (asset grid multi-select), `date-group-selectable.js` (a date header's checkbox over its day's cells) and `context-menu.js` (native popover menus of folders and albums); `index.js` registers them |
 
 Legacy feature folders often used a consistent file split:
 - `event_handlers.js` — custom DOM event listeners (`document.body.addEventListener(Const.events.*)`)
@@ -404,13 +404,54 @@ trigger.
 `js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
 user-supplied names and server errors, without HTML markup or pre-escaping. Auto-dismisses after 3 s.
 
-**Infinite scroll + lazy load** — The last `.cell` gets class `last-cell` and carries the page to
-load next in `data-app-search-next-page`. An `IntersectionObserver` in
-`js/fragments/search-results.js` watches it and requests that page through `runSearch`, appending
-the result after the cell; the cell is unobserved and loses the attribute as it fires, so scrolling
-back over it loads nothing again. A page the server rejects is reported through the snackbar by
-`FrontendApp.handleAfterRequest` (`isSearchRequest` in `js/listeners/htmx-routes.js`), since no
-visible control is behind the request. Images use `alt-data-src` instead of `src`; the same centralized
+**Infinite scroll + lazy load** — The last `.cell` gets class `last-cell` and carries how the next
+page is reached: its number in `data-app-search-next-page` (an ungrouped grid) or the encoded
+cursor in `data-app-search-after` (a grouped grid). An `IntersectionObserver` in
+`js/fragments/search-results.js` watches it and calls `loadNextPage(lastCellEl)`, exported from the
+same module: it reads the continuation, deletes the attribute, requests the page through `runSearch`
+as `transient` parameters (`{ p }` or `{ after }`, with `isContinuousScroll`), and appends the result
+after the cell. The request in flight is kept per cell, so a second caller gets the same promise and
+no page is requested twice; the detail modal is that second caller when it steps past the last
+loaded cell. A cell loses its attribute as it loads, so scrolling back over it loads nothing again.
+A page the server rejects is reported through the snackbar by `FrontendApp.handleAfterRequest`
+(`isSearchRequest` in `js/listeners/htmx-routes.js`), since no visible control is behind the request.
+
+**Date headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each day with a
+`.date-group` header: a checkbox over the day, a `<time datetime="yyyy-MM-dd">` with the
+server-formatted day (**Saturday, January 2, 2025**), and the day's full match count across every
+page in `.count` — as text (**(3 items)**, **(1 item)**) with the number itself in `data-count`,
+which is what the client reads and decrements. The header spans
+the row and is `position: sticky` at the top of `#content` (CSS only, in
+`includes/search_results.scala.html`; `#assets` is an isolation root so the drag stand-in still
+paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
+A continuation of a day already on screen repeats no header, so the new cells read as the same
+group. The one client-side change to a header is its count: `removeAssetsFromGrid`
+(`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` from
+`js/search-results/date-groups.js` before a cell leaves, which walks back to the nearest header,
+takes one off, and removes the header at zero; a header whose loaded cells are all gone but whose
+count is positive stays, since the day has matches on pages not loaded yet.
+
+The header's checkbox is `x-data="initDateGroupSelectable()"`
+(`js/alpine/components/date-group-selectable.js`). Its set is the day's cells *in the grid*, read off
+the DOM as the header's following siblings up to the next header — a group owns no element of its
+own, which is what lets a continued day append cells with no header of its own. Clicking it selects
+or deselects them through each cell's own `selectable` component, the same path a click on a
+thumbnail's checkmark takes; it never writes to the `selectedAssets` store and never fetches the
+day's unloaded pages. It shows checked only when the whole day is both loaded and selected, and the
+indeterminate dash otherwise, so a day still scrolling in never reads as fully selected. `paint()`
+writes that state into the box: it is the box's `x-effect`, and the box's `change` handler calls it
+again after `toggle()`, since a click that changes neither count re-runs no effect. The click is not
+cancelled on purpose: the browser restores a cancelled checkbox's `checked` and `indeterminate` once
+the click is dispatched, after the microtask Alpine runs effects in, so a `@click.prevent` box would
+show its pre-click state. It recounts
+on `Const.events.gridSelectionChanged`, which `selectable`'s `toggle()` and `deselect()` announce on
+every selection change (so a Shift-click, a box selection and Deselect All all reach it),
+`removeAssetsFromGrid` announces when cells leave, and `bindDateGroupSelectionSync`
+(`js/search-results/date-groups.js`) announces when continuous scroll appends a page into a day
+already on screen. Recounts are coalesced per microtask, so a box selection over hundreds of cells
+recounts each header once. Headers are never
+selectable (box selection targets `[alt-asset-id]`), never draggable, and carry no `img` or
+`.metadata`, so lazy loading and metadata visibility skip them. Images use `alt-data-src` instead of `src`; the same centralized
 search-results fragment hydrator binds infinite scroll, lazy image loading, metadata visibility, and
 box selection for `data-app-fragment="search-results"`, and sets the viewed folder scope from the
 fragment's `data-results-*` metadata. When a loaded image scrolls out of view and is swapped for the
@@ -444,10 +485,14 @@ nothing; a failed page is reported by the snackbar and what was loaded remains s
 decides once, when the drag starts, whether the container can scroll, so a box begun while the first
 page fits without a scrollbar does not autoscroll in that gesture.
 
-**Detail navigation** — Shadow-results syncing, next/previous navigation, paged JSON fetching,
-and modal asset-detail loading are coordinated from `js/search-results/detail-navigator.js`. Its
-JSON fetches use `currentSearchUrl({ p })`, which leaves the store alone, so paging the shadow
-results never moves the visible page.
+**Detail navigation** — Next/previous navigation and modal asset-detail loading are coordinated
+from `js/search-results/detail-navigator.js`. The results grid is the modal's source of truth:
+the coordinator remembers the asset it shows, and next/previous move to the nearest `.cell`
+sibling of that asset's cell (`#asset-<id>`) in document order, skipping `.date-group` headers.
+At the end of the loaded grid, next calls `loadNextPage` on the last cell - the same page load the
+scroll observer makes, shared if already in flight - and continues into the cells it appended; at
+the true end, and at the first cell, nothing happens. There is no shadow list and no JSON: a cell
+removed from the grid drops out of navigation with it, and the search route is HTML only.
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)` to persist to
@@ -490,33 +535,48 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a context menu panel |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
-| `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection |
+| `static/js/alpine/components/selectable.js` | Alpine component for per-asset selection, and the `gridSelectionChanged` announcement every selection change makes |
+| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a date header's checkbox: selects its day's loaded cells as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through `selectable` on release |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's or album's native popover menu |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
-| `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request — and `currentSearchUrl` |
+| `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
+| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells and image loading in the asset-detail modal |
+| `static/js/search-results/date-groups.js` | keeps a date header's count current as cells leave the grid, and re-announces the selection when a page is appended |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu.js` | builds the ⋯ menu cell of a folder or album; closes a menu from outside its component (Escape, ancestor collapse, modal open, completed inline dialog) |
 | `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
-| `views/includes/search_results.scala.html` | Search grid wrapper with sort controls |
-| `views/htmx/results_grid.scala.html` | Individual asset cells, infinite-scroll trigger |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls; the controller passes in the rendered grid partial |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids; a page's last cell carries the next page number or the cursor |
+| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by page number |
+| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a date header per day, infinite-scroll trigger by cursor |
 
 ## Search parameters
 
-Every search in the app — the initial load, folder and person navigation, the sort dropdown,
-continuous scroll, the shadow results behind asset detail — goes through **one** function,
-`runSearch` in `js/search-results/search.js`. A caller supplies only the parameter it knows about;
-the `searchParams` store supplies the rest. Nothing else builds a URL for `/htmx/search/r/:repoId`.
+Every search in the app — the initial load, folder and person navigation, the Sort and Group
+dropdowns, continuous scroll, the page the detail modal loads at the end of the grid — goes through
+**one** function, `runSearch` in `js/search-results/search.js`. A caller supplies only the parameter
+it knows about; the `searchParams` store supplies the rest. Nothing else builds a URL for
+`/htmx/search/r/:repoId`.
 
 `js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`, `q`,
-`sort`, `rpp`, `p`) and the rules for combining them: choosing a folder, a person, or an album
-clears the other two, a view clears all three, and any change other than paging returns to page 1. A parameter still at its
-default is left out of the request, so a default is never spelled out on both sides — except
+`sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them: choosing a folder,
+a person, or an album clears the other two, a view clears all three, and any change other than paging
+returns to page 1. Grouping is a reorder like the sort and survives all of those. A parameter still at
+its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
+
+`groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
+day; the Group dropdown in `search_results.scala.html` sets both from its selected option, and "No
+grouping" sets both to empty, which the store normalizes to `null`. A grouped search has no page
+number: the serializer leaves `p` out whenever `groupBy` is set (the server rejects the pair), and
+the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
+remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
+URL.
 
 The browser URL is authoritative exactly once, at page load: `index.scala.html` seeds the store from
 `window.location.search`, so a bookmarked or shared search still opens. After that the store is the
@@ -531,13 +591,15 @@ has settled):
 ```html
 <a data-app-search="click" data-app-search-person-id="abc">          <!-- literal parameter -->
 <select data-app-search="change" data-app-search-from-value="sort">  <!-- parameter from the element's value -->
+<select data-app-search="change" data-app-search-from-selected-option>  <!-- every data-app-search-<param> literal of the selected <option> -->
+  <option data-app-search-group-by="dateTaken" data-app-search-group-direction="desc">
 ```
 
 The hydrator also owns the rule that folder navigation does nothing in triage and trash, so that
 guard lives in one place rather than in markup.
 
-Per-request flags that must not be remembered (`isContinuousScroll`) are passed as `transient` and
-are serialized into that one request only. A server-side action that should change what is
+Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's `p` or
+`after`) are passed as `transient` and are serialized into that one request only. A server-side action that should change what is
 displayed reports it as a custom event and lets JS run the search — as the people merge does with
 `personMerged` — rather than redirecting to a search URL of its own.
 

@@ -13,8 +13,11 @@ import { Const } from "../constants.js"
  * (`HX-Replace-Url`) is a projection of it for bookmarking, and is never read back.
  *
  * `params`    are merged into the store, subject to its scope rules (see `stores/search-params.js`)
- * `transient` are serialized into this one request only and never stored (continuous scroll)
+ * `transient` are serialized into this one request only and never stored (continuous scroll: the
+ *             page number or the `after` cursor, and `isContinuousScroll`)
  * `target`    / `swap` are the htmx swap for this caller
+ *
+ * Resolves when the request completes, with the response swapped in.
  */
 export function runSearch({
     params = {},
@@ -29,9 +32,9 @@ export function runSearch({
 
 /**
  * The URL the current search parameters would request, with `overrides` layered on top. Leaves the
- * store untouched, so shadow-result paging can fetch another page without moving the visible one.
+ * store untouched, so a continuation can ask for another page without moving the visible one.
  */
-export function currentSearchUrl(overrides = {}) {
+function currentSearchUrl(overrides = {}) {
     const query = Alpine.store(Const.state.searchParams).toQueryString(
         overrides,
     )

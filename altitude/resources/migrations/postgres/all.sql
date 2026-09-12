@@ -73,12 +73,19 @@ CREATE TABLE asset (
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
   is_purged BOOLEAN NOT NULL DEFAULT FALSE,
   is_pipeline_processed BOOLEAN NOT NULL DEFAULT FALSE,
-  -- area size of the image in pixels (width * height)
-  original_created_at TIMESTAMP WITH TIME ZONE NOT NULL
+  -- Camera wall-clock time, with no zone. NULL means unknown and forms the native-position "No date" group.
+  original_created_at TIMESTAMP WITHOUT TIME ZONE,
+  -- CaptureDateSource.dbValue: which metadata rung won; NULL when no capture time was resolved.
+  original_created_at_source VARCHAR(32)
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
 CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processed);
+-- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
+-- day-count probe seeks directly and a grouped, date-sorted page reads in index order.
+CREATE INDEX asset_search_date_taken ON asset (
+  repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
+);
 
 CREATE SEQUENCE person_label;
 

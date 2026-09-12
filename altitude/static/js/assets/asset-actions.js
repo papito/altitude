@@ -6,6 +6,8 @@ import {
     showWarningSnackBar,
 } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
+import { decrementDateGroupOf } from "../search-results/date-groups.js"
+import { notifyGridSelectionChanged } from "../alpine/components/selectable.js"
 
 export function createAssetActions({
     Alpine,
@@ -55,6 +57,11 @@ export function createAssetActions({
         }
     }
 
+    /**
+     * The one place cells leave the grid (a move out of scope, recycle, purge, restore, removal from
+     * an album). Each cell leaves its day's header count and the footer total as it goes; the detail
+     * modal, which walks the grid, forgets it with the cell.
+     */
     function removeAssetsFromGrid(assetIds) {
         let removedCount = 0
 
@@ -64,11 +71,13 @@ export function createAssetActions({
                 continue
             }
 
+            decrementDateGroupOf(el)
             el.remove()
             removedCount++
         }
 
         if (removedCount > 0) {
+            notifyGridSelectionChanged()
             Alpine.store(Const.state.resultsTotal).decrement(removedCount)
         }
     }

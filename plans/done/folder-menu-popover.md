@@ -181,7 +181,7 @@ would leave competing behavior or unused code.
    ownership, and the revised listener responsibilities. Review the root
    `AGENTS.md` and retain its general guidance unless an actual instruction
    changes. Update the folder-menu note in
-   `docs/agents/alpine-components/dropdown.md`; add a concise Altitude note to
+   `../../docs/reference/alpine-components/dropdown.md`; add a concise Altitude note to
    `headless-popover.md` explaining that this feature uses native popovers.
    Keep those component reference documents accurate about the components they
    describe. Preserve unrelated in-progress edits to documentation and completed
@@ -267,7 +267,7 @@ What was built:
   (unused), `common/nodes.js`, and `getRequestPathname` (its only caller went).
   `js/dragdrop/folders.js` excludes `.menu-ctrl` from folder dragging.
 - Documentation: `altitude/views/AGENTS.md`, `altitude/AGENTS.md`, and the
-  Altitude notes in `docs/agents/alpine-components/{dropdown,headless-popover,README}.md`.
+  Altitude notes in `../../docs/reference/alpine-components/{dropdown,headless-popover,README}.md`.
 
 Deviations from the tasks above:
 

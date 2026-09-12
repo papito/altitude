@@ -72,6 +72,7 @@ object FieldConst:
     val IS_PURGED = "is_purged"
     val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
     val ORIGINAL_CREATED_AT = "original_created_at"
+    val ORIGINAL_CREATED_AT_SOURCE = "original_created_at_source"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

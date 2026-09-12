@@ -71,11 +71,11 @@ import altitude.core.models.MimedPreviewData
     asset.originalCreatedAt should not be None
   }
 
-  test("Imported asset without metadata has media creation date set") {
+  test("Imported asset without metadata has no capture date") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
-    asset.originalCreatedAt should not be None
+    asset.originalCreatedAt should be(None)
   }
 
   test("Imported image asset has width and height") {

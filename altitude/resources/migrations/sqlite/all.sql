@@ -69,8 +69,10 @@ CREATE TABLE asset (
   is_triaged TINYINT NOT NULL DEFAULT 0,
   is_purged TINYINT NOT NULL DEFAULT 0,
   is_pipeline_processed TINYINT NOT NULL DEFAULT 0,
-  -- EXIF DateTimeOriginal, defaults to Now() if none
-  original_created_at DATETIME NOT NULL,
+  -- Camera wall-clock time, with no zone. NULL means unknown and forms the native-position "No date" group.
+  original_created_at DATETIME,
+  -- CaptureDateSource.dbValue: which metadata rung won; NULL when no capture time was resolved.
+  original_created_at_source TEXT,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
@@ -78,6 +80,11 @@ CREATE TABLE asset (
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
 CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processed);
+-- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
+-- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
+CREATE INDEX asset_search_date_taken ON asset (
+  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at
+);
 
 CREATE TABLE person_label (
   id INTEGER PRIMARY KEY AUTOINCREMENT

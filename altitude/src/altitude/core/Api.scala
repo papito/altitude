@@ -114,6 +114,9 @@ object Api:
       val VIEW = "view"
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
+      val GROUP_BY = "groupBy"
+      val GROUP_DIRECTION = "groupDirection"
+      val AFTER = "after"
 
     object SearchSort:
       val DIRECTION = "direction"

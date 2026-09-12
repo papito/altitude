@@ -44,34 +44,6 @@ export function initializeFrontendStores({ Alpine }) {
     // The whole search parameter set; every search request is built from it (search-results/search.js)
     Alpine.store(Const.state.searchParams, createSearchParamsStore())
 
-    Alpine.store(Const.state.shadowResults, {
-        items: [],
-        page: 1,
-        totalPages: 0,
-        currentAssetId: null,
-
-        replace(items, page, totalPages) {
-            this.items = items
-            this.page = page
-            this.totalPages = totalPages
-        },
-
-        reset(page = 1, totalPages = 0) {
-            this.items = []
-            this.page = page
-            this.totalPages = totalPages
-            this.currentAssetId = null
-        },
-
-        prepend(newItems) {
-            this.items = newItems.concat(this.items)
-        },
-
-        append(newItems) {
-            this.items = this.items.concat(newItems)
-        },
-    })
-
     /**
      * The view as a behaviour, for `x-show` / `:class` bindings. Derived from `searchParams.view`,
      * which is the parameter itself, and written once at page load - the view only ever changes by

@@ -50,5 +50,12 @@ case class ExtractedMetadata(var data: ExtractedMetadata.MetadataType = Map[Stri
     val updatedDirectory = directory + (fieldName -> value)
     data = data + (directoryName -> updatedDirectory)
 
+  /** Preserve upstream synthetic fields while letting freshly extracted fields win within each directory. Neither input changes. */
+  def merge(other: ExtractedMetadata): ExtractedMetadata =
+    ExtractedMetadata(other.data.foldLeft(data) {
+      case (merged, (directory, fields)) =>
+        merged.updated(directory, merged.getOrElse(directory, Map.empty) ++ fields)
+    })
+
   def getFieldValues(directoryName: String): ExtractedMetadata.FieldValuesType =
     data.getOrElse(directoryName, Map())

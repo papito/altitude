@@ -7,7 +7,10 @@ import org.apache.commons.dbutils.QueryRunner
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.jdbc.querybuilder.SearchQueryBuilder
 import altitude.core.models._
+import altitude.core.util.GroupedSearchPage
+import altitude.core.util.GroupedSearchRow
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 
@@ -22,8 +25,43 @@ object SearchDao:
                  VALUES (?, ?, ?, ?, ?, ?)
             """
 abstract class SearchDao(override val config: Config) extends AssetDao(config) with altitude.core.dao.SearchDao:
-  override def search(query: SearchQuery): SearchResult =
-    throw NotImplementedError()
+  /** The engine's search SQL builder, selecting the columns its asset model is built from */
+  protected def assetSearchQueryBuilder: SearchQueryBuilder
+
+  override def search(searchQuery: SearchQuery): SearchResult =
+    val sqlQuery = assetSearchQueryBuilder.buildSelectSql(query = searchQuery)
+    val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
+    val total: Int = count(recs)
+
+    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
+    if recs.nonEmpty then logger.debug(recs.map(_.toString).mkString("\n"))
+
+    SearchResult(
+      records = recs.map(makeModel),
+      total = total,
+      rpp = searchQuery.rpp,
+      page = searchQuery.page,
+      sort = searchQuery.searchSort)
+
+  override def searchGrouped(query: SearchQuery): GroupedSearchPage =
+    val sqlQuery = assetSearchQueryBuilder.buildGroupedSearchSql(query)
+    val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
+
+    val rows = recs.map {
+      rec =>
+        GroupedSearchRow(
+          asset = makeModel(rec),
+          day = getDateField(rec("day")),
+          sortValue = getSortValueField(rec("sort_value")),
+          dayTotal = getIntField(rec("day_total")))
+    }
+
+    GroupedSearchPage(
+      rows = rows,
+      // A first page carries the overall count on every row; an empty first page has no rows because nothing matches
+      total = Option.when(query.cursor.isEmpty)(recs.headOption.map(rec => getIntField(rec("total"))).getOrElse(0)),
+      hasMore = recs.headOption.exists(rec => getIntField(rec("candidate_count")) > query.rpp)
+    )
 
   protected def addSearchDocument(asset: Asset): Unit =
     throw NotImplementedError()

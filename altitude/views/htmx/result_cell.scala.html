@@ -1,0 +1,77 @@
+@import altitude.core.Const
+@import altitude.core.util.Util
+@import altitude.core.RequestContext
+@import altitude.core.models.Asset
+
+@* One cell of the results grid, ungrouped or grouped. The page's last cell carries how the next page is reached, for the
+   IntersectionObserver in js/fragments/search-results.js, which requests it through the search funnel: the next page number
+   (an ungrouped search) or the encoded cursor (a grouped one), never both. Every other cell carries neither. *@
+@(asset: Asset, isContinuousScroll: Boolean, nextPage: Option[Int] = None, nextCursor: Option[String] = None, showNoDate: Boolean = false)
+
+@defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
+<div id="asset-@{asset.persistedId}"
+     class="@if(nextPage.isDefined || nextCursor.isDefined) {cell last-cell} else {cell}"
+     alt-folder-id="@{asset.folderId}"
+     @if(asset.isTriaged){alt-is-triaged="true"}
+     @if(showNoDate && asset.originalCreatedAt.isEmpty){alt-has-no-date="true"}
+     @if(nextPage.isDefined){data-app-search-next-page="@{nextPage.get}"}
+     @if(nextCursor.isDefined){data-app-search-after="@{nextCursor.get}"}>
+
+    <div alt-asset-id="@{asset.persistedId}"
+         x-data="initSelectable('@{asset.persistedId}')"
+         :class="{ 'drag-drop': true, 'selected': selected, 'masked': dragged }">
+
+        <div class="checkmark"
+             @@click="toggle">
+        </div>
+
+        @if(asset.isTriaged) {
+          <div class="triage-marker">triage</div>
+        }
+        @if(showNoDate && asset.originalCreatedAt.isEmpty) {
+          <div class="no-date-marker">no date</div>
+        }
+
+        <img alt-asset-id="@{asset.persistedId}"
+             draggable="false"
+             @@click.shift="toggleViaAsset($event)"
+             hx-trigger="click[!event.shiftKey]"
+             hx-target="#imageDetailModalContent"
+             hx-get="/htmx/asset/r/@{RequestContext.getRepository.persistedId}/modals/asset-detail/@{asset.persistedId}"
+             @if(isContinuousScroll) {alt-data-src="@{imgUrl}"} else {src="@{imgUrl}"}
+             alt="@{ asset.fileName }"
+             class="responsive-image">
+
+    </div>@* /inner cell drag droppable *@
+
+    <div class="metadata">
+        <div class="fileName" title="@{ asset.fileName }">
+            <span>File:</span> @{ asset.fileName }
+        </div>
+
+        @defining(Util.humanReadableDateTime(asset.originalCreatedAt)) { originalCreatedAt =>
+        <div class="originalCreatedAt" title="@{ originalCreatedAt }">
+            <span>Created:</span> @{ originalCreatedAt }
+        </div>
+        }
+
+        @defining(Util.humanReadableDateTime(asset.createdAt)) { createdAt =>
+        <div class="importedAt" title="@{ createdAt }">
+            <span>Imported:</span> @{ createdAt }
+        </div>
+        }
+
+        @defining(s"${asset.width} x ${asset.height}") { dimensions =>
+        <div class="dimensions" title="@{ dimensions }px">
+            <span>Dimensions:</span> @{ dimensions } px
+        </div>
+        }
+
+        @defining(Util.humanReadableByteCount(asset.sizeBytes)) { fileSize =>
+        <div class="fileSize" title="@{ fileSize }">
+            <span>Size:</span> @{ fileSize }
+        </div>
+        }
+    </div>
+</div>@* /cell *@
+}

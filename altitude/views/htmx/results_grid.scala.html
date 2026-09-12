@@ -1,84 +1,13 @@
-@import altitude.core.Const
-@import altitude.core.util.Util
-@import altitude.core.RequestContext
-@import altitude.core.models.Asset
 @import altitude.core.util.SearchResult
+@import altitude.core.FieldConst
 
+@* The ungrouped grid: the page's cells, the last of which carries the number of the next page when there is one *@
 @(isContinuousScroll: Boolean = false, p: Int, results: SearchResult)
 
-@defining(p + 1) { nextPage =>
-
 @for(idx <- results.records.indices) {
-    @defining(results.records(idx): Asset) { asset =>
-    @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
-
-    @if(idx == results.records.length - 1 && results.hasMoreResults) {
-
-        @* Last cell is special: it carries the page to load next. An IntersectionObserver in
-           js/fragments/search-results.js watches it and requests that page through the search funnel,
-           which supplies every other search parameter from the `searchParams` store. *@
-        <div id="asset-@{asset.persistedId}"
-             class="cell last-cell"
-             alt-folder-id="@{asset.folderId}"
-             @if(asset.isTriaged){alt-is-triaged="true"}
-             data-app-search-next-page="@{nextPage}">
-    } else {
-        <div class="cell" id="asset-@{asset.persistedId}" alt-folder-id="@{asset.folderId}" @if(asset.isTriaged){alt-is-triaged="true"}>
-    }
-
-        <div alt-asset-id="@{asset.persistedId}"
-             x-data="initSelectable('@{asset.persistedId}')"
-             :class="{ 'drag-drop': true, 'selected': selected, 'masked': dragged }">
-
-            <div class="checkmark"
-                 @@click="toggle">
-            </div>
-
-            @if(asset.isTriaged) {
-              <div class="triage-marker">triage</div>
-            }
-
-            <img alt-asset-id="@{asset.persistedId}"
-                 draggable="false"
-                 @@click.shift="toggleViaAsset($event)"
-                 hx-trigger="click[!event.shiftKey]"
-                 hx-target="#imageDetailModalContent"
-                 hx-get="/htmx/asset/r/@{RequestContext.getRepository.persistedId}/modals/asset-detail/@{asset.persistedId}"
-                 @if(isContinuousScroll) {alt-data-src="@{imgUrl}"} else {src="@{imgUrl}"}
-                 alt="@{ asset.fileName }"
-                 class="responsive-image">
-
-        </div>@* /inner cell drag droppable *@
-
-        <div class="metadata">
-            <div class="fileName" title="@{ asset.fileName }">
-                <span>File:</span> @{ asset.fileName }
-            </div>
-
-            @defining(Util.humanReadableDateTime(asset.originalCreatedAt)) { originalCreatedAt =>
-            <div class="originalCreatedAt" title="@{ originalCreatedAt }">
-                <span>Created:</span> @{ originalCreatedAt }
-            </div>
-            }
-
-            @defining(Util.humanReadableDateTime(asset.createdAt)) { createdAt =>
-            <div class="importedAt" title="@{ createdAt }">
-                <span>Imported:</span> @{ createdAt }
-            </div>
-            }
-
-            @defining(s"${asset.width} x ${asset.height}") { dimensions =>
-            <div class="dimensions" title="@{ dimensions }px">
-                <span>Dimensions:</span> @{ dimensions } px
-            </div>
-            }
-
-            @defining(Util.humanReadableByteCount(asset.sizeBytes)) { fileSize =>
-            <div class="fileSize" title="@{ fileSize }">
-                <span>Size:</span> @{ fileSize }
-            </div>
-            }
-        </div>
-    </div>@* /cell *@
-    }}}
+@htmx.html.result_cell(
+    asset = results.records(idx),
+    isContinuousScroll = isContinuousScroll,
+    showNoDate = results.sort.headOption.exists(_.field == FieldConst.Asset.ORIGINAL_CREATED_AT),
+    nextPage = Option.when(idx == results.records.length - 1 && results.hasMoreResults)(p + 1))
 }

@@ -4,6 +4,7 @@ import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 import { buildDialogTriggerCtrl } from "../common/context-menu.js"
 import { runSearch } from "../search-results/search.js"
 import { bindBoxSelection } from "../search-results/box-selection.js"
+import { bindDateGroupSelectionSync } from "../search-results/date-groups.js"
 
 const placeholderImageData =
     "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
@@ -19,7 +20,6 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
 
     app.Alpine.store(Const.state.selectedAssets).reset()
     app.Alpine.store(Const.state.resultsTotal).set(resultsTotal)
-    app.Alpine.store(Const.state.shadowResults).reset()
 
     syncViewedScope(fragmentEl)
     ensureViewSettingsControl(fragmentEl)
@@ -31,13 +31,13 @@ export function hydrateSearchResultsFragment({ fragmentEl, app }) {
         return
     }
 
-    bindSearchResultsInfiniteScroll({ assetsElement, app })
+    bindSearchResultsInfiniteScroll({ assetsElement })
     bindSearchResultsLazyLoad({ assetsElement, app })
+    bindDateGroupSelectionSync({ assetsElement })
     applyGridMetadataVisibilityToAllCells({
         assetsElement,
         context: app.context,
     })
-    app.searchDetailCoordinator.syncShadowResults()
 }
 
 /**
@@ -114,13 +114,84 @@ export function handleViewSettingChanged({ event, context }) {
 /**
  * INFINITE SCROLL
  *
- * The last cell of a page carries the page to load next. When it comes into view we request that
- * page through the search funnel, which supplies the rest of the current search, and append the
- * result after the cell. Each cell fires once: it is unobserved as soon as it does, so scrolling
- * back up over it loads nothing again.
+ * The last cell of a page carries how the next page is reached: its number (`data-app-search-next-page`,
+ * an ungrouped grid) or the cursor to continue from (`data-app-search-after`, a grouped grid). When
+ * it comes into view we request that page through the search funnel, which supplies the rest of the
+ * current search, and append the result after the cell. Each cell loads its page once: it loses the
+ * attribute as it does, so scrolling back up over it loads nothing again.
+ *
+ * The detail modal loads pages the same way, through `loadNextPage`, when it steps past the last
+ * loaded cell (js/search-results/detail-navigator.js).
  */
-function bindSearchResultsInfiniteScroll({ assetsElement, app }) {
-    const observer = getNextPageObserver(app)
+
+// A cell that has already loaded its page keeps the class but loses the attribute, so only the one
+// page still to be loaded is ever picked up
+const CONTINUATION_SELECTOR =
+    ".last-cell[data-app-search-next-page], .last-cell[data-app-search-after]"
+
+// The page request in flight per last cell: a second caller while it is in flight - the modal
+// stepping past the cell the scroll is already loading, or the reverse - shares it
+const pendingPageLoads = new WeakMap()
+
+let nextPageObserver = null
+
+/**
+ * Loads the page `lastCellEl` continues to, appending it after the cell, and resolves when the
+ * request completes. A cell without a continuation resolves at once, and a cell whose page is in
+ * flight returns that request, so nothing is ever requested twice.
+ */
+export function loadNextPage(lastCellEl) {
+    const pending = pendingPageLoads.get(lastCellEl)
+    if (pending) {
+        return pending
+    }
+
+    const continuation = continuationOf(lastCellEl)
+    if (!continuation) {
+        return Promise.resolve()
+    }
+
+    // One request per cell, whatever the scroll does afterwards
+    nextPageObserver?.unobserve(lastCellEl)
+    delete lastCellEl.dataset.appSearchNextPage
+    delete lastCellEl.dataset.appSearchAfter
+
+    console.debug("Loading more: %o", continuation)
+
+    // `p: null` keeps the store's page out of a cursor continuation; the store's own value is
+    // never right for a continuation anyway
+    const request = runSearch({
+        transient: {
+            ...continuation,
+            p: continuation.p ?? null,
+            isContinuousScroll: true,
+        },
+        target: lastCellEl,
+        swap: "afterend",
+    }).finally(() => pendingPageLoads.delete(lastCellEl))
+
+    pendingPageLoads.set(lastCellEl, request)
+
+    return request
+}
+
+/** `{ after }` or `{ p }`, whichever the cell carries; `null` when it carries neither */
+function continuationOf(lastCellEl) {
+    const { appSearchAfter, appSearchNextPage } = lastCellEl.dataset
+
+    if (appSearchAfter) {
+        return { after: appSearchAfter }
+    }
+
+    if (appSearchNextPage) {
+        return { p: Number(appSearchNextPage) }
+    }
+
+    return null
+}
+
+function bindSearchResultsInfiniteScroll({ assetsElement }) {
+    const observer = getNextPageObserver()
 
     if (assetsElement.dataset.appInfiniteScrollBound !== "true") {
         assetsElement.dataset.appInfiniteScrollBound = "true"
@@ -141,50 +212,29 @@ function observeLastCell({ root, observer }) {
         return
     }
 
-    // A cell that has already loaded its page keeps the class but loses the attribute, so only the
-    // one page still to be loaded is ever picked up
-    const selector = ".last-cell[data-app-search-next-page]"
-
-    if (root.matches(selector)) {
+    if (root.matches(CONTINUATION_SELECTOR)) {
         observer.observe(root)
     }
 
-    root.querySelectorAll(selector).forEach((cellEl) =>
+    root.querySelectorAll(CONTINUATION_SELECTOR).forEach((cellEl) =>
         observer.observe(cellEl),
     )
 }
 
-function getNextPageObserver(app) {
-    if (app.nextPageObserver) {
-        return app.nextPageObserver
+function getNextPageObserver() {
+    if (nextPageObserver) {
+        return nextPageObserver
     }
 
-    app.nextPageObserver = new IntersectionObserver((entries) => {
+    nextPageObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
-            if (!entry.isIntersecting) {
-                return
+            if (entry.isIntersecting) {
+                loadNextPage(entry.target)
             }
-
-            const lastCellEl = entry.target
-            const nextPage = Number(lastCellEl.dataset.appSearchNextPage)
-
-            // One request per cell, whatever the scroll does afterwards
-            app.nextPageObserver.unobserve(lastCellEl)
-            delete lastCellEl.dataset.appSearchNextPage
-
-            console.debug("Loading more: page %s", nextPage)
-
-            runSearch({
-                transient: { p: nextPage, isContinuousScroll: true },
-                target: lastCellEl,
-                swap: "afterend",
-            }).then(() => {
-                app.searchDetailCoordinator.appendShadowResultsPage(nextPage)
-            })
         })
     })
 
-    return app.nextPageObserver
+    return nextPageObserver
 }
 
 function bindSearchResultsLazyLoad({ assetsElement, app }) {

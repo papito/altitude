@@ -24,6 +24,9 @@ case class UnsupportedMediaTypeException(asset: Asset) extends Exception()
 
 case class IllegalOperationException(msg: String) extends IllegalArgumentException(msg)
 
+/** A grouped-search continuation cursor that is malformed or belongs to a different search */
+case class SearchCursorException(msg: String) extends IllegalArgumentException(msg)
+
 case class MetadataExtractorException(asset: Asset, ex: Throwable) extends Exception(ex)
 
 case class NotFoundException(msg: String) extends Exception(msg)

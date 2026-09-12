@@ -1,10 +1,15 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
-@import altitude.core.util.SearchResult
+@import altitude.core.util.GroupBy
+@import altitude.core.util.SearchGrouping
 @import altitude.core.util.SearchSort
+@import altitude.core.util.SortDirection
 @import altitude.core.models.Person
-@(results: SearchResult, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None)
-@defining(results.sort.head) { sort =>
+
+@* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
+   controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
+   `grouping`) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. *@
+@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None)
 
 <style>
   #searchControl {
@@ -13,7 +18,7 @@
     border: 1px solid var(--background-tertiary-color);
     border-radius: 5px;
     display: grid;
-    grid-template-columns: .5fr 1fr 1fr;
+    grid-template-columns: .5fr 1fr 1fr 1fr;
   }
 
   /* Direct children only: as a descendant selector this would also match the View control's popover
@@ -103,7 +108,50 @@
     display: flex;
     flex-wrap: wrap;
     flex-direction: row;
-    justify-content: center;
+    /* Cells fill each row from the left, so a group's short last row lines up under the rest of it
+       and under its header rather than floating in the middle of the pane */
+    justify-content: flex-start;
+    /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
+    isolation: isolate;
+  }
+
+  /* A date header of a grouped grid spans the whole row and sticks to the top of the scrolling #content pane. Every header
+     sticks at the same offset, so the next day's header paints over the previous one as it arrives - which reads as a
+     replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+  #assets .date-group {
+    flex-basis: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 6px;
+    font-weight: bold;
+    font-size: 1.1em;
+    background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+  }
+
+  /* The gap between groups. It hangs off the header rather than the cells above it, so the first
+     group still starts flush against the controls, and a group continued onto the next page - which
+     repeats no header - gains no gap in its middle */
+  #assets .date-group:not(:first-child) {
+    margin-top: 20px;
+  }
+
+  #assets .date-group .count {
+    color: var(--faded-font-color);
+    font-weight: normal;
+    font-size: smaller;
+  }
+
+  /* Selects the day's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
+  #assets .date-group .group-checkmark {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--success-background-color);
   }
 
   #assets .cell {
@@ -148,11 +196,10 @@
     color: var(--faded-font-color);
   }
 
-  #assets .cell .drag-drop .triage-marker {
+  #assets .cell .drag-drop .triage-marker,
+  #assets .cell .drag-drop .no-date-marker {
     position: absolute;
     bottom: 8px;
-    right: 8px;
-    background-color: var(--success-background-color);
     color: white;
     font-size: 10px;
     font-weight: bold;
@@ -162,15 +209,27 @@
     letter-spacing: 1px;
   }
 
+  #assets .cell .drag-drop .triage-marker {
+    right: 8px;
+    background-color: var(--success-background-color);
+  }
+
+  #assets .cell .drag-drop .no-date-marker {
+    left: 8px;
+    background-color: var(--warning-background-color);
+  }
+
   /* Hide triage marker when in triage view (all items are triaged there) */
   #content.triage #assets .cell .drag-drop .triage-marker {
     display: none;
   }
 
-  /* Hide triage marker while the cell is being dragged, and while the move it
+  /* Hide cell badges while the cell is being dragged, and while the move it
      triggered is still in flight - otherwise it blinks back on a successful drop */
   #assets .cell .drag-drop.dragging .triage-marker,
-  #assets .cell.move-pending .drag-drop .triage-marker {
+  #assets .cell.move-pending .drag-drop .triage-marker,
+  #assets .cell .drag-drop.dragging .no-date-marker,
+  #assets .cell.move-pending .drag-drop .no-date-marker {
     display: none;
   }
 
@@ -179,7 +238,7 @@
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js) *@
 <div data-app-fragment="search-results"
-     data-results-total="@{results.total}"
+     data-results-total="@{total}"
      data-results-repo-id="@{RequestContext.getRepository.persistedId}"
      data-results-view="@{view}"
      data-results-folder-id="@{folderId.getOrElse("")}"
@@ -202,6 +261,29 @@
   @* The ⚙ View control is a dialog-trigger context menu, built into this host by
      js/fragments/search-results.js like the Add album and Add folder controls *@
   <div id="viewSettingsActions"></div>
+
+  <div class="group">
+    @* The selected option is the effective grouping the server used. Each option carries the two parameters it sets, which
+       the search funnel reads off the selected option (data-app-search-from-selected-option, js/search-results/search-triggers.js)
+       and combines with every other search parameter in the `searchParams` store. Grouping is a reorder, like the sort: it
+       survives a change of folder, person, album or view. *@
+    <select id="groupOptions"
+            class="sort-dropdown"
+            data-app-search="change"
+            data-app-search-from-selected-option>
+
+      <option data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {selected}>
+        No grouping
+      </option>
+
+      <option data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {selected}>
+        Date Taken (Newest first)
+      </option>
+      <option data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {selected}>
+        Date Taken (Oldest first)
+      </option>
+    </select>
+  </div>
 
   <div class="sort">
     @* The selected option is the effective sort the server used; changing it goes through the search funnel, which
@@ -250,9 +332,6 @@
 </div>
 
 <div id="assets" x-data>
-  @htmx.html.results_grid(isContinuousScroll = false, p = 1, results = results)
+  @grid
 </div>
 </div>
-
-}
-

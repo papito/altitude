@@ -1,10 +1,19 @@
 package altitude.core.dao.jdbc.querybuilder
 
+import java.time.LocalDate
+
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.util.GroupBy
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
+import altitude.core.util.SearchCursor
+import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchQuery
+import altitude.core.util.SearchSort
+import altitude.core.util.SortDirection
+import altitude.core.util.SortValue
 
 object SearchQueryBuilder:
   private val ASSET_TABLE_NAME = "asset"
@@ -20,6 +29,21 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     ClauseComponents(elements = List(s"$tableName.${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?"), bindVals = List(true))
 
   protected def textSearch(searchQuery: SearchQuery): ClauseComponents
+
+  /** The calendar-day expression a grouped search orders, compares and counts by; it must match the engine's date index */
+  protected def dayExpression(groupBy: GroupBy): String
+
+  /** The ORDER BY term for the sort within a day. Engines may decorate it to steer their planner. */
+  protected def secondarySortExpression(sort: SearchSort, grouping: SearchGrouping): String
+
+  /** Whether the engine's schema lets this timestamp column be null */
+  protected def isNullableTimestamp(field: String): Boolean
+
+  /** Where the engine natively places nulls for this direction; the cursor comparison must agree with the ORDER BY */
+  protected def nullsFirst(direction: SortDirection): Boolean
+
+  /** A calendar day as a bind value comparable with the engine's day expression */
+  protected def dayBindValue(day: LocalDate): Any
 
   override protected def from(searchQuery: SearchQuery): ClauseComponents =
     ClauseComponents(elements = allTableNames(searchQuery))
@@ -66,6 +90,142 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
 
     logger.debug(s"Select SQL: $sql with $bindVals")
     SqlQuery(sql, bindVals)
+
+  /**
+   * One statement for a grouped page: the ordered page slice joined back to its asset rows, the full-day count of each day on the
+   * page and, on a first page, the count of every match. Every branch shares the exact same FROM/WHERE/GROUP BY/HAVING, so counts
+   * can never drift from the rows. The candidates slice is narrow (ID, day, sort key) and fetches one row past the page to detect
+   * continuation; only the page's rows are joined to the asset table. Every branch is materialized: the candidates because they
+   * are read twice, the counts so the day count runs once per distinct day, not once per page row.
+   *
+   * A page reached by cursor skips the overall count: it is the dominant cost of the statement on a large library, and the footer
+   * total was set by the first page. Ordering is day, then the sort, then the ID as a deterministic tiebreaker. Nulls fall where
+   * the engine puts them natively; an explicit NULLS clause would forfeit index-ordered reads on both engines.
+   */
+  def buildGroupedSearchSql(query: SearchQuery): SqlQuery =
+    val grouping = query.grouping.getOrElse(throw IllegalArgumentException("A grouped search needs a grouping"))
+    val sort = query.searchSort.head
+    val clauses = compileClauses(query)
+    val day = dayExpression(grouping.by)
+
+    // A grouping timestamp the schema lets be null gives its rows their own group, at the engine's native null position
+    val ownGroup = isNullableTimestamp(grouping.by.field)
+    val matchWhere = clauses(SqlQueryBuilder.WHERE)
+    val from = fromStr(clauses(SqlQueryBuilder.FROM))
+    val groupBy = groupByStr(clauses(SqlQueryBuilder.GROUP_BY))
+    val having = havingStr(clauses(SqlQueryBuilder.HAVING))
+
+    // The one relation every branch selects from: the matching assets, deduplicated the same way in each
+    def matching(select: String, where: ClauseComponents): String =
+      s"SELECT $select $from ${whereStr(where)} $groupBy $having"
+
+    def orderBy(dayTerm: String, sortTerm: String, idTerm: String): String =
+      s"$dayTerm ${grouping.direction}, $sortTerm ${sort.direction}, $idTerm ASC"
+
+    val candidatesOrder = orderBy(day, secondarySortExpression(sort, grouping), s"$tableName.${FieldConst.ID}")
+    // A cursor continues from a position; without one this is the first page
+    val continuation = query.cursor.map(cursorPredicate(_, grouping, sort, day)).getOrElse(ClauseComponents())
+    val candidatesWhere = matchWhere + continuation
+    val isFirstPage = query.cursor.isEmpty
+
+    // The columns the asset model is built from, minus the generic builder's window count, which this statement replaces
+    val assetColumns = selColumnNames
+      .filterNot(_ == BaseDao.totalRecsWindowFunction)
+      .map(column => if column == "*" then s"$tableName.*" else column)
+
+    val totalCte =
+      if isFirstPage then
+        s", total AS MATERIALIZED (SELECT count(*) AS n FROM (${matching(s"$tableName.${FieldConst.ID}", matchWhere)}) AS m)"
+      else ""
+    val totalColumn = if isFirstPage then ", t.n AS total" else ""
+    val totalJoin = if isFirstPage then "CROSS JOIN total AS t" else ""
+
+    val narrow = s"$tableName.${FieldConst.ID} AS id, $day AS day, $tableName.${sort.field} AS sort_value"
+    val slice = s"${matching(narrow, candidatesWhere)} ORDER BY $candidatesOrder LIMIT ${query.rpp + 1}"
+    val needsUndatedSlice = ownGroup && !nullsFirst(grouping.direction) && query.cursor.exists(_.day.isDefined)
+    // A day range never reaches NULL. Only a transition from dated rows to the trailing null group needs a second slice.
+    // Put its guard in LIMIT: SQLite short-circuits a zero limit, but would scan the null block for a WHERE guard.
+    val candidatesCte =
+      if needsUndatedSlice then s"""dated AS MATERIALIZED ($slice), undated AS MATERIALIZED (
+          ${matching(narrow, matchWhere + ClauseComponents(List(s"$day IS NULL")))} ORDER BY $candidatesOrder
+          LIMIT CASE WHEN (SELECT count(*) FROM dated) > ${query.rpp} THEN 0 ELSE ${query.rpp + 1} END
+        ), candidates AS MATERIALIZED (SELECT id, day, sort_value FROM dated UNION ALL SELECT id, day, sort_value FROM undated)"""
+      else s"candidates AS MATERIALIZED ( $slice )"
+
+    // Separate equality and IS NULL probes keep both counts on the day index. The null driver is empty on dated-only pages.
+    val datedDriver = if ownGroup then " WHERE day IS NOT NULL" else ""
+    val nullCount =
+      if ownGroup then
+        s""" UNION ALL SELECT p.day AS day,
+        (SELECT count(*) FROM (${matching(s"$tableName.${FieldConst.ID}", matchWhere + ClauseComponents(List(s"$day IS NULL")))}) AS m) AS n
+        FROM (SELECT DISTINCT day FROM page WHERE day IS NULL) AS p"""
+      else ""
+    val nullJoin = if ownGroup then " OR (d.day IS NULL AND p.day IS NULL)" else ""
+    val sql = s"""
+      WITH $candidatesCte, page AS MATERIALIZED (
+        SELECT id, day, sort_value FROM candidates ORDER BY ${orderBy("day", "sort_value", "id")} LIMIT ${query.rpp}
+      ), day_counts AS MATERIALIZED (
+        SELECT p.day AS day,
+               (SELECT count(*) FROM (${matching(s"$tableName.${FieldConst.ID}", matchWhere + ClauseComponents(List(s"$day = p.day")))}) AS m) AS n
+          FROM (SELECT DISTINCT day FROM page$datedDriver) AS p$nullCount
+      )$totalCte
+      SELECT ${assetColumns.mkString(", ")}, p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
+             (SELECT count(*) FROM candidates) AS candidate_count$totalColumn
+        FROM page AS p
+             JOIN $tableName ON $tableName.${FieldConst.ID} = p.id
+             LEFT JOIN day_counts AS d ON d.day = p.day$nullJoin
+             $totalJoin
+       ORDER BY ${orderBy("p.day", "p.sort_value", "p.id")}
+    """
+
+    // Appearance order: dated slice, optional undated slice, dated count, optional null count, optional first-page total.
+    SqlQuery(
+      sql,
+      candidatesWhere.bindVals ++ (if needsUndatedSlice then matchWhere.bindVals else Nil) ++
+        matchWhere.bindVals ++ (if ownGroup then matchWhere.bindVals else Nil) ++ (if isFirstPage then matchWhere.bindVals
+                                                                                   else Nil)
+    )
+
+  /**
+   * Rows strictly after the cursor's anchor in page order, as lexicographic comparisons with independent directions: an earlier
+   * day, or the same day and a later sort value, or the same sort value and a greater ID. A redundant inclusive bound on the day
+   * lets the day index seek straight to the boundary. Where the sort column can be null, nulls sit where the engine natively
+   * orders them and the comparison honors that placement.
+   */
+  private def cursorPredicate(cursor: SearchCursor, grouping: SearchGrouping, sort: SearchSort, day: String): ClauseComponents =
+    val dayOp = if grouping.direction == SortDirection.DESC then "<" else ">"
+    val sortOp = if sort.direction == SortDirection.DESC then "<" else ">"
+    val sortColumn = s"$tableName.${sort.field}"
+    val id = s"$tableName.${FieldConst.ID}"
+
+    // Sorting by capture time inside its null group reduces to ID order; every capture sort value there is NULL.
+    val afterBySort: ClauseComponents =
+      if cursor.day.isEmpty && sort.field == grouping.by.field then ClauseComponents(List(s"$id > ?"), List(cursor.id))
+      else
+        cursor.sortValue match
+          case SortValue.Null if nullsFirst(sort.direction) =>
+            ClauseComponents(List(s"($sortColumn IS NOT NULL OR $id > ?)"), List(cursor.id))
+          case SortValue.Null =>
+            ClauseComponents(List(s"($sortColumn IS NULL AND $id > ?)"), List(cursor.id))
+          case value =>
+            val nullsAfter =
+              if isNullableTimestamp(sort.field) && !nullsFirst(sort.direction) then s" OR $sortColumn IS NULL" else ""
+            ClauseComponents(
+              List(s"($sortColumn $sortOp ? OR ($sortColumn = ? AND $id > ?)$nullsAfter)"),
+              List(value.bindValue, value.bindValue, cursor.id))
+
+    cursor.day match
+      case Some(cursorDay) =>
+        // The redundant inclusive bound seeks to the cursor day; a trailing null block is supplied by the guarded slice.
+        val dayValue = dayBindValue(cursorDay)
+        ClauseComponents(
+          List(s"$day $dayOp= ?", s"($day $dayOp ? OR ${afterBySort.elements.head})"),
+          List(dayValue, dayValue) ++ afterBySort.bindVals)
+      case None if nullsFirst(grouping.direction) =>
+        // All dated days follow the leading null group, regardless of the secondary sort.
+        ClauseComponents(List(s"($day IS NOT NULL OR ${afterBySort.elements.head})"), afterBySort.bindVals)
+      case None =>
+        ClauseComponents(List(s"$day IS NULL", afterBySort.elements.head), afterBySort.bindVals)
 
   override protected def where(searchQuery: SearchQuery): ClauseComponents =
     val repoIdElements = allTableNames(searchQuery).map(tableName => s"$tableName.${FieldConst.REPO_ID} = ?")
@@ -184,7 +344,8 @@ abstract class SearchQueryBuilder(selColumnNames: List[String])
     if !query.isSorted then return ClauseComponents()
 
     val sort = query.searchSort.head
-    val sql = s" ORDER BY $tableName.${sort.field} ${sort.direction}"
+    // A missing capture time creates a large tie group; ID order keeps offset pages deterministic.
+    val sql = s" ORDER BY $tableName.${sort.field} ${sort.direction}, $tableName.${FieldConst.ID} ASC"
 
     ClauseComponents(List(sql))
 

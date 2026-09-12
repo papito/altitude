@@ -14,11 +14,6 @@ export function registerHtmxAndSearchListeners(app) {
         app.searchDetailCoordinator.handleShowPrevious()
     })
 
-    document.body.addEventListener(Const.events.detailShown, (event) => {
-        app.Alpine.store(Const.state.shadowResults).currentAssetId =
-            event.detail.assetId
-    })
-
     document.body.addEventListener(Const.events.escapeKeyPressed, () => {
         app.handleEscapeKeyPressed()
     })

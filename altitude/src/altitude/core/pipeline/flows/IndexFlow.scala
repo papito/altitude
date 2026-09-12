@@ -21,11 +21,12 @@ object IndexFlow:
         app.txManager.withFaceVector {
           try {
             debugInfo(s"\tPersisting asset ${dataAsset.asset.fileName}")
-            app.service.asset.add(dataAsset.asset)
+            val persisted = app.service.asset.add(dataAsset.asset)
+            val persistedData = dataAsset.copy(asset = persisted)
             debugInfo(s"\tIndexing asset ${dataAsset.asset.fileName}")
-            app.service.search.indexAsset(dataAsset.asset)
+            app.service.search.indexAsset(persisted)
 
-            Future.successful((Left(dataAsset), ctx))
+            Future.successful((Left(persistedData), ctx))
           } catch {
             case e: DuplicateException =>
               Future.successful(Right(InvalidAsset(dataAsset.asset, Some(e))), ctx)

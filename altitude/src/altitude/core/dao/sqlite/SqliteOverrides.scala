@@ -1,10 +1,27 @@
 package altitude.core.dao.sqlite
 
-import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
 
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.util.SortValue
+
+object SqliteOverrides:
+  /** The stored DATETIME text format. Timestamps are wall-clock text: camera-local for capture times, UTC for import times. */
+  val DATETIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+  /** Reads the stored format, tolerating a fractional second on rows written from a java.sql.Timestamp */
+  val DATETIME_PARSER: DateTimeFormatter = new DateTimeFormatterBuilder()
+    .append(DATETIME_FORMATTER)
+    .optionalStart()
+    .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+    .optionalEnd()
+    .toFormatter
 
 trait SqliteOverrides:
   this: BaseDao[?] =>
@@ -14,16 +31,28 @@ trait SqliteOverrides:
   override protected def nativeBool(value: Boolean): Any =
     if value then "1" else "0"
 
+  override protected def nativeLocalDateTime(value: LocalDateTime): Any =
+    value.format(SqliteOverrides.DATETIME_FORMATTER)
+
+  override protected def nativeUtcTimestamp(value: OffsetDateTime): Any =
+    value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
+
+  // Parsed as the wall-clock time it spells; a JVM-zone round trip would shift a time inside the server's DST gap
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] =
     if value.isEmpty || value.get == null then return None
 
-    val timeStamp = value.get.asInstanceOf[String]
-    Some(stringToLocalDateTime(timeStamp))
+    Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_PARSER))
 
-  private def stringToLocalDateTime(datetimeAsString: String): java.time.LocalDateTime =
-    val formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-    val date = formatter.parse(datetimeAsString)
-    date.toInstant.atZone(ZoneId.systemDefault).toLocalDateTime
+  // date() returns ISO text; it is never converted through a JVM zone
+  override protected def getDateField(value: AnyRef): Option[LocalDate] =
+    Option(value).map(v => LocalDate.parse(v.asInstanceOf[String]))
+
+  // Timestamps stay in their stored text form so a cursor compares them exactly as the column stores them
+  override protected def getSortValueField(value: AnyRef): SortValue = value match
+    case null => SortValue.Null
+    case text: String => SortValue.Text(text)
+    case number: java.lang.Number => SortValue.Num(number.longValue)
+    case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
 
   def count(recs: List[Map[String, AnyRef]]): Int = if recs.nonEmpty then recs.head("total").asInstanceOf[Int] else 0
 

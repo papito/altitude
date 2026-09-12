@@ -1,17 +1,16 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import org.apache.commons.dbutils.QueryRunner
 
-import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
+import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
@@ -47,6 +46,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),
       originalCreatedAt = getDateTimeField(rec.get(FieldConst.Asset.ORIGINAL_CREATED_AT)),
+      originalCreatedAtSource =
+        Option(rec(FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE)).flatMap(value => CaptureDateSource.fromDbValue(value.toString)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
@@ -81,35 +82,20 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
-             ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED},  ${FieldConst.Asset.ORIGINAL_CREATED_AT},
-            ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE},
+             ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
+             ${FieldConst.CREATED_AT},
+             ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
       case Some(id) => id
       case None => BaseDao.genId
 
-    val originalDateTime: LocalDateTime = asset.publicMetadata.dateTimeOriginal match
-      case Some(dateTime) =>
-        try
-          val originalDt = LocalDateTime.parse(dateTime, exifDateTimeFormatterPattern)
-          originalDt
-        catch
-          case _: DateTimeParseException =>
-            logger.warn(s"DateTimeParseException. Failed to parse dateTimeOriginal [$dateTime] for asset with id [$id]")
-            LocalDateTime.now()
-          case _: Exception =>
-            logger.error(s"Unknown exception. ailed to parse dateTimeOriginal [$dateTime] for asset with id [$id]")
-            LocalDateTime.now()
-      case None => LocalDateTime.now()
-
-    val sqlOriginalDateTime = getDataSourceType match
-      case C.DbEngineName.POSTGRES =>
-        Some(originalDateTime)
-      case C.DbEngineName.SQLITE =>
-        Some(originalDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
+    // Resolution belongs to the pipeline. Unknown capture times and their provenance are bound as SQL NULL.
+    val capture: Any = asset.originalCreatedAt.map(nativeLocalDateTime).orNull
+    val captureSource: Any = asset.originalCreatedAtSource.map(_.dbValue).orNull
 
     val sqlVals: List[Any] = List(
       id,
@@ -123,7 +109,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.assetType.mime,
       asset.folderId,
       asset.isTriaged,
-      sqlOriginalDateTime.orNull,
+      capture,
+      captureSource,
+      // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone
+      nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)),
       asset.width,
       asset.height,
       asset.width * asset.height,
