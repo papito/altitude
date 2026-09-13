@@ -34,16 +34,15 @@ class MetadataExtractionService:
           // Each PNG text chunk is a separate directory with the same name. Keep its keys instead of overwriting Textual Data.
           if directory.isInstanceOf[PngDirectory] && tag.getTagType == PngDirectory.TAG_TEXTUAL_DATA then
             directory.getObject(PngDirectory.TAG_TEXTUAL_DATA).asInstanceOf[java.util.List[KeyValuePair]].asScala.foreach {
-              pair => extractedMetadata.addValue(directory.getName, pair.getKey, sanitizeString(pair.getValue.toString))
+              pair => addValue(extractedMetadata, directory.getName, pair.getKey, pair.getValue.toString)
             }
-          else extractedMetadata.addValue(directory.getName, tag.getTagName, sanitizeString(tag.getDescription))
+          else addValue(extractedMetadata, directory.getName, tag.getTagName, tag.getDescription)
         }
         // XMP's ordinary tags contain only the property count; the replayable property paths live in a separate map.
         directory match
           case xmp: XmpDirectory =>
             xmp.getXmpProperties.asScala.foreach {
-              case (key, value) =>
-                extractedMetadata.addValue(directory.getName, key, sanitizeString(value))
+              case (key, value) => addValue(extractedMetadata, directory.getName, key, value)
             }
           case _ => ()
       }
@@ -55,14 +54,12 @@ class MetadataExtractionService:
         ExtractedMetadata()
 
   /**
-   * Sanitizes a string by removing null characters. This is useful to ensure that metadata does not contain any null characters
-   * which can cause issues in processing.
-   *
-   * Postgres, for example, is not a fan of null unicode characters in strings
+   * A tag whose description cannot be derived is skipped: a GPS coordinate without its ref tag, for one, describes as null, and a
+   * null value would not survive the JSON column. Null characters are removed from the rest, since Postgres, for one, rejects
+   * them inside a string.
    */
-  private def sanitizeString(input: String): String =
-    if input == null then return null
-    input.replace("\u0000", "")
+  private def addValue(extractedMetadata: ExtractedMetadata, directoryName: String, key: String, value: String): Unit =
+    Option(value).foreach(v => extractedMetadata.addValue(directoryName, key, v.replace("\u0000", "")))
 
   def detectAssetType(data: Array[Byte]): AssetType =
     var inputStream: Option[InputStream] = None

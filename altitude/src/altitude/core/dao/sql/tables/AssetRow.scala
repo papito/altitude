@@ -36,6 +36,8 @@ case class AssetRow[T[_]](
     isPipelineProcessed: T[Boolean],
     originalCreatedAt: T[Option[LocalDateTime]],
     originalCreatedAtSource: T[Option[String]],
+    latitude: T[Option[Double]],
+    longitude: T[Option[Double]],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

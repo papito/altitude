@@ -76,6 +76,24 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, So
     }
   }
 
+  test("Coordinates round-trip through storage and stay null when absent") {
+    val located = testContext.makeAsset().copy(latitude = Some(-33.857), longitude = Some(151.2152))
+    val unlocated = testContext.makeAsset()
+    val ids = testApp.txManager.withTransaction {
+      List(located, unlocated).map(asset => testApp.DAO.asset.add(asset).persistedId)
+    }
+    val reread = ids.map(testApp.service.asset.getById)
+    reread.head.latitude shouldBe Some(-33.857)
+    reread.head.longitude shouldBe Some(151.2152)
+    reread.last.latitude shouldBe None
+    reread.last.longitude shouldBe None
+    // The hand-written SQL paths build the model from a row map and must read the same columns
+    val locked =
+      testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToRecycle(ids.toSet)).sortBy(a => ids.indexOf(a.persistedId))
+    locked.map(_.latitude) shouldBe List(Some(-33.857), None)
+    locked.map(_.longitude) shouldBe List(Some(151.2152), None)
+  }
+
   test("The import result carries the resolved capture time and its persisted provenance") {
     for (
       (file, expected) <- List(
