@@ -132,6 +132,11 @@ object Api:
       val GROUP_DIRECTION = "groupDirection"
       val AFTER = "after"
 
+    // The map's own parameters: `viewport` clips cells and pins, unlike the `bbox` search filter, which the map ignores
+    object Map:
+      val VIEWPORT = "viewport"
+      val ZOOM = "zoom"
+
     object SearchSort:
       val DIRECTION = "direction"
       val FIELD = "field"

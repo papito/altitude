@@ -101,15 +101,17 @@ import altitude.core.App
           ujson.Obj("locationId" -> parent.persistedId, "assetIds" -> ujson.Arr(asset.persistedId))
         )
         for (payload <- invalid) {
-          val response = requests.put(
-            s"$host/api/location/r/$repoId/assets",
-            headers = Map("Content-Type" -> "application/json"),
-            data = payload.toString,
-            cookies = testContext.cookies,
-            check = false
-          )
-          response.statusCode shouldBe 400
-          ujson.read(response.text())("error").str should not be empty
+          withClue(s"$payload: ") {
+            val response = requests.put(
+              s"$host/api/location/r/$repoId/assets",
+              headers = Map("Content-Type" -> "application/json"),
+              data = payload.toString,
+              cookies = testContext.cookies,
+              check = false
+            )
+            response.statusCode shouldBe 400
+            ujson.read(response.text())("error").str should not be empty
+          }
         }
         val response = requests.put(
           s"$host/api/location/r/$repoId/assets",

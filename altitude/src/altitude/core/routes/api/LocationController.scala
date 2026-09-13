@@ -22,8 +22,7 @@ class LocationController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
   def getLocationList(repoId: String)(using request: Request): Response[String] =
-    val json = ujson.Arr.from(App.altitude.service.location.getAll.map(toJson))
-    cask.Response(json.toString, 200, Seq(("Content-Type", "application/json")))
+    jsonResponse(ujson.Arr.from(App.altitude.service.location.getAll.map(toJson)))
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/assets")
@@ -37,18 +36,14 @@ class LocationController(using logger: Logger) extends BaseController:
 
   /** Bad payloads and parent targets are client errors; a Location outside this repository is not found. */
   private def membershipChange(countKey: String, change: (String, Set[String]) => Int)(using request: Request): Response[String] =
-    val (locationId, assetIds) = Try(membershipRequest(unscrubbedJson.get)).toOption match
-      case None => return error("Expected locationId and an assetIds array of strings", 400)
+    val jsonIn = unscrubbedJson.get // a wrong content type keeps its own validation error
+    val (locationId, assetIds) = Try(membershipRequest(jsonIn)).toOption match
+      case None => return jsonError("Expected locationId and an assetIds array of strings", 400)
       case Some(membership) => membership
-    try
-      val count = change(locationId, assetIds)
-      cask.Response(ujson.Obj(countKey -> count).toString, 200, Seq("Content-Type" -> "application/json"))
+    try jsonResponse(ujson.Obj(countKey -> change(locationId, assetIds)))
     catch
-      case ex: NotFoundException => error(ex.getMessage, 404)
-      case ex: IllegalOperationException => error(ex.getMessage, 400)
-
-  private def error(message: String, status: Int): Response[String] =
-    cask.Response(ujson.Obj("error" -> message).toString, status, Seq("Content-Type" -> "application/json"))
+      case ex: NotFoundException => jsonError(ex.getMessage, 404)
+      case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
 
   private def membershipRequest(jsonIn: ujson.Obj): (String, Set[String]) =
     (jsonIn(Api.Field.Location.LOCATION_ID).str, jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet)

@@ -26,8 +26,17 @@ class LocationActionController(using logger: Logger) extends BaseController:
   private val scrubber =
     DataScrubber(trim = List(fields.NAME, fields.PARENT_ID, fields.LATITUDE, fields.LONGITUDE, fields.RADIUS_M))
 
+  private val numeric = List(fields.LATITUDE, fields.LONGITUDE, fields.RADIUS_M)
+  private val optionalFields = List(fields.PARENT_ID, fields.RADIUS_M)
+
   private def parents: List[Location] = App.altitude.service.location.getAll.filter(_.kind == LocationKind.Parent)
   private def locations: List[Location] = App.altitude.service.location.getAll.filter(_.kind == LocationKind.Location)
+
+  private def isParent(location: Location): Boolean = location.kind == LocationKind.Parent
+  private def renameTitle(location: Location): String =
+    if isParent(location) then Const.UI.RENAME_PARENT_DIALOG_TITLE else Const.UI.RENAME_LOCATION_DIALOG_TITLE
+  private def deleteTitle(location: Location): String =
+    if isParent(location) then Const.UI.DELETE_PARENT_DIALOG_TITLE else Const.UI.DELETE_LOCATION_DIALOG_TITLE
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
@@ -45,13 +54,15 @@ class LocationActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-location")
   def renameDialog(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id) {
-      location => html(htmx.html.rename_location_dialog(location, formJson = ujson.Obj(fields.NAME -> location.name)))
+      location =>
+        html(
+          htmx.html.rename_location_dialog(location, renameTitle(location), formJson = ujson.Obj(fields.NAME -> location.name)))
     }
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-location")
   def deleteDialog(repoId: String, id: String)(using request: Request): Response[String] =
-    withLocation(id)(location => html(htmx.html.delete_location_dialog(location)))
+    withLocation(id)(location => html(htmx.html.delete_location_dialog(location, deleteTitle(location))))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/move-location")
@@ -59,20 +70,24 @@ class LocationActionController(using logger: Logger) extends BaseController:
     withLocation(id) {
       location =>
         html(
-          htmx.html
-            .move_location_dialog(location, parents, formJson = ujson.Obj(fields.PARENT_ID -> location.parentId.getOrElse(""))))
+          htmx.html.move_location_dialog(
+            location,
+            parents,
+            Const.UI.MOVE_LOCATION_DIALOG_TITLE,
+            formJson = ujson.Obj(fields.PARENT_ID -> location.parentId.getOrElse(""))))
     }
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-to-location")
   def addToLocationDialog(repoId: String)(using request: Request): Response[String] =
-    html(htmx.html.add_to_location_dialog(locations))
+    html(htmx.html.add_to_location_dialog(Const.UI.ADD_TO_LOCATION_DIALOG_TITLE, locations))
 
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/add")
   def add(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
     submit(errors => addForm(errors, json), fields.PARENT_ID) {
+      normalize(json)
       validate(json, required = List(fields.NAME), uuid = List(fields.PARENT_ID), coordinates = true)
       App.altitude.service.location.addLocation(
         json(fields.NAME).str,
@@ -88,6 +103,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
   def addParent(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
     submit(errors => htmx.html.add_parent_dialog(errors, json), fields.NAME) {
+      normalize(json)
       validate(json, required = List(fields.NAME))
       App.altitude.service.location.addParent(json(fields.NAME).str)
     }
@@ -98,7 +114,8 @@ class LocationActionController(using logger: Logger) extends BaseController:
     val json = scrubber.scrub(unscrubbedJson.get)
     withLocation(optional(json, Api.Field.ID).getOrElse("")) {
       location =>
-        submit(errors => htmx.html.rename_location_dialog(location, errors, json), Api.Field.ID) {
+        submit(errors => htmx.html.rename_location_dialog(location, renameTitle(location), errors, json), Api.Field.ID) {
+          normalize(json)
           validate(json, required = List(fields.NAME))
           App.altitude.service.location.rename(location.persistedId, json(fields.NAME).str)
         }
@@ -110,7 +127,10 @@ class LocationActionController(using logger: Logger) extends BaseController:
     val json = scrubber.scrub(unscrubbedJson.get)
     withLocation(optional(json, Api.Field.ID).getOrElse("")) {
       location =>
-        submit(errors => htmx.html.move_location_dialog(location, parents, errors, json), fields.PARENT_ID) {
+        submit(
+          errors => htmx.html.move_location_dialog(location, parents, Const.UI.MOVE_LOCATION_DIALOG_TITLE, errors, json),
+          fields.PARENT_ID) {
+          normalize(json)
           validate(json, required = Nil, uuid = List(fields.PARENT_ID))
           App.altitude.service.location.moveToParent(location.persistedId, optional(json, fields.PARENT_ID))
         }
@@ -120,7 +140,10 @@ class LocationActionController(using logger: Logger) extends BaseController:
   @cask.put(f"/$prefix/r/:repoId/assets")
   def addAssets(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
-    submit(errors => htmx.html.add_to_location_dialog(locations, errors, json), fields.LOCATION_ID) {
+    submit(
+      errors => htmx.html.add_to_location_dialog(Const.UI.ADD_TO_LOCATION_DIALOG_TITLE, locations, errors, json),
+      fields.LOCATION_ID) {
+      normalize(json)
       validate(json, required = List(fields.LOCATION_ID, Api.Field.ASSET_IDS), uuid = List(fields.LOCATION_ID))
       // HTMX's hidden field is a comma-separated selection, unlike the array accepted by the JSON API.
       val ids = json(Api.Field.ASSET_IDS).str.split(",").map(_.trim).filter(_.nonEmpty).toSet
@@ -153,6 +176,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
 
   private def addForm(errors: Map[String, String] = Map.empty, json: ujson.Obj = ujson.Obj()): Html =
     htmx.html.add_location_dialog(
+      Const.UI.ADD_LOCATION_DIALOG_TITLE,
       parents,
       App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
       App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION),
@@ -176,20 +200,25 @@ class LocationActionController(using logger: Logger) extends BaseController:
     logger.debug(s"Location dialog validation failed for ${errors.keys.mkString(", ")}")
     dialogFormValidationResponse("<!doctype html>" + render(errors))
 
-  /** Forms submit strings; API callers may use JSON numbers for the pin and radius. Normalize only those numeric fields. */
-  private def validate(json: ujson.Obj, required: List[String], uuid: List[String] = Nil, coordinates: Boolean = false): Unit =
+  /**
+   * Forms submit strings; API callers may use JSON numbers for the pin and radius, and an empty or null optional field means no
+   * parent or radius. Rewrites `json` in place so the validation and the re-rendered form see one shape.
+   */
+  private def normalize(json: ujson.Obj): Unit =
     val errors = ValidationException()
-    val numeric = List(fields.LATITUDE, fields.LONGITUDE, fields.RADIUS_M)
     for ((field, value) <- json.obj.toList) do
       value match
         case number: ujson.Num if numeric.contains(field) => json(field) = number.toString
-        case ujson.Null if field == fields.PARENT_ID || field == fields.RADIUS_M => json.obj.remove(field)
+        case ujson.Null if optionalFields.contains(field) => json.obj.remove(field)
         case _: ujson.Str =>
         case _ => errors.errors += field -> Const.Msg.Err.INCORRECT_VALUE_TYPE
     errors.trigger()
+    // Absent optional inputs must not reach UUID or integer validation
+    optionalFields.foreach(field => if optional(json, field).isEmpty then json.obj.remove(field))
 
-    // Empty optional inputs mean no parent or radius, and must not be passed to UUID or integer validation.
-    List(fields.PARENT_ID, fields.RADIUS_M).foreach(field => if optional(json, field).isEmpty then json.obj.remove(field))
+  /** Field checks on a normalized payload; every failing field is reported at once. */
+  private def validate(json: ujson.Obj, required: List[String], uuid: List[String] = Nil, coordinates: Boolean = false): Unit =
+    val errors = ValidationException()
     try
       ApiRequestValidator(
         required = required,
@@ -203,10 +232,10 @@ class LocationActionController(using logger: Logger) extends BaseController:
       List((fields.LATITUDE, -90, 90), (fields.LONGITUDE, -180, 180)).foreach {
         (field, min, max) =>
           if !optional(json, field).flatMap(_.toDoubleOption).exists(n => n >= min && n <= max) then
-            errors.errors += field -> s"Enter a decimal between $min and $max"
+            errors.errors += field -> Const.Msg.Err.VALUE_NOT_A_DECIMAL_IN_RANGE.format(min, max)
       }
       if optional(json, fields.RADIUS_M).exists(value => !value.toIntOption.exists(_ > 0)) then
-        errors.errors += fields.RADIUS_M -> "Enter a positive whole number of metres"
+        errors.errors += fields.RADIUS_M -> Const.Msg.Err.VALUE_NOT_A_POSITIVE_INTEGER
     errors.trigger()
 
   private def optional(json: ujson.Obj, field: String): Option[String] = json.obj.get(field).flatMap(_.strOpt).filter(_.nonEmpty)

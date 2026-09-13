@@ -2,11 +2,11 @@
 @import altitude.core.Api
 @import altitude.core.models.Location
 
-@(parents: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@(title: String, parents: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
 @* The editor's map and geocoder are enhanced in Unit 8; typed coordinates already submit through the same validation flow. *@
 <form id="addLocation" class="location-editor" data-app-fragment="modal"
-      data-app-modal-title="Add Location"
+      data-app-modal-title="@{title}"
       data-app-dialog-autofocus-selector="#field-name"
       data-app-success-event="LOCATION_ADDED_EVENT"
       hx-target="this" hx-swap="none" hx-json-enc
@@ -33,5 +33,5 @@
       <div id="locationGeocodeResults"></div>
     }
   </div>
-  <button type="submit" class="action-button">Add Location</button>
+  <button type="submit" class="action-button">Add</button>
 </form>

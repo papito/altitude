@@ -2,7 +2,7 @@
 @import altitude.core.models.Location
 @import altitude.core.models.LocationKind
 
-@(location: Location)
+@(location: Location, title: String)
 
 @* A deleted parent leaves its Locations at the top level; neither kind owns the assets it points to. *@
 <div id="deleteLocation"
@@ -10,7 +10,7 @@
      data-app-dialog-return-focus="#addLocationBtn"
      data-app-success-event="LOCATION_DELETED_EVENT"
      data-app-success-detail='@{ujson.Obj("id" -> location.persistedId)}'>
-  <h3 class="dialog-title">Delete @if(location.kind == LocationKind.Parent) {parent} else {location}</h3>
+  <h3 class="dialog-title">@{title}</h3>
   @if(location.kind == LocationKind.Parent) {
     <p>Its Locations move to the top level.</p>
   }

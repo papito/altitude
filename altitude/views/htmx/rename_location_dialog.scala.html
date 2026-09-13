@@ -1,9 +1,8 @@
 @import altitude.core.Api
 @import altitude.core.RequestContext
 @import altitude.core.models.Location
-@import altitude.core.models.LocationKind
 
-@(location: Location, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@(location: Location, title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 @defining(formJson.obj.get(Api.Field.Location.NAME).flatMap(_.strOpt)) { name =>
 
 @* Shown inline in the location's menu, like the folder dialogs. hx-target="this" lets the server's
@@ -22,7 +21,7 @@
       hx-trigger="submit"
       hx-json-enc>
 
-  <h3 class="dialog-title">Rename @if(location.kind == LocationKind.Parent) {parent} else {location}</h3>
+  <h3 class="dialog-title">@{title}</h3>
 
   @if(fieldErrors.contains(Api.Field.Location.NAME)) {
     <div class="error">@{ fieldErrors(Api.Field.Location.NAME) }</div>

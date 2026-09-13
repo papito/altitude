@@ -105,11 +105,14 @@ object Const:
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
+      val VALUE_NOT_A_DECIMAL_IN_RANGE = "Enter a decimal between %s and %s"
+      val VALUE_NOT_A_POSITIVE_INTEGER = "Enter a positive whole number"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
   // core.css). The add dialogs have no title: their one field's placeholder says what they do, and
   // the inline view-settings dialog has none either: its checkbox labels are the whole content.
+  // The Location dialogs are titled by kind: the controller picks the parent or Location constant.
   object UI:
     val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
     val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
@@ -118,6 +121,8 @@ object Const:
     val ADD_LOCATION_DIALOG_TITLE = "Add location"
     val RENAME_LOCATION_DIALOG_TITLE = "Rename location"
     val DELETE_LOCATION_DIALOG_TITLE = "Delete location"
+    val RENAME_PARENT_DIALOG_TITLE = "Rename parent"
+    val DELETE_PARENT_DIALOG_TITLE = "Delete parent"
     val MOVE_LOCATION_DIALOG_TITLE = "Move to parent"
     val ADD_TO_LOCATION_DIALOG_TITLE = "Add to location"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"

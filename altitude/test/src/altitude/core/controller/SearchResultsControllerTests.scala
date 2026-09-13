@@ -76,38 +76,46 @@ import altitude.core.models.Asset
         testApp.service.location.addAssets(location.persistedId, Set(member.persistedId))
         val scope = Map("locationId" -> location.persistedId, "bbox" -> "0,0,10,10")
         for (group <- List(Map.empty[String, String], Map("groupBy" -> "location"), Map("groupBy" -> "dateTaken"))) {
-          val grid = htmlSearch(host, repoId, scope ++ group)
-          grid.statusCode shouldBe 200
-          grid.text() should include(cell(member))
-          grid.text().contains(cell(outside)) shouldBe false
-          grid.text() should include(s"""data-results-location-id="${location.persistedId}"""")
+          withClue(s"$group: ") {
+            val grid = htmlSearch(host, repoId, scope ++ group)
+            grid.statusCode shouldBe 200
+            grid.text() should include(cell(member))
+            grid.text().contains(cell(outside)) shouldBe false
+            grid.text() should include(s"""data-results-location-id="${location.persistedId}"""")
+          }
         }
+        // In map layout the bbox is the panel's scope: the map's total and bounds cover the whole search, the URL keeps it
         val response = htmlSearch(
           host,
           repoId,
           scope ++ Map(
+            "bbox" -> "50,50,60,60",
             "layout" -> "map",
             "groupBy" -> "bad",
             "groupDirection" -> "up",
             "after" -> "bad",
             "p" -> "99",
             "rpp" -> "0",
-            "isContinuousScroll" -> "true"))
+            "isContinuousScroll" -> "true")
+        )
         response.statusCode shouldBe 200
         val page = response.text()
         page should include("""id="map"""")
-        page should include("data-map-bounds=")
+        page should include("""data-map-bounds="1.0,2.0,1.0,2.0"""")
+        page should include("""data-map-count="1"""")
         page should include("""data-results-total="1"""")
         page.contains("""id="assets"""") shouldBe false
         "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
         val url = java.net.URLDecoder.decode(response.headers("hx-replace-url").head, "UTF-8")
         url should include("layout=map")
         url should include(s"locationId=${location.persistedId}")
-        url should include("bbox=0,0,10,10")
+        url should include("bbox=50,50,60,60")
         for (params <- List(Map("bbox" -> "bad"), Map("bbox" -> "-91,0,0,0"), Map("layout" -> "other"))) {
-          val invalid = htmlSearch(host, repoId, params)
-          invalid.statusCode shouldBe 400
-          invalid.headers("content-type").head should include("text/plain")
+          withClue(s"$params: ") {
+            val invalid = htmlSearch(host, repoId, params)
+            invalid.statusCode shouldBe 400
+            invalid.headers("content-type").head should include("text/plain")
+          }
         }
     }
   }

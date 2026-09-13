@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–5 implemented 2026-09-13 (Unit 5 uncommitted); Units 6–9 not started.** This expands §7 of
+Status: **Units 1–5 implemented and committed 2026-09-13, plus the Unit 5 review follow-ups ([done/locations-unit-5-followups.md](done/locations-unit-5-followups.md)); Units 6–9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -348,7 +348,7 @@ Tests
 ## Unit 5 — Routes
 
 **Done 2026-09-13**, with these integration details:
-- `SearchRequestParser.Scope.query` shares the scope while leaving sort, grouping and pagination with the controller. Map cells/bounds accept the toolbar's `sort` parameter without applying it to aggregates. Map layout omits ignored grouping from the replacement URL. Cells treat `bbox` as a viewport, not an asset filter, so Location pin counts do not change when members’ own GPS points leave the viewport.
+- `SearchRequestParser.Scope.query` shares the scope while leaving sort, grouping and pagination with the controller. Map layout omits ignored grouping from the replacement URL. *Revised by the follow-ups:* the map endpoints accept the client's search parameters verbatim (`cask.QueryParams`) and ignore grid-only ones and the `bbox` filter, which is the panel's scope; the map's clipping box is the separate `viewport` parameter, so Location pin counts do not change when members' own GPS points leave the viewport, and the map layout's count and bounds cover the whole search.
 - The six dialog templates, shared parent select, Locations tab host and map view host are included here so every route renders. Their client renderers, opening controls, map interactions and styling remain Units 6–8. Coordinate fields use text inputs with decimal input hints to preserve malformed values for correction; Unit 8 should preserve that behavior when adding the map editor.
 - Dialog values accept numeric JSON as well as form strings. Empty/null parent and radius values mean absent. Invalid hidden IDs return 400, foreign Locations return 404, and invalid parent choices replace the form with a field error. JSON membership endpoints return 400 for malformed payloads or parent targets and 404 for foreign Locations.
 - The geocoder gate is tested through HTTP (404 while disabled); the enabled external lookup remains covered by `GeocoderServiceTests` against its local stub. Upstream failures are mapped to JSON 502.
@@ -363,7 +363,7 @@ Files
   camelCase, hand-built: `id, name, kind, parentId, parentName, latitude, longitude, radiusM,
   numOfAssets`, in path order), `PUT /r/:repoId/assets` `{locationId, assetIds}` → `{added}`,
   `DELETE /r/:repoId/assets` → `{removed}`.
-- `routes/api/MapController.scala` (`api/map`): `GET /r/:repoId/cells?<search params>&bbox=&zoom=`
+- `routes/api/MapController.scala` (`api/map`): `GET /r/:repoId/cells?<search params>&viewport=&zoom=`
   → `{cells: [...], locations: [...], countsPlottedPoints: true}`; `GET /r/:repoId/bounds?<search
   params>` → `{south, west, north, east, count}` or `{count: 0}`; `GET /r/:repoId/geocode?q=` →
   `[{label, latitude, longitude}]`, 404 when disabled. Bad `bbox`/`zoom` are JSON 400s.
@@ -471,8 +471,8 @@ Frontend, no server tests; verified in the browser.
   marker icons), restores the last center/zoom from `map-state.js` when the search scope
   fingerprint is unchanged else `fitBounds` the server bounds (world view when there are none),
   `invalidateSize()` after the fragment settles and on `#content` resize (the Split.js drag),
-  requests `/api/map/r/:repoId/cells` with the store's search parameters (minus `layout`,
-  `groupBy`, `bbox`, paging) plus the viewport bbox and zoom on `moveend` (debounced 150 ms,
+  requests `/api/map/r/:repoId/cells` with the store's search parameters verbatim (the server
+  ignores grid-only ones and the `bbox` filter) plus `viewport` and `zoom` on `moveend` (debounced 150 ms,
   superseded responses dropped by sequence), loads the cells into a supercluster index (radius
   60, `map`/`reduce` summing counts and keeping the newest representative) and renders the
   clusters for the viewport as `L.divIcon` markers: a single-asset cell is a thumbnail pin
@@ -486,7 +486,7 @@ Frontend, no server tests; verified in the browser.
   `#mapPanelContent` with `runSearch({params: {bbox}, transient: {layout: "grid", groupBy: null,
   groupDirection: null}, target: "#mapPanelContent"})` — the bbox is a real store parameter, so the
   panel's infinite scroll and cursor continuation work unchanged and the URL is bookmarkable; the
-  map's own cell requests deliberately omit `bbox`, so the map keeps showing the whole scope.
+  map endpoints and the map layout's count/bounds ignore `bbox`, so the map keeps showing the whole scope.
   "Show only these in the grid" → `runSearch({params: {layout: "grid"}})`; a toolbar chip
   (`#bboxScope`, "Map area ×") clears `bbox` in both layouts. Closing the panel clears `bbox`.
 - `static/js/map/map-state.js`: center/zoom in memory keyed by the scope fingerprint the fragment

@@ -4,6 +4,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.App
+import altitude.core.Const
 
 @DoNotDiscover class LocationActionControllerTests extends ControllerTestCore {
   private val jsonHeaders = Map("Content-Type" -> "application/json")
@@ -37,21 +38,31 @@ import altitude.core.App
         val add = get("dialogs/add-location")
         add should include("""id="addLocation"""")
         add should include("""data-app-fragment="modal"""")
+        add should include(s"""data-app-modal-title="${Const.UI.ADD_LOCATION_DIALOG_TITLE}"""")
         add should include("data-map-tile-url=")
         add should include("""data-geocoder-enabled="false"""")
         add should include(s"""value="${parent.persistedId}"""")
         (add should not).include(s"""value="${location.persistedId}"""")
         get("dialogs/add-parent") should include("""id="addParent"""")
-        get("dialogs/rename-location", Map("id" -> location.persistedId)) should include("Beach")
-        get("dialogs/rename-location", Map("id" -> parent.persistedId)) should include("Rename parent")
-        get("dialogs/delete-location", Map("id" -> parent.persistedId)) should include("top level")
-        get("dialogs/delete-location", Map("id" -> location.persistedId)) should include("Beach")
+        val rename = get("dialogs/rename-location", Map("id" -> location.persistedId))
+        rename should include("Beach")
+        rename should include(Const.UI.RENAME_LOCATION_DIALOG_TITLE)
+        get("dialogs/rename-location", Map("id" -> parent.persistedId)) should include(Const.UI.RENAME_PARENT_DIALOG_TITLE)
+        val deleteParent = get("dialogs/delete-location", Map("id" -> parent.persistedId))
+        deleteParent should include("top level")
+        deleteParent should include(Const.UI.DELETE_PARENT_DIALOG_TITLE)
+        val deleteLocation = get("dialogs/delete-location", Map("id" -> location.persistedId))
+        deleteLocation should include("Beach")
+        deleteLocation should include(Const.UI.DELETE_LOCATION_DIALOG_TITLE)
         val move = get("dialogs/move-location", Map("id" -> location.persistedId))
         move should include("""id="moveLocation"""")
+        move should include(Const.UI.MOVE_LOCATION_DIALOG_TITLE)
+        move should include("Beach")
         move should include(s"""value="${parent.persistedId}" selected""")
         (move should not).include(s"""value="${root.persistedId}"""")
         val membership = get("dialogs/add-to-location")
         membership should include("""id="addToLocation"""")
+        membership should include(s"""data-app-modal-title="${Const.UI.ADD_TO_LOCATION_DIALOG_TITLE}"""")
         membership should include("Italy - Beach")
         membership should include("Park")
         (membership should not).include(s"""value="${parent.persistedId}"""")
@@ -101,12 +112,14 @@ import altitude.core.App
             "parentId" -> saved.persistedId
           )
         ) {
-          val json = body()
-          json("name") = "Other"
-          json(field) = invalid
-          val response = post(json)
-          validation(response, "addLocation")
-          if field != "name" then response.text() should include("Other")
+          withClue(s"$field=$invalid: ") {
+            val json = body()
+            json("name") = "Other"
+            json(field) = invalid
+            val response = post(json)
+            validation(response, "addLocation")
+            if field != "name" then response.text() should include("Other")
+          }
         }
         val missing = body()
         missing.obj.remove("latitude")
@@ -187,34 +200,40 @@ import altitude.core.App
         val foreign = testApp.service.location.addLocation("Elsewhere", 3, 4)
         testApp.service.repository.switchContextToRepository(repo)
         for (action <- List("rename", "move"); id <- List("", "bad-id")) {
-          val response = requests.put(
-            s"$host/htmx/location/r/$repoId/$action",
-            headers = jsonHeaders,
-            data = ujson.Obj("id" -> id, "name" -> "Changed").toString,
-            cookies = testContext.cookies,
-            check = false
-          )
-          response.statusCode shouldBe 400
-        }
-        for (dialog <- List("rename-location", "delete-location", "move-location")) {
-          requests
-            .get(
-              s"$host/htmx/location/r/$repoId/dialogs/$dialog",
-              params = Map("id" -> foreign.persistedId),
-              cookies = testContext.cookies,
-              check = false)
-            .statusCode shouldBe 404
-        }
-        for (action <- List("rename", "move")) {
-          requests
-            .put(
+          withClue(s"$action with id '$id': ") {
+            val response = requests.put(
               s"$host/htmx/location/r/$repoId/$action",
               headers = jsonHeaders,
-              data = ujson.Obj("id" -> foreign.persistedId, "name" -> "Changed").toString,
+              data = ujson.Obj("id" -> id, "name" -> "Changed").toString,
               cookies = testContext.cookies,
               check = false
             )
-            .statusCode shouldBe 404
+            response.statusCode shouldBe 400
+          }
+        }
+        for (dialog <- List("rename-location", "delete-location", "move-location")) {
+          withClue(s"$dialog: ") {
+            requests
+              .get(
+                s"$host/htmx/location/r/$repoId/dialogs/$dialog",
+                params = Map("id" -> foreign.persistedId),
+                cookies = testContext.cookies,
+                check = false)
+              .statusCode shouldBe 404
+          }
+        }
+        for (action <- List("rename", "move")) {
+          withClue(s"$action: ") {
+            requests
+              .put(
+                s"$host/htmx/location/r/$repoId/$action",
+                headers = jsonHeaders,
+                data = ujson.Obj("id" -> foreign.persistedId, "name" -> "Changed").toString,
+                cookies = testContext.cookies,
+                check = false
+              )
+              .statusCode shouldBe 404
+          }
         }
         requests
           .delete(
@@ -244,15 +263,23 @@ import altitude.core.App
           "dialogs/add-to-location"
         ).foreach {
           path =>
-            requests
-              .get(s"$host/htmx/location/r/$repoId/$path", params = Map("id" -> repoId), headers = headers, check = false)
-              .statusCode shouldBe 401
+            withClue(s"GET $path: ") {
+              requests
+                .get(s"$host/htmx/location/r/$repoId/$path", params = Map("id" -> repoId), headers = headers, check = false)
+                .statusCode shouldBe 401
+            }
         }
         List("add", "add-parent").foreach {
-          path => requests.post(s"$host/htmx/location/r/$repoId/$path", headers = headers, check = false).statusCode shouldBe 401
+          path =>
+            withClue(s"POST $path: ") {
+              requests.post(s"$host/htmx/location/r/$repoId/$path", headers = headers, check = false).statusCode shouldBe 401
+            }
         }
         List("rename", "move", "assets").foreach {
-          path => requests.put(s"$host/htmx/location/r/$repoId/$path", headers = headers, check = false).statusCode shouldBe 401
+          path =>
+            withClue(s"PUT $path: ") {
+              requests.put(s"$host/htmx/location/r/$repoId/$path", headers = headers, check = false).statusCode shouldBe 401
+            }
         }
         requests
           .delete(s"$host/htmx/location/r/$repoId/", params = Map("id" -> repoId), headers = headers, check = false)

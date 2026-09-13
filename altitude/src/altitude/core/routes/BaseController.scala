@@ -19,6 +19,12 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
 
     Some(if request.text().isEmpty then ujson.Obj() else ujson.read(request.text()).asInstanceOf[ujson.Obj])
 
+  /** A JSON API response; `jsonError` is the `{"error": ...}` shape every JSON route uses for a client or upstream failure */
+  def jsonResponse(value: ujson.Value, status: Int = 200): Response[String] =
+    cask.Response(value.toString, status, Seq(("Content-Type", "application/json")))
+
+  def jsonError(message: String, status: Int): Response[String] = jsonResponse(ujson.Obj("error" -> message), status)
+
   /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the
    * submitting form itself, instead of going to the form's normal target. The client treats a retargeted response as a validation

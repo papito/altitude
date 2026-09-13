@@ -30,7 +30,8 @@ import altitude.core.App
         val scope = Map("locationId" -> location.persistedId, "sort" -> "filename0")
         val bounds = get("bounds", scope)
         bounds shouldBe ujson.Obj("south" -> 10, "west" -> 20, "north" -> 11, "east" -> 21, "count" -> 2)
-        val cells = get("cells", scope ++ Map("bbox" -> "-90,-180,90,180", "zoom" -> "10"))
+        val world = Map("viewport" -> "-90,-180,90,180", "zoom" -> "10")
+        val cells = get("cells", scope ++ world)
         cells("countsPlottedPoints").bool shouldBe true
         cells("cells").arr.map(_("assetId").str).toSet shouldBe Set(ownPoint.persistedId, fallback.persistedId)
         cells("cells").arr.map(_("count").num).sum shouldBe 2
@@ -41,14 +42,27 @@ import altitude.core.App
           "latitude" -> 10,
           "longitude" -> 20,
           "count" -> 2)
-        get("cells", scope ++ Map("bbox" -> "10.5,20.5,12,22", "zoom" -> "10"))("cells").arr
+        get("cells", scope ++ Map("viewport" -> "10.5,20.5,12,22", "zoom" -> "10"))("cells").arr
           .map(_("assetId").str)
           .toList shouldBe List(ownPoint.persistedId)
         // Panning clips plotted cells and Location pins, but a visible Location still counts every matching member.
-        val pinViewport = get("cells", scope ++ Map("bbox" -> "9,19,10.5,20.5", "zoom" -> "10"))
+        val pinViewport = get("cells", scope ++ Map("viewport" -> "9,19,10.5,20.5", "zoom" -> "10"))
         pinViewport("cells").arr.map(_("assetId").str).toList shouldBe List(fallback.persistedId)
         pinViewport("locations").arr.head("count").num shouldBe 2
-        get("bounds", scope + ("bbox" -> "-1,-1,1,1")) shouldBe ujson.Obj("count" -> 0)
+        // The client sends its search parameters verbatim: grid-only ones are ignored, and so is the panel's bbox filter
+        val gridOnly = Map(
+          "bbox" -> "-1,-1,1,1",
+          "sort" -> "filename1",
+          "layout" -> "map",
+          "groupBy" -> "location",
+          "groupDirection" -> "up",
+          "rpp" -> "0",
+          "p" -> "9",
+          "after" -> "x",
+          "isContinuousScroll" -> "true"
+        )
+        get("cells", scope ++ world ++ gridOnly) shouldBe cells
+        get("bounds", scope ++ gridOnly) shouldBe bounds
         get("bounds", scope + ("q" -> "no-such-photo")) shouldBe ujson.Obj("count" -> 0)
         testApp.service.library.recycleAssets(Set(outside.persistedId))
         get("bounds")("count").num shouldBe 2
@@ -67,30 +81,36 @@ import altitude.core.App
     login()
     withServer(App) {
       host =>
-        val valid = Map("bbox" -> "-90,-180,90,180", "zoom" -> "5")
+        val valid = Map("viewport" -> "-90,-180,90,180", "zoom" -> "5")
         val invalid = List(
-          valid - "bbox",
+          valid - "viewport",
           valid - "zoom",
-          valid + ("bbox" -> "x"),
-          valid + ("bbox" -> "20,0,10,1"),
-          valid + ("bbox" -> "NaN,0,10,1"),
+          valid + ("viewport" -> "x"),
+          valid + ("viewport" -> "20,0,10,1"),
+          valid + ("viewport" -> "NaN,0,10,1"),
           valid + ("zoom" -> "five"),
-          valid + ("zoom" -> "1.5"))
+          valid + ("zoom" -> "1.5")
+        )
         invalid.foreach {
           params =>
-            val response =
-              requests.get(s"$host/api/map/r/$repoId/cells", params = params, cookies = testContext.cookies, check = false)
-            response.statusCode shouldBe 400
-            response.headers("content-type").head should include("application/json")
-            ujson.read(response.text())("error").str should not be empty
+            withClue(s"$params: ") {
+              val response =
+                requests.get(s"$host/api/map/r/$repoId/cells", params = params, cookies = testContext.cookies, check = false)
+              response.statusCode shouldBe 400
+              response.headers("content-type").head should include("application/json")
+              val error = ujson.read(response.text())("error").str
+              if params.contains("zoom") && params.get("zoom") == valid.get("zoom") then error should include("viewport")
+              else error should include("zoom")
+            }
         }
-        val badBounds = requests.get(
+        // The bbox search filter is not the map's: a malformed one is ignored rather than refused
+        val ignoredBounds = requests.get(
           s"$host/api/map/r/$repoId/bounds",
           params = Map("bbox" -> "bad"),
           cookies = testContext.cookies,
           check = false)
-        badBounds.statusCode shouldBe 400
-        ujson.read(badBounds.text())("error").str should include("bbox")
+        ignoredBounds.statusCode shouldBe 200
+        ujson.read(ignoredBounds.text()) shouldBe ujson.Obj("count" -> 0)
         val disabled = requests.get(
           s"$host/api/map/r/$repoId/geocode",
           params = Map("q" -> "Paris"),
@@ -107,7 +127,10 @@ import altitude.core.App
     withServer(App) {
       host =>
         List("cells", "bounds", "geocode").foreach {
-          endpoint => requests.get(s"$host/api/map/r/$repoId/$endpoint", check = false).statusCode shouldBe 401
+          endpoint =>
+            withClue(s"$endpoint: ") {
+              requests.get(s"$host/api/map/r/$repoId/$endpoint", check = false).statusCode shouldBe 401
+            }
         }
     }
   }

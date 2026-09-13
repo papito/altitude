@@ -40,7 +40,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * With `groupBy`, a header opens each date or Location, and the page is continued by the `after` cursor the last cell carries
    * (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
    *
-   * `layout=map` renders bounds and a total without fetching asset rows; grouping and paging have no effect.
+   * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
+   * them (`bbox` scopes the panel and the grid, and stays in the URL).
    *
    * Results are HTML only: the detail modal walks the rendered grid, so nothing asks for them as JSON, and a JSON request is
    * refused.
@@ -104,7 +105,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     )
 
     if layout == Const.Search.Layout.MAP then
-      val query = scope.query()
+      // In map layout `bbox` is the crowded-pin panel's scope (the URL keeps it): the map itself plots the whole search
+      val query = scope.copy(bbox = None).query()
       logger.info(s"MAP QUERY: $query")
       val library = App.altitude.service.library
       return html(
