@@ -254,6 +254,10 @@ form input.error, form input.error:focus {
     text-align: left;
 }
 
+.context-menu .actions {
+    display: grid;
+}
+
 /* Divider between rows only, never above the first or below the last */
 .context-menu .actions button + button {
     border-top: 1px solid gray;
