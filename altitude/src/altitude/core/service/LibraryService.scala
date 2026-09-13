@@ -263,8 +263,11 @@ class LibraryService(val app: Altitude):
 
         app.service.person.recycleFacesForAssets(assetIds)
 
-        // Albums only point at assets; a recycled asset leaves every album and a restore does not bring it back
-        app.service.album.removeAssetsFromAllAlbums(assetsToRecycle.map(_.persistedId).toSet)
+        // Albums and Locations only point at assets; a recycled asset leaves every one of them and a restore does not bring
+        // it back
+        val recycledIds = assetsToRecycle.map(_.persistedId).toSet
+        app.service.album.removeAssetsFromAllAlbums(recycledIds)
+        app.service.location.removeAssetsFromAllLocations(recycledIds)
     }
 
   def purgeRecycleBin(): Unit =

@@ -21,6 +21,9 @@ object Api:
     val MAX_ALBUM_NAME_LENGTH = 250
     val MIN_ALBUM_NAME_LENGTH = 1
 
+    val MAX_LOCATION_NAME_LENGTH = 250
+    val MIN_LOCATION_NAME_LENGTH = 1
+
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
@@ -55,6 +58,14 @@ object Api:
     object Album:
       val ALBUM_ID = "albumId"
       val NAME = "name"
+
+    object Location:
+      val LOCATION_ID = "locationId"
+      val NAME = "name"
+      val PARENT_ID = "parentId"
+      val LATITUDE = "latitude"
+      val LONGITUDE = "longitude"
+      val RADIUS_M = "radiusM"
 
     object Asset:
       val ASSET = "asset"

@@ -20,6 +20,7 @@ import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
 import altitude.core.service.ImportPipelineService
 import altitude.core.service.LibraryService
+import altitude.core.service.LocationService
 import altitude.core.service.MetadataExtractionService
 import altitude.core.service.MigrationService
 import altitude.core.service.PasetoService
@@ -190,6 +191,12 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
+    val location: dao.LocationDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.LocationDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.LocationDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
     val metadataField: dao.UserMetadataFieldDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.MetadataFieldDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.MetadataFieldDao(app.config) with dao.sqlite.SqliteOverrides
@@ -246,6 +253,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val asset: AssetService = AssetService(app)
     val folder: FolderService = FolderService(app)
     val album: AlbumService = AlbumService(app)
+    val location: LocationService = LocationService(app)
     val stats: StatsService = StatsService(app)
     val person: PersonService = PersonService(app)
     val faceDetection: FaceDetectionService = FaceDetectionService(app)

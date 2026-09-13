@@ -35,8 +35,10 @@ object Columns:
     required(of(table, row, dialect), table, name)
 
   /**
-   * A bind value of whatever type the caller's untyped map happened to hold. The accepted types are exactly the ones the
-   * hand-built SQL accepted; anything else was, and still is, an error rather than a silently mistyped bind.
+   * A bind value of whatever type the caller's untyped map happened to hold. The accepted types are the ones the hand-built SQL
+   * accepted, plus an `Option` for a nullable column in an update's `SET` (`None` renders `NULL`; it is not a bind, and it is
+   * meaningless in a predicate, where `= NULL` never matches); anything else was, and still is, an error rather than a silently
+   * mistyped bind.
    */
   def literal(value: Any, dialect: Dialect): SqlStr =
     import dialect.*
@@ -50,6 +52,8 @@ object Columns:
       case v: Byte => sql"$v"
       case v: Double => sql"$v"
       case v: Float => sql"$v"
+      case Some(v) => literal(v, dialect)
+      case None => sql"NULL"
       case _ => throw IllegalArgumentException(s"This type of parameter is not supported: $value")
 
   /** `column = ?`, bound. Written out rather than built with `===`, which would render `IS NOT DISTINCT FROM` for a nullable. */

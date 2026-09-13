@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Unit 1 implemented 2026-09-13 (uncommitted); Units 2–9 not started.** This expands §7 of
+Status: **Units 1 and 2 implemented 2026-09-13 (Unit 2 uncommitted); Units 3–9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -176,6 +176,15 @@ Tests
 - `unit/RowColumnTests`: add the three row classes.
 
 ## Unit 2 — Location model, DAO, service
+
+**Done 2026-09-13**, with three findings:
+- The path order as written (`COALESCE(p.name_lc, l.name_lc), l.name_lc`) puts a Location named "Alba" before its parent
+  "Italy". `getAll` orders by the path key, then top-level rows before children, then name, so a parent always directly precedes
+  its Locations. The test "listed by path" pins it.
+- `Columns.literal` had no way to bind a `NULL`, which a move to the top level and `moveChildrenToRoot` need through the typed
+  `updateById` / `updateByQuery` path. It now accepts an `Option` in a `SET` (`None` renders `NULL`); no hand-written `UPDATE`.
+- `LocationService.getById` is overridden to be repository-scoped, and every mutation goes through it, which is what makes the
+  "foreign IDs change nothing" test pass without a check in each method. `getByIds` was not needed and is not on the trait.
 
 Files
 - `models/LocationKind.scala` (new): `enum LocationKind(val dbValue: String)` with `fromDbValue`

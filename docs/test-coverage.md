@@ -171,6 +171,21 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 - [ ] Verify album operations preserve the complete asset state, binary files, statistics, and people counts, including deleting the last album membership. Current assertions cover only selected asset fields. [MEDIUM]
 - [ ] Verify empty ID sets return zero without writes, removing an absent membership is a no-op, and triaged assets can be album members. [EDGE]
 
+## Locations, parents and membership
+
+Sources: [LocationService](../altitude/src/altitude/core/service/LocationService.scala), [Location](../altitude/src/altitude/core/models/Location.scala). Evidence: [LocationServiceTests](../altitude/test/src/altitude/core/integration/LocationServiceTests.scala).
+
+- ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across parents and Locations on add and rename, and permit casing-only renames.
+- ✅ Reject a pin out of range (including NaN) and a non-positive radius; store the edges of the range and a radius; the model refuses a pinless Location, a pinned parent and a nested parent.
+- ✅ Add a Location under a parent only: a Location as the parent is an `IllegalOperationException`, an unknown parent is `NotFoundException`; `getAll` fills `parentName`.
+- ✅ Move a Location between parents and back to the top level; refuse moving a parent, moving under a Location or under itself; unknown IDs on either side are `NotFoundException`.
+- ✅ Delete a parent: its Locations move to the top level and keep their memberships. Delete a Location: memberships go, assets stay, other Locations keep theirs; a repeated delete is `NotFoundException`.
+- ✅ Add membership idempotently with insertion counts, an empty set is a no-op, unknown and recycled assets are dropped, a parent refuses assets, an unknown Location is `NotFoundException`.
+- ✅ Remove memberships (an absent membership is a no-op); recycling removes all memberships and restoring does not reinstate them; folder deletion and asset-row deletion also remove affected memberships.
+- ✅ `getAll` path order (parent before its Locations regardless of name), counts, and parent names.
+- ✅ Repository isolation: same names in another repository, no listing or count leakage, and every read and mutation by a foreign Location or parent ID is `NotFoundException` and changes nothing; a foreign asset in a local batch is dropped.
+- [ ] Verify a failure after `moveChildrenToRoot` inside a parent delete rolls the re-parenting back. [MEDIUM]
+
 ## Moving and recycling library assets
 
 Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [AssetControllerTests](../altitude/test/src/altitude/core/controller/AssetControllerTests.scala).
