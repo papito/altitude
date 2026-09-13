@@ -173,7 +173,7 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 
 ## Locations, parents and membership
 
-Sources: [LocationService](../altitude/src/altitude/core/service/LocationService.scala), [Location](../altitude/src/altitude/core/models/Location.scala). Evidence: [LocationServiceTests](../altitude/test/src/altitude/core/integration/LocationServiceTests.scala).
+Sources: [LocationService](../altitude/src/altitude/core/service/LocationService.scala), [Location](../altitude/src/altitude/core/models/Location.scala). Evidence: [LocationServiceTests](../altitude/test/src/altitude/core/integration/LocationServiceTests.scala), [LocationControllerTests](../altitude/test/src/altitude/core/controller/LocationControllerTests.scala), [LocationActionControllerTests](../altitude/test/src/altitude/core/controller/LocationActionControllerTests.scala).
 
 - ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across parents and Locations on add and rename, and permit casing-only renames.
 - ✅ Reject a pin out of range (including NaN) and a non-positive radius; store the edges of the range and a radius; the model refuses a pinless Location, a pinned parent and a nested parent.
@@ -184,6 +184,7 @@ Sources: [LocationService](../altitude/src/altitude/core/service/LocationService
 - ✅ Remove memberships (an absent membership is a no-op); recycling removes all memberships and restoring does not reinstate them; folder deletion and asset-row deletion also remove affected memberships.
 - ✅ `getAll` path order (parent before its Locations regardless of name), counts, and parent names.
 - ✅ Repository isolation: same names in another repository, no listing or count leakage, and every read and mutation by a foreign Location or parent ID is `NotFoundException` and changes nothing; a foreign asset in a local batch is dropped.
+- ✅ HTTP: camelCase list shape/path order/counts, persisted add/remove membership counts, all dialogs and mutation routes, duplicate/decimal/radius/parent validation with form replacement, authentication, invalid hidden IDs and foreign Location IDs.
 - [ ] Verify a failure after `moveChildrenToRoot` inside a parent delete rolls the re-parenting back. [MEDIUM]
 
 ## Moving and recycling library assets
@@ -337,7 +338,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 
 ## Map cells, bounds and the geocoder
 
-Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQueries.scala), [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [GeocoderService](../altitude/src/altitude/core/service/GeocoderService.scala). Evidence: [SearchMapTests](../altitude/test/src/altitude/core/integration/SearchMapTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [GeocoderServiceTests](../altitude/test/src/altitude/core/unit/GeocoderServiceTests.scala).
+Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQueries.scala), [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [GeocoderService](../altitude/src/altitude/core/service/GeocoderService.scala). Evidence: [SearchMapTests](../altitude/test/src/altitude/core/integration/SearchMapTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [GeocoderServiceTests](../altitude/test/src/altitude/core/unit/GeocoderServiceTests.scala), [MapControllerTests](../altitude/test/src/altitude/core/controller/MapControllerTests.scala), [SearchResultsControllerTests](../altitude/test/src/altitude/core/controller/SearchResultsControllerTests.scala).
 
 - ✅ Cells aggregate the plotted points on both engines: an asset at its own point, an asset without one at the pin of each Location it is in (counted once per Location), assets at one coordinate merged into one cell with the mean centroid, a Location listed with its matching count and its parent's name, and absent without matching assets.
 - ✅ The representative asset of a cell is the newest capture, then the lowest ID, and follows the matching set when the newest is recycled.
@@ -347,6 +348,8 @@ Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQuer
 - ✅ The map reads the same matching set as the grid: recycled assets only in the trash view, a folder scope narrows cells, Location counts and bounds, the root folder is the whole repository, another repository's geotagged asset is invisible.
 - ✅ The cells and bounds statements render on both dialects with every placeholder bound and both point sources carrying the search's filters; the Locations query is repository- and kind-scoped, antimeridian-aware, and counts over the matching relation.
 - ✅ Geocoder: disabled by config refuses with `IllegalOperationException` and sends nothing; enabled, against a local stub, it sends `format=json`, `limit=5`, the URL-encoded query and an identifying `User-Agent`, maps the places, skips one without coordinates, asks nothing for blank text, and turns a non-200 answer or a non-list body into `GeocoderException`.
+- ✅ HTTP: cells/bounds JSON shapes, plotted-point counts, Location/text/bbox/trash scope, Location membership counts preserved across pans, ignored toolbar sort, empty bounds, invalid bbox/zoom JSON 400s, disabled-geocoder JSON 404, and authentication. HTML search covers Location grouping/cursor continuation, Location/bbox filters, a map shell without `#assets`, disabled Group, totals and replacement URL scope.
+- [ ] Enabled geocoder success and upstream failure are covered at the service level against a local stub; HTTP serialization and the 502 mapping still need an enabled-config controller fixture. [MINOR]
 - [ ] Verify with `EXPLAIN` on both engines that a cells query over a large repository uses the partial `asset_geo` index. [MEDIUM]
 - [ ] Bounds for a result whose points straddle the antimeridian could be the narrower box across it rather than the whole longitude range. [EDGE]
 

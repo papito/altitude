@@ -8,8 +8,8 @@
 
 @* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
    controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
-   `grouping`) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. *@
-@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None)
+   `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. *@
+@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID)
 
 <style>
   #searchControl {
@@ -258,7 +258,10 @@
      data-results-repo-id="@{RequestContext.getRepository.persistedId}"
      data-results-view="@{view}"
      data-results-folder-id="@{folderId.getOrElse("")}"
-     data-results-album-id="@{albumId.getOrElse("")}">
+     data-results-album-id="@{albumId.getOrElse("")}"
+     data-results-location-id="@{locationId.getOrElse("")}"
+     data-results-bbox="@{bbox.getOrElse("")}"
+     data-results-layout="@{layout}">
 
 @if(person != null) {
 @htmx.html.person(person)
@@ -284,6 +287,7 @@
        and combines with every other search parameter in the `searchParams` store. Grouping is a reorder, like the sort: it
        survives a change of folder, person, album or view. *@
     <select id="groupOptions"
+            @if(layout == Const.Search.Layout.MAP) {disabled}
             class="sort-dropdown"
             data-app-search="change"
             data-app-search-from-selected-option>
@@ -347,7 +351,11 @@
   </div>
 </div>
 
-<div id="assets">
+@if(layout == Const.Search.Layout.MAP) {
   @grid
-</div>
+} else {
+  <div id="assets">
+    @grid
+  </div>
+}
 </div>

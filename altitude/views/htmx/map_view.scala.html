@@ -1,0 +1,11 @@
+@import altitude.core.models.MapBounds
+
+@(bounds: Option[MapBounds], tileUrl: String, attribution: String)
+
+@* A map search fetches only a count and bounds; the viewport hydrator in Unit 7 supplies the map and its cells. *@
+<div id="map"
+     data-app-fragment="map-view"
+     data-map-bounds="@{bounds.map(b => s"${b.south},${b.west},${b.north},${b.east}").getOrElse("")}"
+     data-map-count="@{bounds.map(_.count).getOrElse(0)}"
+     data-map-tile-url="@{tileUrl}"
+     data-map-attribution="@{attribution}"></div>

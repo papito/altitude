@@ -59,6 +59,10 @@ object Const:
       FieldConst.Asset.SIZE_BYTES,
       FieldConst.Asset.AREA_SIZE)
 
+    object Layout:
+      val GRID = "grid"
+      val MAP = "map"
+
     object View:
       // Matches `Const.views.repository` in static/js/constants.js - the client sends this verbatim
       val DEFAULT = "repository"

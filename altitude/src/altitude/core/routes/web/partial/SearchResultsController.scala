@@ -10,10 +10,10 @@ import scala.util.Try
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
-import altitude.core.FieldConst
 import altitude.core.SearchCursorException
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
+import altitude.core.routes.SearchRequestParser
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchResult
@@ -37,8 +37,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
    *
-   * With `groupBy`, the grid is grouped by date: a header opens each day, and the page is continued by the `after` cursor the
-   * last cell carries (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
+   * With `groupBy`, a header opens each date or Location, and the page is continued by the `after` cursor the last cell carries
+   * (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
+   *
+   * `layout=map` renders bounds and a total without fetching asset rows; grouping and paging have no effect.
    *
    * Results are HTML only: the detail modal walks the rendered grid, so nothing asks for them as JSON, and a JSON request is
    * refused.
@@ -55,6 +57,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       folderId: Option[String] = None,
       personId: Option[String] = None,
       albumId: Option[String] = None,
+      locationId: Option[String] = None,
+      bbox: Option[String] = None,
+      layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
       groupDirection: Option[String] = None,
@@ -73,28 +78,58 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400,
         Seq(("Content-Type", "application/json")))
 
-    // Where are we? Triage? Recycle? etc.
-    val queryParams: Map[String, Any] = view match
-      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
-      case Const.Search.View.TRASHBIN =>
-        Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false) // recycled but NOT purged
-      case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
+    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox) match
+      case Left(message) => return badRequest(message)
+      case Right(scope) => scope
+
+    if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return badRequest("Unknown layout")
+
+    val searchSort = parseSort(sort) match
+      case None => return badRequest("Unknown sort")
+      case Some(searchSort) => searchSort
+
+    val browserUrl = browserViewUrl(
+      view,
+      sort,
+      q,
+      folderId,
+      personId,
+      albumId,
+      locationId,
+      bbox,
+      layout,
+      if layout == Const.Search.Layout.MAP then None else groupBy,
+      if layout == Const.Search.Layout.MAP then None else groupDirection,
+      request
+    )
+
+    if layout == Const.Search.Layout.MAP then
+      val query = scope.query()
+      logger.info(s"MAP QUERY: $query")
+      val library = App.altitude.service.library
+      return html(
+        includes.html.search_results(
+          total = library.count(query),
+          sort = searchSort,
+          grouping = None,
+          grid = htmx.html.map_view(
+            library.mapBounds(query),
+            App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
+            App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION)),
+          person = personOf(personId),
+          view = view,
+          folderId = folderId,
+          albumId = albumId,
+          locationId = locationId,
+          bbox = bbox,
+          layout = layout
+        ),
+        "HX-Replace-Url" -> browserUrl
+      )
 
     if groupBy.isDefined || groupDirection.isDefined || after.isDefined then
       val searchQuery =
-        parseGroupedQuery(
-          queryParams,
-          rpp,
-          p,
-          q,
-          sort,
-          folderId,
-          personId,
-          albumId,
-          groupBy,
-          groupDirection,
-          after,
-          isContinuousScroll) match
+        parseGroupedQuery(scope, rpp, p, searchSort, groupBy, groupDirection, after, isContinuousScroll) match
           case Left(message) => return badRequest(message)
           case Right(query) => query
 
@@ -119,29 +154,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           person = personOf(personId),
           view = view,
           folderId = folderId,
-          albumId = albumId
+          albumId = albumId,
+          locationId = locationId,
+          bbox = bbox
         ),
-        ("HX-Replace-Url", browserViewUrl(view, sort, q, folderId, personId, albumId, groupBy, groupDirection, request))
+        ("HX-Replace-Url", browserUrl)
       )
 
     val page = p.getOrElse(1)
 
-    // The sort argument is the field name with the direction appended as a single digit, e.g. "filename0"
-    val searchSort = SearchSort(
-      field = sort.slice(0, sort.length - 1),
-      direction = SortDirection(sort.takeRight(1).toInt)
-    )
-
-    val searchQuery = new SearchQuery(
-      params = queryParams,
-      text = q,
-      rpp = rpp,
-      folderIds = folderId.toSet,
-      personIds = personId.toSet,
-      albumIds = albumId.toSet,
-      page = page,
-      searchSort = List(searchSort)
-    )
+    val searchQuery = scope.query(rpp = rpp, page = page, searchSort = List(searchSort))
 
     logger.info(s"QUERY: ${searchQuery.toString}")
 
@@ -168,11 +190,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         person = personOf(personId),
         view = view,
         folderId = folderId,
-        albumId = albumId
+        albumId = albumId,
+        locationId = locationId,
+        bbox = bbox
       ),
-      (
-        "HX-Replace-Url",
-        browserViewUrl(view, sort, q, folderId, personId, albumId, groupBy = None, groupDirection = None, request))
+      ("HX-Replace-Url", browserUrl)
     )
 
   /**
@@ -183,14 +205,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
   private def parseGroupedQuery(
-      queryParams: Map[String, Any],
+      scope: SearchRequestParser.Scope,
       rpp: Int,
       p: Option[Int],
-      q: Option[String],
-      sort: String,
-      folderId: Option[String],
-      personId: Option[String],
-      albumId: Option[String],
+      searchSort: SearchSort,
       groupBy: Option[String],
       groupDirection: Option[String],
       after: Option[String],
@@ -208,10 +226,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
-    val searchSort = parseSort(sort) match
-      case None => return Left("Unknown sort")
-      case Some(searchSort) => searchSort
-
     if rpp < 1 || rpp > Const.Search.MAX_GROUPED_RPP then
       return Left(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_GROUPED_RPP}")
     if p.isDefined then
@@ -225,13 +239,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       return Left(s"${Api.Field.Search.AFTER} continues the results: send it with ${Api.Field.Search.IS_CONTINUOUS_SCROLL}")
 
     Right(
-      new SearchQuery(
-        params = queryParams,
-        text = q,
+      scope.query(
         rpp = rpp,
-        folderIds = folderId.toSet,
-        personIds = personId.toSet,
-        albumIds = albumId.toSet,
         searchSort = List(searchSort),
         grouping = Some(SearchGrouping(by, direction)),
         cursor = cursor
@@ -271,6 +280,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       folderId: Option[String],
       personId: Option[String],
       albumId: Option[String],
+      locationId: Option[String],
+      bbox: Option[String],
+      layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
       request: Request): String =
@@ -279,6 +291,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       folderId.map(Api.Field.Search.FOLDER_ID -> _),
       personId.map(Api.Field.Search.PERSON_ID -> _),
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
+      locationId.map(Api.Field.Search.LOCATION_ID -> _),
+      bbox.map(Api.Field.Search.BBOX -> _),
+      Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
       q.map(Api.Field.Search.QUERY_TEXT -> _),
       Some(Api.Field.Search.SORT -> sort),
       groupBy.map(Api.Field.Search.GROUP_BY -> _),

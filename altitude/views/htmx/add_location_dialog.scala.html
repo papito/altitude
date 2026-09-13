@@ -1,0 +1,37 @@
+@import altitude.core.RequestContext
+@import altitude.core.Api
+@import altitude.core.models.Location
+
+@(parents: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+
+@* The editor's map and geocoder are enhanced in Unit 8; typed coordinates already submit through the same validation flow. *@
+<form id="addLocation" class="location-editor" data-app-fragment="modal"
+      data-app-modal-title="Add Location"
+      data-app-dialog-autofocus-selector="#field-name"
+      data-app-success-event="LOCATION_ADDED_EVENT"
+      hx-target="this" hx-swap="none" hx-json-enc
+      hx-post="/htmx/location/r/@{RequestContext.getRepository.persistedId}/add">
+  <div data-app-fragment="location-editor"
+       data-map-tile-url="@{tileUrl}"
+       data-map-attribution="@{attribution}"
+       data-geocoder-enabled="@{geocoderEnabled}">
+    @for((field, label) <- List(Api.Field.Location.NAME -> "Name", Api.Field.Location.LATITUDE -> "Latitude", Api.Field.Location.LONGITUDE -> "Longitude", Api.Field.Location.RADIUS_M -> "Radius (metres, optional)")) {
+      <div>
+        <label for="field-@{field}">@{label}</label>
+        @if(fieldErrors.contains(field)) {<div class="error">@{fieldErrors(field)}</div>}
+        @* Text inputs keep even a malformed submitted coordinate visible for correction. *@
+        <input id="field-@{field}" name="@{field}" type="text"
+               @if(field != Api.Field.Location.NAME) {inputmode="decimal"} else {maxlength="@{Api.Constraints.MAX_LOCATION_NAME_LENGTH}"}
+               value="@{formJson.obj.get(field).flatMap(_.strOpt).getOrElse("")}">
+      </div>
+    }
+    @includes.html.location_parent_select(parents, formJson, fieldErrors)
+    <div id="locationEditorMap" tabindex="-1"></div>
+    @if(geocoderEnabled) {
+      <label for="locationGeocode">Search places</label>
+      <input id="locationGeocode" type="search" autocomplete="off">
+      <div id="locationGeocodeResults"></div>
+    }
+  </div>
+  <button type="submit" class="action-button">Add Location</button>
+</form>

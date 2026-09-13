@@ -398,6 +398,10 @@ search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDelet
 list, which restores focus by ID, or to the visible add button when the dialog's return control
 was hidden by the change (`focusAddAlbumControlIfFocusLost`).
 
+**Location route templates** — Unit 5 supplies the `/htmx/location` tab shell (`#locationActions`, `#noLocations`, `#locationList`) and the six dialog templates. Add Location and Add to Location are `modal` fragments; Add parent, Rename, Delete and Move to parent are inline dialogs. All use the existing dialog operation attributes and validation replacement headers. Add and Move share `includes/location_parent_select`, which offers parents only and `(none)` for the top level. Add to Location offers Locations only, labels children `Parent - Location`, and posts a comma-separated hidden `assetIds` field. Delete names the kind and explains that a parent's Locations move to the top level. Coordinate inputs currently use text with decimal input hints so malformed submitted values remain visible for correction. The Add Location template passes tile settings and the geocoder flag on its nested `location-editor` fragment. The sidebar renderer, opening controls, selection hydrator, styles and map/geocoder interaction belong to Units 6–8 and are not yet wired.
+
+The server also accepts `locationId`, `bbox` and `layout=grid|map` for results, mirrored as `data-results-*` attributes. In map layout `search_results` disables Group and renders `htmx/map_view` without the `#assets` wrapper. That shell carries `#map`, `data-map-bounds="s,w,n,e"` (empty when no points), `data-map-count`, `data-map-tile-url` and `data-map-attribution`. Unit 7 adds the map hydrator, panel, layout toggle and the new parameters to the client store; the existing store behavior below describes what is currently wired.
+
 **Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` and
 `views/htmx/{rename,delete}_album_dialog.scala.html` are `data-app-fragment="inline-dialog"`
 fragments: the heading (`.dialog-title`, the modal title's type treatment) sits inside the

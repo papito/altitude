@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–4 implemented 2026-09-13 (Unit 4 uncommitted); Units 5–9 not started.** This expands §7 of
+Status: **Units 1–5 implemented 2026-09-13 (Unit 5 uncommitted); Units 6–9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -346,6 +346,13 @@ Tests
   network in tests.
 
 ## Unit 5 — Routes
+
+**Done 2026-09-13**, with these integration details:
+- `SearchRequestParser.Scope.query` shares the scope while leaving sort, grouping and pagination with the controller. Map cells/bounds accept the toolbar's `sort` parameter without applying it to aggregates. Map layout omits ignored grouping from the replacement URL. Cells treat `bbox` as a viewport, not an asset filter, so Location pin counts do not change when members’ own GPS points leave the viewport.
+- The six dialog templates, shared parent select, Locations tab host and map view host are included here so every route renders. Their client renderers, opening controls, map interactions and styling remain Units 6–8. Coordinate fields use text inputs with decimal input hints to preserve malformed values for correction; Unit 8 should preserve that behavior when adding the map editor.
+- Dialog values accept numeric JSON as well as form strings. Empty/null parent and radius values mean absent. Invalid hidden IDs return 400, foreign Locations return 404, and invalid parent choices replace the form with a field error. JSON membership endpoints return 400 for malformed payloads or parent targets and 404 for foreign Locations.
+- The geocoder gate is tested through HTTP (404 while disabled); the enabled external lookup remains covered by `GeocoderServiceTests` against its local stub. Upstream failures are mapped to JSON 502.
+- Controller integration tests followed red → green, including follow-up cycles for map requests carrying `sort`, invalid/foreign action IDs, and Location counts across viewport changes. Verification: `make compile`, `make lint`, `make test-unit` (86), `make test-sqlite` (223), and `make test-controllers` (45) passed. No database schema or dev data changes; PostgreSQL and browser verification remain with the later frontend/full-feature units.
 
 Files
 - `routes/SearchRequestParser.scala` (new): the parameter → `SearchQuery` scope logic currently

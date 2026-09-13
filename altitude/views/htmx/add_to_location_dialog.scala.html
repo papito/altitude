@@ -1,0 +1,24 @@
+@import altitude.core.RequestContext
+@import altitude.core.Api
+@import altitude.core.models.Location
+
+@(locations: List[Location], fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+
+@* Unit 6's hydrator fills the hidden assetIds field from the current selection on the first render. *@
+<form id="addToLocation" data-app-fragment="modal"
+      data-app-modal-title="Add to Location"
+      data-app-dialog-kind="add-to-location"
+      data-app-dialog-autofocus-selector="#field-locationId"
+      data-app-success-event="ASSETS_ADDED_TO_LOCATION_EVENT"
+      hx-target="this" hx-swap="none" hx-json-enc
+      hx-put="/htmx/location/r/@{RequestContext.getRepository.persistedId}/assets">
+  @for((field, error) <- fieldErrors.toList.sortBy(_._1)) {<div class="error">@{error}</div>}
+  <label for="field-locationId">Location</label>
+  <select id="field-locationId" name="@{Api.Field.Location.LOCATION_ID}">
+    @for(location <- locations) {
+      <option value="@{location.persistedId}" @if(formJson.obj.get(Api.Field.Location.LOCATION_ID).flatMap(_.strOpt).contains(location.persistedId)) {selected}>@{location.parentName.map(_ + " - ").getOrElse("") + location.name}</option>
+    }
+  </select>
+  <input type="hidden" name="@{Api.Field.ASSET_IDS}" value="@{formJson.obj.get(Api.Field.ASSET_IDS).flatMap(_.strOpt).getOrElse("")}">
+  <button type="submit" class="action-button" @if(locations.isEmpty) {disabled}>Add</button>
+</form>

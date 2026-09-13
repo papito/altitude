@@ -1,0 +1,15 @@
+@import altitude.core.Api
+@import altitude.core.models.Location
+
+@(parents: List[Location], formJson: ujson.Obj, fieldErrors: Map[String, String])
+
+@defining(Api.Field.Location.PARENT_ID) { field =>
+  <label for="field-@{field}">Parent</label>
+  @if(fieldErrors.contains(field)) {<div class="error">@{fieldErrors(field)}</div>}
+  <select id="field-@{field}" name="@{field}">
+    <option value="">(none)</option>
+    @for(parent <- parents) {
+      <option value="@{parent.persistedId}" @if(formJson.obj.get(field).flatMap(_.strOpt).contains(parent.persistedId)) {selected}>@{parent.name}</option>
+    }
+  </select>
+}

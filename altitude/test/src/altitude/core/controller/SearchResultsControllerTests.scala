@@ -36,6 +36,82 @@ import altitude.core.models.Asset
     asset
   }
 
+  test("Location grouping renders paths and continues by cursor to No location") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val parent = testApp.service.location.addParent("Italy")
+        val location = testApp.service.location.addLocation("Beach", 1, 2, Some(parent.persistedId))
+        val first = persistUndated("a.jpg")
+        val second = persistUndated("b.jpg")
+        val unlocated = persistUndated("c.jpg")
+        testApp.service.location.addAssets(location.persistedId, Set(first.persistedId, second.persistedId))
+        val params = Map("groupBy" -> "location", "rpp" -> "1", "sort" -> "filename0")
+        val page = htmlSearch(host, repoId, params)
+        page.statusCode shouldBe 200
+        page.text() should include("Italy › Beach")
+        page.text() should include(header(location.persistedId))
+        val next = htmlSearch(
+          host,
+          repoId,
+          params ++ Map("after" -> cursorOf(page.text()).head, "isContinuousScroll" -> "true", "rpp" -> "2"))
+        next.statusCode shouldBe 200
+        next.text().contains(header(location.persistedId)) shouldBe false
+        ordered(next.text(), cell(second), "No location")
+        ordered(next.text(), "No location", cell(unlocated))
+    }
+  }
+
+  test("Location and bbox filter both grid shapes, and map layout ignores grouping and paging") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val location = testApp.service.location.addLocation("Beach", 1, 2)
+        val member = persistUndated("a.jpg")
+        val outside = persistUndated("b.jpg")
+        testApp.service.location.addAssets(location.persistedId, Set(member.persistedId))
+        val scope = Map("locationId" -> location.persistedId, "bbox" -> "0,0,10,10")
+        for (group <- List(Map.empty[String, String], Map("groupBy" -> "location"), Map("groupBy" -> "dateTaken"))) {
+          val grid = htmlSearch(host, repoId, scope ++ group)
+          grid.statusCode shouldBe 200
+          grid.text() should include(cell(member))
+          grid.text().contains(cell(outside)) shouldBe false
+          grid.text() should include(s"""data-results-location-id="${location.persistedId}"""")
+        }
+        val response = htmlSearch(
+          host,
+          repoId,
+          scope ++ Map(
+            "layout" -> "map",
+            "groupBy" -> "bad",
+            "groupDirection" -> "up",
+            "after" -> "bad",
+            "p" -> "99",
+            "rpp" -> "0",
+            "isContinuousScroll" -> "true"))
+        response.statusCode shouldBe 200
+        val page = response.text()
+        page should include("""id="map"""")
+        page should include("data-map-bounds=")
+        page should include("""data-results-total="1"""")
+        page.contains("""id="assets"""") shouldBe false
+        "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
+        val url = java.net.URLDecoder.decode(response.headers("hx-replace-url").head, "UTF-8")
+        url should include("layout=map")
+        url should include(s"locationId=${location.persistedId}")
+        url should include("bbox=0,0,10,10")
+        for (params <- List(Map("bbox" -> "bad"), Map("bbox" -> "-91,0,0,0"), Map("layout" -> "other"))) {
+          val invalid = htmlSearch(host, repoId, params)
+          invalid.statusCode shouldBe 400
+          invalid.headers("content-type").head should include("text/plain")
+        }
+    }
+  }
+
   test("The No date header crosses a page boundary and is not repeated on continuation") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
