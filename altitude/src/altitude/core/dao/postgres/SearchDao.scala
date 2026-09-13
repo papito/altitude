@@ -6,7 +6,8 @@ import org.apache.commons.dbutils.QueryRunner
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
-import altitude.core.dao.postgres.querybuilder.AssetSearchQueryBuilder
+import altitude.core.dao.sql.search.PostgresSearchDialect
+import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.models.Asset
 
 class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides:
@@ -45,5 +46,4 @@ class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.Sear
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, docSql, sqlVals.map(_.asInstanceOf[Object])*)
 
-  override protected val assetSearchQueryBuilder: AssetSearchQueryBuilder =
-    new AssetSearchQueryBuilder(sqlColsForSelect = AssetDao.DEFAULT_SQL_COLS_FOR_SELECT)
+  override protected val searchDialect: SearchDialect = PostgresSearchDialect

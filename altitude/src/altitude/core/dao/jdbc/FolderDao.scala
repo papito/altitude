@@ -1,14 +1,29 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.FolderRow
 import altitude.core.models.Folder
 
 abstract class FolderDao(override val config: Config) extends BaseDao[Folder] with altitude.core.dao.FolderDao:
   final override val tableName = "folder"
+
+  final override type Row[T[_]] = FolderRow[T]
+  final override protected def table: Table[Row] = FolderRow
+
+  // `numOfChildren` is a computed column of the hand-written queries; the typed paths never select it, as before
+  override protected def toModel(row: FolderRow[Sc]): Folder =
+    Folder(
+      id = Option(row.id),
+      name = row.name,
+      parentId = row.parentId,
+      isRecycled = row.isRecycled
+    )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Folder =
     Folder(

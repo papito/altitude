@@ -1,15 +1,15 @@
 package altitude.core.dao.sqlite
 
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
+import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
-import altitude.core.util.SortValue
+import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 
 object SqliteOverrides:
   /** The stored DATETIME text format. Timestamps are wall-clock text: camera-local for capture times, UTC for import times. */
@@ -25,6 +25,11 @@ object SqliteOverrides:
 
 trait SqliteOverrides:
   this: BaseDao[?] =>
+
+  override protected val dialect: Dialect = AltitudeSqliteDialect
+
+  // An instant is stored as its UTC wall clock and handed back verbatim, as `getDateTimeField` does for the raw paths
+  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime = value.toLocalDateTime
 
   override protected def jsonFunc = "?"
 
@@ -42,19 +47,6 @@ trait SqliteOverrides:
     if value.isEmpty || value.get == null then return None
 
     Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_PARSER))
-
-  // date() returns ISO text; it is never converted through a JVM zone
-  override protected def getDateField(value: AnyRef): Option[LocalDate] =
-    Option(value).map(v => LocalDate.parse(v.asInstanceOf[String]))
-
-  // Timestamps stay in their stored text form so a cursor compares them exactly as the column stores them
-  override protected def getSortValueField(value: AnyRef): SortValue = value match
-    case null => SortValue.Null
-    case text: String => SortValue.Text(text)
-    case number: java.lang.Number => SortValue.Num(number.longValue)
-    case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
-
-  def count(recs: List[Map[String, AnyRef]]): Int = if recs.nonEmpty then recs.head("total").asInstanceOf[Int] else 0
 
   // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
   override protected def getBooleanField(value: AnyRef): Boolean = value match

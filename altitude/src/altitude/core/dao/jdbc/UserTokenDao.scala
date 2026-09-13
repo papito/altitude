@@ -1,13 +1,26 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
+import altitude.core.dao.sql.tables.UserTokenRow
 import altitude.core.models.UserToken
 import altitude.core.util.Util
 
 abstract class UserTokenDao(override val config: Config) extends BaseDao[UserToken] with altitude.core.dao.UserTokenDao:
   final override val tableName = "user_token"
+
+  final override type Row[T[_]] = UserTokenRow[T]
+  final override protected def table: Table[Row] = UserTokenRow
+
+  override protected def toModel(row: UserTokenRow[Sc]): UserToken =
+    UserToken(
+      userId = row.accountId,
+      token = row.token,
+      expiresAt = row.expiresAt.map(toLocalDateTime).get
+    )
 
   override protected def makeModel(rec: Map[String, AnyRef]): UserToken =
     val expiresAtStr = rec(FieldConst.UserToken.EXPIRES_AT).asInstanceOf[String]

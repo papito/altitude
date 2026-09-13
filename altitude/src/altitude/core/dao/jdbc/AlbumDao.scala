@@ -1,14 +1,24 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.AlbumRow
 import altitude.core.models.Album
 
 abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with altitude.core.dao.AlbumDao:
   final override val tableName = "album"
   private val membershipTable = "album_asset"
+
+  final override type Row[T[_]] = AlbumRow[T]
+  final override protected def table: Table[Row] = AlbumRow
+
+  // `numOfAssets` is counted by `getAll`'s hand-written query; the typed paths never select it, as before
+  override protected def toModel(row: AlbumRow[Sc]): Album =
+    Album(id = Option(row.id), name = row.name)
 
   override protected def makeModel(rec: Map[String, AnyRef]): Album =
     Album(

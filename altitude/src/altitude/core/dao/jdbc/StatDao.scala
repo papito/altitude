@@ -2,14 +2,22 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.StatRow
 import altitude.core.models.Stat
 
 abstract class StatDao(override val config: Config) extends BaseDao[Stat] with altitude.core.dao.StatDao:
 
   final override val tableName = "stats"
+
+  final override type Row[T[_]] = StatRow[T]
+  final override protected def table: Table[Row] = StatRow
+
+  override protected def toModel(row: StatRow[Sc]): Stat = Stat(row.dimension, row.dimVal)
 
   override protected def makeModel(rec: Map[String, AnyRef]): Stat =
     Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int])

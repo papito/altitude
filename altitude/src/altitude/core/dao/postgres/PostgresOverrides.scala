@@ -7,9 +7,10 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
+import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
-import altitude.core.util.SortValue
+import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 
 object PostgresOverrides:
   /**
@@ -33,6 +34,12 @@ object PostgresOverrides:
 trait PostgresOverrides:
   this: BaseDao[?] =>
 
+  override protected val dialect: Dialect = AltitudePostgresDialect
+
+  // An instant is shown in the JVM zone, as `getDateTimeField` does for the raw paths
+  override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
+    value.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime
+
   override protected def jsonFunc = "CAST(? as jsonb)"
 
   override protected def nativeBool(value: Boolean): Any =
@@ -53,18 +60,6 @@ trait PostgresOverrides:
       case instant: OffsetDateTime => Some(instant.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime)
       case timeStamp: java.sql.Timestamp => Some(timeStamp.toLocalDateTime)
       case other => throw IllegalArgumentException(s"Invalid type for date/time field: $other")
-
-  override protected def getDateField(value: AnyRef): Option[LocalDate] = Option(value.asInstanceOf[LocalDate])
-
-  override protected def getSortValueField(value: AnyRef): SortValue = value match
-    case null => SortValue.Null
-    case text: String => SortValue.Text(text)
-    case number: java.lang.Number => SortValue.Num(number.longValue)
-    case dateTime: LocalDateTime => SortValue.LocalTimestamp(dateTime)
-    case instant: OffsetDateTime => SortValue.UtcInstant(instant)
-    case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
-
-  def count(recs: List[Map[String, AnyRef]]): Int = if recs.nonEmpty then recs.head("total").asInstanceOf[Long].toInt else 0
 
   override protected def getBooleanField(value: AnyRef): Boolean = value.asInstanceOf[Boolean]
 

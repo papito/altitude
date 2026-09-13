@@ -2,9 +2,12 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import org.apache.commons.dbutils.QueryRunner
+import scalasql.Sc
+import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.tables.SystemRow
 import altitude.core.models.SystemMetadata
 
 abstract class SystemMetadataDao(override val config: Config)
@@ -12,6 +15,12 @@ abstract class SystemMetadataDao(override val config: Config)
   with altitude.core.dao.SystemMetadataDao:
 
   override val tableName = "system"
+
+  final override type Row[T[_]] = SystemRow[T]
+  final override protected def table: Table[Row] = SystemRow
+
+  override protected def toModel(row: SystemRow[Sc]): SystemMetadata =
+    SystemMetadata(version = row.version, isInitialized = row.isInitialized)
 
   override protected def makeModel(rec: Map[String, AnyRef]): SystemMetadata = SystemMetadata(
     version = rec(FieldConst.SystemMetadata.VERSION).asInstanceOf[Int],

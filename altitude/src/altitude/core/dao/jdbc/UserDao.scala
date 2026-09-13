@@ -1,13 +1,46 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import scalasql.Sc
+import scalasql.Table
 
+import altitude.core.ConstraintException
 import altitude.core.FieldConst
+import altitude.core.NotFoundException
+import altitude.core.dao.sql.Db
+import altitude.core.dao.sql.tables.AccountRow
 import altitude.core.models.AccountType
 import altitude.core.models.User
 
 abstract class UserDao(override val config: Config) extends BaseDao[User] with altitude.core.dao.UserDao:
   final override val tableName = "account"
+
+  final override type Row[T[_]] = AccountRow[T]
+  final override protected def table: Table[Row] = AccountRow
+
+  override protected def toModel(row: AccountRow[Sc]): User =
+    User(
+      id = Option(row.id),
+      email = row.email,
+      name = row.name,
+      accountType = AccountType.valueOf(row.accountType),
+      lastActiveRepoId = row.lastActiveRepoId
+    )
+
+  /**
+   * The password hash is deliberately not part of the `User` model, so it is read on its own. An unknown account is a
+   * `NotFoundException`, which is what the login path expects to catch.
+   */
+  override def getPasswordHashByEmail(email: String): String =
+    import dialect.*
+
+    val hashes = Db.read(dialect)(_.run(AccountRow.select.filter(_.email === email).map(_.passwordHash)))
+
+    if hashes.isEmpty then throw NotFoundException("No account with that email address")
+
+    if hashes.length > 1 then throw ConstraintException("More than one account with the same email address")
+
+    hashes.head
 
   override protected def makeModel(rec: Map[String, AnyRef]): User =
     User(

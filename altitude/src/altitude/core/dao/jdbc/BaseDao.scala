@@ -1,7 +1,6 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -11,6 +10,12 @@ import org.apache.commons.dbutils.RowProcessor
 import org.apache.commons.dbutils.handlers.MapListHandler
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import scalasql.Column
+import scalasql.Sc
+import scalasql.Table
+import scalasql.core.Expr
+import scalasql.core.Queryable
+import scalasql.dialects.Dialect
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -20,17 +25,18 @@ import altitude.core.ConstraintException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
-import altitude.core.dao.jdbc.querybuilder.SqlQuery
-import altitude.core.dao.jdbc.querybuilder.SqlQueryBuilder
+import altitude.core.dao.sql.Columns
+import altitude.core.dao.sql.Db
+import altitude.core.dao.sql.DynamicAssignments
+import altitude.core.dao.sql.DynamicFilter
 import altitude.core.models.BaseModel
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import altitude.core.util.SortValue
+import altitude.core.util.SortDirection
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
-  val totalRecsWindowFunction: String = "count(*) OVER() AS total"
 
   private def incrReadQueryCount(): Unit =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
@@ -45,11 +51,20 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def txManager: TransactionManager = TransactionManager(config)
 
   val tableName: String
+
+  /** The one remaining hand-written `SELECT` that names its columns is `RepositoryDao.getAll`; everywhere else [[table]] does */
   protected def columnsForSelect: List[String] = List("*")
 
-  val sqlQueryBuilder: SqlQueryBuilder[Query] = new SqlQueryBuilder[Query](columnsForSelect, tableName)
+  /** The ScalaSql row class behind this DAO's table */
+  type Row[T[_]]
 
-  def count(recs: List[Map[String, AnyRef]]): Int
+  protected def table: Table[Row]
+
+  /**
+   * A row as the model wants it. This is the typed twin of [[makeModel]]: the two must agree for as long as both a typed and a
+   * hand-written SQL path can return the same record.
+   */
+  protected def toModel(row: Row[Sc]): Model
 
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
@@ -66,6 +81,16 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def rowProcessor: RowProcessor = new BasicRowProcessor()
 
   protected def getBooleanField(value: AnyRef): Boolean
+
+  /** The ScalaSql dialect this engine's typed queries are written against */
+  protected val dialect: Dialect
+
+  /**
+   * An instant column as the model wants it. The two engines already disagree: PostgreSQL stores a `timestamptz` and shows it in
+   * the JVM zone, SQLite stores UTC wall-clock text and hands it back verbatim. Row classes type these columns the same way, so
+   * the engine decides here what the `LocalDateTime` on the model means, exactly as `getDateTimeField` does for the raw paths.
+   */
+  protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime
 
   // Aggregates such as COUNT(*) come back as Long on Postgres and Integer on SQLite
   protected def getIntField(value: AnyRef): Int = value match
@@ -88,8 +113,13 @@ abstract class BaseDao[Model <: BaseModel]:
     ujson.read(jsonStr).asInstanceOf[ujson.Obj]
 
   def getOneByQuery(q: Query): Model =
-    val sqlQuery = sqlQueryBuilder.buildSelectSql(q)
-    getOneBySql(sqlQuery.sqlAsString, sqlQuery.bindValues)
+    val rows = Db.read(dialect)(_.run(matching(q)))
+
+    if rows.isEmpty then throw NotFoundException(s"Cannot find record in '$tableName' with query: $q")
+
+    if rows.length > 1 then throw ConstraintException("getById should return only a single result")
+
+    toModel(rows.head)
 
   def executeAndGetOne(sql: String, values: List[Any] = List()): Map[String, AnyRef] =
     val res = executeAndGetMany(sql, values)
@@ -132,15 +162,30 @@ abstract class BaseDao[Model <: BaseModel]:
     logger.debug(s"Deleted records: $numDeleted")
     numDeleted
 
-  def query(q: Query): QueryResult[Model] =
-    this.query(q, sqlQueryBuilder)
+  def query(q: Query): QueryResult[Model] = queryRecords(q)
 
-  protected def query(query: Query, sqlQueryBuilder: SqlQueryBuilder[Query]): QueryResult[Model] =
-    val sqlQuery: SqlQuery = sqlQueryBuilder.buildSelectSql(query)
-    val recs = manyBySqlQuery(sqlQuery.sqlAsString, sqlQuery.bindValues)
-    val total: Int = count(recs)
-    logger.debug(s"Found [$total] records. Retrieved [${recs.length}] records")
-    QueryResult(records = recs.map(makeModel), total = total, rpp = query.rpp, sort = query.sort)
+  /**
+   * The generic read behind [[query]]. It is separate because some DAOs close the public method off - an asset is only ever
+   * queried through one of its view-scoped variants - and still need the implementation.
+   */
+  protected def queryRecords(q: Query): QueryResult[Model] =
+    import dialect.*
+
+    // The window count is added before the ordering and the page, so it counts every match rather than the page
+    val counted = matching(q).mapAggregate((row, aggregate) => (row, aggregate.size.over))
+
+    val sorted = q.sort.headOption.fold(counted) {
+      sort =>
+        val ordered = counted.sortBy(row => column(row._1, sort.param))
+        if sort.direction == SortDirection.DESC then ordered.desc else ordered.asc
+    }
+
+    val page = if q.rpp > 0 then sorted.drop((q.page - 1) * q.rpp).take(q.rpp) else sorted
+
+    val rows = Db.read(dialect)(_.run(page))
+    val total: Int = rows.headOption.map(_._2).getOrElse(0)
+    logger.debug(s"Found [$total] records. Retrieved [${rows.length}] records")
+    QueryResult(records = rows.map((row, _) => toModel(row)).toList, total = total, rpp = q.rpp, sort = q.sort)
 
   protected def addRecord(sql: String, values: List[Any]): Unit =
     BaseDao.incrWriteQueryCount()
@@ -162,26 +207,21 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def getByIds(ids: Set[String]): List[Model] =
     if ids.isEmpty then return List()
-    BaseDao.incrReadQueryCount()
-    val query = new Query().add(FieldConst.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
-    val sqlQuery = sqlQueryBuilder.buildSelectSql(query)
-    logger.debug(s"SELECT SQL: ${sqlQuery.sqlAsString} with values: ${ids.toList}")
-    val runner: QueryRunner = new QueryRunner()
-    val res =
-      runner
-        .query(RequestContext.getConn, sqlQuery.sqlAsString, new MapListHandler(rowProcessor), sqlQuery.bindValues*)
-        .asScala
-        .toList
-    logger.debug(s"Found ${res.length} records")
-    val recs = res.map(_.asScala.toMap[String, AnyRef])
-    recs.map(makeModel)
+
+    val q = new Query().add(FieldConst.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
+    val rows = Db.read(dialect)(_.run(matching(q)))
+    logger.debug(s"Found ${rows.length} records")
+    rows.map(toModel).toList
 
   def updateByQuery(q: Query, data: Map[String, Any]): Int =
-    BaseDao.incrWriteQueryCount()
-    val sqlQuery = sqlQueryBuilder.buildUpdateSql(q, data)
-    logger.debug(s"UPDATE SQL: ${sqlQuery.sqlAsString} with bind values ${sqlQuery.bindValues}")
-    val runner = queryRunner
-    val numUpdated = runner.update(RequestContext.getConn, sqlQuery.sqlAsString, sqlQuery.bindValues*)
+    import dialect.*
+
+    val assignments = data.toSeq.map {
+      (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, updateColumns(row), name, value, dialect)
+    }
+
+    val update = table.update(row => DynamicFilter(table, updateColumns(row), q, dialect)).set(assignments*)
+    val numUpdated = Db.write(dialect)(_.run(update))
     logger.debug("Updated records: " + numUpdated)
     numUpdated
 
@@ -215,12 +255,23 @@ abstract class BaseDao[Model <: BaseModel]:
   def decrement(id: String, field: String, count: Int = 1): Unit =
     increment(id, field, -count)
 
+  /** Every row of this table the query selects, as a typed relation */
+  private def matching(q: Query) =
+    import dialect.*
+    table.select.filter(row => DynamicFilter(table, selectColumns(row), q, dialect))
+
+  private def column(row: Row[Expr], name: String): Expr[?] =
+    Columns.required(selectColumns(row), table, name)
+
+  private def selectColumns(row: Row[Expr]): Map[String, Expr[?]] =
+    Columns.byName(table, rowQueryable.walkExprs(row))
+
+  private def updateColumns(row: Row[Column]): Map[String, Expr[?]] =
+    Columns.byName(table, rowQueryable.asInstanceOf[Queryable.Row[Row[Column], Row[Sc]]].walkExprs(row))
+
+  protected given rowQueryable: Queryable.Row[Row[Expr], Row[Sc]] = table.containerQr(using dialect)
+
+  /** Built from a result-set row map by the paths that are still hand-written SQL. See [[toModel]] for the typed twin. */
   protected def makeModel(rec: Map[String, AnyRef]): Model
 
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
-
-  /** A calendar-day column, as the engine's day expression returns it */
-  protected def getDateField(value: AnyRef): Option[LocalDate]
-
-  /** A sort-key column, typed so it can be bound back for comparison exactly as stored */
-  protected def getSortValueField(value: AnyRef): SortValue
