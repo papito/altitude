@@ -24,6 +24,8 @@
  * `common/context-menu-markup.js`.
  */
 
+import { placeAnchoredPanel } from "../../common/anchored-panel.js"
+
 const OPEN_MENU_SELECTOR = ".context-menu:popover-open"
 
 /** The ⋯ control that opens `panel`: the button in the same menu cell that targets it. */
@@ -186,68 +188,14 @@ export function contextMenu() {
         },
 
         /**
-         * Places the panel before the browser shows it or after its content changed while open.
-         *
-         * Before showing, the panel is hidden, so it is given its open-state display just long
-         * enough to measure: its size depends only on its own styles, which are the same in and
-         * out of the top layer. Once shown, the panel is a fixed-position element in the top
-         * layer, whose containing block is the viewport whatever its ancestors do, so viewport
-         * coordinates from `getBoundingClientRect()` apply directly; the explorer's scrolling,
-         * clipping, and drag transforms cannot affect it. Any menu closes when the page scrolls
-         * or resizes, so the position is never tracked.
-         *
-         * Vertical placement: below the trigger by default; above it when there is no room below;
-         * when it fits on neither side, on the roomier side with its height capped so the content
-         * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge, or
-         * centered on the trigger for a root with `data-menu-align="center"` (the View settings
-         * control); either way shrunk to the viewport width if needed, then shifted as far as it
-         * takes to stay inside the viewport, so every control stays reachable in narrow windows.
+         * The native popover is fixed in the top layer, so the shared viewport placement applies
+         * before it opens too. Menus close on scroll/resize instead of following their trigger.
          */
         place() {
-            const panel = this.$refs.panel
-            const trigger = this.$refs.trigger.getBoundingClientRect()
-            const viewportWidth = document.documentElement.clientWidth
-            const viewportHeight = document.documentElement.clientHeight
-
-            // Measure the panel free of the constraints an earlier placement may have applied
-            panel.style.display = "grid"
-            panel.style.maxHeight = ""
-            panel.style.maxWidth = `${viewportWidth - 2 * VIEWPORT_GAP}px`
-
-            const spaceBelow = Math.max(
-                0,
-                viewportHeight - trigger.bottom - VIEWPORT_GAP,
-            )
-            const spaceAbove = Math.max(0, trigger.top - VIEWPORT_GAP)
-            const { height } = panel.getBoundingClientRect()
-
-            let top
-            if (height <= spaceBelow) {
-                top = trigger.bottom
-            } else if (height <= spaceAbove) {
-                top = trigger.top - height
-            } else if (spaceBelow >= spaceAbove) {
-                panel.style.maxHeight = `${spaceBelow}px`
-                top = trigger.bottom
-            } else {
-                panel.style.maxHeight = `${spaceAbove}px`
-                top = VIEWPORT_GAP
-            }
-
-            // Re-measure the width: an internal scrollbar added by the height cap widens the panel
-            const { width } = panel.getBoundingClientRect()
-            const alignedLeft =
-                this.$root.dataset.menuAlign === "center"
-                    ? trigger.left + (trigger.width - width) / 2
-                    : trigger.left
-            const left = Math.max(
-                VIEWPORT_GAP,
-                Math.min(alignedLeft, viewportWidth - VIEWPORT_GAP - width),
-            )
-
-            panel.style.top = `${top}px`
-            panel.style.left = `${left}px`
-            panel.style.display = ""
+            placeAnchoredPanel(this.$refs.panel, this.$refs.trigger, {
+                gap: VIEWPORT_GAP,
+                center: this.$root.dataset.menuAlign === "center",
+            })
         },
 
         /**

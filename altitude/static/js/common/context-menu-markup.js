@@ -12,7 +12,7 @@
 /**
  * Builds a menu cell: the ⋯ trigger button and the native popover panel it opens, holding the
  * action buttons. Each action requests its dialog into the shared modal host; opening the modal
- * closes the menu through `common/modal.js`.
+ * closes the menu through `common/modal.js`. The stable trigger is also the modal's anchor.
  *
  * `triggerId` and `panelId` must be stable across rebuilds: rebuilds restore focus by
  * ID, and the dialogs declare the trigger as their
@@ -47,6 +47,7 @@ export function buildContextMenuCtrl({
         const actionEl = document.createElement("button")
         actionEl.type = "button"
         _requestDialogOnClick(actionEl, { url, target: "#modalContent", vals })
+        actionEl.dataset.appModalAnchor = `#${triggerId}`
         actionEl.textContent = label
         actionsEl.appendChild(actionEl)
     })
@@ -57,7 +58,7 @@ export function buildContextMenuCtrl({
     return menuCtrlEl
 }
 
-/** Builds an Add button that loads a separate modal and remains available for focus on close. */
+/** Builds an Add button that anchors its separate modal and takes focus back on close. */
 export function buildModalTriggerCtrl({
     triggerId,
     label,
@@ -73,6 +74,7 @@ export function buildModalTriggerCtrl({
         buttonClass,
     })
     _requestDialogOnClick(btnEl, { url, target: "#modalContent", vals })
+    btnEl.dataset.appModalAnchor = `#${triggerId}`
     return btnEl
 }
 

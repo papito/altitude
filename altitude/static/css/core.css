@@ -390,8 +390,8 @@ form input.error, form input.error:focus {
 /* MODAL */
 /*       */
 
-/* Both hosts start hidden inline and are shown by Alpine (`x-show`), which restores these display values.
-   The general host places the box centered horizontally (`.modal-box` margin) and this padding from the top */
+/* Both hosts start hidden inline and are shown by Alpine (`x-show`). Without an anchor, the general
+   host centers the box horizontally (`.modal-box` margin) with this padding from the top. */
 #modalContainer {
     position: fixed;
     z-index: 4;
@@ -404,15 +404,30 @@ form input.error, form input.error:focus {
     background-color: rgba(0,0,0,0.4);
 }
 
-/* Fixed content width, shrunk on narrow viewports so the box (content + its border) keeps
+/* Default content width, shrunk on narrow viewports so the box (content + its border) keeps
    --modal-viewport-gap to each viewport edge; the box itself is sized by its content */
 #modalContent {
     box-sizing: border-box;
-    width: min(
-        calc(var(--modal-content-width) + 2 * var(--modal-content-padding)),
-        calc(100vw - 2 * (var(--modal-viewport-gap) + var(--modal-border-width)))
-    );
+    width: calc(var(--modal-content-width) + 2 * var(--modal-content-padding));
+    max-width: calc(100vw - 2 * (var(--modal-viewport-gap) + var(--modal-border-width)));
     padding: var(--modal-content-padding);
+}
+
+/* Explorer forms keep their controls' natural widths; the box shrinks around them. The Location
+   map editor declares its own width and already fills it with its map and fields. */
+#modalContainer.anchored #modalContent:not(:has(.location-editor)) {
+    width: max-content;
+}
+
+/* Preserve natural control widths, only constraining them when the viewport is narrower. */
+#modalContainer.anchored input, #modalContainer.anchored select {
+    max-width: 100%;
+}
+
+#modalContainer.anchored .modal-box {
+    position: fixed;
+    margin: 0;
+    overflow: auto;
 }
 
 .modal-box {

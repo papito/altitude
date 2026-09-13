@@ -61,3 +61,8 @@ Escape handled once in `global.js`, no overlay element or transitions, backdrop 
 detail, and `.noreturn.noautofocus` so `js/common/modal.js` places and restores focus itself. Folder, album, Location, category, people, and purge dialogs use the general modal host and its
 operation lifecycle (`static/js/fragments/dialog-operations.js`). Only View settings remains an
 inline popover dialog (`static/js/fragments/inline-dialog.js`).
+
+Explorer action modals are positioned below their row's menu trigger or Add button, using
+`data-app-modal-anchor` on the request button. `modal.js` retains the anchor through validation and
+uses `common/anchored-panel.js` to keep the dialog within the viewport. Ordinary anchored forms
+shrink to their contents without widening inputs; the Location map editor keeps its declared width.

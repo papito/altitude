@@ -230,10 +230,17 @@ swaps once the user dismissed or replaced it. Visibility is bound through the Al
 `js/app.js` contains focus and hides the page from assistive tech; its documented local patch
 cancels delayed activation when a trap is released or removed). Escape (`global.js`) closes the
 active modal and any open context menu and is consumed by them, so a background inline edit
-survives; general dialogs ignore backdrop clicks, asset detail closes on them. General-dialog width is CSS only
-(`--modal-content-width` in `core.css`, shrinking to the viewport); asset detail is sized to the
-image with `setAssetDetailSize()`. General-dialog placement is the host's CSS (box centered
-horizontally, `padding-top` from the top). Opening any modal closes an open context menu first, so a
+survives; general dialogs ignore backdrop clicks, asset detail closes on them. Explorer action dialogs
+are anchored below the row's ⋯ trigger, or the Add button. Their request buttons declare
+`data-app-modal-anchor` with that control's selector; `modal.js` preserves it through validation,
+repositions on content/viewport/explorer resizing and scrolling, and releases its observers on close
+or replacement. `common/anchored-panel.js` supplies placement shared with context menus: below and
+left-aligned normally, flipping above or capping height on the roomier side when necessary, with
+horizontal placement constrained to the viewport. The box is hidden until measured to avoid a
+flash at the default position. Anchored forms use natural content width in `core.css`, keeping
+inputs at their existing width and only the standard padding at the right. The Location map editor
+retains its explicitly declared width. Other general dialogs retain `--modal-content-width` and the
+host's centered placement; asset detail is sized with `setAssetDetailSize()` in its own host. Opening any modal closes an open context menu first, so a
 modal never appears over one.
 
 Both modal hosts use `.close-modal` in `core.css`: the X stays white (`--modal-close-color`)
@@ -458,7 +465,7 @@ Delete leaves initial focus on the close control, so opening the confirmation ca
 destructive button. Rename and Move return focus to the row's ⋯ button; Delete names a control
 that survives the mutation (the parent folder's ⋯ or the list's Add button). Add returns to its
 opener; for a menu action the modal owner remembers the visible ⋯ trigger. Re-hydrating validation
-preserves that original return control. Escape and the host's X dismiss the dialog.
+preserves that original return control and anchor. Escape and the host's X dismiss the dialog.
 
 **Inline dialogs** — Only View settings uses `js/fragments/inline-dialog.js`, which gives it initial
 focus and binds its checkboxes. It has no operation lifecycle; dismissal follows the popover's
@@ -596,7 +603,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
+| `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), explorer dialog anchoring, `setAssetDetailSize` |
+| `static/js/common/anchored-panel.js` | viewport placement shared by popover menus and anchored explorer modals |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
