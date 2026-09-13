@@ -66,6 +66,12 @@
 
     <footer></footer>
 
+    @* Keeps the nav counts fresh while imports run, only while the page is visible *@
+    <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}"
+         hx-trigger="every 5s [document.visibilityState === 'visible']"
+         hx-target="nav"
+         hx-swap="innerHTML"></div>
+
     <script src="/static/js/lib/hx-ws.js"></script>
     <script type="module" src="/static/js/upload-form-page.js"></script>
 
@@ -102,18 +108,6 @@
               statusTextEl.style.display = "none"
           }, 3000)
       })
-
-      // keep refreshing the nav for updated counts
-      setInterval(() => {
-          htmx.ajax(
-              "GET",
-              "/htmx/nav/r/" + "@{RequestContext.getRepository.persistedId}",
-              {
-                  swap: "innerHTML",
-                  target: "nav",
-              },
-    )
-      }, 5000)
     </script>
   </body>
 </html>

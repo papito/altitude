@@ -4,6 +4,11 @@ import { hydrateInlineDialogFragment } from "./inline-dialog.js"
 import { hydrateImageDetailFragment } from "./image-detail.js"
 import { hydratePersonNameEditorFragment } from "./person-name-editor.js"
 import { hydrateSearchResultsFragment } from "./search-results.js"
+import {
+    hydrateAlbumListFragment,
+    hydrateFolderTreeFragment,
+} from "./explorer.js"
+import { bindDialogOpeners } from "./dialog-openers.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
 export function hydrateAppFragments({ root, app }) {
@@ -16,11 +21,7 @@ export function hydrateAppFragments({ root, app }) {
     })
 
     findFragmentRoots(root, "inline-dialog").forEach((fragmentEl) => {
-        hydrateInlineDialogFragment({
-            fragmentEl,
-            context: app.context,
-            dispatch: app.dispatch.bind(app),
-        })
+        hydrateInlineDialogFragment({ fragmentEl, context: app.context })
     })
 
     findFragmentRoots(root, "image-detail").forEach((fragmentEl) => {
@@ -31,8 +32,17 @@ export function hydrateAppFragments({ root, app }) {
     })
 
     findFragmentRoots(root, "search-results").forEach((fragmentEl) => {
-        hydrateSearchResultsFragment({ fragmentEl, app })
+        hydrateSearchResultsFragment({ fragmentEl })
     })
 
+    findFragmentRoots(root, "folder-tree").forEach(() => {
+        hydrateFolderTreeFragment({ context: app.context })
+    })
+
+    findFragmentRoots(root, "album-list").forEach(() => {
+        hydrateAlbumListFragment({ context: app.context })
+    })
+
+    bindDialogOpeners({ root, hydrate: (el) => app.hydrateFragments(el) })
     bindSearchTriggers(root)
 }

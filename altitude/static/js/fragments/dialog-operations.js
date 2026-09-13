@@ -3,8 +3,9 @@
  *
  * A dialog is a server-rendered form completing one user action, hydrated from its
  * `data-app-fragment` kind. Its presentation (a modal host, or some other container) is the kind's
- * concern; what every kind shares is declared with `data-app-dialog-*` attributes on the fragment
- * root and handled here: the success event and detail, and whether success closes the dialog.
+ * concern; what every kind shares is declared on the fragment root and handled here: the success
+ * event and its detail (`data-app-success-*`, see `readSuccessEvent`), dispatched once the
+ * operation completes, after which the dialog is closed.
  *
  * Each kind registers with `registerDialogKind`, supplying a handle for the dialog a request was
  * issued from: `isActive()` tells whether that same dialog is still shown, and `close()` dismisses
@@ -16,7 +17,6 @@
  * has since been closed or replaced: page updates and success events always happen, but only the
  * still active initiating dialog may be closed or have its form replaced by the response.
  */
-import { Const } from "../constants.js"
 import {
     getRequestPath,
     getResponseRetarget,
@@ -25,7 +25,7 @@ import {
     isRequestSuccessful,
 } from "../common/htmx-events.js"
 import { showErrorSnackBar, showWarningSnackBar } from "../common/snackbar.js"
-import { parseFragmentDetail, parseFragmentTargetDetail } from "./helpers.js"
+import { readSuccessEvent } from "./helpers.js"
 
 // fragment kind -> `createHandle(fragmentEl)` returning that dialog's `{ isActive, close }`
 const dialogKinds = new Map()
@@ -61,12 +61,7 @@ export function trackDialogOperationRequest(event) {
     pendingOperations.set(ctx, {
         dialog: createHandle(fragmentEl),
         fragmentEl,
-        successEventKey: fragmentEl.dataset.appDialogSuccessEvent,
-        successDetail: {
-            ...parseFragmentDetail(fragmentEl.dataset.appDialogSuccessDetail),
-            ...parseFragmentTargetDetail(fragmentEl, ctx.sourceElement),
-        },
-        closeOnSuccess: fragmentEl.dataset.appDialogCloseOnSuccess !== "false",
+        successEvent: readSuccessEvent(fragmentEl, ctx.sourceElement),
     })
 
     return true
@@ -107,8 +102,9 @@ export function settleDialogOperation(event, { dispatch }) {
         return true
     }
 
-    // A response retargeted at the submitting form is a validation replacement, not a completed
-    // operation: it swaps into the active dialog and is re-hydrated, or is reported and dropped.
+    // A response retargeted at the submitting form (`BaseController.dialogFormValidationResponse`)
+    // is a validation replacement, not a completed operation: it swaps into the active dialog and
+    // is re-hydrated, or is reported and dropped.
     if (getResponseRetarget(event)) {
         if (!stillActive) {
             event.preventDefault()
@@ -120,9 +116,11 @@ export function settleDialogOperation(event, { dispatch }) {
         return true
     }
 
-    dispatchSuccessEvent({ operation, dispatch })
+    if (operation.successEvent) {
+        dispatch(operation.successEvent.name, operation.successEvent.detail)
+    }
 
-    if (stillActive && operation.closeOnSuccess) {
+    if (stillActive) {
         operation.dialog.close()
     }
 
@@ -142,22 +140,6 @@ function hasPendingOperation(fragmentEl) {
     return [...pendingOperations.values()].some(
         (operation) => operation.fragmentEl === fragmentEl,
     )
-}
-
-function dispatchSuccessEvent({ operation, dispatch }) {
-    if (!operation.successEventKey) {
-        return
-    }
-
-    const eventName = Const.events[operation.successEventKey]
-    if (!eventName) {
-        console.warn(
-            `Unknown dialog success event key: ${operation.successEventKey}`,
-        )
-        return
-    }
-
-    dispatch(eventName, operation.successDetail)
 }
 
 function extractValidationMessages(responseText) {

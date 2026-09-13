@@ -28,7 +28,7 @@
  * Expansion needs no request: the tree endpoint returns every folder.
  *
  * Each folder's context menu is built with the tree too, as a native
- * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu.js`, shared
+ * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu-markup.js`, shared
  * with the album list), so opening a menu needs no request. The panel holds its
  * actions and an empty dialog host: an action loads its dialog into the host
  * through HTMX, and the panel then shows the dialog in place of the actions. The
@@ -49,7 +49,10 @@ import {
     setAssetCount,
     sizeCountColumn,
 } from "./asset-count.js"
-import { buildContextMenuCtrl, buildDialogTriggerCtrl } from "./context-menu.js"
+import {
+    buildContextMenuCtrl,
+    buildDialogTriggerCtrl,
+} from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
@@ -212,10 +215,7 @@ function _getExpandedFolderIds() {
         .querySelectorAll(
             `#rootFolderList .folder[${Const.attributes.expanded}]`,
         )
-        .forEach((el) => {
-            const id = el.getAttribute(Const.attributes.folderId)
-            if (id) ids.add(id)
-        })
+        .forEach((el) => ids.add(el.dataset.folderId))
     return ids
 }
 
@@ -241,17 +241,16 @@ function _getFocusedTreeControlId() {
  * document order, so a parent is decided before its children, and a branch is restored only when
  * its parent is expanded: whatever moved beneath a collapsed parent is normalized to collapsed,
  * and that parent's next single-click reveals one level, as the model's reset invariant requires.
- * Root is always expanded; deleted folders are simply absent, and a folder that lost its last
- * child is no longer a branch, which `expand()` ignores. The model keeps the icon and
- * `aria-expanded` in step.
+ * Root is always expanded and has no parent, so it is never restored; deleted folders are simply
+ * absent, and a folder that lost its last child is no longer a branch, which `expand()` ignores.
+ * The model keeps the icon and `aria-expanded` in step.
  */
 function _restoreExpandedState(expandedIds) {
     _getFolderNodes().forEach((el) => {
-        const id = el.getAttribute(Const.attributes.folderId)
-        if (!expandedIds.has(id)) return
+        if (!expandedIds.has(el.dataset.folderId)) return
 
-        const folder = new Folder(id)
-        if (!folder.isRoot && folder.parent().isExpanded()) {
+        const folder = new Folder(el)
+        if (folder.parent()?.isExpanded()) {
             folder.expand()
         }
     })
@@ -268,11 +267,11 @@ function _renderRootNode(folder, repoId) {
     const folderEl = document.createElement("div")
     folderEl.classList.add("folder", "root")
     folderEl.id = `folder-${folder.id}`
-    folderEl.setAttribute("alt-num-of-children", folder.numOfChildren)
-    folderEl.setAttribute("alt-folder-id", folder.id)
-    folderEl.setAttribute("alt-parent-folder-id", folder.id) // root is its own parent
-    folderEl.setAttribute("alt-is-root", "true")
-    folderEl.setAttribute("alt-expanded", "true")
+    folderEl.setAttribute(Const.attributes.numOfChildren, folder.numOfChildren)
+    folderEl.setAttribute(Const.attributes.folderId, folder.id)
+    // Root has no parent attribute: the model walks parents until there is none
+    folderEl.setAttribute(Const.attributes.isRoot, "true")
+    folderEl.setAttribute(Const.attributes.expanded, "true")
 
     folderEl.appendChild(_buildRootControls(folder, repoId))
     folderEl.appendChild(_buildChildrenDiv(folder, repoId, true, 0))
@@ -283,7 +282,7 @@ function _renderRootNode(folder, repoId) {
 function _buildRootControls(folder, repoId) {
     const controlsEl = document.createElement("div")
     controlsEl.classList.add("controls", "dropzone")
-    controlsEl.setAttribute("alt-folder-id", folder.id)
+    controlsEl.setAttribute(Const.attributes.folderId, folder.id)
 
     // Clickable folder icon → navigate to root (same as clicking the name)
     const iconEl = document.createElement("i")
@@ -314,9 +313,9 @@ function _renderFolderNode(folder, repoId, depth) {
     const folderEl = document.createElement("div")
     folderEl.classList.add("folder")
     folderEl.id = `folder-${folder.id}`
-    folderEl.setAttribute("alt-num-of-children", folder.numOfChildren)
-    folderEl.setAttribute("alt-folder-id", folder.id)
-    folderEl.setAttribute("alt-parent-folder-id", folder.parentId)
+    folderEl.setAttribute(Const.attributes.numOfChildren, folder.numOfChildren)
+    folderEl.setAttribute(Const.attributes.folderId, folder.id)
+    folderEl.setAttribute(Const.attributes.parentFolderId, folder.parentId)
     folderEl.style.setProperty("--depth", depth)
 
     folderEl.appendChild(_buildFolderControls(folder, repoId))
@@ -328,7 +327,7 @@ function _renderFolderNode(folder, repoId, depth) {
 function _buildFolderControls(folder, repoId) {
     const controlsEl = document.createElement("div")
     controlsEl.classList.add("controls", "drag-drop", "dropzone")
-    controlsEl.setAttribute("alt-folder-id", folder.id)
+    controlsEl.setAttribute(Const.attributes.folderId, folder.id)
 
     const nameEl = _buildFolderNameEl(folder, folder.name)
     const iconCtrlEl = _buildFolderIconCtrl(folder, nameEl)
@@ -425,7 +424,7 @@ function _bindBranchGestures(ctrlEl, folderId) {
 
         if (!ctrlEl.isConnected || event.detail > 1) return
 
-        const folder = _findFolder(folderId)
+        const folder = Folder.find(folderId)
         if (!folder) return
 
         const expanded = folder.isExpanded()
@@ -447,7 +446,7 @@ function _bindBranchGestures(ctrlEl, folderId) {
 
         if (!ctrlEl.isConnected || wasExpanded === null) return
 
-        const folder = _findFolder(folderId)
+        const folder = Folder.find(folderId)
         if (!folder) return
 
         if (wasExpanded) {
@@ -456,15 +455,6 @@ function _bindBranchGestures(ctrlEl, folderId) {
             folder.expandAll()
         }
     })
-}
-
-function _findFolder(folderId) {
-    try {
-        return new Folder(folderId)
-    } catch (_) {
-        // the node was removed by a tree rebuild mid-interaction
-        return null
-    }
 }
 
 function _buildFolderNameEl(folder, label) {
@@ -540,7 +530,7 @@ function _buildChildrenDiv(folder, repoId, isRoot, depth) {
     const childrenEl = document.createElement("div")
     childrenEl.className = "children"
     childrenEl.id = `children-${folder.id}`
-    childrenEl.setAttribute("alt-folder-id", folder.id)
+    childrenEl.setAttribute(Const.attributes.folderId, folder.id)
 
     // Root starts expanded; non-root starts collapsed
     if (!isRoot) {

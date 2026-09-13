@@ -1,3 +1,4 @@
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import {
     getActiveModalHost,
@@ -7,7 +8,7 @@ import {
     setAssetDetailSize,
 } from "../common/modal.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
-import { loadNextPage } from "../fragments/search-results.js"
+import { loadNextPage } from "./infinite-scroll.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
 // Pending load listeners per image element, removed when a newer `src` supersedes the load
@@ -54,10 +55,10 @@ export function setImgSrcAndWait({ img, url }) {
  * and at the first cell, nothing happens.
  *
  * Every image request gets its own token. Only the latest request for the still-active
- * asset-detail open may change the image, box size, title, loading state, or dispatch
- * `detailShown`; superseded or orphaned completions are ignored, and none can reopen a modal.
+ * asset-detail open may change the image, box size, title, or loading state; superseded or
+ * orphaned completions are ignored, and none can reopen a modal.
  */
-export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
+export function createSearchDetailCoordinator({ context }) {
     // The asset the modal shows, or is loading: where navigation starts from
     let currentAssetId = null
     let imageRequestToken = 0
@@ -177,7 +178,6 @@ export function createSearchDetailCoordinator({ Alpine, context, dispatch }) {
             setAssetDetailSize({ width, height })
             Alpine.store(Const.state.modal).title = title
             loading.value = false
-            dispatch(Const.events.detailShown, { assetId })
         } catch (error) {
             if (!isCurrentImageRequest({ token, openId })) {
                 return

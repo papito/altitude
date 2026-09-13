@@ -44,8 +44,10 @@
     cursor: pointer;
   }
 
+  /* Hidden until at least one field is shown: the grid carries one `show-<field>` class per visible field
+     (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
   #assets .cell .metadata {
-    display: grid;
+    display: none;
     background-color: var(--background-tertiary-color);
     width: 100%;
     padding-top: 6px;
@@ -86,6 +88,18 @@
     background-position: center;
     background-repeat: no-repeat;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  #assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-fileSize) .cell .metadata {
+    display: grid;
+  }
+
+  #assets.show-fileName .metadata > .fileName,
+  #assets.show-originalCreatedAt .metadata > .originalCreatedAt,
+  #assets.show-importedAt .metadata > .importedAt,
+  #assets.show-dimensions .metadata > .dimensions,
+  #assets.show-fileSize .metadata > .fileSize {
+    display: block;
   }
 
   #assets .cell .metadata div {
@@ -236,7 +250,9 @@
 </style>
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
-   the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js) *@
+   the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
+   The grid's behaviours (selection, infinite scroll, lazy images, metadata visibility, box selection) are bound by that
+   hydrator from the modules under js/search-results/ *@
 <div data-app-fragment="search-results"
      data-results-total="@{total}"
      data-results-repo-id="@{RequestContext.getRepository.persistedId}"
@@ -259,7 +275,7 @@
     </div>
   </div>
   @* The ⚙ View control is a dialog-trigger context menu, built into this host by
-     js/fragments/search-results.js like the Add album and Add folder controls *@
+     js/search-results/view-settings-control.js like the Add album and Add folder controls *@
   <div id="viewSettingsActions"></div>
 
   <div class="group">
@@ -331,7 +347,7 @@
   </div>
 </div>
 
-<div id="assets" x-data>
+<div id="assets">
   @grid
 </div>
 </div>

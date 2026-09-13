@@ -12,7 +12,6 @@
     @includes.html.header_common()
     <script src="/static/js/lib/interact.min.js"></script>
     <script src="/static/js/lib/json-enc.js"></script>
-    <script src="/static/js/lib/hx-alpine-compat.js"></script>
 
     <style>
       body {
@@ -86,47 +85,44 @@
 
       <div id="explorer" class="split content split-horizontal">
         <div id="explorerViews" class="content">
-          <tab-container>
-            <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
-              <button type="button" id="foldersTab" role="tab" data-tab-container-no-tabstop>
-                <a
-                  href="#folders"
-                  hx-target="#explorerPanelContent"
-                  hx-swap="innerHTML"
-                  hx-trigger="click"
-                  hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab"
-                >
-                  <i class="fas fa-folder"></i> Folders
-                </a>
-              </button>
+          @* Each tab is the link itself. A successful tab load marks its tab selected
+             (js/listeners/htmx-requests.js); the initial tab is loaded the same way below *@
+          <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
+            <a id="foldersTab"
+               role="tab"
+               aria-selected="false"
+               href="#folders"
+               hx-target="#explorerPanelContent"
+               hx-swap="innerHTML"
+               hx-trigger="click"
+               hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab">
+              <i class="fas fa-folder"></i> Folders
+            </a>
 
-              <button type="button" id="albumsTab" role="tab" data-tab-container-no-tabstop>
-                <a
-                  href="#albums"
-                  hx-target="#explorerPanelContent"
-                  hx-trigger="click"
-                  hx-swap="innerHTML"
-                  hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab"
-                >
-                  <i class="fas fa-images"></i> Albums
-                </a>
-              </button>
+            <a id="albumsTab"
+               role="tab"
+               aria-selected="false"
+               href="#albums"
+               hx-target="#explorerPanelContent"
+               hx-swap="innerHTML"
+               hx-trigger="click"
+               hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab">
+              <i class="fas fa-images"></i> Albums
+            </a>
 
-              <button type="button" id="peopleTab" role="tab" data-tab-container-no-tabstop>
-                <a
-                  href="#people"
-                  hx-target="#explorerPanelContent"
-                  hx-trigger="click"
-                  hx-swap="innerHTML"
-                  hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-                >
-                  <i class="fas fa-users"></i> People
-                </a>
-              </button>
-            </div>
+            <a id="peopleTab"
+               role="tab"
+               aria-selected="false"
+               href="#people"
+               hx-target="#explorerPanelContent"
+               hx-swap="innerHTML"
+               hx-trigger="click"
+               hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab">
+              <i class="fas fa-users"></i> People
+            </a>
+          </div>
 
-            <div id="explorerPanelContent" role="tabpanel" class="tab-content"></div>
-          </tab-container>
+          <div id="explorerPanelContent" role="tabpanel" class="tab-content"></div>
         </div>
       </div>
 
@@ -152,6 +148,7 @@
       function loadView() {
           initApp()
 
+          // Set once: the repository cannot change without a full page load
           window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
           /**
@@ -214,15 +211,17 @@
               })
           }
 
-          // if there is no URL fragment, we default to folder views
-          // in triage view the tab list is hidden — always load the folders tab
+          // The URL fragment names the explorer tab to open, defaulting to folders; in triage
+          // the tab list is hidden, so it is always folders. The tab is loaded exactly as a
+          // click on it would load it: issued from the tab, so it is marked selected on success
           const fragment = (view === Const.views.triage) ? "#folders" : (window.location.hash || "#folders")
+          const tabEl = document.querySelector(`[role="tab"][href="${fragment}"]`) ?? document.querySelector('[role="tab"]')
 
-          const tabLink = document.querySelector('a[href="' + fragment + '"]')
-
-          if (tabLink) {
-              tabLink.click()
-          }
+          htmx.ajax("GET", tabEl.getAttribute("hx-get"), {
+              source: tabEl,
+              target: "#explorerPanelContent",
+              swap: "innerHTML",
+          })
 
           /**
            * Perform search on load - the default one, or the one the URL asked for

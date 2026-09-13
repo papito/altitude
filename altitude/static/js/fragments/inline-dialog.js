@@ -14,8 +14,7 @@
  * A dialog that needs wiring beyond the form itself names it with `data-app-dialog-kind`; the view
  * settings dialog is the only one, and it submits nothing at all.
  */
-import { Const } from "../constants.js"
-import { closeContextMenu } from "../common/context-menu.js"
+import { closeContextMenu } from "../alpine/components/context-menu.js"
 import { registerDialogKind } from "./dialog-operations.js"
 import { focusFragmentElement } from "./helpers.js"
 
@@ -50,7 +49,7 @@ registerDialogKind("inline-dialog", {
  * or else to the panel itself, so a held or repeated Enter from the menu cannot activate a
  * destructive control; one Tab reaches it.
  */
-export function hydrateInlineDialogFragment({ fragmentEl, context, dispatch }) {
+export function hydrateInlineDialogFragment({ fragmentEl, context }) {
     const panel = fragmentEl.closest(OPEN_PANEL_SELECTOR)
 
     if (!panel) {
@@ -71,16 +70,17 @@ export function hydrateInlineDialogFragment({ fragmentEl, context, dispatch }) {
     }
 
     if (fragmentEl.dataset.appDialogKind === "view-settings") {
-        initializeViewSettingsFragment({ fragmentEl, context, dispatch })
+        initializeViewSettingsFragment({ fragmentEl, context })
     }
 }
 
 /**
  * The view settings dialog: each checkbox is one grid metadata field, seeded from the fields the
- * context holds and applied the moment it changes, so the dialog never submits anything and the
- * panel stays open for as long as the user keeps it there.
+ * context holds and written back the moment it changes (the grid follows the set reactively,
+ * js/search-results/metadata-visibility.js), so the dialog never submits anything and the panel
+ * stays open for as long as the user keeps it there.
  */
-function initializeViewSettingsFragment({ fragmentEl, context, dispatch }) {
+function initializeViewSettingsFragment({ fragmentEl, context }) {
     const showFields = context.getGridMetadataFields()
 
     fragmentEl
@@ -104,18 +104,10 @@ function initializeViewSettingsFragment({ fragmentEl, context, dispatch }) {
             return
         }
 
-        const fieldName = checkboxEl.value
-        const checked = checkboxEl.checked
-
-        if (checked) {
-            context.addGridMetadataField(fieldName)
+        if (checkboxEl.checked) {
+            context.addGridMetadataField(checkboxEl.value)
         } else {
-            context.removeGridMetadataField(fieldName)
+            context.removeGridMetadataField(checkboxEl.value)
         }
-
-        dispatch(Const.events.viewSettingChanged, {
-            fieldName,
-            checked,
-        })
     })
 }

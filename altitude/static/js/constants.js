@@ -1,9 +1,14 @@
-export let Const = {
+export const Const = {
     views: {
         repository: "repository",
         triage: "triage",
         trashbin: "trashbin",
     },
+
+    /**
+     * Custom event names, dispatched on `document.body`. Templates name the same strings verbatim
+     * in `data-app-success-event` attributes and `$dispatch(...)` calls, so a rename touches both.
+     */
     events: {
         folderMoved: "FOLDER_MOVED_EVENT",
         folderRenamed: "FOLDER_RENAMED_EVENT",
@@ -11,12 +16,11 @@ export let Const = {
         batchAssetsRecycled: "BATCH_ASSETS_RECYCLED_EVENT",
         batchAssetsPurged: "BATCH_ASSETS_PURGED_EVENT",
         batchAssetsRestored: "BATCH_ASSETS_RESTORED_EVENT",
-        folderTrashed: "FOLDER_TRASHED_EVENT",
         assetMoved: "ASSET_MOVED_EVENT",
         assetTrashed: "ASSET_TRASHED_EVENT",
+        trashPurged: "TRASH_PURGED_EVENT",
         folderDeleted: "FOLDER_DELETED_EVENT",
         folderAdded: "FOLDER_ADDED_EVENT",
-        folderCollapsed: "FOLDER_COLLAPSED_EVENT",
         albumAdded: "ALBUM_ADDED_EVENT",
         albumRenamed: "ALBUM_RENAMED_EVENT",
         albumDeleted: "ALBUM_DELETED_EVENT",
@@ -29,35 +33,28 @@ export let Const = {
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
-        viewSettingChanged: "VIEW_SETTING_CHANGED_EVENT",
-        deselectAll: "DESELECT_ALL_EVENT",
-        gridSelectionChanged: "GRID_SELECTION_CHANGED_EVENT",
-        toggleAsset: "TOGGLE_ASSET_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
-        detailShown: "DETAIL_SHOWN_EVENT",
     },
 
     /**
-     * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-     * CAUTION: These are hard-coded in the HTML templates and are here to avoid magic strings in JS code.
-     *
-     * One way to fix this it to have these constants in SSP server-side and reference them in JS code.
-     * It's going to be ugly eiter way.
+     * The `data-*` attributes JS reads element identity and state from. The Twirl templates and the
+     * client-side renderers (`common/folder-tree.js`, `common/album-list.js`) write the same names;
+     * `element.dataset` reads them by their camel-cased key (`data-folder-id` is `dataset.folderId`).
      */
     attributes: {
-        expanded: "alt-expanded",
-        viewedScope: "alt-viewed-scope",
-        isRoot: "alt-is-root",
-        numOfChildren: "alt-num-of-children",
-        parentFolderId: "alt-parent-folder-id",
-        folderId: "alt-folder-id",
-        albumId: "alt-album-id",
-        assetId: "alt-asset-id",
-        originalWidth: "alt-og-width",
-        dataSrc: "alt-data-src",
-        personId: "alt-person-id",
-        faceId: "alt-face-id",
+        expanded: "data-expanded",
+        viewedScope: "data-viewed-scope",
+        isRoot: "data-is-root",
+        numOfChildren: "data-num-of-children",
+        parentFolderId: "data-parent-folder-id",
+        folderId: "data-folder-id",
+        albumId: "data-album-id",
+        assetId: "data-asset-id",
+        originalWidth: "data-og-width",
+        dataSrc: "data-src",
+        personId: "data-person-id",
+        faceId: "data-face-id",
     },
 
     context: {

@@ -1,39 +1,21 @@
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { createModalStore } from "../common/modal.js"
+import { createSelectedAssetsStore } from "../search-results/selection.js"
 import { createSearchParamsStore } from "./search-params.js"
 
-export function initializeFrontendStores({ Alpine }) {
-    Alpine.store(Const.state.selectedAssets, {
-        items: new Map(),
+export function initializeFrontendStores() {
+    Alpine.store(Const.context.repoId, "")
+    Alpine.store(Const.context.gridMetadataFields, new Set())
 
-        get isEmpty() {
-            return this.items.size === 0
-        },
-
-        get size() {
-            return this.items.size
-        },
-
-        reset() {
-            document.body.dispatchEvent(
-                new CustomEvent(Const.events.deselectAll),
-            )
-        },
-
-        contains(id) {
-            return this.items.has(id)
-        },
-    })
+    // The selected asset IDs (search-results/selection.js)
+    Alpine.store(Const.state.selectedAssets, createSelectedAssetsStore())
 
     Alpine.store(Const.state.resultsTotal, {
         count: 0,
 
         set(n) {
             this.count = n
-        },
-
-        increment(n = 1) {
-            this.count += n
         },
 
         decrement(n = 1) {

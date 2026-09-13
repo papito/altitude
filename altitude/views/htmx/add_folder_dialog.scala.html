@@ -11,9 +11,8 @@
       id="addFolder"
       data-app-fragment="inline-dialog"
       data-app-dialog-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
-      data-app-dialog-success-event="folderAdded"
-      data-app-dialog-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
-      alt-folder-id="@{parentId}"
+      data-app-success-event="FOLDER_ADDED_EVENT"
+      data-app-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'
       hx-target="this"
       hx-swap="none"
       hx-post="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/add"

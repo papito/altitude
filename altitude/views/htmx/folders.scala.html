@@ -1,5 +1,3 @@
-@import altitude.core.RequestContext
-
 @()
 
 <style>
@@ -91,7 +89,7 @@
        results include the whole subtree. Expansion plays no part. The marker sits on the viewed folder's
        node alone (see js/common/viewed-folder-scope.js); its descendants are DOM descendants, so this one
        rule covers root, branches, and leaves in the subtree, and never an icon in a menu or dialog */
-    #rootFolderList .folder[alt-viewed-scope] .folder-icon {
+    #rootFolderList .folder[data-viewed-scope] .folder-icon {
         color: var(--success-font-color);
     }
 
@@ -156,14 +154,6 @@
    stays the first thing in the tab *@
 <div id="folderActions" hidden></div>
 
-<div id="rootFolderList" class="folder-list"></div>
-
-<script type="module">
-    import { selectTab } from "/static/js/common/navigation.js"
-    import { reloadFolderTree } from "/static/js/common/folder-tree.js"
-
-    selectTab("explorer", "foldersTab")
-    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
-    reloadFolderTree("@{ RequestContext.getRepository.persistedId }")
-</script>
+@* Rendered client-side by js/common/folder-tree.js once the tab has settled (js/fragments/explorer.js) *@
+<div id="rootFolderList" class="folder-list" data-app-fragment="folder-tree"></div>
 

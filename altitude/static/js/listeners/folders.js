@@ -30,9 +30,10 @@ export function registerFolderListeners(app) {
 
         try {
             const response = await http.put(
-                `/htmx/folder/r/${app.context.getRepoId()}/move?movedFolderId=${movedFolderId}&newParentId=${newParentId}`,
+                `/htmx/folder/r/${app.context.getRepoId()}/move`,
                 null,
                 {
+                    params: { movedFolderId, newParentId },
                     validateStatus: allowHttpStatuses(409),
                 },
             )
@@ -59,18 +60,8 @@ export function registerFolderListeners(app) {
     document.body.addEventListener(Const.events.folderAdded, async (event) => {
         await reloadFolderTree(app.context.getRepoId())
 
-        // Expand the parent so the newly added folder is visible
-        const parentId = event.detail.parentId
-        if (parentId) {
-            try {
-                const parent = new Folder(parentId)
-                if (!parent.isRoot && !parent.isExpanded()) {
-                    parent.expand()
-                }
-            } catch (_) {
-                // parent not present in the rebuilt tree - nothing to reveal
-            }
-        }
+        // Expand the parent so the newly added folder is visible; `expand()` ignores root
+        Folder.find(event.detail.parentId)?.expand()
     })
 
     document.body.addEventListener(

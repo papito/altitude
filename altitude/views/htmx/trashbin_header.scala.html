@@ -7,21 +7,37 @@
         place-items: center;
         margin-top: var(--control-vertical-space);
     }
+
+    #purgeRecycleBinConfirm {
+        display: grid;
+        place-items: center;
+        row-gap: var(--control-vertical-space);
+    }
 </style>
 
+@* The button opens the confirmation below in the modal host without a request (js/fragments/dialog-openers.js);
+   the confirmation is a modal dialog like any fetched one, and its success announces the purge *@
 <div id="purgeRecycleBin">
-    <button class="action-button error"
-            hx-swap="innerHTML"
-            hx-target="#content"
-            hx-confirm="This will PERMANENTLY delete all items in the recycle bin. Are you sure?"
-            hx-delete="/htmx/trash/r/@{ RequestContext.getRepository.persistedId }/purge"
-            hx-trigger="click">
+    <button type="button"
+            class="action-button error"
+            data-app-open-dialog="#purgeRecycleBinDialog">
         Purge recycle bin
     </button>
 </div>
 
-<script type="module">
-    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
-</script>
-
-
+<template id="purgeRecycleBinDialog">
+    <div id="purgeRecycleBinConfirm"
+         data-app-fragment="modal"
+         data-app-modal-title="Purge recycle bin"
+         data-app-success-event="TRASH_PURGED_EVENT">
+        <div>This will PERMANENTLY delete all items in the recycle bin.</div>
+        <button type="button"
+                class="action-button error"
+                hx-swap="innerHTML"
+                hx-target="#content"
+                hx-delete="/htmx/trash/r/@{ RequestContext.getRepository.persistedId }/purge"
+                hx-trigger="click">
+            Delete everything permanently
+        </button>
+    </div>
+</template>

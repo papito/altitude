@@ -3,10 +3,12 @@ export function highlightNav(elClass) {
     document.querySelector(fullClassName).classList.add("active")
 }
 
-export function selectTab(parentId, tabId) {
-    htmx.findAll(`#${parentId} button[role='tab'`).forEach((tab) => {
-        tab.removeAttribute("aria-selected")
-    })
+/** Marks `tabEl` as the selected tab of its tab list, and its siblings as not selected */
+export function selectTab(tabEl) {
+    tabEl
+        .closest('[role="tablist"]')
+        ?.querySelectorAll('[role="tab"]')
+        .forEach((tab) => tab.setAttribute("aria-selected", "false"))
 
-    htmx.find(`#${tabId}`).setAttribute("aria-selected", "True")
+    tabEl.setAttribute("aria-selected", "true")
 }

@@ -1,3 +1,4 @@
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import {
     focusAddAlbumControlIfFocusLost,
@@ -12,6 +13,8 @@ import { runSearch } from "../search-results/search.js"
  * among the selected ones, as folder moves do.
  */
 export function registerAlbumListeners(app) {
+    const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
+
     document.body.addEventListener(Const.events.albumAdded, async () => {
         await reloadAlbumList(app.context.getRepoId())
         // The first album hides the empty-state button that opened the dialog
@@ -41,12 +44,8 @@ export function registerAlbumListeners(app) {
 
     document.body.addEventListener(Const.events.assetAddedToAlbum, (event) => {
         const { albumId, assetId } = event.detail
-        const selectedAssetsStore = app.Alpine.store(Const.state.selectedAssets)
 
-        if (
-            !selectedAssetsStore.isEmpty &&
-            selectedAssetsStore.contains(assetId)
-        ) {
+        if (selectedAssets().contains(assetId)) {
             app.dispatch(Const.events.batchAssetsAddedToAlbum, { albumId })
             return
         }
@@ -57,13 +56,9 @@ export function registerAlbumListeners(app) {
     document.body.addEventListener(
         Const.events.batchAssetsAddedToAlbum,
         (event) => {
-            const selectedAssetsStore = app.Alpine.store(
-                Const.state.selectedAssets,
-            )
-
             app.assetActions.addAssetsToAlbum({
                 albumId: event.detail.albumId,
-                assetIds: Array.from(selectedAssetsStore.items.keys()),
+                assetIds: selectedAssets().toArray(),
             })
         },
     )
@@ -71,13 +66,9 @@ export function registerAlbumListeners(app) {
     document.body.addEventListener(
         Const.events.batchAssetsRemovedFromAlbum,
         () => {
-            const selectedAssetsStore = app.Alpine.store(
-                Const.state.selectedAssets,
-            )
-
             app.assetActions.removeAssetsFromAlbum({
                 albumId: app.context.getCurrentAlbumId(),
-                assetIds: Array.from(selectedAssetsStore.items.keys()),
+                assetIds: selectedAssets().toArray(),
             })
         },
     )

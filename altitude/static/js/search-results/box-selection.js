@@ -13,9 +13,8 @@ import {
  * gesture: it draws the rectangle, autoscrolls `#content` near its vertical edges, and keeps the
  * list of thumbnails currently inside the rectangle. It changes no selection state of its own: it
  * adds no classes, and this module reads its list once, on release. Only then does the box go
- * through the same code a Shift-click uses - the `selectedAssets` store's `reset()` for a
- * replacement box, then each thumbnail's `selectable` component's `toggle()` - so the checkmarks
- * and the store update exactly as they always did.
+ * through the `selectedAssets` store, like every other selection change: `reset()` for a
+ * replacement box, then `select()` for each thumbnail it touched.
  *
  * Gesture rules:
  * - A plain drag from empty grid space (padding, gaps, a cell's metadata) replaces the selection.
@@ -272,27 +271,15 @@ function createBoxSelection({ assetsElement, contentElement }) {
     function commit({ candidates, additive }) {
         const store = Alpine.store(Const.state.selectedAssets)
 
-        // Synchronous: `reset()` dispatches `deselectAll`, which is handled at once
         if (!additive) {
             store.reset()
         }
 
-        let added = 0
-
-        for (const el of candidates) {
-            const component = Alpine.$data(el)
-
-            // `toggle()` would deselect an already selected thumbnail
-            if (component && !component.selected) {
-                component.toggle()
-                added += 1
-            }
-        }
+        candidates.forEach((el) => store.select(el.dataset.assetId))
 
         console.debug(
-            "Box selection: %d thumbnails in the box, %d newly selected, additive: %s, selected now: %d",
+            "Box selection: %d thumbnails in the box, additive: %s, selected now: %d",
             candidates.length,
-            added,
             additive,
             store.size,
         )

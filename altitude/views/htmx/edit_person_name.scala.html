@@ -18,8 +18,8 @@
       hx-trigger="submit"
       hx-json-enc>
 
-    @if(fieldErrors.contains( Api.Field.Person.NAME)) {
-        <div class="error">@{ fieldErrors( Api.Field.Folder.NAME) }</div>
+    @if(fieldErrors.contains(Api.Field.Person.NAME)) {
+        <div class="error">@{ fieldErrors(Api.Field.Person.NAME) }</div>
     }
 
     <input type="text"

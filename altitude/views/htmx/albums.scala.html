@@ -1,5 +1,3 @@
-@import altitude.core.RequestContext
-
 @()
 
 <style>
@@ -36,7 +34,7 @@
     }
 
     /* Green marks the viewed album: the one whose results are displayed (see js/common/album-list.js) */
-    #albumList .album[alt-viewed-scope] .album-icon {
+    #albumList .album[data-viewed-scope] .album-icon {
         color: var(--success-font-color);
     }
 
@@ -68,13 +66,5 @@
 
 <div id="noAlbums" hidden></div>
 
-<div id="albumList" class="album-list"></div>
-
-<script type="module">
-    import { selectTab } from "/static/js/common/navigation.js"
-    import { reloadAlbumList } from "/static/js/common/album-list.js"
-
-    selectTab("explorer", "albumsTab")
-    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
-    reloadAlbumList("@{ RequestContext.getRepository.persistedId }")
-</script>
+@* Rendered client-side by js/common/album-list.js once the tab has settled (js/fragments/explorer.js) *@
+<div id="albumList" class="album-list" data-app-fragment="album-list"></div>

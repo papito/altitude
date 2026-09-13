@@ -7,7 +7,7 @@
  * handling for the popover from running a second time.
  * Arrow keys navigate between assets only while asset detail is active and no text is being edited.
  */
-import { closeOpenContextMenu } from "./common/context-menu.js"
+import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
 import { Const } from "./constants.js"
 

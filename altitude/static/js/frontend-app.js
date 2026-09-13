@@ -1,50 +1,31 @@
-import { Const } from "./constants.js"
+import { Alpine } from "./lib/alpine.esm.min.js"
 import { refreshAlbumCounts } from "./common/album-list.js"
 import { refreshFolderCounts } from "./common/folder-tree.js"
-import { showErrorSnackBar } from "./common/snackbar.js"
-import {
-    getRequestPath,
-    getResponseStatus,
-    isRequestSuccessful,
-} from "./common/htmx-events.js"
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
-import { isDialogOperationRequest } from "./fragments/dialog-operations.js"
-import { isModalOpenRequest } from "./common/modal.js"
-import {
-    handleExplorerAfterRequest,
-    isExplorerRequest,
-} from "./listeners/htmx-explorer.js"
-import {
-    isSearchRequest,
-    isTrashPurgeRequest,
-} from "./listeners/htmx-routes.js"
-import {
-    handlePeopleAfterRequest,
-    handlePeopleEscapeKeyPressed,
-} from "./listeners/htmx-people-inline-editor.js"
+import { handlePeopleEscapeKeyPressed } from "./listeners/people.js"
 import { registerAppEventListeners } from "./listeners/index.js"
 import { createSearchDetailCoordinator } from "./search-results/detail-navigator.js"
 import { initializeFrontendStores } from "./stores/app-stores.js"
-import "./search-results/dragon-drop.js"
 
+/**
+ * The composition root: initializes the stores, creates the feature coordinators, registers the
+ * listeners, starts Alpine, binds drag/drop, and hydrates the fragments of the initial page.
+ * Feature logic lives in the modules it composes.
+ */
 export class FrontendApp {
-    constructor({ Alpine, context }) {
-        this.Alpine = Alpine
+    constructor({ context }) {
         this.context = context
         this.started = false
         this.assetActions = createAssetActions({
-            Alpine,
             context,
             reloadNav: this.reloadNav.bind(this),
             reloadFolderCounts: this.reloadFolderCounts.bind(this),
             reloadAlbumCounts: this.reloadAlbumCounts.bind(this),
         })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
-            Alpine,
             context,
-            dispatch: this.dispatch.bind(this),
         })
     }
 
@@ -54,9 +35,9 @@ export class FrontendApp {
         }
 
         this.started = true
-        this.initializeStores()
-        this.registerEventListeners()
-        this.Alpine.start()
+        initializeFrontendStores()
+        registerAppEventListeners(this)
+        Alpine.start()
         bindAppDragDrop(this)
 
         /*
@@ -66,8 +47,8 @@ export class FrontendApp {
          *
          * 1. `hydrateAppFragments()` only initializes fragment roots that already exist in the
          *    current DOM, so on first load it hydrates just the initial page content.
-         * 2. Fragments injected later by HTMX are handled separately in `handleAfterSettle()`,
-         *    which re-runs hydration for the newly swapped nodes only.
+         * 2. Fragments injected later by HTMX are hydrated from `htmx:after:settle`
+         *    (`listeners/htmx-requests.js`) for the newly swapped nodes only.
          * 3. Individual fragment hydrators are written to be idempotent (using `data-app-*`
          *    bound flags where needed), so re-hydrating overlapping DOM is harmless.
          */
@@ -76,79 +57,8 @@ export class FrontendApp {
         return this
     }
 
-    initializeStores() {
-        this.Alpine.store(Const.context.repoId, "")
-        this.Alpine.store(Const.context.gridMetadataFields, new Set())
-
-        initializeFrontendStores({ Alpine: this.Alpine })
-    }
-
-    registerEventListeners() {
-        registerAppEventListeners(this)
-    }
-
-    handleAfterRequest(event) {
-        const requestPath = getRequestPath(event)
-        const status = getResponseStatus(event)
-
-        // Modal opens and the operations submitted from dialogs are settled by `listeners/dialogs.js`
-        if (isModalOpenRequest(event) || isDialogOperationRequest(event)) {
-            return
-        }
-
-        if (handlePeopleAfterRequest({ app: this, event })) {
-            return
-        }
-
-        if (isExplorerRequest({ app: this, requestPath })) {
-            handleExplorerAfterRequest({ event })
-            return
-        }
-
-        if (isTrashPurgeRequest(requestPath)) {
-            if (!isRequestSuccessful(event)) {
-                showErrorSnackBar(
-                    `Error for request to ${requestPath}. HTTP ${status}`,
-                )
-                return
-            }
-
-            // Purging only touches recycled assets, which the counts already exclude, but every
-            // asset mutation refreshes them so the rule has no exceptions to remember
-            this.reloadNav()
-            this.reloadFolderCounts()
-            this.reloadAlbumCounts()
-            return
-        }
-
-        // A page continuous scroll asks for has no visible control behind it, so a failure
-        // would otherwise pass unnoticed; a box selection in progress keeps what it has loaded
-        if (isSearchRequest(requestPath) && !isRequestSuccessful(event)) {
-            showErrorSnackBar(`Error loading search results. HTTP ${status}`)
-        }
-    }
-
     handleEscapeKeyPressed() {
         handlePeopleEscapeKeyPressed()
-    }
-
-    /**
-     * Runs once per swap with the nodes htmx just inserted: hydrate app fragments among
-     * them, and initialize Alpine on the folder nav warning so its `x-show` binding
-     * applies without waiting for Alpine's mutation observer.
-     */
-    handleAfterSettle(event) {
-        event.detail.newContent.forEach((node) => {
-            if (!(node instanceof Element)) {
-                return
-            }
-
-            if (node.id === "folderNavWarning") {
-                this.Alpine.initTree(node)
-            }
-
-            this.hydrateFragments(node)
-        })
     }
 
     hydrateFragments(root) {

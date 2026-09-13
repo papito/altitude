@@ -28,7 +28,7 @@ export function setViewedFolderScope({ repoId, folderId }) {
 }
 
 /**
- * Clears the previous marker and marks the viewed folder's node with `alt-viewed-scope`. The
+ * Clears the previous marker and marks the viewed folder's node with `data-viewed-scope`. The
  * node's descendants are DOM descendants, so one CSS rule colors the whole subtree from this
  * single marker: root and leaves, hidden descendants without expanding them, and any folder later
  * added to or moved within the subtree by its new position. Ancestors and unrelated branches are

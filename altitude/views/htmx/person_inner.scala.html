@@ -7,8 +7,8 @@
 
 <!-- The style for this is in person.scala.html -->
 
-<div class="visual" alt-person-id="@{person.persistedId}">
-    <div class="cover drag-drop" alt-person-id="@{person.persistedId}">
+<div class="visual" data-person-id="@{person.persistedId}">
+    <div class="cover drag-drop" data-person-id="@{person.persistedId}">
         <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}"
              hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
              hx-target="#modalContent"
@@ -47,15 +47,16 @@
         }
     }
 
+    @* A successful discard announces itself (js/listeners/htmx-requests.js), and the people list drops the person *@
     @if(person.numOfFaces < FaceRecognition.MIN_FACES_THRESHOLD && !person.isBadMatch) {
-        <div id="markAsBadMatch"
-             alt-person-id="@{person.persistedId}"
-             class="mark-discarded">
+        <div class="mark-discarded">
             <a href="#"
                hx-trigger="click"
                hx-delete="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}"
                hx-swap="innerHTML"
                hx-target="#person"
+               data-app-success-event="PERSON_MARKED_AS_BAD_MATCH_EVENT"
+               data-app-success-detail='{"personId":"@{person.persistedId}"}'
             ><i class="fas fa-trash"></i>Discard</a>
         </div>
     }

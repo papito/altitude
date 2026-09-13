@@ -1,12 +1,9 @@
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { dragged, dragMoveListener } from "../common/dragon-drop.js"
+import { dragged, dragMoveListener } from "./helpers.js"
 
-export function bindBatchOpsDragDrop({ Alpine }) {
-    const dragHandleEl = document.querySelector("#batchOps button.drag-drop")
-    if (!dragHandleEl) {
-        return
-    }
-
+/** The footer's Move button drags the whole selection; the selected thumbnails dim while it does */
+export function bindBatchOpsDragDrop() {
     interact("#batchOps button.drag-drop").draggable({
         inertia: true,
         autoScroll: true,
@@ -14,23 +11,10 @@ export function bindBatchOpsDragDrop({ Alpine }) {
         listeners: {
             move: dragMoveListener,
             start: () => {
-                const selectedAssetsStore = Alpine.store(
-                    Const.state.selectedAssets,
-                )
-
-                selectedAssetsStore.items.forEach((asset) => {
-                    asset.drag()
-                })
+                Alpine.store(Const.state.selectedAssets).setDragging(true)
             },
             end: (event) => {
-                const selectedAssetsStore = Alpine.store(
-                    Const.state.selectedAssets,
-                )
-
-                selectedAssetsStore.items.forEach((asset) => {
-                    asset.drop()
-                })
-
+                Alpine.store(Const.state.selectedAssets).setDragging(false)
                 dragged(event)
             },
         },
