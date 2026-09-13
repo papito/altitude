@@ -14,15 +14,17 @@ export function createAssetActions({
     reloadNav,
     reloadFolderCounts,
     reloadAlbumCounts,
+    reloadLocationCounts,
 }) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
 
     // Every successful mutation refreshes the nav counts, the folder tree counts, and the album
-    // counts (recycling drops an asset from its albums)
+    // and Location counts (recycling drops an asset from its albums and Locations)
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()
         reloadAlbumCounts()
+        reloadLocationCounts()
     }
 
     function removeTriageStyling(assetIds) {
@@ -298,6 +300,73 @@ export function createAssetActions({
         }
     }
 
+    function locationName(locationId) {
+        return (
+            document.getElementById(`locationName-${locationId}`)
+                ?.textContent ?? "location"
+        )
+    }
+
+    /**
+     * Locations point at assets like albums do: adding leaves the assets where they are, so the
+     * grid does not change. Assets already in the Location are skipped by the server, hence the
+     * warning when the drop added nothing.
+     */
+    async function addAssetsToLocation({ locationId, assetIds }) {
+        const payload = { locationId, assetIds }
+
+        try {
+            const response = await http.put(
+                `/api/location/r/${context.getRepoId()}/assets`,
+                payload,
+            )
+            const added = response.data.added
+
+            if (added === 0) {
+                showWarningSnackBar(
+                    `Already in location "${locationName(locationId)}"`,
+                )
+            } else {
+                showSuccessSnackBar(
+                    `${added > 1 ? `${added} assets` : "Asset"} added to location "${locationName(locationId)}"`,
+                )
+            }
+
+            if (shouldResetSelectedAssets(assetIds)) {
+                selectedAssets().reset()
+            }
+
+            reloadLocationCounts()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error adding assets to location: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
+    /** Removes the pointers only; the assets leave the displayed Location results and nothing else */
+    async function removeAssetsFromLocation({ locationId, assetIds }) {
+        const payload = { locationId, assetIds }
+
+        try {
+            await http.delete(`/api/location/r/${context.getRepoId()}/assets`, {
+                data: payload,
+            })
+
+            showSuccessSnackBar(
+                `${assetIds.length > 1 ? "Assets" : "Asset"} removed from location "${locationName(locationId)}"`,
+            )
+
+            removeAssetsFromGrid(assetIds)
+            selectedAssets().reset()
+            reloadLocationCounts()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error removing assets from location: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
     return {
         moveAssets,
         recycleAssets,
@@ -305,5 +374,7 @@ export function createAssetActions({
         restoreAssets,
         addAssetsToAlbum,
         removeAssetsFromAlbum,
+        addAssetsToLocation,
+        removeAssetsFromLocation,
     }
 }

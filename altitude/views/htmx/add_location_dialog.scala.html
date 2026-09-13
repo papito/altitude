@@ -4,6 +4,24 @@
 
 @(title: String, parents: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
+<style>
+  /* One field per row; the map and the geocoder (Unit 8) take rows of their own */
+  #addLocation, #addLocation .location-editor-fields {
+    display: grid;
+    row-gap: var(--control-vertical-space);
+  }
+
+  #addLocation label {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  #addLocation input[type="text"], #addLocation select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+</style>
+
 @* The editor's map and geocoder are enhanced in Unit 8; typed coordinates already submit through the same validation flow. *@
 <form id="addLocation" class="location-editor" data-app-fragment="modal"
       data-app-modal-title="@{title}"
@@ -11,7 +29,8 @@
       data-app-success-event="LOCATION_ADDED_EVENT"
       hx-target="this" hx-swap="none" hx-json-enc
       hx-post="/htmx/location/r/@{RequestContext.getRepository.persistedId}/add">
-  <div data-app-fragment="location-editor"
+  <div class="location-editor-fields"
+       data-app-fragment="location-editor"
        data-map-tile-url="@{tileUrl}"
        data-map-attribution="@{attribution}"
        data-geocoder-enabled="@{geocoderEnabled}">
@@ -25,7 +44,9 @@
                value="@{formJson.obj.get(field).flatMap(_.strOpt).getOrElse("")}">
       </div>
     }
-    @includes.html.location_parent_select(parents, formJson, fieldErrors)
+    <div>
+      @includes.html.location_parent_select(parents, formJson, fieldErrors)
+    </div>
     <div id="locationEditorMap" tabindex="-1"></div>
     @if(geocoderEnabled) {
       <label for="locationGeocode">Search places</label>

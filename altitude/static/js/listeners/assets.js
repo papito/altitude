@@ -59,5 +59,6 @@ export function registerAssetListeners(app) {
         app.reloadNav()
         app.reloadFolderCounts()
         app.reloadAlbumCounts()
+        app.reloadLocationCounts()
     })
 }

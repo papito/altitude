@@ -33,6 +33,11 @@ export const context = {
         return Alpine.store(Const.state.searchParams).albumId
     },
 
+    /** The Location whose assets are being browsed, or null when no Location filter is active */
+    getCurrentLocationId: function () {
+        return Alpine.store(Const.state.searchParams).locationId
+    },
+
     /**
      * Seeds the grid-visible metadata fields from localStorage, where they are kept as a JSON array
      * of field names. A value saved by an earlier version as a comma-separated list still loads.

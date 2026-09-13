@@ -13,6 +13,7 @@ const DEFAULTS = {
     folderId: null,
     personId: null,
     albumId: null,
+    locationId: null,
     q: null,
     sort: null,
     groupBy: null,
@@ -24,17 +25,18 @@ const DEFAULTS = {
 /**
  * What changing one parameter does to the others.
  *
- * Choosing a folder, a person, or an album are all "look somewhere else", so each clears the other
- * two; a view is a different place again and clears all three. Everything else narrows or reorders
+ * Choosing a folder, a person, an album, or a Location are all "look somewhere else", so each clears
+ * the other three; a view is a different place again and clears all four. Everything else narrows or reorders
  * what is already in scope - the date grouping, like the sort, survives all of them. This table is
  * what the server's old `newSearch=true` flag used to express, and it is the whole reason a widget
  * can send just the one parameter it knows about.
  */
 const CLEARS = {
-    view: ["folderId", "personId", "albumId"],
-    folderId: ["personId", "albumId"],
-    personId: ["folderId", "albumId"],
-    albumId: ["folderId", "personId"],
+    view: ["folderId", "personId", "albumId", "locationId"],
+    folderId: ["personId", "albumId", "locationId"],
+    personId: ["folderId", "albumId", "locationId"],
+    albumId: ["folderId", "personId", "locationId"],
+    locationId: ["folderId", "personId", "albumId"],
 }
 
 const NUMERIC = new Set(["p", "rpp"])

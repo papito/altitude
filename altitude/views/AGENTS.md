@@ -33,8 +33,10 @@ calls `reloadFolderTree(repoId)` once the tab has settled; edit `js/common/folde
 folder rows and action markup. The tree's interaction contract (expansion gestures, viewed-folder
 highlighting) is under **Folder tree expansion and viewed scope** below. `htmx/albums.scala.html`
 is the same shape for the Albums tab: styles, the two add buttons, and the empty `#albumList` host
-(`data-app-fragment="album-list"`) that `js/common/album-list.js` renders (see **Albums** below).
-Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
+(`data-app-fragment="album-list"`) that `js/common/album-list.js` renders (see **Albums** below), and
+`htmx/locations.scala.html` for the Locations tab: styles, the `#locationActions` / `#noLocations` hosts
+and the empty `#locationList` host (`data-app-fragment="location-list"`) that `js/common/location-list.js`
+renders (see **Locations** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
 explorer tab that issued a load is marked selected from `htmx:after:request`
 (`js/listeners/htmx-requests.js`). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
 `.asset-count`) live in `core.css`.
@@ -48,13 +50,13 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | JS directory | Template(s) it serves |
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
-| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), and buttons opening a page-held dialog (`dialog-openers.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); and the `document`-level dialog request wiring (`dialogs.js`) |
+| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); and the `document`-level dialog request wiring (`dialogs.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the date headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), and the post-gesture click swallow (`click-suppression.js`) |
-| `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, and album drag/drop, plus the helpers they share (`helpers.js`) |
+| `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), context-menu-markup (builds the ⋯ menu of a folder or album and the dialog-trigger buttons), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the parents and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a date header's checkbox over its day's cells) and `context-menu.js` (native popover menus of folders and albums, and the functions that close one from outside); `index.js` registers them |
 
@@ -79,6 +81,9 @@ through `element.dataset` by their camel-cased key:
 ```js
 Const.attributes.folderId       // "data-folder-id"        el.dataset.folderId
 Const.attributes.albumId        // "data-album-id"
+Const.attributes.locationId     // "data-location-id" (a Location row and its drop zone)
+Const.attributes.parentId       // "data-parent-id"   (a Location row under a parent)
+Const.attributes.kind           // "data-kind"        (`parent` | `location` on a Location row)
 Const.attributes.assetId        // "data-asset-id"
 Const.attributes.numOfChildren  // "data-num-of-children"
 Const.attributes.expanded       // "data-expanded"
@@ -241,12 +246,14 @@ A **dialog** is a server-rendered form that completes one user action, hydrated 
 the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), and `kind`, naming wiring a dialog needs beyond its
-form (only the view settings checkboxes, hydrated in `js/fragments/inline-dialog.js`). Its success
+form (the view settings checkboxes, hydrated in `js/fragments/inline-dialog.js`, and the Add to
+location selection, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-location.js`). Its success
 event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
 `-detail-target-attr-*`) on the fragment root. The one attribute that describes the modal host is
-`data-app-modal-title`. The three folder dialogs, the three album dialogs, and the view settings
-dialog are **inline dialogs** (`data-app-fragment="inline-dialog"`, see **Context menus**); the
-people dialogs and the purge confirmation are modal dialogs.
+`data-app-modal-title`. The three folder dialogs, the three album dialogs, the Add parent, Rename,
+Delete and Move to parent Location dialogs, and the view settings dialog are **inline dialogs**
+(`data-app-fragment="inline-dialog"`, see **Context menus**); the people dialogs, the purge
+confirmation, Add location and Add to location are modal dialogs.
 
 A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"`
 names a `<template>` whose content is a `modal` fragment; `js/fragments/dialog-openers.js` copies
@@ -280,7 +287,7 @@ The navigation origin is set to the requested asset before its image loads, so p
 already uses the newly opened asset while the spinner is showing.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
 
-**Context menus** — Each folder's or album's ⋯ button (its **trigger**, `.menu-trigger`) is a real
+**Context menus** — Each folder's, album's or Location row's ⋯ button (its **trigger**, `.menu-trigger`) is a real
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
 for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
 `js/common/context-menu-markup.js` as the tree or list is rendered, so opening a menu sends no request.
@@ -398,9 +405,47 @@ search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDelet
 list, which restores focus by ID, or to the visible add button when the dialog's return control
 was hidden by the change (`focusAddAlbumControlIfFocusLost`).
 
-**Location route templates** — Unit 5 supplies the `/htmx/location` tab shell (`#locationActions`, `#noLocations`, `#locationList`) and the six dialog templates. Add Location and Add to Location are `modal` fragments; Add parent, Rename, Delete and Move to parent are inline dialogs. All use the existing dialog operation attributes and validation replacement headers. Add and Move share `includes/location_parent_select`, which offers parents only and `(none)` for the top level. Add to Location offers Locations only, labels children `Parent - Location`, and posts a comma-separated hidden `assetIds` field. Every dialog heading or modal title comes from `Const.UI`, chosen by kind in the controller (parent or Location). Delete names the kind and explains that a parent's Locations move to the top level. Coordinate inputs currently use text with decimal input hints so malformed submitted values remain visible for correction. The Add Location template passes tile settings and the geocoder flag on its nested `location-editor` fragment. The sidebar renderer, opening controls, selection hydrator, styles and map/geocoder interaction belong to Units 6–8 and are not yet wired.
+**Locations** — The Locations tab (`views/htmx/locations.scala.html`) is rendered by
+`js/common/location-list.js` from the JSON list endpoint, which returns parents and Locations in path
+order (a parent directly followed by its Locations, top-level Locations interleaved by name), so the
+list is rendered in that order as it comes: one `.location` row (`#location-{id}`, `data-location-id`,
+`data-kind`) per entry, `.parent`, `.top-level`, or `.child` (under a parent: `data-parent-id`,
+`--depth: 1` and a `.trace` cell that indents it like a folder). A parent row is menu (Rename, Delete)
+| `fa-layer-group` icon | name; it holds no assets, so it is neither a drop target nor a search
+trigger. A Location row is menu (Rename, Delete, Move to parent) | `.asset-count`
+(`#location-count-{id}`, sized through `--location-count-column`) | `fa-map-marker-alt` icon | name,
+with icon and name as `data-app-search-location-id` triggers and the row's `.controls` a drop zone
+(`js/dragdrop/locations.js`) for a single asset or the batch mover. Locations hold pointers only: a
+drop adds memberships (`PUT /api/location/r/:repoId/assets`, `assetActions.addAssetsToLocation`;
+assets already in the Location are skipped and reported), the grid does not change, and the counts
+are patched in place (`refreshLocationCounts`, also called by `refreshCounts` after every asset
+mutation, because recycling drops an asset from its Locations). While a Location's results are
+displayed (`searchParams.locationId`, mirrored by `data-results-location-id`, which marks the row
+`data-viewed-scope` and colors its icon green) the batch footer offers "Remove from location", which
+deletes the memberships of the selected assets and removes their cells. The footer always offers "Add
+to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
+`add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
+`assetIds` field from the selection and keeps the fragment's success detail naming the chosen
+Location; on success `assetsAddedToLocation` resets the selection and refreshes the counts.
 
-The server also accepts `locationId`, `bbox` and `layout=grid|map` for results, mirrored as `data-results-*` attributes. In map layout `search_results` disables Group and renders `htmx/map_view` without the `#assets` wrapper; there `bbox` is the crowded-pin panel's scope, so the total and `data-map-bounds` cover the whole search and the cells request sends the store's parameters verbatim plus `viewport` and `zoom`. That shell carries `#map`, `data-map-bounds="s,w,n,e"` (empty when no points), `data-map-count`, `data-map-tile-url` and `data-map-attribution`. Unit 7 adds the map hydrator, panel, layout toggle and the new parameters to the client store; the existing store behavior below describes what is currently wired.
+Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the map editor of the
+later unit) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
+`#addFirstLocationBtn`; Add parent is an inline dialog below `#addParentBtn`, a dialog-trigger
+control like Add album. The renderer builds all three into their hosts and shows one host or the
+other. Rename, Delete and Move to parent are inline dialogs in the row's menu (`#locationMenuCtrl-{id}`
+is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
+away); deleting the viewed Location runs a search back to the whole repository. `locationAdded` /
+`parentAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list, which
+restores focus by ID, or to the visible add control when the dialog's return control was hidden by
+the change (`focusAddLocationControlIfFocusLost`). Add and Move share
+`includes/location_parent_select`, which offers parents only and `(none)` for the top level; Add to
+location offers Locations only, labelled `Parent - Location`. Every dialog heading or modal title
+comes from `Const.UI`, chosen by kind in the controller. Coordinate inputs are text with decimal
+input hints so a malformed submitted value stays visible for correction; the Add location
+template passes tile settings and the geocoder flag on its nested `location-editor` fragment, whose
+hydrator (the map and geocoder) is Unit 8 of `plans/locations-and-map-view-implementation.md`.
+
+The server also accepts `bbox` and `layout=grid|map` for results, mirrored as `data-results-*` attributes. In map layout `search_results` disables Group and renders `htmx/map_view` without the `#assets` wrapper; there `bbox` is the crowded-pin panel's scope, so the total and `data-map-bounds` cover the whole search and the cells request sends the store's parameters verbatim plus `viewport` and `zoom`. That shell carries `#map`, `data-map-bounds="s,w,n,e"` (empty when no points), `data-map-count`, `data-map-tile-url` and `data-map-attribution`. Unit 7 adds the map hydrator, panel, layout toggle and the `layout` / `bbox` parameters to the client store.
 
 **Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` and
 `views/htmx/{rename,delete}_album_dialog.scala.html` are `data-app-fragment="inline-dialog"`
@@ -531,10 +576,10 @@ it re-fetches the tree JSON and patches each `#folder-count-{id}` in place, leav
 and open menus alone. If the response holds a folder the DOM lacks (restoring assets can un-recycle
 their folders), it falls back to a full render. Folder operations (add, rename, move, delete) keep
 using `reloadFolderTree`, which renders fresh counts as part of the rebuild. `app.reloadAlbumCounts()`
-does the same for the album list (`refreshAlbumCounts`), and fetches nothing while another explorer
-tab is active.
+and `app.reloadLocationCounts()` do the same for the album and Location lists (`refreshAlbumCounts`,
+`refreshLocationCounts`), and fetch nothing while another explorer tab is active.
 
-Asset move/recycle/purge/restore and album membership UI flows are implemented in `js/assets/asset-actions.js`,
+Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`,
 and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
@@ -571,6 +616,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder or album and the dialog-trigger buttons |
 | `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
+| `static/js/common/location-list.js` | renders the parents and Locations, their counts, and each row's menu from the JSON list endpoint; patches the counts in place; marks the viewed Location |
+| `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls; the controller passes in the rendered grid partial |
@@ -586,9 +633,9 @@ dropdowns, continuous scroll, the page the detail modal loads at the end of the 
 it knows about; the `searchParams` store supplies the rest. Nothing else builds a URL for
 `/htmx/search/r/:repoId`.
 
-`js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`, `q`,
-`sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them: choosing a folder,
-a person, or an album clears the other two, a view clears all three, and any change other than paging
+`js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
+`locationId`, `q`, `sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them:
+choosing a folder, a person, an album, or a Location clears the other three, a view clears all four, and any change other than paging
 returns to page 1. Grouping is a reorder like the sort and survives all of those. A parameter still at
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.

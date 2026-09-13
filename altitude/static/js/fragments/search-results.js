@@ -1,6 +1,7 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { setViewedAlbum } from "../common/album-list.js"
+import { setViewedLocation } from "../common/location-list.js"
 import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 import { bindBoxSelection } from "../search-results/box-selection.js"
 import { bindInfiniteScroll } from "../search-results/infinite-scroll.js"
@@ -42,14 +43,20 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
 }
 
 /**
- * The folder tree highlights the folder scope of the results now displayed, and the album list the
- * album. The fragment carries the scope the server resolved, which is what is on screen - not what
- * the search store now asks for, so a superseded or failed navigation never moves the highlight.
- * Triage and trash results have no folder or album scope, whatever is still in the search parameters.
+ * The folder tree highlights the folder scope of the results now displayed, the album list the
+ * album, and the Location list the Location. The fragment carries the scope the server resolved,
+ * which is what is on screen - not what the search store now asks for, so a superseded or failed
+ * navigation never moves the highlight. Triage and trash results have no folder, album or Location
+ * scope, whatever is still in the search parameters.
  */
 function syncViewedScope(fragmentEl) {
-    const { resultsRepoId, resultsView, resultsFolderId, resultsAlbumId } =
-        fragmentEl.dataset
+    const {
+        resultsRepoId,
+        resultsView,
+        resultsFolderId,
+        resultsAlbumId,
+        resultsLocationId,
+    } = fragmentEl.dataset
     const hasScope =
         resultsView !== Const.views.triage &&
         resultsView !== Const.views.trashbin
@@ -59,4 +66,5 @@ function syncViewedScope(fragmentEl) {
         folderId: hasScope ? resultsFolderId : null,
     })
     setViewedAlbum(hasScope ? resultsAlbumId : null)
+    setViewedLocation(hasScope ? resultsLocationId : null)
 }

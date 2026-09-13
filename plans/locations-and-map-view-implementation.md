@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–5 implemented and committed 2026-09-13, plus the Unit 5 review follow-ups ([done/locations-unit-5-followups.md](done/locations-unit-5-followups.md)); Units 6–9 not started.** This expands §7 of
+Status: **Units 1–6 implemented 2026-09-13 (Units 1–5 committed, plus the Unit 5 review follow-ups, [done/locations-unit-5-followups.md](done/locations-unit-5-followups.md); Unit 6 not yet committed); Units 7–9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -398,6 +398,19 @@ the 400 matrix gains `groupDirection` with `location` and malformed `bbox`.
 
 Frontend, no server tests; verified in the browser.
 
+**Done 2026-09-13**, with these findings:
+- The empty state shows only the centered "Add your first location" (the verification table's wording); "Add parent"
+  appears with the top buttons once a row exists, since a parent without Locations has no use on its own.
+- The Add to location dialog's success needs the chosen Location after the modal is gone, and the operation's success
+  detail is read when the request is issued: `fragments/add-to-location.js` keeps `data-app-success-detail` in step with
+  the select (and fills the hidden `assetIds` only when empty, so a validation replacement keeps the submitted value).
+  `fragments/modal.js` dispatches on `data-app-dialog-kind` the way `inline-dialog.js` does for view settings.
+- The two modal forms got a minimal grid layout (one field per row) so they are usable before Unit 8 restyles the editor.
+- D9's "drag between parents also works" (re-parenting a Location by dragging its row) is not in this unit's file list
+  and was not built; the Move to parent dialog covers it. Listed under *Not in this phase* until decided.
+- Real pointer drags cannot be synthesized in the hidden automation tab; the drop handlers' event path was exercised by
+  dispatching the events they emit. A manual drag check remains for the user.
+
 - `views/index.scala.html`: a fourth tab `#locationsTab` (`fa-map-marker-alt`, `href="#locations"`,
   `hx-get=/htmx/location/r/:repoId/tab`).
 - `views/htmx/locations.scala.html`: styles (rows are the album grid; a Location under a parent
@@ -571,6 +584,7 @@ Verification
   `extracted_metadata`, so a later `AssetService.resolveMissingCoordinates` needs no file reads.
 - Scoping the grid by a parent (all its Locations at once).
 - Dragging a pin's asset from the map onto a Location row (the panel covers it).
+- Re-parenting a Location by dragging its row onto a parent (D9 mentions it; the Move to parent dialog covers it).
 - Self-hosted tiles: the tile URL is config, but `StaticController` has no `Range` support for
   PMTiles.
 - Prev/next in the asset detail modal opened from a map pin (no grid to walk).

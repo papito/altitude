@@ -7,6 +7,7 @@ import { hydrateSearchResultsFragment } from "./search-results.js"
 import {
     hydrateAlbumListFragment,
     hydrateFolderTreeFragment,
+    hydrateLocationListFragment,
 } from "./explorer.js"
 import { bindDialogOpeners } from "./dialog-openers.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
@@ -41,6 +42,10 @@ export function hydrateAppFragments({ root, app }) {
 
     findFragmentRoots(root, "album-list").forEach(() => {
         hydrateAlbumListFragment({ context: app.context })
+    })
+
+    findFragmentRoots(root, "location-list").forEach(() => {
+        hydrateLocationListFragment({ context: app.context })
     })
 
     bindDialogOpeners({ root, hydrate: (el) => app.hydrateFragments(el) })

@@ -1,6 +1,94 @@
 @()
 
-@* Unit 6 renders the action controls and the repository's Location list into these hosts. *@
-<div id="locationActions"></div>
-<div id="noLocations"></div>
-<div id="locationList" data-app-fragment="location-list"></div>
+<style>
+    #locationList {
+        /* A Location under a parent is indented by one step, drawn by its `.trace` cell like the folder tree's */
+        --location-indent: 20px;
+        /* One vertical rhythm between rows */
+        --location-row-gap: 8px;
+        /* Horizontal gap between the cells of a row (⋯ button, trace, count, icon, name). The trace
+           subtracts it, so both uses must be the same value */
+        --location-control-gap: 6px;
+        /* The asset count's slot. js/common/location-list.js sets this to the width of the widest count
+           after every render, so the icons line up whether or not a row shows a count */
+        --location-count-column: max-content;
+
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: var(--location-row-gap);
+    }
+
+    #locationList .location .controls {
+        display: grid;
+        column-gap: var(--location-control-gap);
+        align-items: center;
+        touch-action: none;
+    }
+
+    #locationList .location.parent > .controls {
+        /* ⋯ menu button | icon | name (grows). A parent holds no assets, so it shows no count */
+        grid-template-columns: max-content max-content 1fr;
+    }
+
+    #locationList .location.top-level > .controls {
+        /* ⋯ menu button | asset count | icon | name (grows) */
+        grid-template-columns: max-content var(--location-count-column) max-content 1fr;
+    }
+
+    #locationList .location.child > .controls {
+        /* ⋯ menu button | trace (= indent) | asset count | icon | name (grows) */
+        grid-template-columns: max-content max-content var(--location-count-column) max-content 1fr;
+    }
+
+    #locationList .trace {
+        /* Spans the indent minus the grid gap on its count side, so the count/icon/name sit where a
+           plain margin-left indent would put them while the ⋯ stays flush left */
+        width: calc(var(--depth) * var(--location-indent) - var(--location-control-gap));
+        border-top: 2px double var(--panel-border-color);
+    }
+
+    #locationList .location i {
+        font-size: 1.2em;
+        color: rgba(234, 231, 231, 0.98);
+    }
+
+    #locationList .location-name, #locationList .location-icon {
+        cursor: pointer;
+    }
+
+    /* Green marks the viewed Location: the one whose results are displayed (see js/common/location-list.js) */
+    #locationList .location[data-viewed-scope] .location-icon {
+        color: var(--success-font-color);
+    }
+
+    /* The two add buttons sit centered at the top of the explorer. Both rules are scoped to the shown
+       state, because a display of their own would override the `hidden` attribute the renderer toggles */
+    #locationActions:not([hidden]) {
+        display: flex;
+        justify-content: center;
+        gap: var(--control-vertical-space);
+        margin-bottom: var(--control-vertical-space);
+    }
+
+    /* Empty state: the one control, centered in the explorer */
+    #noLocations:not([hidden]) {
+        display: grid;
+        place-items: center;
+        min-height: 60vh;
+    }
+
+    #locationActions .action-button span, #noLocations .action-button span {
+        margin-left: 5px;
+    }
+</style>
+
+@* Hosts for the add controls, built by js/common/location-list.js: "Add location" opens its modal,
+   "Add parent" is a context menu component whose button opens the inline dialog right below it. The
+   renderer shows one host or the other: the top buttons normally, the centered "Add your first
+   location" while there are no Locations; both stay hidden until the list has loaded *@
+<div id="locationActions" hidden></div>
+
+<div id="noLocations" hidden></div>
+
+@* Rendered client-side by js/common/location-list.js once the tab has settled (js/fragments/explorer.js) *@
+<div id="locationList" class="location-list" data-app-fragment="location-list"></div>
