@@ -3,13 +3,11 @@
 
 @(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-@* Shown inline in a panel below whichever add button opened it; the dialog names no
-   return-focus control, so focus goes back to whichever button opened it. Return submits; the field's
-   placeholder is the whole prompt, so there is no heading.
-   hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
+@* Return submits. Validation responses replace the form in the modal, keeping its values and errors. *@
 <form action="#"
       id="addCategory"
-      data-app-fragment="inline-dialog"
+      data-app-fragment="modal"
+      data-app-modal-title="Add category"
       data-app-dialog-autofocus-selector="#field@{ Api.Field.Location.NAME }"
       data-app-success-event="CATEGORY_ADDED_EVENT"
       hx-target="this"

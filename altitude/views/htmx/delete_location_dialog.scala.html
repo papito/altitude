@@ -6,11 +6,11 @@
 
 @* A deleted category leaves its Locations at the top level; neither kind owns the assets it points to. *@
 <div id="deleteLocation"
-     data-app-fragment="inline-dialog"
+     data-app-fragment="modal"
+     data-app-modal-title="@{title}"
      data-app-dialog-return-focus="#addLocationBtn"
      data-app-success-event="LOCATION_DELETED_EVENT"
      data-app-success-detail='@{ujson.Obj("id" -> location.persistedId)}'>
-  <h3 class="dialog-title">@{title}</h3>
   @if(location.kind == LocationKind.Category) {
     <p>Its Locations move to the top level.</p>
   }

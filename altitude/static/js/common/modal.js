@@ -21,7 +21,10 @@
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { closeOpenContextMenu } from "../alpine/components/context-menu.js"
+import {
+    closeOpenContextMenu,
+    getContextMenuTrigger,
+} from "../alpine/components/context-menu.js"
 
 export const ModalHost = {
     general: "general",
@@ -101,7 +104,7 @@ export function isModalOpenActive(openId) {
  * relevant one to return to, chosen to survive the page update its operation triggers - or, without
  * one, back to the element that was focused when the open was requested.
  *
- * An open context menu (folder or album), whichever state it is in, is closed first, so a modal
+ * An open context menu (folder, album, or Location) is closed first, so a modal
  * never appears over one.
  */
 export function openModal({
@@ -117,9 +120,13 @@ export function openModal({
     const openId = ++lastOpenId
     store.openId = openId
 
-    returnFocus = {
-        opener: pendingOpen?.opener ?? document.activeElement,
-        fallbackSelector: returnFocusSelector,
+    // Validation re-hydrates a form inside the active host without a new open request. Keep the
+    // original return control instead of remembering the field that the response just removed.
+    if (pendingOpen || store.activeHost !== host || !returnFocus) {
+        returnFocus = {
+            opener: pendingOpen?.opener ?? document.activeElement,
+            fallbackSelector: returnFocusSelector,
+        }
     }
     openSource = pendingOpen?.ctx.sourceElement ?? null
     pendingOpen = null
@@ -213,10 +220,12 @@ export function trackModalOpenRequest(event) {
         return false
     }
 
+    // Menu actions become hidden when the modal opens. Return to their visible ⋯ trigger.
+    const panel = event.detail.ctx.sourceElement?.closest(".context-menu")
     pendingOpen = {
         ctx: event.detail.ctx,
         host,
-        opener: document.activeElement,
+        opener: panel ? getContextMenuTrigger(panel) : document.activeElement,
     }
 
     return true

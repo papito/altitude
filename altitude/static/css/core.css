@@ -180,10 +180,10 @@ form input.error, form input.error:focus {
 }
 
 /*                                             */
-/* CONTEXT MENUS (folder tree and album list)  */
+/* CONTEXT MENUS (folders, albums, Locations, and View settings)  */
 /*                                             */
 
-/* The ⋯ cell built by js/common/context-menu.js: the trigger and its native popover panel */
+/* The ⋯ cell built by js/common/context-menu-markup.js: the trigger and its native popover panel */
 .menu-ctrl {
     display: grid;
     place-items: center;
@@ -230,7 +230,7 @@ form input.error, form input.error:focus {
     display: grid;
 }
 
-/* A panel holding only a dialog (the Add album control) opens on the click that requests the
+/* A panel holding only a dialog (the View settings control) opens on the click that requests the
    dialog, so it stays invisible until the dialog has arrived rather than showing an empty box */
 .context-menu.dialog-only:not(:has(.dialog:not([hidden]))) {
     visibility: hidden;
@@ -268,18 +268,9 @@ form input.error, form input.error:focus {
     outline-offset: -2px;
 }
 
-/* Dialog state: the panel shows one inline dialog (add, rename, or delete) in place of its
-   actions. The dialog keeps the modal's content padding; its heading keeps the modal title's
-   type treatment (see .modal-title) without the toolbar. */
+/* The View settings popover uses the same content padding as the modal. */
 .context-menu .dialog {
     padding: var(--modal-content-padding);
-}
-
-.context-menu .dialog-title {
-    margin: 0 0 var(--control-vertical-space);
-    font-size: 1.1em;
-    font-weight: bold;
-    text-transform: capitalize;
 }
 
 /* Asset count on a folder or album row, right-aligned against the icon; zero counts render empty

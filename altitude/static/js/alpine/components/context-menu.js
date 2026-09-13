@@ -1,26 +1,24 @@
 /**
- * Alpine coordination for a folder's or an album's native popover menu.
+ * Alpine coordination for folder, album, and Location menus and the View settings popover.
  *
- * The component root is the `.menu-ctrl` cell (or the Add album `.dialog-trigger-ctrl`) built by
+ * The component root is the `.menu-ctrl` cell (or the View settings `.dialog-trigger-ctrl`) built by
  * `common/context-menu-markup.js`: it holds the trigger (`x-ref="trigger"`, opening the panel with
  * `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
  * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
  * siblings: opening one closes any other, exactly as required.
  *
- * The panel has two states. It shows its actions (`x-ref="actions"`) until one of them loads its
- * inline dialog into the dialog host (`x-ref="dialog"`); the dialog then shows in place of the
- * actions until the panel closes, which discards the dialog and shows the actions again. The
- * actions stay in the DOM throughout, so their htmx wiring is never lost.
+ * Entity menus hold actions that open separate modals. Only View settings has a dialog host
+ * (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh settings.
  *
  * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
  * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component
  * adds only what native popovers lack: placement against the trigger (again when a dialog changes
- * the panel's height), the switch between actions and dialog, dismissal when keyboard focus
+ * the panel's height), dismissal when keyboard focus
  * leaves, dismissal on scroll or resize, and cleanup. Escape is handled once for the whole
  * document in `global.js`.
  *
  * Callers outside the component that must close a menu (that Escape handler, the folder model when
- * an ancestor collapses, the modal owner, an inline dialog that completed its operation) go through
+ * an ancestor collapses, the modal owner) go through
  * `closeContextMenu()` / `closeOpenContextMenu()` below. Because at most one auto popover of this
  * kind is open at a time, "the open menu" is a single panel. The menu markup itself is built by
  * `common/context-menu-markup.js`.
@@ -34,14 +32,10 @@ export function getContextMenuTrigger(panel) {
 }
 
 /**
- * Hides `panel` if it is open, optionally moving focus to `focusTarget`, by default the panel's
- * trigger (a completed dialog operation names the control that survives it instead). Returns
+ * Hides `panel` if it is open, optionally moving focus to the panel's trigger. Returns
  * whether a menu was closed. `reason` is logged so a surprising dismissal can be traced.
  */
-export function closeContextMenu(
-    panel,
-    { reason, returnFocus = false, focusTarget = null },
-) {
+export function closeContextMenu(panel, { reason, returnFocus = false }) {
     if (!panel?.matches(":popover-open")) {
         return false
     }
@@ -51,8 +45,7 @@ export function closeContextMenu(
     panel.hidePopover()
 
     if (returnFocus) {
-        const target = focusTarget ?? getContextMenuTrigger(panel)
-        target?.focus()
+        getContextMenuTrigger(panel)?.focus()
     }
 
     return true
@@ -117,7 +110,7 @@ export function contextMenu() {
             } else {
                 this.detachOpenListeners?.()
                 dialogRequest = null
-                this.showActions()
+                this.clearDialog()
             }
         },
 
@@ -126,18 +119,9 @@ export function contextMenu() {
          * it went; a menu must never pull it back from the control the user moved to. A click on
          * non-interactive dialog content (heading, label, padding) moves focus to the panel
          * itself, which is inside the root, so it keeps the menu open.
-         *
-         * A validation response replaces the dialog's form while its field has focus: htmx marks
-         * the form `htmx-swapping`, removes it (the browser reports the field losing focus with
-         * nowhere to go), and focuses the field's copy in the same task. That is not focus
-         * leaving, so it keeps the menu open too.
          */
         handleFocusOut(event) {
-            if (
-                !this.isOpen() ||
-                this.$root.contains(event.relatedTarget) ||
-                event.target.closest(".htmx-swapping")
-            ) {
+            if (!this.isOpen() || this.$root.contains(event.relatedTarget)) {
                 return
             }
 
@@ -145,9 +129,7 @@ export function contextMenu() {
         },
 
         /**
-         * A request targeting the dialog host is an action loading its dialog: remember it as
-         * the one whose response may show. Requests submitted from the dialog itself target the
-         * dialog, not the host, and are the dialog operation tracker's concern.
+         * Remember the View settings load as the only response allowed to fill its dialog host.
          */
         handleBeforeRequest(event) {
             const ctx = event.detail.ctx
@@ -160,8 +142,7 @@ export function contextMenu() {
         /**
          * Runs before htmx swaps a response into the dialog host. Only the response to the
          * request the open panel is waiting for may show; one for a panel that has closed since
-         * (and possibly reopened) is dropped, so a late dialog never appears over the actions. A
-         * failed load is reported by the folder request listener.
+         * (and possibly reopened) is dropped. Failed loads use the shared HTMX request listener.
          */
         handleAfterRequest(event) {
             const ctx = event.detail.ctx
@@ -182,8 +163,7 @@ export function contextMenu() {
         },
 
         /**
-         * A dialog has been swapped into the host (loaded, or replaced by its validation copy):
-         * show it instead of the actions and place the panel again for its new height. The
+         * View settings has loaded: reveal its content and place the panel for its new height. The
          * fragment hydrator that runs next, from the body-level settle listener, gives the dialog
          * focus.
          */
@@ -192,16 +172,17 @@ export function contextMenu() {
                 return
             }
 
-            this.$refs.actions.hidden = true
             this.$refs.dialog.hidden = false
             this.place()
         },
 
-        /** Back to the actions state, discarding any dialog the host holds. */
-        showActions() {
-            this.$refs.dialog.replaceChildren()
-            this.$refs.dialog.hidden = true
-            this.$refs.actions.hidden = false
+        /** Only View settings has inline content to discard; entity menus keep their actions. */
+        clearDialog() {
+            const dialog = this.$refs.dialog
+            if (dialog) {
+                dialog.replaceChildren()
+                dialog.hidden = true
+            }
         },
 
         /**
@@ -218,7 +199,7 @@ export function contextMenu() {
          * Vertical placement: below the trigger by default; above it when there is no room below;
          * when it fits on neither side, on the roomier side with its height capped so the content
          * scrolls inside the panel. Horizontal placement: aligned with the trigger's left edge, or
-         * centered on the trigger for a root with `data-menu-align="center"` (the Add album
+         * centered on the trigger for a root with `data-menu-align="center"` (the View settings
          * control); either way shrunk to the viewport width if needed, then shifted as far as it
          * takes to stay inside the viewport, so every control stays reachable in narrow windows.
          */

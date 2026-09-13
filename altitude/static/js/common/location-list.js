@@ -29,7 +29,7 @@ import {
 } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
-    buildDialogTriggerCtrl,
+    buildModalTriggerCtrl,
 } from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
@@ -165,28 +165,25 @@ function _render(locations, repoId) {
 
 /**
  * Builds the add controls into their hosts on the first render after the tab loads. "Add location"
- * requests its modal into the modal host (the dialog holds a map, so it is not an inline one);
- * "Add category" and the empty-state button are built here rather than in the tab template because
- * they are context menu components like the rows' menus. The hosts (`#locationActions`,
- * `#noLocations`) only decide which is shown.
+ * and "Add category" open separate modals. The hosts (`#locationActions`, `#noLocations`)
+ * decide which controls are shown.
  */
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("locationActions")
     if (actionsEl.childElementCount > 0) return
 
     actionsEl.appendChild(
-        _buildAddLocationButton({
-            id: "addLocationBtn",
+        buildModalTriggerCtrl({
+            triggerId: "addLocationBtn",
             label: "Add location",
             buttonClass: "action-button small",
-            repoId,
+            iconClass: "fas fa-plus",
+            url: `/htmx/location/r/${repoId}/dialogs/add-location`,
         }),
     )
     actionsEl.appendChild(
-        buildDialogTriggerCtrl({
+        buildModalTriggerCtrl({
             triggerId: "addCategoryBtn",
-            panelId: "addCategoryMenu",
-            dialogId: "addCategoryDialog",
             label: "Add category",
             iconClass: "fas fa-plus",
             url: `/htmx/location/r/${repoId}/dialogs/add-category`,
@@ -196,11 +193,12 @@ function _ensureAddControls(repoId) {
 
     const noLocationsEl = document.getElementById("noLocations")
     noLocationsEl.appendChild(
-        _buildAddLocationButton({
-            id: "addFirstLocationBtn",
+        buildModalTriggerCtrl({
+            triggerId: "addFirstLocationBtn",
             label: "Add your first location",
             buttonClass: "action-button",
-            repoId,
+            iconClass: "fas fa-plus",
+            url: `/htmx/location/r/${repoId}/dialogs/add-location`,
         }),
     )
 
@@ -208,31 +206,6 @@ function _ensureAddControls(repoId) {
         htmx.process(actionsEl)
         htmx.process(noLocationsEl)
     }
-}
-
-/** A button requesting the Add location modal into the modal host; the dialog returns focus to it on close */
-function _buildAddLocationButton({ id, label, buttonClass, repoId }) {
-    const btnEl = document.createElement("button")
-    btnEl.type = "button"
-    btnEl.id = id
-    btnEl.className = buttonClass
-    btnEl.setAttribute(
-        "hx-get",
-        `/htmx/location/r/${repoId}/dialogs/add-location`,
-    )
-    btnEl.setAttribute("hx-target", "#modalContent")
-    btnEl.setAttribute("hx-swap", "innerHTML")
-    btnEl.setAttribute("hx-trigger", "click")
-
-    const iconEl = document.createElement("i")
-    iconEl.className = "fas fa-plus"
-    iconEl.setAttribute("aria-hidden", "true")
-    const labelEl = document.createElement("span")
-    labelEl.textContent = label
-    btnEl.appendChild(iconEl)
-    btnEl.appendChild(labelEl)
-
-    return btnEl
 }
 
 /** With no rows the centered empty-state button is the only control; otherwise the top buttons show */
@@ -354,7 +327,7 @@ function _makeSearchTrigger(el, locationId) {
 
 /**
  * The row's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete for both kinds, plus Move
- * to category for a Location, each loading its inline dialog into the panel's dialog host.
+ * to category for a Location, each loading a separate modal.
  * `locationMenuCtrl-<id>` is the trigger the rename and move dialogs return focus to.
  */
 function _buildMenuCtrl(location, repoId) {
@@ -370,7 +343,6 @@ function _buildMenuCtrl(location, repoId) {
     return buildContextMenuCtrl({
         triggerId: `locationMenuCtrl-${location.id}`,
         panelId: `locationMenu-${location.id}`,
-        dialogId: `locationMenuDialog-${location.id}`,
         ariaLabel: `Actions for ${isCategory ? "category" : "location"} ${location.name}`,
         entityAttr: Const.attributes.locationId,
         entityId: location.id,

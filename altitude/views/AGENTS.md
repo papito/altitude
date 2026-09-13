@@ -208,8 +208,7 @@ set (`x-show`, `x-text`), and `reset()` from its Deselect All button clears it.
 `x-data="contextMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
 `alpine/components/context-menu.js`) wraps each folder's or album's ⋯ trigger and its native
 `popover="auto"` panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
-outside clicks); the component only places the panel, switches it between its actions and the
-inline dialog an action loads, closes it when focus leaves or when the page scrolls or the explorer
+outside clicks); the component only places the panel, closes it when focus leaves or when the page scrolls or the explorer
 resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
 menus** below.
 
@@ -222,8 +221,8 @@ those responsibilities stay with HTMX and the custom event bus.
 dialogs and into `#imageDetailModalContent` for asset detail. `js/common/modal.js` is the single owner
 of both: which host is active (one at a time — a new open replaces the active modal), the title,
 initial focus (the fragment's autofocus selector, else the close control, never a destructive action),
-focus restoration on close (the element focused when the open was requested, else the fragment's
-`data-app-dialog-return-focus` selector), and identity: every displayed open has an `openId`
+focus restoration on close (the fragment's `data-app-dialog-return-focus` selector, else the
+control that opened it, using the visible ⋯ trigger for a menu action), and identity: every displayed open has an `openId`
 (`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
 swaps once the user dismissed or replaced it. Visibility is bound through the Alpine `modal` store
@@ -239,7 +238,7 @@ modal never appears over one.
 
 Both modal hosts use `.close-modal` in `core.css`: the X stays white (`--modal-close-color`)
 at rest, on hover, and on focus, with no focus outline (the modal may focus it on open).
-Folder and album inline dialogs have no X; they follow the context menu's dismissal rules.
+Folder, album, Location, and category dialogs use the general modal host and its close control.
 
 A **dialog** is a server-rendered form that completes one user action, hydrated from its
 `data-app-fragment` kind; a **modal dialog** is one shown in the modal host. Attributes that describe
@@ -250,10 +249,10 @@ form (the view settings checkboxes, hydrated in `js/fragments/inline-dialog.js`,
 location selection, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-location.js`). Its success
 event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
 `-detail-target-attr-*`) on the fragment root. The one attribute that describes the modal host is
-`data-app-modal-title`. The three folder dialogs, the three album dialogs, the Add parent, Rename,
-Delete and Move to category Location dialogs, and the view settings dialog are **inline dialogs**
-(`data-app-fragment="inline-dialog"`, see **Context menus**); the people dialogs, the purge
-confirmation, Add location and Add to location are modal dialogs.
+`data-app-modal-title`. Folder, album, Location, and category actions, including the Add controls,
+are **modal dialogs**, as are the people dialogs and purge confirmation. Only View settings is an
+**inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its checkboxes apply
+immediately without submitting an operation.
 
 A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"`
 names a `<template>` whose content is a `modal` fragment; `js/fragments/dialog-openers.js` copies
@@ -291,39 +290,29 @@ Arrow-key navigation works only while asset detail is active and no text field i
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
 for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
 `js/common/context-menu-markup.js` as the tree or list is rendered, so opening a menu sends no request.
-The Add album buttons, the "Add folder" button above the tree (`#addFolderBtn`, adding into
-the root), and the ⚙ View button above the results grid (`#viewSettingsBtn`, built by
-`js/search-results/view-settings-control.js` into the `#viewSettingsActions` host the results template supplies)
-are the same component in a second shape (`buildDialogTriggerCtrl`,
-`.dialog-trigger-ctrl`): the button both toggles a panel with no actions and requests its one
-dialog into the host; the `dialog-only` panel stays invisible until the dialog arrives, opens
-below the button centered on it (`data-menu-align="center"` on the root), and hands focus back to
-the button, which shows no focus ring for it (`.dialog-trigger-ctrl > button` drops the outline, and
-`.action-button` glows only on `:focus-visible`, never after a mouse click). View settings submits
-nothing - each checkbox applies as it changes - so only a dismissal closes that panel. The panel shows either its
-**actions** (`.actions`: Add folder; Rename and Delete for non-root folders; Rename and Delete for
-an album) or one **inline dialog** in its dialog host (`.dialog`, `#menuDialog-{id}` /
-`#albumMenuDialog-{id}`). Each action is an HTMX request for its
-dialog into that host; the response replaces the actions (they stay in the DOM, hidden, so their
-htmx wiring survives) until the panel closes, which discards the dialog and shows the actions again.
-Only the response to the request the open panel is waiting for may show: the component records the
-panel's own open request from `htmx:before:request` and cancels, in `htmx:after:request`, any
-response for the host that is not that request or arrives while the panel is closed; failed loads
-are reported by `js/listeners/htmx-requests.js`. After every swap into the host (the load, or a
-validation replacement of the form) the component re-places the panel for its new height. The
-browser owns visibility: it toggles the panel from its trigger, closes it on any click outside, and
-keeps one open at a time because a panel is never a DOM descendant of another entity's panel.
+Each action requests its dialog into `#modalContent`; the modal owner closes the menu when the
+response opens. Menu panels contain only their action buttons, with no inline form or dialog host.
+`buildModalTriggerCtrl` builds the Add folder, Add album, Add location, and Add category buttons
+(including empty-state controls) as direct requests to the same modal host.
+
+The ⚙ View button above the results grid (`#viewSettingsBtn`, built by
+`js/search-results/view-settings-control.js` into `#viewSettingsActions`) uses
+`buildDialogTriggerCtrl`, a `.dialog-trigger-ctrl` with an inline dialog host. Its `dialog-only`
+panel stays invisible until the settings arrive, opens below the button centered on it
+(`data-menu-align="center"`), and is cleared on close. The component records its load request and
+drops a response after the panel has closed or reopened. Each checkbox applies immediately;
+View settings submits nothing. Its trigger shows no focus ring (`.dialog-trigger-ctrl > button`).
+The browser owns popover visibility: it toggles the panel from its trigger, closes it on any click
+outside, and keeps one open because a panel is never a descendant of another entity's panel.
 The `contextMenu` component places the panel in the top layer against the trigger (below,
 flipping above when needed, clamped to the viewport, height-capped with internal scrolling when
 neither side fits; left-aligned with the trigger, or centered on it for a `data-menu-align="center"`
 root); it closes the panel when focus leaves and on scroll, window resize, or explorer resize;
 it never tracks a moving trigger. The panel carries `tabindex="-1"`, so a click on a dialog's
-heading, label, or padding moves focus to the panel rather than out of it; a validation swap that
-removes the focused field (`htmx-swapping` on the form) is not focus leaving either.
+label or padding moves focus to the panel rather than out of it.
 `closeContextMenu` / `closeOpenContextMenu`, exported by the component module, close a menu from
 outside the component: Escape in `global.js` (focus returns to the trigger unless a modal was
-closed too), the folder model when an ancestor collapses, `openModal`, and a completed
-inline-dialog operation (with the declared return control); the trigger is found as the
+closed too), the folder model when an ancestor collapses, and `openModal`; the trigger is found as the
 `[popovertarget]` button in the panel's cell, not by an ID convention. Removing the tree or list removes the open panel and, through the component's
 `destroy`, its listeners. Styling lives in `core.css`; CSS sets `display` only under
 `:popover-open`, because the hidden state relies on the browser's `display: none`. During
@@ -397,10 +386,9 @@ does not change, and the album counts are patched in place (`refreshAlbumCounts`
 While an album's results are displayed (`searchParams.albumId`, mirrored by `data-results-album-id`
 on the results fragment, which marks the row `data-viewed-scope` and colors its icon green) the batch
 footer offers "Remove from album", which deletes the memberships of the selected assets and removes
-their cells. Add is an inline dialog (`add_album_dialog.scala.html`, submitted with Return) in a panel right
-below the button that opened it: the top `#addAlbumBtn` (centered above the list) or, while
+their cells. Add is a separate modal (`add_album_dialog.scala.html`, submitted with Return) opened by the top `#addAlbumBtn` (centered above the list) or, while
 there are no albums, by the centered `#addFirstAlbumBtn`; the renderer builds both controls into
-their hosts and shows one or the other. Rename and Delete are inline dialogs in the album's menu; deleting the viewed album runs a
+their hosts and shows one or the other. Rename and Delete open separate modals from the album's menu; deleting the viewed album runs a
 search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDeleted` reload the
 list, which restores focus by ID, or to the visible add button when the dialog's return control
 was hidden by the change (`focusAddAlbumControlIfFocusLost`).
@@ -429,17 +417,16 @@ to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`,
 Location; on success `assetsAddedToLocation` resets the selection and refreshes the counts.
 
 Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the pin editor below) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
-`#addFirstLocationBtn`; Add category is an inline dialog below `#addCategoryBtn`, a dialog-trigger
-control like Add album. The renderer builds all three into their hosts and shows one host or the
-other. Rename, Delete and Move to category are inline dialogs in the row's menu (`#locationMenuCtrl-{id}`
+`#addFirstLocationBtn`; Add category also opens a modal from `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
+other. Rename, Delete and Move to category open separate modals from the row's menu (`#locationMenuCtrl-{id}`
 is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
 away); deleting the viewed Location runs a search back to the whole repository. `locationAdded` /
 `categoryAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list, which
 restores focus by ID, or to the visible add control when the dialog's return control was hidden by
 the change (`focusAddLocationControlIfFocusLost`). Add and Move share
 `includes/location_category_select`, which offers categories only and `(none)` for the top level; Add to
-location offers Locations only, labelled `Category - Location`. Every dialog heading or modal title
-comes from `Const.UI`, chosen by kind in the controller.
+location offers Locations only, labelled `Category - Location`. Rename, Delete, and Move titles
+come from `Const.UI`, chosen by kind in the controller.
 
 **Location pin editor** — A Location's pin is placed on a map, never typed. The Add location form
 nests a `data-app-fragment="location-editor"` root carrying the tile URL, the attribution and the
@@ -462,20 +449,20 @@ plain script (`window.L`) with its stylesheet by `index.scala.html`.
 
 The server also accepts `bbox` and `layout=grid|map` for results, mirrored as `data-results-*` attributes. In map layout `search_results` disables Group and renders `htmx/map_view` without the `#assets` wrapper; there `bbox` is the crowded-pin panel's scope, so the total and `data-map-bounds` cover the whole search and the cells request sends the store's parameters verbatim plus `viewport` and `zoom`. That shell carries `#map`, `data-map-bounds="s,w,n,e"` (empty when no points), `data-map-count`, `data-map-tile-url` and `data-map-attribution`. Unit 7 adds the map hydrator, panel, layout toggle and the `layout` / `bbox` parameters to the client store.
 
-**Inline dialogs** — `views/htmx/{add,rename,delete}_folder_dialog.scala.html` and
-`views/htmx/{rename,delete}_album_dialog.scala.html` are `data-app-fragment="inline-dialog"`
-fragments: the heading (`.dialog-title`, the modal title's type treatment) sits inside the
-fragment root so a validation replacement carries it, except in the two add dialogs, whose field
-placeholder is the whole prompt; the name field has an explicit `size` (the panel stays
-`max-content` wide), and Delete's root is a wrapper around the heading and the confirm button. Add and Rename keep `hx-target="this"`, `hx-swap="none"`, and
-`hx-json-enc`. `js/fragments/inline-dialog.js` places initial focus (the declared selector with
-optional select, else the panel itself, so a held Enter from the menu cannot fire Delete; one Tab
-reaches the button) and registers the inline presentation with `dialog-operations.js`: an
-operation's dialog is active while that fragment is still in an open panel, and closing it closes
-the panel with focus on the declared return control (the parent's ⋯ after a folder deletion, the
-"Add album" button after an album deletion) or, when none is declared (the add dialogs), on the
-trigger that opened the panel. Dismissal follows the menu's rules with no confirmation; Escape returns focus to the
-trigger.
+**Explorer action dialogs** — The folder, album, Location, and category forms declare
+`data-app-fragment="modal"` and `data-app-modal-title`; the shared host supplies their heading and
+close control. Add and Rename submit with Return and retain `hx-target="this"`, `hx-swap="none"`,
+and `hx-json-enc`, so validation replaces the active form with its submitted values and errors.
+The modal focuses the name field (selecting it for Rename), or the category selector for Move.
+Delete leaves initial focus on the close control, so opening the confirmation cannot activate its
+destructive button. Rename and Move return focus to the row's ⋯ button; Delete names a control
+that survives the mutation (the parent folder's ⋯ or the list's Add button). Add returns to its
+opener; for a menu action the modal owner remembers the visible ⋯ trigger. Re-hydrating validation
+preserves that original return control. Escape and the host's X dismiss the dialog.
+
+**Inline dialogs** — Only View settings uses `js/fragments/inline-dialog.js`, which gives it initial
+focus and binds its checkboxes. It has no operation lifecycle; dismissal follows the popover's
+rules and Escape returns focus to the trigger.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
@@ -611,7 +598,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
 | `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), `setAssetDetailSize` |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
-| `static/js/fragments/inline-dialog.js` | inline dialog fragments shown in a context menu panel |
+| `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
 | `static/js/alpine/components/date-group-selectable.js` | Alpine component for a date header's checkbox: selects its day's loaded cells as a set |
@@ -622,7 +609,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, declared success events, tab selection, fragment hydration |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
-| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's or album's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open, completed inline dialog) |
+| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's or album's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |

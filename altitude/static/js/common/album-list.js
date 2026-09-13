@@ -4,8 +4,8 @@
  * Public API:
  *   reloadAlbumList(repoId) — fetch every album from the server, re-render, restore focus, and
  *   show the right add control: the top "Add album" button normally, the centered empty-state
- *   button while there are no albums. Each add button opens the add dialog in a popover panel
- *   right below it (`buildDialogTriggerCtrl`).
+ *   button while there are no albums. Each add button opens a separate modal
+ *   (`buildModalTriggerCtrl`).
  *   refreshAlbumCounts(repoId) — fetch the list and patch only the asset counts in place; falls
  *   back to a full render when the list gained an album the DOM does not have.
  *   setViewedAlbum(albumId) — mark the album whose results are displayed (green icon).
@@ -24,7 +24,7 @@ import {
 } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
-    buildDialogTriggerCtrl,
+    buildModalTriggerCtrl,
 } from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
@@ -159,8 +159,7 @@ function _render(albums, repoId) {
 
 /**
  * Builds the two add controls into their hosts on the first render after the tab loads. They are
- * built here rather than in the tab template because they are context menu components like the
- * rows' menus; the hosts (`#albumActions`, `#noAlbums`) only decide which one is shown.
+ * shared modal-opening buttons; the hosts (`#albumActions`, `#noAlbums`) decide which one is shown.
  */
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("albumActions")
@@ -169,10 +168,8 @@ function _ensureAddControls(repoId) {
     const url = `/htmx/album/r/${repoId}/dialogs/add-album`
 
     actionsEl.appendChild(
-        buildDialogTriggerCtrl({
+        buildModalTriggerCtrl({
             triggerId: "addAlbumBtn",
-            panelId: "addAlbumMenu",
-            dialogId: "addAlbumDialog",
             label: "Add album",
             iconClass: "fas fa-plus",
             url,
@@ -182,10 +179,8 @@ function _ensureAddControls(repoId) {
 
     const noAlbumsEl = document.getElementById("noAlbums")
     noAlbumsEl.appendChild(
-        buildDialogTriggerCtrl({
+        buildModalTriggerCtrl({
             triggerId: "addFirstAlbumBtn",
-            panelId: "addFirstAlbumMenu",
-            dialogId: "addFirstAlbumDialog",
             label: "Add your first album",
             iconClass: "fas fa-plus",
             url,
@@ -287,8 +282,8 @@ function _makeSearchTrigger(el, albumId) {
 }
 
 /**
- * The album's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete, each loading its inline
- * dialog into the panel's dialog host. `albumMenuCtrl-<id>` is the trigger the rename dialog
+ * The album's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete, each loading a
+ * separate modal. `albumMenuCtrl-<id>` is the trigger the rename dialog
  * returns focus to.
  */
 function _buildMenuCtrl(album, repoId) {
@@ -300,7 +295,6 @@ function _buildMenuCtrl(album, repoId) {
     return buildContextMenuCtrl({
         triggerId: `albumMenuCtrl-${album.id}`,
         panelId: `albumMenu-${album.id}`,
-        dialogId: `albumMenuDialog-${album.id}`,
         ariaLabel: `Actions for album ${album.name}`,
         entityAttr: Const.attributes.albumId,
         entityId: album.id,

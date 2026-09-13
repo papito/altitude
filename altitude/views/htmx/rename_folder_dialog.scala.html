@@ -7,7 +7,8 @@
 @* hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="renameFolder"
-      data-app-fragment="inline-dialog"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
       data-app-dialog-autofocus-selector="#field-@{ Api.Field.Folder.NAME }"
       data-app-dialog-select-on-focus="true"
       data-app-dialog-return-focus="#folderMenuCtrl-@{id}"
@@ -18,8 +19,6 @@
       hx-put="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/rename"
       hx-trigger="submit"
       hx-json-enc>
-
-  <h3 class="dialog-title">@{title}</h3>
 
   @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
     <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>

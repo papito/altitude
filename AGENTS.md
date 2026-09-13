@@ -25,6 +25,8 @@ Write the minimal amount of code that preserves clarity, readability, and mainta
 
 Use the fewest props and the least markup needed to accomplish the task.
 
+Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `altitude/static/js/common/modal.js`. Keep their context menus as action lists; only View settings uses an inline popover dialog.
+
 Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified.
 
 Strongly prefer CSS Grid and Flexbox.
