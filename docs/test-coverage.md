@@ -117,7 +117,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 
 ## Extracted metadata and capture dates
 
-Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/MetadataExtractionService.scala), [ExtractMetadataFlow](../altitude/src/altitude/core/pipeline/flows/ExtractMetadataFlow.scala). Evidence: [MetadataParserTests](../altitude/test/src/altitude/core/integration/MetadataParserTests.scala), [AssetDateStorageTests](../altitude/test/src/altitude/core/integration/AssetDateStorageTests.scala), [CaptureDateResolverTests](../altitude/test/src/altitude/core/unit/CaptureDateResolverTests.scala).
+Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/MetadataExtractionService.scala), [ExtractMetadataFlow](../altitude/src/altitude/core/pipeline/flows/ExtractMetadataFlow.scala). Evidence: [MetadataParserTests](../altitude/test/src/altitude/core/integration/MetadataParserTests.scala), [AssetDateStorageTests](../altitude/test/src/altitude/core/integration/AssetDateStorageTests.scala), [ImportPipelineServiceTests](../altitude/test/src/altitude/core/integration/ImportPipelineServiceTests.scala), [CaptureDateResolverTests](../altitude/test/src/altitude/core/unit/CaptureDateResolverTests.scala), [GeoLocationResolverTests](../altitude/test/src/altitude/core/unit/GeoLocationResolverTests.scala).
 
 - ✅ Detect JPEG and PNG media types and MIME values; extract concrete JPEG/EXIF tags.
 - ✅ Retain XMP property paths and multiple PNG text chunks without overwriting earlier keys.
@@ -125,8 +125,11 @@ Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/Metad
 - ✅ Preserve camera wall-clock timestamps through storage, including a DST gap and reads under different JVM time zones; store import timestamps in UTC.
 - ✅ Missing capture metadata stays null, public display metadata cannot supply a capture timestamp, and an undated imported image belongs to the No date group.
 - ✅ Unit tests cover fallback-source priority, metadata/filename parsing, malformed dates, sentinel/future-date rejection, and stable provenance serialization. These supplement the narrower real-import fixtures.
+- ✅ Resolve GPS coordinates from real JPEG fixtures (N/E, S/W, a sub-degree western longitude whose sign only the ref carries) and persist them through the import pipeline; a coordinate without a ref, and 0/0, resolve to nothing. Coordinates round-trip through storage on both engines and stay null when absent, on the typed and the row-map read paths.
+- ✅ Unit tests cover the DMS description format, hemisphere refs overriding the description's sign, a comma decimal separator, partial/garbage/out-of-range input, and the null-island rejection.
+- ✅ A tag whose description is null (a GPS coordinate without its ref) is skipped rather than stored as a null value.
 - [ ] Verify corrupt/unsupported bytes yield empty extracted metadata under the service's error policy, without returning partially accumulated metadata. [MEDIUM]
-- [ ] Exercise null-character sanitization with real metadata values and persist the result on both engines; cover null tag descriptions. [MEDIUM]
+- [ ] Exercise null-character sanitization with real metadata values and persist the result on both engines. [MEDIUM]
 - [ ] Add real-import coverage for filename fallback and XMP/IPTC/GPS/EXIF-digitized fallbacks, including an invalid higher-priority date. Resolver-only tests do not verify every extractor-to-database mapping. [MEDIUM]
 - [ ] Cover actual compressed/international PNG date text and malformed XMP packets; assert retained keys and fallback behavior. [EDGE]
 - [ ] Verify type detection on empty/corrupt input and a supported non-JPEG/PNG image, with resources released on detection failure. [EDGE]
