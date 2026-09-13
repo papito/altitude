@@ -24,6 +24,7 @@ import altitude.core.dao.sql.tables.LocationRow
 import altitude.core.dao.sql.tables.MetadataParameterRow
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
+import altitude.core.models.LocationKind
 import altitude.core.util.BoundingBox
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
@@ -53,6 +54,11 @@ object SearchQueries:
    * collide with a top-level one.
    */
   private val PATH_SEPARATOR: String = 1.toChar.toString
+
+  /** A row of [[mapLocations]]: ID, name, parent name, latitude, longitude, matching-asset count */
+  type MapLocationRow = (String, String, Option[String], Option[Double], Option[Double], Int)
+  type MapLocationExprs =
+    (Expr[String], Expr[String], Expr[Option[String]], Expr[Option[Double]], Expr[Option[Double]], Expr[Int])
 
   /** Every asset a search matches, unordered and unpaged */
   def matching(engine: SearchDialect, query: SearchQuery, repositoryId: String): Select[AssetRow[Expr], AssetRow[Sc]] =
@@ -301,6 +307,97 @@ object SearchQueries:
              LEFT JOIN group_counts AS g ON g.location_id = p.location_id OR (g.location_id IS NULL AND p.location_id IS NULL)
              $totalJoin
        ORDER BY ${order("p")}
+    """
+
+  /**
+   * Every point the map plots for a search, one row per plotted point, with the asset's ID and capture time: a matching asset
+   * with a point of its own is plotted there, and only there; one without is plotted at the pin of each Location it is in, so an
+   * asset in two Locations is two points, as it is two cells in the Location grid. With a box, only the points inside it.
+   *
+   * Rendered as a `UNION ALL` of the two typed relations; each carries every filter of the search, so the points can never
+   * disagree with the grid.
+   */
+  private def plottedPoints(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: Option[BoundingBox]): SqlStr =
+    import engine.dialect.*
+
+    val base = matching(engine, query, repositoryId)
+
+    val own = base
+      .filter(asset => asset.latitude.isDefined)
+      .filterIf(bbox.isDefined)(asset => inBox(engine, bbox.get, asset.latitude, asset.longitude))
+      .map(asset => (asset.id, asset.latitude, asset.longitude, asset.originalCreatedAt))
+
+    val pinned = base
+      .filter(asset => asset.latitude.isEmpty)
+      .join(LocationAssetRow)((asset, link) => asset.id `=` link.assetId)
+      .join(LocationRow)((row, location) => row._2.locationId `=` location.id)
+      .filterIf(bbox.isDefined)((_, _, location) => inBox(engine, bbox.get, location.latitude, location.longitude))
+      .map((asset, _, location) => (asset.id, location.latitude, location.longitude, asset.originalCreatedAt))
+
+    sql"${Db.render(own, engine.dialect).withCompleteQuery(false)} UNION ALL ${Db.render(pinned, engine.dialect).withCompleteQuery(false)}"
+
+  /** The plotted points as a named CTE, for the statements that aggregate them */
+  private def pointsCte(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: Option[BoundingBox]): SqlStr =
+    sql"WITH points (asset_id, latitude, longitude, taken) AS (${plottedPoints(engine, query, repositoryId, bbox)})"
+
+  /**
+   * One statement for the map's cells in a viewport: the plotted points in the box, each assigned to a square cell of
+   * `cellDegrees` a side by flooring its coordinates, then one window pass per cell for the count, the centroid and the rank of
+   * each point by newest capture time (nulls last, whatever the engine's native placement) and then ID; the rank-one row of each
+   * cell is the cell, and its asset represents it. `floor` is built into both engines.
+   */
+  def mapCells(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: BoundingBox, cellDegrees: Double): SqlStr =
+    import engine.dialect.*
+
+    sql"""
+      ${pointsCte(engine, query, repositoryId, Some(bbox))}, gridded AS (
+        SELECT asset_id, latitude, longitude, taken, floor(longitude / $cellDegrees) AS cell_x, floor(latitude / $cellDegrees) AS cell_y
+          FROM points
+      ), cells AS (
+        SELECT asset_id, cell_x, cell_y,
+               COUNT(*) OVER w AS n, AVG(latitude) OVER w AS latitude, AVG(longitude) OVER w AS longitude,
+               ROW_NUMBER() OVER (PARTITION BY cell_x, cell_y ORDER BY CASE WHEN taken IS NULL THEN 1 ELSE 0 END, taken DESC, asset_id ASC) AS rn
+          FROM gridded
+        WINDOW w AS (PARTITION BY cell_x, cell_y)
+      )
+      SELECT n, latitude, longitude, asset_id FROM cells WHERE rn = 1 ORDER BY cell_y, cell_x
+    """
+
+  /**
+   * The Locations pinned inside the box that hold at least one matching asset, with that count and their parent's name. The count
+   * is a correlated count over the search's own [[matching]] relation, so it agrees with the grid scoped to the Location.
+   */
+  def mapLocations(
+      engine: SearchDialect,
+      query: SearchQuery,
+      repositoryId: String,
+      bbox: BoundingBox): Select[MapLocationExprs, MapLocationRow] =
+    import engine.dialect.*
+
+    val matchingIds = matching(engine, query, repositoryId).map(_.id)
+
+    def matches(location: LocationRow[Expr]): Expr[Int] =
+      LocationAssetRow.select.filter(link => (link.locationId `=` location.id) && matchingIds.contains(link.assetId)).size
+
+    LocationRow.select
+      .leftJoin(LocationRow)((location, parent) => Expr[Boolean](implicit ctx => sql"${location.parentId} = ${parent.id}"))
+      .filter {
+        (location, _) =>
+          (location.repositoryId `=` repositoryId) && (location.kind `=` LocationKind.Location.dbValue) &&
+          inBox(engine, bbox, location.latitude, location.longitude) && (matches(location) > 0)
+      }
+      .map(
+        (location, parent) =>
+          (location.id, location.name, parent.map(_.name), location.latitude, location.longitude, matches(location)))
+
+  /**
+   * One aggregate over every plotted point of the search: the box around them and their count, for fitting the map to a result.
+   * With nothing plotted the extremes are NULL and the count is zero.
+   */
+  def mapBounds(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
+    sql"""
+      ${pointsCte(engine, query, repositoryId, None)}
+      SELECT min(latitude), max(latitude), min(longitude), max(longitude), count(*) FROM points
     """
 
   /**

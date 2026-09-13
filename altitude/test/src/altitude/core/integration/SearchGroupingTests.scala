@@ -89,11 +89,8 @@ import altitude.core.util.*
   private def addLocation(name: String, parentId: Option[String] = None, pin: (Double, Double) = paris): Location =
     testApp.service.location.addLocation(name, pin._1, pin._2, parentId, None)
 
-  /** Coordinates are parsed on import only, so a fixture sets them directly, as an import would have */
   private def setCoordinates(asset: Asset, latitude: Double, longitude: Double): Unit =
-    testApp.txManager.withTransaction {
-      update("UPDATE asset SET latitude = ?, longitude = ? WHERE id = ?", latitude, longitude, asset.persistedId)
-    }
+    testContext.setAssetCoordinates(asset.persistedId, latitude, longitude)
 
   private def flat(
       params: Map[String, Any] = Map(FieldConst.Asset.IS_RECYCLED -> false),

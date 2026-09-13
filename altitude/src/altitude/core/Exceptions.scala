@@ -33,4 +33,7 @@ case class NotFoundException(msg: String) extends Exception(msg)
 
 case class StorageException(msg: String) extends Exception(msg)
 
+/** The external geocoder could not be reached or did not answer with a list of places */
+case class GeocoderException(msg: String) extends Exception(msg)
+
 case class SamePersonDetectedTwiceException(msg: String) extends Exception(msg)

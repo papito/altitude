@@ -18,6 +18,7 @@ import altitude.core.service.AssetService
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
+import altitude.core.service.GeocoderService
 import altitude.core.service.ImportPipelineService
 import altitude.core.service.LibraryService
 import altitude.core.service.LocationService
@@ -261,6 +262,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val importPipeline: ImportPipelineService = ImportPipelineService(app)
     val purgePipeline: PurgePipelineService = PurgePipelineService(app)
     val urlService: UrlService = UrlService()
+    val geocoder: GeocoderService = GeocoderService(app.config)
 
     val fileStore: FileStoreService = fileStoreType match {
       case Const.StorageEngineName.FS => FileSystemStoreService(app)

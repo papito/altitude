@@ -14,6 +14,7 @@ import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.MurmurHash
 import altitude.core.util.Query
@@ -97,6 +98,18 @@ class LibraryService(val app: Altitude):
   def count(query: SearchQuery): Int =
     txManager.asReadOnly {
       app.service.search.count(withResolvedFolderScope(query))
+    }
+
+  /** The map's cells and Locations for a viewport at a zoom, scoped like `search`; both aggregates read one snapshot */
+  def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
+    txManager.asReadOnly {
+      app.service.search.mapCells(withResolvedFolderScope(query), bbox, zoom)
+    }
+
+  /** The box around every point a search plots, scoped like `search`; nothing when nothing is plotted */
+  def mapBounds(query: SearchQuery): Option[MapBounds] =
+    txManager.asReadOnly {
+      app.service.search.mapBounds(withResolvedFolderScope(query))
     }
 
   /**

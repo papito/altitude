@@ -335,6 +335,21 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - [ ] Reject malformed cursor field types, invalid dates, oversized tokens, and mismatched sort-value types with a domain error rather than leaking an internal exception. [EDGE]
 - [ ] Issue an authenticated request for another user's repository and assert the intended access rule. The test named `Grouped requests require authentication and a repository the user can see` only sends unauthenticated requests. [CRITICAL]
 
+## Map cells, bounds and the geocoder
+
+Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQueries.scala), [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [GeocoderService](../altitude/src/altitude/core/service/GeocoderService.scala). Evidence: [SearchMapTests](../altitude/test/src/altitude/core/integration/SearchMapTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [GeocoderServiceTests](../altitude/test/src/altitude/core/unit/GeocoderServiceTests.scala).
+
+- ✅ Cells aggregate the plotted points on both engines: an asset at its own point, an asset without one at the pin of each Location it is in (counted once per Location), assets at one coordinate merged into one cell with the mean centroid, a Location listed with its matching count and its parent's name, and absent without matching assets.
+- ✅ The representative asset of a cell is the newest capture, then the lowest ID, and follows the matching set when the newest is recycled.
+- ✅ Cell size follows the zoom (one cell at zoom 0, two at zoom 10 for points a degree apart) and the zoom is clamped to 0..20.
+- ✅ Cells and Locations are clipped to the viewport, including a box across the antimeridian.
+- ✅ Bounds cover both point sources, count plotted points, follow the search's filters, and are absent when nothing is plotted.
+- ✅ The map reads the same matching set as the grid: recycled assets only in the trash view, a folder scope narrows cells, Location counts and bounds, the root folder is the whole repository, another repository's geotagged asset is invisible.
+- ✅ The cells and bounds statements render on both dialects with every placeholder bound and both point sources carrying the search's filters; the Locations query is repository- and kind-scoped, antimeridian-aware, and counts over the matching relation.
+- ✅ Geocoder: disabled by config refuses with `IllegalOperationException` and sends nothing; enabled, against a local stub, it sends `format=json`, `limit=5`, the URL-encoded query and an identifying `User-Agent`, maps the places, skips one without coordinates, asks nothing for blank text, and turns a non-200 answer or a non-list body into `GeocoderException`.
+- [ ] Verify with `EXPLAIN` on both engines that a cells query over a large repository uses the partial `asset_geo` index. [MEDIUM]
+- [ ] Bounds for a result whose points straddle the antimeridian could be the narrower box across it rather than the whole longitude range. [EDGE]
+
 ## People, face ownership, and merges
 
 Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.scala). Evidence: [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala).

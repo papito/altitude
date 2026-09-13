@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–3 implemented 2026-09-13 (Unit 3 uncommitted); Units 4–9 not started.** This expands §7 of
+Status: **Units 1–4 implemented 2026-09-13 (Unit 4 uncommitted); Units 5–9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -295,6 +295,17 @@ Tests
   re-review).
 
 ## Unit 4 — Map queries, geocoder proxy, config
+
+**Done 2026-09-13**, with four findings:
+- The cells statement partitions on `floor(coordinate / cell)` computed in an inner `gridded` CTE, since a window cannot partition on an
+  alias of its own SELECT, and ranks the representative with `CASE WHEN taken IS NULL THEN 1 ELSE 0 END, taken DESC, asset_id` so an
+  undated asset never wins on Postgres, where a null sorts first in `DESC`. Both engines accept the named `WINDOW w` clause.
+- `mapLocations` is a typed ScalaSql query (the correlated count is `LocationAssetRow.select.filter(...).size`, rendered as a scalar
+  subquery both in the projection and in the `> 0` filter); only the two point aggregates needed the hand-written `WITH` shell.
+- `LibraryService.mapCells` returns a `MapCells(cells, locations)` pair rather than two calls, so the two aggregates share one
+  read-only transaction; `GeocoderService` takes a `Config` rather than the app, which is what lets the test point it at a stub.
+- `GeocoderServiceTests` is a unit suite (no database; a `com.sun.net.httpserver` stub on 127.0.0.1), not an integration suite as
+  planned, so it runs once instead of once per engine. `TestContext.setAssetCoordinates` replaces the grouping tests' private helper.
 
 Files
 - `dao/sql/search/SearchQueries.scala`: `plottedPoints(engine, query, repositoryId)` — a

@@ -23,6 +23,12 @@ object Const:
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
 
+    // The map's basemap and the place-name search behind the Add Location dialog; both talk to third parties, see reference.conf
+    val MAP_TILE_URL = "map.tile.url"
+    val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
+    val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
+    val MAP_GEOCODER_URL = "map.geocoder.url"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"

@@ -7,8 +7,11 @@ import altitude.core.Altitude
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
 import altitude.core.models.FieldType
+import altitude.core.models.MapBounds
+import altitude.core.models.MapCells
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
@@ -16,6 +19,16 @@ import altitude.core.util.SearchResult
 
 object SearchService:
   private val NON_FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.TEXT)
+
+  /** The map's zoom levels: a web-mercator tile pyramid, from the whole world in one tile to street level */
+  val MIN_ZOOM = 0
+  val MAX_ZOOM = 20
+
+  /**
+   * A cell is a quarter of a tile's width at the zoom, about 64 pixels on screen, on both axes; a zoom outside the range is
+   * clamped
+   */
+  def cellDegrees(zoom: Int): Double = 360.0 / math.pow(2, zoom.max(MIN_ZOOM).min(MAX_ZOOM)) / 4
 
 class SearchService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -41,6 +54,21 @@ class SearchService(val app: Altitude):
 
   def count(query: SearchQuery): Int =
     searchDao.count(query)
+
+  /** What the map draws for a viewport at a zoom: the cells over the plotted points in the box, and the Locations pinned in it */
+  def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
+    val started = System.currentTimeMillis
+    val result = MapCells(
+      cells = searchDao.mapCells(query, bbox, SearchService.cellDegrees(zoom)),
+      locations = searchDao.mapLocations(query, bbox))
+    logger.debug(
+      s"Map at zoom $zoom in $bbox: ${result.cells.length} cells, ${result.locations.length} Locations, " +
+        s"in ${System.currentTimeMillis - started}ms")
+    result
+
+  /** The box around every point the search plots, for fitting the map to a result; nothing when nothing is plotted */
+  def mapBounds(query: SearchQuery): Option[MapBounds] =
+    searchDao.mapBounds(query)
 
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor

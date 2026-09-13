@@ -17,6 +17,7 @@ import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.models._
+import altitude.core.util.BoundingBox
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.GroupedSearchRow
@@ -90,6 +91,30 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
       total = Option.when(isFirstPage)(page.headOption.flatMap(_._3).getOrElse(0)),
       hasMore = page.headOption.exists(_._2 > query.rpp)
     )
+
+  override def mapCells(query: SearchQuery, bbox: BoundingBox, cellDegrees: Double): List[MapCell] =
+    import dialect.*
+
+    val statement = SearchQueries.mapCells(searchDialect, query, RequestContext.getRepository.persistedId, bbox, cellDegrees)
+    val cells = Db.read(dialect)(_.runSql[(Int, Double, Double, String)](statement)).map(MapCell.apply).toList
+    logger.debug(s"Map cells of $cellDegrees degrees in $bbox: ${cells.length} cells over ${cells.map(_.count).sum} points")
+    cells
+
+  override def mapLocations(query: SearchQuery, bbox: BoundingBox): List[MapLocation] =
+    val select = SearchQueries.mapLocations(searchDialect, query, RequestContext.getRepository.persistedId, bbox)
+    Db.read(dialect)(_.run(select)).toList.map {
+      // The kind filter guarantees a pin; a Location row without one cannot exist under the schema's CHECK
+      case (id, name, parentName, latitude, longitude, count) =>
+        MapLocation(id, name, parentName, latitude.get, longitude.get, count)
+    }
+
+  override def mapBounds(query: SearchQuery): Option[MapBounds] =
+    import dialect.*
+
+    val statement = SearchQueries.mapBounds(searchDialect, query, RequestContext.getRepository.persistedId)
+    val (south, north, west, east, count) =
+      Db.read(dialect)(_.runSql[(Option[Double], Option[Double], Option[Double], Option[Double], Int)](statement)).head
+    Option.when(count > 0)(MapBounds(south = south.get, west = west.get, north = north.get, east = east.get, count = count))
 
   /** Runs a grouped statement: a first page's rows end with the overall total, which a page reached by cursor never selects */
   private def readGrouped[Row](statement: SqlStr, isFirstPage: Boolean)(using

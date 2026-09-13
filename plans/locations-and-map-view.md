@@ -1,7 +1,7 @@
 # Locations + Map View — library options and decisions
 
 Status: **decisions made 2026-09-13 (§6). The implementation plan is
-[locations-and-map-view-implementation.md](locations-and-map-view-implementation.md) (Units 1–3 done, the rest not started).**
+[locations-and-map-view-implementation.md](locations-and-map-view-implementation.md) (Units 1–4 done, the rest not started).**
 
 Written 2026-09-13. Versions below were checked against GitHub releases / npm on that date.
 

@@ -393,6 +393,76 @@ import altitude.core.util.SortValue
         "p.parent_name AS parent_name, p.sort_value AS sort_value, g.n AS group_total") shouldBe true
   }
 
+  test("The map's cells are one statement: the plotted points in the box, gridded, one window pass, the newest per cell") {
+    for ((engine, dialect) <- engines) withClue(engine) {
+      val query = new SearchQuery(params = Map("is_recycled" -> false), locationIds = Set("l1"))
+      val statement = SearchQueries.mapCells(dialect, query, "repo-1", BoundingBox(48.0, 2.0, 49.0, 3.0), 0.25)
+      val text = statement.toString.replaceAll("\\s+", " ")
+
+      withClue(text) {
+        // An asset's own point in the box, and - without one - the pin of each Location it is in that is in the box
+        text.contains("WITH points (asset_id, latitude, longitude, taken) AS (") shouldBe true
+        text.contains("UNION ALL") shouldBe true
+        text.contains(
+          "(asset0.latitude IS NOT NULL) AND (asset0.latitude BETWEEN ? AND ? AND asset0.longitude BETWEEN ? AND ?)") shouldBe true
+        text.contains("JOIN location_asset location_asset1 ON") shouldBe true
+        text.contains("JOIN location location2 ON") shouldBe true
+        text.contains("(location2.latitude BETWEEN ? AND ? AND location2.longitude BETWEEN ? AND ?)") shouldBe true
+        // Both branches carry the search's own filters
+        "location_asset\\S*\\.location_id IN \\(\\?\\)".r.findAllIn(text).size shouldBe 2
+        text.contains("floor(longitude / ?) AS cell_x, floor(latitude / ?) AS cell_y") shouldBe true
+        text.contains("COUNT(*) OVER w AS n, AVG(latitude) OVER w AS latitude, AVG(longitude) OVER w AS longitude") shouldBe true
+        text.contains(
+          "ROW_NUMBER() OVER (PARTITION BY cell_x, cell_y ORDER BY CASE WHEN taken IS NULL THEN 1 ELSE 0 END, taken DESC, asset_id ASC) AS rn") shouldBe true
+        text.contains("WINDOW w AS (PARTITION BY cell_x, cell_y)") shouldBe true
+        text.contains("WHERE rn = 1") shouldBe true
+        text.contains("NULLS FIRST") shouldBe false
+        text.contains("NULLS LAST") shouldBe false
+        text.count(_ == '?') shouldBe binds(statement)
+      }
+    }
+  }
+
+  test("The map's bounds are one aggregate over the same plotted points, over the whole search") {
+    for ((engine, dialect) <- engines) withClue(engine) {
+      val query = new SearchQuery(params = Map("is_recycled" -> false), text = Some("beach"))
+      val statement = SearchQueries.mapBounds(dialect, query, "repo-1")
+      val text = statement.toString.replaceAll("\\s+", " ")
+
+      withClue(text) {
+        text.contains("WITH points (asset_id, latitude, longitude, taken) AS (") shouldBe true
+        text.contains("UNION ALL") shouldBe true
+        text.contains("SELECT min(latitude), max(latitude), min(longitude), max(longitude), count(*) FROM points") shouldBe true
+        text.contains("BETWEEN") shouldBe false
+        // The text filter is applied to both point sources
+        "FROM search_document ".r.findAllIn(text).size shouldBe 2
+        text.count(_ == '?') shouldBe binds(statement)
+      }
+    }
+  }
+
+  test("The map's Locations are the pinned ones in the box, counted over the matching assets, with their parent's name") {
+    for ((engine, dialect) <- engines) withClue(engine) {
+      val query = new SearchQuery(params = Map("is_recycled" -> false), folderIds = Set("f1"))
+      val select = SearchQueries.mapLocations(dialect, query, "repo-1", BoundingBox(-1.0, 179.0, 1.0, -179.0))
+      val sql = DbApi.renderSql(select, Db.config, dialect.dialect)
+
+      withClue(sql) {
+        sql.contains("FROM location location0") shouldBe true
+        sql.contains("LEFT JOIN location location1 ON location0.parent_id = location1.id") shouldBe true
+        sql.contains("location0.repository_id = ?") shouldBe true
+        sql.contains("location0.kind = ?") shouldBe true
+        // A box across the antimeridian covers both sides of it
+        sql.contains("(location0.longitude >= ? OR location0.longitude <= ?)") shouldBe true
+        // The count is a correlated subquery over the search's own matching relation, and only Locations with one are listed
+        sql.contains("FROM location_asset") shouldBe true
+        sql.contains("asset_id IN (SELECT asset") shouldBe true
+        sql.contains("folder_id IN (?)") shouldBe true
+        sql.contains("> ?") shouldBe true
+      }
+    }
+  }
+
   private def flat(engine: SearchDialect, query: SearchQuery): String =
     DbApi.renderSql(SearchQueries.flat(engine, query, "repo-1"), Db.config, engine.dialect)
 
