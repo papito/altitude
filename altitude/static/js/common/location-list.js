@@ -3,19 +3,19 @@
  * nesting.
  *
  * Public API:
- *   reloadLocationList(repoId) — fetch every parent and Location from the server, re-render, restore
- *   focus, and show the right add controls: the top "Add location" and "Add parent" buttons
+ *   reloadLocationList(repoId) — fetch every category and Location from the server, re-render, restore
+ *   focus, and show the right add controls: the top "Add location" and "Add category" buttons
  *   normally, the centered "Add your first location" while the list is empty.
  *   refreshLocationCounts(repoId) — fetch the list and patch only the asset counts in place; falls
  *   back to a full render when the list gained a row the DOM does not have.
  *   setViewedLocation(locationId) — mark the Location whose results are displayed (green icon).
  *   focusAddLocationControlIfFocusLost() — move focus to whichever add control is visible.
  *
- * The list endpoint returns the rows in path order (a parent directly followed by its Locations,
+ * The list endpoint returns the rows in path order (a category directly followed by its Locations,
  * top-level Locations interleaved by name), so the list is rendered in that order as it comes: a
- * parent row, then each of its Locations indented one step. A parent row shows its ⋯ menu (Rename,
+ * category row, then each of its Locations indented one step. A category row shows its ⋯ menu (Rename,
  * Delete), an icon and the name; it holds no assets, so it is neither a drop target nor a search
- * trigger. A Location row shows its ⋯ menu (Rename, Delete, Move to parent), its asset count
+ * trigger. A Location row shows its ⋯ menu (Rename, Delete, Move to category), its asset count
  * (`.asset-count`, empty for zero; `common/asset-count.js`), an icon and the name; icon and name
  * are search triggers for the Location and the row's `.controls` is a drop zone for assets
  * (`dragdrop/locations.js`). Locations are pointers only: nothing here moves or changes an asset.
@@ -36,7 +36,7 @@ import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
 const COUNT_COLUMN_VARIABLE = "--location-count-column"
 const SCOPE_MARKER = Const.attributes.viewedScope
-const PARENT_KIND = "parent"
+const CATEGORY_KIND = "category"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ function _render(locations, repoId) {
 /**
  * Builds the add controls into their hosts on the first render after the tab loads. "Add location"
  * requests its modal into the modal host (the dialog holds a map, so it is not an inline one);
- * "Add parent" and the empty-state button are built here rather than in the tab template because
+ * "Add category" and the empty-state button are built here rather than in the tab template because
  * they are context menu components like the rows' menus. The hosts (`#locationActions`,
  * `#noLocations`) only decide which is shown.
  */
@@ -184,12 +184,12 @@ function _ensureAddControls(repoId) {
     )
     actionsEl.appendChild(
         buildDialogTriggerCtrl({
-            triggerId: "addParentBtn",
-            panelId: "addParentMenu",
-            dialogId: "addParentDialog",
-            label: "Add parent",
+            triggerId: "addCategoryBtn",
+            panelId: "addCategoryMenu",
+            dialogId: "addCategoryDialog",
+            label: "Add category",
             iconClass: "fas fa-plus",
-            url: `/htmx/location/r/${repoId}/dialogs/add-parent`,
+            url: `/htmx/location/r/${repoId}/dialogs/add-category`,
             buttonClass: "action-button small",
         }),
     )
@@ -244,11 +244,11 @@ function _showAddControl(isEmpty) {
 /**
  * Writes each Location's count into its rendered row. Returns false as soon as a Location has no
  * row, leaving the caller to render in full; rows with no Location in the JSON are left alone,
- * since Location operations always reload the whole list. Parents carry no count.
+ * since Location operations always reload the whole list. Categories carry no count.
  */
 function _patchAssetCounts(locations) {
     return locations
-        .filter((location) => location.kind !== PARENT_KIND)
+        .filter((location) => location.kind !== CATEGORY_KIND)
         .every((location) => {
             const el = document.getElementById(`location-count-${location.id}`)
             if (!el) return false
@@ -282,20 +282,20 @@ function _applyViewedLocation() {
 // ─── DOM builders ────────────────────────────────────────────────────────────
 
 /**
- * One row. A parent is `.parent`; a Location is `.top-level` or, under a parent, `.child` with
+ * One row. A category is `.category`; a Location is `.top-level` or, under a category, `.child` with
  * `--depth: 1` and a `.trace` cell, so the CSS in the tab template indents it like a folder.
  */
 function _buildRow(location, repoId) {
-    const isParent = location.kind === PARENT_KIND
-    const isChild = !isParent && Boolean(location.parentId)
+    const isCategory = location.kind === CATEGORY_KIND
+    const isChild = !isCategory && Boolean(location.categoryId)
 
     const rowEl = document.createElement("div")
-    rowEl.className = `location ${isParent ? "parent" : isChild ? "child" : "top-level"}`
+    rowEl.className = `location ${isCategory ? "category" : isChild ? "child" : "top-level"}`
     rowEl.id = `location-${location.id}`
     rowEl.setAttribute(Const.attributes.locationId, location.id)
     rowEl.setAttribute(Const.attributes.kind, location.kind)
     if (isChild) {
-        rowEl.setAttribute(Const.attributes.parentId, location.parentId)
+        rowEl.setAttribute(Const.attributes.categoryId, location.categoryId)
         rowEl.style.setProperty("--depth", 1)
     }
 
@@ -304,7 +304,7 @@ function _buildRow(location, repoId) {
 
     const iconEl = document.createElement("i")
     iconEl.id = `location-icon-${location.id}`
-    iconEl.className = `fas ${isParent ? "fa-layer-group" : "fa-map-marker-alt"} location-icon`
+    iconEl.className = `fas ${isCategory ? "fa-layer-group" : "fa-map-marker-alt"} location-icon`
 
     const nameEl = document.createElement("span")
     nameEl.id = `locationName-${location.id}`
@@ -313,7 +313,7 @@ function _buildRow(location, repoId) {
 
     controlsEl.appendChild(_buildMenuCtrl(location, repoId))
 
-    if (isParent) {
+    if (isCategory) {
         // ⋯ menu button | icon | name
         controlsEl.appendChild(iconEl)
         controlsEl.appendChild(nameEl)
@@ -354,24 +354,24 @@ function _makeSearchTrigger(el, locationId) {
 
 /**
  * The row's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete for both kinds, plus Move
- * to parent for a Location, each loading its inline dialog into the panel's dialog host.
+ * to category for a Location, each loading its inline dialog into the panel's dialog host.
  * `locationMenuCtrl-<id>` is the trigger the rename and move dialogs return focus to.
  */
 function _buildMenuCtrl(location, repoId) {
-    const isParent = location.kind === PARENT_KIND
+    const isCategory = location.kind === CATEGORY_KIND
     const actions = [
         { label: "Rename", dialog: "rename-location" },
         { label: "Delete", dialog: "delete-location" },
     ]
-    if (!isParent) {
-        actions.push({ label: "Move to parent", dialog: "move-location" })
+    if (!isCategory) {
+        actions.push({ label: "Move to category", dialog: "move-location" })
     }
 
     return buildContextMenuCtrl({
         triggerId: `locationMenuCtrl-${location.id}`,
         panelId: `locationMenu-${location.id}`,
         dialogId: `locationMenuDialog-${location.id}`,
-        ariaLabel: `Actions for ${isParent ? "parent" : "location"} ${location.name}`,
+        ariaLabel: `Actions for ${isCategory ? "category" : "location"} ${location.name}`,
         entityAttr: Const.attributes.locationId,
         entityId: location.id,
         actions: actions.map(({ label, dialog }) => ({

@@ -2,17 +2,17 @@
 @import altitude.core.Api
 @import altitude.core.models.Location
 
-@(location: Location, parents: List[Location], title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@(location: Location, categories: List[Location], title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
 <form id="moveLocation" data-app-fragment="inline-dialog"
-      data-app-dialog-autofocus-selector="#field-parentId"
+      data-app-dialog-autofocus-selector="#field-categoryId"
       data-app-dialog-return-focus="#locationMenuCtrl-@{location.persistedId}"
       data-app-success-event="LOCATION_MOVED_EVENT"
       data-app-success-detail='@{ujson.Obj("id" -> location.persistedId)}'
       hx-target="this" hx-swap="none" hx-json-enc
       hx-put="/htmx/location/r/@{RequestContext.getRepository.persistedId}/move">
   <h3 class="dialog-title">@{title}</h3>
-  @includes.html.location_parent_select(parents, formJson, fieldErrors)
+  @includes.html.location_category_select(categories, formJson, fieldErrors)
   <input type="hidden" name="@{Api.Field.ID}" value="@{location.persistedId}">
   <button type="submit" class="action-button">Move "<strong>@{location.name}</strong>"</button>
 </form>

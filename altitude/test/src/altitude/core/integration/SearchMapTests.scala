@@ -27,8 +27,8 @@ import altitude.core.util.SearchQuery
   private val paris = (48.8566, 2.3522)
   private val world = BoundingBox.parse("-90,-180,90,180")
 
-  private def addLocation(name: String, pin: (Double, Double) = paris, parentId: Option[String] = None): Location =
-    testApp.service.location.addLocation(name, pin._1, pin._2, parentId, None)
+  private def addLocation(name: String, pin: (Double, Double) = paris, categoryId: Option[String] = None): Location =
+    testApp.service.location.addLocation(name, pin._1, pin._2, categoryId)
 
   private def persistAt(latitude: Double, longitude: Double, folder: Option[Folder] = None): Asset = {
     val asset = testContext.persistAsset(folder = folder)
@@ -55,12 +55,12 @@ import altitude.core.util.SearchQuery
   private def summary(cells: List[MapCell]): List[(Int, String)] = cells.map(cell => (cell.count, cell.assetId)).sorted
 
   private def locationSummary(locations: List[MapLocation]): List[(String, Option[String], Int)] =
-    locations.map(location => (location.name, location.parentName, location.count)).sorted
+    locations.map(location => (location.name, location.categoryName, location.count)).sorted
 
   private def bounds(query: SearchQuery = searchQuery()): Option[MapBounds] = testApp.service.library.mapBounds(query)
 
   test("Cells aggregate the plotted points: an asset at its own point, or at its Locations' pins without one") {
-    val italy = testApp.service.location.addParent("Italy")
+    val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", (41.9028, 12.4964), Some(italy.persistedId))
     val sydney = addLocation("Sydney", (-33.8688, 151.2093))
     addLocation("Empty", (35.6762, 139.6503))
@@ -99,7 +99,7 @@ import altitude.core.util.SearchQuery
     londonCell.count shouldBe 1
     londonCell.assetId shouldBe pointAndPin.persistedId
 
-    // A Location is listed with its matching assets, and not at all when it has none; the parent names it
+    // A Location is listed with its matching assets, and not at all when it has none; the category names it
     locationSummary(result.locations) shouldEqual List(("Rome", Some("Italy"), 3), ("Sydney", None, 1))
   }
 

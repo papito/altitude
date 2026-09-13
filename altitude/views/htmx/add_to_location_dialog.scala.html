@@ -32,7 +32,7 @@
     @if(fieldErrors.contains(Api.Field.Location.LOCATION_ID)) {<div class="error">@{fieldErrors(Api.Field.Location.LOCATION_ID)}</div>}
     <select id="field-locationId" name="@{Api.Field.Location.LOCATION_ID}">
       @for(location <- locations) {
-        <option value="@{location.persistedId}" @if(formJson.obj.get(Api.Field.Location.LOCATION_ID).flatMap(_.strOpt).contains(location.persistedId)) {selected}>@{location.parentName.map(_ + " - ").getOrElse("") + location.name}</option>
+        <option value="@{location.persistedId}" @if(formJson.obj.get(Api.Field.Location.LOCATION_ID).flatMap(_.strOpt).contains(location.persistedId)) {selected}>@{location.categoryName.map(_ + " - ").getOrElse("") + location.name}</option>
       }
     </select>
   </div>

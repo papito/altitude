@@ -228,7 +228,7 @@ import altitude.core.util.*
     ids(continue(cursor, grouping, sort, rpp = 6)).length shouldBe 6
 
     val folder = testApp.service.folder.add("scoped")
-    val location = testApp.service.location.addLocation("Rome", 41.9, 12.5, None, None)
+    val location = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
     def scoped(folderIds: Set[String] = Set(), locationIds: Set[String] = Set(), bbox: Option[BoundingBox] = None) =
       testApp.service.library.searchGrouped(
         new SearchQuery(
@@ -293,10 +293,10 @@ import altitude.core.util.*
 
   test("Cursor traversal by Location matches the complete order for every sort field and direction") {
     val assets = fixture()
-    val italy = testApp.service.location.addParent("Italy")
-    val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, Some(italy.persistedId), None)
-    val alba = testApp.service.location.addLocation("Alba", 44.7, 8.0, Some(italy.persistedId), None)
-    val berlin = testApp.service.location.addLocation("Berlin", 52.5, 13.4, None, None)
+    val italy = testApp.service.location.addCategory("Italy")
+    val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, Some(italy.persistedId))
+    val alba = testApp.service.location.addLocation("Alba", 44.7, 8.0, Some(italy.persistedId))
+    val berlin = testApp.service.location.addLocation("Berlin", 52.5, 13.4, None)
     // Overlapping memberships, a Location the size of a page, and a trailing group with every kind of tie
     val inRome = assets.slice(0, 6)
     val inBerlin = assets.slice(3, 9) ++ assets.slice(12, 14)

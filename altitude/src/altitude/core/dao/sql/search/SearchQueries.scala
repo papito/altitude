@@ -49,13 +49,13 @@ import altitude.core.util.SortValue
 object SearchQueries:
 
   /**
-   * Separates a parent's name from its Location's in a path key: the control character U+0001. It sorts below every printable
-   * character, so the composite key orders exactly as the pair (parent name, Location name) would, and a Location's key cannot
+   * Separates a category's name from its Location's in a path key: the control character U+0001. It sorts below every printable
+   * character, so the composite key orders exactly as the pair (category name, Location name) would, and a Location's key cannot
    * collide with a top-level one.
    */
   private val PATH_SEPARATOR: String = 1.toChar.toString
 
-  /** A row of [[mapLocations]]: ID, name, parent name, latitude, longitude, matching-asset count */
+  /** A row of [[mapLocations]]: ID, name, category name, latitude, longitude, matching-asset count */
   type MapLocationRow = (String, String, Option[String], Option[Double], Option[Double], Int)
   type MapLocationExprs =
     (Expr[String], Expr[String], Expr[Option[String]], Expr[Option[Double]], Expr[Option[Double]], Expr[Int])
@@ -202,13 +202,13 @@ object SearchQueries:
    * matching assets joined to their Locations - an asset once per Location it is in, so an asset in two Locations appears under
    * both - and `unlocated` is the matching assets in no Location, which always come last as the "No location" group.
    *
-   * Locations are in path order: the key is the parent's lower-cased name and the Location's own joined by [[PATH_SEPARATOR]], or
-   * the Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a deterministic
-   * tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices `located` after
-   * it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE` as the day
-   * statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated` alone. A group's
-   * count is the matching assets in that Location (or in none); the overall total on a first page is the number of matching
-   * assets, so the group counts may sum to more than it.
+   * Locations are in path order: the key is the category's lower-cased name and the Location's own joined by [[PATH_SEPARATOR]],
+   * or the Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a
+   * deterministic tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices
+   * `located` after it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE`
+   * as the day statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated`
+   * alone. A group's count is the matching assets in that Location (or in none); the overall total on a first page is the number
+   * of matching assets, so the group counts may sum to more than it.
    */
   def groupedByLocation(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     import engine.dialect.*
@@ -224,11 +224,11 @@ object SearchQueries:
     val located = base
       .join(LocationAssetRow)((asset, link) => asset.id `=` link.assetId)
       .join(LocationRow)((row, location) => row._2.locationId `=` location.id)
-      .leftJoin(LocationRow)((row, parent) => Expr[Boolean](implicit ctx => sql"${row._3.parentId} = ${parent.id}"))
-    val ((asset, _, location), parent) = WithSqlExpr.get(located)
-    val parentName: Expr[Option[String]] = parent.map(_.name)
+      .leftJoin(LocationRow)((row, category) => Expr[Boolean](implicit ctx => sql"${row._3.categoryId} = ${category.id}"))
+    val ((asset, _, location), category) = WithSqlExpr.get(located)
+    val categoryName: Expr[Option[String]] = category.map(_.name)
     val pathKey =
-      Expr[String](implicit ctx => sql"COALESCE(${parent.get.nameLc} || $PATH_SEPARATOR, '') || ${location.nameLc}")
+      Expr[String](implicit ctx => sql"COALESCE(${category.get.nameLc} || $PATH_SEPARATOR, '') || ${location.nameLc}")
 
     def inNoLocation(row: AssetRow[Expr]): Expr[Boolean] =
       LocationAssetRow.select.filter(link => link.assetId `=` row.id).map(_.assetId).isEmpty
@@ -248,7 +248,7 @@ object SearchQueries:
       engine,
       located
         .filterIf(query.cursor.isDefined && inLocatedPart)(_ => afterLocation(query.cursor.get))
-        .map(_ => (asset.id, location.id, pathKey, location.name, parentName, sortValue(engine, asset, sort))),
+        .map(_ => (asset.id, location.id, pathKey, location.name, categoryName, sortValue(engine, asset, sort))),
       sql"$pathKey ASC, ${location.id} ASC, ${engine.secondarySort(asset, sort, grouping)} ${towards(sort.direction)}, ${asset.id} ASC",
       SqlStr.raw(s" LIMIT ${query.rpp + 1}")
     )
@@ -300,7 +300,7 @@ object SearchQueries:
           FROM (SELECT DISTINCT location_id FROM page WHERE location_id IS NULL) AS p
       )$totalCte
       SELECT $assetColumns, p.location_id AS location_id, p.path_key AS path_key, p.location_name AS location_name,
-             p.parent_name AS parent_name, p.sort_value AS sort_value, g.n AS group_total,
+             p.category_name AS category_name, p.sort_value AS sort_value, g.n AS group_total,
              (SELECT count(*) FROM candidates) AS candidate_count$totalColumn
         FROM page AS p
              JOIN asset ON asset.id = p.id
@@ -364,8 +364,8 @@ object SearchQueries:
     """
 
   /**
-   * The Locations pinned inside the box that hold at least one matching asset, with that count and their parent's name. The count
-   * is a correlated count over the search's own [[matching]] relation, so it agrees with the grid scoped to the Location.
+   * The Locations pinned inside the box that hold at least one matching asset, with that count and their category's name. The
+   * count is a correlated count over the search's own [[matching]] relation, so it agrees with the grid scoped to the Location.
    */
   def mapLocations(
       engine: SearchDialect,
@@ -380,15 +380,15 @@ object SearchQueries:
       LocationAssetRow.select.filter(link => (link.locationId `=` location.id) && matchingIds.contains(link.assetId)).size
 
     LocationRow.select
-      .leftJoin(LocationRow)((location, parent) => Expr[Boolean](implicit ctx => sql"${location.parentId} = ${parent.id}"))
+      .leftJoin(LocationRow)((location, category) => Expr[Boolean](implicit ctx => sql"${location.categoryId} = ${category.id}"))
       .filter {
         (location, _) =>
           (location.repositoryId `=` repositoryId) && (location.kind `=` LocationKind.Location.dbValue) &&
           inBox(engine, bbox, location.latitude, location.longitude) && (matches(location) > 0)
       }
       .map(
-        (location, parent) =>
-          (location.id, location.name, parent.map(_.name), location.latitude, location.longitude, matches(location)))
+        (location, category) =>
+          (location.id, location.name, category.map(_.name), location.latitude, location.longitude, matches(location)))
 
   /**
    * One aggregate over every plotted point of the search: the box around them and their count, for fitting the map to a result.
@@ -514,7 +514,7 @@ object SearchQueries:
   private val narrowColumns: SqlStr = SqlStr.raw("(id, day, sort_value)")
 
   /** The Location candidates' columns: the asset, its Location and what heads the group, and the sort key */
-  private val locationColumnList: SqlStr = SqlStr.raw("id, location_id, path_key, location_name, parent_name, sort_value")
+  private val locationColumnList: SqlStr = SqlStr.raw("id, location_id, path_key, location_name, category_name, sort_value")
   private val locationColumns: SqlStr = sql"($locationColumnList)"
 
   /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */

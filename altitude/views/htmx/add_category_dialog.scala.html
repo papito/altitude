@@ -8,13 +8,13 @@
    placeholder is the whole prompt, so there is no heading.
    hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
-      id="addParent"
+      id="addCategory"
       data-app-fragment="inline-dialog"
       data-app-dialog-autofocus-selector="#field@{ Api.Field.Location.NAME }"
-      data-app-success-event="PARENT_ADDED_EVENT"
+      data-app-success-event="CATEGORY_ADDED_EVENT"
       hx-target="this"
       hx-swap="none"
-      hx-post="/htmx/location/r/@{RequestContext.getRepository.persistedId}/add-parent"
+      hx-post="/htmx/location/r/@{RequestContext.getRepository.persistedId}/add-category"
       hx-trigger="submit"
       hx-json-enc>
 
@@ -33,7 +33,7 @@
                autocomplete="off"
                size="30"
                value='@{ formJson.obj.get(Api.Field.Location.NAME).flatMap(_.strOpt).getOrElse("") }'
-               placeholder="New parent name"
+               placeholder="New category name"
                maxlength="@{ Api.Constraints.MAX_LOCATION_NAME_LENGTH }"
                minlength="@{ Api.Constraints.MIN_LOCATION_NAME_LENGTH }">
     </div>

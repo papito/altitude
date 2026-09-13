@@ -171,21 +171,21 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 - [ ] Verify album operations preserve the complete asset state, binary files, statistics, and people counts, including deleting the last album membership. Current assertions cover only selected asset fields. [MEDIUM]
 - [ ] Verify empty ID sets return zero without writes, removing an absent membership is a no-op, and triaged assets can be album members. [EDGE]
 
-## Locations, parents and membership
+## Locations, categories and membership
 
 Sources: [LocationService](../altitude/src/altitude/core/service/LocationService.scala), [Location](../altitude/src/altitude/core/models/Location.scala). Evidence: [LocationServiceTests](../altitude/test/src/altitude/core/integration/LocationServiceTests.scala), [LocationControllerTests](../altitude/test/src/altitude/core/controller/LocationControllerTests.scala), [LocationActionControllerTests](../altitude/test/src/altitude/core/controller/LocationActionControllerTests.scala).
 
-- ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across parents and Locations on add and rename, and permit casing-only renames.
-- ✅ Reject a pin out of range (including NaN) and a non-positive radius; store the edges of the range and a radius; the model refuses a pinless Location, a pinned parent and a nested parent.
-- ✅ Add a Location under a parent only: a Location as the parent is an `IllegalOperationException`, an unknown parent is `NotFoundException`; `getAll` fills `parentName`.
-- ✅ Move a Location between parents and back to the top level; refuse moving a parent, moving under a Location or under itself; unknown IDs on either side are `NotFoundException`.
-- ✅ Delete a parent: its Locations move to the top level and keep their memberships. Delete a Location: memberships go, assets stay, other Locations keep theirs; a repeated delete is `NotFoundException`.
-- ✅ Add membership idempotently with insertion counts, an empty set is a no-op, unknown and recycled assets are dropped, a parent refuses assets, an unknown Location is `NotFoundException`.
+- ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across categories and Locations on add and rename, and permit casing-only renames.
+- ✅ Reject a pin out of range (including NaN); store the edges of the range; the model refuses a pinless Location, a pinned category and a nested category.
+- ✅ Add a Location under a category only: a Location as the category is an `IllegalOperationException`, an unknown category is `NotFoundException`; `getAll` fills `categoryName`.
+- ✅ Move a Location between categories and back to the top level; refuse moving a category, moving under a Location or under itself; unknown IDs on either side are `NotFoundException`.
+- ✅ Delete a category: its Locations move to the top level and keep their memberships. Delete a Location: memberships go, assets stay, other Locations keep theirs; a repeated delete is `NotFoundException`.
+- ✅ Add membership idempotently with insertion counts, an empty set is a no-op, unknown and recycled assets are dropped, a category refuses assets, an unknown Location is `NotFoundException`.
 - ✅ Remove memberships (an absent membership is a no-op); recycling removes all memberships and restoring does not reinstate them; folder deletion and asset-row deletion also remove affected memberships.
-- ✅ `getAll` path order (parent before its Locations regardless of name), counts, and parent names.
-- ✅ Repository isolation: same names in another repository, no listing or count leakage, and every read and mutation by a foreign Location or parent ID is `NotFoundException` and changes nothing; a foreign asset in a local batch is dropped.
-- ✅ HTTP: camelCase list shape/path order/counts, persisted add/remove membership counts, all dialogs and mutation routes, duplicate/decimal/radius/parent validation with form replacement, authentication, invalid hidden IDs and foreign Location IDs.
-- [ ] Verify a failure after `moveChildrenToRoot` inside a parent delete rolls the re-parenting back. [MEDIUM]
+- ✅ `getAll` path order (category before its Locations regardless of name), counts, and category names.
+- ✅ Repository isolation: same names in another repository, no listing or count leakage, and every read and mutation by a foreign Location or category ID is `NotFoundException` and changes nothing; a foreign asset in a local batch is dropped.
+- ✅ HTTP: camelCase list shape/path order/counts, persisted add/remove membership counts, all dialogs and mutation routes, duplicate/decimal/category validation with form replacement (a missing pin is one `PIN_REQUIRED` error with the name kept), the Add dialog's hidden coordinate inputs, readout and map host, authentication, invalid hidden IDs and foreign Location IDs.
+- [ ] Verify a failure after `moveChildrenToRoot` inside a category delete rolls the re-categorying back. [MEDIUM]
 
 ## Moving and recycling library assets
 
@@ -324,7 +324,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ Reject malformed/unsupported-version cursors and changes to text, folder scope, grouping direction, sort field, or sort direction; allow a changed page size.
 - ✅ Apply text/metadata/folder/album/person filters to group counts and rows; verify root scope, recycle view, repository isolation, timezone independence, and one statement per unscoped grouped page.
 - ✅ HTTP tests reject invalid grouped parameters and unsupported JSON negotiation; unauthenticated HTML/API-style requests receive redirect/401, and empty continuations return 204.
-- ✅ Group by Location: path order (a parent's Locations at the parent's name, by their own), an asset under each of its Locations, group counts against a total that counts assets, `Parent › Location` data on the keys, the trailing "No location" group, the fixed direction, the sort within a group, an empty first page, one statement per page.
+- ✅ Group by Location: path order (a category's Locations at the category's name, by their own), an asset under each of its Locations, group counts against a total that counts assets, `Category › Location` data on the keys, the trailing "No location" group, the fixed direction, the sort within a group, an empty first page, one statement per page.
 - ✅ Location groups span pages with one count, continue into and inside "No location", and cross from the last Location into it; every filter bounds the groups and their counts, and a `locationIds` scope leaves no trailing group.
 - ✅ Location cursor traversal matches the complete order for every sort field and direction at page sizes 1, 5 and 6, including overlapping memberships and a Location exactly a page long; a first page counts assets once; deleting the anchor's Location continues into the trailing group its members joined.
 - ✅ A cursor is rejected for a changed `locationIds` or `bbox`, from a day grouping against a Location grouping, and for a version-3 token.

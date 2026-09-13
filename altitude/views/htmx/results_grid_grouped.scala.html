@@ -3,7 +3,7 @@
 @import altitude.core.util.Util
 @import altitude.core.FieldConst
 
-@* The grouped grid: each group's header (a capture day, or a Location as `Parent › Location`), then its cells; the page's last
+@* The grouped grid: each group's header (a capture day, or a Location as `Category › Location`), then its cells; the page's last
    cell carries the cursor of the next page when there is one. The header is skipped for the first group when it continues the previous page's group (`continuesGroup`), so the
    new cells land after that page's last cell and read as the same group.
 
@@ -25,7 +25,7 @@
   @group.key match {
     case SearchGroupKey.Day(Some(date)) => {<time datetime="@{date}">@{Util.humanReadableDate(date)}</time>}
     case SearchGroupKey.Day(None) => {<span>No date</span>}
-    case SearchGroupKey.Location(Some(_), _, name, parentName) => {<span>@parentName.map(_ + " › ")@name</span>}
+    case SearchGroupKey.Location(Some(_), _, name, categoryName) => {<span>@categoryName.map(_ + " › ")@name</span>}
     case SearchGroupKey.Location(None, _, _, _) => {<span>No location</span>}
   }
   <span class="count" data-count="@{group.total}">@{Util.humanReadableItemCount(group.total)}</span>

@@ -42,8 +42,8 @@ import altitude.core.models.Asset
     login()
     withServer(App) {
       host =>
-        val parent = testApp.service.location.addParent("Italy")
-        val location = testApp.service.location.addLocation("Beach", 1, 2, Some(parent.persistedId))
+        val category = testApp.service.location.addCategory("Italy")
+        val location = testApp.service.location.addLocation("Beach", 1, 2, Some(category.persistedId))
         val first = persistUndated("a.jpg")
         val second = persistUndated("b.jpg")
         val unlocated = persistUndated("c.jpg")

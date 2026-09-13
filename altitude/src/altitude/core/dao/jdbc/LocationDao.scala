@@ -18,16 +18,15 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
   final override type Row[T[_]] = LocationRow[T]
   final override protected def table: Table[Row] = LocationRow
 
-  // `numOfAssets` and `parentName` come only from `getAll`'s hand-written query; the typed paths never select them
+  // `numOfAssets` and `categoryName` come only from `getAll`'s hand-written query; the typed paths never select them
   override protected def toModel(row: LocationRow[Sc]): Location =
     Location(
       id = Option(row.id),
       name = row.name,
       kind = kindOf(row.kind),
-      parentId = row.parentId,
+      categoryId = row.categoryId,
       latitude = row.latitude,
-      longitude = row.longitude,
-      radiusM = row.radiusM
+      longitude = row.longitude
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Location =
@@ -35,12 +34,11 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       name = rec(FieldConst.Location.NAME).asInstanceOf[String],
       kind = kindOf(rec(FieldConst.Location.KIND).asInstanceOf[String]),
-      parentId = Option(rec(FieldConst.Location.PARENT_ID)).map(_.asInstanceOf[String]),
+      categoryId = Option(rec(FieldConst.Location.CATEGORY_ID)).map(_.asInstanceOf[String]),
       latitude = getDoubleField(rec(FieldConst.Location.LATITUDE)),
       longitude = getDoubleField(rec(FieldConst.Location.LONGITUDE)),
-      radiusM = Option(rec(FieldConst.Location.RADIUS_M)).map(getIntField),
       numOfAssets = rec.get(FieldConst.Location.NUM_OF_ASSETS).map(getIntField).getOrElse(0),
-      parentName = rec.get(FieldConst.Location.PARENT_NAME).flatMap(Option(_)).map(_.asInstanceOf[String])
+      categoryName = rec.get(FieldConst.Location.CATEGORY_NAME).flatMap(Option(_)).map(_.asInstanceOf[String])
     )
 
   private def kindOf(dbValue: String): LocationKind =
@@ -50,41 +48,40 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     val id = location.id.getOrElse(BaseDao.genId)
 
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Location.PARENT_ID},
+        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Location.CATEGORY_ID},
                                 ${FieldConst.Location.KIND}, ${FieldConst.Location.NAME}, ${FieldConst.Location.NAME_LC},
-                                ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE}, ${FieldConst.Location.RADIUS_M})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     val values: List[Any] = List(
       id,
       RequestContext.getRepository.persistedId,
-      location.parentId.orNull,
+      location.categoryId.orNull,
       location.kind.dbValue,
       location.name,
       location.nameLowercase,
       location.latitude.orNull,
-      location.longitude.orNull,
-      location.radiusM.orNull
+      location.longitude.orNull
     )
 
     addRecord(sql, values)
     location.copy(id = Some(id))
 
   override def getAll: List[Location] =
-    // Path order: a parent and its Locations share the parent's name as the first key, top-level rows use their own; a parent
+    // Path order: a category and its Locations share the category's name as the first key, top-level rows use their own; a category
     // comes before its Locations whatever their names, because the ordering by name alone would put "Alba" before "Italy"
     val sql = s"""
-      SELECT l.*, p.${FieldConst.Location.NAME} AS ${FieldConst.Location.PARENT_NAME}, (
+      SELECT l.*, p.${FieldConst.Location.NAME} AS ${FieldConst.Location.CATEGORY_NAME}, (
         SELECT COUNT(*)
           FROM $membershipTable la
          WHERE la.${FieldConst.Location.LOCATION_ID} = l.${FieldConst.ID}
       ) AS ${FieldConst.Location.NUM_OF_ASSETS}
         FROM $tableName l
-             LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.PARENT_ID}
+             LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE l.${FieldConst.REPO_ID} = ?
        ORDER BY COALESCE(p.${FieldConst.Location.NAME_LC}, l.${FieldConst.Location.NAME_LC}),
-                CASE WHEN l.${FieldConst.Location.PARENT_ID} IS NULL THEN 0 ELSE 1 END,
+                CASE WHEN l.${FieldConst.Location.CATEGORY_ID} IS NULL THEN 0 ELSE 1 END,
                 l.${FieldConst.Location.NAME_LC}
     """
 
@@ -148,6 +145,6 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       .map(_(FieldConst.Location.ASSET_ID).asInstanceOf[String])
       .toSet
 
-  override def moveChildrenToRoot(parentId: String): Int =
-    val children = new Query().add(FieldConst.Location.PARENT_ID -> parentId).withRepository()
-    updateByQuery(children, Map(FieldConst.Location.PARENT_ID -> None))
+  override def moveChildrenToRoot(categoryId: String): Int =
+    val children = new Query().add(FieldConst.Location.CATEGORY_ID -> categoryId).withRepository()
+    updateByQuery(children, Map(FieldConst.Location.CATEGORY_ID -> None))

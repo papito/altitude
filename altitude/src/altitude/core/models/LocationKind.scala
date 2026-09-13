@@ -4,7 +4,7 @@ import altitude.core.util.JsonCodec
 
 /** What a `location` row is: a named container or a pinned place. Persist dbValue, never the enum name. */
 enum LocationKind(val dbValue: String):
-  case Parent extends LocationKind("parent")
+  case Category extends LocationKind("category")
   case Location extends LocationKind("location")
 
 object LocationKind:

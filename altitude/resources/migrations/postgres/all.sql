@@ -177,29 +177,27 @@ CREATE TABLE album_asset (
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
 CREATE INDEX album_asset_02 ON album_asset (asset_id);
 
--- A user-defined place. Parents (kind 'parent') are pure containers, one level deep; Locations (kind 'location') are a pin with
--- an optional radius and hold assets through location_asset. Both kinds share one name pool per repository.
+-- A user-defined place. Categories (kind 'category') are pure containers, one level deep; Locations (kind 'location') are a pin
+-- and hold assets through location_asset. Both kinds share one name pool per repository.
 CREATE TABLE location (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
-  -- NULL = top level. No cascade: deleting a parent re-parents its Locations to the top level first (LocationService).
-  parent_id CHAR(36) REFERENCES location (id),
+  -- NULL = top level. No cascade: deleting a Category moves its Locations to the top level first (LocationService).
+  category_id CHAR(36) REFERENCES location (id),
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
-  radius_m INT,
-  CHECK (kind IN ('parent', 'location')),
-  CHECK (kind <> 'parent' OR (parent_id IS NULL AND latitude IS NULL AND longitude IS NULL AND radius_m IS NULL)),
+  CHECK (kind IN ('category', 'location')),
+  CHECK (kind <> 'category' OR (category_id IS NULL AND latitude IS NULL AND longitude IS NULL)),
   CHECK (kind <> 'location' OR (latitude IS NOT NULL AND longitude IS NOT NULL)),
   CHECK (latitude BETWEEN -90 AND 90),
-  CHECK (longitude BETWEEN -180 AND 180),
-  CHECK (radius_m > 0)
+  CHECK (longitude BETWEEN -180 AND 180)
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
-CREATE INDEX location_02 ON location (repository_id, parent_id);
+CREATE INDEX location_02 ON location (repository_id, category_id);
 
 CREATE TABLE location_asset (
   repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,

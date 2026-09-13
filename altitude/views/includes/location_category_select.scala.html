@@ -1,0 +1,15 @@
+@import altitude.core.Api
+@import altitude.core.models.Location
+
+@(categories: List[Location], formJson: ujson.Obj, fieldErrors: Map[String, String])
+
+@defining(Api.Field.Location.CATEGORY_ID) { field =>
+  <label for="field-@{field}">Category</label>
+  @if(fieldErrors.contains(field)) {<div class="error">@{fieldErrors(field)}</div>}
+  <select id="field-@{field}" name="@{field}">
+    <option value="">(none)</option>
+    @for(category <- categories) {
+      <option value="@{category.persistedId}" @if(formJson.obj.get(field).flatMap(_.strOpt).contains(category.persistedId)) {selected}>@{category.name}</option>
+    }
+  </select>
+}

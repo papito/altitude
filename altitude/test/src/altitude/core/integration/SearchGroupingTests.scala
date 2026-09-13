@@ -74,20 +74,21 @@ import altitude.core.util.*
   private def summary(result: GroupedSearchResult): List[(Option[LocalDate], Int, List[String])] =
     result.groups.map(group => (dayOf(group.key), group.total, group.assets.map(_.persistedId)))
 
-  /** A Location page as (Location name, parent name, the group's full count, the asset IDs on the page) per group */
+  /** A Location page as (Location name, category name, the group's full count, the asset IDs on the page) per group */
   private def locationSummary(result: GroupedSearchResult): List[(Option[String], Option[String], Int, List[String])] =
     result.groups.map {
       group =>
         group.key match {
-          case SearchGroupKey.Location(_, _, name, parentName) => (name, parentName, group.total, group.assets.map(_.persistedId))
+          case SearchGroupKey.Location(_, _, name, categoryName) =>
+            (name, categoryName, group.total, group.assets.map(_.persistedId))
           case other => throw IllegalStateException(s"Not a Location group: $other")
         }
     }
 
   private val paris = (48.8566, 2.3522)
 
-  private def addLocation(name: String, parentId: Option[String] = None, pin: (Double, Double) = paris): Location =
-    testApp.service.location.addLocation(name, pin._1, pin._2, parentId, None)
+  private def addLocation(name: String, categoryId: Option[String] = None, pin: (Double, Double) = paris): Location =
+    testApp.service.location.addLocation(name, pin._1, pin._2, categoryId)
 
   private def setCoordinates(asset: Asset, latitude: Double, longitude: Double): Unit =
     testContext.setAssetCoordinates(asset.persistedId, latitude, longitude)
@@ -362,7 +363,7 @@ import altitude.core.util.*
   }
 
   test("Location groups are in path order, hold an asset under each of its Locations, and end with No location") {
-    val italy = testApp.service.location.addParent("Italy")
+    val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", Some(italy.persistedId))
     val alba = addLocation("Alba", Some(italy.persistedId))
     val berlin = addLocation("Berlin")
@@ -380,7 +381,7 @@ import altitude.core.util.*
     val page = grouped(by = GroupBy.Location)
     RequestContext.readQueryCount.value - before shouldBe 1
 
-    // A parent's Locations sort at the parent's name, by their own; an asset in two Locations is under both; the total counts assets
+    // A category's Locations sort at the category's name, by their own; an asset in two Locations is under both; the total counts assets
     locationSummary(page) shouldEqual List(
       (Some("Berlin"), None, 1, List(a1.persistedId)),
       (Some("Alba"), Some("Italy"), 2, List(a2.persistedId, a4.persistedId)),
@@ -414,7 +415,7 @@ import altitude.core.util.*
   }
 
   test("Location groups span pages with one consistent count and continue into No location") {
-    val italy = testApp.service.location.addParent("Italy")
+    val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", Some(italy.persistedId))
     val berlin = addLocation("Berlin")
     val a1 = persistDated("2026-09-06T10:00:00", "1.jpg").persistedId

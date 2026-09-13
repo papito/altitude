@@ -325,7 +325,7 @@ import altitude.core.util.SortValue
       )
       val statement = SearchQueries.groupedByLocation(dialect, query, "repo-1")
       val text = statement.toString.replaceAll("\\s+", " ").trim
-      val columns = "(id, location_id, path_key, location_name, parent_name, sort_value)"
+      val columns = "(id, location_id, path_key, location_name, category_name, sort_value)"
 
       withClue(s"$engine/$position/$field: $text") {
         // The located slice and its guard on the unlocated one exist until the anchor is in the trailing group
@@ -333,7 +333,7 @@ import altitude.core.util.SortValue
         text.contains(s"unlocated $columns AS MATERIALIZED") shouldBe (position != "unlocated")
         text.contains("LIMIT CASE WHEN (SELECT count(*) FROM located) > 50 THEN 0 ELSE 51 END") shouldBe (position != "unlocated")
         text.contains(s"candidates $columns AS MATERIALIZED") shouldBe true
-        // The located relation is the asset joined to its memberships, the Location and its parent
+        // The located relation is the asset joined to its memberships, the Location and its category
         text.contains("JOIN location_asset location_asset1 ON") shouldBe (position != "unlocated")
         text.contains("LEFT JOIN location location3 ON") shouldBe (position != "unlocated")
         // The unlocated relation is the matching set less every asset in a Location
@@ -390,7 +390,7 @@ import altitude.core.util.SortValue
     val declared = Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", ")
     text.contains(
       s"SELECT $declared, p.location_id AS location_id, p.path_key AS path_key, p.location_name AS location_name, " +
-        "p.parent_name AS parent_name, p.sort_value AS sort_value, g.n AS group_total") shouldBe true
+        "p.category_name AS category_name, p.sort_value AS sort_value, g.n AS group_total") shouldBe true
   }
 
   test("The map's cells are one statement: the plotted points in the box, gridded, one window pass, the newest per cell") {
@@ -441,7 +441,7 @@ import altitude.core.util.SortValue
     }
   }
 
-  test("The map's Locations are the pinned ones in the box, counted over the matching assets, with their parent's name") {
+  test("The map's Locations are the pinned ones in the box, counted over the matching assets, with their category's name") {
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(params = Map("is_recycled" -> false), folderIds = Set("f1"))
       val select = SearchQueries.mapLocations(dialect, query, "repo-1", BoundingBox(-1.0, 179.0, 1.0, -179.0))
@@ -449,7 +449,7 @@ import altitude.core.util.SortValue
 
       withClue(sql) {
         sql.contains("FROM location location0") shouldBe true
-        sql.contains("LEFT JOIN location location1 ON location0.parent_id = location1.id") shouldBe true
+        sql.contains("LEFT JOIN location location1 ON location0.category_id = location1.id") shouldBe true
         sql.contains("location0.repository_id = ?") shouldBe true
         sql.contains("location0.kind = ?") shouldBe true
         // A box across the antimeridian covers both sides of it

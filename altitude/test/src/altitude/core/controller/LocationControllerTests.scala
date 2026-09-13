@@ -6,14 +6,14 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.App
 
 @DoNotDiscover class LocationControllerTests extends ControllerTestCore {
-  test("Location list has camelCase fields, path order, parent names and persisted counts") {
+  test("Location list has camelCase fields, path order, category names and persisted counts") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
     withServer(App) {
       host =>
-        val parent = testApp.service.location.addParent("Italy")
-        val child = testApp.service.location.addLocation("Alba", 44.7, 8.0, Some(parent.persistedId), Some(100))
+        val category = testApp.service.location.addCategory("Italy")
+        val child = testApp.service.location.addLocation("Alba", 44.7, 8.0, Some(category.persistedId))
         val root = testApp.service.location.addLocation("Beach", 1, 2)
         val asset = testContext.persistAsset()
         testApp.service.location.addAssets(child.persistedId, Set(asset.persistedId))
@@ -21,27 +21,25 @@ import altitude.core.App
         response.statusCode shouldBe 200
         response.headers("content-type").head should include("application/json")
         val rows = ujson.read(response.text()).arr
-        rows.map(_("id").str).toList shouldBe List(root.persistedId, parent.persistedId, child.persistedId)
+        rows.map(_("id").str).toList shouldBe List(root.persistedId, category.persistedId, child.persistedId)
         rows.last.obj.keySet.toSet shouldBe Set(
           "id",
           "name",
           "kind",
-          "parentId",
-          "parentName",
+          "categoryId",
+          "categoryName",
           "latitude",
           "longitude",
-          "radiusM",
           "numOfAssets")
-        rows.last("parentName").str shouldBe "Italy"
-        rows.last("parentId").str shouldBe parent.persistedId
+        rows.last("categoryName").str shouldBe "Italy"
+        rows.last("categoryId").str shouldBe category.persistedId
         rows.last("latitude").num shouldBe 44.7
         rows.last("longitude").num shouldBe 8.0
-        rows.last("radiusM").num shouldBe 100
         rows.last("numOfAssets").num shouldBe 1
         rows.last("kind").str shouldBe "location"
-        rows(1)("kind").str shouldBe "parent"
+        rows(1)("kind").str shouldBe "category"
         rows(1)("latitude") shouldBe ujson.Null
-        rows.head("parentId") shouldBe ujson.Null
+        rows.head("categoryId") shouldBe ujson.Null
     }
   }
 
@@ -82,13 +80,13 @@ import altitude.core.App
     }
   }
 
-  test("Invalid membership payloads and parent targets are JSON 400s; foreign Locations are 404s") {
+  test("Invalid membership payloads and category targets are JSON 400s; foreign Locations are 404s") {
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
     login()
     withServer(App) {
       host =>
-        val parent = testApp.service.location.addParent("Parent")
+        val category = testApp.service.location.addCategory("Category")
         val location = testApp.service.location.addLocation("Here", 1, 2)
         val asset = testContext.persistAsset()
         val otherRepo = testContext.persistRepository()
@@ -98,7 +96,7 @@ import altitude.core.App
         val invalid = List(
           ujson.Obj(),
           ujson.Obj("locationId" -> location.persistedId, "assetIds" -> "not-an-array"),
-          ujson.Obj("locationId" -> parent.persistedId, "assetIds" -> ujson.Arr(asset.persistedId))
+          ujson.Obj("locationId" -> category.persistedId, "assetIds" -> ujson.Arr(asset.persistedId))
         )
         for (payload <- invalid) {
           withClue(s"$payload: ") {

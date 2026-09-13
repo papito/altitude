@@ -23,8 +23,8 @@ import altitude.core.Const
     login()
     withServer(App) {
       host =>
-        val parent = testApp.service.location.addParent("Italy")
-        val location = testApp.service.location.addLocation("Beach", 1, 2, Some(parent.persistedId))
+        val category = testApp.service.location.addCategory("Italy")
+        val location = testApp.service.location.addLocation("Beach", 1, 2, Some(category.persistedId))
         val root = testApp.service.location.addLocation("Park", 3, 4)
         def get(path: String, params: Map[String, String] = Map.empty): String = {
           val response =
@@ -41,16 +41,21 @@ import altitude.core.Const
         add should include(s"""data-app-modal-title="${Const.UI.ADD_LOCATION_DIALOG_TITLE}"""")
         add should include("data-map-tile-url=")
         add should include("""data-geocoder-enabled="false"""")
-        add should include(s"""value="${parent.persistedId}"""")
+        // The pin is placed on the map: the coordinates travel in hidden inputs, with a read-only readout
+        add should include("""type="hidden" id="field-latitude" name="latitude"""")
+        add should include("""type="hidden" id="field-longitude" name="longitude"""")
+        add should include("""id="locationPinReadout"""")
+        add should include("""id="locationEditorMap"""")
+        add should include(s"""value="${category.persistedId}"""")
         (add should not).include(s"""value="${location.persistedId}"""")
-        get("dialogs/add-parent") should include("""id="addParent"""")
+        get("dialogs/add-category") should include("""id="addCategory"""")
         val rename = get("dialogs/rename-location", Map("id" -> location.persistedId))
         rename should include("Beach")
         rename should include(Const.UI.RENAME_LOCATION_DIALOG_TITLE)
-        get("dialogs/rename-location", Map("id" -> parent.persistedId)) should include(Const.UI.RENAME_PARENT_DIALOG_TITLE)
-        val deleteParent = get("dialogs/delete-location", Map("id" -> parent.persistedId))
-        deleteParent should include("top level")
-        deleteParent should include(Const.UI.DELETE_PARENT_DIALOG_TITLE)
+        get("dialogs/rename-location", Map("id" -> category.persistedId)) should include(Const.UI.RENAME_CATEGORY_DIALOG_TITLE)
+        val deleteCategory = get("dialogs/delete-location", Map("id" -> category.persistedId))
+        deleteCategory should include("top level")
+        deleteCategory should include(Const.UI.DELETE_CATEGORY_DIALOG_TITLE)
         val deleteLocation = get("dialogs/delete-location", Map("id" -> location.persistedId))
         deleteLocation should include("Beach")
         deleteLocation should include(Const.UI.DELETE_LOCATION_DIALOG_TITLE)
@@ -58,14 +63,14 @@ import altitude.core.Const
         move should include("""id="moveLocation"""")
         move should include(Const.UI.MOVE_LOCATION_DIALOG_TITLE)
         move should include("Beach")
-        move should include(s"""value="${parent.persistedId}" selected""")
+        move should include(s"""value="${category.persistedId}" selected""")
         (move should not).include(s"""value="${root.persistedId}"""")
         val membership = get("dialogs/add-to-location")
         membership should include("""id="addToLocation"""")
         membership should include(s"""data-app-modal-title="${Const.UI.ADD_TO_LOCATION_DIALOG_TITLE}"""")
         membership should include("Italy - Beach")
         membership should include("Park")
-        (membership should not).include(s"""value="${parent.persistedId}"""")
+        (membership should not).include(s"""value="${category.persistedId}"""")
     }
   }
 
@@ -75,27 +80,22 @@ import altitude.core.Const
     login()
     withServer(App) {
       host =>
-        val parent = testApp.service.location.addParent("Italy")
+        val category = testApp.service.location.addCategory("Italy")
         def post(json: ujson.Obj) = requests.post(
           s"$host/htmx/location/r/$repoId/add",
           headers = jsonHeaders,
           data = json.toString,
           cookies = testContext.cookies,
           check = false)
-        def body() = ujson.Obj(
-          "name" -> "  Beach ",
-          "latitude" -> "1.25",
-          "longitude" -> "-2.5",
-          "parentId" -> parent.persistedId,
-          "radiusM" -> "100")
+        def body() =
+          ujson.Obj("name" -> "  Beach ", "latitude" -> "1.25", "longitude" -> "-2.5", "categoryId" -> category.persistedId)
         val created = post(body())
         created.statusCode shouldBe 200
         created.text() shouldBe ""
         val saved = testApp.service.location.getAll.find(_.name == "Beach").get
         saved.latitude shouldBe Some(1.25)
         saved.longitude shouldBe Some(-2.5)
-        saved.parentId shouldBe Some(parent.persistedId)
-        saved.radiusM shouldBe Some(100)
+        saved.categoryId shouldBe Some(category.persistedId)
         validation(post(body()), "addLocation")
         for (
           (field, invalid) <- List(
@@ -106,10 +106,8 @@ import altitude.core.Const
             "latitude" -> "NaN",
             "longitude" -> "-181",
             "longitude" -> "Infinity",
-            "radiusM" -> "0",
-            "radiusM" -> "1.5",
-            "parentId" -> "not-a-uuid",
-            "parentId" -> saved.persistedId
+            "categoryId" -> "not-a-uuid",
+            "categoryId" -> saved.persistedId
           )
         ) {
           withClue(s"$field=$invalid: ") {
@@ -123,33 +121,36 @@ import altitude.core.Const
         }
         val missing = body()
         missing.obj.remove("latitude")
-        validation(post(missing), "addLocation")
-        val numeric = post(ujson.Obj("name" -> "Root", "latitude" -> -90, "longitude" -> 180, "parentId" -> "", "radiusM" -> ""))
+        val pinless = post(missing)
+        validation(pinless, "addLocation")
+        pinless.text() should include(Const.Msg.Err.PIN_REQUIRED)
+        pinless.text() should include("Beach")
+        val numeric =
+          post(ujson.Obj("name" -> "Root", "latitude" -> -90, "longitude" -> 180, "categoryId" -> ""))
         numeric.statusCode shouldBe 200
         numeric.text() shouldBe ""
         val root = testApp.service.location.getAll.find(_.name == "Root").get
-        root.parentId shouldBe None
-        root.radiusM shouldBe None
+        root.categoryId shouldBe None
         testApp.service.location.getAll.size shouldBe 3
     }
   }
 
-  test("Parent add, rename, move, dialog membership and delete persist their changes") {
+  test("Category add, rename, move, dialog membership and delete persist their changes") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
     withServer(App) {
       host =>
-        def postParent(name: String) = requests.post(
-          s"$host/htmx/location/r/$repoId/add-parent",
+        def postCategory(name: String) = requests.post(
+          s"$host/htmx/location/r/$repoId/add-category",
           headers = jsonHeaders,
           data = ujson.Obj("name" -> name).toString,
           cookies = testContext.cookies,
           check = false)
-        postParent(" Italy ").text() shouldBe ""
-        val parent = testApp.service.location.getAll.head
-        validation(postParent("italy"), "addParent")
-        validation(postParent(" "), "addParent")
+        postCategory(" Italy ").text() shouldBe ""
+        val category = testApp.service.location.getAll.head
+        validation(postCategory("italy"), "addCategory")
+        validation(postCategory(" "), "addCategory")
         val location = testApp.service.location.addLocation("Beach", 1, 2)
         def put(action: String, payload: ujson.Obj) = requests.put(
           s"$host/htmx/location/r/$repoId/$action",
@@ -161,12 +162,12 @@ import altitude.core.Const
         validation(put("rename", ujson.Obj("id" -> location.persistedId, "name" -> "")), "renameLocation")
         put("rename", ujson.Obj("id" -> location.persistedId, "name" -> " Coast ")).statusCode shouldBe 200
         testApp.service.location.getById(location.persistedId).name shouldBe "Coast"
-        put("move", ujson.Obj("id" -> location.persistedId, "parentId" -> parent.persistedId)).statusCode shouldBe 200
-        testApp.service.location.getById(location.persistedId).parentId shouldBe Some(parent.persistedId)
-        validation(put("move", ujson.Obj("id" -> location.persistedId, "parentId" -> location.persistedId)), "moveLocation")
-        put("move", ujson.Obj("id" -> location.persistedId, "parentId" -> "")).statusCode shouldBe 200
-        testApp.service.location.getById(location.persistedId).parentId shouldBe None
-        put("move", ujson.Obj("id" -> location.persistedId, "parentId" -> parent.persistedId)).statusCode shouldBe 200
+        put("move", ujson.Obj("id" -> location.persistedId, "categoryId" -> category.persistedId)).statusCode shouldBe 200
+        testApp.service.location.getById(location.persistedId).categoryId shouldBe Some(category.persistedId)
+        validation(put("move", ujson.Obj("id" -> location.persistedId, "categoryId" -> location.persistedId)), "moveLocation")
+        put("move", ujson.Obj("id" -> location.persistedId, "categoryId" -> "")).statusCode shouldBe 200
+        testApp.service.location.getById(location.persistedId).categoryId shouldBe None
+        put("move", ujson.Obj("id" -> location.persistedId, "categoryId" -> category.persistedId)).statusCode shouldBe 200
         val first = testContext.persistAsset()
         val second = testContext.persistAsset()
         val membership = put(
@@ -175,14 +176,16 @@ import altitude.core.Const
         membership.statusCode shouldBe 200
         membership.text() shouldBe ""
         testApp.service.location.getAssetIds(location.persistedId) shouldBe Set(first.persistedId, second.persistedId)
-        validation(put("assets", ujson.Obj("locationId" -> parent.persistedId, "assetIds" -> first.persistedId)), "addToLocation")
+        validation(
+          put("assets", ujson.Obj("locationId" -> category.persistedId, "assetIds" -> first.persistedId)),
+          "addToLocation")
         def delete(id: String) = requests.delete(
           s"$host/htmx/location/r/$repoId/",
           params = Map("id" -> id),
           cookies = testContext.cookies,
           check = false)
-        delete(parent.persistedId).statusCode shouldBe 200
-        testApp.service.location.getById(location.persistedId).parentId shouldBe None
+        delete(category.persistedId).statusCode shouldBe 200
+        testApp.service.location.getById(location.persistedId).categoryId shouldBe None
         delete(location.persistedId).statusCode shouldBe 200
         testApp.service.location.getAll shouldBe Nil
         testApp.service.asset.getById(first.persistedId).persistedId shouldBe first.persistedId
@@ -256,7 +259,7 @@ import altitude.core.Const
         List(
           "tab",
           "dialogs/add-location",
-          "dialogs/add-parent",
+          "dialogs/add-category",
           "dialogs/rename-location",
           "dialogs/delete-location",
           "dialogs/move-location",
@@ -269,7 +272,7 @@ import altitude.core.Const
                 .statusCode shouldBe 401
             }
         }
-        List("add", "add-parent").foreach {
+        List("add", "add-category").foreach {
           path =>
             withClue(s"POST $path: ") {
               requests.post(s"$host/htmx/location/r/$repoId/$path", headers = headers, check = false).statusCode shouldBe 401

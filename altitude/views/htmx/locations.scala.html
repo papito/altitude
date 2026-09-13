@@ -2,7 +2,7 @@
 
 <style>
     #locationList {
-        /* A Location under a parent is indented by one step, drawn by its `.trace` cell like the folder tree's */
+        /* A Location under a category is indented by one step, drawn by its `.trace` cell like the folder tree's */
         --location-indent: 20px;
         /* One vertical rhythm between rows */
         --location-row-gap: 8px;
@@ -25,8 +25,8 @@
         touch-action: none;
     }
 
-    #locationList .location.parent > .controls {
-        /* ⋯ menu button | icon | name (grows). A parent holds no assets, so it shows no count */
+    #locationList .location.category > .controls {
+        /* ⋯ menu button | icon | name (grows). A category holds no assets, so it shows no count */
         grid-template-columns: max-content max-content 1fr;
     }
 
@@ -83,7 +83,7 @@
 </style>
 
 @* Hosts for the add controls, built by js/common/location-list.js: "Add location" opens its modal,
-   "Add parent" is a context menu component whose button opens the inline dialog right below it. The
+   "Add category" is a context menu component whose button opens the inline dialog right below it. The
    renderer shows one host or the other: the top buttons normally, the centered "Add your first
    location" while there are no Locations; both stay hidden until the list has loaded *@
 <div id="locationActions" hidden></div>

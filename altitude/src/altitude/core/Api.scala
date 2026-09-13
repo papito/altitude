@@ -62,10 +62,9 @@ object Api:
     object Location:
       val LOCATION_ID = "locationId"
       val NAME = "name"
-      val PARENT_ID = "parentId"
+      val CATEGORY_ID = "categoryId"
       val LATITUDE = "latitude"
       val LONGITUDE = "longitude"
-      val RADIUS_M = "radiusM"
 
     object Asset:
       val ASSET = "asset"

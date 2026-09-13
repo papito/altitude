@@ -18,7 +18,7 @@ import altitude.core.routes.decorators.requireLogin
 class LocationController(using logger: Logger) extends BaseController:
   private val prefix = "api/location"
 
-  /** Parents and Locations in path order, with nullable pin and parent fields and membership counts */
+  /** Categories and Locations in path order, with nullable pin and category fields and membership counts */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
   def getLocationList(repoId: String)(using request: Request): Response[String] =
@@ -34,7 +34,7 @@ class LocationController(using logger: Logger) extends BaseController:
   def removeAssetsFromLocation(repoId: String)(using request: Request): Response[String] =
     membershipChange("removed", App.altitude.service.location.removeAssets)
 
-  /** Bad payloads and parent targets are client errors; a Location outside this repository is not found. */
+  /** Bad payloads and category targets are client errors; a Location outside this repository is not found. */
   private def membershipChange(countKey: String, change: (String, Set[String]) => Int)(using request: Request): Response[String] =
     val jsonIn = unscrubbedJson.get // a wrong content type keeps its own validation error
     val (locationId, assetIds) = Try(membershipRequest(jsonIn)).toOption match
@@ -54,11 +54,10 @@ class LocationController(using logger: Logger) extends BaseController:
       "id" -> location.persistedId,
       "name" -> location.name,
       "kind" -> location.kind.dbValue,
-      "parentId" -> location.parentId.map(ujson.Str(_)).getOrElse(ujson.Null),
-      "parentName" -> location.parentName.map(ujson.Str(_)).getOrElse(ujson.Null),
+      "categoryId" -> location.categoryId.map(ujson.Str(_)).getOrElse(ujson.Null),
+      "categoryName" -> location.categoryName.map(ujson.Str(_)).getOrElse(ujson.Null),
       "latitude" -> location.latitude.map(ujson.Num(_)).getOrElse(ujson.Null),
       "longitude" -> location.longitude.map(ujson.Num(_)).getOrElse(ujson.Null),
-      "radiusM" -> location.radiusM.map(n => ujson.Num(n)).getOrElse(ujson.Null),
       "numOfAssets" -> location.numOfAssets
     )
 

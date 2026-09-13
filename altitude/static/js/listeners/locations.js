@@ -8,7 +8,7 @@ import { showSuccessSnackBar } from "../common/snackbar.js"
 import { runSearch } from "../search-results/search.js"
 
 /**
- * Location events: the dialogs' outcomes (add, add parent, rename, move and delete reload the
+ * Location events: the dialogs' outcomes (add, add category, rename, move and delete reload the
  * list; the Add to location dialog announces its memberships) and membership changes from
  * drag/drop and the batch footer. A single-asset drop escalates to a batch when that asset is
  * among the selected ones, as folder moves and album drops do.
@@ -23,7 +23,7 @@ export function registerLocationListeners(app) {
         focusAddLocationControlIfFocusLost()
     })
 
-    document.body.addEventListener(Const.events.parentAdded, async () => {
+    document.body.addEventListener(Const.events.categoryAdded, async () => {
         await reloadLocationList(repoId())
     })
 

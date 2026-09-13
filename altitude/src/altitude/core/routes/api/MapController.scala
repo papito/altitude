@@ -65,7 +65,7 @@ class MapController(using logger: Logger) extends BaseController:
               ujson.Obj(
                 "id" -> location.id,
                 "name" -> location.name,
-                "parentName" -> location.parentName.map(ujson.Str(_)).getOrElse(ujson.Null),
+                "categoryName" -> location.categoryName.map(ujson.Str(_)).getOrElse(ujson.Null),
                 "latitude" -> location.latitude,
                 "longitude" -> location.longitude,
                 "count" -> location.count

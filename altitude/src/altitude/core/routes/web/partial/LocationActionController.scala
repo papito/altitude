@@ -24,19 +24,19 @@ class LocationActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/location"
   private val fields = Api.Field.Location
   private val scrubber =
-    DataScrubber(trim = List(fields.NAME, fields.PARENT_ID, fields.LATITUDE, fields.LONGITUDE, fields.RADIUS_M))
+    DataScrubber(trim = List(fields.NAME, fields.CATEGORY_ID, fields.LATITUDE, fields.LONGITUDE))
 
-  private val numeric = List(fields.LATITUDE, fields.LONGITUDE, fields.RADIUS_M)
-  private val optionalFields = List(fields.PARENT_ID, fields.RADIUS_M)
+  private val numeric = List(fields.LATITUDE, fields.LONGITUDE)
+  private val optionalFields = List(fields.CATEGORY_ID)
 
-  private def parents: List[Location] = App.altitude.service.location.getAll.filter(_.kind == LocationKind.Parent)
+  private def categories: List[Location] = App.altitude.service.location.getAll.filter(_.kind == LocationKind.Category)
   private def locations: List[Location] = App.altitude.service.location.getAll.filter(_.kind == LocationKind.Location)
 
-  private def isParent(location: Location): Boolean = location.kind == LocationKind.Parent
+  private def isCategory(location: Location): Boolean = location.kind == LocationKind.Category
   private def renameTitle(location: Location): String =
-    if isParent(location) then Const.UI.RENAME_PARENT_DIALOG_TITLE else Const.UI.RENAME_LOCATION_DIALOG_TITLE
+    if isCategory(location) then Const.UI.RENAME_CATEGORY_DIALOG_TITLE else Const.UI.RENAME_LOCATION_DIALOG_TITLE
   private def deleteTitle(location: Location): String =
-    if isParent(location) then Const.UI.DELETE_PARENT_DIALOG_TITLE else Const.UI.DELETE_LOCATION_DIALOG_TITLE
+    if isCategory(location) then Const.UI.DELETE_CATEGORY_DIALOG_TITLE else Const.UI.DELETE_LOCATION_DIALOG_TITLE
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
@@ -47,8 +47,8 @@ class LocationActionController(using logger: Logger) extends BaseController:
   def addLocationDialog(repoId: String)(using request: Request): Response[String] = html(addForm())
 
   @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/dialogs/add-parent")
-  def addParentDialog(repoId: String)(using request: Request): Response[String] = html(htmx.html.add_parent_dialog())
+  @cask.get(f"/$prefix/r/:repoId/dialogs/add-category")
+  def addCategoryDialog(repoId: String)(using request: Request): Response[String] = html(htmx.html.add_category_dialog())
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-location")
@@ -72,9 +72,9 @@ class LocationActionController(using logger: Logger) extends BaseController:
         html(
           htmx.html.move_location_dialog(
             location,
-            parents,
+            categories,
             Const.UI.MOVE_LOCATION_DIALOG_TITLE,
-            formJson = ujson.Obj(fields.PARENT_ID -> location.parentId.getOrElse(""))))
+            formJson = ujson.Obj(fields.CATEGORY_ID -> location.categoryId.getOrElse(""))))
     }
 
   @requireLogin()
@@ -86,26 +86,25 @@ class LocationActionController(using logger: Logger) extends BaseController:
   @cask.post(f"/$prefix/r/:repoId/add")
   def add(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
-    submit(errors => addForm(errors, json), fields.PARENT_ID) {
+    submit(errors => addForm(errors, json), fields.CATEGORY_ID) {
       normalize(json)
-      validate(json, required = List(fields.NAME), uuid = List(fields.PARENT_ID), coordinates = true)
+      validate(json, required = List(fields.NAME), uuid = List(fields.CATEGORY_ID), coordinates = true)
       App.altitude.service.location.addLocation(
         json(fields.NAME).str,
         json(fields.LATITUDE).str.toDouble,
         json(fields.LONGITUDE).str.toDouble,
-        optional(json, fields.PARENT_ID),
-        optional(json, fields.RADIUS_M).map(_.toInt)
+        optional(json, fields.CATEGORY_ID)
       )
     }
 
   @requireLogin()
-  @cask.post(f"/$prefix/r/:repoId/add-parent")
-  def addParent(repoId: String)(using request: Request): Response[String] =
+  @cask.post(f"/$prefix/r/:repoId/add-category")
+  def addCategory(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
-    submit(errors => htmx.html.add_parent_dialog(errors, json), fields.NAME) {
+    submit(errors => htmx.html.add_category_dialog(errors, json), fields.NAME) {
       normalize(json)
       validate(json, required = List(fields.NAME))
-      App.altitude.service.location.addParent(json(fields.NAME).str)
+      App.altitude.service.location.addCategory(json(fields.NAME).str)
     }
 
   @requireLogin()
@@ -128,11 +127,11 @@ class LocationActionController(using logger: Logger) extends BaseController:
     withLocation(optional(json, Api.Field.ID).getOrElse("")) {
       location =>
         submit(
-          errors => htmx.html.move_location_dialog(location, parents, Const.UI.MOVE_LOCATION_DIALOG_TITLE, errors, json),
-          fields.PARENT_ID) {
+          errors => htmx.html.move_location_dialog(location, categories, Const.UI.MOVE_LOCATION_DIALOG_TITLE, errors, json),
+          fields.CATEGORY_ID) {
           normalize(json)
-          validate(json, required = Nil, uuid = List(fields.PARENT_ID))
-          App.altitude.service.location.moveToParent(location.persistedId, optional(json, fields.PARENT_ID))
+          validate(json, required = Nil, uuid = List(fields.CATEGORY_ID))
+          App.altitude.service.location.moveToCategory(location.persistedId, optional(json, fields.CATEGORY_ID))
         }
     }
 
@@ -177,7 +176,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
   private def addForm(errors: Map[String, String] = Map.empty, json: ujson.Obj = ujson.Obj()): Html =
     htmx.html.add_location_dialog(
       Const.UI.ADD_LOCATION_DIALOG_TITLE,
-      parents,
+      categories,
       App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
       App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION),
       App.altitude.service.geocoder.isEnabled,
@@ -201,8 +200,8 @@ class LocationActionController(using logger: Logger) extends BaseController:
     dialogFormValidationResponse("<!doctype html>" + render(errors))
 
   /**
-   * Forms submit strings; API callers may use JSON numbers for the pin and radius, and an empty or null optional field means no
-   * parent or radius. Rewrites `json` in place so the validation and the re-rendered form see one shape.
+   * Forms submit strings; API callers may use JSON numbers for the pin, and an empty or null optional field means no Category.
+   * Rewrites `json` in place so the validation and the re-rendered form see one shape.
    */
   private def normalize(json: ujson.Obj): Unit =
     val errors = ValidationException()
@@ -229,13 +228,11 @@ class LocationActionController(using logger: Logger) extends BaseController:
     catch case ex: ValidationException => errors.errors ++= ex.errors
 
     if coordinates then
-      List((fields.LATITUDE, -90, 90), (fields.LONGITUDE, -180, 180)).foreach {
-        (field, min, max) =>
-          if !optional(json, field).flatMap(_.toDoubleOption).exists(n => n >= min && n <= max) then
-            errors.errors += field -> Const.Msg.Err.VALUE_NOT_A_DECIMAL_IN_RANGE.format(min, max)
+      // The pin is placed on a map, so a missing or out-of-range coordinate is one problem: "no pin", reported once
+      val badCoordinate = List((fields.LATITUDE, -90, 90), (fields.LONGITUDE, -180, 180)).find {
+        (field, min, max) => !optional(json, field).flatMap(_.toDoubleOption).exists(n => n >= min && n <= max)
       }
-      if optional(json, fields.RADIUS_M).exists(value => !value.toIntOption.exists(_ > 0)) then
-        errors.errors += fields.RADIUS_M -> Const.Msg.Err.VALUE_NOT_A_POSITIVE_INTEGER
+      badCoordinate.foreach((field, _, _) => errors.errors += field -> Const.Msg.Err.PIN_REQUIRED)
     errors.trigger()
 
   private def optional(json: ujson.Obj, field: String): Option[String] = json.obj.get(field).flatMap(_.strOpt).filter(_.nonEmpty)

@@ -12,8 +12,8 @@ import altitude.core.App
     login()
     withServer(App) {
       host =>
-        val parent = testApp.service.location.addParent("Parent")
-        val location = testApp.service.location.addLocation("Beach", 10, 20, Some(parent.persistedId))
+        val category = testApp.service.location.addCategory("Category")
+        val location = testApp.service.location.addLocation("Beach", 10, 20, Some(category.persistedId))
         val ownPoint = testContext.persistAsset()
         testContext.setAssetCoordinates(ownPoint.persistedId, 11, 21)
         val fallback = testContext.persistAsset()
@@ -38,7 +38,7 @@ import altitude.core.App
         cells("locations").arr.head shouldBe ujson.Obj(
           "id" -> location.persistedId,
           "name" -> "Beach",
-          "parentName" -> "Parent",
+          "categoryName" -> "Category",
           "latitude" -> 10,
           "longitude" -> 20,
           "count" -> 2)

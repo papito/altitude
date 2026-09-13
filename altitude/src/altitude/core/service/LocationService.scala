@@ -10,7 +10,7 @@ import altitude.core.models.LocationKind
 import altitude.core.util.Query
 
 /**
- * Parents and Locations, one table and one name pool per repository (see [[Location]]). Like albums, nothing here touches an
+ * Categories and Locations, one table and one name pool per repository (see [[Location]]). Like albums, nothing here touches an
  * asset: membership rows are all that change. The reverse direction lives in `LibraryService.recycleAssets`, which drops a
  * recycled asset from every Location; purging deletes the asset row and the schema cascades the memberships. Every lookup is
  * scoped to the context repository, so a foreign ID is simply not found.
@@ -18,29 +18,23 @@ import altitude.core.util.Query
 class LocationService(val app: Altitude) extends BaseService[Location]:
   override protected val dao: LocationDao = app.DAO.location
 
-  def addLocation(
-      name: String,
-      latitude: Double,
-      longitude: Double,
-      parentId: Option[String] = None,
-      radiusM: Option[Int] = None): Location =
+  def addLocation(name: String, latitude: Double, longitude: Double, categoryId: Option[String] = None): Location =
     txManager.withTransaction {
-      parentId.foreach(requireParent)
-      logger.info(s"Adding location [$name] at [$latitude, $longitude]" + parentId.fold("")(id => s" under [$id]"))
+      categoryId.foreach(requireCategory)
+      logger.info(s"Adding location [$name] at [$latitude, $longitude]" + categoryId.fold("")(id => s" under [$id]"))
       add(
         Location(
           name = name.trim,
           kind = LocationKind.Location,
-          parentId = parentId,
+          categoryId = categoryId,
           latitude = Some(latitude),
-          longitude = Some(longitude),
-          radiusM = radiusM))
+          longitude = Some(longitude)))
     }
 
-  def addParent(name: String): Location =
+  def addCategory(name: String): Location =
     txManager.withTransaction {
-      logger.info(s"Adding location parent [$name]")
-      add(Location(name = name.trim, kind = LocationKind.Parent))
+      logger.info(s"Adding location category [$name]")
+      add(Location(name = name.trim, kind = LocationKind.Category))
     }
 
   /** Scoped to the context repository: another repository's row is not found */
@@ -63,26 +57,26 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       renamed
     }
 
-  /** Moves a Location under a parent, or to the top level with `None`. Parents stay where they are: one level only. */
-  def moveToParent(id: String, parentId: Option[String]): Location =
+  /** Moves a Location under a category, or to the top level with `None`. Categories stay where they are: one level only. */
+  def moveToCategory(id: String, categoryId: Option[String]): Location =
     txManager.withTransaction {
       val location: Location = getById(id)
       if location.kind != LocationKind.Location then throw IllegalOperationException(s"Only a Location can be moved: $id")
-      parentId.foreach(requireParent)
+      categoryId.foreach(requireCategory)
 
-      logger.info(s"Moving location [${location.name}] to " + parentId.fold("the top level")(id => s"parent [$id]"))
-      updateById(id, Map(FieldConst.Location.PARENT_ID -> parentId))
-      location.copy(parentId = parentId)
+      logger.info(s"Moving location [${location.name}] to " + categoryId.fold("the top level")(id => s"category [$id]"))
+      updateById(id, Map(FieldConst.Location.CATEGORY_ID -> categoryId))
+      location.copy(categoryId = categoryId)
     }
 
-  /** A hard delete of either kind. A parent's Locations move to the top level first, in the same transaction. */
+  /** A hard delete of either kind. A category's Locations move to the top level first, in the same transaction. */
   override def deleteById(id: String): Int =
     txManager.withTransaction {
       val location: Location = getById(id)
 
-      if location.kind == LocationKind.Parent then
+      if location.kind == LocationKind.Category then
         val moved = dao.moveChildrenToRoot(id)
-        logger.info(s"Deleting location parent [${location.name}], moving $moved location(s) to the top level")
+        logger.info(s"Deleting location category [${location.name}], moving $moved location(s) to the top level")
       else logger.info(s"Deleting location [${location.name}]")
 
       val deleted = super.deleteById(id)
@@ -124,11 +118,11 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       dao.getAssetIds(locationId)
     }
 
-  /** The row must exist in this repository and be a parent - the only thing a Location can be put under */
-  private def requireParent(id: String): Unit =
-    if (getById(id): Location).kind != LocationKind.Parent then throw IllegalOperationException(s"Not a location parent: $id")
+  /** The row must exist in this repository and be a category - the only thing a Location can be put under */
+  private def requireCategory(id: String): Unit =
+    if (getById(id): Location).kind != LocationKind.Category then throw IllegalOperationException(s"Not a location category: $id")
 
-  /** The row must exist in this repository and be a Location - parents hold no assets */
+  /** The row must exist in this repository and be a Location - categories hold no assets */
   private def requireLocation(id: String): Unit =
     if (getById(id): Location).kind != LocationKind.Location then
       throw IllegalOperationException(s"Not a location, cannot hold assets: $id")

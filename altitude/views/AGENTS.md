@@ -6,7 +6,7 @@
 - **Alpine.js** — reactive state and UI behavior (`x-data`, `x-show`, `$store`)
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
 - Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
-  Viselect for box selection); versions and sources are listed in `static/js/lib/README.md`
+  Viselect for box selection, Leaflet for the Location pin editor and the map); versions and sources are listed in `static/js/lib/README.md`
 
 ## Template Layout
 
@@ -82,8 +82,8 @@ through `element.dataset` by their camel-cased key:
 Const.attributes.folderId       // "data-folder-id"        el.dataset.folderId
 Const.attributes.albumId        // "data-album-id"
 Const.attributes.locationId     // "data-location-id" (a Location row and its drop zone)
-Const.attributes.parentId       // "data-parent-id"   (a Location row under a parent)
-Const.attributes.kind           // "data-kind"        (`parent` | `location` on a Location row)
+Const.attributes.categoryId       // "data-category-id"   (a Location row under a category)
+Const.attributes.kind           // "data-kind"        (`category` | `location` on a Location row)
 Const.attributes.assetId        // "data-asset-id"
 Const.attributes.numOfChildren  // "data-num-of-children"
 Const.attributes.expanded       // "data-expanded"
@@ -251,7 +251,7 @@ location selection, hydrated from `js/fragments/modal.js` through `js/fragments/
 event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
 `-detail-target-attr-*`) on the fragment root. The one attribute that describes the modal host is
 `data-app-modal-title`. The three folder dialogs, the three album dialogs, the Add parent, Rename,
-Delete and Move to parent Location dialogs, and the view settings dialog are **inline dialogs**
+Delete and Move to category Location dialogs, and the view settings dialog are **inline dialogs**
 (`data-app-fragment="inline-dialog"`, see **Context menus**); the people dialogs, the purge
 confirmation, Add location and Add to location are modal dialogs.
 
@@ -406,13 +406,13 @@ list, which restores focus by ID, or to the visible add button when the dialog's
 was hidden by the change (`focusAddAlbumControlIfFocusLost`).
 
 **Locations** — The Locations tab (`views/htmx/locations.scala.html`) is rendered by
-`js/common/location-list.js` from the JSON list endpoint, which returns parents and Locations in path
-order (a parent directly followed by its Locations, top-level Locations interleaved by name), so the
+`js/common/location-list.js` from the JSON list endpoint, which returns categories and Locations in path
+order (a category directly followed by its Locations, top-level Locations interleaved by name), so the
 list is rendered in that order as it comes: one `.location` row (`#location-{id}`, `data-location-id`,
-`data-kind`) per entry, `.parent`, `.top-level`, or `.child` (under a parent: `data-parent-id`,
-`--depth: 1` and a `.trace` cell that indents it like a folder). A parent row is menu (Rename, Delete)
+`data-kind`) per entry, `.category`, `.top-level`, or `.child` (under a category: `data-category-id`,
+`--depth: 1` and a `.trace` cell that indents it like a folder). A category row is menu (Rename, Delete)
 | `fa-layer-group` icon | name; it holds no assets, so it is neither a drop target nor a search
-trigger. A Location row is menu (Rename, Delete, Move to parent) | `.asset-count`
+trigger. A Location row is menu (Rename, Delete, Move to category) | `.asset-count`
 (`#location-count-{id}`, sized through `--location-count-column`) | `fa-map-marker-alt` icon | name,
 with icon and name as `data-app-search-location-id` triggers and the row's `.controls` a drop zone
 (`js/dragdrop/locations.js`) for a single asset or the batch mover. Locations hold pointers only: a
@@ -428,22 +428,37 @@ to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`,
 `assetIds` field from the selection and keeps the fragment's success detail naming the chosen
 Location; on success `assetsAddedToLocation` resets the selection and refreshes the counts.
 
-Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the map editor of the
-later unit) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
-`#addFirstLocationBtn`; Add parent is an inline dialog below `#addParentBtn`, a dialog-trigger
+Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the pin editor below) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
+`#addFirstLocationBtn`; Add category is an inline dialog below `#addCategoryBtn`, a dialog-trigger
 control like Add album. The renderer builds all three into their hosts and shows one host or the
-other. Rename, Delete and Move to parent are inline dialogs in the row's menu (`#locationMenuCtrl-{id}`
+other. Rename, Delete and Move to category are inline dialogs in the row's menu (`#locationMenuCtrl-{id}`
 is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
 away); deleting the viewed Location runs a search back to the whole repository. `locationAdded` /
-`parentAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list, which
+`categoryAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list, which
 restores focus by ID, or to the visible add control when the dialog's return control was hidden by
 the change (`focusAddLocationControlIfFocusLost`). Add and Move share
-`includes/location_parent_select`, which offers parents only and `(none)` for the top level; Add to
-location offers Locations only, labelled `Parent - Location`. Every dialog heading or modal title
-comes from `Const.UI`, chosen by kind in the controller. Coordinate inputs are text with decimal
-input hints so a malformed submitted value stays visible for correction; the Add location
-template passes tile settings and the geocoder flag on its nested `location-editor` fragment, whose
-hydrator (the map and geocoder) is Unit 8 of `plans/locations-and-map-view-implementation.md`.
+`includes/location_category_select`, which offers categories only and `(none)` for the top level; Add to
+location offers Locations only, labelled `Category - Location`. Every dialog heading or modal title
+comes from `Const.UI`, chosen by kind in the controller.
+
+**Location pin editor** — A Location's pin is placed on a map, never typed. The Add location form
+nests a `data-app-fragment="location-editor"` root carrying the tile URL, the attribution and the
+geocoder flag; `js/fragments/location-editor.js` (hydrated after the modal hydrator) builds a
+Leaflet map in `#locationEditorMap` (`tabindex="-1"`, so Alpine's focus trap leaves Leaflet's keyboard
+handling alone): a click places the pin, a drag moves it, and every placement writes the form's
+hidden `latitude` / `longitude` inputs (six decimals) and the read-only `#locationPinReadout` under
+the map (four decimals; "No pin yet" before). The hidden inputs are all the server sees, and a
+validation replacement re-renders them with the submitted values, so the re-hydrated editor opens on
+that pin at zoom 12 instead of the world view. One editor exists at a time: hydrating disposes of the
+previous map. Leaflet measures its container on creation, when the modal host is still hidden, so the
+hydrator sizes the map once the container is displayed and on every resize. A missing or
+out-of-range coordinate is one error, "Place the pin on the map", rendered once under the map. The
+pin is an `L.divIcon` (`.location-pin`), so Leaflet's marker images are not vendored. When the
+geocoder is enabled the fragment also renders `#locationGeocode` with a Search button: Enter or the
+button asks `/api/map/r/:repoId/geocode` through the shared client (the newest search wins), the
+results are buttons, and a click jumps the map to the place, places the pin, and fills the name when
+it is empty with the label's first segment; a failed search is a snackbar. Leaflet is loaded as a
+plain script (`window.L`) with its stylesheet by `index.scala.html`.
 
 The server also accepts `bbox` and `layout=grid|map` for results, mirrored as `data-results-*` attributes. In map layout `search_results` disables Group and renders `htmx/map_view` without the `#assets` wrapper; there `bbox` is the crowded-pin panel's scope, so the total and `data-map-bounds` cover the whole search and the cells request sends the store's parameters verbatim plus `viewport` and `zoom`. That shell carries `#map`, `data-map-bounds="s,w,n,e"` (empty when no points), `data-map-count`, `data-map-tile-url` and `data-map-attribution`. Unit 7 adds the map hydrator, panel, layout toggle and the `layout` / `bbox` parameters to the client store.
 
@@ -616,8 +631,9 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder or album and the dialog-trigger buttons |
 | `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
-| `static/js/common/location-list.js` | renders the parents and Locations, their counts, and each row's menu from the JSON list endpoint; patches the counts in place; marks the viewed Location |
+| `static/js/common/location-list.js` | renders the categories and Locations, their counts, and each row's menu from the JSON list endpoint; patches the counts in place; marks the viewed Location |
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location |
+| `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls; the controller passes in the rendered grid partial |

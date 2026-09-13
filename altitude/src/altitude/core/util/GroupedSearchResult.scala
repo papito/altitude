@@ -10,7 +10,7 @@ import altitude.core.models.Asset
  */
 enum SearchGroupKey:
   case Day(date: Option[LocalDate])
-  case Location(id: Option[String], pathKey: Option[String], name: Option[String], parentName: Option[String])
+  case Location(id: Option[String], pathKey: Option[String], name: Option[String], categoryName: Option[String])
 
   /** The ordering key a cursor remembers for the group: the ISO day, or the Location's path key */
   def cursorKey: Option[String] = this match

@@ -18,15 +18,15 @@ import altitude.core.models.Repository
 
   private val paris = (48.8566, 2.3522)
 
-  private def addLocation(name: String, parentId: Option[String] = None, radiusM: Option[Int] = None): Location =
-    testApp.service.location.addLocation(name, paris._1, paris._2, parentId, radiusM)
+  private def addLocation(name: String, categoryId: Option[String] = None): Location =
+    testApp.service.location.addLocation(name, paris._1, paris._2, categoryId)
 
   private def locationCounts: Map[String, Int] =
     testApp.service.location.getAll.map(location => location.persistedId -> location.numOfAssets).toMap
 
   private def listedNames: List[String] = testApp.service.location.getAll.map(_.name)
 
-  test("Names are trimmed and cannot be empty, for Locations and parents") {
+  test("Names are trimmed and cannot be empty, for Locations and categories") {
     intercept[ValidationException] {
       addLocation("")
     }
@@ -34,7 +34,7 @@ import altitude.core.models.Repository
       addLocation(" \t ")
     }
     intercept[ValidationException] {
-      testApp.service.location.addParent("  ")
+      testApp.service.location.addCategory("  ")
     }
 
     val location: Location = addLocation("  Eiffel Tower  ")
@@ -42,22 +42,21 @@ import altitude.core.models.Repository
     location.kind shouldEqual LocationKind.Location
     location.latitude shouldEqual Some(paris._1)
     location.longitude shouldEqual Some(paris._2)
-    location.radiusM shouldEqual None
 
-    val parent: Location = testApp.service.location.addParent("  France  ")
-    parent.name shouldEqual "France"
-    parent.kind shouldEqual LocationKind.Parent
-    parent.latitude shouldEqual None
-    parent.longitude shouldEqual None
+    val category: Location = testApp.service.location.addCategory("  France  ")
+    category.name shouldEqual "France"
+    category.kind shouldEqual LocationKind.Category
+    category.latitude shouldEqual None
+    category.longitude shouldEqual None
   }
 
-  test("Parents and Locations share one case-insensitive name pool per repository") {
+  test("Categories and Locations share one case-insensitive name pool per repository") {
     val location: Location = addLocation("Paris")
-    val parent: Location = testApp.service.location.addParent("France")
+    val category: Location = testApp.service.location.addCategory("France")
 
-    // Same name as a Location, as a parent, and the other way around
+    // Same name as a Location, as a category, and the other way around
     intercept[DuplicateException] {
-      testApp.service.location.addParent("paris")
+      testApp.service.location.addCategory("paris")
     }
     intercept[DuplicateException] {
       addLocation("FRANCE")
@@ -66,7 +65,7 @@ import altitude.core.models.Repository
       testApp.service.location.rename(location.persistedId, "france")
     }
     intercept[DuplicateException] {
-      testApp.service.location.rename(parent.persistedId, "PARIS")
+      testApp.service.location.rename(category.persistedId, "PARIS")
     }
 
     // Changing only the casing of a row's own name is allowed
@@ -74,124 +73,120 @@ import altitude.core.models.Repository
     (testApp.service.location.getById(location.persistedId): Location).name shouldEqual "PARIS"
   }
 
-  test("A Location needs a pin in range and a positive radius") {
+  test("A Location needs a pin in range") {
     intercept[ValidationException] {
-      testApp.service.location.addLocation("north", 90.001, 0, None, None)
+      testApp.service.location.addLocation("north", 90.001, 0)
     }
     intercept[ValidationException] {
-      testApp.service.location.addLocation("south", -91, 0, None, None)
+      testApp.service.location.addLocation("south", -91, 0)
     }
     intercept[ValidationException] {
-      testApp.service.location.addLocation("east", 0, 180.5, None, None)
+      testApp.service.location.addLocation("east", 0, 180.5)
     }
     intercept[ValidationException] {
-      testApp.service.location.addLocation("nan", Double.NaN, 0, None, None)
-    }
-    intercept[ValidationException] {
-      testApp.service.location.addLocation("radius", 0, 0, None, Some(0))
+      testApp.service.location.addLocation("nan", Double.NaN, 0)
     }
 
-    // The edges of the range and a radius are fine
-    val edge: Location = testApp.service.location.addLocation("edge", -90, 180, None, Some(250))
+    // The edges of the range are fine
+    val edge: Location = testApp.service.location.addLocation("edge", -90, 180)
     val stored: Location = testApp.service.location.getById(edge.persistedId)
     stored.latitude shouldEqual Some(-90.0)
     stored.longitude shouldEqual Some(180.0)
-    stored.radiusM shouldEqual Some(250)
 
     // The model itself keeps the two kinds honest
     intercept[ValidationException] {
       Location(name = "pinless", kind = LocationKind.Location)
     }
     intercept[ValidationException] {
-      Location(name = "pinned parent", kind = LocationKind.Parent, latitude = Some(1), longitude = Some(1))
+      Location(name = "pinned category", kind = LocationKind.Category, latitude = Some(1), longitude = Some(1))
     }
     intercept[ValidationException] {
-      Location(name = "nested parent", kind = LocationKind.Parent, parentId = Some("x"))
+      Location(name = "nested category", kind = LocationKind.Category, categoryId = Some("x"))
     }
   }
 
-  test("A Location can be added under a parent, and only under a parent") {
-    val parent: Location = testApp.service.location.addParent("France")
+  test("A Location can be added under a category, and only under a category") {
+    val category: Location = testApp.service.location.addCategory("France")
     val sibling: Location = addLocation("Lyon")
 
-    val location: Location = addLocation("Paris", parentId = Some(parent.persistedId))
-    location.parentId shouldEqual Some(parent.persistedId)
+    val location: Location = addLocation("Paris", categoryId = Some(category.persistedId))
+    location.categoryId shouldEqual Some(category.persistedId)
 
     intercept[IllegalOperationException] {
-      addLocation("Nested", parentId = Some(sibling.persistedId))
+      addLocation("Nested", categoryId = Some(sibling.persistedId))
     }
     intercept[NotFoundException] {
-      addLocation("Orphan", parentId = Some("bogus"))
+      addLocation("Orphan", categoryId = Some("bogus"))
     }
 
     val listed = testApp.service.location.getAll.find(_.persistedId == location.persistedId).get
-    listed.parentName shouldEqual Some("France")
-    sibling.parentName shouldEqual None
+    listed.categoryName shouldEqual Some("France")
+    sibling.categoryName shouldEqual None
   }
 
-  test("Move a Location to a parent and back to the top level") {
-    val parent: Location = testApp.service.location.addParent("France")
-    val otherParent: Location = testApp.service.location.addParent("Italy")
+  test("Move a Location to a category and back to the top level") {
+    val category: Location = testApp.service.location.addCategory("France")
+    val otherCategory: Location = testApp.service.location.addCategory("Italy")
     val location: Location = addLocation("Paris")
 
-    testApp.service.location.moveToParent(location.persistedId, Some(parent.persistedId))
-    (testApp.service.location.getById(location.persistedId): Location).parentId shouldEqual Some(parent.persistedId)
+    testApp.service.location.moveToCategory(location.persistedId, Some(category.persistedId))
+    (testApp.service.location.getById(location.persistedId): Location).categoryId shouldEqual Some(category.persistedId)
 
-    testApp.service.location.moveToParent(location.persistedId, Some(otherParent.persistedId))
-    (testApp.service.location.getById(location.persistedId): Location).parentId shouldEqual Some(otherParent.persistedId)
+    testApp.service.location.moveToCategory(location.persistedId, Some(otherCategory.persistedId))
+    (testApp.service.location.getById(location.persistedId): Location).categoryId shouldEqual Some(otherCategory.persistedId)
 
-    testApp.service.location.moveToParent(location.persistedId, None)
-    (testApp.service.location.getById(location.persistedId): Location).parentId shouldEqual None
+    testApp.service.location.moveToCategory(location.persistedId, None)
+    (testApp.service.location.getById(location.persistedId): Location).categoryId shouldEqual None
 
-    // Parents are one level deep: a parent cannot be moved, and nothing can be moved under a Location
+    // Categories are one level deep: a category cannot be moved, and nothing can be moved under a Location
     intercept[IllegalOperationException] {
-      testApp.service.location.moveToParent(parent.persistedId, Some(otherParent.persistedId))
+      testApp.service.location.moveToCategory(category.persistedId, Some(otherCategory.persistedId))
     }
     intercept[IllegalOperationException] {
-      testApp.service.location.moveToParent(location.persistedId, Some(addLocation("Lyon").persistedId))
+      testApp.service.location.moveToCategory(location.persistedId, Some(addLocation("Lyon").persistedId))
     }
     intercept[IllegalOperationException] {
-      testApp.service.location.moveToParent(location.persistedId, Some(location.persistedId))
+      testApp.service.location.moveToCategory(location.persistedId, Some(location.persistedId))
     }
     intercept[NotFoundException] {
-      testApp.service.location.moveToParent(location.persistedId, Some("bogus"))
+      testApp.service.location.moveToCategory(location.persistedId, Some("bogus"))
     }
     intercept[NotFoundException] {
-      testApp.service.location.moveToParent("bogus", Some(parent.persistedId))
+      testApp.service.location.moveToCategory("bogus", Some(category.persistedId))
     }
   }
 
-  test("Rename a Location and a parent") {
+  test("Rename a Location and a category") {
     val location: Location = addLocation("before")
-    val parent: Location = testApp.service.location.addParent("old parent")
+    val category: Location = testApp.service.location.addCategory("old category")
 
     testApp.service.location.rename(location.persistedId, " after ")
-    testApp.service.location.rename(parent.persistedId, "new parent")
+    testApp.service.location.rename(category.persistedId, "new category")
 
     (testApp.service.location.getById(location.persistedId): Location).name shouldEqual "after"
-    (testApp.service.location.getById(parent.persistedId): Location).name shouldEqual "new parent"
+    (testApp.service.location.getById(category.persistedId): Location).name shouldEqual "new category"
 
     intercept[NotFoundException] {
       testApp.service.location.rename("bogus", "name")
     }
   }
 
-  test("Deleting a parent moves its Locations to the top level") {
-    val parent: Location = testApp.service.location.addParent("France")
-    val paris: Location = addLocation("Paris", parentId = Some(parent.persistedId))
-    val lyon: Location = addLocation("Lyon", parentId = Some(parent.persistedId))
+  test("Deleting a category moves its Locations to the top level") {
+    val category: Location = testApp.service.location.addCategory("France")
+    val paris: Location = addLocation("Paris", categoryId = Some(category.persistedId))
+    val lyon: Location = addLocation("Lyon", categoryId = Some(category.persistedId))
     val asset: Asset = testContext.persistAsset()
     testApp.service.location.addAssets(paris.persistedId, Set(asset.persistedId))
 
-    testApp.service.location.deleteById(parent.persistedId)
+    testApp.service.location.deleteById(category.persistedId)
 
     intercept[NotFoundException] {
-      testApp.service.location.getById(parent.persistedId)
+      testApp.service.location.getById(category.persistedId)
     }
     val remaining = testApp.service.location.getAll
     remaining.map(_.name) shouldEqual List("Lyon", "Paris")
-    remaining.map(_.parentId) shouldEqual List(None, None)
-    remaining.map(_.parentName) shouldEqual List(None, None)
+    remaining.map(_.categoryId) shouldEqual List(None, None)
+    remaining.map(_.categoryName) shouldEqual List(None, None)
     // The Locations keep their memberships
     testApp.service.location.getAssetIds(paris.persistedId) shouldEqual Set(asset.persistedId)
     lyon.persistedId.nonEmpty shouldBe true
@@ -239,9 +234,9 @@ import altitude.core.models.Repository
     asset.isRecycled shouldBe false
   }
 
-  test("Recycled and unknown assets are not added, and a parent holds no assets") {
+  test("Recycled and unknown assets are not added, and a category holds no assets") {
     val location: Location = addLocation("location")
-    val parent: Location = testApp.service.location.addParent("parent")
+    val category: Location = testApp.service.location.addCategory("category")
     val asset: Asset = testContext.persistAsset()
     val recycled: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
@@ -253,12 +248,12 @@ import altitude.core.models.Repository
     testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set(asset.persistedId)
 
     intercept[IllegalOperationException] {
-      testApp.service.location.addAssets(parent.persistedId, Set(asset.persistedId))
+      testApp.service.location.addAssets(category.persistedId, Set(asset.persistedId))
     }
     intercept[NotFoundException] {
       testApp.service.location.addAssets("bogus", Set(asset.persistedId))
     }
-    testApp.service.location.getAssetIds(parent.persistedId) shouldEqual Set()
+    testApp.service.location.getAssetIds(category.persistedId) shouldEqual Set()
   }
 
   test("Removing assets from a Location leaves the assets alone") {
@@ -319,13 +314,13 @@ import altitude.core.models.Repository
     locationCounts(location.persistedId) shouldEqual 1
   }
 
-  test("Locations are listed by path, a parent before its Locations, with counts and parent names") {
-    val italy: Location = testApp.service.location.addParent("Italy")
-    val france: Location = testApp.service.location.addParent("france")
-    val rome: Location = addLocation("Rome", parentId = Some(italy.persistedId))
-    // Sorts before its parent by name alone, so the order has to put the parent first explicitly
-    val alba: Location = addLocation("Alba", parentId = Some(italy.persistedId))
-    val paris: Location = addLocation("paris", parentId = Some(france.persistedId))
+  test("Locations are listed by path, a category before its Locations, with counts and category names") {
+    val italy: Location = testApp.service.location.addCategory("Italy")
+    val france: Location = testApp.service.location.addCategory("france")
+    val rome: Location = addLocation("Rome", categoryId = Some(italy.persistedId))
+    // Sorts before its category by name alone, so the order has to put the category first explicitly
+    val alba: Location = addLocation("Alba", categoryId = Some(italy.persistedId))
+    val paris: Location = addLocation("paris", categoryId = Some(france.persistedId))
     val geneva: Location = addLocation("Geneva")
     val zurich: Location = addLocation("Zurich")
 
@@ -337,11 +332,11 @@ import altitude.core.models.Repository
     listedNames shouldEqual List("france", "paris", "Geneva", "Italy", "Alba", "Rome", "Zurich")
 
     val byId = testApp.service.location.getAll.map(location => location.persistedId -> location).toMap
-    byId(rome.persistedId).parentName shouldEqual Some("Italy")
-    byId(alba.persistedId).parentName shouldEqual Some("Italy")
-    byId(paris.persistedId).parentName shouldEqual Some("france")
-    byId(geneva.persistedId).parentName shouldEqual None
-    byId(italy.persistedId).parentName shouldEqual None
+    byId(rome.persistedId).categoryName shouldEqual Some("Italy")
+    byId(alba.persistedId).categoryName shouldEqual Some("Italy")
+    byId(paris.persistedId).categoryName shouldEqual Some("france")
+    byId(geneva.persistedId).categoryName shouldEqual None
+    byId(italy.persistedId).categoryName shouldEqual None
 
     val counts = locationCounts
     counts(rome.persistedId) shouldEqual 2
@@ -352,8 +347,8 @@ import altitude.core.models.Repository
 
   test("Locations are scoped to the repository and foreign IDs change nothing") {
     val firstRepo: Repository = testContext.repository
-    val parent: Location = testApp.service.location.addParent("shared name")
-    val location: Location = addLocation("Paris", parentId = Some(parent.persistedId))
+    val category: Location = testApp.service.location.addCategory("shared name")
+    val location: Location = addLocation("Paris", categoryId = Some(category.persistedId))
     val asset: Asset = testContext.persistAsset()
     testApp.service.location.addAssets(location.persistedId, Set(asset.persistedId))
 
@@ -361,7 +356,7 @@ import altitude.core.models.Repository
     switchContextRepo(secondRepo)
 
     // Same names are fine in another repository, and the first repository's rows are not visible
-    val ownParent: Location = testApp.service.location.addParent("shared name")
+    val ownCategory: Location = testApp.service.location.addCategory("shared name")
     addLocation("Paris")
     listedNames shouldEqual List("Paris", "shared name")
     locationCounts.values.sum shouldEqual 0
@@ -374,14 +369,14 @@ import altitude.core.models.Repository
       testApp.service.location.rename(location.persistedId, "renamed")
     }
     intercept[NotFoundException] {
-      testApp.service.location.moveToParent(location.persistedId, None)
+      testApp.service.location.moveToCategory(location.persistedId, None)
     }
     intercept[NotFoundException] {
-      // A foreign parent as the target
-      addLocation("Under foreign", parentId = Some(parent.persistedId))
+      // A foreign category as the target
+      addLocation("Under foreign", categoryId = Some(category.persistedId))
     }
     intercept[NotFoundException] {
-      testApp.service.location.deleteById(parent.persistedId)
+      testApp.service.location.deleteById(category.persistedId)
     }
     intercept[NotFoundException] {
       testApp.service.location.addAssets(location.persistedId, Set(testContext.persistAsset(Some(secondRepo)).persistedId))
@@ -392,14 +387,14 @@ import altitude.core.models.Repository
     testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set()
 
     // A foreign asset in an otherwise local batch is dropped
-    val ownLocation: Location = addLocation("Own", parentId = Some(ownParent.persistedId))
+    val ownLocation: Location = addLocation("Own", categoryId = Some(ownCategory.persistedId))
     val ownAsset: Asset = testContext.persistAsset(Some(secondRepo))
     testApp.service.location.addAssets(ownLocation.persistedId, Set(ownAsset.persistedId, asset.persistedId)) shouldEqual 1
     testApp.service.location.removeAssetsFromAllLocations(Set(asset.persistedId)) shouldEqual 0
 
     switchContextRepo(firstRepo)
     listedNames shouldEqual List("shared name", "Paris")
-    (testApp.service.location.getById(location.persistedId): Location).parentId shouldEqual Some(parent.persistedId)
+    (testApp.service.location.getById(location.persistedId): Location).categoryId shouldEqual Some(category.persistedId)
     testApp.service.location.getAssetIds(location.persistedId) shouldEqual Set(asset.persistedId)
     locationCounts(location.persistedId) shouldEqual 1
   }

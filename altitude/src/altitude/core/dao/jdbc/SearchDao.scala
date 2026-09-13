@@ -80,8 +80,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         readGrouped[(AssetRow[Sc], Option[String], Option[String], Option[String], Option[String], SortValue, Int, Int)](
           statement,
           isFirstPage).map {
-          case ((asset, locationId, pathKey, name, parentName, sortValue, groupTotal, candidates), total) =>
-            val group = SearchGroupKey.Location(id = locationId, pathKey = pathKey, name = name, parentName = parentName)
+          case ((asset, locationId, pathKey, name, categoryName, sortValue, groupTotal, candidates), total) =>
+            val group = SearchGroupKey.Location(id = locationId, pathKey = pathKey, name = name, categoryName = categoryName)
             (GroupedSearchRow(toModel(asset), group, sortValue, groupTotal), candidates, total)
         }
 
@@ -104,8 +104,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val select = SearchQueries.mapLocations(searchDialect, query, RequestContext.getRepository.persistedId, bbox)
     Db.read(dialect)(_.run(select)).toList.map {
       // The kind filter guarantees a pin; a Location row without one cannot exist under the schema's CHECK
-      case (id, name, parentName, latitude, longitude, count) =>
-        MapLocation(id, name, parentName, latitude.get, longitude.get, count)
+      case (id, name, categoryName, latitude, longitude, count) =>
+        MapLocation(id, name, categoryName, latitude.get, longitude.get, count)
     }
 
   override def mapBounds(query: SearchQuery): Option[MapBounds] =

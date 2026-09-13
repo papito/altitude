@@ -112,17 +112,16 @@ object FieldConst:
     val ASSET_ID = "asset_id"
 
   object Location:
-    val PARENT_ID = "parent_id"
+    val CATEGORY_ID = "category_id"
     val KIND = "kind"
     val NAME = "name"
     val NAME_LC = "name_lc"
     val LATITUDE = "latitude"
     val LONGITUDE = "longitude"
-    val RADIUS_M = "radius_m"
     val LOCATION_ID = "location_id"
     val ASSET_ID = "asset_id"
     val NUM_OF_ASSETS = "num_of_assets"
-    val PARENT_NAME = "parent_name"
+    val CATEGORY_NAME = "category_name"
 
   object MimedData:
     val MIME_TYPE = "mime_type"

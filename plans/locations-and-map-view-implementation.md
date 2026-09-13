@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–6 implemented 2026-09-13 (Units 1–5 committed, plus the Unit 5 review follow-ups, [done/locations-unit-5-followups.md](done/locations-unit-5-followups.md); Unit 6 not yet committed); Units 7–9 not started.** This expands §7 of
+Status: **Units 1–6 and 8 implemented 2026-09-13 (Units 1–6 committed; Unit 8 delivered by [locations-category-and-pin-editor.md](done/locations-category-and-pin-editor.md), which also renamed parents to Categories and removed radius); Units 7 and 9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -37,23 +37,23 @@ These came out of reading the code; each is the smallest change that keeps the d
 
 ## Decisions made in this plan
 
-1. **D1, one table.** `location` has a nullable `parent_id` and a `kind` (`parent` | `location`).
+1. **D1, one table.** `location` has a nullable `category_id` and a `kind` (`category` | `location`).
    One row type means one uniqueness index for the shared name pool (D1), one model, one DAO, and
-   the group header / dropdown label (`Parent › Location`) is a self-join. Two tables would need a
+   the group header / dropdown label (`Category › Location`) is a self-join. Two tables would need a
    cross-table uniqueness check the DB cannot express. CHECK constraints keep the two kinds
-   honest (a parent has no pin, no radius, no parent; a Location has a pin); "a Location's parent
-   must be a parent" is a service check.
-2. **D2 is explicit, not an `ON DELETE SET NULL`.** `LocationService.deleteById` re-parents the
+   honest (a category has no pin, no radius, no category; a Location has a pin); "a Location's category
+   must be a category" is a service check.
+2. **D2 is explicit, not an `ON DELETE SET NULL`.** `LocationService.deleteById` re-categories the
    children to root in the same transaction, then deletes. The foreign key stays at its default
-   (NO ACTION), so a delete that forgot the re-parent fails instead of silently orphaning.
+   (NO ACTION), so a delete that forgot the re-category fails instead of silently orphaning.
 3. **Group by Location is its own statement**, `SearchQueries.groupedByLocation`, beside
    `grouped`, not a generalization of it. Its shape differs on every axis (asset × Location join,
    a two-column group key, fixed order, a trailing "No location" group regardless of direction,
    names to render). Both share `matching`, `sortColumn`, `secondarySort`, the total CTE and the
    `afterBySort` cursor fragment. The day statement, which is tuned and benchmarked, is not
    touched beyond the group-key type.
-4. **Group order for Location** is by *path*: `COALESCE(parent.name_lc, location.name_lc),
-   location.name_lc`. Root Locations and parents therefore interleave alphabetically at the top
+4. **Group order for Location** is by *path*: `COALESCE(category.name_lc, location.name_lc),
+   location.name_lc`. Root Locations and categories therefore interleave alphabetically at the top
    level, which is also the order the sidebar shows. Names are unique across the pool, so the pair
    is a total order. "No location" is last in every case.
 5. **Cursor v4.** `SearchCursor.day: Option[LocalDate]` becomes `key: Option[String]` (the ISO day,
@@ -71,7 +71,7 @@ These came out of reading the code; each is the smallest change that keeps the d
 9. **Leaflet is loaded as a plain script** (`window.L`, like `interact`), supercluster too
    (`window.Supercluster`); both only on `index.scala.html`. No default marker images are needed:
    every pin is an `L.divIcon`.
-10. **Add Location is a modal** (it holds a map); Add parent, Rename, Delete and Move to parent are
+10. **Add Location is a modal** (it holds a map); Add category, Rename, Delete and Move to category are
     inline dialogs like the album ones.
 
 ---
@@ -87,24 +87,23 @@ longitude DOUBLE PRECISION,
 CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
   WHERE latitude IS NOT NULL;
 
--- location: parents and Locations in one uniqueness pool (D1)
+-- location: categories and Locations in one uniqueness pool (D1)
 CREATE TABLE location (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
-  parent_id CHAR(36) REFERENCES location (id),          -- NULL = root; NO ACTION on delete (see decision 2)
-  kind VARCHAR(16) NOT NULL,                             -- 'parent' | 'location'
+  category_id CHAR(36) REFERENCES location (id),          -- NULL = root; NO ACTION on delete (see decision 2)
+  kind VARCHAR(16) NOT NULL,                             -- 'category' | 'location'
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
-  radius_m INT,                                          -- D4: stored, unused this phase
-  CHECK (kind IN ('parent', 'location')),
-  CHECK ((kind = 'parent' AND parent_id IS NULL AND latitude IS NULL AND longitude IS NULL AND radius_m IS NULL)
+  CHECK (kind IN ('category', 'location')),
+  CHECK ((kind = 'category' AND category_id IS NULL AND latitude IS NULL AND longitude IS NULL)
       OR (kind = 'location' AND latitude IS NOT NULL AND longitude IS NOT NULL)),
-  CHECK (latitude BETWEEN -90 AND 90), CHECK (longitude BETWEEN -180 AND 180), CHECK (radius_m > 0)
+  CHECK (latitude BETWEEN -90 AND 90), CHECK (longitude BETWEEN -180 AND 180)
 ) INHERITS (_core);                                      -- SQLite: explicit created_at/updated_at
 CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
-CREATE INDEX location_02 ON location (repository_id, parent_id);
+CREATE INDEX location_02 ON location (repository_id, category_id);
 
 -- location_asset: pointers only, like album_asset (no updated_at on SQLite, same as album_asset)
 CREATE TABLE location_asset (
@@ -132,7 +131,7 @@ Server-side, TDD. **Done 2026-09-13**, with two findings the plan did not antici
 - The null-description hazard was real: importing a JPEG whose GPS tags lack a ref crashed on JSON
   serialization before this unit. `MetadataExtractionService` now skips such tags.
 - The fixtures were made from `images/6.jpg` with Pillow by writing a GPS IFD (tags 1–4) and are
-  exercised through metadata-extractor only. The parent-vs-Location CHECK is split into two
+  exercised through metadata-extractor only. The category-vs-Location CHECK is split into two
   single-line constraints so `RowColumnTests`' DDL parser reads the table cleanly.
 
 Files
@@ -141,9 +140,9 @@ Files
 - `dao/sql/tables/LocationRow.scala`, `LocationAssetRow.scala` (new; copy `AlbumRow` /
   `AlbumAssetRow`, no column-name overrides).
 - `models/Asset.scala`: `latitude: Option[Double] = None`, `longitude: Option[Double] = None`.
-- `FieldConst.Asset`: `LATITUDE`, `LONGITUDE`. `FieldConst.Location` (new): `PARENT_ID`, `KIND`,
+- `FieldConst.Asset`: `LATITUDE`, `LONGITUDE`. `FieldConst.Location` (new): `CATEGORY_ID`, `KIND`,
   `NAME`, `NAME_LC`, `LATITUDE`, `LONGITUDE`, `RADIUS_M`, `LOCATION_ID`, `ASSET_ID`,
-  `NUM_OF_ASSETS`, `PARENT_NAME`.
+  `NUM_OF_ASSETS`, `CATEGORY_NAME`.
 - `dao/jdbc/AssetDao.scala`: `add` binds the two columns (`Any` values, `orNull`, like `capture`);
   `toModel` and `makeModel` read them (`Option(rec(...)).map(_.asInstanceOf[Double])`).
 - `util/GeoLocationResolver.scala` (new, the `CaptureDateResolver` shape): a pure
@@ -178,8 +177,8 @@ Tests
 ## Unit 2 — Location model, DAO, service
 
 **Done 2026-09-13**, with three findings:
-- The path order as written (`COALESCE(p.name_lc, l.name_lc), l.name_lc`) puts a Location named "Alba" before its parent
-  "Italy". `getAll` orders by the path key, then top-level rows before children, then name, so a parent always directly precedes
+- The path order as written (`COALESCE(p.name_lc, l.name_lc), l.name_lc`) puts a Location named "Alba" before its category
+  "Italy". `getAll` orders by the path key, then top-level rows before children, then name, so a category always directly precedes
   its Locations. The test "listed by path" pins it.
 - `Columns.literal` had no way to bind a `NULL`, which a move to the top level and `moveChildrenToRoot` need through the typed
   `updateById` / `updateByQuery` path. It now accepts an `Option` in a `SET` (`None` renders `NULL`); no hand-written `UPDATE`.
@@ -189,52 +188,52 @@ Tests
 Files
 - `models/LocationKind.scala` (new): `enum LocationKind(val dbValue: String)` with `fromDbValue`
   and a `bimap` codec, like `CaptureDateSource`.
-- `models/Location.scala` (new): `Location(id, name, kind, parentId: Option[String], latitude:
+- `models/Location.scala` (new): `Location(id, name, kind, categoryId: Option[String], latitude:
   Option[Double], longitude: Option[Double], radiusM: Option[Int], numOfAssets: Int = 0,
-  parentName: Option[String] = None) extends BaseModel with NoDates`. Constructor validation:
-  non-empty name; a parent has no pin/radius/parent; a Location has a pin in range; radius > 0.
-  `nameLowercase` as in `Album`. `parentName` is read-only, filled by `getAll`.
+  categoryName: Option[String] = None) extends BaseModel with NoDates`. Constructor validation:
+  non-empty name; a category has no pin/radius/category; a Location has a pin in range; radius > 0.
+  `nameLowercase` as in `Album`. `categoryName` is read-only, filled by `getAll`.
 - `dao/LocationDao.scala` (trait) and `dao/jdbc/LocationDao.scala` (engine mixin at wiring, like
-  the album DAO): `add`, `getAll` (self-join for `parent_name`, correlated membership count,
+  the album DAO): `add`, `getAll` (self-join for `category_name`, correlated membership count,
   ordered by path: `COALESCE(p.name_lc, l.name_lc), l.name_lc`), `addAssets` (the album
   `INSERT … SELECT … NOT EXISTS` shape, returns how many were new), `removeAssets`,
-  `removeAssetsFromAllLocations`, `getAssetIds`, `moveChildrenToRoot(parentId)`,
+  `removeAssetsFromAllLocations`, `getAssetIds`, `moveChildrenToRoot(categoryId)`,
   `getByIds`. Kind is a `location` column, so `updateById` covers rename and move.
-- `service/LocationService.scala`: `addLocation(name, latitude, longitude, parentId, radiusM)`,
-  `addParent(name)`, `getAll`, `rename(id, name)`, `moveToParent(id, parentId: Option[String])`
-  (target must exist, be a parent, and the moved row must be a Location; `IllegalOperationException`
-  otherwise), `deleteById` (a parent: `moveChildrenToRoot` first; either kind: hard delete,
+- `service/LocationService.scala`: `addLocation(name, latitude, longitude, categoryId, radiusM)`,
+  `addCategory(name)`, `getAll`, `rename(id, name)`, `moveToCategory(id, categoryId: Option[String])`
+  (target must exist, be a category, and the moved row must be a Location; `IllegalOperationException`
+  otherwise), `deleteById` (a category: `moveChildrenToRoot` first; either kind: hard delete,
   `NotFoundException` on 0 rows), `addAssets`, `removeAssets`, `removeAssetsFromAllLocations`,
   `getAssetIds`. Duplicate names surface as `DuplicateException` through `BaseService.add` /
   `updateById` (both kinds share `location_01`). Membership is only offered on Locations, never
-  parents (`IllegalOperationException`).
+  categories (`IllegalOperationException`).
 - `service/LibraryService.recycleAssets`: `location.removeAssetsFromAllLocations(...)` beside the
   album call (D6). Restore and move do nothing, purge cascades.
 - `Altitude.scala`: `DAO.location`, `service.location`.
-- `Api.Field.Location` (`LOCATION_ID`, `NAME`, `PARENT_ID`, `LATITUDE`, `LONGITUDE`, `RADIUS_M`),
+- `Api.Field.Location` (`LOCATION_ID`, `NAME`, `CATEGORY_ID`, `LATITUDE`, `LONGITUDE`, `RADIUS_M`),
   `Api.Constraints.MAX/MIN_LOCATION_NAME_LENGTH` (same as albums), `Const.UI` dialog titles.
 
 Tests — `integration/LocationServiceTests` (register in `AllIntegrationTestSuites`), on both
-engines: trim/empty/duplicate (parent vs Location share the pool, case-insensitive, on add and
-rename), pin validation, add under a parent, cannot parent to a Location or to itself, cannot
-nest parents, move to parent and back to root, delete a parent moves children to root, delete a
+engines: trim/empty/duplicate (category vs Location share the pool, case-insensitive, on add and
+rename), pin validation, add under a category, cannot category to a Location or to itself, cannot
+nest categories, move to category and back to root, delete a category moves children to root, delete a
 Location drops memberships and leaves assets alone, add assets (idempotent, recycled and foreign
-IDs skipped, parent refused), remove assets, recycle drops memberships and restore does not
-re-add, purge cascades, `getAll` order and counts and `parentName`, repository isolation (the
+IDs skipped, category refused), remove assets, recycle drops memberships and restore does not
+re-add, purge cascades, `getAll` order and counts and `categoryName`, repository isolation (the
 `docs/test-coverage.md` gap: foreign IDs on every mutation change nothing).
 
 ## Unit 3 — Search: filters, count, group by Location, cursor v4
 
 **Done 2026-09-13**, with four findings:
-- The path key as planned (`COALESCE(parent.name_lc, name_lc)` then a second term) cannot be carried in one cursor field, and
-  ordering by `path_key, location_id` alone would order a parent's Locations by ID, against D8. The key is therefore one string:
-  the parent's `name_lc` and the Location's joined by U+0001 (`SearchQueries.PATH_SEPARATOR`, below every printable character,
+- The path key as planned (`COALESCE(category.name_lc, name_lc)` then a second term) cannot be carried in one cursor field, and
+  ordering by `path_key, location_id` alone would order a category's Locations by ID, against D8. The key is therefore one string:
+  the category's `name_lc` and the Location's joined by U+0001 (`SearchQueries.PATH_SEPARATOR`, below every printable character,
   so it orders as the pair would), or the Location's `name_lc` alone at the top level; the Location ID stays as the tiebreaker.
 - A first page also needs both slices: `located` may hold fewer rows than a page, and `unlocated` fills the rest under the same
   guarded `LIMIT CASE`. The `page` CTE and the final `ORDER BY` lead with `CASE WHEN location_id IS NULL THEN 1 ELSE 0 END` so the
   trailing group is last on both engines without `NULLS LAST`.
 - `groupDirection` with `groupBy=location` is refused by the controller in this unit (one `case`), since accepting and ignoring it
-  would have been the behaviour until Unit 5. The grouped grid template renders a Location header as `Parent › Location` and
+  would have been the behaviour until Unit 5. The grouped grid template renders a Location header as `Category › Location` and
   `data-group-key` now so the code compiles; Unit 7 restyles it.
 - `SearchDialect.day` and `secondarySort` are keyed on the grouping's `dateField`; a Location grouping puts SQLite's unary `+`
   on every sort term, since there is no grouping index to protect.
@@ -251,7 +250,7 @@ Files
 - `util/SearchCursor.scala`: `key: Option[String]`, `groupId: Option[String]`, `VERSION = 4`.
 - `util/GroupedSearchResult.scala`: `GroupedSearchRow(asset, group: SearchGroupKey, sortValue,
   groupTotal)`; `SearchGroupKey` is an enum: `Day(date: Option[LocalDate])` and
-  `Location(id: Option[String], pathKey: Option[String], name: Option[String], parentName:
+  `Location(id: Option[String], pathKey: Option[String], name: Option[String], categoryName:
   Option[String])` (all `None` = "No location"). `AssetDateGroup` becomes `AssetGroup(key,
   total, assets)`; `groupsOf` folds on `key`.
 - `dao/sql/search/SearchQueries.scala`:
@@ -261,8 +260,8 @@ Files
     the box). Plain `BETWEEN` arithmetic, no dialect hook.
   - `count(engine, query, repositoryId)`: `matching(...).size`, for the map layout's total.
   - `groupedByLocation(engine, query, repositoryId)`: the same `WITH` shell as `grouped`.
-    `located` = `matching` joined to `location_asset`, `location`, and a left-joined parent,
-    projected to `(asset_id, location_id, path_key, location_name, parent_name, sort_value)`,
+    `located` = `matching` joined to `location_asset`, `location`, and a left-joined category,
+    projected to `(asset_id, location_id, path_key, location_name, category_name, sort_value)`,
     ordered by `path_key, location_id, <secondary sort>, asset_id`, `LIMIT rpp + 1`, with the
     cursor predicate `path_key > ?k OR (path_key = ?k AND (location_id > ?g OR (location_id = ?g
     AND afterBySort)))`. `unlocated` = `matching` filtered to assets in no Location, guarded by
@@ -284,7 +283,7 @@ Tests
   Location statement on both dialects has every `?` bound, no `NULLS FIRST/LAST`, and the
   `unlocated` guard; `count` renders one `COUNT`.
 - `unit/SearchQueryModelTests`: `BoundingBox.parse` (bad arity, ranges, antimeridian).
-- `integration/SearchGroupingTests`: group by Location — order by path, `Parent › Location`
+- `integration/SearchGroupingTests`: group by Location — order by path, `Category › Location`
   data on the rows, an asset in two Locations appears twice, "No location" last, per-group
   totals across pages, combined with folder/album/person/location filters; `locationId` filter;
   `bbox` filter (own point, Location pin fallback, antimeridian).
@@ -322,7 +321,7 @@ Files
 - `dao/SearchDao` + `dao/jdbc/SearchDao`: `mapCells`, `mapLocations`, `mapBounds`.
 - `service/SearchService` / `LibraryService`: `mapCells(query, bbox, zoom)` (cell size from
   zoom, clamped to 0..20), `mapBounds(query)`; models `MapCell(count, latitude, longitude,
-  assetId)`, `MapLocation(id, name, parentName, latitude, longitude, count)`, `MapBounds(south,
+  assetId)`, `MapLocation(id, name, categoryName, latitude, longitude, count)`, `MapBounds(south,
   west, north, east, count)` in `models/`.
 - `service/GeocoderService.scala` (new): `enabled: Boolean` from config; `search(q): List[GeoResult]`
   calls `map.geocoder.url` (`requests`-free: `java.net.http.HttpClient`, 5 s timeout, `format=json`,
@@ -349,8 +348,8 @@ Tests
 
 **Done 2026-09-13**, with these integration details:
 - `SearchRequestParser.Scope.query` shares the scope while leaving sort, grouping and pagination with the controller. Map layout omits ignored grouping from the replacement URL. *Revised by the follow-ups:* the map endpoints accept the client's search parameters verbatim (`cask.QueryParams`) and ignore grid-only ones and the `bbox` filter, which is the panel's scope; the map's clipping box is the separate `viewport` parameter, so Location pin counts do not change when members' own GPS points leave the viewport, and the map layout's count and bounds cover the whole search.
-- The six dialog templates, shared parent select, Locations tab host and map view host are included here so every route renders. Their client renderers, opening controls, map interactions and styling remain Units 6–8. Coordinate fields use text inputs with decimal input hints to preserve malformed values for correction; Unit 8 should preserve that behavior when adding the map editor.
-- Dialog values accept numeric JSON as well as form strings. Empty/null parent and radius values mean absent. Invalid hidden IDs return 400, foreign Locations return 404, and invalid parent choices replace the form with a field error. JSON membership endpoints return 400 for malformed payloads or parent targets and 404 for foreign Locations.
+- The six dialog templates, shared category select, Locations tab host and map view host are included here so every route renders. Their client renderers, opening controls, map interactions and styling remain Units 6–8. Coordinate fields use text inputs with decimal input hints to preserve malformed values for correction; Unit 8 should preserve that behavior when adding the map editor.
+- Dialog values accept numeric JSON as well as form strings. Empty/null category and radius values mean absent. Invalid hidden IDs return 400, foreign Locations return 404, and invalid category choices replace the form with a field error. JSON membership endpoints return 400 for malformed payloads or category targets and 404 for foreign Locations.
 - The geocoder gate is tested through HTTP (404 while disabled); the enabled external lookup remains covered by `GeocoderServiceTests` against its local stub. Upstream failures are mapped to JSON 502.
 - Controller integration tests followed red → green, including follow-up cycles for map requests carrying `sort`, invalid/foreign action IDs, and Location counts across viewport changes. Verification: `make compile`, `make lint`, `make test-unit` (86), `make test-sqlite` (223), and `make test-controllers` (45) passed. No database schema or dev data changes; PostgreSQL and browser verification remain with the later frontend/full-feature units.
 
@@ -360,7 +359,7 @@ Files
   `bbox`), shared by the three controllers below. `SearchResultsController` keeps grouping,
   sort, paging and rendering.
 - `routes/api/LocationController.scala` (`api/location`): `GET /r/:repoId/list` (flat JSON,
-  camelCase, hand-built: `id, name, kind, parentId, parentName, latitude, longitude, radiusM,
+  camelCase, hand-built: `id, name, kind, categoryId, categoryName, latitude, longitude, radiusM,
   numOfAssets`, in path order), `PUT /r/:repoId/assets` `{locationId, assetIds}` → `{added}`,
   `DELETE /r/:repoId/assets` → `{removed}`.
 - `routes/api/MapController.scala` (`api/map`): `GET /r/:repoId/cells?<search params>&viewport=&zoom=`
@@ -368,11 +367,11 @@ Files
   params>` → `{south, west, north, east, count}` or `{count: 0}`; `GET /r/:repoId/geocode?q=` →
   `[{label, latitude, longitude}]`, 404 when disabled. Bad `bbox`/`zoom` are JSON 400s.
 - `routes/web/partial/LocationActionController.scala` (`htmx/location`): `tab`;
-  `dialogs/add-location` (modal, with the parent dropdown, the tile settings and the geocoder
-  flag), `dialogs/add-parent`, `dialogs/rename-location`, `dialogs/delete-location`,
-  `dialogs/move-location` (parent dropdown), `dialogs/add-to-location` (`[Parent] - Location`
-  dropdown of Locations only); `POST add` (JSON: name, latitude, longitude, parentId?, radiusM?),
-  `POST add-parent`, `PUT rename`, `PUT move`, `PUT assets` (JSON `{locationId, assetIds:
+  `dialogs/add-location` (modal, with the category dropdown, the tile settings and the geocoder
+  flag), `dialogs/add-category`, `dialogs/rename-location`, `dialogs/delete-location`,
+  `dialogs/move-location` (category dropdown), `dialogs/add-to-location` (`[Category] - Location`
+  dropdown of Locations only); `POST add` (JSON: name, latitude, longitude, categoryId?, radiusM?),
+  `POST add-category`, `PUT rename`, `PUT move`, `PUT assets` (JSON `{locationId, assetIds:
   "id,id"}` from the dialog's hidden field; returns empty 200), `DELETE /`. Validation and
   duplicate handling exactly as `AlbumActionController` (`DataScrubber`, `ApiRequestValidator`,
   `dialogFormValidationResponse`); latitude/longitude are validated as decimals in range with a
@@ -389,7 +388,7 @@ Tests — `controller/LocationControllerTests`, `LocationActionControllerTests`,
 `MapControllerTests` (register in `AllControllerTestSuites`): list shape and order, membership
 endpoints against persisted membership, every dialog renders, add/rename/move/delete with
 validation replacement headers and duplicate names, cells/bounds/geocode status codes and JSON,
-401s. `SearchResultsControllerTests`: `groupBy=location` headers read `Parent › Location` and
+401s. `SearchResultsControllerTests`: `groupBy=location` headers read `Category › Location` and
 "No location", `data-group-key`, cursor round-trip; `layout=map` response has `#map` and no
 `#assets`, carries `data-map-bounds`, `hx-replace-url` includes `layout`, `locationId`, `bbox`;
 the 400 matrix gains `groupDirection` with `location` and malformed `bbox`.
@@ -399,35 +398,35 @@ the 400 matrix gains `groupDirection` with `location` and malformed `bbox`.
 Frontend, no server tests; verified in the browser.
 
 **Done 2026-09-13**, with these findings:
-- The empty state shows only the centered "Add your first location" (the verification table's wording); "Add parent"
-  appears with the top buttons once a row exists, since a parent without Locations has no use on its own.
+- The empty state shows only the centered "Add your first location" (the verification table's wording); "Add category"
+  appears with the top buttons once a row exists, since a category without Locations has no use on its own.
 - The Add to location dialog's success needs the chosen Location after the modal is gone, and the operation's success
   detail is read when the request is issued: `fragments/add-to-location.js` keeps `data-app-success-detail` in step with
   the select (and fills the hidden `assetIds` only when empty, so a validation replacement keeps the submitted value).
   `fragments/modal.js` dispatches on `data-app-dialog-kind` the way `inline-dialog.js` does for view settings.
 - The two modal forms got a minimal grid layout (one field per row) so they are usable before Unit 8 restyles the editor.
-- D9's "drag between parents also works" (re-parenting a Location by dragging its row) is not in this unit's file list
-  and was not built; the Move to parent dialog covers it. Listed under *Not in this phase* until decided.
+- D9's "drag between categories also works" (re-categorying a Location by dragging its row) is not in this unit's file list
+  and was not built; the Move to category dialog covers it. Listed under *Not in this phase* until decided.
 - Real pointer drags cannot be synthesized in the hidden automation tab; the drop handlers' event path was exercised by
   dispatching the events they emit. A manual drag check remains for the user.
 
 - `views/index.scala.html`: a fourth tab `#locationsTab` (`fa-map-marker-alt`, `href="#locations"`,
   `hx-get=/htmx/location/r/:repoId/tab`).
-- `views/htmx/locations.scala.html`: styles (rows are the album grid; a Location under a parent
+- `views/htmx/locations.scala.html`: styles (rows are the album grid; a Location under a category
   gets `--depth: 1` like the folder tree's trace cell), `#locationActions` (two centered
   dialog-trigger buttons: "Add location" opening the modal through `hx-target="#modalContent"`,
-  "Add parent" inline), `#noLocations`, `#locationList[data-app-fragment="location-list"]`.
+  "Add category" inline), `#noLocations`, `#locationList[data-app-fragment="location-list"]`.
 - `static/js/common/location-list.js` (copy of `album-list.js`): `reloadLocationList`,
   `refreshLocationCounts`, `setViewedLocation`, `focusAddLocationControlIfFocusLost`. Renders the
-  flat JSON as parents with their Locations nested one level, root Locations interleaved by
-  name. Parent row: menu (Rename, Delete) | icon `fa-layer-group` | name, no
+  flat JSON as categories with their Locations nested one level, root Locations interleaved by
+  name. Category row: menu (Rename, Delete) | icon `fa-layer-group` | name, no
   count, not a drop target, not a search trigger. Location row: menu (Rename, Delete, Move to
-  parent) | `.asset-count` | `fa-map-marker-alt` | name; icon and name are
+  category) | `.asset-count` | `fa-map-marker-alt` | name; icon and name are
   `data-app-search-location-id` triggers; `.controls` is `.dropzone[data-location-id]`.
 - `static/js/dragdrop/locations.js` + `dragdrop/index.js`: `#locationList .dropzone` accepts
   `#assets .drag-drop, #batchOps .drag-drop`, dispatches `assetAddedToLocation` /
   `batchAssetsAddedToLocation`.
-- `static/js/listeners/locations.js` + `listeners/index.js`: `locationAdded`, `parentAdded`,
+- `static/js/listeners/locations.js` + `listeners/index.js`: `locationAdded`, `categoryAdded`,
   `locationRenamed`, `locationMoved`, `locationDeleted` (reload, snackbar, search back to the
   repository when the viewed Location goes), `assetAddedToLocation` (escalates to the batch when
   selected), `batchAssetsAddedToLocation`, `batchAssetsRemovedFromLocation`,
@@ -437,10 +436,10 @@ Frontend, no server tests; verified in the browser.
   Location counts; `frontend-app.js`: `reloadLocationCounts()`.
 - `views/includes/batch_ops.scala.html`: "Add to location (n)" always in the non-trash footer;
   "Remove from location (n)" while `$store.searchParams.locationId` is set.
-- Dialog templates under `views/htmx/`: `add_parent_dialog`, `rename_location_dialog`,
-  `delete_location_dialog` (names the kind; a parent's says its Locations move to the top level),
-  `move_location_dialog` (`<select>` of parents plus "(none)"), `add_to_location_dialog` (modal:
-  select of Locations labelled `Parent - Location`, hidden `assetIds` field the hydrator fills from
+- Dialog templates under `views/htmx/`: `add_category_dialog`, `rename_location_dialog`,
+  `delete_location_dialog` (names the kind; a category's says its Locations move to the top level),
+  `move_location_dialog` (`<select>` of categories plus "(none)"), `add_to_location_dialog` (modal:
+  select of Locations labelled `Category - Location`, hidden `assetIds` field the hydrator fills from
   the selection store, `hx-put` to `/htmx/location/r/:repoId/assets`, success event
   `ASSETS_ADDED_TO_LOCATION_EVENT`). All follow the album dialogs' attributes (`data-app-fragment`,
   autofocus, return focus, success event/detail).
@@ -448,7 +447,7 @@ Frontend, no server tests; verified in the browser.
   it (folder/person/album/location clear each other). `context.js`: `getCurrentLocationId()`.
   `views/includes/search_results.scala.html`: `data-results-location-id`;
   `fragments/search-results.js`: `setViewedLocation`.
-- `static/js/constants.js`: the events and `attributes.locationId`, `attributes.parentId`,
+- `static/js/constants.js`: the events and `attributes.locationId`, `attributes.categoryId`,
   `attributes.kind`; `fragments/index.js` + `fragments/explorer.js`: the `location-list` kind and an
   `add-to-location` hydrator that fills the hidden field.
 
@@ -466,7 +465,7 @@ Frontend, no server tests; verified in the browser.
   `date-group-selectable.js`, `detail-navigator.js`, `box-selection.js` selectors follow; the
   Alpine component keeps its name).
 - `views/htmx/results_grid_grouped.scala.html`: header text by key: a `<time>` for a day,
-  "No date"; for a Location `Parent › Location` (`<span class="parent">` + `›` + name), "No
+  "No date"; for a Location `Category › Location` (`<span class="category">` + `›` + name), "No
   location". The cell's `id` is `asset-<id>` for day/ungrouped grids and `asset-<id>-in-<locationId>`
   in the Location grid (`result_cell` gets a `cellId` parameter); `data-asset-id` stays.
 - Duplicate cells (deviation 3): `selection.js` paints `[data-asset-id="…"] .drag-drop` (all
@@ -516,23 +515,9 @@ Frontend, no server tests; verified in the browser.
 
 ## Unit 8 — Frontend: Add Location modal and geocoder
 
-- `views/htmx/add_location_dialog.scala.html` (modal, `data-app-fragment="modal"`,
-  `data-app-modal-title`): name, parent `<select>`, a `#locationEditorMap` (300 px tall),
-  latitude / longitude `<input type="number" step="any">`, radius (m, optional), and — only
-  when the geocoder is enabled — a search box with a results list. `hx-post` +
-  `hx-json-enc`, success event `LOCATION_ADDED_EVENT`; validation replaces the form in place
-  (the map is re-created by the hydrator after the swap, centred on the submitted values).
-  `#modalContent:has(.location-editor)` widens `--modal-content-width` to 720 px, capped by the
-  viewport.
-- `static/js/fragments/location-editor.js` (kind `location-editor`, registered in
-  `fragments/index.js`): Leaflet map in the modal (tile settings from data attributes),
-  initial view = the current results map view when one is open, else the world; click places or
-  moves a draggable pin and writes the fields; editing a field moves the pin; the geocoder box
-  queries `/api/map/r/:repoId/geocode` (debounced, Enter or button), a result click places the
-  pin and fills the name when it is empty; `invalidateSize()` once the modal is visible. Alpine's
-  `x-trap` must not swallow map keyboard handling: the map container gets `tabindex="-1"`.
-- Not a menu action: editing a Location's pin after creation is not in D9 and is listed under
-  *Not in this phase*.
+**Done 2026-09-13** through [locations-category-and-pin-editor.md](done/locations-category-and-pin-editor.md), reshaped: the
+coordinates are never typed (hidden inputs plus a read-only readout under the map), radius is gone, and "parent" is
+"Category" everywhere. `views/AGENTS.md` **Location pin editor** describes what was built.
 
 ## Unit 9 — Docs and verification
 
@@ -546,7 +531,7 @@ Docs (anti-drift rule)
   map fragment and panel, the layout persistence, `.result-group`, duplicate cells in the
   Location grid, the location editor modal.
 - `static/js/lib/README.md`: Leaflet and supercluster rows. `CONTEXT.md`: **Location**,
-  **Parent**, **Plotted point**. `docs/test-coverage.md`: rows for the new suites.
+  **Category**, **Plotted point**. `docs/test-coverage.md`: rows for the new suites.
 - `plans/locations-and-map-view.md`: status line points here; §7 replaced by a link.
 
 Verification
@@ -562,10 +547,10 @@ Verification
 |---|---|
 | Locations tab, empty | centered "Add location" only; the modal opens with the map |
 | Add a Location by clicking the map, then by typing coordinates, then via the geocoder (enabled in `application-dev.conf`) | pin and fields stay in sync; validation errors keep the values; the list shows it |
-| Add a parent; move a Location under it via the menu; rename; delete the parent | the Location returns to root; names are unique across kinds (error in place) |
+| Add a category; move a Location under it via the menu; rename; delete the category | the Location returns to root; names are unique across kinds (error in place) |
 | Drop one asset, then a selection, onto a Location; footer "Add to location (n)" | counts update; "Already in location" on a repeat |
 | Click a Location | grid scoped, row marked green, URL carries `locationId`, footer offers "Remove from location" |
-| Group by Location | headers `Parent › Location`, an asset in two Locations appears twice, "No location" last, selecting a header selects its cells, recycling a duplicated asset removes both cells and fixes both counts, infinite scroll continues within and across groups |
+| Group by Location | headers `Category › Location`, an asset in two Locations appears twice, "No location" last, selecting a header selects its cells, recycling a duplicated asset removes both cells and fixes both counts, infinite scroll continues within and across groups |
 | Layout → map | toolbar stays, Group disabled, map fits the results, tiles load, pins render on a blank canvas when tiles are blocked (D17) |
 | Zoom in/out, pan | cells re-request and merge; single-asset pins show thumbnails; Location pins are distinct |
 | Click a single pin | asset detail modal |
@@ -582,9 +567,9 @@ Verification
 - Editing a Location's pin or radius after creation; auto-assignment by radius (D4).
 - Backfilling coordinates for already-imported assets (D5); `GeoLocationResolver` replays from
   `extracted_metadata`, so a later `AssetService.resolveMissingCoordinates` needs no file reads.
-- Scoping the grid by a parent (all its Locations at once).
+- Scoping the grid by a category (all its Locations at once).
 - Dragging a pin's asset from the map onto a Location row (the panel covers it).
-- Re-parenting a Location by dragging its row onto a parent (D9 mentions it; the Move to parent dialog covers it).
+- Re-categorying a Location by dragging its row onto a category (D9 mentions it; the Move to category dialog covers it).
 - Self-hosted tiles: the tile URL is config, but `StaticController` has no `Range` support for
   PMTiles.
 - Prev/next in the asset detail modal opened from a map pin (no grid to walk).

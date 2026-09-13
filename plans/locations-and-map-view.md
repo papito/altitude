@@ -1,7 +1,7 @@
 # Locations + Map View — library options and decisions
 
 Status: **decisions made 2026-09-13 (§6). The implementation plan is
-[locations-and-map-view-implementation.md](locations-and-map-view-implementation.md) (Units 1–6 done, the rest not started).**
+[locations-and-map-view-implementation.md](locations-and-map-view-implementation.md) (Units 1–6 and 8 done; 7 and 9 not started). Revised 2026-09-13 by [locations-category-and-pin-editor.md](done/locations-category-and-pin-editor.md): parents are Categories, radius is gone, the pin is placed on a map.**
 
 Written 2026-09-13. Versions below were checked against GitHub releases / npm on that date.
 
@@ -175,15 +175,15 @@ map), a `Range`-capable static route in Cask, and a regional `.pmtiles` extract 
 Answered via structured questions; the recommended option was taken unless noted.
 
 ### Data model
-- **D1 Parents** are named containers with no pin and no direct assets. **One uniqueness
-  pool** per repository: a parent and a Location cannot share a name (`name_lc` unique across
+- **D1 Categories** (called parents until 2026-09-13) are named containers with no pin and no direct assets. **One uniqueness
+  pool** per repository: a category and a Location cannot share a name (`name_lc` unique across
   both). Implementation choice for the plan: one `location` table with a nullable
-  `parent_id` and a `kind` (`parent` | `location`) discriminator, or two tables with a shared
+  `category_id` and a `kind` (`category` | `location`) discriminator, or two tables with a shared
   uniqueness check. Decide in the plan.
-- **D2 Deleting a non-empty parent** moves its Locations to root.
-- **D3 Drop targets** are Location rows only. Parents are not drop targets.
-- **D4 Location = pin + optional radius.** Nullable `radius_m` stored now; **no
-  auto-assignment** in this phase.
+- **D2 Deleting a non-empty category** moves its Locations to root.
+- **D3 Drop targets** are Location rows only. Categories are not drop targets.
+- **D4 Location = pin.** *(Revised 2026-09-13: radius removed as a concept; there is no
+  auto-assignment rule without it.)*
 - **D5 Asset coordinates: parse on import only.** *(Not the recommended option.)* Nullable
   `latitude`/`longitude` on `asset`, filled in `ExtractMetadataFlow` from
   metadata-extractor's `GpsDirectory.getGeoLocation()`. No backfill action; existing assets
@@ -195,21 +195,22 @@ Answered via structured questions; the recommended option was taken unless noted
 - **D7 Group by Location, multi-membership:** an asset appears under **every** Location it
   belongs to (row = asset × Location; group counts may sum to more than the result total).
   A **"No location"** group comes last.
-- **D8 Group dropdown** gains one option, *Location*. Groups are ordered by parent name,
-  then Location name; the header reads `Parent › Location` when a parent exists, otherwise
-  just the Location name. Grouping by parent is not offered.
+- **D8 Group dropdown** gains one option, *Location*. Groups are ordered by category name,
+  then Location name; the header reads `Category › Location` when a category exists, otherwise
+  just the Location name. Grouping by category is not offered.
 
 ### Menus and dialogs
-- **D9 Menus.** Location row ⋯ menu: **Rename, Delete, Move to parent** (dialog with a
-  parent dropdown; drag between parents also works). Parent row ⋯ menu: **Rename, Delete**.
+- **D9 Menus.** Location row ⋯ menu: **Rename, Delete, Move to category** (dialog with a
+  category dropdown; drag between categories also works). Category row ⋯ menu: **Rename, Delete**.
   **Add to Location** lives on the **asset context menu and batch ops**, opening a dialog
-  with a `[Parent] - Location` dropdown (parent omitted when absent).
+  with a `[Category] - Location` dropdown (category omitted when absent).
 - **D10 Crowded pin.** Pin = stacked thumbnail + count badge. Click zooms to the cluster's
   expansion zoom when it would split; at max zoom or identical coordinates it opens a
   **side panel with a paged thumbnail grid**, which offers **"show only these in the grid"**
   (uses the `locationId` filter from D18 or a bbox filter).
 - **D11 Add Location modal.** Large modal with the map, click-to-place and draggable pin,
-  **editable lat/lng fields**, name, parent dropdown, optional radius. Plus a
+  a **read-only coordinate readout** (revised 2026-09-13: the pin is never typed; the coordinates
+  travel in hidden inputs), name, Category dropdown. Plus a
   **place-name search box** backed by an external geocoder (Nominatim or Photon),
   **config-gated** (off by default; documents the privacy trade-off). "Create Location from
   this photo" was **not** selected.
@@ -248,6 +249,6 @@ Expanded on 2026-09-13 into
 (schema and GPS import, Location model/DAO/service, search filters and Group by Location, map
 queries and geocoder, routes, Locations tab, map view, Add Location modal, docs). That document
 also records the choices this one left open (D1: one `location` table with `kind` and
-`parent_id`) and the deviations it needed: `view=map` becomes `layout=map` because `view` already
+`category_id`) and the deviations it needed: `view=map` becomes `layout=map` because `view` already
 names the asset state; the per-asset context menu of D9 is deferred (none exists); the crowded-pin
 panel is a `bbox`-scoped search rather than a client-side leaf walk; supercluster is ISC-licensed.
