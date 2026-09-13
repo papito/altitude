@@ -1,3 +1,4 @@
+import { bindAssetDragDrop } from "./assets.js"
 import { bindBatchOpsDragDrop } from "./batch-ops.js"
 import { bindPeopleDragDrop } from "./people.js"
 import { bindFolderDragDrop } from "./folders.js"
@@ -11,8 +12,11 @@ export function bindAppDragDrop(app) {
     // (pre-scroll) bounding rectangles.
     interact.dynamicDrop(true)
 
-    bindBatchOpsDragDrop({ Alpine: app.Alpine })
-    bindPeopleDragDrop({ dispatch: app.dispatch.bind(app) })
-    bindFolderDragDrop({ dispatch: app.dispatch.bind(app) })
-    bindAlbumDragDrop({ dispatch: app.dispatch.bind(app) })
+    const dispatch = app.dispatch.bind(app)
+
+    bindAssetDragDrop({ dispatch })
+    bindBatchOpsDragDrop()
+    bindPeopleDragDrop({ dispatch })
+    bindFolderDragDrop({ dispatch })
+    bindAlbumDragDrop({ dispatch })
 }

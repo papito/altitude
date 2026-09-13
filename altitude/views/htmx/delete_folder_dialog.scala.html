@@ -9,8 +9,8 @@
 <div id="deleteFolder"
      data-app-fragment="inline-dialog"
      data-app-dialog-return-focus="#folderMenuCtrl-@{folder.parentId}"
-     data-app-dialog-success-event="folderDeleted"
-     data-app-dialog-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'>
+     data-app-success-event="FOLDER_DELETED_EVENT"
+     data-app-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'>
 
     <h3 class="dialog-title">@{title}</h3>
 

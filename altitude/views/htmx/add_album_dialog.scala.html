@@ -11,7 +11,7 @@
       id="addAlbum"
       data-app-fragment="inline-dialog"
       data-app-dialog-autofocus-selector="#field@{ Api.Field.Album.NAME }"
-      data-app-dialog-success-event="albumAdded"
+      data-app-success-event="ALBUM_ADDED_EVENT"
       hx-target="this"
       hx-swap="none"
       hx-post="/htmx/album/r/@{RequestContext.getRepository.persistedId}/add"

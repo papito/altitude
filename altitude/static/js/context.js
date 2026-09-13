@@ -1,13 +1,14 @@
+import { Alpine } from "./lib/alpine.esm.min.js"
 import { Const } from "./constants.js"
 
 /**
- * This module is used to store the context of the current user request.
+ * The context of the current page: the repository being browsed and the user's grid settings.
  *
- * he parent template can set the context as shown below:
+ * The page template sets the repository once, at load, from the request:
  *
- * <script type="module">
- *      window.ctx.setRepoId("<%= RequestContext.getRepository.persistedId %>")
- * </script>
+ *     window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+ *
+ * It cannot change without a full page load, so no partial needs to set it again.
  */
 export const context = {
     setRepoId: function (repoId) {
@@ -32,41 +33,51 @@ export const context = {
         return Alpine.store(Const.state.searchParams).albumId
     },
 
+    /**
+     * Seeds the grid-visible metadata fields from localStorage, where they are kept as a JSON array
+     * of field names. A value saved by an earlier version as a comma-separated list still loads.
+     */
     loadMetadataFieldViewSettingsFromStore: function () {
-        // localStorage stores the grid-visible metadata fields as a comma-separated list
-        const savedGridMetadataFields = localStorage.getItem(
-            Const.localStore.gridMetadataFields,
-        )
-        if (!savedGridMetadataFields || savedGridMetadataFields.length === 0) {
+        const saved = localStorage.getItem(Const.localStore.gridMetadataFields)
+        if (!saved) {
             return
         }
 
-        const fieldNames = savedGridMetadataFields?.split(",")
-        const cache = new Set(fieldNames)
-        Alpine.store(Const.context.gridMetadataFields, cache)
+        let fieldNames
+        try {
+            fieldNames = JSON.parse(saved)
+        } catch {
+            fieldNames = saved.split(",")
+        }
+
+        if (!Array.isArray(fieldNames)) {
+            return
+        }
+
+        const fields = this.getGridMetadataFields()
+        fields.clear()
+        fieldNames.filter(Boolean).forEach((name) => fields.add(name))
     },
 
+    /** The reactive set of field names shown under every grid cell */
     getGridMetadataFields: function () {
-        return Alpine.store(Const.context.gridMetadataFields) || new Set()
+        return Alpine.store(Const.context.gridMetadataFields)
     },
 
     addGridMetadataField: function (fieldName) {
-        const cache = this.getGridMetadataFields()
-        cache.add(fieldName)
-        Alpine.store(Const.context.gridMetadataFields, cache)
+        this.getGridMetadataFields().add(fieldName)
         this.persistGridMetadataFields()
     },
 
     removeGridMetadataField: function (fieldName) {
-        const cache = this.getGridMetadataFields()
-        cache.delete(fieldName)
-        Alpine.store(Const.context.gridMetadataFields, cache)
+        this.getGridMetadataFields().delete(fieldName)
         this.persistGridMetadataFields()
     },
 
     persistGridMetadataFields: function () {
-        const cache = this.getGridMetadataFields()
-        const serialized = Array.from(cache).join(",")
-        localStorage.setItem(Const.localStore.gridMetadataFields, serialized)
+        localStorage.setItem(
+            Const.localStore.gridMetadataFields,
+            JSON.stringify(Array.from(this.getGridMetadataFields())),
+        )
     },
 }

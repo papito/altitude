@@ -4,7 +4,7 @@
  * closes them goes through this class.
  *
  * A **branch** is a non-root folder with child folders. Only a branch ever carries the
- * `alt-expanded` state: root is always expanded and has no expansion gestures, and a leaf has
+ * `data-expanded` state: root is always expanded and has no expansion gestures, and a leaf has
  * nothing to expand, even when it holds assets.
  *
  * Reset invariant: collapsing a branch also collapses every descendant branch. A closed branch can
@@ -15,26 +15,28 @@
  * Expansion never changes which folders are highlighted as the viewed scope
  * (`common/viewed-folder-scope.js`): that follows the displayed search results.
  */
-import { closeOpenContextMenu } from "../common/context-menu.js"
+import { closeOpenContextMenu } from "../alpine/components/context-menu.js"
 import { Const } from "../constants.js"
 
 export class Folder {
-    constructor(id) {
-        if (!id) {
-            throw new Error("Folder id is required")
-        }
-        this.element = htmx.find("#folder-" + id)
+    /**
+     * The folder rendered as `#folder-<id>`, or null when the tree holds no such node: the node was
+     * removed by a rebuild mid-interaction, or the ID names a folder not in this tree at all.
+     */
+    static find(id) {
+        const element = id ? document.getElementById(`folder-${id}`) : null
 
-        if (!this.element) {
-            throw new Error("Folder element not found for id " + id)
-        }
-        this.id = id
+        return element ? new Folder(element) : null
+    }
+
+    constructor(element) {
+        this.element = element
+        this.id = element.dataset.folderId
         this.iconEl = htmx.find("#folder-icon-" + this.id)
         this.childrenEl = htmx.find("#children-" + this.id)
         // The branch control wrapping the icon; root has none
         this.expandCtrlEl = htmx.find("#expand-folder-children-" + this.id)
-        this.isRoot =
-            this.element.getAttribute(Const.attributes.isRoot) === "true"
+        this.isRoot = element.dataset.isRoot === "true"
     }
 
     folderNameEl() {
@@ -59,11 +61,9 @@ export class Folder {
         return !this.isRoot && this.numOfChildren() > 0
     }
 
+    /** The parent folder; null for root, which carries no parent attribute */
     parent() {
-        const parentId = this.element.getAttribute(
-            Const.attributes.parentFolderId,
-        )
-        return new Folder(parentId)
+        return Folder.find(this.element.dataset.parentFolderId)
     }
 
     /**
@@ -130,22 +130,16 @@ export class Folder {
     }
 
     /**
-     * Returns true if this folder is the same as, or a descendant of, the folder
-     * identified by ancestorId. Walks up the DOM via alt-parent-folder-id attributes.
-     * Returns false if ancestorId is not found in the ancestor chain (or the chain
-     * is broken by a missing DOM element).
+     * Whether this folder is the folder identified by `ancestorId` or one of its descendants,
+     * walking up the parent attributes until root, which has none.
      */
     isDescendantOrSelf(ancestorId) {
-        let currentId = this.id
-        while (currentId) {
-            if (currentId === ancestorId) return true
-            const el = document.getElementById("folder-" + currentId)
-            if (!el) return false
-            const parentId = el.getAttribute(Const.attributes.parentFolderId)
-            // root folder is its own parent — stop to avoid infinite loop
-            if (parentId === currentId) return false
-            currentId = parentId
+        for (let folder = this; folder; folder = folder.parent()) {
+            if (folder.id === ancestorId) {
+                return true
+            }
         }
+
         return false
     }
 
@@ -160,12 +154,12 @@ export class Folder {
                 `.folder[${Const.attributes.folderId}]`,
             ),
         )
-            .map((el) => new Folder(el.getAttribute(Const.attributes.folderId)))
+            .map((el) => new Folder(el))
             .filter((folder) => folder.isBranch())
     }
 
     /**
-     * The one place a branch's state changes: the `alt-expanded` flag, the visibility of its
+     * The one place a branch's state changes: the `data-expanded` flag, the visibility of its
      * children, its plus/minus glyph, and the `aria-expanded` of its control move together.
      */
     _setExpanded(expanded) {

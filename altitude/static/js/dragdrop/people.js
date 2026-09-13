@@ -4,7 +4,7 @@ import {
     dragMoveListener,
     dropzoneListeners,
     setFixedPositionWhileDragging,
-} from "../common/dragon-drop.js"
+} from "./helpers.js"
 
 export function bindPeopleDragDrop({ dispatch }) {
     interact("#people .drag-drop, #person .drag-drop").draggable({

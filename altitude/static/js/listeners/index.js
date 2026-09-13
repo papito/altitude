@@ -2,7 +2,8 @@ import { registerFolderListeners } from "./folders.js"
 import { registerAlbumListeners } from "./albums.js"
 import { registerPeopleListeners } from "./people.js"
 import { registerAssetListeners } from "./assets.js"
-import { registerHtmxAndSearchListeners } from "./htmx-search.js"
+import { registerSearchListeners } from "./search.js"
+import { registerHtmxRequestListeners } from "./htmx-requests.js"
 import { registerDialogListeners } from "./dialogs.js"
 
 export function registerAppEventListeners(app) {
@@ -10,6 +11,7 @@ export function registerAppEventListeners(app) {
     registerAlbumListeners(app)
     registerPeopleListeners(app)
     registerAssetListeners(app)
-    registerHtmxAndSearchListeners(app)
+    registerSearchListeners(app)
+    registerHtmxRequestListeners(app)
     registerDialogListeners(app)
 }

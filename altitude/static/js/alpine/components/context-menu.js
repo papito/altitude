@@ -2,7 +2,7 @@
  * Alpine coordination for a folder's or an album's native popover menu.
  *
  * The component root is the `.menu-ctrl` cell (or the Add album `.dialog-trigger-ctrl`) built by
- * `common/context-menu.js`: it holds the trigger (`x-ref="trigger"`, opening the panel with
+ * `common/context-menu-markup.js`: it holds the trigger (`x-ref="trigger"`, opening the panel with
  * `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
  * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
  * siblings: opening one closes any other, exactly as required.
@@ -18,9 +18,60 @@
  * the panel's height), the switch between actions and dialog, dismissal when keyboard focus
  * leaves, dismissal on scroll or resize, and cleanup. Escape is handled once for the whole
  * document in `global.js`.
+ *
+ * Callers outside the component that must close a menu (that Escape handler, the folder model when
+ * an ancestor collapses, the modal owner, an inline dialog that completed its operation) go through
+ * `closeContextMenu()` / `closeOpenContextMenu()` below. Because at most one auto popover of this
+ * kind is open at a time, "the open menu" is a single panel. The menu markup itself is built by
+ * `common/context-menu-markup.js`.
  */
-import { closeContextMenu } from "../../common/context-menu.js"
 
+const OPEN_MENU_SELECTOR = ".context-menu:popover-open"
+
+/** The ⋯ control that opens `panel`: the button in the same menu cell that targets it. */
+export function getContextMenuTrigger(panel) {
+    return panel.parentElement?.querySelector(`[popovertarget="${panel.id}"]`)
+}
+
+/**
+ * Hides `panel` if it is open, optionally moving focus to `focusTarget`, by default the panel's
+ * trigger (a completed dialog operation names the control that survives it instead). Returns
+ * whether a menu was closed. `reason` is logged so a surprising dismissal can be traced.
+ */
+export function closeContextMenu(
+    panel,
+    { reason, returnFocus = false, focusTarget = null },
+) {
+    if (!panel?.matches(":popover-open")) {
+        return false
+    }
+
+    console.debug(`Closing context menu ${panel.id}: ${reason}`)
+
+    panel.hidePopover()
+
+    if (returnFocus) {
+        const target = focusTarget ?? getContextMenuTrigger(panel)
+        target?.focus()
+    }
+
+    return true
+}
+
+/**
+ * Closes the open context menu, if any, looking only inside `within`. Returns whether one was
+ * closed.
+ */
+export function closeOpenContextMenu({
+    reason,
+    returnFocus = false,
+    within = document,
+} = {}) {
+    return closeContextMenu(within.querySelector(OPEN_MENU_SELECTOR), {
+        reason,
+        returnFocus,
+    })
+}
 // Minimum distance kept between the panel and the viewport edges when it has to be shifted,
 // flipped, or shrunk
 const VIEWPORT_GAP = 8

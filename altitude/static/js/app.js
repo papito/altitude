@@ -1,11 +1,12 @@
 import { Alpine } from "./lib/alpine.esm.min.js"
-import focus from "./lib/alpine-focus.esm.js"
+import focusPlugin from "./lib/alpine-focus.esm.js"
 import { context } from "./context.js"
 import { FrontendApp } from "./frontend-app.js"
 
 // `x-trap` for the modal hosts; plugins must be registered before Alpine starts
-Alpine.plugin(focus)
+Alpine.plugin(focusPlugin)
 
+// Templates reach Alpine and the context by name (`$store` bindings, `window.ctx.setRepoId`)
 window.Alpine = Alpine
 window.ctx = context
 
@@ -17,7 +18,7 @@ export function initApp() {
     console.debug("Initializing...")
 
     if (!frontendApp) {
-        frontendApp = new FrontendApp({ Alpine, context })
+        frontendApp = new FrontendApp({ context })
     }
 
     return frontendApp.start()

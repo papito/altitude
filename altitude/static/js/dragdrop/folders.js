@@ -1,9 +1,5 @@
 import { Const } from "../constants.js"
-import {
-    dragged,
-    dragMoveListener,
-    dropzoneListeners,
-} from "../common/dragon-drop.js"
+import { dragged, dragMoveListener, dropzoneListeners } from "./helpers.js"
 
 export function bindFolderDragDrop({ dispatch }) {
     interact("#rootFolderList .drag-drop").draggable({

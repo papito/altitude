@@ -34,7 +34,7 @@
     }
 
     #faceSelector .faces img:hover {
-        border: 1px solid var(--warning-font-color)
+        border: 1px solid var(--warning-font-color);
         cursor: pointer;
     }
 </style>
@@ -42,9 +42,9 @@
 <div id="faceSelector"
      data-app-fragment="modal"
      data-app-modal-title="@{title}"
-     data-app-dialog-success-event="personCoverFaceSet"
-     data-app-dialog-success-detail='{"@{ Api.Field.PERSON_ID }":"@{ person.persistedId }"}'
-     data-app-dialog-success-detail-target-attr-face-id="alt-face-id">
+     data-app-success-event="PERSON_COVER_FACE_SET_EVENT"
+     data-app-success-detail='{"@{ Api.Field.PERSON_ID }":"@{ person.persistedId }"}'
+     data-app-success-detail-target-attr-face-id="data-face-id">
     <div class="info">
         <div>
             Best faces for <strong>@{person.name}</strong>
@@ -55,7 +55,7 @@
         @for(face <- faces) {
             <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{face.persistedId}"
                  alt="Face option for @{person.name}"
-                 alt-face-id="@{face.persistedId}"
+                 data-face-id="@{face.persistedId}"
                  hx-swap="innerHTML"
                  hx-target="#person"
                  hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/cover-image?@{Api.Field.FACE_ID}=@{face.persistedId}"

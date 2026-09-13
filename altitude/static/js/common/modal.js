@@ -21,7 +21,7 @@
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { closeOpenContextMenu } from "./context-menu.js"
+import { closeOpenContextMenu } from "../alpine/components/context-menu.js"
 
 export const ModalHost = {
     general: "general",

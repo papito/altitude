@@ -53,17 +53,27 @@ export function parseFragmentDetail(jsonValue) {
 }
 
 /**
- * Success-detail values read from attributes of the element that issued the request, declared as
- * `data-app-dialog-success-detail-target-attr-<detail key>="<attribute name>"` on the fragment.
+ * The success event an element declares for the requests issued from it, or null.
+ *
+ *   data-app-success-event="FOLDER_ADDED_EVENT"          the event name, verbatim (Const.events)
+ *   data-app-success-detail='{"parentId": "..."}'         the detail, as JSON
+ *   data-app-success-detail-target-attr-face-id="data-face-id"
+ *                                                         a detail value read from an attribute of the
+ *                                                         element that issued the request (`sourceEl`)
+ *
+ * A dialog declares them on its fragment root, for every request submitted from it; a plain
+ * request element declares them on itself.
  */
-export function parseFragmentTargetDetail(
-    fragmentEl,
-    sourceEl,
-    keyPrefix = "appDialogSuccessDetailTargetAttr",
-) {
-    const detail = {}
+export function readSuccessEvent(el, sourceEl) {
+    const name = el?.dataset.appSuccessEvent
+    if (!name) {
+        return null
+    }
 
-    Object.entries(fragmentEl.dataset).forEach(([key, value]) => {
+    const detail = parseFragmentDetail(el.dataset.appSuccessDetail)
+    const keyPrefix = "appSuccessDetailTargetAttr"
+
+    Object.entries(el.dataset).forEach(([key, attributeName]) => {
         if (!key.startsWith(keyPrefix)) {
             return
         }
@@ -71,11 +81,14 @@ export function parseFragmentTargetDetail(
         const detailKey = datasetKeySuffixToDetailKey(
             key.slice(keyPrefix.length),
         )
+        const value = sourceEl?.getAttribute?.(attributeName)
 
-        detail[detailKey] = sourceEl?.getAttribute?.(value) ?? detail[detailKey]
+        if (value !== null && value !== undefined) {
+            detail[detailKey] = value
+        }
     })
 
-    return detail
+    return { name, detail }
 }
 
 export function datasetKeySuffixToDetailKey(keySuffix) {

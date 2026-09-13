@@ -12,8 +12,8 @@
       data-app-dialog-autofocus-selector="#field-@{ Api.Field.Album.NAME }"
       data-app-dialog-select-on-focus="true"
       data-app-dialog-return-focus="#albumMenuCtrl-@{id}"
-      data-app-dialog-success-event="albumRenamed"
-      data-app-dialog-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
+      data-app-success-event="ALBUM_RENAMED_EVENT"
+      data-app-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
       hx-target="this"
       hx-swap="none"
       hx-put="/htmx/album/r/@{RequestContext.getRepository.persistedId}/rename"

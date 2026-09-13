@@ -29,7 +29,7 @@ const RESERVED_KEYS = new Set([
     FROM_VALUE_KEY,
     FROM_SELECTED_OPTION_KEY,
     BOUND_KEY,
-    // The last cell's continuation, read by the infinite-scroll observer (js/fragments/search-results.js)
+    // The last cell's continuation, read by the infinite-scroll observer (js/search-results/infinite-scroll.js)
     "appSearchNextPage",
     "appSearchAfter",
 ])

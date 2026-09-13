@@ -74,12 +74,22 @@ page size, and is never continued by page number (`core/util/SearchQuery.scala`)
 
 ## One statement per page
 
-`SearchQueryBuilder.buildGroupedSearchSql`
-(`core/dao/jdbc/querybuilder/SearchQueryBuilder.scala`) emits a single statement
-that yields the page's rows, each day's **full** match count, and — on a first
-page only — the count of all matches. Every branch reuses the exact same
-`FROM` / `WHERE` / `GROUP BY` / `HAVING`, so the counts can never drift from the
-rows they describe.
+`SearchQueries.grouped` (`core/dao/sql/search/SearchQueries.scala`) emits a
+single statement that yields the page's rows, each day's **full** match count,
+and — on a first page only — the count of all matches.
+
+It is a hybrid. Every branch renders the same typed relation,
+`SearchQueries.matching` (repository, view flags, pipeline completion, and the
+request's text / folder / person / album / metadata filters as semi-joins on
+`asset.id`), so the counts can never drift from the rows they describe and every
+bind value travels with the fragment that needs it. The `WITH` shell around them
+is hand-written, because none of what makes it fast — `MATERIALIZED`, the
+guarded `LIMIT CASE` on the trailing null slice, SQLite's planner hint, native
+null placement — can be expressed as a typed query.
+
+ScalaSql aliases a table as `asset0` and names a projection's columns `res_0`,
+`res_1`, `res_2`; each CTE renames them with a column list of its own, which is
+why the candidate relations read `candidates (id, day, sort_value)`.
 
 ### PostgreSQL
 
@@ -87,82 +97,116 @@ Group by day taken descending, sort by filename ascending, 50 per page, first
 page:
 
 ```sql
-WITH candidates AS MATERIALIZED (
-  SELECT asset.id AS id, asset.original_created_at::date AS day, asset.filename AS sort_value
-    FROM asset
-   WHERE asset.repository_id = ? AND asset.is_recycled = ? AND asset.is_pipeline_processed = ?
-   ORDER BY asset.original_created_at::date DESC, asset.filename ASC, asset.id ASC
+WITH candidates (id, day, sort_value) AS MATERIALIZED (
+  SELECT asset0.id AS res_0, asset0.original_created_at::date AS res_1, asset0.filename AS res_2
+    FROM asset asset0
+   WHERE ((asset0.repository_id = ?) AND (asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ?
+   ORDER BY asset0.original_created_at::date DESC, asset0.filename ASC, asset0.id ASC
    LIMIT 51                       -- one past the page: the "is there more" probe
-), page AS MATERIALIZED (
+), page (id, day, sort_value) AS MATERIALIZED (
   SELECT id, day, sort_value FROM candidates
    ORDER BY day DESC, sort_value ASC, id ASC
    LIMIT 50
 ), day_counts AS MATERIALIZED (
   SELECT p.day AS day,
          (SELECT count(*) FROM (
-            SELECT asset.id FROM asset
-             WHERE asset.repository_id = ? AND asset.is_recycled = ? AND asset.is_pipeline_processed = ?
-               AND asset.original_created_at::date = p.day) AS m) AS n
-    FROM (SELECT DISTINCT day FROM page) AS p
+            SELECT asset0.id FROM asset asset0
+             WHERE ((asset0.repository_id = ?) AND (asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ?
+               AND asset0.original_created_at::date = p.day) AS m) AS n
+    FROM (SELECT DISTINCT day FROM page WHERE day IS NOT NULL) AS p
+   UNION ALL                      -- the undated group is probed with IS NULL, so both probes stay on the day index
+  SELECT p.day AS day,
+         (SELECT count(*) FROM (
+            SELECT asset0.id FROM asset asset0
+             WHERE ((asset0.repository_id = ?) AND (asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ?
+               AND asset0.original_created_at::date IS NULL) AS m) AS n
+    FROM (SELECT DISTINCT day FROM page WHERE day IS NULL) AS p
 ), total AS MATERIALIZED (
   SELECT count(*) AS n FROM (
-    SELECT asset.id FROM asset
-     WHERE asset.repository_id = ? AND asset.is_recycled = ? AND asset.is_pipeline_processed = ?) AS m
+    SELECT asset0.id FROM asset asset0
+     WHERE ((asset0.repository_id = ?) AND (asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ?) AS m
 )
-SELECT asset.*, p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
+SELECT asset.id, asset.repository_id, ..., p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
        (SELECT count(*) FROM candidates) AS candidate_count, t.n AS total
   FROM page AS p
        JOIN asset ON asset.id = p.id
-       LEFT JOIN day_counts AS d ON d.day = p.day
+       LEFT JOIN day_counts AS d ON d.day = p.day OR (d.day IS NULL AND p.day IS NULL)
        CROSS JOIN total AS t
  ORDER BY p.day DESC, p.sort_value ASC, p.id ASC;
 ```
 
+The outer `SELECT` names the asset columns in the order `AssetRow` declares
+them, because the row is read back positionally.
+
 The `WHERE` above is the minimum. A real search appends whatever the request
-carried, identically in every branch: full-text (`search_document.tsv @@
-to_tsquery(?)`), folder / person / album `IN` filters, and user-metadata filters
-with their `GROUP BY` + `HAVING count(...) >= n`.
+carried, identically in every branch, and always as a semi-join on `asset.id`:
+
+```sql
+   AND asset0.id IN (SELECT search_document1.asset_id FROM search_document search_document1
+                      WHERE search_document1.repository_id = ? AND tsv @@ to_tsquery(?))
+   AND asset0.id IN (SELECT metadata_parameter1.asset_id FROM metadata_parameter metadata_parameter1
+                      WHERE metadata_parameter1.repository_id = ?
+                        AND ((metadata_parameter1.field_id = ? AND metadata_parameter1.field_value_kw = ?) OR ...)
+                      GROUP BY metadata_parameter1.asset_id HAVING COUNT(1) >= ?)
+```
+
+An asset carrying `n` of the requested metadata values has `n` matching
+parameter rows, so the counting lives inside that subquery. Nothing is joined
+into the outer query, which therefore reads `FROM asset` alone and needs no
+`GROUP BY` of its own and no deduplication.
 
 ### SQLite
 
-Same skeleton; two engine-specific twists, and this one is a *continuation*
-page (reached by cursor), so it also shows the cursor predicate and the missing
-`total`:
+Same skeleton; two engine-specific twists, and this one is a *continuation* page
+(reached by cursor) that crosses from the dated days into the trailing "No date"
+group, so it also shows the cursor predicate, the guarded second slice, and the
+missing `total`:
 
 ```sql
-WITH candidates AS MATERIALIZED (
-  SELECT asset.id AS id, date(asset.original_created_at) AS day, asset.filename AS sort_value
-    FROM asset
-   WHERE asset.repository_id = ? AND asset.is_recycled = ? AND asset.is_pipeline_processed = ?
-     AND date(asset.original_created_at) <= ?          -- redundant bound; lets the day index seek
-     AND (date(asset.original_created_at) < ?
-          OR (asset.filename > ? OR (asset.filename = ? AND asset.id > ?)))
-   ORDER BY date(asset.original_created_at) DESC, +asset.filename ASC, asset.id ASC
+WITH dated (id, day, sort_value) AS MATERIALIZED (
+  SELECT asset0.id AS res_0, date(asset0.original_created_at) AS res_1, asset0.filename AS res_2
+    FROM asset asset0
+   WHERE ((asset0.repository_id = ?) AND (asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ?
+     AND date(asset0.original_created_at) <= ?          -- redundant bound; lets the day index seek
+     AND (date(asset0.original_created_at) < ?
+          OR (asset0.filename > ? OR (asset0.filename = ? AND asset0.id > ?)))
+   ORDER BY date(asset0.original_created_at) DESC, +asset0.filename ASC, asset0.id ASC
    LIMIT 51
-), page AS MATERIALIZED (
+), undated (id, day, sort_value) AS MATERIALIZED (
+  SELECT asset0.id AS res_0, date(asset0.original_created_at) AS res_1, asset0.filename AS res_2
+    FROM asset asset0
+   WHERE ((asset0.repository_id = ?) AND (asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ?
+     AND date(asset0.original_created_at) IS NULL
+   ORDER BY date(asset0.original_created_at) DESC, +asset0.filename ASC, asset0.id ASC
+   LIMIT CASE WHEN (SELECT count(*) FROM dated) > 50 THEN 0 ELSE 51 END
+), candidates (id, day, sort_value) AS MATERIALIZED (
+  SELECT id, day, sort_value FROM dated UNION ALL SELECT id, day, sort_value FROM undated
+), page (id, day, sort_value) AS MATERIALIZED (
   SELECT id, day, sort_value FROM candidates
    ORDER BY day DESC, sort_value ASC, id ASC
    LIMIT 50
 ), day_counts AS MATERIALIZED (
-  SELECT p.day AS day,
-         (SELECT count(*) FROM (
-            SELECT asset.id FROM asset
-             WHERE asset.repository_id = ? AND asset.is_recycled = ? AND asset.is_pipeline_processed = ?
-               AND date(asset.original_created_at) = p.day) AS m) AS n
-    FROM (SELECT DISTINCT day FROM page) AS p
+  ...                                                    -- as above, with date(col) for col::date
 )
-SELECT asset.id, asset.filename, ..., p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
+SELECT asset.id, asset.repository_id, ..., p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
        (SELECT count(*) FROM candidates) AS candidate_count
   FROM page AS p
        JOIN asset ON asset.id = p.id
-       LEFT JOIN day_counts AS d ON d.day = p.day
+       LEFT JOIN day_counts AS d ON d.day = p.day OR (d.day IS NULL AND p.day IS NULL)
  ORDER BY p.day DESC, p.sort_value ASC, p.id ASC;
 ```
 
-- **`+asset.filename`** — the unary plus keeps the term from matching any index.
+- **`+asset0.filename`** — the unary plus keeps the term from matching any index.
   Without it SQLite's planner is tempted away from the day index by an indexable
   sort term, and then sorts every matching row. PostgreSQL needs no such hint
-  (`secondarySortExpression` is overridden per engine).
+  (`SearchDialect.secondarySort` is overridden per engine).
+- **The guarded `undated` slice.** A day range never reaches NULL, so a
+  continuation that crosses into the trailing null group needs a second slice.
+  Its guard lives in `LIMIT`, not in `WHERE`: SQLite short-circuits a zero limit,
+  but would scan the null block for a `WHERE` guard. It is emitted only when the
+  engine puts nulls *last* for the grouping direction and the cursor is still on
+  a dated day — on the other three combinations there is a single `candidates`
+  slice.
 - **Nullable import times.** SQLite's `created_at` can be null on legacy rows.
   Nothing groups by it, but it is a valid *sort* column, so `isNullableTimestamp`
   still lists it: the cursor comparison has to honor where SQLite places those
@@ -327,8 +371,9 @@ flat structure that lets a continued day append cells with no header.
 | Cursor, scope fingerprint | `core/util/SearchCursor.scala` |
 | Typed sort key | `core/util/SortValue.scala` |
 | Page rows → groups | `core/util/GroupedSearchResult.scala` |
-| The grouped statement | `core/dao/jdbc/querybuilder/SearchQueryBuilder.scala` |
-| Engine specifics | `core/dao/{postgres,sqlite}/querybuilder/AssetSearchQueryBuilder.scala` |
+| The grouped statement, the matching relation | `core/dao/sql/search/SearchQueries.scala` |
+| Engine specifics | `core/dao/sql/search/{Postgres,Sqlite}SearchDialect.scala` |
+| Row classes, type mappers | `core/dao/sql/tables/`, `core/dao/sql/dialects/` |
 | Row reading, typed columns | `core/dao/jdbc/BaseDao.scala`, `{Postgres,Sqlite}Overrides.scala` |
 | Cursor scope check, folder expansion | `core/service/LibraryService.scala` |
 | Group assembly, next cursor | `core/service/SearchService.scala` |
@@ -337,5 +382,6 @@ flat structure that lets a continued day append cells with no header.
 | Client | `static/js/search-results/{search,search-triggers,date-groups}.js`, `static/js/alpine/components/date-group-selectable.js`, `static/js/stores/search-params.js`, `static/js/fragments/search-results.js` |
 
 Tests: `test/.../integration/SearchGroupingTests.scala`,
-`SearchCursorTests.scala`, `AssetDateStorageTests.scala`, and
-`controller/SearchResultsControllerTests.scala`.
+`SearchCursorTests.scala`, `AssetDateStorageTests.scala`,
+`controller/SearchResultsControllerTests.scala`, and `unit/SearchSqlTests.scala`
+for the emitted SQL.

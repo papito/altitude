@@ -1,3 +1,4 @@
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import {
@@ -7,15 +8,15 @@ import {
 } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
-import { notifyGridSelectionChanged } from "../alpine/components/selectable.js"
 
 export function createAssetActions({
-    Alpine,
     context,
     reloadNav,
     reloadFolderCounts,
     reloadAlbumCounts,
 }) {
+    const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
+
     // Every successful mutation refreshes the nav counts, the folder tree counts, and the album
     // counts (recycling drops an asset from its albums)
     function refreshCounts() {
@@ -31,7 +32,7 @@ export function createAssetActions({
                 continue
             }
 
-            cellEl.removeAttribute("alt-is-triaged")
+            delete cellEl.dataset.isTriaged
 
             const marker = cellEl.querySelector(".triage-marker")
             if (marker) {
@@ -77,7 +78,7 @@ export function createAssetActions({
         }
 
         if (removedCount > 0) {
-            notifyGridSelectionChanged()
+            selectedAssets().noteGridChange()
             Alpine.store(Const.state.resultsTotal).decrement(removedCount)
         }
     }
@@ -92,27 +93,26 @@ export function createAssetActions({
             return false
         }
 
-        try {
-            const destFolder = new Folder(destinationFolderId)
-            return !destFolder.isDescendantOrSelf(viewedFolderId)
-        } catch {
+        const destFolder = Folder.find(destinationFolderId)
+        if (!destFolder) {
             console.debug(
                 `Destination folder ${destinationFolderId} not in DOM, assuming outside viewed subtree`,
             )
             return true
         }
+
+        return !destFolder.isDescendantOrSelf(viewedFolderId)
     }
 
     function shouldResetSelectedAssets(assetIds) {
         return (
             assetIds.length > 1 ||
-            (assetIds.length === 1 &&
-                Alpine.store(Const.state.selectedAssets).contains(assetIds[0]))
+            (assetIds.length === 1 && selectedAssets().contains(assetIds[0]))
         )
     }
 
     async function moveAssets({ folderId, assetIds }) {
-        const newParentFolder = new Folder(folderId)
+        const newParentFolderName = Folder.find(folderId)?.name() ?? folderId
         const payload = { assetIds, folderId }
 
         // Runs in the same synchronous turn as the drop, before the drag
@@ -124,7 +124,7 @@ export function createAssetActions({
 
             const successMessage = `${
                 assetIds.length > 1 ? "Assets" : "Asset"
-            } moved to folder "${newParentFolder.name()}"`
+            } moved to folder "${newParentFolderName}"`
             showSuccessSnackBar(successMessage)
 
             removeTriageStyling(assetIds)
@@ -134,7 +134,7 @@ export function createAssetActions({
             }
 
             if (shouldResetSelectedAssets(assetIds)) {
-                Alpine.store(Const.state.selectedAssets).reset()
+                selectedAssets().reset()
             }
 
             refreshCounts()
@@ -165,7 +165,7 @@ export function createAssetActions({
             removeAssetsFromGrid(assetIds)
 
             if (shouldResetSelectedAssets(assetIds)) {
-                Alpine.store(Const.state.selectedAssets).reset()
+                selectedAssets().reset()
             }
 
             refreshCounts()
@@ -190,7 +190,7 @@ export function createAssetActions({
             showSuccessSnackBar(successMessage)
 
             removeAssetsFromGrid(assetIds)
-            Alpine.store(Const.state.selectedAssets).reset()
+            selectedAssets().reset()
             refreshCounts()
         } catch (error) {
             showErrorSnackBar(
@@ -224,7 +224,7 @@ export function createAssetActions({
             showSuccessSnackBar(successMessage)
 
             removeAssetsFromGrid(assetIds)
-            Alpine.store(Const.state.selectedAssets).reset()
+            selectedAssets().reset()
             refreshCounts()
         } catch (error) {
             showErrorSnackBar(
@@ -264,7 +264,7 @@ export function createAssetActions({
             }
 
             if (shouldResetSelectedAssets(assetIds)) {
-                Alpine.store(Const.state.selectedAssets).reset()
+                selectedAssets().reset()
             }
 
             reloadAlbumCounts()
@@ -289,7 +289,7 @@ export function createAssetActions({
             )
 
             removeAssetsFromGrid(assetIds)
-            Alpine.store(Const.state.selectedAssets).reset()
+            selectedAssets().reset()
             reloadAlbumCounts()
         } catch (error) {
             showErrorSnackBar(

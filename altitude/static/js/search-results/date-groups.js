@@ -1,5 +1,3 @@
-import { notifyGridSelectionChanged } from "../alpine/components/selectable.js"
-
 /**
  * The date headers of a grouped grid (`.date-group`, rendered by `htmx/results_grid_grouped.scala.html`
  * with the day's full match count in `.count`, across every page loaded or not). This is the one
@@ -40,23 +38,6 @@ export function decrementDateGroupOf(cellEl) {
  */
 function itemCountText(count) {
     return count === 1 ? "(1 item)" : `(${count} items)`
-}
-
-/**
- * A page appended by continuous scroll can land in a day whose header is already on screen, and
- * those cells arrive unselected: the header's checkbox has to recount. Bound once per displayed
- * grid, from the search results fragment hydrator.
- */
-export function bindDateGroupSelectionSync({ assetsElement }) {
-    if (assetsElement.dataset.appDateGroupSyncBound === "true") {
-        return
-    }
-
-    assetsElement.dataset.appDateGroupSyncBound = "true"
-
-    assetsElement.addEventListener("htmx:after:settle", () => {
-        notifyGridSelectionChanged()
-    })
 }
 
 function dateGroupOf(cellEl) {

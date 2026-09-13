@@ -11,8 +11,8 @@
       data-app-dialog-autofocus-selector="#field-@{ Api.Field.Folder.NAME }"
       data-app-dialog-select-on-focus="true"
       data-app-dialog-return-focus="#folderMenuCtrl-@{id}"
-      data-app-dialog-success-event="folderRenamed"
-      data-app-dialog-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
+      data-app-success-event="FOLDER_RENAMED_EVENT"
+      data-app-success-detail='{"@{ Api.Field.ID }":"@{ id }"}'
       hx-target="this"
       hx-swap="none"
       hx-put="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/rename"

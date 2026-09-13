@@ -10,7 +10,7 @@
  *   back to a full render when the list gained an album the DOM does not have.
  *   setViewedAlbum(albumId) — mark the album whose results are displayed (green icon).
  *
- * Each row shows: the album's ⋯ menu (Rename, Delete; built by `common/context-menu.js`), its
+ * Each row shows: the album's ⋯ menu (Rename, Delete; built by `common/context-menu-markup.js`), its
  * asset count (`.asset-count`, empty for zero; `common/asset-count.js`), an icon, and the name.
  * Icon and name are search triggers for the album; every row's `.controls` is a drop zone for
  * assets (`dragdrop/albums.js`). Albums are pointers only: nothing here moves or changes an asset.
@@ -22,7 +22,10 @@ import {
     setAssetCount,
     sizeCountColumn,
 } from "./asset-count.js"
-import { buildContextMenuCtrl, buildDialogTriggerCtrl } from "./context-menu.js"
+import {
+    buildContextMenuCtrl,
+    buildDialogTriggerCtrl,
+} from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
@@ -90,7 +93,7 @@ export async function refreshAlbumCounts(repoId) {
 let _viewedAlbumId = null
 
 /**
- * Records the album whose results are displayed and marks its row with `alt-viewed-scope`, which
+ * Records the album whose results are displayed and marks its row with `data-viewed-scope`, which
  * the CSS in `views/htmx/albums.scala.html` colors green. Null clears the marker. Like the viewed
  * folder scope, this follows the displayed results, never the search parameters.
  */

@@ -9,31 +9,21 @@
     padding: 0 var(--panel-padding);
 }
 
-[role="tablist"] a {
+/* TAB: the link itself, so the whole visual tab is the hit target */
+
+[role="tab"] {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.4em;
-    /* Padding lives here so the full visual tab area is a link hit-target */
     padding: 0.6em 0.8em;
-    color: inherit;
+    margin: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--faded-font-color);
     text-decoration: none;
     text-transform: capitalize;
     letter-spacing: 0.04em;
     white-space: nowrap;
-}
-
-/* TAB BUTTON */
-
-[role="tab"] {
-    position: relative;
-    /* No padding — the <a> inside carries it */
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    background: transparent;
-    color: var(--faded-font-color);
     cursor: pointer;
     font-size: 1em;
     transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -47,17 +37,10 @@
 
 /* ACTIVE TAB */
 
-[role="tab"][aria-selected="True"] {
+[role="tab"][aria-selected="true"] {
     color: #fff;
     border-bottom: 2px solid var(--success-font-color);
     background: transparent;
-    outline: 0;
-    border-radius: 0;
-}
-
-[role="tab"][aria-selected="True"]::before,
-[role="tab"][aria-selected="True"]::after {
-    display: none;
 }
 
 [role="tab"]:focus,

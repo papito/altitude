@@ -1,5 +1,5 @@
 import { Const } from "../constants.js"
-import { dropzoneListeners } from "../common/dragon-drop.js"
+import { dropzoneListeners } from "./helpers.js"
 
 /**
  * Album rows accept assets: a single thumbnail, or the batch mover when assets are selected.

@@ -78,52 +78,26 @@
     }
 </style>
 
+@* One request for the whole group: the checked radio's value is the filter (hx-include) *@
 <div id="peopleTypeFilter">
-    <div class="radio-group">
+    <div class="radio-group"
+         hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
+         hx-trigger="change"
+         hx-target="#explorerPanelContent"
+         hx-swap="innerHTML"
+         hx-include="[name='@{Api.Field.People.TYPE_FILTER}']:checked">
+        @for((value, label) <- Seq(
+            Const.PeopleTypeFilter.COMPLETE -> "Verified",
+            Const.PeopleTypeFilter.HIDDEN -> "Hidden",
+            Const.PeopleTypeFilter.INCOMPLETE -> "Unverified",
+            Const.PeopleTypeFilter.ALL -> "All")) {
         <label>
-            <input type="radio" @if(typeFilter == Const.PeopleTypeFilter.COMPLETE) {checked}
-                   name="peopleTypeFilter"
-                   value="@{Const.PeopleTypeFilter.COMPLETE}"
-                   hx-target="#explorerPanelContent"
-                   hx-trigger="change"
-                   hx-swap="innerHTML"
-                   hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-                   hx-vals='{"@{Api.Field.People.TYPE_FILTER}": "@{Const.PeopleTypeFilter.COMPLETE}"}'>
-            Verified
+            <input type="radio" @if(typeFilter == value) {checked}
+                   name="@{Api.Field.People.TYPE_FILTER}"
+                   value="@{value}">
+            @label
         </label>
-        <label>
-            <input type="radio" @if(typeFilter == Const.PeopleTypeFilter.HIDDEN) {checked}
-                   name="peopleTypeFilter"
-                   value="@{Const.PeopleTypeFilter.HIDDEN}"
-                   hx-target="#explorerPanelContent"
-                   hx-trigger="change"
-                   hx-swap="innerHTML"
-                   hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-                   hx-vals='{"@{Api.Field.People.TYPE_FILTER}": "@{Const.PeopleTypeFilter.HIDDEN}"}'>
-            Hidden
-        </label>
-        <label>
-            <input type="radio" @if(typeFilter == Const.PeopleTypeFilter.INCOMPLETE) {checked}
-                   name="peopleTypeFilter"
-                   value="@{Const.PeopleTypeFilter.INCOMPLETE}"
-                   hx-target="#explorerPanelContent"
-                   hx-trigger="change"
-                   hx-swap="innerHTML"
-                   hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-                   hx-vals='{"@{Api.Field.People.TYPE_FILTER}": "@{Const.PeopleTypeFilter.INCOMPLETE}"}'>
-            Unverified
-        </label>
-        <label>
-            <input type="radio" @if(typeFilter == Const.PeopleTypeFilter.ALL) {checked}
-                   name="peopleTypeFilter"
-                   value="@{Const.PeopleTypeFilter.ALL}"
-                   hx-target="#explorerPanelContent"
-                   hx-trigger="change"
-                   hx-swap="innerHTML"
-                   hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-                   hx-vals='{"@{Api.Field.People.TYPE_FILTER}": "@{Const.PeopleTypeFilter.ALL}"}'>
-            All
-        </label>
+        }
     </div>
 </div>
 
@@ -133,7 +107,7 @@
             @for(person <- people) {
             <div id="person-@{person.persistedId}"
                  class="cell drag-drop dropzone"
-                 alt-person-id="@{person.persistedId}">
+                 data-person-id="@{person.persistedId}">
                 <div class="image">
                     <a href="#"
                        data-app-search="click"
@@ -149,7 +123,7 @@
                            }
                            data-app-search="click"
                            data-app-search-person-id="@{person.persistedId}">
-                            @{person.name.get} <span>(@{person.numOfFaces})</span>
+                            @{person.name.getOrElse("")} <span>(@{person.numOfFaces})</span>
                         </a>
                     </span>
                 </div>
@@ -159,12 +133,6 @@
     </div>
 </div>
 
-<script type="module">
-    import { selectTab } from "/static/js/common/navigation.js"
-
-    selectTab("explorer", "peopleTab")
-    window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
-</script>
 
 
 
