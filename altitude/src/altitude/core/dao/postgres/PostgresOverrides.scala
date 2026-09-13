@@ -11,7 +11,6 @@ import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
-import altitude.core.util.SortValue
 
 object PostgresOverrides:
   /**
@@ -61,18 +60,6 @@ trait PostgresOverrides:
       case instant: OffsetDateTime => Some(instant.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime)
       case timeStamp: java.sql.Timestamp => Some(timeStamp.toLocalDateTime)
       case other => throw IllegalArgumentException(s"Invalid type for date/time field: $other")
-
-  override protected def getDateField(value: AnyRef): Option[LocalDate] = Option(value.asInstanceOf[LocalDate])
-
-  override protected def getSortValueField(value: AnyRef): SortValue = value match
-    case null => SortValue.Null
-    case text: String => SortValue.Text(text)
-    case number: java.lang.Number => SortValue.Num(number.longValue)
-    case dateTime: LocalDateTime => SortValue.LocalTimestamp(dateTime)
-    case instant: OffsetDateTime => SortValue.UtcInstant(instant)
-    case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
-
-  def count(recs: List[Map[String, AnyRef]]): Int = if recs.nonEmpty then recs.head("total").asInstanceOf[Long].toInt else 0
 
   override protected def getBooleanField(value: AnyRef): Boolean = value.asInstanceOf[Boolean]
 

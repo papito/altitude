@@ -1,6 +1,5 @@
 package altitude.core.dao.sqlite
 
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -11,7 +10,6 @@ import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
-import altitude.core.util.SortValue
 
 object SqliteOverrides:
   /** The stored DATETIME text format. Timestamps are wall-clock text: camera-local for capture times, UTC for import times. */
@@ -49,19 +47,6 @@ trait SqliteOverrides:
     if value.isEmpty || value.get == null then return None
 
     Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_PARSER))
-
-  // date() returns ISO text; it is never converted through a JVM zone
-  override protected def getDateField(value: AnyRef): Option[LocalDate] =
-    Option(value).map(v => LocalDate.parse(v.asInstanceOf[String]))
-
-  // Timestamps stay in their stored text form so a cursor compares them exactly as the column stores them
-  override protected def getSortValueField(value: AnyRef): SortValue = value match
-    case null => SortValue.Null
-    case text: String => SortValue.Text(text)
-    case number: java.lang.Number => SortValue.Num(number.longValue)
-    case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
-
-  def count(recs: List[Map[String, AnyRef]]): Int = if recs.nonEmpty then recs.head("total").asInstanceOf[Int] else 0
 
   // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
   override protected def getBooleanField(value: AnyRef): Boolean = value match

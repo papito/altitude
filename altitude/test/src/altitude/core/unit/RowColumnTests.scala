@@ -10,7 +10,6 @@ import scalasql.dialects.Dialect
 
 import scala.io.Source
 
-import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
@@ -32,12 +31,15 @@ import altitude.core.dao.sql.tables._
     List(
       AccountRow -> DbApi.renderSql(AccountRow.select, Db.config, dialect),
       AlbumRow -> DbApi.renderSql(AlbumRow.select, Db.config, dialect),
+      AlbumAssetRow -> DbApi.renderSql(AlbumAssetRow.select, Db.config, dialect),
       AssetRow -> DbApi.renderSql(AssetRow.select, Db.config, dialect),
       FaceRow -> DbApi.renderSql(FaceRow.select, Db.config, dialect),
       FolderRow -> DbApi.renderSql(FolderRow.select, Db.config, dialect),
       MetadataFieldRow -> DbApi.renderSql(MetadataFieldRow.select, Db.config, dialect),
+      MetadataParameterRow -> DbApi.renderSql(MetadataParameterRow.select, Db.config, dialect),
       PersonRow -> DbApi.renderSql(PersonRow.select, Db.config, dialect),
       RepositoryRow -> DbApi.renderSql(RepositoryRow.select, Db.config, dialect),
+      SearchDocumentRow -> DbApi.renderSql(SearchDocumentRow.select, Db.config, dialect),
       StatRow -> DbApi.renderSql(StatRow.select, Db.config, dialect),
       SystemRow -> DbApi.renderSql(SystemRow.select, Db.config, dialect),
       UserTokenRow -> DbApi.renderSql(UserTokenRow.select, Db.config, dialect)
@@ -119,7 +121,11 @@ import altitude.core.dao.sql.tables._
   private def selectedColumns(sql: String): List[String] =
     "[a-z_]+[0-9]+\\.([a-z_0-9]+) AS ".r.findAllMatchIn(sql).map(_.group(1)).toList
 
-  /** `CREATE TABLE` column names per table, with PostgreSQL's inherited `_core` columns folded in */
+  /**
+   * `CREATE TABLE` column names per table, with PostgreSQL's inherited `_core` columns folded in.
+   *
+   * SQLite's `search_document` is an fts4 virtual table, declared on one line and inheriting nothing, so it is read separately.
+   */
   private def schemaColumns(engine: String): Map[String, List[String]] = {
     val source = Source.fromInputStream(getClass.getResourceAsStream(s"/migrations/$engine/all.sql"))
     val ddl =
@@ -131,8 +137,13 @@ import altitude.core.dao.sql.tables._
       .map(m => m.group(1) -> (columnNames(m.group(2)), m.group(3).contains("INHERITS")))
       .toMap
 
+    val virtualTables = "CREATE VIRTUAL TABLE (\\w+) USING \\w+ \\(([^)]*)\\)".r
+      .findAllMatchIn(ddl)
+      .map(m => m.group(1) -> m.group(2).split(",").map(_.trim).toList)
+      .toMap
+
     val core = tables.get("_core").map(_._1).getOrElse(List())
-    tables.map { case (name, (columns, inherits)) => name -> (if (inherits) core ++ columns else columns) }
+    tables.map { case (name, (columns, inherits)) => name -> (if (inherits) core ++ columns else columns) } ++ virtualTables
   }
 
   private def columnNames(body: String): List[String] =

@@ -11,10 +11,9 @@ import altitude.core.unit.FolderModelTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RowColumnTests
 import altitude.core.unit.SearchQueryModelTests
-import altitude.core.unit.SearchSqlQueryTests
+import altitude.core.unit.SearchSqlTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlDialectTests
-import altitude.core.unit.SqlQueryTests
 import altitude.core.unit.UrlServiceTests
 import altitude.core.unit.UtilTests
 
@@ -23,8 +22,7 @@ abstract class AllUnitTestSuites
     new CoreModelTests,
     new CaptureDateResolverTests,
     new FolderModelTests,
-    new SqlQueryTests,
-    new SearchSqlQueryTests,
+    new SearchSqlTests,
     new RowColumnTests,
     new DynamicFilterTests,
     new SqlDialectTests,

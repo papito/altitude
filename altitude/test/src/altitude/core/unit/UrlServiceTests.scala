@@ -6,14 +6,28 @@ import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.shouldEqual
 
 import altitude.core.Api
+import altitude.core.Const as C
+import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.models.Repository
 import altitude.core.service.UrlService
+import altitude.core.util.Util
 
 @DoNotDiscover class UrlServiceTests extends funsuite.AnyFunSuite with TestFocus {
   val urlService = new UrlService
 
   val personId: String = BaseDao.genId
   val repoId = "1"
+
+  // A browser view URL is scoped to the request's repository, so this suite has to supply one of its own
+  RequestContext.repository.value = Some(
+    new Repository(
+      id = Some(repoId),
+      name = "repo name",
+      ownerAccountId = Util.randomStr(),
+      rootFolderId = "1",
+      fileStoreConfig = Map(),
+      fileStoreType = C.StorageEngineName.FS))
 
   test("Browser view URL has the query string in the given order and the fragment") {
     val tabSelected = "albums"

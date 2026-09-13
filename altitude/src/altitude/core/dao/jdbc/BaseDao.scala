@@ -1,7 +1,6 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -35,11 +34,9 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SortDirection
-import altitude.core.util.SortValue
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
-  val totalRecsWindowFunction: String = "count(*) OVER() AS total"
 
   private def incrReadQueryCount(): Unit =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
@@ -55,7 +52,7 @@ abstract class BaseDao[Model <: BaseModel]:
 
   val tableName: String
 
-  /** Only the raw paths that are still hand-written SQL select by name; the typed paths get their columns from [[table]] */
+  /** The one remaining hand-written `SELECT` that names its columns is `RepositoryDao.getAll`; everywhere else [[table]] does */
   protected def columnsForSelect: List[String] = List("*")
 
   /** The ScalaSql row class behind this DAO's table */
@@ -68,8 +65,6 @@ abstract class BaseDao[Model <: BaseModel]:
    * hand-written SQL path can return the same record.
    */
   protected def toModel(row: Row[Sc]): Model
-
-  def count(recs: List[Map[String, AnyRef]]): Int
 
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
@@ -280,9 +275,3 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def makeModel(rec: Map[String, AnyRef]): Model
 
   protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime]
-
-  /** A calendar-day column, as the engine's day expression returns it */
-  protected def getDateField(value: AnyRef): Option[LocalDate]
-
-  /** A sort-key column, typed so it can be bound back for comparison exactly as stored */
-  protected def getSortValueField(value: AnyRef): SortValue

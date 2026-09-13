@@ -2,8 +2,6 @@ package altitude.core.dao.sql
 
 import scalasql.Table
 import scalasql.core.Expr
-import scalasql.core.SqlStr
-import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.dialects.Dialect
 
 import altitude.core.util.Query
@@ -39,15 +37,8 @@ object DynamicFilter:
         if param.negate then throw IllegalArgumentException(s"A negated parameter is not supported: $name")
 
         param.paramType match
-          case Query.ParamType.EQ => equalTo(column, param.values.head, dialect)
-          case Query.ParamType.IN => isIn(column, param.values, dialect)
+          case Query.ParamType.EQ => Columns.equalTo(column, param.values.head, dialect)
+          case Query.ParamType.IN => Columns.isIn(column, param.values, dialect)
           case other => throw IllegalArgumentException(s"This type of parameter is not supported: $other")
 
-      case other => equalTo(column, other, dialect)
-
-  private def equalTo(column: Expr[?], value: Any, dialect: Dialect): Expr[Boolean] =
-    Expr[Boolean](implicit ctx => sql"$column = ${Columns.literal(value, dialect)}")
-
-  private def isIn(column: Expr[?], values: Set[Any], dialect: Dialect): Expr[Boolean] =
-    val bound = SqlStr.join(values.toList.map(Columns.literal(_, dialect)), SqlStr.commaSep)
-    Expr[Boolean](implicit ctx => sql"$column IN ($bound)")
+      case other => Columns.equalTo(column, other, dialect)
