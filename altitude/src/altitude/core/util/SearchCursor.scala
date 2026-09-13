@@ -2,7 +2,6 @@ package altitude.core.util
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.Base64
@@ -11,17 +10,22 @@ import altitude.core.SearchCursorException
 import altitude.core.util.Query.QueryParam
 
 /**
- * Where a grouped search continues from: the last returned image's position (day, sort value, ID) and a fingerprint of the search
- * the cursor belongs to. It is an opaque, versioned token to the client and supplies only a position: every request re-applies
- * authorization and every filter, and the values are bound, never inlined. The page size is not part of it, so a continuation may
- * ask for a different one.
+ * Where a grouped search continues from: the last returned image's position (its group, sort value, ID) and a fingerprint of the
+ * search the cursor belongs to. It is an opaque, versioned token to the client and supplies only a position: every request
+ * re-applies authorization and every filter, and the values are bound, never inlined. The page size is not part of it, so a
+ * continuation may ask for a different one.
+ *
+ * The group is `key`, the value the groups are ordered by (the ISO day of a date grouping, the path key of a Location grouping),
+ * and for a Location also `groupId`, the Location's ID. Both absent means the trailing group of images with no date or no
+ * Location.
  */
-case class SearchCursor(day: Option[LocalDate], sortValue: SortValue, id: String, scope: String):
+case class SearchCursor(key: Option[String], groupId: Option[String], sortValue: SortValue, id: String, scope: String):
 
   def encode: String =
     val json = ujson.Obj(
       "v" -> SearchCursor.VERSION,
-      "d" -> day.map(d => ujson.Str(d.toString)).getOrElse(ujson.Null),
+      "k" -> key.map(ujson.Str.apply).getOrElse(ujson.Null),
+      "g" -> groupId.map(ujson.Str.apply).getOrElse(ujson.Null),
       "s" -> SearchCursor.sortValueToJson(sortValue),
       "i" -> id,
       "f" -> scope
@@ -33,14 +37,15 @@ case class SearchCursor(day: Option[LocalDate], sortValue: SortValue, id: String
     if scope != currentScope then throw SearchCursorException("The cursor does not belong to this search")
 
 object SearchCursor:
-  private val VERSION = 3
+  private val VERSION = 4
 
   def decode(token: String): SearchCursor =
     try
       val json = ujson.read(new String(Base64.getUrlDecoder.decode(token), StandardCharsets.UTF_8))
       if json("v").num.toInt != VERSION then throw SearchCursorException("Unsupported cursor version")
       SearchCursor(
-        day = json("d").strOpt.map(LocalDate.parse),
+        key = json("k").strOpt,
+        groupId = json("g").strOpt,
         sortValue = sortValueFromJson(json("s")),
         id = json("i").str,
         scope = json("f").str
@@ -72,6 +77,8 @@ object SearchCursor:
       query.folderIds.toList.sorted.mkString(","),
       query.personIds.toList.sorted.mkString(","),
       query.albumIds.toList.sorted.mkString(","),
+      query.locationIds.toList.sorted.mkString(","),
+      query.bbox.map(_.toString).getOrElse(""),
       grouping.by.apiValue,
       grouping.direction.id.toString,
       sort.field,

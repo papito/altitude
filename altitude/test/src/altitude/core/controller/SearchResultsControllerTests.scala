@@ -93,7 +93,7 @@ import altitude.core.models.Asset
     }
   }
 
-  private def header(day: String): String = s"""data-group-date="$day""""
+  private def header(day: String): String = s"""data-group-key="$day""""
 
   /** The cursor the page's last cell carries, if any */
   private def cursorOf(html: String): List[String] =
@@ -223,6 +223,9 @@ import altitude.core.models.Asset
         rejected(Map(Api.Field.Search.GROUP_BY -> "")) should include("groupBy")
         rejected(Map(Api.Field.Search.GROUP_DIRECTION -> "asc")) should include("groupBy")
         rejected(grouped + (Api.Field.Search.GROUP_DIRECTION -> "up")) should include("groupDirection")
+        // A Location grouping has a fixed order
+        rejected(Map(Api.Field.Search.GROUP_BY -> "location", Api.Field.Search.GROUP_DIRECTION -> "asc")) should
+          include("groupDirection")
         rejected(Map(Api.Field.Search.AFTER -> "abc")) should include("groupBy")
         rejected(grouped + (Api.Field.Search.AFTER -> "abc")) should include("cursor")
         rejected(grouped + (Api.Field.Search.AFTER -> "e30")) should include("cursor")

@@ -39,6 +39,9 @@ class SearchService(val app: Altitude):
   def search(query: SearchQuery): SearchResult =
     searchDao.search(query)
 
+  def count(query: SearchQuery): Int =
+    searchDao.count(query)
+
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
    * points at the last returned image and carries the scope fingerprint of the search as requested.
@@ -49,7 +52,12 @@ class SearchService(val app: Altitude):
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
-      SearchCursor(day = last.day, sortValue = last.sortValue, id = last.asset.persistedId, scope = scopeFingerprint)
+      SearchCursor(
+        key = last.group.cursorKey,
+        groupId = last.group.cursorGroupId,
+        sortValue = last.sortValue,
+        id = last.asset.persistedId,
+        scope = scopeFingerprint)
     }
 
     val groups = GroupedSearchResult.groupsOf(page.rows)
@@ -59,7 +67,7 @@ class SearchService(val app: Altitude):
       grouping = query.grouping.get,
       sort = query.searchSort.head,
       nextCursor = nextCursor,
-      continuesGroup = query.cursor.exists(cursor => groups.headOption.exists(_.date == cursor.day))
+      continuesGroup = query.cursor.exists(cursor => groups.headOption.exists(_.key.continues(cursor)))
     )
 
     logger.debug(

@@ -93,6 +93,12 @@ class LibraryService(val app: Altitude):
       app.service.search.search(withResolvedFolderScope(query))
     }
 
+  /** How many assets a search matches, scoped like `search`, for a result that renders no rows of its own */
+  def count(query: SearchQuery): Int =
+    txManager.asReadOnly {
+      app.service.search.count(withResolvedFolderScope(query))
+    }
+
   /**
    * A grouped page with its assets, for the grouped grid. A cursor is accepted only for the search it was issued for,
    * fingerprinted as requested: a folder filter by the folder given, since its descendants are resolved afresh on every page.

@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqua
 import altitude.core.{ Altitude, Const }
 import altitude.core.models.{ Asset, CaptureDateSource, ExtractedMetadata, PublicMetadata }
 import altitude.core.models.{ ImportAsset, UserMetadata }
-import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, SortDirection }
+import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery, SearchSort, SortDirection }
 
 /**
  * Date storage semantics behind date grouping: a capture timestamp is the camera's wall-clock time and must survive storage
@@ -173,7 +173,7 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, So
         rpp = 50,
         searchSort = List(SearchSort("filename", SortDirection.ASC)),
         grouping = Some(SearchGrouping(GroupBy.DateTaken))))
-    grouped.groups.map(_.date) shouldBe List(None)
+    grouped.groups.map(_.key) shouldBe List(SearchGroupKey.Day(None))
     grouped.assets.map(_.persistedId) shouldBe List(imported.persistedId)
     grouped.total shouldBe Some(1)
   }

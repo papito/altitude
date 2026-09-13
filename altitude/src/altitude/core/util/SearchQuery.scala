@@ -17,6 +17,8 @@ class SearchQuery(
     val folderIds: Set[String] = Set(),
     val personIds: Set[String] = Set(),
     val albumIds: Set[String] = Set(),
+    val locationIds: Set[String] = Set(),
+    val bbox: Option[BoundingBox] = None,
     rpp: Int = 0,
     page: Int = 1,
     val searchSort: List[SearchSort] = List(),
@@ -42,7 +44,7 @@ class SearchQuery(
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
-    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, rpp=$rpp, page=$page)"
+    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, locationIds=$locationIds, bbox=$bbox, rpp=$rpp, page=$page)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
     copyWith(metadataFilters = metadataFilters ++ _filters)
@@ -65,6 +67,8 @@ class SearchQuery(
       folderIds = folderIds,
       personIds = personIds,
       albumIds = albumIds,
+      locationIds = locationIds,
+      bbox = bbox,
       rpp = rpp,
       page = page,
       searchSort = searchSort,

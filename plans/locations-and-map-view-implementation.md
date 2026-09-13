@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1 and 2 implemented 2026-09-13 (Unit 2 uncommitted); Units 3–9 not started.** This expands §7 of
+Status: **Units 1–3 implemented 2026-09-13 (Unit 3 uncommitted); Units 4–9 not started.** This expands §7 of
 [locations-and-map-view.md](locations-and-map-view.md) (the library evaluation and the decisions
 D1–D20) into units of work.
 
@@ -224,6 +224,20 @@ re-add, purge cascades, `getAll` order and counts and `parentName`, repository i
 `docs/test-coverage.md` gap: foreign IDs on every mutation change nothing).
 
 ## Unit 3 — Search: filters, count, group by Location, cursor v4
+
+**Done 2026-09-13**, with four findings:
+- The path key as planned (`COALESCE(parent.name_lc, name_lc)` then a second term) cannot be carried in one cursor field, and
+  ordering by `path_key, location_id` alone would order a parent's Locations by ID, against D8. The key is therefore one string:
+  the parent's `name_lc` and the Location's joined by U+0001 (`SearchQueries.PATH_SEPARATOR`, below every printable character,
+  so it orders as the pair would), or the Location's `name_lc` alone at the top level; the Location ID stays as the tiebreaker.
+- A first page also needs both slices: `located` may hold fewer rows than a page, and `unlocated` fills the rest under the same
+  guarded `LIMIT CASE`. The `page` CTE and the final `ORDER BY` lead with `CASE WHEN location_id IS NULL THEN 1 ELSE 0 END` so the
+  trailing group is last on both engines without `NULLS LAST`.
+- `groupDirection` with `groupBy=location` is refused by the controller in this unit (one `case`), since accepting and ignoring it
+  would have been the behaviour until Unit 5. The grouped grid template renders a Location header as `Parent › Location` and
+  `data-group-key` now so the code compiles; Unit 7 restyles it.
+- `SearchDialect.day` and `secondarySort` are keyed on the grouping's `dateField`; a Location grouping puts SQLite's unary `+`
+  on every sort term, since there is no grouping index to protect.
 
 Files
 - `util/SearchQuery.scala`: `locationIds: Set[String]`, `bbox: Option[BoundingBox]` (new small

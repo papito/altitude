@@ -9,8 +9,11 @@ import altitude.core.util.SearchResult
 trait SearchDao:
   def search(query: SearchQuery): SearchResult
 
-  /** One ordered page of a grouped search: its assets with their day and count data */
+  /** One ordered page of a grouped search: its assets with their group and count data */
   def searchGrouped(query: SearchQuery): GroupedSearchPage
+
+  /** The number of assets a search matches, without reading any of them */
+  def count(query: SearchQuery): Int
 
   def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit
 

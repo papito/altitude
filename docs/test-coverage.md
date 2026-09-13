@@ -294,9 +294,12 @@ Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadat
 
 ## Ordinary search and folder scope
 
-Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [SearchServiceTests](../altitude/test/src/altitude/core/integration/SearchServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala).
+Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [SearchServiceTests](../altitude/test/src/altitude/core/integration/SearchServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [SearchGroupingTests](../altitude/test/src/altitude/core/integration/SearchGroupingTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [SearchQueryModelTests](../altitude/test/src/altitude/core/unit/SearchQueryModelTests.scala).
 
 - ✅ Search keyword terms case-insensitively; apply keyword, number, and Boolean filters together; return no match for the exercised wrong-type filter.
+- ✅ Filter by Location (`locationIds`) on the flat search, a grouped search and the bare count; recycling drops the asset from the Location's results and counts.
+- ✅ Filter by bounding box: an asset's own point, its Locations' pins when it has none (never the pin when it has a point), a box across the antimeridian versus the same edges the other way round, the world box; `BoundingBox.parse` arity, ranges and NaN.
+- ✅ Unit tests check the Location and bounding-box filters are bound semi-joins, and that `count` renders one `COUNT` over the matching relation with no ordering or page.
 - ✅ Include descendant folders, treat root search as unrestricted folder scope including triage, filter by one/multiple people, and filter by album.
 - ✅ Paginate results with totals and page counts; handle an oversized page and a page beyond the end.
 - ✅ Return sort metadata and hide unfinished imports from search.
@@ -320,6 +323,11 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ Reject malformed/unsupported-version cursors and changes to text, folder scope, grouping direction, sort field, or sort direction; allow a changed page size.
 - ✅ Apply text/metadata/folder/album/person filters to group counts and rows; verify root scope, recycle view, repository isolation, timezone independence, and one statement per unscoped grouped page.
 - ✅ HTTP tests reject invalid grouped parameters and unsupported JSON negotiation; unauthenticated HTML/API-style requests receive redirect/401, and empty continuations return 204.
+- ✅ Group by Location: path order (a parent's Locations at the parent's name, by their own), an asset under each of its Locations, group counts against a total that counts assets, `Parent › Location` data on the keys, the trailing "No location" group, the fixed direction, the sort within a group, an empty first page, one statement per page.
+- ✅ Location groups span pages with one count, continue into and inside "No location", and cross from the last Location into it; every filter bounds the groups and their counts, and a `locationIds` scope leaves no trailing group.
+- ✅ Location cursor traversal matches the complete order for every sort field and direction at page sizes 1, 5 and 6, including overlapping memberships and a Location exactly a page long; a first page counts assets once; deleting the anchor's Location continues into the trailing group its members joined.
+- ✅ A cursor is rejected for a changed `locationIds` or `bbox`, from a day grouping against a Location grouping, and for a version-3 token.
+- ✅ Unit tests pin the Location statement's shape on both dialects: the located/unlocated slices and the guard between them, the joins, the located-first page order, no `NULLS FIRST/LAST`, every value bound, the same filters in every branch, the path-key cursor comparison, and the ORDER BY with SQLite's planner hint.
 - [ ] Reject reuse of a cursor across repositories or database engines, or after changing album/person/metadata/view filters. Existing scope tests do not cover every fingerprint component. [CRITICAL]
 - [ ] Continue a folder-scoped cursor after adding, moving, or recycling descendants; assert the fingerprint stays tied to the requested folder and current descendants are resolved afresh. [MEDIUM]
 - [ ] Traverse size/area sorts using different numeric values. Current cursor fixtures give equal size/area values, so those cases primarily exercise the ID tiebreaker. [MEDIUM]

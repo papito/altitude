@@ -17,7 +17,6 @@ import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.dao.sqlite.SqliteOverrides
-import altitude.core.util.GroupBy
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
@@ -29,8 +28,8 @@ object SqliteSearchDialect extends SearchDialect:
   import dialect.*
 
   // The stored text is already the camera's wall-clock time: no modifier
-  override def day(asset: AssetRow[Expr], groupBy: GroupBy): Expr[Option[LocalDate]] =
-    val column = Columns.required(AssetRow, asset, groupBy.field, dialect)
+  override def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]] =
+    val column = Columns.required(AssetRow, asset, field, dialect)
     Expr[Option[LocalDate]](implicit ctx => sql"date($column)")
 
   override def textMatch(document: SearchDocumentRow[Expr], text: String): Expr[Boolean] =
@@ -38,11 +37,12 @@ object SqliteSearchDialect extends SearchDialect:
 
   /**
    * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort
-   * every matching row; the unary plus keeps any non-grouping term from being matched, leaving the day index in charge.
+   * every matching row; the unary plus keeps any term other than the grouping date from being matched, leaving the day index in
+   * charge. A Location grouping has no such index, and every sort term of one gets the plus.
    */
   override def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
     val column = Columns.required(AssetRow, asset, sort.field, dialect)
-    if sort.field == grouping.by.field then column else Expr[Any](implicit ctx => sql"+$column")
+    if grouping.by.dateField.contains(sort.field) then column else Expr[Any](implicit ctx => sql"+$column")
 
   // Capture time is null when no metadata rung succeeds; import time only on legacy rows, and only ever as a sort column
   override def isNullableTimestamp(field: String): Boolean =

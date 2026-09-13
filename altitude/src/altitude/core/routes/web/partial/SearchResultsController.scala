@@ -177,7 +177,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   /**
    * A grouped request, validated up front. A problem is the message of a 400:
-   *   - `groupBy` is `dateTaken`; `groupDirection` (`asc`/`desc`, default `desc`) and `after` need it
+   *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
+   *     and is refused with `location`, whose order is fixed; `after` needs `groupBy`
    *   - `sort` is one of the results UI's fields with a direction digit; `rpp` is 1 to the grouped maximum
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
@@ -203,6 +204,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     val direction: SortDirection = groupDirection.map(parseDirection) match
       case None => SortDirection.DESC
       case Some(None) => return Left(s"${Api.Field.Search.GROUP_DIRECTION} must be asc or desc")
+      case Some(Some(_)) if by == GroupBy.Location =>
+        return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
     val searchSort = parseSort(sort) match
