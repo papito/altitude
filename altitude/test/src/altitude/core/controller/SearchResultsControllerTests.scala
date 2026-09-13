@@ -51,15 +51,22 @@ import altitude.core.models.Asset
         val params = Map("groupBy" -> "location", "rpp" -> "1", "sort" -> "filename0")
         val page = htmlSearch(host, repoId, params)
         page.statusCode shouldBe 200
-        page.text() should include("Italy › Beach")
+        page.text() should include("<span class=\"category\">Italy</span> › Beach")
         page.text() should include(header(location.persistedId))
+        // The Group dropdown reflects the grouping, and the grid carries it for its continuations
+        page.text() should include("""data-app-search-group-by="location" data-app-search-group-direction="" selected""")
+        page.text() should include("""data-results-group-by="location"""")
+        page.text() should include("""data-results-group-direction=""""")
+        // An asset in a Location is a cell of its own under it, distinct from the same asset's cell elsewhere
+        page.text() should include(s"""id="asset-${first.persistedId}-in-${location.persistedId}"""")
         val next = htmlSearch(
           host,
           repoId,
           params ++ Map("after" -> cursorOf(page.text()).head, "isContinuousScroll" -> "true", "rpp" -> "2"))
         next.statusCode shouldBe 200
         next.text().contains(header(location.persistedId)) shouldBe false
-        ordered(next.text(), cell(second), "No location")
+        ordered(next.text(), s"""id="asset-${second.persistedId}-in-${location.persistedId}"""", "No location")
+        // The trailing group is the asset's only cell, so it keeps the plain ID
         ordered(next.text(), "No location", cell(unlocated))
     }
   }
@@ -79,8 +86,11 @@ import altitude.core.models.Asset
           withClue(s"$group: ") {
             val grid = htmlSearch(host, repoId, scope ++ group)
             grid.statusCode shouldBe 200
-            grid.text() should include(cell(member))
-            grid.text().contains(cell(outside)) shouldBe false
+            // In the Location grid the cell's ID carries the Location it is under
+            grid.text() should include(
+              if (group.get("groupBy").contains("location")) s"""id="asset-${member.persistedId}-in-${location.persistedId}""""
+              else cell(member))
+            grid.text().contains(s"asset-${outside.persistedId}") shouldBe false
             grid.text() should include(s"""data-results-location-id="${location.persistedId}"""")
           }
         }
@@ -106,6 +116,10 @@ import altitude.core.models.Asset
         page should include("""data-results-total="1"""")
         page.contains("""id="assets"""") shouldBe false
         "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
+        page should include("""id="mapPanel" hidden""")
+        page should include("""id="bboxScope"""")
+        page should include("""data-results-layout="map"""")
+        pressedLayout(page) shouldBe "map"
         val url = java.net.URLDecoder.decode(response.headers("hx-replace-url").head, "UTF-8")
         url should include("layout=map")
         url should include(s"locationId=${location.persistedId}")
@@ -179,6 +193,13 @@ import altitude.core.models.Asset
 
   private def header(day: String): String = s"""data-group-key="$day""""
 
+  /** The layout whose toggle button is pressed */
+  private def pressedLayout(html: String): String =
+    "(?s)aria-pressed=\"true\"\\s+data-app-search=\"click\" data-app-search-layout=\"([a-z]+)\"".r
+      .findFirstMatchIn(html)
+      .get
+      .group(1)
+
   /** The cursor the page's last cell carries, if any */
   private def cursorOf(html: String): List[String] =
     "data-app-search-after=\"([^\"]+)\"".r.findAllMatchIn(html).map(_.group(1)).toList
@@ -226,6 +247,8 @@ import altitude.core.models.Asset
 
         // The Group dropdown reflects the grouping
         page1 should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
+        page1 should include("""data-results-group-by="dateTaken"""")
+        page1 should include("""data-results-group-direction="desc"""")
 
         // The last cell, and only it, carries the cursor; no cell carries a page number
         page1.contains("data-app-search-next-page") shouldBe false
@@ -372,6 +395,10 @@ import altitude.core.models.Asset
         val page = html.text()
         page should include(cell(asset))
         page should include("""data-app-search-group-by="" data-app-search-group-direction="" selected""")
+        page should include("""data-results-layout="grid"""")
+        page should include("""data-results-group-by=""""")
+        pressedLayout(page) shouldBe "grid"
+        page.contains("""id="bboxScope"""") shouldBe false
         page.contains("""class="date-group"""") shouldBe false // the style block names it; no header is rendered
 
         // Past the last page

@@ -7,6 +7,7 @@ import {
     showWarningSnackBar,
 } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
+import { cellsOf } from "../search-results/cells.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
 
 export function createAssetActions({
@@ -27,18 +28,12 @@ export function createAssetActions({
         reloadLocationCounts()
     }
 
+    // An asset can have several cells (a Location grouping shows it under each of its Locations)
     function removeTriageStyling(assetIds) {
         for (const assetId of assetIds) {
-            const cellEl = htmx.find(`#asset-${assetId}`)
-            if (!cellEl) {
-                continue
-            }
-
-            delete cellEl.dataset.isTriaged
-
-            const marker = cellEl.querySelector(".triage-marker")
-            if (marker) {
-                marker.remove()
+            for (const cellEl of cellsOf(assetId)) {
+                delete cellEl.dataset.isTriaged
+                cellEl.querySelector(".triage-marker")?.remove()
             }
         }
     }
@@ -51,31 +46,31 @@ export function createAssetActions({
      */
     function setMovePending(assetIds, isPending) {
         for (const assetId of assetIds) {
-            const cellEl = htmx.find(`#asset-${assetId}`)
-            if (!cellEl) {
-                continue
+            for (const cellEl of cellsOf(assetId)) {
+                cellEl.classList.toggle("move-pending", isPending)
             }
-
-            cellEl.classList.toggle("move-pending", isPending)
         }
     }
 
     /**
      * The one place cells leave the grid (a move out of scope, recycle, purge, restore, removal from
-     * an album). Each cell leaves its day's header count and the footer total as it goes; the detail
-     * modal, which walks the grid, forgets it with the cell.
+     * an album or a Location). Every cell of the asset goes, each leaving its group's header count;
+     * the footer total counts assets, so it drops by one per asset that had a cell. The detail modal,
+     * which walks the grid, forgets a cell with it.
      */
     function removeAssetsFromGrid(assetIds) {
         let removedCount = 0
 
         for (const assetId of assetIds) {
-            const el = htmx.find(`#asset-${assetId}`)
-            if (!el) {
+            const cellEls = cellsOf(assetId)
+            if (cellEls.length === 0) {
                 continue
             }
 
-            decrementDateGroupOf(el)
-            el.remove()
+            for (const cellEl of cellEls) {
+                decrementDateGroupOf(cellEl)
+                cellEl.remove()
+            }
             removedCount++
         }
 

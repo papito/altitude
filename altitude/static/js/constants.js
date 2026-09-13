@@ -46,6 +46,7 @@ export const Const = {
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
+        mapPanelRequested: "MAP_PANEL_REQUESTED_EVENT",
     },
 
     /**
@@ -90,6 +91,15 @@ export const Const = {
         gridMetadataFields: "gridMetadataFields",
         verticalSplitSizes: "verticalSplitSizes",
         horizontalSplitSizes: "horizontalSplitSizes",
+        // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
+        resultsLayout: "resultsLayout",
+    },
+
+    search: {
+        layout: {
+            grid: "grid",
+            map: "map",
+        },
     },
 }
 

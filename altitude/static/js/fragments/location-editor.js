@@ -14,6 +14,7 @@
  */
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
+import { getDisplayedMapView } from "../map/map-state.js"
 
 const PIN_ZOOM = 12
 const WORLD_VIEW = { center: [20, 0], zoom: 2 }
@@ -75,11 +76,15 @@ export function hydrateLocationEditorFragment({ fragmentEl }) {
 
     map.on("click", (event) => setPin(event.latlng))
 
-    // A validation replacement carries the submitted pin: show it where it was
+    // A validation replacement carries the submitted pin: show it where it was. Otherwise the
+    // editor opens where the results map is looking, if one is displayed, and on the world if not
     const initialPin = parsePin(latitudeEl.value, longitudeEl.value)
+    const displayedView = getDisplayedMapView()
     if (initialPin) {
         map.setView(initialPin, PIN_ZOOM)
         setPin(L.latLng(initialPin))
+    } else if (displayedView) {
+        map.setView(displayedView.center, displayedView.zoom)
     } else {
         map.setView(WORLD_VIEW.center, WORLD_VIEW.zoom)
     }

@@ -5,6 +5,7 @@ import { hydrateLocationEditorFragment } from "./location-editor.js"
 import { hydrateImageDetailFragment } from "./image-detail.js"
 import { hydratePersonNameEditorFragment } from "./person-name-editor.js"
 import { hydrateSearchResultsFragment } from "./search-results.js"
+import { hydrateMapViewFragment } from "../map/map-view.js"
 import {
     hydrateAlbumListFragment,
     hydrateFolderTreeFragment,
@@ -40,6 +41,11 @@ export function hydrateAppFragments({ root, app }) {
 
     findFragmentRoots(root, "search-results").forEach((fragmentEl) => {
         hydrateSearchResultsFragment({ fragmentEl })
+    })
+
+    // After the results hydrator, which disposed of the previous map with the previous fragment
+    findFragmentRoots(root, "map-view").forEach((fragmentEl) => {
+        hydrateMapViewFragment({ fragmentEl })
     })
 
     findFragmentRoots(root, "folder-tree").forEach(() => {

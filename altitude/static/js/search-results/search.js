@@ -14,8 +14,11 @@ import { Const } from "../constants.js"
  *
  * `params`    are merged into the store, subject to its scope rules (see `stores/search-params.js`)
  * `transient` are serialized into this one request only and never stored (continuous scroll: the
- *             page number or the `after` cursor, and `isContinuousScroll`)
+ *             page number or the `after` cursor, and `isContinuousScroll`; the crowded-pin panel's
+ *             grid layout while the store says map)
  * `target`    / `swap` are the htmx swap for this caller
+ * `source`    is the element htmx issues the request from, for a caller that needs to recognise
+ *             the response in the lifecycle events (the map panel, whose URL update is rewritten)
  *
  * Resolves when the request completes, with the response swapped in.
  */
@@ -24,10 +27,15 @@ export function runSearch({
     transient = {},
     target = "#content",
     swap = "innerHTML",
+    source = undefined,
 } = {}) {
     Alpine.store(Const.state.searchParams).merge(params)
 
-    return htmx.ajax("get", currentSearchUrl(transient), { target, swap })
+    return htmx.ajax("get", currentSearchUrl(transient), {
+        target,
+        swap,
+        ...(source ? { source } : {}),
+    })
 }
 
 /**

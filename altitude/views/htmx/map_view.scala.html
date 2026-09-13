@@ -2,10 +2,143 @@
 
 @(bounds: Option[MapBounds], tileUrl: String, attribution: String)
 
-@* A map search fetches only a count and bounds; the viewport hydrator in Unit 7 supplies the map and its cells. *@
-<div id="map"
-     data-app-fragment="map-view"
-     data-map-bounds="@{bounds.map(b => s"${b.south},${b.west},${b.north},${b.east}").getOrElse("")}"
-     data-map-count="@{bounds.map(_.count).getOrElse(0)}"
-     data-map-tile-url="@{tileUrl}"
-     data-map-attribution="@{attribution}"></div>
+<style>
+  /* The map fills whatever the results column leaves under the controls; the panel is a column laid over its right edge */
+  #mapView {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    margin: 0 10px 10px 10px;
+    background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+  }
+
+  /* Its own stacking context: Leaflet's panes carry z-indexes in the hundreds, which must stay below the modals */
+  #map {
+    height: 100%;
+    isolation: isolate;
+    /* Tiles that never arrive leave the canvas blank; pins still render on it */
+    background: none;
+  }
+
+  /* `hidden` keeps it away until a crowded pin opens it */
+  #mapPanel:not([hidden]) {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    width: min(60%, 700px);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--panel-border-color);
+    background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+    box-shadow: rgba(0, 0, 0, 0.5) -4px 0 8px;
+  }
+
+  #mapPanel header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--panel-border-color);
+  }
+
+  #mapPanel header .count {
+    flex: 1;
+    font-weight: bold;
+  }
+
+  #mapPanelContent {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* The panel's grid is scoped by the header above it: the fragment's own controls are for the map */
+  #mapPanel #searchControl {
+    display: none;
+  }
+
+  /* Map pins (js/map/map-view.js). Leaflet's div icon carries the class and the size; the pin's own markup is the
+     div inside it, which fills it */
+  .asset-pin {
+    box-sizing: border-box;
+    border: 2px solid white;
+    border-radius: 4px;
+    background-color: var(--background-color);
+    box-shadow: rgba(0, 0, 0, 0.6) 0 1px 4px;
+    cursor: pointer;
+  }
+
+  .asset-pin > div {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  .asset-pin img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 2px;
+  }
+
+  /* A pin standing for several plotted points: the count badge over the representative thumbnail */
+  .asset-pin .drag-count-badge {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.45);
+    text-shadow: rgba(0, 0, 0, 0.75) 0 1px 2px;
+  }
+
+  /* A Location's pin: the glyph with the Location's path beside it */
+  .location-pin.on-map {
+    width: max-content !important;
+    cursor: pointer;
+  }
+
+  .location-pin.on-map > div {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .location-pin.on-map .path {
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1.2;
+    white-space: nowrap;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: white;
+    background-color: var(--dnd-drop-target-color);
+  }
+
+  .location-pin.on-map .path .category {
+    font-weight: normal;
+  }
+</style>
+
+@* The map shell: `data-map-bounds` is the plotted extent of the whole search (empty when nothing is plotted) for the
+   initial fit, and the map hydrator (js/map/map-view.js) requests the cells of each viewport. The panel is the ordinary
+   results grid for a crowded pin's area, run with the `bbox` filter into `#mapPanelContent` (js/map/map-panel.js). *@
+<div id="mapView">
+  <div id="map"
+       data-app-fragment="map-view"
+       data-map-bounds="@{bounds.map(b => s"${b.south},${b.west},${b.north},${b.east}").getOrElse("")}"
+       data-map-count="@{bounds.map(_.count).getOrElse(0)}"
+       data-map-tile-url="@{tileUrl}"
+       data-map-attribution="@{attribution}"></div>
+  <aside id="mapPanel" hidden aria-label="Assets in the map area">
+    <header>
+      <span class="count" id="mapPanelCount"></span>
+      <button type="button" id="mapPanelShowInGrid" class="action-button small" title="Switch to the grid, scoped to this map area">Show only these in the grid</button>
+      <button type="button" id="mapPanelClose" class="action-button small" aria-label="Close">&times;</button>
+    </header>
+    <div id="mapPanelContent"></div>
+  </aside>
+</div>

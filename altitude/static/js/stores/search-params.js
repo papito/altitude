@@ -15,6 +15,8 @@ const DEFAULTS = {
     albumId: null,
     locationId: null,
     q: null,
+    bbox: null,
+    layout: Const.search.layout.grid,
     sort: null,
     groupBy: null,
     groupDirection: null,
@@ -26,27 +28,33 @@ const DEFAULTS = {
  * What changing one parameter does to the others.
  *
  * Choosing a folder, a person, an album, or a Location are all "look somewhere else", so each clears
- * the other three; a view is a different place again and clears all four. Everything else narrows or reorders
- * what is already in scope - the date grouping, like the sort, survives all of them. This table is
- * what the server's old `newSearch=true` flag used to express, and it is the whole reason a widget
- * can send just the one parameter it knows about.
+ * the other three; a view is a different place again and clears all four. The map area (`bbox`, the
+ * crowded-pin panel's scope) belongs to the search it was drawn on, so looking somewhere else clears
+ * it too. Everything else narrows or reorders what is already in scope - the layout, the sort and
+ * the grouping survive all of them. This table is what the server's old `newSearch=true` flag used
+ * to express, and it is the whole reason a widget can send just the one parameter it knows about.
  */
 const CLEARS = {
-    view: ["folderId", "personId", "albumId", "locationId"],
-    folderId: ["personId", "albumId", "locationId"],
-    personId: ["folderId", "albumId", "locationId"],
-    albumId: ["folderId", "personId", "locationId"],
-    locationId: ["folderId", "personId", "albumId"],
+    view: ["folderId", "personId", "albumId", "locationId", "bbox"],
+    folderId: ["personId", "albumId", "locationId", "bbox"],
+    personId: ["folderId", "albumId", "locationId", "bbox"],
+    albumId: ["folderId", "personId", "locationId", "bbox"],
+    locationId: ["folderId", "personId", "albumId", "bbox"],
+    q: ["bbox"],
 }
 
 const NUMERIC = new Set(["p", "rpp"])
 
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
-/** Search parameters read out of a browser URL's query string. Unknown parameters are ignored. */
+/**
+ * Search parameters read out of a browser URL's query string. Unknown parameters are ignored. The
+ * layout is the one exception to "the URL, then the defaults": a URL that says nothing about it gets
+ * the layout last chosen in this browser (`localStorage`), so a map user opens on the map.
+ */
 export function seedSearchParams(search) {
     const urlParams = new URLSearchParams(search || "")
-    const seeded = { ...DEFAULTS }
+    const seeded = { ...DEFAULTS, layout: rememberedLayout() }
 
     PARAM_NAMES.forEach((name) => {
         if (urlParams.has(name)) {
@@ -55,6 +63,14 @@ export function seedSearchParams(search) {
     })
 
     return seeded
+}
+
+function rememberedLayout() {
+    const layout = localStorage.getItem(Const.localStore.resultsLayout)
+
+    return Object.values(Const.search.layout).includes(layout)
+        ? layout
+        : DEFAULTS.layout
 }
 
 /**
@@ -139,10 +155,16 @@ export function createSearchParamsStore() {
         },
 
         merge(changes) {
-            Object.assign(
-                this,
-                applySearchParamChanges(this.snapshot(), changes),
-            )
+            const next = applySearchParamChanges(this.snapshot(), changes)
+
+            if (next.layout !== this.layout) {
+                localStorage.setItem(
+                    Const.localStore.resultsLayout,
+                    next.layout,
+                )
+            }
+
+            Object.assign(this, next)
         },
 
         snapshot() {

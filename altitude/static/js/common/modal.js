@@ -48,6 +48,10 @@ let pendingOpen = null
 // Where focus goes when the active modal closes.
 let returnFocus = null
 
+// The element that issued the request whose fragment the displayed open shows, when it was an htmx
+// request: a results cell's thumbnail for asset detail, which is where its navigation starts from
+let openSource = null
+
 export function createModalStore() {
     return {
         activeHost: null,
@@ -117,6 +121,7 @@ export function openModal({
         opener: pendingOpen?.opener ?? document.activeElement,
         fallbackSelector: returnFocusSelector,
     }
+    openSource = pendingOpen?.ctx.sourceElement ?? null
     pendingOpen = null
 
     console.debug(`Opening ${host} modal "${title}" (open ${openId})`)
@@ -145,6 +150,11 @@ export function openModal({
     }
 
     return openId
+}
+
+/** The element whose htmx request loaded the displayed open's fragment, or null (a page-held dialog, a programmatic open) */
+export function getModalOpenSource() {
+    return openSource
 }
 
 /**

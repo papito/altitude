@@ -6,11 +6,13 @@
 @* One cell of the results grid, ungrouped or grouped. The page's last cell carries how the next page is reached, for the
    IntersectionObserver in js/search-results/infinite-scroll.js, which requests it through the search funnel: the next page
    number (an ungrouped search) or the encoded cursor (a grouped one), never both. Every other cell carries neither.
-   `alt-has-no-date` keeps its name: the controller tests assert on it. *@
-@(asset: Asset, isContinuousScroll: Boolean, nextPage: Option[Int] = None, nextCursor: Option[String] = None, showNoDate: Boolean = false)
+   `alt-has-no-date` keeps its name: the controller tests assert on it. The cell's `id` is `asset-<id>` unless the grid
+   holds the asset more than once (a Location grouping passes `asset-<id>-in-<locationId>`); `data-asset-id` on the
+   thumbnail box is how the client finds every cell of an asset. *@
+@(asset: Asset, isContinuousScroll: Boolean, nextPage: Option[Int] = None, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
 @defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
-<div id="asset-@{asset.persistedId}"
+<div id="@{Option(cellId).getOrElse(s"asset-${asset.persistedId}")}"
      class="@if(nextPage.isDefined || nextCursor.isDefined) {cell last-cell} else {cell}"
      data-folder-id="@{asset.folderId}"
      @if(asset.isTriaged){data-is-triaged="true"}

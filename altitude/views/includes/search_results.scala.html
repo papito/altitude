@@ -18,7 +18,55 @@
     border: 1px solid var(--background-tertiary-color);
     border-radius: 5px;
     display: grid;
-    grid-template-columns: .5fr 1fr 1fr 1fr;
+    grid-template-columns: .5fr 1fr 1fr 1fr auto;
+  }
+
+  /* In map layout the fragment is a column that hands the map every pixel under the controls
+     (js/map/map-view.js sizes the map to it) */
+  [data-app-fragment="search-results"].map-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* The grid / map layout toggle: two pressed-state buttons, the pressed one in the drop-target blue */
+  #layoutToggle {
+    display: flex;
+    gap: 2px;
+    padding: 0 10px;
+  }
+
+  #layoutToggle button {
+    padding: 5px 10px;
+    background-color: var(--background-secondary-color);
+    border: 1px solid var(--background-tertiary-color);
+    color: var(--faded-font-color);
+    cursor: pointer;
+  }
+
+  #layoutToggle button:first-child {
+    border-radius: 5px 0 0 5px;
+  }
+
+  #layoutToggle button:last-child {
+    border-radius: 0 5px 5px 0;
+  }
+
+  #layoutToggle button[aria-pressed="true"] {
+    color: white;
+    background-color: var(--background-tertiary-color);
+  }
+
+  /* The "Map area" chip: the bbox scope of the crowded-pin panel, cleared by its × */
+  #bboxScope {
+    margin-left: 10px;
+    padding: 2px 8px;
+    border: 1px solid var(--dnd-drop-target-color);
+    border-radius: 10px;
+    background: none;
+    color: var(--dnd-drop-target-color);
+    font-size: smaller;
+    cursor: pointer;
   }
 
   /* Direct children only: as a descendant selector this would also match the View control's popover
@@ -129,10 +177,10 @@
     isolation: isolate;
   }
 
-  /* A date header of a grouped grid spans the whole row and sticks to the top of the scrolling #content pane. Every header
-     sticks at the same offset, so the next day's header paints over the previous one as it arrives - which reads as a
-     replacement only because the background is opaque: the pane's tint, if any, over the page background. */
-  #assets .date-group {
+  /* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
+     pane. Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives -
+     which reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+  #assets .result-group {
     flex-basis: 100%;
     position: sticky;
     top: 0;
@@ -149,18 +197,24 @@
   /* The gap between groups. It hangs off the header rather than the cells above it, so the first
      group still starts flush against the controls, and a group continued onto the next page - which
      repeats no header - gains no gap in its middle */
-  #assets .date-group:not(:first-child) {
+  #assets .result-group:not(:first-child) {
     margin-top: 20px;
   }
 
-  #assets .date-group .count {
+  /* A Location group's category, dimmed before the › */
+  #assets .result-group .category {
+    color: var(--faded-font-color);
+    font-weight: normal;
+  }
+
+  #assets .result-group .count {
     color: var(--faded-font-color);
     font-weight: normal;
     font-size: smaller;
   }
 
-  /* Selects the day's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
-  #assets .date-group .group-checkmark {
+  /* Selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
+  #assets .result-group .group-checkmark {
     width: 16px;
     height: 16px;
     margin: 0;
@@ -252,8 +306,11 @@
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
    The grid's behaviours (selection, infinite scroll, lazy images, metadata visibility, box selection) are bound by that
-   hydrator from the modules under js/search-results/ *@
+   hydrator from the modules under js/search-results/. The layout and grouping the grid was rendered with are what a
+   continuation of it sends (js/search-results/infinite-scroll.js): the crowded-pin panel's grid is a plain grid while
+   the store says map. *@
 <div data-app-fragment="search-results"
+     @if(layout == Const.Search.Layout.MAP) {class="map-layout"}
      data-results-total="@{total}"
      data-results-repo-id="@{RequestContext.getRepository.persistedId}"
      data-results-view="@{view}"
@@ -261,7 +318,9 @@
      data-results-album-id="@{albumId.getOrElse("")}"
      data-results-location-id="@{locationId.getOrElse("")}"
      data-results-bbox="@{bbox.getOrElse("")}"
-     data-results-layout="@{layout}">
+     data-results-layout="@{layout}"
+     data-results-group-by="@{grouping.map(_.by.apiValue).getOrElse("")}"
+     data-results-group-direction="@{grouping.filter(_.by.dateField.isDefined).map(_.direction.toString.toLowerCase).getOrElse("")}">
 
 @if(person != null) {
 @htmx.html.person(person)
@@ -275,6 +334,10 @@
   <div class="total">
     <div>
       <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.count"></span>
+      @* The map-area scope of the crowded-pin panel (js/map/map-panel.js); its × clears `bbox` in either layout *@
+      @if(bbox.isDefined) {
+        <button id="bboxScope" type="button" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
+      }
     </div>
   </div>
   @* The ⚙ View control is a dialog-trigger context menu, built into this host by
@@ -301,6 +364,10 @@
       </option>
       <option data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {selected}>
         Date Taken (Oldest first)
+      </option>
+      @* Path order, fixed: the option sets no direction *@
+      <option data-app-search-group-by="location" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Location)) {selected}>
+        Location
       </option>
     </select>
   </div>
@@ -348,6 +415,14 @@
         Dimensions (Largest)
       </option>
     </select>
+  </div>
+
+  @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
+  <div id="layoutToggle" role="group" aria-label="Layout">
+    <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
+            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
+    <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
+            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
   </div>
 </div>
 

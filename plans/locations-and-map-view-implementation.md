@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–6 and 8 done; Units 7 and 9 not started.**
+Status: **Units 1–8 done; Unit 9 not started.**
 
 Read first: `AGENTS.md`, `altitude/AGENTS.md`, `altitude/views/AGENTS.md`. Every Location piece copies the album shape
 (model, DAO, service, HTMX dialogs, client-rendered sidebar list, drag/drop, membership API).
@@ -314,7 +314,7 @@ Files
   cursor from the last row's group. `service/LibraryService.count(query)` is read-only and resolves the folder scope
   like `search`.
 - `views/htmx/results_grid_grouped.scala.html` heads a Location group `Category › Location` or "No location", and
-  every header carries `data-group-key`. Unit 7 restyles the header.
+  every header carries `data-group-key` (the `.result-group` header of Unit 7).
 
 Tests
 - `unit/SearchSqlTests`: the Location and bbox filters are bound semi-joins. On both dialects the Location statement
@@ -510,78 +510,91 @@ Tests: `controller/LocationControllerTests`, `LocationActionControllerTests`, `M
 
 ## Unit 7 — Frontend: layout toggle, map view, crowded-pin panel, Location grouping in the grid
 
-**Not started.** Frontend, verified in the browser. Server-rendered changes get controller assertions.
+**Done.** Frontend, verified in the browser; the server-rendered changes have controller assertions.
 
-Leaflet is already vendored and loaded (Unit 8); this unit adds supercluster and everything that uses both.
-
-- **Vendor**:
-  - `static/js/lib/supercluster.min.js` (supercluster 9.1.0 `dist/supercluster.min.js`, kdbush bundled) and
-    `supercluster.LICENSE` (ISC).
-  - A row in `static/js/lib/README.md` with the exact tarball URL, and `window.Supercluster` in its plain-script note.
-  - `<script src="/static/js/lib/supercluster.min.js">` beside `leaflet.js` in `index.scala.html`, and
-    `Supercluster: "readonly"` in `eslint.config.js`.
+- **Vendor**: `static/js/lib/supercluster.min.js` (supercluster 9.1.0 `dist/supercluster.min.js`, kdbush bundled, byte-identical
+  to the npm tarball) and `supercluster.LICENSE` (ISC), with a row in `static/js/lib/README.md`. `index.scala.html` loads it
+  as a plain script beside `leaflet.js` (`window.Supercluster`), and `eslint.config.js` declares the global.
 - **`views/includes/search_results.scala.html`**:
-  - The toolbar grid gets a fifth cell, a two-button segmented `#layoutToggle` (grid / map,
-    `data-app-search="click" data-app-search-layout="…"`, `aria-pressed`).
-  - The Group `<select>` gains a *Location* option (`data-app-search-group-by="location"`, empty
-    `data-app-search-group-direction`, selected for `SearchGrouping(GroupBy.Location, _)`).
-  - The `.date-group` header becomes `.result-group`. Its CSS here, `results_grid_grouped`, `date-groups.js` and
-    `date-group-selectable.js` follow, along with the comments in `selection.js`. The Alpine component keeps its name.
-  - `SearchResultsControllerTests`: the Location option is selected for `groupBy=location`.
-- **`views/htmx/results_grid_grouped.scala.html`**:
-  - A Location header's Category part becomes `<span class="category">` + `›` + name.
-  - A cell's `id` is `asset-<id>` in day and ungrouped grids and `asset-<id>-in-<locationId>` in the Location grid
-    (`result_cell` gets a `cellId` parameter); `data-asset-id` on `.drag-drop` and the image stays.
-- **Duplicate cells** (D7): every `#asset-<id>` lookup tolerates several cells.
-  - `selection.js` paints `.drag-drop[data-asset-id="…"]` (all copies).
-  - `asset-actions.js`: `removeAssetsFromGrid` and the single-cell lookups act on every cell of the asset, and
-    `decrementDateGroupOf` runs for each header a cell leaves.
-  - `detail-navigator.js` remembers the cell element it opened from (the `hx-get` source), not the asset ID, and steps
-    from that element.
-- **`views/htmx/map_view.scala.html`**: beside the existing `#map`, add `<aside id="mapPanel" hidden>`. It has a header
-  (`<n> items here`, a "Show only these in the grid" button, close) and a `#mapPanelContent` host. CSS in the template:
-  `#content` is the split pane, so the map fills it (`height: 100%`), with the aside as an overlay column on the right,
-  both under `--view-tint`. Move `.location-pin` from the Add location dialog's style block into a stylesheet both load,
-  since Location pins on the map reuse it.
-- **`static/js/map/map-view.js`** (the `map-view` fragment hydrator, registered in `fragments/index.js`):
-  - Creates the Leaflet map from the data attributes (tile layer, attribution control, `worldCopyJump`).
-  - Initial view: restore the last center/zoom from `map-state.js` when the search scope fingerprint is unchanged;
-    otherwise `fitBounds` the server bounds; the world when there are none.
-  - Sizing: `invalidateSize()` once the fragment is displayed and on a `ResizeObserver` of `#content` (the Split.js drag).
-  - On `moveend` (debounced 150 ms), requests `/api/map/r/:repoId/cells` with the store's search parameters verbatim
-    plus `viewport` and `zoom`, and drops superseded responses by sequence number.
-  - Normalizes `viewport` to the server's form: latitudes clamped to ±90, longitudes wrapped into -180..180 with
-    `west > east` across the antimeridian, and the whole world when the view spans 360° or more.
-  - Loads the cells into a supercluster index (radius 60; `map`/`reduce` sum the counts and keep the newest
-    representative), then renders the viewport's clusters as `L.divIcon` markers:
+  - The toolbar grid has a fifth cell, the two-button segmented `#layoutToggle` (grid / map, `data-app-search="click"
+    data-app-search-layout="…"`, `aria-pressed` on the current one).
+  - The Group `<select>` has a *Location* option (`data-app-search-group-by="location"`, empty
+    `data-app-search-group-direction`, selected for a Location grouping).
+  - The `.total` cell renders `#bboxScope` ("Map area ×", `data-app-search-bbox=""`) while the results carry a `bbox`.
+  - The fragment root carries `data-results-group-by` / `data-results-group-direction` (the effective grouping, no
+    direction for a Location grouping) beside `data-results-layout`, and `class="map-layout"` in map layout, which makes
+    it a flex column so the map takes every pixel under the controls.
+  - The group header is `.result-group` (here, in `results_grid_grouped`, `date-groups.js`, `date-group-selectable.js` and
+    the comments in `selection.js`); the Alpine component keeps its name. `.result-group .category` dims the Category part.
+- **`views/htmx/results_grid_grouped.scala.html`**: a Location header's Category is `<span class="category">` + `›` + name.
+  A cell's `id` is `asset-<id>` in day and ungrouped grids and in the "No location" group, and `asset-<id>-in-<locationId>`
+  under a Location (`result_cell` takes a `cellId`); `data-asset-id` on `.drag-drop` and the image is what the client
+  addresses cells by.
+- **Duplicate cells** (D7): `search-results/cells.js` (`cellsOf`, `thumbnailsOf`, `assetIdOf`) finds every cell of an asset.
+  `selection.js` paints all of them; `asset-actions.js` removes, marks and un-triages all of them, running
+  `decrementDateGroupOf` for each header a cell leaves, while the footer total drops once per asset. The detail
+  navigator remembers the cell element it opened from - the element that issued the asset-detail request, exposed by
+  `modal.js` as `getModalOpenSource()` and read by `fragments/image-detail.js` - and steps from that element; a detail
+  opened from no cell (a map pin) has no previous or next.
+- **`views/htmx/map_view.scala.html`**: `#mapView` (relative, fills the column) holds `#map` (`isolation: isolate`, so
+  Leaflet's panes stay under the modals) and `<aside id="mapPanel" hidden>`: a header (`#mapPanelCount` "<n> items here",
+  `#mapPanelShowInGrid`, `#mapPanelClose`) and the `#mapPanelContent` host, an overlay column on the right under
+  `--view-tint`; the panel's own `#searchControl` is hidden, its grid is scoped by the header. The pin styles live here
+  (`.asset-pin`, `.location-pin.on-map`); `.location-pin` itself is in `core.css`, shared with the pin editor.
+- **`static/js/map/map-view.js`** (the `map-view` fragment hydrator, registered in `fragments/index.js` after the results hydrator):
+  - Creates the Leaflet map from the data attributes (tile layer, attribution, `worldCopyJump`, max zoom 19). One map
+    exists at a time: `disposeMapView()` releases it, and the results hydrator calls that for every new results fragment.
+  - Initial view: the view last looked at in this scope (`map-state.js`); otherwise `fitBounds` on the server bounds
+    (padding, max zoom 15); the world when there are none.
+  - Sizing: a `ResizeObserver` on the map element calls `invalidateSize()` (the Split.js drag, the window).
+  - On `moveend` (debounced 150 ms) it requests `/api/map/r/:repoId/cells` with the store's parameters verbatim plus
+    `viewport` and `zoom`, and drops superseded responses by sequence number. `viewport` is normalized to the server's
+    form: latitudes clamped to ±90, longitudes wrapped into -180..180 with `west > east` across the antimeridian, and
+    the whole world once the view spans 360°. Markers are placed in the world copy nearest the map's centre.
+  - The cells go into a supercluster index (radius 60 px, `extent: 256` to match Leaflet's tiles; `map`/`reduce` sum the
+    counts and keep the largest cell's representative, since a cell carries no capture time), and the viewport's
+    clusters render as `L.divIcon` markers:
     - **Single-asset cell** (D15): a thumbnail pin (`/content/r/:repoId/preview/:assetId`) whose `hx-get` loads the
       asset-detail modal into `#imageDetailModalContent`, processed with `htmx.process`.
-    - **Crowded pin** (D10): the representative thumbnail with a count badge (`.drag-count-badge` styling). A click
-      flies to the cluster's expansion zoom when it is below the max; otherwise it opens the panel.
-    - **Location pin** (D12/D18): the `.location-pin` marker glyph plus `Category › Name`, in
-      `--dnd-drop-target-color`. A click runs `runSearch({params: {locationId}})`.
-- **`static/js/map/map-panel.js`**:
-  - Opens `#mapPanel` and runs the ordinary search into `#mapPanelContent` with `runSearch({params: {bbox}, transient:
-    {layout: "grid", groupBy: null, groupDirection: null}, target: "#mapPanelContent"})`.
-  - `bbox` is a real store parameter, so the panel's infinite scroll and cursor continuation work unchanged and the URL
-    is bookmarkable. The map endpoints and the map layout's count and bounds ignore `bbox`, so the map keeps plotting
-    the whole scope.
-  - "Show only these in the grid" → `runSearch({params: {layout: "grid"}})`. A toolbar chip (`#bboxScope`, "Map area
-    ×") clears `bbox` in both layouts. Closing the panel clears `bbox`.
-- **`static/js/map/map-state.js`**: center and zoom in memory, keyed by the scope fingerprint the fragment carries
-  (`data-results-*`), so a re-render for a sort change does not reset the view. It also exposes the displayed map's
-  current view.
-- **Pin editor start view**: `fragments/location-editor.js` opens on the results map's center and zoom when the map
-  layout is displayed, and on the world otherwise. A validation replacement still opens on the submitted pin at zoom 12.
-- **Layout persistence** (D14):
-  - `Const.localStore.resultsLayout`, written by the store's `merge` when `layout` changes. `index.scala.html` seeds the
-    store from the URL first, then `localStorage`.
-  - `search-params.js`: `layout` and `bbox` in `DEFAULTS` (`grid` / `null`). `bbox` is cleared by any scope change
-    except `layout` and `sort`.
-- **`fragments/search-results.js`**: it already skips grid bindings when `#assets` is absent. It additionally hydrates
-  the map through the fragment registry and skips `bindBoxSelection` in map layout.
-- **Global Escape** (`global.js`): closes the map panel after the modal and menu rules, before the broadcast.
-- Remove the plan-unit reference from the `map_view.scala.html` comment.
+    - **Crowded pin** (D10): the representative thumbnail with a `.drag-count-badge` count. A click on a cluster flies to
+      its expansion zoom when that is within the max zoom, else opens the panel for the union of its cells' extents; a
+      click on a cell of several points flies two zoom levels in, or at the max zoom opens the panel for the cell's
+      extent (a cell is `360 / 2^zoom / 4` degrees on a grid from the origin, the server's rule).
+    - **Location pin** (D12/D18): the `.location-pin` glyph plus `Category › Name`. A click runs `runSearch({params: {locationId}})`.
+- **`static/js/map/map-panel.js`**: `openMapPanel({bbox})` shows the aside and runs `runSearch({params: {bbox},
+  transient: {layout: "grid", groupBy: null, groupDirection: null}, target: "#mapPanelContent", source: panelEl})`.
+  `bbox` is a real store parameter, so the panel's infinite scroll and cursor continuation work unchanged and the URL is
+  bookmarkable: the map hydrator reopens the panel for the `data-results-bbox` its fragment carries. "Show only these in
+  the grid" runs `runSearch({params: {layout: "grid"}})`; the × , Escape (`global.js`, after the modal and menu rules)
+  and the `#bboxScope` chip all clear `bbox` through the search funnel, which re-renders the map without a panel.
+  - A continuation continues the grid as rendered: `infinite-scroll.js` sends the fragment's `data-results-layout`,
+    `-group-by` and `-group-direction` as transient parameters, so the panel's grid stays a plain grid while the store
+    says map and may hold a grouping.
+  - The panel's request is issued from the panel element (`runSearch`'s `source` option), and `listeners/map.js` rewrites
+    the `HX-Replace-Url` of responses to such requests in `htmx:before:history:update`, putting `layout=map` back.
+  - `fragments/search-results.js` hydrates the panel's fragment as the panel's grid: it reports the count to
+    `#mapPanelCount`, scrolls the panel, and leaves the displayed map, the total store, the viewed scope and box selection alone.
+- **`static/js/map/map-state.js`**: center and zoom in memory, keyed by the scope fingerprint of the store's `view`,
+  `folderId`, `personId`, `albumId`, `locationId` and `q` (the sort, layout, grouping, paging and `bbox` do not key it),
+  so a re-render for a sort change or a panel does not reset the view. It also exposes the displayed map's live view.
+- **Pin editor start view**: `fragments/location-editor.js` opens on the results map's center and zoom when a map is
+  displayed, and on the world otherwise. A validation replacement still opens on the submitted pin at zoom 12.
+- **Layout persistence** (D14): `Const.localStore.resultsLayout`, written by the store's `merge` when `layout` changes;
+  `seedSearchParams` takes the layout from the URL first, then `localStorage`. `Const.search.layout` names the two values.
+- **`search-params.js`**: `layout` (`grid`) and `bbox` (`null`) in `DEFAULTS`. `bbox` is cleared by `view`, `folderId`,
+  `personId`, `albumId`, `locationId` and `q`; `layout`, `sort` and the grouping keep it.
+
+Tests (`SearchResultsControllerTests`): the Location option and the `data-results-group-by` / `-direction` attributes
+for each grouping, the `-in-<locationId>` cell IDs and the `.category` span of a Location page, the pressed toggle
+button, `#mapPanel hidden` and `#bboxScope` in map layout, and no chip without a `bbox`.
+
+Browser-verified through the hidden automation tab (Leaflet `setView` with `animate: false`, synthetic clicks on pins,
+`flyTo` spied): the toggle and its persistence, the fitted initial view and the remembered one, cells re-requested per
+view including across the antimeridian, clustering at low zoom and the expansion zoom on click, single pins opening the
+detail modal (no previous/next), Location pins scoping the results, the panel at max zoom with its count, continuation
+(`rpp=5`, with a Location grouping in the store), URL, chip, "Show only these in the grid", × and Escape, Group by
+Location with duplicate cells painted and stepped through in the detail modal, and the pin editor opening on the map's view.
+A real drag across the map and the fly animation remain manual checks in Unit 9.
 
 ## Unit 8 — Frontend: Add location modal and pin editor
 
