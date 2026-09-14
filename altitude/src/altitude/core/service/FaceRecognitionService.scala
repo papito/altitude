@@ -59,8 +59,9 @@ class FaceRecognitionService(val app: Altitude):
       frames =>
         frames.flatMap {
           frame =>
-            val faces = app.service.faceDetection.extractFaces(frame.image, Some(dataAsset.asset.fileName))
-            frame.image.release()
+            val faces =
+              try app.service.faceDetection.extractFaces(frame.image, Some(dataAsset.asset.fileName))
+              finally frame.image.release()
             faces.map { case (face, images) => (face.copy(frameTimeMs = Some(frame.timeMs)), images) }
         }.toList
     }
