@@ -61,6 +61,20 @@ import altitude.core.service.VideoService
     times shouldEqual times.sorted
   }
 
+  test("One open of a clip decodes more than once, seeking back, so a second pass does not reopen it") {
+    val times = service.withFrames(TestVideos.oneFace) {
+      decode =>
+        def timesOf(times: Seq[Long]) = decode(times).map {
+          frame =>
+            frame.image.release(); frame.timeMs
+        }.toList
+        timesOf(Seq(2000L)) ++ timesOf(Seq(0L, 1000L))
+    }
+
+    times should have size 3
+    times.zip(Seq(2000L, 0L, 1000L)).foreach { case (actual, requested) => actual shouldBe requested +- 150 }
+  }
+
   test("A Frame time past the end of the clip yields no frame") {
     service.sampledFrames(TestVideos.oneFace, Seq(0L, 60_000L))(_.map(_.image.release()).size) shouldBe 1
   }
@@ -85,7 +99,7 @@ import altitude.core.service.VideoService
   }
 
   test("The Preview is the first Sampled frame past a black leader") {
-    val preview = service.previewFrame(TestVideos.blackLeader)
+    val preview = service.previewFrame(TestVideos.blackLeader, service.probe(TestVideos.blackLeader).durationMs)
 
     // Two seconds of black, sampled every second: the first frame that is not black is the one at two seconds
     preview.timeMs shouldBe 2000L +- 150
@@ -94,7 +108,8 @@ import altitude.core.service.VideoService
   }
 
   test("The Preview of a clip that never clears the brightness floor is the frame at a tenth of the duration") {
-    val preview = service.previewFrame(TestVideos.clip(Seq(TestVideos.black(5))))
+    val clip = TestVideos.clip(Seq(TestVideos.black(5)))
+    val preview = service.previewFrame(clip, service.probe(clip).durationMs)
 
     preview.timeMs shouldBe 500L +- 150
     preview.image.release()

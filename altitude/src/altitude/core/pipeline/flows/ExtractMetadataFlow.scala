@@ -38,8 +38,7 @@ object ExtractMetadataFlow:
         val publicMetadata = Asset.getPublicMetadata(extractedMetadata)
 
         try
-          val (width, height) = app.service.asset.getDimensions(dataAsset)
-          val durationMs = app.service.asset.getDuration(dataAsset)
+          val (width, height, durationMs) = app.service.asset.getDimensionsAndDuration(dataAsset)
 
           val asset: Asset = dataAsset.asset.copy(
             extractedMetadata = extractedMetadata,

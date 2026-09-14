@@ -52,8 +52,7 @@ class FaceRecognitionService(val app: Altitude):
    * change that splits a person in two does not fail the import.
    */
   private def processVideo(dataAsset: AssetWithData): Unit =
-    val durationMs = dataAsset.asset.durationMs.getOrElse(app.service.video.probe(dataAsset.path).durationMs)
-    val times = app.service.video.sampleTimes(durationMs)
+    val times = app.service.video.sampleTimes(app.service.asset.videoDuration(dataAsset))
 
     val detections: List[(Face, FaceImages)] = app.service.video.sampledFrames(dataAsset.path, times) {
       frames =>

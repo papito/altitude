@@ -88,54 +88,58 @@ class VideoService(config: Config):
     VideoService.sampleTimes(durationMs, sampleIntervalMs, maxSampledFrames)
 
   /**
-   * Decodes the frame at each Frame time, in order, and hands the frames to `consume` as an iterator that decodes as it is
-   * advanced; a time past the last frame yields nothing. The Video stays open for the duration of the call, so the iterator must
-   * not escape it. Each frame's image is released by the consumer.
+   * Opens the Video once and hands `consume` a decoder: given Frame times, it decodes the frame at each, in order, as an iterator
+   * that decodes as it is advanced; a time past the last frame yields nothing. The decoder may be called again, and seeks either
+   * way. The Video stays open for the duration of the call, so neither the decoder nor an iterator must escape it. Each frame's
+   * image is released by the consumer.
    */
-  def sampledFrames[A](path: Path, times: Seq[Long])(consume: Iterator[VideoService.SampledFrame] => A): A =
+  def withFrames[A](path: Path)(consume: (Seq[Long] => Iterator[VideoService.SampledFrame]) => A): A =
     withGrabber(path) {
       grabber =>
         val rotation = VideoService.uprightRotation(grabber.getDisplayRotation)
         // The converter hands out one Mat over the grabber's own frame buffer, so every frame is copied out of it
         val converter = new OpenCVFrameConverter.ToOrgOpenCvCoreMat()
 
-        try
-          val frames = times.iterator.flatMap {
-            timeMs =>
-              grabber.setTimestamp(timeMs * 1000)
-              Option(grabber.grabImage()).map {
-                frame =>
-                  val image = upright(converter.convert(frame), rotation)
-                  VideoService.SampledFrame(Math.round(frame.timestamp / 1000.0), image)
-              }
-          }
-          consume(frames)
+        def decode(times: Seq[Long]): Iterator[VideoService.SampledFrame] = times.iterator.flatMap {
+          timeMs =>
+            grabber.setTimestamp(timeMs * 1000)
+            Option(grabber.grabImage()).map {
+              frame =>
+                val image = upright(converter.convert(frame), rotation)
+                VideoService.SampledFrame(Math.round(frame.timestamp / 1000.0), image)
+            }
+        }
+
+        try consume(decode)
         finally converter.close()
     }
 
+  /** The frames at the Frame times, decoded by one open of the Video; see [[withFrames]] */
+  def sampledFrames[A](path: Path, times: Seq[Long])(consume: Iterator[VideoService.SampledFrame] => A): A =
+    withFrames(path)(decode => consume(decode(times)))
+
   /**
    * The Video's Preview: the first Sampled frame whose mean brightness clears the floor (`video.preview.min_luminance`), which
-   * skips a black leader, or the frame at a tenth of the duration when none does
+   * skips a black leader, or the frame at a tenth of the duration when none does. The duration is the asset's, so the Video is
+   * opened once.
    */
-  def previewFrame(path: Path): VideoService.SampledFrame =
-    val durationMs = probe(path).durationMs
+  def previewFrame(path: Path, durationMs: Long): VideoService.SampledFrame = withFrames(path) {
+    decode =>
+      val bright = decode(sampleTimes(durationMs)).find {
+        frame =>
+          VideoService.meanLuminance(frame.image) >= previewMinLuminance || {
+            frame.image.release()
+            false
+          }
+      }
 
-    val bright = sampledFrames(path, sampleTimes(durationMs)) {
-      frames =>
-        frames.find {
-          frame =>
-            VideoService.meanLuminance(frame.image) >= previewMinLuminance || {
-              frame.image.release()
-              false
-            }
-        }
-    }
-
-    bright.getOrElse {
-      logger.info(s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
-      sampledFrames(path, Seq(durationMs / 10))(_.nextOption())
-        .getOrElse(throw RuntimeException(s"No frame could be decoded from $path"))
-    }
+      bright.getOrElse {
+        logger.info(s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
+        decode(Seq(durationMs / 10))
+          .nextOption()
+          .getOrElse(throw RuntimeException(s"No frame could be decoded from $path"))
+      }
+  }
 
   /**
    * Opens the Video for the call and closes it after; a file FFmpeg cannot open or that has no video stream is a
