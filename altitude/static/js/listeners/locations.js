@@ -1,6 +1,7 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import {
+    expandLocationCategory,
     focusAddLocationControlIfFocusLost,
     reloadLocationList,
 } from "../common/location-list.js"
@@ -11,17 +12,24 @@ import { runSearch } from "../search-results/search.js"
  * Location events: the dialogs' outcomes (add, add category, rename, move and delete reload the
  * list; the Add to location dialog announces its memberships) and membership changes from
  * drag/drop and the batch footer. A single-asset drop escalates to a batch when that asset is
- * among the selected ones, as folder moves and album drops do.
+ * among the selected ones, as folder moves and album drops do. The reload restores the expanded
+ * categories; an add also reveals the category the new Location went into, while a move leaves a
+ * collapsed category collapsed, as moving a folder under a collapsed parent does.
  */
 export function registerLocationListeners(app) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
     const repoId = () => app.context.getRepoId()
 
-    document.body.addEventListener(Const.events.locationAdded, async () => {
-        await reloadLocationList(repoId())
-        // The first Location hides the empty-state button that opened the dialog
-        focusAddLocationControlIfFocusLost()
-    })
+    document.body.addEventListener(
+        Const.events.locationAdded,
+        async (event) => {
+            await reloadLocationList(repoId())
+            // The server names the category in the success detail (null at the top level)
+            expandLocationCategory(event.detail?.categoryId)
+            // The first Location hides the empty-state button that opened the dialog
+            focusAddLocationControlIfFocusLost()
+        },
+    )
 
     document.body.addEventListener(Const.events.categoryAdded, async () => {
         await reloadLocationList(repoId())

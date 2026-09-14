@@ -273,10 +273,10 @@ form input.error, form input.error:focus {
     padding: var(--modal-content-padding);
 }
 
-/* Asset count on a folder or album row, right-aligned against the icon; zero counts render empty
-   (js/common/asset-count.js) */
+/* Asset count on a folder, album or Location row, in the track after the name, so it follows the
+   name directly; zero counts render empty (js/common/asset-count.js) */
 .asset-count {
-    justify-self: end;
+    justify-self: start;
     color: var(--font-color-dim);
     font-size: .9em;
     white-space: nowrap;

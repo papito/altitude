@@ -4,18 +4,47 @@
     #locationList {
         /* A Location under a category is indented by one step, drawn by its `.trace` cell like the folder tree's */
         --location-indent: 20px;
-        /* One vertical rhythm between rows */
+        /* One vertical rhythm for the whole list: the same gap separates sibling rows and separates a
+           category's own row from its Locations, so nesting never tightens the spacing */
         --location-row-gap: 8px;
-        /* Horizontal gap between the cells of a row (⋯ button, trace, count, icon, name). The trace
+        /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name, count). The trace
            subtracts it, so both uses must be the same value */
         --location-control-gap: 6px;
-        /* The asset count's slot. js/common/location-list.js sets this to the width of the widest count
-           after every render, so the icons line up whether or not a row shows a count */
-        --location-count-column: max-content;
 
         display: grid;
         grid-auto-rows: auto;
         grid-row-gap: var(--location-row-gap);
+    }
+
+    /* A category node holds its row and its children container (js/common/location-list.js); a
+       collapsed children container is `display: none`, so it is not a grid item and adds no gap */
+    #locationList .location.category, #locationList .children {
+        display: grid;
+        grid-auto-rows: auto;
+        grid-row-gap: var(--location-row-gap);
+    }
+
+    /* An expanded category and its Locations form a group, set off from the rows around it by twice
+       the row gap: the list's own gap plus this margin, present only while expanded. Grid items do
+       not collapse margins, so the cases below cancel the margin where it would triple the gap */
+    #locationList .location.category[data-expanded] {
+        margin-block: var(--location-row-gap);
+    }
+
+    /* An expanded category directly after another expanded category: the first one's bottom margin
+       already doubles the gap between them */
+    #locationList .location[data-expanded] + .location[data-expanded] {
+        margin-top: 0;
+    }
+
+    /* The list has no root row, so an expanded category that opens or closes the list gets no extra
+       space at the list's top or bottom */
+    #locationList .location.category[data-expanded]:first-child {
+        margin-top: 0;
+    }
+
+    #locationList .location.category[data-expanded]:last-child {
+        margin-bottom: 0;
     }
 
     #locationList .location .controls {
@@ -26,23 +55,31 @@
     }
 
     #locationList .location.category > .controls {
-        /* ⋯ menu button | icon | name (grows). A category holds no assets, so it shows no count */
+        /* ⋯ menu button | icon | name (grows). A category holds no assets, so it shows no count; a
+           category without Locations has nothing to expand, so its icon and name are plain cells */
         grid-template-columns: max-content max-content 1fr;
     }
 
+    #locationList .location.category > .controls:has(> .expand-ctrl) {
+        /* ⋯ menu button | expand button, which lays out the icon and name itself (below) */
+        grid-template-columns: max-content 1fr;
+    }
+
     #locationList .location.top-level > .controls {
-        /* ⋯ menu button | asset count | icon | name (grows) */
-        grid-template-columns: max-content var(--location-count-column) max-content 1fr;
+        /* ⋯ menu button | icon | name | asset count. The name track sizes to its content and wraps
+           when it must; the count track takes the remaining width, so the count follows the name
+           directly and a row without a count ends at its name */
+        grid-template-columns: max-content max-content auto 1fr;
     }
 
     #locationList .location.child > .controls {
-        /* ⋯ menu button | trace (= indent) | asset count | icon | name (grows) */
-        grid-template-columns: max-content max-content var(--location-count-column) max-content 1fr;
+        /* ⋯ menu button | trace (= indent) | icon | name | asset count */
+        grid-template-columns: max-content max-content max-content auto 1fr;
     }
 
     #locationList .trace {
-        /* Spans the indent minus the grid gap on its count side, so the count/icon/name sit where a
-           plain margin-left indent would put them while the ⋯ stays flush left */
+        /* Spans the indent minus the grid gap on its icon side, so the icon/name sit where a plain
+           margin-left indent would put them while the ⋯ stays flush left */
         width: calc(var(--depth) * var(--location-indent) - var(--location-control-gap));
         border-top: 2px double var(--panel-border-color);
     }
@@ -52,12 +89,60 @@
         color: rgba(234, 231, 231, 0.98);
     }
 
-    #locationList .location-name, #locationList .location-icon {
+    /* A category's expand control is a real button (Enter/Space work, no page jump) that keeps only
+       the look of the row content it wraps: the icon and the name, laid out with the row's own
+       columns and gap, so the icon lines up with a top-level Location's. Unlike the ⋯ trigger it
+       keeps the default focus ring: focus lands here from the keyboard, and from a collapse that
+       hid the focused control */
+    #locationList .location.category .expand-ctrl {
+        display: grid;
+        grid-template-columns: max-content auto;
+        column-gap: var(--location-control-gap);
+        align-items: center;
+        justify-items: start;
+        text-align: left;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: inherit;
         cursor: pointer;
     }
 
-    /* Green marks the viewed Location: the one whose results are displayed (see js/common/location-list.js) */
-    #locationList .location[data-viewed-scope] .location-icon {
+    /* The +/− badge on an expandable category's icon: drawn at the icon's corner with the Font
+       Awesome font (fa-plus / fa-minus), positioned out of flow so it adds no width and the icon
+       stays in line with top-level Location icons. A category without Locations has no button and
+       so no badge */
+    #locationList .location.category .expand-ctrl .location-icon {
+        position: relative;
+    }
+
+    #locationList .location.category .expand-ctrl .location-icon::after {
+        content: "\f067";
+        font-family: "Font Awesome 5 Free";
+        font-weight: 900;
+        font-size: 0.5em;
+        line-height: 1;
+        position: absolute;
+        right: -0.35em;
+        bottom: -0.35em;
+        padding: 0.15em;
+        border-radius: 50%;
+        background-color: var(--background-color);
+    }
+
+    #locationList .location.category[data-expanded] .expand-ctrl .location-icon::after {
+        content: "\f068";
+    }
+
+    #locationList .location:not(.category) .location-name, #locationList .location:not(.category) .location-icon {
+        cursor: pointer;
+    }
+
+    /* Green marks the viewed Location: the one whose results are displayed (see js/common/location-list.js).
+       Only that row's own icon: the marker sits on a Location row, never on a category node, and a
+       category is never colored for a Location inside it */
+    #locationList .location[data-viewed-scope] > .controls .location-icon {
         color: var(--success-font-color);
     }
 

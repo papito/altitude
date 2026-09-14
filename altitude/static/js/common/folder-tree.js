@@ -10,11 +10,10 @@
  *   the tree gained a folder the DOM does not have.
  *
  * Every non-root row shows its folder's recursive asset count (`.asset-count`,
- * before the icon): the folder's own sorted assets plus those of every folder
- * beneath it, with triaged and recycled assets excluded. A zero renders empty.
+ * directly after the name): the folder's own sorted assets plus those of every
+ * folder beneath it, with triaged and recycled assets excluded. A zero renders
+ * empty, so a row without assets ends at its name (`common/asset-count.js`).
  * The root row shows no count; the nav already carries the repository total.
- * The count column is exactly as wide as the widest count in the tree, so the
- * icons of sibling rows line up (`sizeCountColumn` in `common/asset-count.js`).
  *
  * The DOM structure produced mirrors what the old Twirl templates generated so
  * that the existing Folder JS model, CSS, and drag-and-drop wiring all continue
@@ -36,18 +35,14 @@
  *
  * Indentation is not structural: every non-root `.folder` carries a `--depth`
  * CSS custom property, and its `.controls` row holds a `.trace` cell (between
- * the ⋯ menu button and the count) whose width is derived from `--depth`. The
+ * the ⋯ menu button and the icon) whose width is derived from `--depth`. The
  * trace both indents the icon/name and draws the dotted guide back to the ⋯
  * button, which stays flush left at every depth.
  */
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { http } from "../http/client.js"
-import {
-    buildAssetCountEl,
-    setAssetCount,
-    sizeCountColumn,
-} from "./asset-count.js"
+import { buildAssetCountEl, setAssetCount } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
@@ -55,8 +50,6 @@ import {
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
-
-const COUNT_COLUMN_VARIABLE = "--folder-count-column"
 
 // ─── public ─────────────────────────────────────────────────────────────────
 
@@ -101,12 +94,7 @@ export async function refreshFolderCounts(repoId) {
         // Another explorer tab is active: the next render of the folders tab fetches fresh counts
         if (!document.getElementById("rootFolderList")) return
 
-        if (_patchAssetCounts(response.data)) {
-            sizeCountColumn(
-                document.getElementById("rootFolderList"),
-                COUNT_COLUMN_VARIABLE,
-            )
-        } else {
+        if (!_patchAssetCounts(response.data)) {
             _renderTree(response.data, repoId)
         }
     } catch (error) {
@@ -134,7 +122,6 @@ function _renderTree(treeData, repoId) {
     // Tear down and rebuild
     container.innerHTML = ""
     container.appendChild(_renderRootNode(treeData, repoId))
-    sizeCountColumn(container, COUNT_COLUMN_VARIABLE)
     _ensureAddControl(treeData, repoId)
 
     // Let HTMX wire up the new elements. Alpine needs no call: its mutation observer
@@ -332,18 +319,18 @@ function _buildFolderControls(folder, repoId) {
     // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, folder.name)
 
-    // Dotted guide from the ⋯ button to the count; its width is the row's indent
+    // Dotted guide from the ⋯ button to the icon; its width is the row's indent
     const traceEl = document.createElement("span")
     traceEl.className = "trace"
 
-    // ⋯ menu button | trace | asset count | icon | folder-name
+    // ⋯ menu button | trace | icon | folder-name | asset count
     controlsEl.appendChild(menuCtrlEl)
     controlsEl.appendChild(traceEl)
+    controlsEl.appendChild(iconCtrlEl)
+    controlsEl.appendChild(nameEl)
     controlsEl.appendChild(
         buildAssetCountEl(`folder-count-${folder.id}`, folder.numOfAssets),
     )
-    controlsEl.appendChild(iconCtrlEl)
-    controlsEl.appendChild(nameEl)
 
     return controlsEl
 }

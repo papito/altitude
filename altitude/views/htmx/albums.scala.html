@@ -4,11 +4,8 @@
     #albumList {
         /* One vertical rhythm between album rows */
         --album-row-gap: 8px;
-        /* Horizontal gap between the cells of a row (⋯ button, count, icon, name) */
+        /* Horizontal gap between the cells of a row (⋯ button, icon, name, count) */
         --album-control-gap: 6px;
-        /* The asset count's slot. js/common/album-list.js sets this to the width of the widest count
-           after every render, so the icons line up whether or not a row shows a count */
-        --album-count-column: max-content;
 
         display: grid;
         grid-auto-rows: auto;
@@ -16,9 +13,11 @@
     }
 
     #albumList .album .controls {
-        /* ⋯ menu button | asset count | icon | album-name (grows) */
+        /* ⋯ menu button | icon | album-name | asset count. The name track sizes to its content and
+           wraps when it must; the count track takes the remaining width, so the count follows the
+           name directly and a row without a count ends at its name */
         display: grid;
-        grid-template-columns: max-content var(--album-count-column) max-content 1fr;
+        grid-template-columns: max-content max-content auto 1fr;
         column-gap: var(--album-control-gap);
         align-items: center;
         touch-action: none;

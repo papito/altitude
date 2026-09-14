@@ -15,7 +15,8 @@ Use the grill-me interview to settle behavior and produce a plan before changing
 
 ## Status
 
-Design interview complete on 2026-09-13. Not implemented.
+Implemented and verified on 2026-09-13. Every task below is done; the browser results are recorded under
+**Verification results** at the end.
 
 ## Confirmed decisions
 
@@ -209,3 +210,44 @@ are presentation terms and are documented in `altitude/views/AGENTS.md`.
 - Delete a category holding the viewed Location: that Location appears at the top level and stays green.
 - Collapse a category with an open Location menu: the menu closes and focus moves to the category's button.
 - Dragging assets onto a Location row inside an expanded category adds them; a category row accepts no drop.
+
+## Verification results
+
+Verified on 2026-09-13 against the dev server (`make test-controllers`: 46 passed, including the new success-detail
+assertions; ESLint and Prettier clean; `mill altitude.resources` refreshed). Chrome ran in a hidden tab, so pointer
+and keyboard input was driven through DOM APIs; two checks are left for a hand test, listed last.
+
+- Counts follow names in all three tabs (`NYC (47)` with the row's 6px gap between them); zero counts render empty
+  and rows end at their names. Folder, top-level Location and category icons share the same left edge. Root and
+  category rows show no count. A long Location name wrapped to two lines with its count still inside the panel and
+  no horizontal scrolling. `refreshAlbumCounts` and `refreshLocationCounts` patched counts in place.
+- Viewing a folder marked it and its two children green and nothing else; viewing root marked nothing and root's
+  icon kept its own color.
+- Folder spacing, measured with `getBoundingClientRect` on temporary folders A → B → B1, A → C → C1 beside NYC and
+  zzzz: all collapsed gave 8px everywhere; A, B and C expanded gave NYC→A 16, A→B 16, B→B1 8, B1→C 16, C→C1 8,
+  C1→zzzz 16; NYC expanded as well gave NYC's children 8 apart and 2→A 16; collapsing A then gave A→zzzz 8. The
+  top and bottom of the tree stayed at 0 throughout.
+- On a fresh page load the category with Locations was collapsed with the plus badge (`\f067`), `aria-expanded`
+  false, and its Locations hidden. `button.click()` (keyboard-style, `detail` 0), a click on the name, and a click
+  on the icon each toggled; a click/click/dblclick sequence and a triple-click each toggled once; `aria-expanded`,
+  the tooltip, the badge (`\f068` when expanded) and `data-expanded` moved together; no network request was
+  made. The badge added no width: the expandable category's icon measured the same as an empty category's.
+- A category with no Locations rendered as plain cells with no button, no badge and the default cursor, and clicks
+  on its icon and name changed nothing.
+- Location spacing: one expanded category gave 16 above and below and 8 inside; two consecutive expanded
+  categories gave 16 between them; an expanded category moved to the list's first position gave a top of 0.
+- Adding a Location into the collapsed category through the Add location dialog expanded it and showed the row;
+  the success event's detail carried `categoryId`. Renaming (list reload) and a count refresh kept the category
+  expanded. Moving a Location into a collapsed category through the Move dialog left it collapsed, and expanding
+  it showed the Location.
+- Viewing a Location inside a category marked only that row and colored only its icon green; the category and
+  the other rows stayed plain, and collapsing and re-expanding the category kept it marked and green.
+- With a Location's menu open and focused inside the category, collapsing the category closed the menu and moved
+  focus to the category's button.
+- Deleting the category holding the viewed Location through the Delete dialog left that Location at the top
+  level, visible and green.
+- Drop targets: every Location row's `.controls` carries `.dropzone` (inside an expanded category too) and no
+  category row does, so `dragdrop/locations.js` binds only Location rows.
+
+Left for a hand test (the hidden tab delivers no real input): pressing Enter and Space on a focused category
+button, and dragging assets onto a Location inside an expanded category.
