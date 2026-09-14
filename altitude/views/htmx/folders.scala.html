@@ -6,13 +6,9 @@
         /* One vertical rhythm for the whole tree: the same gap separates sibling rows and separates
            a folder's own row from its children, so nesting never tightens the spacing */
         --folder-row-gap: 8px;
-        /* Horizontal gap between the cells of a row (⋯ button, trace, count, icon, name). The trace
+        /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name, count). The trace
            subtracts it, so both uses must be the same value */
         --folder-control-gap: 6px;
-        /* The asset count's slot. js/common/folder-tree.js sets this to the width of the widest count
-           in the tree after every render, so sibling icons line up whether or not a row shows a count.
-           Every row is its own grid, so CSS alone cannot share the column width between them */
-        --folder-count-column: max-content;
     }
 
     #rootFolderList .folder.root, .folder-list .children {
@@ -47,14 +43,35 @@
     }
 
     #rootFolderList .folder:not(.root) > .controls {
-        /* ⋯ menu button | dotted trace (= indent) | asset count | icon | folder-name (grows) */
-        grid-template-columns: max-content max-content var(--folder-count-column) max-content 1fr;
+        /* ⋯ menu button | dotted trace (= indent) | icon | folder-name | asset count. The name track
+           sizes to its content and wraps when it must; the count track takes the remaining width, so
+           the count follows the name directly and a row without a count ends at its name */
+        grid-template-columns: max-content max-content max-content auto 1fr;
+    }
+
+    /* An expanded branch and its visible descendants form a group, set off from the rows around it
+       by twice the row gap: the grid's own gap plus this margin, present only while expanded. Grid
+       items do not collapse margins, so the cases below cancel the margin where the neighbouring
+       group's margin already doubles the gap. Root is always expanded and is not a group */
+    #rootFolderList .folder:not(.root)[data-expanded] {
+        margin-block: var(--folder-row-gap);
+    }
+
+    /* An expanded folder directly after an expanded sibling: the sibling's bottom margin already
+       doubles the gap between them */
+    #rootFolderList .folder[data-expanded] + .folder:not(.root)[data-expanded] {
+        margin-top: 0;
+    }
+
+    /* An expanded folder that ends its parent's children: the parent's own bottom margin, or the end
+       of the tree under root, takes the place of its margin, so groups ending together add one gap */
+    #rootFolderList .folder:not(.root)[data-expanded]:last-child {
+        margin-bottom: 0;
     }
 
     #rootFolderList .trace {
-        /* Spans this depth's indent minus the grid gap on its count side, so the count/icon/name
-           sit where a plain margin-left indent would put them while the ⋯ stays flush left. The
-           count slot adds the same constant offset to every row, so relative indentation holds */
+        /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name sit where a
+           plain margin-left indent would put them while the ⋯ stays flush left */
         width: calc(var(--depth) * var(--folder-indent) - var(--folder-control-gap));
         border-top: 2px double var(--panel-border-color);
     }
@@ -88,7 +105,8 @@
     /* Green marks the viewed scope: the folder whose results are displayed and every descendant, since the
        results include the whole subtree. Expansion plays no part. The marker sits on the viewed folder's
        node alone (see js/common/viewed-folder-scope.js); its descendants are DOM descendants, so this one
-       rule covers root, branches, and leaves in the subtree, and never an icon in a menu or dialog */
+       rule covers branches and leaves in the subtree, and never an icon in a menu or dialog. Root is
+       never marked: its results are the whole repository, and nothing turns green for that */
     #rootFolderList .folder[data-viewed-scope] .folder-icon {
         color: var(--success-font-color);
     }

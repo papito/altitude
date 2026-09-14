@@ -69,7 +69,7 @@ import altitude.core.Const
         val membership = get("dialogs/add-to-location")
         membership should include("""id="addToLocation"""")
         membership should include(s"""data-app-modal-title="${Const.UI.ADD_TO_LOCATION_DIALOG_TITLE}"""")
-        membership should include("Italy - Beach")
+        membership should include("Italy › Beach")
         membership should include("Park")
         (membership should not).include(s"""value="${category.persistedId}"""")
     }
@@ -90,9 +90,13 @@ import altitude.core.Const
           check = false)
         def body() =
           ujson.Obj("name" -> "  Beach ", "latitude" -> "1.25", "longitude" -> "-2.5", "categoryId" -> category.persistedId)
+        def successDetail(response: requests.Response): ujson.Value =
+          ujson.read(response.headers(Api.Field.SUCCESS_DETAIL_HEADER.toLowerCase).head)
         val created = post(body())
         created.statusCode shouldBe 200
         created.text() shouldBe ""
+        // The list expands the category of a Location added to it, so the response names the category
+        successDetail(created)(Api.Field.Location.CATEGORY_ID).str shouldBe category.persistedId
         val saved = testApp.service.location.getAll.find(_.name == "Beach").get
         saved.latitude shouldBe Some(1.25)
         saved.longitude shouldBe Some(-2.5)
@@ -130,6 +134,8 @@ import altitude.core.Const
           post(ujson.Obj("name" -> "Root", "latitude" -> -90, "longitude" -> 180, "categoryId" -> ""))
         numeric.statusCode shouldBe 200
         numeric.text() shouldBe ""
+        // A top-level Location has no category to expand
+        successDetail(numeric)(Api.Field.Location.CATEGORY_ID) shouldBe ujson.Null
         val root = testApp.service.location.getAll.find(_.name == "Root").get
         root.categoryId shouldBe None
         testApp.service.location.getAll.size shouldBe 3

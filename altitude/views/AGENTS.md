@@ -58,7 +58,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
 
@@ -352,13 +352,14 @@ children container, and `aria-expanded`, which the model keeps in step with the
 sends no request.
 
 **Folder asset counts** — Every non-root row shows its folder's asset count in a `.asset-count`
-cell (`#folder-count-{id}`, built by `js/common/asset-count.js`) placed before the icon, dimmed in
-parentheses. The count is recursive:
+cell (`#folder-count-{id}`, built by `js/common/asset-count.js`) placed directly after the name, dimmed
+in parentheses: `NYC (47)`. The count is recursive:
 the folder's own sorted assets plus those of every folder beneath it. Triaged and recycled assets are
-excluded, and a zero renders as an empty cell, never `(0)`. The root row (labelled `/`) shows no count (the nav
-carries the repository total), though the tree JSON still reports `numOfAssets` for it. Every row is its own grid, so after each render `sizeCountColumn` measures the widest count and sets
-`--folder-count-column` (declared in `views/htmx/folders.scala.html`) on the list to that width; the
-column is then uniform across rows and sibling icons stay aligned whether or not a row shows a count.
+excluded, and a zero renders as an empty cell, never `(0)`, so a row without assets ends at its name. The root row (labelled `/`) shows no count (the nav
+carries the repository total), though the tree JSON still reports `numOfAssets` for it. The row grid
+(`views/htmx/folders.scala.html`) gives the name a content-sized track that wraps when it must and the
+count the remaining width, so no column is reserved for counts, rows line up on the left, and a long
+name never pushes its count out of the panel. The count is not a search trigger.
 The server computes the counts on every tree fetch (`FolderService.getTree`); nothing is stored.
 
 | Target and starting state | Single-click | Double-click |
@@ -377,12 +378,22 @@ sequence (`event.detail` above 1), and applies the double-click action from the 
 before the first click; the comment on `_bindBranchGestures` explains why. Initial rendering shows
 root and its direct children with every branch collapsed; nothing is persisted.
 
+An expanded branch and its visible descendants form a **group**, set off from the rows around it:
+between any two consecutive visible rows the space is the row gap (`--folder-row-gap`, 8px) or twice
+that where a group starts or ends, never more, whether groups end together, one expanded branch directly
+follows another, or an expanded first child follows its parent's row. The tree's top and bottom get no
+extra space, and root is not a group. The CSS in `htmx/folders.scala.html` implements it as a block
+margin on `.folder[data-expanded]` (grid items do not collapse margins), cancelled where an expanded
+sibling precedes or where the branch is its parent's last child; expansion already toggles the
+attribute, so the renderer plays no part.
+
 Green (`--success-font-color`) marks the **viewed scope**: the folder whose results are displayed
 and all its descendants, because the results cover that subtree. It has nothing to do with
 expansion. `js/common/viewed-folder-scope.js` keeps the scope of the displayed results and marks
 that one folder node with `data-viewed-scope`; the CSS in `htmx/folders.scala.html` colors every
-`.folder-icon` under the node (root and leaves included, hidden descendants too) and no icon in a
-menu or dialog. The search-results fragment carries `data-results-repo-id`, `data-results-view`,
+`.folder-icon` under the node (leaves and hidden descendants included) and no icon in a
+menu or dialog. Root is never marked: viewing the root folder turns nothing green, root's icon
+included, because that scope is the whole repository. The search-results fragment carries `data-results-repo-id`, `data-results-view`,
 and `data-results-folder-id`, which `SearchResultsController` resolved from the parameters it was
 sent, and `js/fragments/search-results.js` sets the scope when the fragment is hydrated. It reads
 those attributes rather than the `searchParams` store on purpose: the highlight must follow what is
@@ -392,8 +403,8 @@ tree rebuild; deleting the viewed folder removes it without selecting the parent
 
 **Albums** — The Albums tab (`views/htmx/albums.scala.html`) is a flat list rendered by
 `js/common/album-list.js` from the JSON list endpoint, one `.album` row (`#album-{id}`,
-`data-album-id`) per album: menu | `.asset-count` (`#album-count-{id}`, column sized like the folder
-one through `--album-count-column`) | icon | name, with icon and name as `data-app-search-album-id`
+`data-album-id`) per album: menu | icon | name | `.asset-count` (`#album-count-{id}`, directly after
+the name, laid out like the folder one), with icon and name as `data-app-search-album-id`
 triggers and the row's `.controls` a drop zone (`js/dragdrop/albums.js`) for a single asset or the
 batch mover. Albums hold pointers only: a drop adds memberships (`PUT /api/album/r/:repoId/assets`,
 `assetActions.addAssetsToAlbum`; assets already in the album are skipped and reported), the grid
@@ -411,13 +422,28 @@ was hidden by the change (`focusAddAlbumControlIfFocusLost`).
 
 **Locations** — The Locations tab (`views/htmx/locations.scala.html`) is rendered by
 `js/common/location-list.js` from the JSON list endpoint, which returns categories and Locations in path
-order (a category directly followed by its Locations, top-level Locations interleaved by name), so the
-list is rendered in that order as it comes: one `.location` row (`#location-{id}`, `data-location-id`,
-`data-kind`) per entry, `.category`, `.top-level`, or `.child` (under a category: `data-category-id`,
-`--depth: 1` and a `.trace` cell that indents it like a folder). A category row is menu (Rename, Delete)
-| `fa-layer-group` icon | name; it holds no assets, so it is neither a drop target nor a search
-trigger. A Location row is menu (Rename, Delete, Move to category) | `.asset-count`
-(`#location-count-{id}`, sized through `--location-count-column`) | `fa-map-marker-alt` icon | name,
+order (a category directly followed by its Locations, top-level Locations interleaved by name).
+Top-level Locations and categories are siblings of `#locationList` in that order; a category is a
+node (`.location.category`, `#location-{id}`, `data-location-id`, `data-kind`) holding its row and,
+when it has Locations, a children container (`#location-children-{id}`, `.children`) with their rows
+(`.child`: `data-category-id`, `--depth: 1` and a `.trace` cell that indents it like a folder); a
+top-level Location is a `.top-level` row. A category row is menu (Rename, Delete) | `fa-layer-group`
+icon | name; it holds no assets and no count, so it is neither a drop target nor a search trigger and
+never turns green. A category with Locations wraps its icon and name in one native button
+(`#location-expand-{id}`, `.expand-ctrl`, with an accessible name, `aria-controls` for the children
+container and `aria-expanded`): clicking the icon or the name, or Enter and Space, expands or
+collapses its Locations and nothing else; the later clicks of a pointer multi-click are ignored, so a
+double-click toggles once, and there is no recursive action because categories are one level deep.
+The CSS draws a +/− badge on the icon (`::after` in the Font Awesome font, positioned so it adds no
+width, so the icon lines up with top-level Location icons). A category with no Locations has a plain
+icon and name, no badge, and clicking it does nothing. Categories start collapsed when the tab loads;
+expansion is snapshotted immediately before every rebuild and restored afterwards (dropping categories
+that no longer exist or lost their Locations), and is not persisted across page loads. Collapsing
+closes an open menu among the hidden Locations and moves focus to the category's button if it was
+inside. Expanded categories get the folder tree's group spacing (twice the row gap where a group
+starts or ends, never more; an expanded category that is the list's first or last row gets no extra
+space at that end). A Location row is menu (Rename, Delete, Move to category) | `fa-map-marker-alt`
+icon | name | `.asset-count` (`#location-count-{id}`, directly after the name),
 with icon and name as `data-app-search-location-id` triggers and the row's `.controls` a drop zone
 (`js/dragdrop/locations.js`) for a single asset or the batch mover. Locations hold pointers only: a
 drop adds memberships (`PUT /api/location/r/:repoId/assets`, `assetActions.addAssetsToLocation`;
@@ -425,13 +451,14 @@ assets already in the Location are skipped and reported), the grid does not chan
 are patched in place (`refreshLocationCounts`, also called by `refreshCounts` after every asset
 mutation, because recycling drops an asset from its Locations). While a Location's results are
 displayed (`searchParams.locationId`, mirrored by `data-results-location-id`, which marks the row
-`data-viewed-scope` and colors its icon green) the batch footer offers "Remove from location", which
+`data-viewed-scope` and colors its own icon green, top-level or inside a category, whose icon stays
+plain; inside a collapsed category the viewed Location stays hidden until it is expanded) the batch footer offers "Remove from location", which
 deletes the memberships of the selected assets and removes their cells. The footer always offers "Add
 to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
 `add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
 `assetIds` field from the selection and keeps the fragment's success detail naming the chosen
-Location (its ID, and its label as the select offers it, since the row is not rendered while another
-explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
+Location (its ID, and its bare name from the option's `data-name`, since the row is not rendered while
+another explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
 reports that through `assetActions.reportAddedToLocation`, the report a drop makes too ("Already in
 location" when nothing was new), then resets the selection and refreshes the counts.
 
@@ -439,10 +466,14 @@ Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the p
 `#addFirstLocationBtn`; Add category also opens a modal from `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
 other. Rename, Delete and Move to category open separate modals from the row's menu (`#locationMenuCtrl-{id}`
 is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
-away); deleting the viewed Location runs a search back to the whole repository. `locationAdded` /
+away); deleting the viewed Location runs a search back to the whole repository, and deleting a
+category leaves its Locations at the top level, a viewed one still green. `locationAdded` /
 `categoryAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list, which
-restores focus by ID, or to the visible add control when the dialog's return control was hidden by
-the change (`focusAddLocationControlIfFocusLost`). Add and Move share
+restores the expanded categories and focus by ID, or focus to the visible add control when the
+dialog's return control was hidden by the change (`focusAddLocationControlIfFocusLost`). Add
+completes with `dialogSuccessResponse` naming the new Location's `categoryId` (null at the top level),
+and the `locationAdded` listener expands that category (`expandLocationCategory`) after the reload; a
+move into a collapsed category leaves it collapsed, as moving a folder under a collapsed parent does. Add and Move share
 `includes/location_category_select`, which offers categories only and `(none)` for the top level; Add to
 location offers Locations only, labelled `Category - Location`. Rename, Delete, and Move titles
 come from `Const.UI`, chosen by kind in the controller.
@@ -526,8 +557,9 @@ keeps the area, so the grid opens scoped to it with the chip to clear it.
 store's `view`, `folderId`, `personId`, `albumId`, `locationId` and `q`; not the sort, layout,
 grouping, paging or `bbox`) in `sessionStorage` (`Const.sessionStore.mapViews`, the 50 scopes looked
 at last), so a re-render for a sort change, a panel, a trip to the grid and back, or a reload of the
-tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. Storage that
-cannot be read or written leaves the views in memory only. It also holds the displayed map's live
+tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. A move is
+written to storage only once moves pause, or on `pagehide`, since Leaflet reports every frame of a
+resize as a move. Storage that cannot be read or written leaves the views in memory only. It also holds the displayed map's live
 view, which the pin editor opens on.
 
 **Explorer action dialogs** — The folder, album, Location, and category forms declare
@@ -710,13 +742,13 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells and image loading in the asset-detail modal |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
-| `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
+| `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row and the dialog-trigger buttons |
-| `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
-| `static/js/common/location-list.js` | renders the categories and Locations, their counts, and each row's menu from the JSON list endpoint; patches the counts in place; marks the viewed Location |
+| `static/js/common/album-list.js` | renders the album list, its counts (after each name), and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
+| `static/js/common/location-list.js` | renders the categories (expandable nodes holding their Locations) and top-level Locations, the counts after each name, and each row's menu from the JSON list endpoint; restores expansion across rebuilds; patches the counts in place; marks the viewed Location |
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
-| `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
+| `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor |

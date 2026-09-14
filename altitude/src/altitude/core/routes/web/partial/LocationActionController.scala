@@ -86,15 +86,17 @@ class LocationActionController(using logger: Logger) extends BaseController:
   @cask.post(f"/$prefix/r/:repoId/add")
   def add(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
-    submit(errors => addForm(errors, json), fields.CATEGORY_ID) {
+    respond(errors => addForm(errors, json), fields.CATEGORY_ID) {
       normalize(json)
       validate(json, required = List(fields.NAME), uuid = List(fields.CATEGORY_ID), coordinates = true)
-      App.altitude.service.location.addLocation(
+      val location = App.altitude.service.location.addLocation(
         json(fields.NAME).str,
         json(fields.LATITUDE).str.toDouble,
         json(fields.LONGITUDE).str.toDouble,
         optional(json, fields.CATEGORY_ID)
       )
+      // The list expands the category the Location went into, so the client needs to know which one (null at the top level)
+      dialogSuccessResponse(ujson.Obj(fields.CATEGORY_ID -> location.categoryId.fold[ujson.Value](ujson.Null)(ujson.Str(_))))
     }
 
   @requireLogin()

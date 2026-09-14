@@ -17,6 +17,8 @@
    number in `data-count`, which is what the client decrements as cells leave the grid. *@
 @(results: GroupedSearchResult, isContinuousScroll: Boolean = false)
 
+@* The position (group, cell) of the page's last cell, found once: a List's size is a walk of the list *@
+@defining(results.groups.lastOption.map(group => (results.groups.size - 1, group.assets.size - 1))) { lastCell =>
 @for((group, groupIdx) <- results.groups.zipWithIndex) {
 @if(!(groupIdx == 0 && results.continuesGroup)) {
 <div class="result-group" data-group-key="@{group.key.cursorGroupId.orElse(group.key.cursorKey).getOrElse("")}" x-data="initDateGroupSelectable()">
@@ -43,6 +45,7 @@
     },
     isContinuousScroll = isContinuousScroll,
     showNoDate = results.sort.field == FieldConst.Asset.ORIGINAL_CREATED_AT,
-    nextCursor = results.nextCursor.filter(_ => groupIdx == results.groups.size - 1 && assetIdx == group.assets.size - 1).map(_.encode))
+    nextCursor = results.nextCursor.filter(_ => lastCell.contains((groupIdx, assetIdx))).map(_.encode))
+}
 }
 }

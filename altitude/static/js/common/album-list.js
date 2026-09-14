@@ -10,18 +10,15 @@
  *   back to a full render when the list gained an album the DOM does not have.
  *   setViewedAlbum(albumId) — mark the album whose results are displayed (green icon).
  *
- * Each row shows: the album's ⋯ menu (Rename, Delete; built by `common/context-menu-markup.js`), its
- * asset count (`.asset-count`, empty for zero; `common/asset-count.js`), an icon, and the name.
+ * Each row shows: the album's ⋯ menu (Rename, Delete; built by `common/context-menu-markup.js`), an
+ * icon, the name, and its asset count (`.asset-count`, directly after the name, empty for zero;
+ * `common/asset-count.js`).
  * Icon and name are search triggers for the album; every row's `.controls` is a drop zone for
  * assets (`dragdrop/albums.js`). Albums are pointers only: nothing here moves or changes an asset.
  */
 import { Const } from "../constants.js"
 import { http } from "../http/client.js"
-import {
-    buildAssetCountEl,
-    setAssetCount,
-    sizeCountColumn,
-} from "./asset-count.js"
+import { buildAssetCountEl, setAssetCount } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
@@ -29,7 +26,6 @@ import {
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
-const COUNT_COLUMN_VARIABLE = "--album-count-column"
 const SCOPE_MARKER = Const.attributes.viewedScope
 
 // ─── public ─────────────────────────────────────────────────────────────────
@@ -77,9 +73,7 @@ export async function refreshAlbumCounts(repoId) {
         const container = document.getElementById("albumList")
         if (!container) return
 
-        if (_patchAssetCounts(response.data)) {
-            sizeCountColumn(container, COUNT_COLUMN_VARIABLE)
-        } else {
+        if (!_patchAssetCounts(response.data)) {
             _render(response.data, repoId)
         }
     } catch (error) {
@@ -135,7 +129,6 @@ function _render(albums, repoId) {
     container.replaceChildren(
         ...albums.map((album) => _buildAlbumRow(album, repoId)),
     )
-    sizeCountColumn(container, COUNT_COLUMN_VARIABLE)
     _ensureAddControls(repoId)
     _showAddControl(albums.length === 0)
 
@@ -260,13 +253,13 @@ function _buildAlbumRow(album, repoId) {
     nameEl.textContent = album.name
     _makeSearchTrigger(nameEl, album.id)
 
-    // ⋯ menu button | asset count | icon | album-name
+    // ⋯ menu button | icon | album-name | asset count
     controlsEl.appendChild(_buildMenuCtrl(album, repoId))
+    controlsEl.appendChild(iconEl)
+    controlsEl.appendChild(nameEl)
     controlsEl.appendChild(
         buildAssetCountEl(`album-count-${album.id}`, album.numOfAssets),
     )
-    controlsEl.appendChild(iconEl)
-    controlsEl.appendChild(nameEl)
 
     albumEl.appendChild(controlsEl)
     return albumEl

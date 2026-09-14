@@ -53,11 +53,11 @@ case class GroupedSearchResult(
 
 object GroupedSearchResult:
 
-  /** Consecutive rows of one group form one group, in page order */
+  /** Consecutive rows of one group form one group, in page order; each run of rows is walked once */
   def groupsOf(rows: List[GroupedSearchRow]): List[AssetGroup] =
-    rows
-      .foldLeft(List.empty[AssetGroup]) {
-        case (last :: earlier, row) if last.key == row.group => last.copy(assets = last.assets :+ row.asset) :: earlier
-        case (groups, row) => AssetGroup(key = row.group, total = row.groupTotal, assets = List(row.asset)) :: groups
-      }
-      .reverse
+    List.unfold(rows) {
+      case remaining @ (first :: _) =>
+        val (run, rest) = remaining.span(_.group == first.group)
+        Some((AssetGroup(key = first.group, total = first.groupTotal, assets = run.map(_.asset)), rest))
+      case Nil => None
+    }
