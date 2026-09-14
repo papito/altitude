@@ -34,14 +34,14 @@ browser supports HEVC), hover-scrubbing in the grid, a per-person timeline of ap
 - `FileStoreFlow` renames the staged file into `files/<id[0:2]>/<id>`. A `FileStoreService.assetFile(id)` accessor
   exposes the stored file for streaming.
 - An invalid asset (unsupported type, duplicate) and any failed element delete their staged file; `Altitude` startup
-  empties `data/staging`.
+  empties `../../data/staging`.
 - `TestContext.makeAssetWithData` and `IntegrationTestUtil.getImportAsset` write their bytes to a staged file.
 
 ### Decoding
 
 `org.bytedeco:javacv:1.5.10` is a dependency, and the FFmpeg 6.1.1 natives are on the classpath through a classifier
 dependency for the detected platform (`;classifier=linux-x86_64` and so on, next to the base jar), which is what the
-platform suffix in `build.mill` is meant to do and does not. The default (LGPL) FFmpeg build decodes H.264, HEVC, VP9
+platform suffix in `../../build.mill` is meant to do and does not. The default (LGPL) FFmpeg build decodes H.264, HEVC, VP9
 and AV1.
 
 A `VideoService` wraps `FFmpegFrameGrabber`:
@@ -146,7 +146,7 @@ Each group is one reviewable, mergeable unit; groups 1 to 3 change no user-visib
 
 ### 1. Decoding
 
-1. **Dependencies.** Add `org.bytedeco:javacv:1.5.10`; replace the platform-suffixed bytedeco lines in `build.mill`
+1. **Dependencies.** Add `org.bytedeco:javacv:1.5.10`; replace the platform-suffixed bytedeco lines in `../../build.mill`
    with classifier dependencies for the detected platform so the FFmpeg natives resolve. Rationale: OpenCV's
    `VideoCapture` has no FFmpeg backend in this build, and the FFmpeg preset currently resolves only its Java stub.
 2. **`VideoService`.** `probe`, `sampledFrames`, `previewFrame`, the sampling schedule and the luminance floor, with
@@ -196,6 +196,6 @@ Each group is one reviewable, mergeable unit; groups 1 to 3 change no user-visib
 
 ### 7. Documentation
 
-13. **Docs.** README no longer lists video as missing; `altitude/AGENTS.md` gets a Video section (staging, decoding,
+13. **Docs.** README no longer lists video as missing; `../../altitude/AGENTS.md` gets a Video section (staging, decoding,
     sampling, clustering, streaming) and the pipeline paragraph mentions staged files; `reference.conf` comments for
-    the new keys. `CONTEXT.md` already defines Video, Preview, Sampled frame and Frame time.
+    the new keys. `../../CONTEXT.md` already defines Video, Preview, Sampled frame and Frame time.
