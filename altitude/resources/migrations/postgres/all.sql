@@ -46,7 +46,7 @@ CREATE TABLE repository (
 CREATE TABLE stats (
   repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
   dimension VARCHAR(60),
-  dim_val INT NOT NULL DEFAULT 0
+  dim_val BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);

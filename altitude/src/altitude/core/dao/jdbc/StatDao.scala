@@ -20,7 +20,7 @@ abstract class StatDao(override val config: Config) extends BaseDao[Stat] with a
   override protected def toModel(row: StatRow[Sc]): Stat = Stat(row.dimension, row.dimVal)
 
   override protected def makeModel(rec: Map[String, AnyRef]): Stat =
-    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], rec(FieldConst.Stat.DIM_VAL).asInstanceOf[Int])
+    Stat(rec(FieldConst.Stat.DIMENSION).asInstanceOf[String], getLongField(rec(FieldConst.Stat.DIM_VAL)).get)
 
   override def add(stat: Stat): Stat =
     val sql: String = s"""
