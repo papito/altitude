@@ -19,6 +19,7 @@ import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.UrlServiceTests
 import altitude.core.unit.UtilTests
+import altitude.core.unit.VideoServiceTests
 
 abstract class AllUnitTestSuites
   extends Suites(
@@ -38,5 +39,6 @@ abstract class AllUnitTestSuites
     new SessionControllerTests,
     new BaseControllerTests,
     new UrlServiceTests,
-    new UtilTests
+    new UtilTests,
+    new VideoServiceTests
   )

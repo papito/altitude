@@ -108,18 +108,33 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
   private val platform: String = detectPlatform()
 
+  // Each bytedeco preset is a Java stub jar plus a classifier jar holding the native libraries of one platform. The
+  // classifier attribute is what selects the natives: appending the platform to the version resolves nothing.
   private val bytedecoPresetLibs = Seq(
     "opencv" -> "4.9.0",
     "ffmpeg" -> "6.1.1",
     "openblas" -> "0.3.26",
-    "opencv-platform" -> "4.9.0",
   ).flatMap {
     case (lib, ver) => Seq(
-      // Add both: dependency and its native binaries for the current platform
       mvn"org.bytedeco:$lib:$ver-$javacppVersion",
-      mvn"org.bytedeco:$lib:$ver-$javacppVersion-$platform"
+      mvn"org.bytedeco:$lib:$ver-$javacppVersion;classifier=$platform"
     )
-  }
+  } ++ Seq(
+    mvn"org.bytedeco:javacpp:$javacppVersion;classifier=$platform",
+    // FFmpegFrameGrabber / FFmpegFrameRecorder and the Frame <-> Mat converters over the presets above; its other
+    // presets (cameras, OCR) are stubs we never call
+    mvn"org.bytedeco:javacv:$javacppVersion".exclude(
+      "org.bytedeco" -> "flycapture",
+      "org.bytedeco" -> "libdc1394",
+      "org.bytedeco" -> "libfreenect",
+      "org.bytedeco" -> "libfreenect2",
+      "org.bytedeco" -> "librealsense",
+      "org.bytedeco" -> "librealsense2",
+      "org.bytedeco" -> "videoinput",
+      "org.bytedeco" -> "artoolkitplus",
+      "org.bytedeco" -> "leptonica",
+      "org.bytedeco" -> "tesseract"),
+  )
 
   def mvnDeps: Task.Simple[Seq[Dep]] = coreDeps ++ bytedecoPresetLibs
 

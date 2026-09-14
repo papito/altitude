@@ -62,26 +62,6 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 - [ ] Exercise cache hits and misses in `getById`, plus lookup after repository update/deletion, so cached data cannot silently remain authoritative forever. [MEDIUM]
 - [ ] Define/test `getDefaultRepository` with no repositories and with multiple repositories. [EDGE]
 
-## System initialization and metadata
-
-Sources: [SystemService](../altitude/src/altitude/core/service/SystemService.scala). Evidence: [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala).
-
-- ✅ Initialize an administrator and repository; assert persisted and in-memory initialized flags, user/repository counts, and the administrator in request context.
-- [ ] Inject failure during initialization and verify user, repository, root folder, statistics, initialized flags, and request context do not leave a partial installation. [CRITICAL]
-- [ ] Define/test repeated and concurrent initialization attempts so setup cannot create unintended additional administrators/repositories. The current test starts with fixture data but does not repeat `initializeSystem`. [MEDIUM]
-- [ ] Directly verify `setVersion`/`version` persistence and `readMetadata`; distinguish an absent schema from other SQL failures currently caught by `version`. [MEDIUM]
-
-## Database migrations
-
-Sources: [MigrationService](../altitude/src/altitude/core/service/MigrationService.scala). Evidence: [SqliteSuiteBundle](../altitude/test/src/altitude/core/suites/SqliteSuiteBundle.scala), [PostgresSuiteBundle](../altitude/test/src/altitude/core/suites/PostgresSuiteBundle.scala). Migration execution is shared setup, not a dedicated assertion suite.
-
-- ✅ Fresh-schema migration is exercised as a setup smoke check before each engine's integration bundle; subsequent tests use the resulting tables.
-- [ ] Starting at a nonzero older version, verify the existing upgrade scripts run in order, preserve seeded user data, and stamp the resulting version. Test the current migration machinery without introducing new migrations. [CRITICAL]
-- [ ] Fail a migration script and verify rollback/version behavior, then retry; separately test failure after script commit but before version stamping. [CRITICAL]
-- [ ] Assert `migrationRequired` for a fresh database, an older schema, the current schema, and a newer-than-supported schema. [MEDIUM]
-- [ ] Re-run `migrate` on the current schema and assert no schema/data changes; assert the exact version after fresh-schema setup. [MEDIUM]
-- [ ] Cover missing/unreadable migration resources and ensure failure does not advance the schema version. [EDGE]
-
 ## Asset persistence, queries, and previews
 
 Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala).

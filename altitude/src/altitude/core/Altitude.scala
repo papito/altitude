@@ -34,6 +34,7 @@ import altitude.core.service.SystemService
 import altitude.core.service.UrlService
 import altitude.core.service.UserMetadataService
 import altitude.core.service.UserService
+import altitude.core.service.VideoService
 import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.TransactionManager
@@ -263,6 +264,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val purgePipeline: PurgePipelineService = PurgePipelineService(app)
     val urlService: UrlService = UrlService()
     val geocoder: GeocoderService = GeocoderService(app.config)
+    val video: VideoService = VideoService(app.config)
 
     val fileStore: FileStoreService = fileStoreType match {
       case Const.StorageEngineName.FS => FileSystemStoreService(app)
