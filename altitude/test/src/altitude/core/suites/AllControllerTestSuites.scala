@@ -10,7 +10,10 @@ import altitude.core.controller.FolderActionControllerTests
 import altitude.core.controller.FolderControllerTests
 import altitude.core.controller.HealthControllerTests
 import altitude.core.controller.IndexControllerTests
+import altitude.core.controller.LocationActionControllerTests
+import altitude.core.controller.LocationControllerTests
 import altitude.core.controller.LoginControllerTests
+import altitude.core.controller.MapControllerTests
 import altitude.core.controller.PeopleActionControllerTests
 import altitude.core.controller.SearchResultsControllerTests
 
@@ -25,6 +28,9 @@ abstract class AllControllerTestSuites
     new FolderControllerTests(),
     new AlbumActionControllerTests(),
     new AlbumControllerTests(),
+    new LocationControllerTests(),
+    new LocationActionControllerTests(),
+    new MapControllerTests(),
     new PeopleActionControllerTests(),
     new SearchResultsControllerTests()
   )

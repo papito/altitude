@@ -30,10 +30,9 @@
  * Each folder's context menu is built with the tree too, as a native
  * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu-markup.js`, shared
  * with the album list), so opening a menu needs no request. The panel holds its
- * actions and an empty dialog host: an action loads its dialog into the host
- * through HTMX, and the panel then shows the dialog in place of the actions. The
- * `contextMenu` Alpine component (`alpine/components/context-menu.js`) places
- * the panel, switches it between the two, and dismisses it.
+ * actions, each requesting a separate modal through HTMX. The `contextMenu` Alpine
+ * component (`alpine/components/context-menu.js`) places and dismisses the menu;
+ * the modal owner closes it when the dialog opens.
  *
  * Indentation is not structural: every non-root `.folder` carries a `--depth`
  * CSS custom property, and its `.controls` row holds a `.trace` cell (between
@@ -51,7 +50,7 @@ import {
 } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
-    buildDialogTriggerCtrl,
+    buildModalTriggerCtrl,
 } from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
@@ -189,10 +188,8 @@ function _ensureAddControl(rootFolder, repoId) {
     if (!hostEl || hostEl.childElementCount > 0) return
 
     hostEl.appendChild(
-        buildDialogTriggerCtrl({
+        buildModalTriggerCtrl({
             triggerId: "addFolderBtn",
-            panelId: "addFolderMenu",
-            dialogId: "addFolderDialog",
             label: "Add folder",
             iconClass: "fas fa-plus",
             url: `/htmx/folder/r/${repoId}/dialogs/add-folder`,
@@ -483,9 +480,8 @@ function _makeSearchTrigger(el, folderId) {
 
 /**
  * The folder's ⋯ menu cell (see `buildContextMenuCtrl`). The IDs are stable across rebuilds:
- * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel,
- * `menuDialog-<id>` the dialog host the actions target. Each action requests its dialog into that
- * host; the root folder can only gain children, so it offers Add folder alone.
+ * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel.
+ * Each action requests a separate modal; the root can only gain children, so it offers Add folder alone.
  */
 function _buildMenuCtrl(folder, repoId, folderName) {
     const actions = [
@@ -514,7 +510,6 @@ function _buildMenuCtrl(folder, repoId, folderName) {
     return buildContextMenuCtrl({
         triggerId: `folderMenuCtrl-${folder.id}`,
         panelId: `menu-${folder.id}`,
-        dialogId: `menuDialog-${folder.id}`,
         ariaLabel: `Actions for folder ${folderName}`,
         entityAttr: Const.attributes.folderId,
         entityId: folder.id,

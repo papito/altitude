@@ -35,6 +35,8 @@ import altitude.core.dao.sql.tables._
       AssetRow -> DbApi.renderSql(AssetRow.select, Db.config, dialect),
       FaceRow -> DbApi.renderSql(FaceRow.select, Db.config, dialect),
       FolderRow -> DbApi.renderSql(FolderRow.select, Db.config, dialect),
+      LocationRow -> DbApi.renderSql(LocationRow.select, Db.config, dialect),
+      LocationAssetRow -> DbApi.renderSql(LocationAssetRow.select, Db.config, dialect),
       MetadataFieldRow -> DbApi.renderSql(MetadataFieldRow.select, Db.config, dialect),
       MetadataParameterRow -> DbApi.renderSql(MetadataParameterRow.select, Db.config, dialect),
       PersonRow -> DbApi.renderSql(PersonRow.select, Db.config, dialect),
@@ -103,6 +105,8 @@ import altitude.core.dao.sql.tables._
       "is_pipeline_processed",
       "original_created_at",
       "original_created_at_source",
+      "latitude",
+      "longitude",
       "created_at",
       "updated_at"
     )

@@ -46,6 +46,8 @@ case class Asset(
     isInFaceRecModel: Boolean = false,
     originalCreatedAt: Option[LocalDateTime] = None,
     originalCreatedAtSource: Option[CaptureDateSource] = None,
+    latitude: Option[Double] = None,
+    longitude: Option[Double] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:

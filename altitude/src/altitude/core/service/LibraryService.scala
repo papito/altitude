@@ -14,6 +14,7 @@ import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.MurmurHash
 import altitude.core.util.Query
@@ -91,6 +92,24 @@ class LibraryService(val app: Altitude):
   def search(query: SearchQuery): SearchResult =
     txManager.asReadOnly {
       app.service.search.search(withResolvedFolderScope(query))
+    }
+
+  /** How many assets a search matches, scoped like `search`, for a result that renders no rows of its own */
+  def count(query: SearchQuery): Int =
+    txManager.asReadOnly {
+      app.service.search.count(withResolvedFolderScope(query))
+    }
+
+  /** The map's cells and Locations for a viewport at a zoom, scoped like `search`; both aggregates read one snapshot */
+  def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
+    txManager.asReadOnly {
+      app.service.search.mapCells(withResolvedFolderScope(query), bbox, zoom)
+    }
+
+  /** The box around every point a search plots, scoped like `search`; nothing when nothing is plotted */
+  def mapBounds(query: SearchQuery): Option[MapBounds] =
+    txManager.asReadOnly {
+      app.service.search.mapBounds(withResolvedFolderScope(query))
     }
 
   /**
@@ -263,8 +282,11 @@ class LibraryService(val app: Altitude):
 
         app.service.person.recycleFacesForAssets(assetIds)
 
-        // Albums only point at assets; a recycled asset leaves every album and a restore does not bring it back
-        app.service.album.removeAssetsFromAllAlbums(assetsToRecycle.map(_.persistedId).toSet)
+        // Albums and Locations only point at assets; a recycled asset leaves every one of them and a restore does not bring
+        // it back
+        val recycledIds = assetsToRecycle.map(_.persistedId).toSet
+        app.service.album.removeAssetsFromAllAlbums(recycledIds)
+        app.service.location.removeAssetsFromAllLocations(recycledIds)
     }
 
   def purgeRecycleBin(): Unit =

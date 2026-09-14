@@ -1,11 +1,12 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.a
 import org.scalatest.matchers.must.Matchers.have
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, convertNumericToPlusOrMinusWrapper, should, shouldBe }
 
 import scala.concurrent.Await
 import scala.concurrent.Future
@@ -114,5 +115,23 @@ import altitude.core.pipeline.sinks.VoidAssetSink
       case (Right(invalid), _) => invalid.cause.get shouldBe a[UnsupportedMediaTypeException]
       case _ => fail("Expected the first element to be of type DuplicateException")
     }
+  }
+
+  test("Pipeline stores the coordinates a photo carries") {
+    val dataAsset =
+      testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset("images/exif/gps-north-east.jpg"))
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source.single(dataAsset, pipelineContext)
+
+    val pipelineRes = Await.result(testApp.service.importPipeline.run(source, AssetSeqOutputSink()), Duration.Inf)
+    pipelineRes should have size 1
+
+    val persisted = pipelineRes.head match {
+      case (Left(asset), _) => testApp.service.asset.getById(asset.persistedId)
+      case (Right(invalid), _) => fail(s"Import failed: ${invalid.cause}")
+    }
+    persisted.latitude.get should be(33.857 +- 1e-4)
+    persisted.longitude.get should be(151.2152 +- 1e-4)
+    persisted.extractedMetadata.getFieldValues("GPS").get("GPS Latitude Ref") shouldBe Some("N")
   }
 }

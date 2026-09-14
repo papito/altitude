@@ -1,3 +1,5 @@
 db.engine=postgres
 dev.user=me
 dev.password=password
+# Place-name search in the Add Location dialog sends every query to a third party; opt in for local development only
+# map.geocoder.enabled=true

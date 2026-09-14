@@ -23,6 +23,12 @@ object Const:
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
 
+    // The map's basemap and the place-name search behind the Add Location dialog; both talk to third parties, see reference.conf
+    val MAP_TILE_URL = "map.tile.url"
+    val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
+    val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
+    val MAP_GEOCODER_URL = "map.geocoder.url"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"
@@ -52,6 +58,10 @@ object Const:
       FieldConst.Asset.FILENAME,
       FieldConst.Asset.SIZE_BYTES,
       FieldConst.Asset.AREA_SIZE)
+
+    object Layout:
+      val GRID = "grid"
+      val MAP = "map"
 
     object View:
       // Matches `Const.views.repository` in static/js/constants.js - the client sends this verbatim
@@ -95,15 +105,24 @@ object Const:
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
+      val PIN_REQUIRED = "Place the pin on the map"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
   // core.css). The add dialogs have no title: their one field's placeholder says what they do, and
   // the inline view-settings dialog has none either: its checkbox labels are the whole content.
+  // The Location dialogs are titled by kind: the controller picks the Category or Location constant.
   object UI:
     val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
     val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
     val RENAME_ALBUM_DIALOG_TITLE = "Rename album"
     val DELETE_ALBUM_DIALOG_TITLE = "Delete album"
+    val ADD_LOCATION_DIALOG_TITLE = "Add location"
+    val RENAME_LOCATION_DIALOG_TITLE = "Rename location"
+    val DELETE_LOCATION_DIALOG_TITLE = "Delete location"
+    val RENAME_CATEGORY_DIALOG_TITLE = "Rename category"
+    val DELETE_CATEGORY_DIALOG_TITLE = "Delete category"
+    val MOVE_LOCATION_DIALOG_TITLE = "Move to category"
+    val ADD_TO_LOCATION_DIALOG_TITLE = "Add to location"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"

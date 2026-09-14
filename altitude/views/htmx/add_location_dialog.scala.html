@@ -1,0 +1,112 @@
+@import altitude.core.RequestContext
+@import altitude.core.Api
+@import altitude.core.models.Location
+
+@(title: String, categories: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+
+<style>
+  /* The editor needs room for the map: widen the general modal for this dialog only */
+  #modalContent:has(.location-editor) {
+    --modal-content-width: 720px;
+  }
+
+  /* One field per row; the map, its readout and the place search take rows of their own */
+  #addLocation, #addLocation .location-editor-fields {
+    display: grid;
+    row-gap: var(--control-vertical-space);
+  }
+
+  #addLocation label {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  #addLocation input[type="text"], #addLocation input[type="search"], #addLocation select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  #locationEditorMap {
+    height: 300px;
+  }
+
+  #locationPinReadout {
+    color: var(--font-color-dim);
+    font-size: .9em;
+  }
+
+  #addLocation .geocode-row {
+    display: grid;
+    grid-template-columns: 1fr max-content;
+    column-gap: 6px;
+    align-items: center;
+  }
+
+  /* Place-name results: one button per place, like a menu's actions */
+  #locationGeocodeResults {
+    display: grid;
+  }
+
+  #locationGeocodeResults button {
+    padding: 6px 8px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  #locationGeocodeResults button:hover, #locationGeocodeResults button:focus-visible {
+    background-color: var(--background-tertiary-color);
+  }
+</style>
+
+@* The pin is placed on the map (js/fragments/location-editor.js): a click places it, dragging moves it, a place-name result
+   jumps to it. The coordinates travel in the hidden inputs, so a validation replacement re-renders the pin where it was; the
+   readout under the map is the only visible form of them. *@
+<form id="addLocation" class="location-editor" data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-dialog-autofocus-selector="#field-name"
+      data-app-success-event="LOCATION_ADDED_EVENT"
+      hx-target="this" hx-swap="none" hx-json-enc
+      hx-post="/htmx/location/r/@{RequestContext.getRepository.persistedId}/add">
+  <div>
+    <label for="field-@{Api.Field.Location.NAME}">Name</label>
+    @if(fieldErrors.contains(Api.Field.Location.NAME)) {<div class="error">@{fieldErrors(Api.Field.Location.NAME)}</div>}
+    <input id="field-@{Api.Field.Location.NAME}" name="@{Api.Field.Location.NAME}" type="text" autocomplete="off"
+           maxlength="@{Api.Constraints.MAX_LOCATION_NAME_LENGTH}"
+           value="@{formJson.obj.get(Api.Field.Location.NAME).flatMap(_.strOpt).getOrElse("")}">
+  </div>
+  <div>
+    @includes.html.location_category_select(categories, formJson, fieldErrors)
+  </div>
+  <div class="location-editor-fields"
+       data-app-fragment="location-editor"
+       data-map-tile-url="@{tileUrl}"
+       data-map-attribution="@{attribution}"
+       data-geocoder-enabled="@{geocoderEnabled}">
+    @if(geocoderEnabled) {
+      <div>
+        <label for="locationGeocode">Search places</label>
+        <div class="geocode-row">
+          <input id="locationGeocode" type="search" autocomplete="off" placeholder="Place name">
+          <button type="button" id="locationGeocodeBtn" class="action-button small">Search</button>
+        </div>
+        <div id="locationGeocodeResults"></div>
+      </div>
+    }
+    @* tabindex keeps Alpine's focus trap from fighting Leaflet's own keyboard handling on the container *@
+    <div id="locationEditorMap" tabindex="-1"></div>
+    @* The two coordinates fail together (there is one pin), so the controller reports one of them; one line shows it *@
+    @for(pinError <- fieldErrors.get(Api.Field.Location.LATITUDE).orElse(fieldErrors.get(Api.Field.Location.LONGITUDE))) {
+      <div class="error">@{pinError}</div>
+    }
+    <div id="locationPinReadout" aria-live="polite">No pin yet</div>
+    <input type="hidden" id="field-@{Api.Field.Location.LATITUDE}" name="@{Api.Field.Location.LATITUDE}"
+           value="@{formJson.obj.get(Api.Field.Location.LATITUDE).flatMap(_.strOpt).getOrElse("")}">
+    <input type="hidden" id="field-@{Api.Field.Location.LONGITUDE}" name="@{Api.Field.Location.LONGITUDE}"
+           value="@{formJson.obj.get(Api.Field.Location.LONGITUDE).flatMap(_.strOpt).getOrElse("")}">
+  </div>
+  <button type="submit" class="action-button">Add</button>
+</form>

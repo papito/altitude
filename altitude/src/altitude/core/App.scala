@@ -9,6 +9,8 @@ import altitude.core.routes.api.AlbumController
 import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.FolderController
 import altitude.core.routes.api.HealthController
+import altitude.core.routes.api.LocationController
+import altitude.core.routes.api.MapController
 import altitude.core.routes.decorators
 import altitude.core.routes.web.ContentViewController
 import altitude.core.routes.web.ImportController
@@ -19,6 +21,7 @@ import altitude.core.routes.web.StaticController
 import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.FolderActionController
+import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
 import altitude.core.routes.web.partial.PeopleActionController
 import altitude.core.routes.web.partial.SearchResultsController
@@ -58,6 +61,8 @@ object App extends cask.Main:
   override def allRoutes: Seq[cask.Routes] = Seq(
     new HealthController,
     new AlbumController,
+    new LocationController,
+    new MapController,
     new AssetController,
     new FolderController,
     new IndexController,
@@ -71,6 +76,7 @@ object App extends cask.Main:
     new SetupFormController,
     new NavController,
     new AlbumActionController,
+    new LocationActionController,
     new AssetActionController,
     new FolderActionController,
     new PeopleActionController,

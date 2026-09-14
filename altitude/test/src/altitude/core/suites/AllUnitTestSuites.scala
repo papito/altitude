@@ -8,6 +8,8 @@ import altitude.core.unit.CoreModelTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
 import altitude.core.unit.FolderModelTests
+import altitude.core.unit.GeocoderServiceTests
+import altitude.core.unit.GeoLocationResolverTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RowColumnTests
 import altitude.core.unit.SearchQueryModelTests
@@ -22,6 +24,8 @@ abstract class AllUnitTestSuites
     new CoreModelTests,
     new CaptureDateResolverTests,
     new FolderModelTests,
+    new GeoLocationResolverTests,
+    new GeocoderServiceTests,
     new SearchSqlTests,
     new RowColumnTests,
     new DynamicFilterTests,

@@ -1,16 +1,18 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
+import { thumbnailsOf } from "./cells.js"
 
 /**
  * SELECTION
  *
  * What is selected in the results grid is a reactive `Set` of asset IDs in the `selectedAssets`
  * store, and nothing else: no per-cell component, no map of component proxies. The store is the
- * one place a selection changes, and each change paints the cell it concerns (`.selected` on the
- * thumbnail box, `#asset-<id> .drag-drop`), so the DOM never has to be asked what is selected.
+ * one place a selection changes, and each change paints the cells it concerns (`.selected` on the
+ * thumbnail box, every `.drag-drop[data-asset-id]` of the asset - a Location grouping holds an
+ * asset once per Location), so the DOM never has to be asked what is selected.
  *
  * The footer binds to the set (`x-show="!$store.selectedAssets.isEmpty"`, `x-text` of its size),
- * and a date header counts its day's cells against it (js/alpine/components/date-group-selectable.js).
+ * and a group header counts its group's cells against it (js/alpine/components/date-group-selectable.js).
  * Cells that enter or leave the grid are announced with `noteGridChange()`, which bumps a reactive
  * counter those headers read: the DOM is not reactive, and this is the one signal that stands in
  * for it.
@@ -87,13 +89,11 @@ export function createSelectedAssetsStore() {
     }
 }
 
+/** Paints every cell of the asset: the thumbnail box is the `.drag-drop` div carrying the asset ID (htmx/result_cell.scala.html) */
 function paint(id, className, on) {
-    thumbnailOf(id)?.classList.toggle(className, on)
-}
-
-/** The thumbnail box of a cell: the `.drag-drop` div carrying the asset ID (htmx/result_cell.scala.html) */
-function thumbnailOf(id) {
-    return document.getElementById(`asset-${id}`)?.querySelector(".drag-drop")
+    thumbnailsOf(id).forEach((thumbnailEl) =>
+        thumbnailEl.classList.toggle(className, on),
+    )
 }
 
 /**

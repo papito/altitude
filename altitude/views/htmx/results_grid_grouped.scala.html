@@ -1,39 +1,48 @@
 @import altitude.core.util.GroupedSearchResult
+@import altitude.core.util.SearchGroupKey
 @import altitude.core.util.Util
 @import altitude.core.FieldConst
 
-@* The grouped grid: each day's header, then its cells; the page's last cell carries the cursor of the next page when there is
-   one. The header is skipped for the first group when it continues the previous page's group (`continuesGroup`), so the
+@* The grouped grid: each group's header (a capture day, or a Location as `Category › Location`), then its cells; the page's last
+   cell - by position, since a Location grouping can hold the last asset in an earlier cell too - carries the cursor of the next page
+   when there is one. The header is skipped for the first group when it continues the previous page's group (`continuesGroup`), so the
    new cells land after that page's last cell and read as the same group.
 
-   The header's checkbox selects the day's loaded cells as a set (js/alpine/components/date-group-selectable.js). It acts on
+   An asset in two Locations is a cell under each, so a Location group's cell IDs carry the Location as well
+   (`asset-<id>-in-<locationId>`); every client-side lookup of an asset's cells goes by `data-asset-id`, which finds them all.
+
+   The header's checkbox selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js). It acts on
    `change` and repaints itself afterwards rather than cancelling the click: the browser reverts a cancelled checkbox click
    once it is dispatched, after Alpine has run its effects (see `paint` there). The count is rendered as text and kept as a
    number in `data-count`, which is what the client decrements as cells leave the grid. *@
 @(results: GroupedSearchResult, isContinuousScroll: Boolean = false)
 
-@defining(results.assets.lastOption.map(_.persistedId)) { lastId =>
 @for((group, groupIdx) <- results.groups.zipWithIndex) {
 @if(!(groupIdx == 0 && results.continuesGroup)) {
-<div class="date-group" data-group-date="@{group.date.map(_.toString).getOrElse("")}" x-data="initDateGroupSelectable()">
+<div class="result-group" data-group-key="@{group.key.cursorGroupId.orElse(group.key.cursorKey).getOrElse("")}" x-data="initDateGroupSelectable()">
   <input type="checkbox"
          class="group-checkmark"
          aria-label="Select this group"
          x-effect="paint($el)"
          @@change="toggle(); paint($el)">
-  @group.date match {
-    case Some(date) => {<time datetime="@{date}">@{Util.humanReadableDate(date)}</time>}
-    case None => {<span>No date</span>}
+  @group.key match {
+    case SearchGroupKey.Day(Some(date)) => {<time datetime="@{date}">@{Util.humanReadableDate(date)}</time>}
+    case SearchGroupKey.Day(None) => {<span>No date</span>}
+    case SearchGroupKey.Location(Some(_), _, name, categoryName) => {<span>@for(category <- categoryName) {<span class="category">@category</span> › }@name</span>}
+    case SearchGroupKey.Location(None, _, _, _) => {<span>No location</span>}
   }
   <span class="count" data-count="@{group.total}">@{Util.humanReadableItemCount(group.total)}</span>
 </div>
 }
-@for(asset <- group.assets) {
+@for((asset, assetIdx) <- group.assets.zipWithIndex) {
 @htmx.html.result_cell(
     asset = asset,
+    cellId = group.key match {
+      case SearchGroupKey.Location(Some(locationId), _, _, _) => s"asset-${asset.persistedId}-in-$locationId"
+      case _ => s"asset-${asset.persistedId}"
+    },
     isContinuousScroll = isContinuousScroll,
     showNoDate = results.sort.field == FieldConst.Asset.ORIGINAL_CREATED_AT,
-    nextCursor = results.nextCursor.filter(_ => lastId.contains(asset.persistedId)).map(_.encode))
-}
+    nextCursor = results.nextCursor.filter(_ => groupIdx == results.groups.size - 1 && assetIdx == group.assets.size - 1).map(_.encode))
 }
 }

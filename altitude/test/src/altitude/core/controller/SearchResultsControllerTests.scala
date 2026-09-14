@@ -36,6 +36,132 @@ import altitude.core.models.Asset
     asset
   }
 
+  test("Location grouping renders paths and continues by cursor to No location") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val category = testApp.service.location.addCategory("Italy")
+        val location = testApp.service.location.addLocation("Beach", 1, 2, Some(category.persistedId))
+        val first = persistUndated("a.jpg")
+        val second = persistUndated("b.jpg")
+        val unlocated = persistUndated("c.jpg")
+        testApp.service.location.addAssets(location.persistedId, Set(first.persistedId, second.persistedId))
+        val params = Map("groupBy" -> "location", "rpp" -> "1", "sort" -> "filename0")
+        val page = htmlSearch(host, repoId, params)
+        page.statusCode shouldBe 200
+        page.text() should include("<span class=\"category\">Italy</span> › Beach")
+        page.text() should include(header(location.persistedId))
+        // The Group dropdown reflects the grouping, and the grid carries it for its continuations
+        page.text() should include("""data-app-search-group-by="location" data-app-search-group-direction="" selected""")
+        page.text() should include("""data-results-group-by="location"""")
+        page.text() should include("""data-results-group-direction=""""")
+        // An asset in a Location is a cell of its own under it, distinct from the same asset's cell elsewhere
+        page.text() should include(s"""id="asset-${first.persistedId}-in-${location.persistedId}"""")
+        val next = htmlSearch(
+          host,
+          repoId,
+          params ++ Map("after" -> cursorOf(page.text()).head, "isContinuousScroll" -> "true", "rpp" -> "2"))
+        next.statusCode shouldBe 200
+        next.text().contains(header(location.persistedId)) shouldBe false
+        ordered(next.text(), s"""id="asset-${second.persistedId}-in-${location.persistedId}"""", "No location")
+        // The trailing group is the asset's only cell, so it keeps the plain ID
+        ordered(next.text(), "No location", cell(unlocated))
+    }
+  }
+
+  test("A Location page marks only its last cell for continuation, though that asset has a cell under an earlier Location") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val beach = testApp.service.location.addLocation("Beach", 1, 2)
+        val hills = testApp.service.location.addLocation("Hills", 3, 4)
+        val both = persistUndated("a.jpg")
+        val beachOnly = persistUndated("b.jpg")
+        persistUndated("c.jpg")
+        testApp.service.location.addAssets(beach.persistedId, Set(both.persistedId, beachOnly.persistedId))
+        testApp.service.location.addAssets(hills.persistedId, Set(both.persistedId))
+
+        // The page is Beach: a, b; Hills: a - and "No location" is still to come, so the page continues
+        val page = htmlSearch(host, repoId, Map("groupBy" -> "location", "rpp" -> "3", "sort" -> "filename0")).text()
+        ordered(
+          page,
+          s"""id="asset-${both.persistedId}-in-${beach.persistedId}"""",
+          s"""id="asset-${both.persistedId}-in-${hills.persistedId}"""")
+        cursorOf(page).size shouldBe 1
+        "class=\"cell last-cell\"".r.findAllMatchIn(page).size shouldBe 1
+        s"""(?s)id="asset-${both.persistedId}-in-${hills.persistedId}"\\s+class="cell last-cell".*?data-app-search-after=""".r
+          .findFirstIn(page)
+          .isDefined shouldBe true
+    }
+  }
+
+  test("Location and bbox filter both grid shapes, and map layout ignores grouping and paging") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val location = testApp.service.location.addLocation("Beach", 1, 2)
+        val member = persistUndated("a.jpg")
+        val outside = persistUndated("b.jpg")
+        testApp.service.location.addAssets(location.persistedId, Set(member.persistedId))
+        val scope = Map("locationId" -> location.persistedId, "bbox" -> "0,0,10,10")
+        for (group <- List(Map.empty[String, String], Map("groupBy" -> "location"), Map("groupBy" -> "dateTaken"))) {
+          withClue(s"$group: ") {
+            val grid = htmlSearch(host, repoId, scope ++ group)
+            grid.statusCode shouldBe 200
+            // In the Location grid the cell's ID carries the Location it is under
+            grid.text() should include(
+              if (group.get("groupBy").contains("location")) s"""id="asset-${member.persistedId}-in-${location.persistedId}""""
+              else cell(member))
+            grid.text().contains(s"asset-${outside.persistedId}") shouldBe false
+            grid.text() should include(s"""data-results-location-id="${location.persistedId}"""")
+          }
+        }
+        // In map layout the bbox is the panel's scope: the map's total and bounds cover the whole search, the URL keeps it
+        val response = htmlSearch(
+          host,
+          repoId,
+          scope ++ Map(
+            "bbox" -> "50,50,60,60",
+            "layout" -> "map",
+            "groupBy" -> "bad",
+            "groupDirection" -> "up",
+            "after" -> "bad",
+            "p" -> "99",
+            "rpp" -> "0",
+            "isContinuousScroll" -> "true")
+        )
+        response.statusCode shouldBe 200
+        val page = response.text()
+        page should include("""id="map"""")
+        page should include("""data-map-bounds="1.0,2.0,1.0,2.0"""")
+        page should include("""data-map-count="1"""")
+        page should include("""data-results-total="1"""")
+        page.contains("""id="assets"""") shouldBe false
+        "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
+        page should include("""id="mapPanel" hidden""")
+        page should include("""id="bboxScope"""")
+        page should include("""data-results-layout="map"""")
+        pressedLayout(page) shouldBe "map"
+        val url = java.net.URLDecoder.decode(response.headers("hx-replace-url").head, "UTF-8")
+        url should include("layout=map")
+        url should include(s"locationId=${location.persistedId}")
+        url should include("bbox=50,50,60,60")
+        for (params <- List(Map("bbox" -> "bad"), Map("bbox" -> "-91,0,0,0"), Map("layout" -> "other"))) {
+          withClue(s"$params: ") {
+            val invalid = htmlSearch(host, repoId, params)
+            invalid.statusCode shouldBe 400
+            invalid.headers("content-type").head should include("text/plain")
+          }
+        }
+    }
+  }
+
   test("The No date header crosses a page boundary and is not repeated on continuation") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -54,10 +180,11 @@ import altitude.core.models.Asset
         ordered(page, header(""), cell(first))
         page should include("<span>No date</span>")
         page should include("""<span class="count" data-count="2">(2 items)</span>""")
+        page should include("""class="result-group"""")
         page.contains("""<time datetime="">""") shouldBe false
         val next = htmlSearch(host, repoId, params ++ Map("after" -> cursorOf(page).head, "isContinuousScroll" -> "true")).text()
         next should include(cell(second))
-        next.contains("""class="date-group"""") shouldBe false
+        next.contains("""class="result-group"""") shouldBe false
         cursorOf(next) shouldBe Nil
         val ascending = htmlSearch(host, repoId, params + ("groupDirection" -> "asc")).text()
         ordered(ascending, header(""), cell(first))
@@ -93,7 +220,14 @@ import altitude.core.models.Asset
     }
   }
 
-  private def header(day: String): String = s"""data-group-date="$day""""
+  private def header(day: String): String = s"""data-group-key="$day""""
+
+  /** The layout whose toggle button is pressed */
+  private def pressedLayout(html: String): String =
+    "(?s)aria-pressed=\"true\"\\s+data-app-search=\"click\" data-app-search-layout=\"([a-z]+)\"".r
+      .findFirstMatchIn(html)
+      .get
+      .group(1)
 
   /** The cursor the page's last cell carries, if any */
   private def cursorOf(html: String): List[String] =
@@ -142,6 +276,8 @@ import altitude.core.models.Asset
 
         // The Group dropdown reflects the grouping
         page1 should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
+        page1 should include("""data-results-group-by="dateTaken"""")
+        page1 should include("""data-results-group-direction="desc"""")
 
         // The last cell, and only it, carries the cursor; no cell carries a page number
         page1.contains("data-app-search-next-page") shouldBe false
@@ -223,6 +359,9 @@ import altitude.core.models.Asset
         rejected(Map(Api.Field.Search.GROUP_BY -> "")) should include("groupBy")
         rejected(Map(Api.Field.Search.GROUP_DIRECTION -> "asc")) should include("groupBy")
         rejected(grouped + (Api.Field.Search.GROUP_DIRECTION -> "up")) should include("groupDirection")
+        // A Location grouping has a fixed order
+        rejected(Map(Api.Field.Search.GROUP_BY -> "location", Api.Field.Search.GROUP_DIRECTION -> "asc")) should
+          include("groupDirection")
         rejected(Map(Api.Field.Search.AFTER -> "abc")) should include("groupBy")
         rejected(grouped + (Api.Field.Search.AFTER -> "abc")) should include("cursor")
         rejected(grouped + (Api.Field.Search.AFTER -> "e30")) should include("cursor")
@@ -285,7 +424,11 @@ import altitude.core.models.Asset
         val page = html.text()
         page should include(cell(asset))
         page should include("""data-app-search-group-by="" data-app-search-group-direction="" selected""")
-        page.contains("""class="date-group"""") shouldBe false // the style block names it; no header is rendered
+        page should include("""data-results-layout="grid"""")
+        page should include("""data-results-group-by=""""")
+        pressedLayout(page) shouldBe "grid"
+        page.contains("""id="bboxScope"""") shouldBe false
+        page.contains("""class="result-group"""") shouldBe false // the style block names it; no header is rendered
 
         // Past the last page
         val scroll = htmlSearch(host, repoId, Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))

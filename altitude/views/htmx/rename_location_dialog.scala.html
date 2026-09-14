@@ -1,0 +1,47 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.Location
+
+@(location: Location, title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+@defining(formJson.obj.get(Api.Field.Location.NAME).flatMap(_.strOpt)) { name =>
+
+@* hx-target="this" lets the server's
+   "HX-Retarget: this" (validation errors) replace this form in place *@
+<form action="#"
+      id="renameLocation"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-dialog-autofocus-selector="#field-@{ Api.Field.Location.NAME }"
+      data-app-dialog-select-on-focus="true"
+      data-app-dialog-return-focus="#locationMenuCtrl-@{location.persistedId}"
+      data-app-success-event="LOCATION_RENAMED_EVENT"
+      data-app-success-detail='{"@{ Api.Field.ID }":"@{ location.persistedId }"}'
+      hx-target="this"
+      hx-swap="none"
+      hx-put="/htmx/location/r/@{RequestContext.getRepository.persistedId}/rename"
+      hx-trigger="submit"
+      hx-json-enc>
+
+  @if(fieldErrors.contains(Api.Field.Location.NAME)) {
+    <div class="error">@{ fieldErrors(Api.Field.Location.NAME) }</div>
+  }
+
+  <div>
+    <label for="@{ Api.Field.Location.NAME }"></label>
+    <input type="text"
+           id="field-@{ Api.Field.Location.NAME }"
+           name="@{ Api.Field.Location.NAME }"
+           autocomplete="off"
+           size="30"
+           placeholder="New location name"
+           maxlength="@{ Api.Constraints.MAX_LOCATION_NAME_LENGTH }"
+           minlength="@{ Api.Constraints.MIN_LOCATION_NAME_LENGTH }"
+        @if(fieldErrors.contains(Api.Field.Location.NAME)) {
+           class="error"
+        }
+           value="@{ name.getOrElse(location.name) }">
+    <input type="hidden" name="@{ Api.Field.ID }" value="@{ location.persistedId }">
+  </div>
+</form>
+
+}

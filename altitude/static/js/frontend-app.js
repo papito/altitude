@@ -1,5 +1,6 @@
 import { Alpine } from "./lib/alpine.esm.min.js"
 import { refreshAlbumCounts } from "./common/album-list.js"
+import { refreshLocationCounts } from "./common/location-list.js"
 import { refreshFolderCounts } from "./common/folder-tree.js"
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
@@ -23,6 +24,7 @@ export class FrontendApp {
             reloadNav: this.reloadNav.bind(this),
             reloadFolderCounts: this.reloadFolderCounts.bind(this),
             reloadAlbumCounts: this.reloadAlbumCounts.bind(this),
+            reloadLocationCounts: this.reloadLocationCounts.bind(this),
         })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
             context,
@@ -82,5 +84,9 @@ export class FrontendApp {
 
     reloadAlbumCounts() {
         refreshAlbumCounts(this.context.getRepoId())
+    }
+
+    reloadLocationCounts() {
+        refreshLocationCounts(this.context.getRepoId())
     }
 }

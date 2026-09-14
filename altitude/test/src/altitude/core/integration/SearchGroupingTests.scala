@@ -9,7 +9,10 @@ import altitude.core.{ Altitude, Const, FieldConst, RequestContext }
 import altitude.core.models.*
 import altitude.core.util.*
 
-/** Grouped search: date groups with full-day totals, page contents, and counts that honor every search filter */
+/**
+ * Grouped search: date groups with full-day totals, page contents, and counts that honor every search filter; Location groups in
+ * path order with an asset under each of its Locations; the Location and bounding-box filters and the bare count.
+ */
 @DoNotDiscover class SearchGroupingTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   private val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
@@ -42,7 +45,10 @@ import altitude.core.util.*
       metadataFilters: Map[String, Any] = Map(),
       folderIds: Set[String] = Set(),
       personIds: Set[String] = Set(),
-      albumIds: Set[String] = Set()): GroupedSearchResult =
+      albumIds: Set[String] = Set(),
+      locationIds: Set[String] = Set(),
+      bbox: Option[BoundingBox] = None,
+      by: GroupBy = GroupBy.DateTaken): GroupedSearchResult =
     testApp.service.library.searchGrouped(
       new SearchQuery(
         text = text,
@@ -51,15 +57,48 @@ import altitude.core.util.*
         folderIds = folderIds,
         personIds = personIds,
         albumIds = albumIds,
+        locationIds = locationIds,
+        bbox = bbox,
         rpp = rpp,
         searchSort = List(sort),
-        grouping = Some(SearchGrouping(GroupBy.DateTaken, direction)),
+        grouping = Some(SearchGrouping(by, direction)),
         cursor = cursor
       ))
 
+  private def dayOf(key: SearchGroupKey): Option[LocalDate] = key match {
+    case SearchGroupKey.Day(date) => date
+    case other => throw IllegalStateException(s"Not a day group: $other")
+  }
+
   /** The page as (day, the day's full count, the asset IDs on the page) per group, in page order */
   private def summary(result: GroupedSearchResult): List[(Option[LocalDate], Int, List[String])] =
-    result.groups.map(group => (group.date, group.total, group.assets.map(_.persistedId)))
+    result.groups.map(group => (dayOf(group.key), group.total, group.assets.map(_.persistedId)))
+
+  /** A Location page as (Location name, category name, the group's full count, the asset IDs on the page) per group */
+  private def locationSummary(result: GroupedSearchResult): List[(Option[String], Option[String], Int, List[String])] =
+    result.groups.map {
+      group =>
+        group.key match {
+          case SearchGroupKey.Location(_, _, name, categoryName) =>
+            (name, categoryName, group.total, group.assets.map(_.persistedId))
+          case other => throw IllegalStateException(s"Not a Location group: $other")
+        }
+    }
+
+  private val paris = (48.8566, 2.3522)
+
+  private def addLocation(name: String, categoryId: Option[String] = None, pin: (Double, Double) = paris): Location =
+    testApp.service.location.addLocation(name, pin._1, pin._2, categoryId)
+
+  private def setCoordinates(asset: Asset, latitude: Double, longitude: Double): Unit =
+    testContext.setAssetCoordinates(asset.persistedId, latitude, longitude)
+
+  private def flat(
+      params: Map[String, Any] = Map(FieldConst.Asset.IS_RECYCLED -> false),
+      locationIds: Set[String] = Set(),
+      bbox: Option[BoundingBox] = None,
+      folderIds: Set[String] = Set()): SearchQuery =
+    new SearchQuery(params = params, locationIds = locationIds, bbox = bbox, folderIds = folderIds, rpp = 100)
 
   private def ids(result: GroupedSearchResult): List[String] = result.assets.map(_.persistedId)
 
@@ -72,7 +111,7 @@ import altitude.core.util.*
     ids(result) shouldEqual List(undated.persistedId)
     result.total shouldBe Some(1)
     result.groups.head.total shouldBe 1
-    result.groups.head.date shouldBe None
+    dayOf(result.groups.head.key) shouldBe None
   }
 
   private def nullDaysFirst(direction: SortDirection): Boolean =
@@ -118,7 +157,7 @@ import altitude.core.util.*
       val third = grouped(direction = direction, rpp = 2, cursor = second.nextCursor)
       val pages = List(first, second, third)
       pages.flatMap(ids) shouldEqual assets.map(_.persistedId)
-      pages.map(_.groups.map(g => (g.date, g.total, g.assets.size))) shouldEqual
+      pages.map(_.groups.map(g => (dayOf(g.key), g.total, g.assets.size))) shouldEqual
         List(List((None, 5, 2)), List((None, 5, 2)), List((None, 5, 1)))
       second.continuesGroup shouldBe true
       third.continuesGroup shouldBe true
@@ -201,7 +240,7 @@ import altitude.core.util.*
     val pages = List(page1, page2, page3)
 
     pages.flatMap(ids) shouldEqual assets.map(_.persistedId)
-    pages.map(_.groups.map(group => (group.date, group.total, group.assets.length))) shouldEqual List(
+    pages.map(_.groups.map(group => (dayOf(group.key), group.total, group.assets.length))) shouldEqual List(
       List((day("2026-09-06"), 7, 3)),
       List((day("2026-09-06"), 7, 3)),
       List((day("2026-09-06"), 7, 1)))
@@ -293,7 +332,7 @@ import altitude.core.util.*
     switchContextUser(testContext.users.head)
     val home = grouped()
     home.total shouldBe Some(2)
-    home.groups.map(group => (group.date, group.total, group.assets.length)) shouldEqual List((day("2026-09-06"), 2, 2))
+    home.groups.map(group => (dayOf(group.key), group.total, group.assets.length)) shouldEqual List((day("2026-09-06"), 2, 2))
   }
 
   test("A grouped page is one statement regardless of the number of days on it") {
@@ -318,7 +357,176 @@ import altitude.core.util.*
       val byCapture = grouped(sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
       ids(byCapture) should contain theSameElementsAs List(dated.persistedId, undated.persistedId)
       byCapture.total shouldBe Some(2)
-      byCapture.groups.map(group => (group.date, group.total, group.assets.length)) shouldEqual List((day("2026-09-06"), 2, 2))
+      byCapture.groups.map(group => (dayOf(group.key), group.total, group.assets.length)) shouldEqual List(
+        (day("2026-09-06"), 2, 2))
     }
+  }
+
+  test("Location groups are in path order, hold an asset under each of its Locations, and end with No location") {
+    val italy = testApp.service.location.addCategory("Italy")
+    val rome = addLocation("Rome", Some(italy.persistedId))
+    val alba = addLocation("Alba", Some(italy.persistedId))
+    val berlin = addLocation("Berlin")
+    val kyoto = addLocation("Kyoto")
+    val a1 = persistDated("2026-09-06T10:00:00", "a1.jpg")
+    val a2 = persistDated("2026-09-06T11:00:00", "a2.jpg")
+    val a3 = persistDated("2026-09-06T12:00:00", "a3.jpg")
+    val a4 = persistDated("2026-09-06T13:00:00", "a4.jpg")
+    testApp.service.location.addAssets(rome.persistedId, Set(a1.persistedId))
+    testApp.service.location.addAssets(berlin.persistedId, Set(a1.persistedId))
+    testApp.service.location.addAssets(alba.persistedId, Set(a2.persistedId, a4.persistedId))
+    testApp.service.location.addAssets(kyoto.persistedId, Set(a4.persistedId))
+
+    val before = RequestContext.readQueryCount.value
+    val page = grouped(by = GroupBy.Location)
+    RequestContext.readQueryCount.value - before shouldBe 1
+
+    // A category's Locations sort at the category's name, by their own; an asset in two Locations is under both; the total counts assets
+    locationSummary(page) shouldEqual List(
+      (Some("Berlin"), None, 1, List(a1.persistedId)),
+      (Some("Alba"), Some("Italy"), 2, List(a2.persistedId, a4.persistedId)),
+      (Some("Rome"), Some("Italy"), 1, List(a1.persistedId)),
+      (Some("Kyoto"), None, 1, List(a4.persistedId)),
+      (None, None, 1, List(a3.persistedId))
+    )
+    page.total shouldBe Some(4)
+    page.groups.map(_.key.cursorGroupId) shouldEqual
+      List(Some(berlin.persistedId), Some(alba.persistedId), Some(rome.persistedId), Some(kyoto.persistedId), None)
+    page.groups.head.key.cursorKey shouldBe Some("berlin")
+    page.continuesGroup shouldBe false
+    page.nextCursor shouldBe None
+
+    // The direction of the request is ignored: the order is fixed
+    locationSummary(grouped(by = GroupBy.Location, direction = SortDirection.ASC)) shouldEqual locationSummary(page)
+
+    // The sort applies within each group
+    val newestFirst = grouped(by = GroupBy.Location, sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC))
+    locationSummary(newestFirst).map(_._4) shouldEqual List(
+      List(a1.persistedId),
+      List(a4.persistedId, a2.persistedId),
+      List(a1.persistedId),
+      List(a4.persistedId),
+      List(a3.persistedId))
+
+    // Nothing matches: an empty first page with a zero count
+    val none = grouped(by = GroupBy.Location, text = Some("nothing"))
+    none.isEmpty shouldBe true
+    none.total shouldBe Some(0)
+  }
+
+  test("Location groups span pages with one consistent count and continue into No location") {
+    val italy = testApp.service.location.addCategory("Italy")
+    val rome = addLocation("Rome", Some(italy.persistedId))
+    val berlin = addLocation("Berlin")
+    val a1 = persistDated("2026-09-06T10:00:00", "1.jpg").persistedId
+    val a2 = persistDated("2026-09-06T10:00:00", "2.jpg").persistedId
+    val a3 = persistDated("2026-09-06T10:00:00", "3.jpg").persistedId
+    val a4 = persistDated("2026-09-06T10:00:00", "4.jpg").persistedId
+    val a5 = persistDated("2026-09-06T10:00:00", "5.jpg").persistedId
+    val a6 = persistDated("2026-09-06T10:00:00", "6.jpg").persistedId
+    testApp.service.location.addAssets(berlin.persistedId, Set(a1, a2, a3))
+    testApp.service.location.addAssets(rome.persistedId, Set(a2, a3, a4))
+
+    // Berlin, Rome, No location: a1 a2 a3 | a2 a3 a4 | a5 a6
+    val page1 = grouped(by = GroupBy.Location, rpp = 2)
+    val page2 = grouped(by = GroupBy.Location, rpp = 2, cursor = page1.nextCursor)
+    val page3 = grouped(by = GroupBy.Location, rpp = 2, cursor = page2.nextCursor)
+    val page4 = grouped(by = GroupBy.Location, rpp = 2, cursor = page3.nextCursor)
+
+    locationSummary(page1) shouldEqual List((Some("Berlin"), None, 3, List(a1, a2)))
+    // Berlin completes and Rome opens; the count of a group is the same on every page it spans
+    locationSummary(page2) shouldEqual List((Some("Berlin"), None, 3, List(a3)), (Some("Rome"), Some("Italy"), 3, List(a2)))
+    locationSummary(page3) shouldEqual List((Some("Rome"), Some("Italy"), 3, List(a3, a4)))
+    // Rome ran out exactly at a page boundary: the next page is the trailing group alone
+    locationSummary(page4) shouldEqual List((None, None, 2, List(a5, a6)))
+    page2.continuesGroup shouldBe true
+    page3.continuesGroup shouldBe true
+    page4.continuesGroup shouldBe false
+    List(page2, page3, page4).map(_.total) shouldEqual List(None, None, None)
+    page4.nextCursor shouldBe None
+
+    // A page ending inside No location continues there, with the group's count unchanged
+    val page5 = grouped(by = GroupBy.Location, rpp = 7)
+    page5.nextCursor.map(cursor => (cursor.key, cursor.groupId, cursor.id)) shouldBe Some((None, None, a5))
+    val tail = grouped(by = GroupBy.Location, rpp = 7, cursor = page5.nextCursor)
+    locationSummary(tail) shouldEqual List((None, None, 2, List(a6)))
+    tail.continuesGroup shouldBe true
+    tail.nextCursor shouldBe None
+
+    // A page can cross from the last Location into No location
+    val page6 = grouped(by = GroupBy.Location, rpp = 4)
+    locationSummary(grouped(by = GroupBy.Location, rpp = 4, cursor = page6.nextCursor)) shouldEqual
+      List((Some("Rome"), Some("Italy"), 3, List(a3, a4)), (None, None, 2, List(a5, a6)))
+  }
+
+  test("Every filter bounds the Location groups and their counts, and the Location filter scopes a search") {
+    val rome = addLocation("Rome")
+    val berlin = addLocation("Berlin")
+    val folder = testApp.service.folder.add("trip")
+    val inFolder = persistDated("2026-09-06T10:00:00", "a1.jpg", folder = Some(folder))
+    val elsewhere = persistDated("2026-09-06T11:00:00", "a2.jpg")
+    val unlocated = persistDated("2026-09-06T12:00:00", "a3.jpg", folder = Some(folder))
+    testApp.service.location.addAssets(rome.persistedId, Set(inFolder.persistedId, elsewhere.persistedId))
+    testApp.service.location.addAssets(berlin.persistedId, Set(elsewhere.persistedId))
+
+    val byFolder = grouped(by = GroupBy.Location, folderIds = Set(folder.persistedId))
+    locationSummary(byFolder) shouldEqual
+      List((Some("Rome"), None, 1, List(inFolder.persistedId)), (None, None, 1, List(unlocated.persistedId)))
+    byFolder.total shouldBe Some(2)
+
+    // Scoped to a Location, the groups are the Locations of its assets and there is no trailing group
+    val byLocation = grouped(by = GroupBy.Location, locationIds = Set(berlin.persistedId))
+    locationSummary(byLocation) shouldEqual
+      List((Some("Berlin"), None, 1, List(elsewhere.persistedId)), (Some("Rome"), None, 1, List(elsewhere.persistedId)))
+    byLocation.total shouldBe Some(1)
+
+    // The Location filter on a flat search, on a day grouping, and on the bare count
+    val query = flat(locationIds = Set(rome.persistedId))
+    testApp.service.library.search(query).records.map(_.persistedId) should contain theSameElementsAs
+      List(inFolder.persistedId, elsewhere.persistedId)
+    testApp.service.library.count(query) shouldBe 2
+    summary(grouped(locationIds = Set(rome.persistedId), folderIds = Set(folder.persistedId))) shouldEqual
+      List((day("2026-09-06"), 1, List(inFolder.persistedId)))
+    testApp.service.library.count(flat(locationIds = Set(rome.persistedId), folderIds = Set(folder.persistedId))) shouldBe 1
+
+    // Recycling drops the memberships, and with them the asset from the Location's group and count
+    testApp.service.library.recycleAssets(Set(elsewhere.persistedId))
+    locationSummary(grouped(by = GroupBy.Location)) shouldEqual
+      List((Some("Rome"), None, 1, List(inFolder.persistedId)), (None, None, 1, List(unlocated.persistedId)))
+    testApp.service.library.count(flat()) shouldBe 2
+  }
+
+  test("The bounding-box filter plots an asset at its own point, or at its Locations' pins without one") {
+    val sydney = addLocation("Sydney", pin = (-33.8688, 151.2093))
+    val own = persistDated("2026-09-06T10:00:00", "paris.jpg")
+    setCoordinates(own, paris._1, paris._2)
+    val pinned = persistDated("2026-09-06T11:00:00", "sydney.jpg")
+    val pointAndPin = persistDated("2026-09-06T12:00:00", "tokyo.jpg")
+    setCoordinates(pointAndPin, 35.6762, 139.6503)
+    val east = persistDated("2026-09-06T13:00:00", "east.jpg")
+    setCoordinates(east, 0.5, 179.5)
+    val west = persistDated("2026-09-06T14:00:00", "west.jpg")
+    setCoordinates(west, -0.5, -179.5)
+    val nowhere = persistDated("2026-09-06T15:00:00", "nowhere.jpg")
+    testApp.service.location.addAssets(sydney.persistedId, Set(pinned.persistedId, pointAndPin.persistedId, nowhere.persistedId))
+    testApp.service.location.removeAssets(sydney.persistedId, Set(nowhere.persistedId))
+
+    def found(box: String): List[String] =
+      testApp.service.library.search(flat(bbox = Some(BoundingBox.parse(box)))).records.map(_.persistedId).sorted
+
+    found("48,2,49,3") shouldEqual List(own.persistedId)
+    // An asset with a point of its own is never plotted at its Location's pin
+    found("-34,151,-33,152") shouldEqual List(pinned.persistedId)
+    found("35,139,36,140") shouldEqual List(pointAndPin.persistedId)
+    // A box across the antimeridian covers both sides of it; the same edges the other way round do not
+    found("-1,179,1,-179") shouldEqual List(east.persistedId, west.persistedId).sorted
+    found("-1,-179,1,179") shouldEqual Nil
+    found("-90,-180,90,180") shouldEqual List(own, pinned, pointAndPin, east, west).map(_.persistedId).sorted
+
+    // The same predicate bounds the count and a grouped page
+    testApp.service.library.count(flat(bbox = Some(BoundingBox.parse("-1,179,1,-179")))) shouldBe 2
+    summary(grouped(bbox = Some(BoundingBox.parse("-34,151,-33,152")))) shouldEqual
+      List((day("2026-09-06"), 1, List(pinned.persistedId)))
+    testApp.service.library.count(flat()) shouldBe 6
   }
 }

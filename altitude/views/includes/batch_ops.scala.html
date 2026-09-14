@@ -39,7 +39,7 @@
 
 <div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
     <div class="container">
-        <!-- Default view: Move, Recycle, Remove from album (in an album), Deselect All -->
+        <!-- Default view: Move, Recycle, Remove from album (in an album), Add to location, Remove from location (in a Location), Deselect All -->
         <template x-if="!$store.currentView.isTrashBinView()">
             <div class="container">
                 <div class="control batch-mover">
@@ -52,6 +52,16 @@
                 <template x-if="$store.searchParams.albumId">
                     <div class="control">
                         <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromAlbum)"><i class="fas fa-minus-circle"></i>Remove from album&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                    </div>
+                </template>
+                <!-- Opens the Add to location dialog for the selection (js/listeners/locations.js); Locations are pointers like albums -->
+                <div class="control">
+                    <button class="action-button" @@click="$dispatch(window.Const.events.batchAddToLocationRequested)"><i class="fas fa-map-marker-alt"></i>Add to location&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                </div>
+                <!-- While a Location's results are displayed: drop the selected assets from that Location -->
+                <template x-if="$store.searchParams.locationId">
+                    <div class="control">
+                        <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
                     </div>
                 </template>
                 <div class="control">

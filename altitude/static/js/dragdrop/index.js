@@ -3,6 +3,7 @@ import { bindBatchOpsDragDrop } from "./batch-ops.js"
 import { bindPeopleDragDrop } from "./people.js"
 import { bindFolderDragDrop } from "./folders.js"
 import { bindAlbumDragDrop } from "./albums.js"
+import { bindLocationDragDrop } from "./locations.js"
 
 export function bindAppDragDrop(app) {
     // Recalculate dropzone rects on every dragmove instead of caching them at
@@ -19,4 +20,5 @@ export function bindAppDragDrop(app) {
     bindPeopleDragDrop({ dispatch })
     bindFolderDragDrop({ dispatch })
     bindAlbumDragDrop({ dispatch })
+    bindLocationDragDrop({ dispatch })
 }

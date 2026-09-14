@@ -3,13 +3,11 @@
 
 @(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), parentId: String)
 
-@* Opened from a folder's ⋯ menu (Add folder) or from the "Add folder" button above the tree (into the root);
-   the dialog names no return-focus control, so focus goes back to whichever of the two opened it. The
-   field's placeholder is the whole prompt, so there is no heading.
-   hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
+@* Return submits. Validation responses replace the form in the modal, keeping its values and errors. *@
 <form action="#"
       id="addFolder"
-      data-app-fragment="inline-dialog"
+      data-app-fragment="modal"
+      data-app-modal-title="Add folder"
       data-app-dialog-autofocus-selector="#field@{ Api.Field.Folder.NAME }"
       data-app-success-event="FOLDER_ADDED_EVENT"
       data-app-success-detail='{"@{ Api.Field.Folder.PARENT_ID }":"@{ parentId }"}'

@@ -2,6 +2,9 @@
  * Modal dialog fragments (`data-app-fragment="modal"`): hydration into the shared modal owner, and
  * the modal presentation of the dialog operation lifecycle (`dialog-operations.js`). A validation
  * response that replaces the form in place is re-hydrated, which re-opens the same host.
+ *
+ * A dialog that needs wiring beyond its form names it with `data-app-dialog-kind`, as the inline
+ * dialogs do; the Add to location dialog is the only modal one (`add-to-location.js`).
  */
 import {
     closeModal,
@@ -10,6 +13,7 @@ import {
     ModalHost,
     openModal,
 } from "../common/modal.js"
+import { hydrateAddToLocationFragment } from "./add-to-location.js"
 import { registerDialogKind } from "./dialog-operations.js"
 
 // An operation issued from a modal dialog belongs to the open displayed at that moment; only that
@@ -33,4 +37,8 @@ export function hydrateModalFragment({ fragmentEl }) {
         selectOnFocus: fragmentEl.dataset.appDialogSelectOnFocus === "true",
         returnFocusSelector: fragmentEl.dataset.appDialogReturnFocus,
     })
+
+    if (fragmentEl.dataset.appDialogKind === "add-to-location") {
+        hydrateAddToLocationFragment({ fragmentEl })
+    }
 }

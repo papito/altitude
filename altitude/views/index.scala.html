@@ -10,7 +10,10 @@
     <title>ALTITUDE</title>
 
     @includes.html.header_common()
+    <link rel="stylesheet" href="/static/css/leaflet.css">
     <script src="/static/js/lib/interact.min.js"></script>
+    <script src="/static/js/lib/leaflet.js"></script>
+    <script src="/static/js/lib/supercluster.min.js"></script>
     <script src="/static/js/lib/json-enc.js"></script>
 
     <style>
@@ -108,6 +111,17 @@
                hx-trigger="click"
                hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab">
               <i class="fas fa-images"></i> Albums
+            </a>
+
+            <a id="locationsTab"
+               role="tab"
+               aria-selected="false"
+               href="#locations"
+               hx-target="#explorerPanelContent"
+               hx-swap="innerHTML"
+               hx-trigger="click"
+               hx-get="/htmx/location/r/@{RequestContext.getRepository.persistedId}/tab">
+              <i class="fas fa-map-marker-alt"></i> Locations
             </a>
 
             <a id="peopleTab"

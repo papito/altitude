@@ -7,7 +7,6 @@ import scalasql.dialects.Dialect
 
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
-import altitude.core.util.GroupBy
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
@@ -25,13 +24,16 @@ trait SearchDialect:
   /** The ScalaSql dialect the typed halves of a search are written against */
   val dialect: Dialect
 
-  /** The calendar-day expression a grouped search orders, compares and counts by; it must match the engine's date index */
-  def day(asset: AssetRow[Expr], groupBy: GroupBy): Expr[Option[LocalDate]]
+  /**
+   * The calendar day of a timestamp column, which a date grouping orders, compares and counts by; it must match the engine's date
+   * index
+   */
+  def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]]
 
   /** The engine's full-text predicate over one search document */
   def textMatch(document: SearchDocumentRow[Expr], text: String): Expr[Boolean]
 
-  /** The ORDER BY term for the sort within a day. Engines may decorate it to steer their planner. */
+  /** The ORDER BY term for the sort within a group. Engines may decorate it to steer their planner. */
   def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?]
 
   /** Whether the engine's schema lets this timestamp column be null */

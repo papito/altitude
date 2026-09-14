@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqua
 import altitude.core.{ Altitude, Const }
 import altitude.core.models.{ Asset, CaptureDateSource, ExtractedMetadata, PublicMetadata }
 import altitude.core.models.{ ImportAsset, UserMetadata }
-import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, SortDirection }
+import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery, SearchSort, SortDirection }
 
 /**
  * Date storage semantics behind date grouping: a capture timestamp is the camera's wall-clock time and must survive storage
@@ -74,6 +74,24 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, So
       reread.originalCreatedAt shouldBe None
       reread.originalCreatedAtSource shouldBe None
     }
+  }
+
+  test("Coordinates round-trip through storage and stay null when absent") {
+    val located = testContext.makeAsset().copy(latitude = Some(-33.857), longitude = Some(151.2152))
+    val unlocated = testContext.makeAsset()
+    val ids = testApp.txManager.withTransaction {
+      List(located, unlocated).map(asset => testApp.DAO.asset.add(asset).persistedId)
+    }
+    val reread = ids.map(testApp.service.asset.getById)
+    reread.head.latitude shouldBe Some(-33.857)
+    reread.head.longitude shouldBe Some(151.2152)
+    reread.last.latitude shouldBe None
+    reread.last.longitude shouldBe None
+    // The hand-written SQL paths build the model from a row map and must read the same columns
+    val locked =
+      testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToRecycle(ids.toSet)).sortBy(a => ids.indexOf(a.persistedId))
+    locked.map(_.latitude) shouldBe List(Some(-33.857), None)
+    locked.map(_.longitude) shouldBe List(Some(151.2152), None)
   }
 
   test("The import result carries the resolved capture time and its persisted provenance") {
@@ -155,7 +173,7 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchQuery, SearchSort, So
         rpp = 50,
         searchSort = List(SearchSort("filename", SortDirection.ASC)),
         grouping = Some(SearchGrouping(GroupBy.DateTaken))))
-    grouped.groups.map(_.date) shouldBe List(None)
+    grouped.groups.map(_.key) shouldBe List(SearchGroupKey.Day(None))
     grouped.assets.map(_.persistedId) shouldBe List(imported.persistedId)
     grouped.total shouldBe Some(1)
   }

@@ -76,7 +76,10 @@ CREATE TABLE asset (
   -- Camera wall-clock time, with no zone. NULL means unknown and forms the native-position "No date" group.
   original_created_at TIMESTAMP WITHOUT TIME ZONE,
   -- CaptureDateSource.dbValue: which metadata rung won; NULL when no capture time was resolved.
-  original_created_at_source VARCHAR(32)
+  original_created_at_source VARCHAR(32),
+  -- WGS84 decimal degrees, parsed from the file's GPS metadata on import only (GeoLocationResolver). NULL when it carried none.
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
@@ -86,6 +89,9 @@ CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processe
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
 );
+-- Map viewport queries: a bounding-box range over the located assets of a repository only.
+CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
+  WHERE latitude IS NOT NULL;
 
 CREATE SEQUENCE person_label;
 
@@ -170,6 +176,37 @@ CREATE TABLE album_asset (
 
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
 CREATE INDEX album_asset_02 ON album_asset (asset_id);
+
+-- A user-defined place. Categories (kind 'category') are pure containers, one level deep; Locations (kind 'location') are a pin
+-- and hold assets through location_asset. Both kinds share one name pool per repository.
+CREATE TABLE location (
+  id CHAR(36) PRIMARY KEY,
+  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  -- NULL = top level. No cascade: deleting a Category moves its Locations to the top level first (LocationService).
+  category_id CHAR(36) REFERENCES location (id),
+  kind VARCHAR(16) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  name_lc VARCHAR(255) NOT NULL,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  CHECK (kind IN ('category', 'location')),
+  CHECK (kind <> 'category' OR (category_id IS NULL AND latitude IS NULL AND longitude IS NULL)),
+  CHECK (kind <> 'location' OR (latitude IS NOT NULL AND longitude IS NOT NULL)),
+  CHECK (latitude BETWEEN -90 AND 90),
+  CHECK (longitude BETWEEN -180 AND 180)
+) INHERITS (_core);
+
+CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
+CREATE INDEX location_02 ON location (repository_id, category_id);
+
+CREATE TABLE location_asset (
+  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  location_id CHAR(36) NOT NULL REFERENCES location (id) ON DELETE CASCADE,
+  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE
+) INHERITS (_core);
+
+CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
+CREATE INDEX location_asset_02 ON location_asset (asset_id);
 
 CREATE TABLE metadata_parameter (
   repository_id CHAR(36) REFERENCES repository (id),

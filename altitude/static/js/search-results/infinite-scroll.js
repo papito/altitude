@@ -13,6 +13,12 @@ import { runSearch } from "./search.js"
  *
  * The detail modal loads pages the same way, through `loadNextPage`, when it steps past the last
  * loaded cell (js/search-results/detail-navigator.js).
+ *
+ * A continuation continues the grid as it was rendered: the layout and grouping its results fragment
+ * carries (`data-results-layout`, `data-results-group-by`, `data-results-group-direction`) are sent
+ * for that one request, whatever the store now says. For the main grid they are the store's own
+ * values; for the crowded-pin panel's grid (js/map/map-panel.js) they are the plain grid it was
+ * requested as, while the store says map.
  */
 
 // A cell that has already loaded its page keeps the class but loses the attribute, so only the one
@@ -53,6 +59,7 @@ export function loadNextPage(lastCellEl) {
     // never right for a continuation anyway
     const request = runSearch({
         transient: {
+            ...renderedGridParamsOf(lastCellEl),
             ...continuation,
             p: continuation.p ?? null,
             isContinuousScroll: true,
@@ -64,6 +71,23 @@ export function loadNextPage(lastCellEl) {
     pendingPageLoads.set(lastCellEl, request)
 
     return request
+}
+
+/** The layout and grouping the grid holding `cellEl` was rendered with, from its results fragment */
+function renderedGridParamsOf(cellEl) {
+    const fragment = cellEl.closest('[data-app-fragment="search-results"]')
+    if (!fragment) {
+        return {}
+    }
+
+    const { resultsLayout, resultsGroupBy, resultsGroupDirection } =
+        fragment.dataset
+
+    return {
+        layout: resultsLayout || null,
+        groupBy: resultsGroupBy || null,
+        groupDirection: resultsGroupDirection || null,
+    }
 }
 
 /** `{ after }` or `{ p }`, whichever the cell carries; `null` when it carries neither */
@@ -84,7 +108,7 @@ function continuationOf(lastCellEl) {
 /**
  * Watches the displayed grid's last cell, and every last cell of the pages appended to it. A page
  * arriving is also the one moment cells enter the grid, which the selection store is told about
- * so a date header can recount its day.
+ * so a group header can recount its group.
  */
 export function bindInfiniteScroll({ assetsElement }) {
     const observer = getNextPageObserver()

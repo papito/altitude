@@ -6,7 +6,7 @@ import globals from "globals"
 /**
  * ESLint flat config for the front-end modules under altitude/static/js. The vendored libraries
  * in static/js/lib are not linted. `htmx` and `interact` are loaded as plain scripts by the page
- * templates, so they are globals; Alpine is imported from its ES module wherever it is used.
+ * templates, so they are globals (Leaflet is `L`, supercluster is `Supercluster`); Alpine is imported from its ES module wherever it is used.
  */
 export default [
     {
@@ -24,6 +24,8 @@ export default [
                 ...globals.browser,
                 htmx: "readonly",
                 interact: "readonly",
+                L: "readonly",
+                Supercluster: "readonly",
             },
         },
         settings: {

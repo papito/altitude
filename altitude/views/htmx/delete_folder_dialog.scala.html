@@ -4,15 +4,13 @@
 
 @(folder: Folder, title: String)
 
-@* The dialog shows in the folder's own menu, which exists while it is open, but focus returns to
-   the parent's menu control, which is what survives the deletion *@
+@* Focus returns to the parent's menu control, which survives the deletion *@
 <div id="deleteFolder"
-     data-app-fragment="inline-dialog"
+     data-app-fragment="modal"
+     data-app-modal-title="@{title}"
      data-app-dialog-return-focus="#folderMenuCtrl-@{folder.parentId}"
      data-app-success-event="FOLDER_DELETED_EVENT"
      data-app-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'>
-
-    <h3 class="dialog-title">@{title}</h3>
 
     <button type="button"
             class="action-button error"

@@ -201,6 +201,19 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
+  /** Coordinates are parsed on import only, so a fixture writes them directly, as an import of a geotagged file would have */
+  def setAssetCoordinates(assetId: String, latitude: Double, longitude: Double): Unit = {
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET latitude = ?, longitude = ? WHERE id = ?",
+        latitude.asInstanceOf[Object],
+        longitude.asInstanceOf[Object],
+        assetId
+      )
+    }
+  }
+
   def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {
     require(people.count(_.id.isEmpty) == 0, "Person must have an ID for a mock face to be added")
 

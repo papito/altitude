@@ -1,0 +1,23 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Location
+@import altitude.core.models.LocationKind
+
+@(location: Location, title: String)
+
+@* A deleted category leaves its Locations at the top level; neither kind owns the assets it points to. *@
+<div id="deleteLocation"
+     data-app-fragment="modal"
+     data-app-modal-title="@{title}"
+     data-app-dialog-return-focus="#addLocationBtn"
+     data-app-success-event="LOCATION_DELETED_EVENT"
+     data-app-success-detail='@{ujson.Obj("id" -> location.persistedId)}'>
+  @if(location.kind == LocationKind.Category) {
+    <p>Its Locations move to the top level.</p>
+  }
+  <button type="button" class="action-button error"
+          hx-target="this" hx-swap="none"
+          hx-delete="/htmx/location/r/@{RequestContext.getRepository.persistedId}"
+          hx-vals='@{ujson.Obj("id" -> location.persistedId)}'>
+    Delete "<strong>@{location.name}</strong>" (its assets are not affected)
+  </button>
+</div>

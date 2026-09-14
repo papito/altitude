@@ -8,14 +8,12 @@ import {
     setAssetDetailSize,
 } from "../common/modal.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
+import { assetIdOf } from "./cells.js"
 import { loadNextPage } from "./infinite-scroll.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
 // Pending load listeners per image element, removed when a newer `src` supersedes the load
 const pendingImageLoads = new WeakMap()
-
-// A cell of the results grid is `#asset-<id>` (htmx/result_cell.scala.html)
-const CELL_ID_PREFIX = "asset-"
 
 export function setImgSrcAndWait({ img, url }) {
     pendingImageLoads.get(img)?.()
@@ -49,31 +47,35 @@ export function setImgSrcAndWait({ img, url }) {
  * Coordinates previous/next navigation and image loading inside the asset-detail modal.
  *
  * The results grid is the modal's source of truth: next and previous move between the grid's
- * `.cell`s in document order, skipping the date headers of a grouped grid, and a cell removed from
+ * `.cell`s in document order, skipping the group headers of a grouped grid, and a cell removed from
  * the grid drops out of navigation with it. At the end of the loaded grid, next loads the following
  * page exactly as the scroll observer does (`loadNextPage`) and continues into it; at the true end,
  * and at the first cell, nothing happens.
+ *
+ * What is remembered is the cell the modal was opened from or stepped to, not the asset: a Location
+ * grouping holds an asset in a cell under each of its Locations, and stepping from the cell keeps
+ * the walk in the group the user was looking at. A detail opened with no cell (a map pin) has
+ * nowhere to step to.
  *
  * Every image request gets its own token. Only the latest request for the still-active
  * asset-detail open may change the image, box size, title, or loading state; superseded or
  * orphaned completions are ignored, and none can reopen a modal.
  */
 export function createSearchDetailCoordinator({ context }) {
-    // The asset the modal shows, or is loading: where navigation starts from
-    let currentAssetId = null
+    // The cell the modal shows, or is loading: where navigation starts from
+    let currentCell = null
     let imageRequestToken = 0
 
     function isAssetDetailActive() {
         return getActiveModalHost() === ModalHost.assetDetail
     }
 
+    /** The current cell while it is still in the grid */
     function currentCellEl() {
-        return currentAssetId
-            ? document.getElementById(`${CELL_ID_PREFIX}${currentAssetId}`)
-            : null
+        return currentCell?.isConnected ? currentCell : null
     }
 
-    /** The nearest `.cell` among the siblings in `direction`, past any date header */
+    /** The nearest `.cell` among the siblings in `direction`, past any group header */
     function siblingCellOf(cellEl, direction) {
         let el = cellEl[direction]
 
@@ -85,10 +87,8 @@ export function createSearchDetailCoordinator({ context }) {
     }
 
     function showCell(cellEl) {
-        const assetId = cellEl.id.slice(CELL_ID_PREFIX.length)
-
-        currentAssetId = assetId
-        loadAssetDetail(assetId)
+        currentCell = cellEl
+        loadAssetDetail(assetIdOf(cellEl), cellEl)
     }
 
     async function handleShowNext() {
@@ -97,7 +97,6 @@ export function createSearchDetailCoordinator({ context }) {
         }
 
         const openId = getModalOpenId()
-        const originId = currentAssetId
         const cellEl = currentCellEl()
 
         if (!cellEl) {
@@ -116,7 +115,7 @@ export function createSearchDetailCoordinator({ context }) {
                 return
             }
 
-            if (!isModalOpenActive(openId) || currentAssetId !== originId) {
+            if (!isModalOpenActive(openId) || currentCell !== cellEl) {
                 return
             }
 
@@ -150,8 +149,9 @@ export function createSearchDetailCoordinator({ context }) {
     }
 
     /**
-     * Makes `assetId` the navigation origin immediately, then loads its image. If the request
-     * is still current when the image arrives, applies the asset's size and title.
+     * Makes `cellEl` (the cell the asset is shown in, or null for a detail opened from no cell) the
+     * navigation origin immediately, then loads the image. If the request is still current when
+     * the image arrives, applies the asset's size and title.
      */
     async function showImage({
         openId,
@@ -160,12 +160,12 @@ export function createSearchDetailCoordinator({ context }) {
         title,
         width,
         height,
-        assetId,
+        cellEl = null,
         token = ++imageRequestToken,
     }) {
         const loading = Alpine.store(Const.state.imageDetailLoading)
-        // Navigation starts from the requested asset while its image is still loading.
-        currentAssetId = assetId
+        // Navigation starts from the requested cell while its image is still loading.
+        currentCell = cellEl
         loading.value = true
 
         try {
@@ -190,10 +190,11 @@ export function createSearchDetailCoordinator({ context }) {
     }
 
     /**
-     * Navigates the active asset-detail modal to `assetId`: fetches the asset's metadata, then
-     * its image. Both steps are skipped if the request is superseded or the modal goes away.
+     * Navigates the active asset-detail modal to `assetId`, shown by `cellEl`: fetches the asset's
+     * metadata, then its image. Both steps are skipped if the request is superseded or the modal
+     * goes away.
      */
-    async function loadAssetDetail(assetId) {
+    async function loadAssetDetail(assetId, cellEl) {
         const repoId = context.getRepoId()
         const imgEl = document.querySelector("#imageDetailModalContent img")
 
@@ -235,7 +236,7 @@ export function createSearchDetailCoordinator({ context }) {
             title: assetData.file_name,
             width: assetData.width,
             height: assetData.height,
-            assetId,
+            cellEl,
             token,
         })
     }

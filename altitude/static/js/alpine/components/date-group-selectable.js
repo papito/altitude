@@ -2,16 +2,16 @@ import { Alpine } from "../../lib/alpine.esm.min.js"
 import { Const } from "../../constants.js"
 
 /**
- * The checkbox of a date group header (`htmx/results_grid_grouped.scala.html`): it selects or
- * deselects that day's cells as a set, and shows how much of the day is selected - unchecked, the
- * indeterminate dash, or checked.
+ * The checkbox of a group header (`.result-group`, a day or a Location,
+ * `htmx/results_grid_grouped.scala.html`): it selects or deselects that group's cells as a set, and
+ * shows how much of the group is selected - unchecked, the indeterminate dash, or checked.
  *
- * The set is the day's *loaded* cells. A day's header count is its match count across every page,
- * loaded or not, so a day still scrolling in stays indeterminate however many of its loaded cells
- * are selected; selecting a day never requests the pages it has not reached yet.
+ * The set is the group's *loaded* cells. A group's header count is its match count across every page,
+ * loaded or not, so a group still scrolling in stays indeterminate however many of its loaded cells
+ * are selected; selecting a group never requests the pages it has not reached yet.
  *
  * A group owns no element of its own: its cells are the header's following siblings, up to the next
- * header or the end of the grid, which is what lets a day continued onto the next cursor page repeat
+ * header or the end of the grid, which is what lets a group continued onto the next cursor page repeat
  * no header and simply append cells. So the set is read off the DOM each time rather than held.
  *
  * Everything here is derived from the `selectedAssets` store: the counts read its reactive set and
@@ -96,7 +96,7 @@ export function initDateGroupSelectable() {
             const ids = []
             let el = this.$root.nextElementSibling
 
-            while (el && !el.classList.contains("date-group")) {
+            while (el && !el.classList.contains("result-group")) {
                 const id = el.querySelector?.(`[${Const.attributes.assetId}]`)
                     ?.dataset.assetId
 

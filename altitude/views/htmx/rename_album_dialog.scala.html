@@ -4,11 +4,12 @@
 @(title: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), id: String, existingName: Option[String] = None)
 @defining(formJson.obj.get(Api.Field.Album.NAME).flatMap(_.strOpt)) { name =>
 
-@* Shown inline in the album's menu, like the folder dialogs. hx-target="this" lets the server's
+@* hx-target="this" lets the server's
    "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
       id="renameAlbum"
-      data-app-fragment="inline-dialog"
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
       data-app-dialog-autofocus-selector="#field-@{ Api.Field.Album.NAME }"
       data-app-dialog-select-on-focus="true"
       data-app-dialog-return-focus="#albumMenuCtrl-@{id}"
@@ -19,8 +20,6 @@
       hx-put="/htmx/album/r/@{RequestContext.getRepository.persistedId}/rename"
       hx-trigger="submit"
       hx-json-enc>
-
-  <h3 class="dialog-title">@{title}</h3>
 
   @if(fieldErrors.contains(Api.Field.Album.NAME)) {
     <div class="error">@{ fieldErrors(Api.Field.Album.NAME) }</div>

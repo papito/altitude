@@ -7,6 +7,7 @@ import {
     showWarningSnackBar,
 } from "../common/snackbar.js"
 import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
+import { cellsOf } from "../search-results/cells.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
 
 export function createAssetActions({
@@ -14,29 +15,25 @@ export function createAssetActions({
     reloadNav,
     reloadFolderCounts,
     reloadAlbumCounts,
+    reloadLocationCounts,
 }) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
 
     // Every successful mutation refreshes the nav counts, the folder tree counts, and the album
-    // counts (recycling drops an asset from its albums)
+    // and Location counts (recycling drops an asset from its albums and Locations)
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()
         reloadAlbumCounts()
+        reloadLocationCounts()
     }
 
+    // An asset can have several cells (a Location grouping shows it under each of its Locations)
     function removeTriageStyling(assetIds) {
         for (const assetId of assetIds) {
-            const cellEl = htmx.find(`#asset-${assetId}`)
-            if (!cellEl) {
-                continue
-            }
-
-            delete cellEl.dataset.isTriaged
-
-            const marker = cellEl.querySelector(".triage-marker")
-            if (marker) {
-                marker.remove()
+            for (const cellEl of cellsOf(assetId)) {
+                delete cellEl.dataset.isTriaged
+                cellEl.querySelector(".triage-marker")?.remove()
             }
         }
     }
@@ -49,31 +46,31 @@ export function createAssetActions({
      */
     function setMovePending(assetIds, isPending) {
         for (const assetId of assetIds) {
-            const cellEl = htmx.find(`#asset-${assetId}`)
-            if (!cellEl) {
-                continue
+            for (const cellEl of cellsOf(assetId)) {
+                cellEl.classList.toggle("move-pending", isPending)
             }
-
-            cellEl.classList.toggle("move-pending", isPending)
         }
     }
 
     /**
      * The one place cells leave the grid (a move out of scope, recycle, purge, restore, removal from
-     * an album). Each cell leaves its day's header count and the footer total as it goes; the detail
-     * modal, which walks the grid, forgets it with the cell.
+     * an album or a Location). Every cell of the asset goes, each leaving its group's header count;
+     * the footer total counts assets, so it drops by one per asset that had a cell. The detail modal,
+     * which walks the grid, forgets a cell with it.
      */
     function removeAssetsFromGrid(assetIds) {
         let removedCount = 0
 
         for (const assetId of assetIds) {
-            const el = htmx.find(`#asset-${assetId}`)
-            if (!el) {
+            const cellEls = cellsOf(assetId)
+            if (cellEls.length === 0) {
                 continue
             }
 
-            decrementDateGroupOf(el)
-            el.remove()
+            for (const cellEl of cellEls) {
+                decrementDateGroupOf(cellEl)
+                cellEl.remove()
+            }
             removedCount++
         }
 
@@ -298,6 +295,81 @@ export function createAssetActions({
         }
     }
 
+    function locationName(locationId) {
+        return (
+            document.getElementById(`locationName-${locationId}`)
+                ?.textContent ?? "location"
+        )
+    }
+
+    /**
+     * The outcome of adding assets to a Location, by a drop or the Add to location dialog: the
+     * server skips assets already in it and reports how many it `added`, so nothing added is a
+     * warning rather than a success. The dialog passes the `name` it offered the Location under,
+     * since its row is not rendered while another explorer tab is displayed.
+     */
+    function reportAddedToLocation({ locationId, added, name }) {
+        const label = name ?? locationName(locationId)
+
+        if (added === 0) {
+            showWarningSnackBar(`Already in location "${label}"`)
+            return
+        }
+
+        showSuccessSnackBar(
+            `${added > 1 ? `${added} assets` : "Asset"} added to location "${label}"`,
+        )
+    }
+
+    /**
+     * Locations point at assets like albums do: adding leaves the assets where they are, so the
+     * grid does not change.
+     */
+    async function addAssetsToLocation({ locationId, assetIds }) {
+        const payload = { locationId, assetIds }
+
+        try {
+            const response = await http.put(
+                `/api/location/r/${context.getRepoId()}/assets`,
+                payload,
+            )
+            reportAddedToLocation({ locationId, added: response.data.added })
+
+            if (shouldResetSelectedAssets(assetIds)) {
+                selectedAssets().reset()
+            }
+
+            reloadLocationCounts()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error adding assets to location: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
+    /** Removes the pointers only; the assets leave the displayed Location results and nothing else */
+    async function removeAssetsFromLocation({ locationId, assetIds }) {
+        const payload = { locationId, assetIds }
+
+        try {
+            await http.delete(`/api/location/r/${context.getRepoId()}/assets`, {
+                data: payload,
+            })
+
+            showSuccessSnackBar(
+                `${assetIds.length > 1 ? "Assets" : "Asset"} removed from location "${locationName(locationId)}"`,
+            )
+
+            removeAssetsFromGrid(assetIds)
+            selectedAssets().reset()
+            reloadLocationCounts()
+        } catch (error) {
+            showErrorSnackBar(
+                `Error removing assets from location: ${getHttpErrorMessage(error)}`,
+            )
+        }
+    }
+
     return {
         moveAssets,
         recycleAssets,
@@ -305,5 +377,8 @@ export function createAssetActions({
         restoreAssets,
         addAssetsToAlbum,
         removeAssetsFromAlbum,
+        addAssetsToLocation,
+        reportAddedToLocation,
+        removeAssetsFromLocation,
     }
 }

@@ -5,6 +5,7 @@ import cask.model.Response
 import org.slf4j.Logger
 
 import altitude.core.{ Const => C }
+import altitude.core.Api
 import altitude.core.ValidationException
 
 abstract class BaseController(using logger: Logger) extends cask.Routes:
@@ -18,6 +19,12 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       throw ValidationException(C.Msg.Err.INVALID_CONTENT_TYPE)
 
     Some(if request.text().isEmpty then ujson.Obj() else ujson.read(request.text()).asInstanceOf[ujson.Obj])
+
+  /** A JSON API response; `jsonError` is the `{"error": ...}` shape every JSON route uses for a client or upstream failure */
+  def jsonResponse(value: ujson.Value, status: Int = 200): Response[String] =
+    cask.Response(value.toString, status, Seq(("Content-Type", "application/json")))
+
+  def jsonError(message: String, status: Int): Response[String] = jsonResponse(ujson.Obj("error" -> message), status)
 
   /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the
@@ -37,3 +44,11 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
         ("HX-Retarget", "this"),
         ("HX-Reswap", "outerHTML settle:0")
       ))
+
+  /**
+   * Response for a dialog operation that completed with an outcome only the server knows (how many assets a membership change
+   * applied): an empty body, as for any completed operation, and `detail` as JSON in `Api.Field.SUCCESS_DETAIL_HEADER`, which the
+   * client merges into the success detail the dialog declares (js/fragments/dialog-operations.js).
+   */
+  def dialogSuccessResponse(detail: ujson.Obj): Response[String] =
+    cask.Response("", 200, Seq(("Content-Type", "text/html"), (Api.Field.SUCCESS_DETAIL_HEADER, detail.toString)))

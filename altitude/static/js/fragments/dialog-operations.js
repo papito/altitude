@@ -5,7 +5,9 @@
  * `data-app-fragment` kind. Its presentation (a modal host, or some other container) is the kind's
  * concern; what every kind shares is declared on the fragment root and handled here: the success
  * event and its detail (`data-app-success-*`, see `readSuccessEvent`), dispatched once the
- * operation completes, after which the dialog is closed.
+ * operation completes, after which the dialog is closed. An outcome only the server knows (how many
+ * assets a membership change applied) arrives as JSON in the `App-Success-Detail` response header
+ * (`BaseController.dialogSuccessResponse`) and is merged over the declared detail.
  *
  * Each kind registers with `registerDialogKind`, supplying a handle for the dialog a request was
  * issued from: `isActive()` tells whether that same dialog is still shown, and `close()` dismisses
@@ -17,15 +19,17 @@
  * has since been closed or replaced: page updates and success events always happen, but only the
  * still active initiating dialog may be closed or have its form replaced by the response.
  */
+import { Const } from "../constants.js"
 import {
     getRequestPath,
+    getResponseHeader,
     getResponseRetarget,
     getResponseStatus,
     getResponseText,
     isRequestSuccessful,
 } from "../common/htmx-events.js"
 import { showErrorSnackBar, showWarningSnackBar } from "../common/snackbar.js"
-import { readSuccessEvent } from "./helpers.js"
+import { parseFragmentDetail, readSuccessEvent } from "./helpers.js"
 
 // fragment kind -> `createHandle(fragmentEl)` returning that dialog's `{ isActive, close }`
 const dialogKinds = new Map()
@@ -117,7 +121,12 @@ export function settleDialogOperation(event, { dispatch }) {
     }
 
     if (operation.successEvent) {
-        dispatch(operation.successEvent.name, operation.successEvent.detail)
+        dispatch(operation.successEvent.name, {
+            ...operation.successEvent.detail,
+            ...parseFragmentDetail(
+                getResponseHeader(event, Const.http.successDetailHeader),
+            ),
+        })
     }
 
     if (stillActive) {

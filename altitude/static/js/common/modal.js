@@ -14,14 +14,19 @@
  * - the identity of each displayed open (`openId`), so asynchronous work started for one open
  *   (form submissions, image loads) can tell whether that open is still the active one.
  *
- * Placement is the hosts' CSS: the general box is centered horizontally with a fixed top padding.
+ * Explorer actions anchor the general box below their row's menu trigger or Add button.
+ * Other general dialogs use the host's centered placement; asset detail has its own host.
  *
  * `global.js` imports this module on every page, including pages without the hosts or the store,
  * so every entry point tolerates a missing store.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { closeOpenContextMenu } from "../alpine/components/context-menu.js"
+import { placeAnchoredPanel } from "./anchored-panel.js"
+import {
+    closeOpenContextMenu,
+    getContextMenuTrigger,
+} from "../alpine/components/context-menu.js"
 
 export const ModalHost = {
     general: "general",
@@ -47,6 +52,14 @@ let pendingOpen = null
 
 // Where focus goes when the active modal closes.
 let returnFocus = null
+
+// The element that issued the request whose fragment the displayed open shows, when it was an htmx
+// request: a results cell's thumbnail for asset detail, which is where its navigation starts from
+let openSource = null
+
+// Keep the anchor across validation replacements; its selector also survives list rebuilds.
+let anchorSelector = null
+let detachPlacementListeners = null
 
 export function createModalStore() {
     return {
@@ -97,7 +110,7 @@ export function isModalOpenActive(openId) {
  * relevant one to return to, chosen to survive the page update its operation triggers - or, without
  * one, back to the element that was focused when the open was requested.
  *
- * An open context menu (folder or album), whichever state it is in, is closed first, so a modal
+ * An open context menu (folder, album, or Location) is closed first, so a modal
  * never appears over one.
  */
 export function openModal({
@@ -113,11 +126,26 @@ export function openModal({
     const openId = ++lastOpenId
     store.openId = openId
 
-    returnFocus = {
-        opener: pendingOpen?.opener ?? document.activeElement,
-        fallbackSelector: returnFocusSelector,
+    // Validation re-hydrates a form inside the active host without a new open request. Keep the
+    // original return control instead of remembering the field that the response just removed.
+    if (pendingOpen || store.activeHost !== host || !returnFocus) {
+        returnFocus = {
+            opener: pendingOpen?.opener ?? document.activeElement,
+            fallbackSelector: returnFocusSelector,
+        }
+        anchorSelector = pendingOpen?.anchorSelector ?? null
     }
+    openSource = pendingOpen?.ctx.sourceElement ?? null
     pendingOpen = null
+    resetAnchoredPlacement()
+
+    if (host === ModalHost.general && anchorSelector) {
+        const container = getContainer(ModalHost.general)
+        container.classList.add("anchored")
+        // Alpine reveals the host asynchronously. Hide the box until it has been measured so it
+        // never flashes at the host's default position before moving below the anchor.
+        container.querySelector(".modal-box").style.visibility = "hidden"
+    }
 
     console.debug(`Opening ${host} modal "${title}" (open ${openId})`)
 
@@ -130,6 +158,9 @@ export function openModal({
         store.activeHost = host
         store.title = title
         whenHostDisplayed(host, openId, () => {
+            if (host === ModalHost.general && anchorSelector) {
+                bindAnchoredPlacement(openId)
+            }
             placeInitialFocus({ host, focusSelector, selectOnFocus })
         })
     }
@@ -147,6 +178,11 @@ export function openModal({
     return openId
 }
 
+/** The element whose htmx request loaded the displayed open's fragment, or null (a page-held dialog, a programmatic open) */
+export function getModalOpenSource() {
+    return openSource
+}
+
 /**
  * Closes the active modal and restores focus. Returns false when nothing was open.
  */
@@ -161,6 +197,8 @@ export function closeModal() {
     console.debug(`Closing ${store.activeHost} modal (open ${store.openId})`)
     store.activeHost = null
     store.title = ""
+    detachPlacementListeners?.()
+    anchorSelector = null
 
     const focusTarget = returnFocus
     returnFocus = null
@@ -203,10 +241,13 @@ export function trackModalOpenRequest(event) {
         return false
     }
 
+    // Menu actions become hidden when the modal opens. Return to their visible ⋯ trigger.
+    const panel = event.detail.ctx.sourceElement?.closest(".context-menu")
     pendingOpen = {
         ctx: event.detail.ctx,
         host,
-        opener: document.activeElement,
+        opener: panel ? getContextMenuTrigger(panel) : document.activeElement,
+        anchorSelector: event.detail.ctx.sourceElement?.dataset.appModalAnchor,
     }
 
     return true
@@ -262,7 +303,7 @@ function getModalOpenRequestHost(event) {
 function whenHostDisplayed(host, openId, callback, attempt = 0) {
     const container = getContainer(host)
 
-    if (modalStore().openId !== openId || attempt > 100) {
+    if (!isModalOpenActive(openId) || attempt > 100) {
         return
     }
 
@@ -272,6 +313,73 @@ function whenHostDisplayed(host, openId, callback, attempt = 0) {
     }
 
     callback()
+}
+
+/** Clear only the general box's placement styles; asset detail owns its sizing separately. */
+function resetAnchoredPlacement() {
+    detachPlacementListeners?.()
+    const container = getContainer(ModalHost.general)
+    container.classList.remove("anchored")
+    const box = container.querySelector(".modal-box")
+    for (const property of [
+        "top",
+        "left",
+        "max-width",
+        "max-height",
+        "visibility",
+    ]) {
+        box.style.removeProperty(property)
+    }
+}
+
+/** Re-measure on validation/content changes, viewport resizing, and movement of the anchor. */
+function bindAnchoredPlacement(openId) {
+    const container = getContainer(ModalHost.general)
+    const box = container.querySelector(".modal-box")
+    const content = document.getElementById(hostContentIds[ModalHost.general])
+    const anchor = document.querySelector(anchorSelector)
+    if (!anchor) {
+        resetAnchoredPlacement()
+        return
+    }
+
+    const place = () => {
+        if (!isModalOpenActive(openId)) return
+        const currentAnchor = document.querySelector(anchorSelector)
+        if (!currentAnchor?.getClientRects().length) {
+            resetAnchoredPlacement()
+            return
+        }
+        const gap = parseFloat(
+            getComputedStyle(container).getPropertyValue(
+                "--modal-viewport-gap",
+            ),
+        )
+        placeAnchoredPanel(box, currentAnchor, { gap })
+        box.style.visibility = ""
+    }
+
+    // Observe content rather than the height-capped box, avoiding feedback from placement itself.
+    const observer = new ResizeObserver(place)
+    observer.observe(content)
+    observer.observe(anchor)
+    const explorer = document.getElementById("explorer")
+    if (explorer) observer.observe(explorer)
+    const onScroll = (event) => {
+        if (!container.contains(event.target)) place()
+    }
+    window.addEventListener("resize", place)
+    document.addEventListener("scroll", onScroll, {
+        capture: true,
+        passive: true,
+    })
+    detachPlacementListeners = () => {
+        observer.disconnect()
+        window.removeEventListener("resize", place)
+        document.removeEventListener("scroll", onScroll, { capture: true })
+        detachPlacementListeners = null
+    }
+    place()
 }
 
 function placeInitialFocus({ host, focusSelector, selectOnFocus }) {

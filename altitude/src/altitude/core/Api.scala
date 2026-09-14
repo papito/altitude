@@ -21,6 +21,9 @@ object Api:
     val MAX_ALBUM_NAME_LENGTH = 250
     val MIN_ALBUM_NAME_LENGTH = 1
 
+    val MAX_LOCATION_NAME_LENGTH = 250
+    val MIN_LOCATION_NAME_LENGTH = 1
+
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
@@ -36,6 +39,8 @@ object Api:
     val MULTI_VALUE_DELIM = "+"
     val USER_TEST_HEADER_ID = "TEST-user-id"
     val REPO_TEST_HEADER_ID = "TEST-repo-id"
+    // JSON a dialog's operation adds to its declared success detail (`BaseController.dialogSuccessResponse`)
+    val SUCCESS_DETAIL_HEADER = "App-Success-Detail"
 
     val TOTAL_RECORDS = "totalRecords"
     val TOTAL_PAGES = "totalPages"
@@ -55,6 +60,13 @@ object Api:
     object Album:
       val ALBUM_ID = "albumId"
       val NAME = "name"
+
+    object Location:
+      val LOCATION_ID = "locationId"
+      val NAME = "name"
+      val CATEGORY_ID = "categoryId"
+      val LATITUDE = "latitude"
+      val LONGITUDE = "longitude"
 
     object Asset:
       val ASSET = "asset"
@@ -111,12 +123,20 @@ object Api:
       val FOLDER_ID = "folderId"
       val PERSON_ID = "personId"
       val ALBUM_ID = "albumId"
+      val LOCATION_ID = "locationId"
+      val BBOX = "bbox"
+      val LAYOUT = "layout"
       val VIEW = "view"
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
       val GROUP_BY = "groupBy"
       val GROUP_DIRECTION = "groupDirection"
       val AFTER = "after"
+
+    // The map's own parameters: `viewport` clips cells and pins, unlike the `bbox` search filter, which the map ignores
+    object Map:
+      val VIEWPORT = "viewport"
+      val ZOOM = "zoom"
 
     object SearchSort:
       val DIRECTION = "direction"

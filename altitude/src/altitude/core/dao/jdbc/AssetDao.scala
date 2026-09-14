@@ -46,6 +46,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       isPipelineProcessed = row.isPipelineProcessed,
       originalCreatedAt = row.originalCreatedAt,
       originalCreatedAtSource = row.originalCreatedAtSource.flatMap(CaptureDateSource.fromDbValue),
+      latitude = row.latitude,
+      longitude = row.longitude,
       createdAt = row.createdAt.map(toLocalDateTime),
       updatedAt = row.updatedAt.map(toLocalDateTime)
     )
@@ -76,6 +78,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       originalCreatedAt = getDateTimeField(rec.get(FieldConst.Asset.ORIGINAL_CREATED_AT)),
       originalCreatedAtSource =
         Option(rec(FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE)).flatMap(value => CaptureDateSource.fromDbValue(value.toString)),
+      latitude = getDoubleField(rec(FieldConst.Asset.LATITUDE)),
+      longitude = getDoubleField(rec(FieldConst.Asset.LONGITUDE)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
@@ -111,19 +115,22 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
              ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
+             ${FieldConst.Asset.LATITUDE}, ${FieldConst.Asset.LONGITUDE},
              ${FieldConst.CREATED_AT},
              ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
       case Some(id) => id
       case None => BaseDao.genId
 
-    // Resolution belongs to the pipeline. Unknown capture times and their provenance are bound as SQL NULL.
+    // Resolution belongs to the pipeline. Unknown capture times, their provenance and coordinates are bound as SQL NULL.
     val capture: Any = asset.originalCreatedAt.map(nativeLocalDateTime).orNull
     val captureSource: Any = asset.originalCreatedAtSource.map(_.dbValue).orNull
+    val latitude: Any = asset.latitude.map(Double.box).orNull
+    val longitude: Any = asset.longitude.map(Double.box).orNull
 
     val sqlVals: List[Any] = List(
       id,
@@ -139,6 +146,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.isTriaged,
       capture,
       captureSource,
+      latitude,
+      longitude,
       // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone
       nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)),
       asset.width,

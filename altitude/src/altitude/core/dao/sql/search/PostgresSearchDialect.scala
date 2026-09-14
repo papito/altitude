@@ -16,7 +16,6 @@ import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
-import altitude.core.util.GroupBy
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
@@ -28,8 +27,8 @@ object PostgresSearchDialect extends SearchDialect:
   import dialect.*
 
   // Capture time is a wall-clock `timestamp` with no zone, so its calendar day is a plain cast
-  override def day(asset: AssetRow[Expr], groupBy: GroupBy): Expr[Option[LocalDate]] =
-    val column = Columns.required(AssetRow, asset, groupBy.field, dialect)
+  override def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]] =
+    val column = Columns.required(AssetRow, asset, field, dialect)
     Expr[Option[LocalDate]](implicit ctx => sql"$column::date")
 
   /**

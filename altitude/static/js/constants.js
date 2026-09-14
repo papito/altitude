@@ -27,6 +27,17 @@ export const Const = {
         assetAddedToAlbum: "ASSET_ADDED_TO_ALBUM_EVENT",
         batchAssetsAddedToAlbum: "BATCH_ASSETS_ADDED_TO_ALBUM_EVENT",
         batchAssetsRemovedFromAlbum: "BATCH_ASSETS_REMOVED_FROM_ALBUM_EVENT",
+        locationAdded: "LOCATION_ADDED_EVENT",
+        categoryAdded: "CATEGORY_ADDED_EVENT",
+        locationRenamed: "LOCATION_RENAMED_EVENT",
+        locationMoved: "LOCATION_MOVED_EVENT",
+        locationDeleted: "LOCATION_DELETED_EVENT",
+        assetAddedToLocation: "ASSET_ADDED_TO_LOCATION_EVENT",
+        batchAssetsAddedToLocation: "BATCH_ASSETS_ADDED_TO_LOCATION_EVENT",
+        batchAssetsRemovedFromLocation:
+            "BATCH_ASSETS_REMOVED_FROM_LOCATION_EVENT",
+        batchAddToLocationRequested: "BATCH_ADD_TO_LOCATION_REQUESTED_EVENT",
+        assetsAddedToLocation: "ASSETS_ADDED_TO_LOCATION_EVENT",
         personMerged: "PERSON_MERGED_EVENT",
         confirmPersonMerge: "CONFIRM_PERSON_MERGE_EVENT",
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
@@ -39,7 +50,8 @@ export const Const = {
 
     /**
      * The `data-*` attributes JS reads element identity and state from. The Twirl templates and the
-     * client-side renderers (`common/folder-tree.js`, `common/album-list.js`) write the same names;
+     * client-side renderers (`common/folder-tree.js`, `common/album-list.js`,
+     * `common/location-list.js`) write the same names;
      * `element.dataset` reads them by their camel-cased key (`data-folder-id` is `dataset.folderId`).
      */
     attributes: {
@@ -50,6 +62,9 @@ export const Const = {
         parentFolderId: "data-parent-folder-id",
         folderId: "data-folder-id",
         albumId: "data-album-id",
+        locationId: "data-location-id",
+        categoryId: "data-category-id",
+        kind: "data-kind",
         assetId: "data-asset-id",
         originalWidth: "data-og-width",
         dataSrc: "data-src",
@@ -75,6 +90,25 @@ export const Const = {
         gridMetadataFields: "gridMetadataFields",
         verticalSplitSizes: "verticalSplitSizes",
         horizontalSplitSizes: "horizontalSplitSizes",
+        // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
+        resultsLayout: "resultsLayout",
+    },
+
+    sessionStore: {
+        // The map view last looked at per search scope (js/map/map-state.js)
+        mapViews: "mapViews",
+    },
+
+    search: {
+        layout: {
+            grid: "grid",
+            map: "map",
+        },
+    },
+
+    http: {
+        // JSON the server adds to a dialog operation's success detail (`Api.Field.SUCCESS_DETAIL_HEADER`)
+        successDetailHeader: "App-Success-Detail",
     },
 }
 

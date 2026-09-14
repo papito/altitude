@@ -98,6 +98,12 @@ abstract class BaseDao[Model <: BaseModel]:
     case l: java.lang.Long => l.toInt
     case _ => throw IllegalArgumentException(s"Invalid type for integer field: $value")
 
+  // A nullable floating-point column; both engines hand a REAL / DOUBLE PRECISION back as a boxed number
+  protected def getDoubleField(value: AnyRef): Option[Double] = Option(value).map {
+    case n: java.lang.Number => n.doubleValue
+    case other => throw IllegalArgumentException(s"Invalid type for double field: $other")
+  }
+
   protected def getNextVal(tableName: String): AnyRef
 
   private def queryRunner = new QueryRunner()

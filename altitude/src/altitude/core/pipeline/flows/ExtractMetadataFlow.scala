@@ -14,6 +14,7 @@ import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
 import altitude.core.util.CaptureDateInputs
 import altitude.core.util.CaptureDateResolver
+import altitude.core.util.GeoLocationResolver
 
 object ExtractMetadataFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
@@ -29,6 +30,9 @@ object ExtractMetadataFlow:
           LocalDateTime.now(ZoneOffset.UTC))
         debugInfo(
           s"\tCapture date for ${dataAsset.asset.fileName}: ${capture.map(c => s"${c.at} (${c.source.dbValue})").getOrElse("unknown")}")
+        val point = GeoLocationResolver.resolve(extractedMetadata)
+        debugInfo(
+          s"\tCoordinates for ${dataAsset.asset.fileName}: ${point.map(p => s"${p.latitude}, ${p.longitude}").getOrElse("none")}")
         val publicMetadata = Asset.getPublicMetadata(extractedMetadata)
         val (width, height) = app.service.asset.getDimensions(dataAsset)
 
@@ -37,6 +41,8 @@ object ExtractMetadataFlow:
           publicMetadata = publicMetadata,
           originalCreatedAt = capture.map(_.at),
           originalCreatedAtSource = capture.map(_.source),
+          latitude = point.map(_.latitude),
+          longitude = point.map(_.longitude),
           width = width,
           height = height
         )

@@ -117,7 +117,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 
 ## Extracted metadata and capture dates
 
-Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/MetadataExtractionService.scala), [ExtractMetadataFlow](../altitude/src/altitude/core/pipeline/flows/ExtractMetadataFlow.scala). Evidence: [MetadataParserTests](../altitude/test/src/altitude/core/integration/MetadataParserTests.scala), [AssetDateStorageTests](../altitude/test/src/altitude/core/integration/AssetDateStorageTests.scala), [CaptureDateResolverTests](../altitude/test/src/altitude/core/unit/CaptureDateResolverTests.scala).
+Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/MetadataExtractionService.scala), [ExtractMetadataFlow](../altitude/src/altitude/core/pipeline/flows/ExtractMetadataFlow.scala). Evidence: [MetadataParserTests](../altitude/test/src/altitude/core/integration/MetadataParserTests.scala), [AssetDateStorageTests](../altitude/test/src/altitude/core/integration/AssetDateStorageTests.scala), [ImportPipelineServiceTests](../altitude/test/src/altitude/core/integration/ImportPipelineServiceTests.scala), [CaptureDateResolverTests](../altitude/test/src/altitude/core/unit/CaptureDateResolverTests.scala), [GeoLocationResolverTests](../altitude/test/src/altitude/core/unit/GeoLocationResolverTests.scala).
 
 - ✅ Detect JPEG and PNG media types and MIME values; extract concrete JPEG/EXIF tags.
 - ✅ Retain XMP property paths and multiple PNG text chunks without overwriting earlier keys.
@@ -125,8 +125,11 @@ Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/Metad
 - ✅ Preserve camera wall-clock timestamps through storage, including a DST gap and reads under different JVM time zones; store import timestamps in UTC.
 - ✅ Missing capture metadata stays null, public display metadata cannot supply a capture timestamp, and an undated imported image belongs to the No date group.
 - ✅ Unit tests cover fallback-source priority, metadata/filename parsing, malformed dates, sentinel/future-date rejection, and stable provenance serialization. These supplement the narrower real-import fixtures.
+- ✅ Resolve GPS coordinates from real JPEG fixtures (N/E, S/W, a sub-degree western longitude whose sign only the ref carries) and persist them through the import pipeline; a coordinate without a ref, and 0/0, resolve to nothing. Coordinates round-trip through storage on both engines and stay null when absent, on the typed and the row-map read paths.
+- ✅ Unit tests cover the DMS description format, hemisphere refs overriding the description's sign, a comma decimal separator, partial/garbage/out-of-range input, and the null-island rejection.
+- ✅ A tag whose description is null (a GPS coordinate without its ref) is skipped rather than stored as a null value.
 - [ ] Verify corrupt/unsupported bytes yield empty extracted metadata under the service's error policy, without returning partially accumulated metadata. [MEDIUM]
-- [ ] Exercise null-character sanitization with real metadata values and persist the result on both engines; cover null tag descriptions. [MEDIUM]
+- [ ] Exercise null-character sanitization with real metadata values and persist the result on both engines. [MEDIUM]
 - [ ] Add real-import coverage for filename fallback and XMP/IPTC/GPS/EXIF-digitized fallbacks, including an invalid higher-priority date. Resolver-only tests do not verify every extractor-to-database mapping. [MEDIUM]
 - [ ] Cover actual compressed/international PNG date text and malformed XMP packets; assert retained keys and fallback behavior. [EDGE]
 - [ ] Verify type detection on empty/corrupt input and a supported non-JPEG/PNG image, with resources released on detection failure. [EDGE]
@@ -167,6 +170,22 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 - [ ] Run concurrent insertion of the same membership and verify idempotency and accurate counts under the unique constraint. [MEDIUM]
 - [ ] Verify album operations preserve the complete asset state, binary files, statistics, and people counts, including deleting the last album membership. Current assertions cover only selected asset fields. [MEDIUM]
 - [ ] Verify empty ID sets return zero without writes, removing an absent membership is a no-op, and triaged assets can be album members. [EDGE]
+
+## Locations, categories and membership
+
+Sources: [LocationService](../altitude/src/altitude/core/service/LocationService.scala), [Location](../altitude/src/altitude/core/models/Location.scala). Evidence: [LocationServiceTests](../altitude/test/src/altitude/core/integration/LocationServiceTests.scala), [LocationControllerTests](../altitude/test/src/altitude/core/controller/LocationControllerTests.scala), [LocationActionControllerTests](../altitude/test/src/altitude/core/controller/LocationActionControllerTests.scala).
+
+- ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across categories and Locations on add and rename, and permit casing-only renames.
+- ✅ Reject a pin out of range (including NaN); store the edges of the range; the model refuses a pinless Location, a pinned category and a nested category.
+- ✅ Add a Location under a category only: a Location as the category is an `IllegalOperationException`, an unknown category is `NotFoundException`; `getAll` fills `categoryName`.
+- ✅ Move a Location between categories and back to the top level; refuse moving a category, moving under a Location or under itself; unknown IDs on either side are `NotFoundException`.
+- ✅ Delete a category: its Locations move to the top level and keep their memberships. Delete a Location: memberships go, assets stay, other Locations keep theirs; a repeated delete is `NotFoundException`.
+- ✅ Add membership idempotently with insertion counts, an empty set is a no-op, unknown and recycled assets are dropped, a category refuses assets, an unknown Location is `NotFoundException`.
+- ✅ Remove memberships (an absent membership is a no-op); recycling removes all memberships and restoring does not reinstate them; folder deletion and asset-row deletion also remove affected memberships.
+- ✅ `getAll` path order (category before its Locations regardless of name), counts, and category names.
+- ✅ Repository isolation: same names in another repository, no listing or count leakage, and every read and mutation by a foreign Location or category ID is `NotFoundException` and changes nothing; a foreign asset in a local batch is dropped.
+- ✅ HTTP: camelCase list shape/path order/counts, persisted add/remove membership counts, all dialogs and mutation routes, duplicate/decimal/category validation with form replacement (a missing pin is one `PIN_REQUIRED` error with the name kept), the Add dialog's hidden coordinate inputs, readout and map host, the dialog membership's `App-Success-Detail` added count (zero on a repeat), authentication, invalid hidden IDs and foreign Location IDs.
+- [ ] Verify a failure after `moveChildrenToRoot` inside a category delete rolls the re-categorying back. [MEDIUM]
 
 ## Moving and recycling library assets
 
@@ -276,9 +295,12 @@ Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadat
 
 ## Ordinary search and folder scope
 
-Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [SearchServiceTests](../altitude/test/src/altitude/core/integration/SearchServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala).
+Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [SearchServiceTests](../altitude/test/src/altitude/core/integration/SearchServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [SearchGroupingTests](../altitude/test/src/altitude/core/integration/SearchGroupingTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [SearchQueryModelTests](../altitude/test/src/altitude/core/unit/SearchQueryModelTests.scala).
 
 - ✅ Search keyword terms case-insensitively; apply keyword, number, and Boolean filters together; return no match for the exercised wrong-type filter.
+- ✅ Filter by Location (`locationIds`) on the flat search, a grouped search and the bare count; recycling drops the asset from the Location's results and counts.
+- ✅ Filter by bounding box: an asset's own point, its Locations' pins when it has none (never the pin when it has a point), a box across the antimeridian versus the same edges the other way round, the world box; `BoundingBox.parse` arity, ranges and NaN.
+- ✅ Unit tests check the Location and bounding-box filters are bound semi-joins, and that `count` renders one `COUNT` over the matching relation with no ordering or page.
 - ✅ Include descendant folders, treat root search as unrestricted folder scope including triage, filter by one/multiple people, and filter by album.
 - ✅ Paginate results with totals and page counts; handle an oversized page and a page beyond the end.
 - ✅ Return sort metadata and hide unfinished imports from search.
@@ -302,12 +324,35 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ Reject malformed/unsupported-version cursors and changes to text, folder scope, grouping direction, sort field, or sort direction; allow a changed page size.
 - ✅ Apply text/metadata/folder/album/person filters to group counts and rows; verify root scope, recycle view, repository isolation, timezone independence, and one statement per unscoped grouped page.
 - ✅ HTTP tests reject invalid grouped parameters and unsupported JSON negotiation; unauthenticated HTML/API-style requests receive redirect/401, and empty continuations return 204.
+- ✅ Group by Location: path order (a category's Locations at the category's name, by their own), an asset under each of its Locations, group counts against a total that counts assets, `Category › Location` data on the keys, the trailing "No location" group, the fixed direction, the sort within a group, an empty first page, one statement per page.
+- ✅ Location groups span pages with one count, continue into and inside "No location", and cross from the last Location into it; every filter bounds the groups and their counts, and a `locationIds` scope leaves no trailing group.
+- ✅ Location cursor traversal matches the complete order for every sort field and direction at page sizes 1, 5 and 6, including overlapping memberships and a Location exactly a page long; a first page counts assets once; deleting the anchor's Location continues into the trailing group its members joined.
+- ✅ A cursor is rejected for a changed `locationIds` or `bbox`, from a day grouping against a Location grouping, and for a version-3 token.
+- ✅ HTTP: the Group dropdown selects the Location option and the fragment carries `data-results-group-by` / `data-results-group-direction` for each grouping (no direction for Location); a Location group's cells are `asset-<id>-in-<locationId>` under a header whose category is a `.category` span, while "No location" keeps plain cell IDs; a first page renders `result-group` headers and a continuation of the same group renders none; a Location page whose last asset also has a cell under an earlier Location puts the cursor and `last-cell` on its last cell only.
+- ✅ Unit tests pin the Location statement's shape on both dialects: the located/unlocated slices and the guard between them, the joins, the located-first page order, no `NULLS FIRST/LAST`, every value bound, the same filters in every branch, the path-key cursor comparison, and the ORDER BY with SQLite's planner hint.
 - [ ] Reject reuse of a cursor across repositories or database engines, or after changing album/person/metadata/view filters. Existing scope tests do not cover every fingerprint component. [CRITICAL]
 - [ ] Continue a folder-scoped cursor after adding, moving, or recycling descendants; assert the fingerprint stays tied to the requested folder and current descendants are resolved afresh. [MEDIUM]
 - [ ] Traverse size/area sorts using different numeric values. Current cursor fixtures give equal size/area values, so those cases primarily exercise the ID tiebreaker. [MEDIUM]
 - [ ] Check remaining-day counts after inserts/deletes and test mutations to an anchor's sort/day value; define the expected live-result semantics explicitly. [MEDIUM]
 - [ ] Reject malformed cursor field types, invalid dates, oversized tokens, and mismatched sort-value types with a domain error rather than leaking an internal exception. [EDGE]
 - [ ] Issue an authenticated request for another user's repository and assert the intended access rule. The test named `Grouped requests require authentication and a repository the user can see` only sends unauthenticated requests. [CRITICAL]
+
+## Map cells, bounds and the geocoder
+
+Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQueries.scala), [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [GeocoderService](../altitude/src/altitude/core/service/GeocoderService.scala). Evidence: [SearchMapTests](../altitude/test/src/altitude/core/integration/SearchMapTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [GeocoderServiceTests](../altitude/test/src/altitude/core/unit/GeocoderServiceTests.scala), [MapControllerTests](../altitude/test/src/altitude/core/controller/MapControllerTests.scala), [SearchResultsControllerTests](../altitude/test/src/altitude/core/controller/SearchResultsControllerTests.scala).
+
+- ✅ Cells aggregate the plotted points on both engines: an asset at its own point, an asset without one at the pin of each Location it is in (counted once per Location), assets at one coordinate merged into one cell with the mean centroid, a Location listed with its matching count and its category's name, and absent without matching assets.
+- ✅ The representative asset of a cell is the newest capture, then the lowest ID, and follows the matching set when the newest is recycled.
+- ✅ Cell size follows the zoom (one cell at zoom 0, two at zoom 10 for points a degree apart) and the zoom is clamped to 0..20.
+- ✅ Cells and Locations are clipped to the viewport, including a box across the antimeridian.
+- ✅ Bounds cover both point sources, count plotted points, follow the search's filters, and are absent when nothing is plotted.
+- ✅ The map reads the same matching set as the grid: recycled assets only in the trash view, a folder scope narrows cells, Location counts and bounds, the root folder is the whole repository, another repository's geotagged asset is invisible.
+- ✅ The cells and bounds statements render on both dialects with every placeholder bound and both point sources carrying the search's filters; the Locations query is repository- and kind-scoped, antimeridian-aware, and counts over the matching relation.
+- ✅ Geocoder: disabled by config refuses with `IllegalOperationException` and sends nothing; enabled, against a local stub, it sends `format=json`, `limit=5`, the URL-encoded query and an identifying `User-Agent`, maps the places, skips one without coordinates, asks nothing for blank text, and turns a non-200 answer or a non-list body into `GeocoderException`.
+- ✅ HTTP: cells/bounds JSON shapes, plotted-point counts, Location/text/bbox/trash scope, Location membership counts preserved across pans, ignored toolbar sort, empty bounds, invalid bbox/zoom JSON 400s, disabled-geocoder JSON 404, and authentication. HTML search covers Location grouping/cursor continuation, Location/bbox filters, a map shell without `#assets`, disabled Group, totals and replacement URL scope; the pressed layout toggle button and `data-results-layout` in each layout, the hidden `#mapPanel` in map layout, and the `#bboxScope` chip present with a `bbox` and absent without one.
+- [ ] Enabled geocoder success and upstream failure are covered at the service level against a local stub; HTTP serialization and the 502 mapping still need an enabled-config controller fixture. [MINOR]
+- ✅ A cells query reads the geotagged assets through the partial `asset_geo` index on both engines (`EXPLAIN QUERY PLAN` on SQLite; `EXPLAIN` on Postgres over a few thousand analyzed rows, where its costing no longer ties every index).
+- [ ] Bounds for a result whose points straddle the antimeridian could be the narrower box across it rather than the whole longitude range. [EDGE]
 
 ## People, face ownership, and merges
 

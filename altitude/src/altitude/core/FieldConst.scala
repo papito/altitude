@@ -73,6 +73,8 @@ object FieldConst:
     val IS_PIPELINE_PROCESSED = "is_pipeline_processed"
     val ORIGINAL_CREATED_AT = "original_created_at"
     val ORIGINAL_CREATED_AT_SOURCE = "original_created_at_source"
+    val LATITUDE = "latitude"
+    val LONGITUDE = "longitude"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"
@@ -108,6 +110,18 @@ object FieldConst:
     val NUM_OF_ASSETS = "num_of_assets"
     val ALBUM_ID = "album_id"
     val ASSET_ID = "asset_id"
+
+  object Location:
+    val CATEGORY_ID = "category_id"
+    val KIND = "kind"
+    val NAME = "name"
+    val NAME_LC = "name_lc"
+    val LATITUDE = "latitude"
+    val LONGITUDE = "longitude"
+    val LOCATION_ID = "location_id"
+    val ASSET_ID = "asset_id"
+    val NUM_OF_ASSETS = "num_of_assets"
+    val CATEGORY_NAME = "category_name"
 
   object MimedData:
     val MIME_TYPE = "mime_type"

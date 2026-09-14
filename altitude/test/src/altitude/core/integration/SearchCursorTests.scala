@@ -65,28 +65,36 @@ import altitude.core.util.*
           )
         else Nil)
 
-  private def expectedOrder(assets: List[Dated], grouping: SearchGrouping, sort: SearchSort): List[String] = {
-    def day(a: Dated): Option[String] = a.taken.map(_.toLocalDate.toString)
-    // Equal size and area leave those sorts to the ID. Nulls are ranked independently at each ordering level.
+  private def nativeOrder(direction: SortDirection): Ordering[Option[String]] = new Ordering[Option[String]] {
+    override def compare(a: Option[String], b: Option[String]): Int = (a, b) match {
+      case (None, None) => 0
+      case (None, _) => if (nullsFirst(direction)) -1 else 1
+      case (_, None) => if (nullsFirst(direction)) 1 else -1
+      case (Some(x), Some(y)) => if (direction == SortDirection.ASC) x.compareTo(y) else y.compareTo(x)
+    }
+  }
+
+  /** The order within a group: the sort, nulls ranked natively, then the ID. Equal size and area leave those sorts to the ID. */
+  private def sortThenId(sort: SearchSort): Ordering[Dated] = {
     def sortKey(a: Dated): Option[String] = sort.field match {
       case FieldConst.Asset.ORIGINAL_CREATED_AT => a.taken.map(_.toString)
       case FieldConst.CREATED_AT => Some(a.imported.withOffsetSameInstant(ZoneOffset.UTC).toString)
       case FieldConst.Asset.FILENAME => Some(a.filename)
       case _ => Some("")
     }
-    def nativeOrder(direction: SortDirection): Ordering[Option[String]] = new Ordering[Option[String]] {
-      override def compare(a: Option[String], b: Option[String]): Int = (a, b) match {
-        case (None, None) => 0
-        case (None, _) => if (nullsFirst(direction)) -1 else 1
-        case (_, None) => if (nullsFirst(direction)) 1 else -1
-        case (Some(x), Some(y)) => if (direction == SortDirection.ASC) x.compareTo(y) else y.compareTo(x)
-      }
-    }
-    val dayOrdering = Ordering.by[Dated, Option[String]](day)(nativeOrder(grouping.direction))
-    val sortOrdering = Ordering.by[Dated, Option[String]](sortKey)(nativeOrder(sort.direction))
-    val byId = Ordering.by[Dated, String](_.id)
-    assets.sorted(dayOrdering.orElse(sortOrdering).orElse(byId)).map(_.id)
+    Ordering.by[Dated, Option[String]](sortKey)(nativeOrder(sort.direction)).orElse(Ordering.by[Dated, String](_.id))
   }
+
+  private def expectedOrder(assets: List[Dated], grouping: SearchGrouping, sort: SearchSort): List[String] = {
+    def day(a: Dated): Option[String] = a.taken.map(_.toLocalDate.toString)
+    // Nulls are ranked independently at each ordering level
+    val dayOrdering = Ordering.by[Dated, Option[String]](day)(nativeOrder(grouping.direction))
+    assets.sorted(dayOrdering.orElse(sortThenId(sort))).map(_.id)
+  }
+
+  /** Members of each Location in path order, then the assets in none, each block in sort order then by ID */
+  private def expectedLocationOrder(blocks: List[List[Dated]], sort: SearchSort): List[String] =
+    blocks.flatMap(_.sorted(sortThenId(sort)).map(_.id))
 
   private def firstPage(grouping: SearchGrouping, sort: SearchSort, rpp: Int, text: Option[String] = None): GroupedSearchResult =
     testApp.service.library.searchGrouped(
@@ -123,7 +131,7 @@ import altitude.core.util.*
       val cursor = SearchCursor.decode(page.nextCursor.get.encode)
       cursor shouldEqual page.nextCursor.get
       page = continue(cursor, grouping, sort, rpp)
-      page.continuesGroup shouldBe page.groups.headOption.exists(_.date == cursor.day)
+      page.continuesGroup shouldBe page.groups.headOption.exists(_.key.continues(cursor))
       page.assets.nonEmpty shouldBe true
       walked.size should be < 100
       walked = walked ++ ids(page)
@@ -220,23 +228,30 @@ import altitude.core.util.*
     ids(continue(cursor, grouping, sort, rpp = 6)).length shouldBe 6
 
     val folder = testApp.service.folder.add("scoped")
-    intercept[SearchCursorException] {
+    val location = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
+    def scoped(folderIds: Set[String] = Set(), locationIds: Set[String] = Set(), bbox: Option[BoundingBox] = None) =
       testApp.service.library.searchGrouped(
         new SearchQuery(
           params = Map(FieldConst.Asset.IS_RECYCLED -> false),
-          folderIds = Set(folder.persistedId),
+          folderIds = folderIds,
+          locationIds = locationIds,
+          bbox = bbox,
           rpp = 5,
           searchSort = List(sort),
           grouping = Some(grouping),
           cursor = Some(cursor)
         ))
-    }
+    intercept[SearchCursorException](scoped(folderIds = Set(folder.persistedId)))
+    intercept[SearchCursorException](scoped(locationIds = Set(location.persistedId)))
+    intercept[SearchCursorException](scoped(bbox = Some(BoundingBox(41.0, 12.0, 42.0, 13.0))))
+    // A cursor from a day grouping does not continue a Location grouping of the same search
+    intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.Location), sort, rpp = 5))
 
-    val nullCursor = cursor.copy(day = None, sortValue = SortValue.Null)
+    val nullCursor = cursor.copy(key = None, sortValue = SortValue.Null)
     SearchCursor.decode(nullCursor.encode) shouldBe nullCursor
     val oldJson =
       ujson.read(new String(java.util.Base64.getUrlDecoder.decode(cursor.encode), java.nio.charset.StandardCharsets.UTF_8))
-    oldJson("v") = 2
+    oldJson("v") = 3
     val oldToken = java.util.Base64.getUrlEncoder.withoutPadding
       .encodeToString(ujson.write(oldJson).getBytes(java.nio.charset.StandardCharsets.UTF_8))
     intercept[SearchCursorException](SearchCursor.decode(oldToken)).getMessage shouldBe "Unsupported cursor version"
@@ -274,5 +289,60 @@ import altitude.core.util.*
           }
       }
     }
+  }
+
+  test("Cursor traversal by Location matches the complete order for every sort field and direction") {
+    val assets = fixture()
+    val italy = testApp.service.location.addCategory("Italy")
+    val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, Some(italy.persistedId))
+    val alba = testApp.service.location.addLocation("Alba", 44.7, 8.0, Some(italy.persistedId))
+    val berlin = testApp.service.location.addLocation("Berlin", 52.5, 13.4, None)
+    // Overlapping memberships, a Location the size of a page, and a trailing group with every kind of tie
+    val inRome = assets.slice(0, 6)
+    val inBerlin = assets.slice(3, 9) ++ assets.slice(12, 14)
+    val inAlba = assets.slice(9, 11)
+    val inNone = assets.slice(11, 12) ++ assets.slice(14, 16)
+    testApp.service.location.addAssets(rome.persistedId, inRome.map(_.id).toSet)
+    testApp.service.location.addAssets(berlin.persistedId, inBerlin.map(_.id).toSet)
+    testApp.service.location.addAssets(alba.persistedId, inAlba.map(_.id).toSet)
+    val blocks = List(inBerlin, inAlba, inRome, inNone)
+    val grouping = SearchGrouping(GroupBy.Location)
+
+    for (field <- sortFields; sortDirection <- SortDirection.values.toList) {
+      val sort = SearchSort(field, sortDirection)
+      val expected = expectedLocationOrder(blocks, sort)
+      withClue(s"$sort: ") {
+        traverse(grouping, sort, rpp = 5) shouldEqual expected
+        // Every position becomes an anchor, including each group boundary
+        traverse(grouping, sort, rpp = 1) shouldEqual expected
+        traverse(grouping, sort, rpp = 6) shouldEqual expected
+      }
+    }
+
+    // Within a group the rows are one asset each; across groups an asset repeats, and the first page counts assets once
+    val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
+    val page1 = firstPage(grouping, sort, rpp = 5)
+    page1.total shouldBe Some(16)
+    page1.groups.map(_.total) shouldEqual List(8)
+    page1.nextCursor.map(cursor => (cursor.key, cursor.groupId)) shouldBe Some((Some("berlin"), Some(berlin.persistedId)))
+    val cursorInRome = {
+      var page = page1
+      while (!page.groups.last.key.cursorGroupId.contains(rome.persistedId))
+        page = continue(page.nextCursor.get, grouping, sort, 5)
+      page.nextCursor.get
+    }
+    cursorInRome.key shouldBe Some("italy" + 1.toChar + "rome")
+
+    // Deleting the anchor's Location moves on to the trailing group, which its now unlocated members have joined
+    testApp.service.location.deleteById(rome.persistedId)
+    val afterRome = expectedLocationOrder(List(inNone ++ assets.slice(0, 3)), sort)
+    var cursor = Option(cursorInRome)
+    var remaining = List.empty[String]
+    while (cursor.isDefined) {
+      val page = continue(cursor.get, grouping, sort, 5)
+      remaining = remaining ++ ids(page)
+      cursor = page.nextCursor
+    }
+    remaining shouldEqual afterRome
   }
 }
