@@ -305,7 +305,7 @@ export function createAssetActions({
     /**
      * The outcome of adding assets to a Location, by a drop or the Add to location dialog: the
      * server skips assets already in it and reports how many it `added`, so nothing added is a
-     * warning rather than a success. The dialog passes the `name` it offered the Location under,
+     * warning rather than a success. The dialog passes the Location's `name` from its select,
      * since its row is not rendered while another explorer tab is displayed.
      */
     function reportAddedToLocation({ locationId, added, name }) {

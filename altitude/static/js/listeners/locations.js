@@ -111,8 +111,12 @@ export function registerLocationListeners(app) {
     document.body.addEventListener(
         Const.events.assetsAddedToLocation,
         (event) => {
-            // `added` is the server's count (the dialog operation merges it into the detail)
-            app.assetActions.reportAddedToLocation(event.detail)
+            // `added` is the server's count (the dialog operation merges it into the detail); a
+            // detail that did not arrive falls back to the selection the dialog submitted
+            app.assetActions.reportAddedToLocation({
+                ...event.detail,
+                added: event.detail.added ?? selectedAssets().size,
+            })
             selectedAssets().reset()
             app.reloadLocationCounts()
         },

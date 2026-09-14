@@ -48,7 +48,11 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
   /**
    * Response for a dialog operation that completed with an outcome only the server knows (how many assets a membership change
    * applied): an empty body, as for any completed operation, and `detail` as JSON in `Api.Field.SUCCESS_DETAIL_HEADER`, which the
-   * client merges into the success detail the dialog declares (js/fragments/dialog-operations.js).
+   * client merges into the success detail the dialog declares (js/fragments/dialog-operations.js). A header value is Latin-1
+   * bytes, so the JSON escapes every non-ASCII character.
    */
   def dialogSuccessResponse(detail: ujson.Obj): Response[String] =
-    cask.Response("", 200, Seq(("Content-Type", "text/html"), (Api.Field.SUCCESS_DETAIL_HEADER, detail.toString)))
+    cask.Response(
+      "",
+      200,
+      Seq(("Content-Type", "text/html"), (Api.Field.SUCCESS_DETAIL_HEADER, ujson.write(detail, escapeUnicode = true))))

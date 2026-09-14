@@ -430,8 +430,8 @@ deletes the memberships of the selected assets and removes their cells. The foot
 to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
 `add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
 `assetIds` field from the selection and keeps the fragment's success detail naming the chosen
-Location (its ID, and its label as the select offers it, since the row is not rendered while another
-explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
+Location (its ID, and its bare name from the option's `data-name`, since the row is not rendered while
+another explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
 reports that through `assetActions.reportAddedToLocation`, the report a drop makes too ("Already in
 location" when nothing was new), then resets the selection and refreshes the counts.
 
@@ -526,8 +526,9 @@ keeps the area, so the grid opens scoped to it with the chip to clear it.
 store's `view`, `folderId`, `personId`, `albumId`, `locationId` and `q`; not the sort, layout,
 grouping, paging or `bbox`) in `sessionStorage` (`Const.sessionStore.mapViews`, the 50 scopes looked
 at last), so a re-render for a sort change, a panel, a trip to the grid and back, or a reload of the
-tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. Storage that
-cannot be read or written leaves the views in memory only. It also holds the displayed map's live
+tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. A move is
+written to storage only once moves pause, or on `pagehide`, since Leaflet reports every frame of a
+resize as a move. Storage that cannot be read or written leaves the views in memory only. It also holds the displayed map's live
 view, which the pin editor opens on.
 
 **Explorer action dialogs** — The folder, album, Location, and category forms declare

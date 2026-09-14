@@ -13,8 +13,10 @@ import { Const } from "../constants.js"
  * from the server's bounds.
  *
  * The views live in `sessionStorage`, so they survive a reload of the tab but a new tab or window
- * starts fitted to the results; the most recently looked-at scopes are kept, up to a bound. Storage
- * that cannot be read or written (a privacy mode, a full quota) leaves the views in memory only.
+ * starts fitted to the results; the most recently looked-at scopes are kept, up to a bound. Every
+ * move is remembered in memory at once, but written to storage only once moves pause (or the page is
+ * left): Leaflet reports each frame of a resize as a move. Storage that cannot be read or written (a
+ * privacy mode, a full quota) leaves the views in memory only.
  *
  * The displayed map also registers its live view here, for the pin editor of the Add location
  * dialog to open where the user is looking (js/fragments/location-editor.js).
@@ -31,8 +33,13 @@ const SCOPE_PARAMS = [
 
 const MAX_REMEMBERED_VIEWS = 50
 
+const STORE_DELAY_MS = 500
+
 // The last view per scope fingerprint, least recently looked at first; read from storage on first use
 let rememberedViews = null
+
+// The pending write of the views to storage, or null when storage is up to date
+let storeTimer = null
 
 // The live view of the map on screen, or null while no map is displayed
 let displayedView = null
@@ -57,13 +64,28 @@ export function rememberMapView(fingerprint, { center, zoom }) {
         views.delete(views.keys().next().value)
     }
 
+    clearTimeout(storeTimer)
+    storeTimer = setTimeout(storeMapViews, STORE_DELAY_MS)
+}
+
+// A reload or navigation before the pending write is due still keeps the last view
+window.addEventListener("pagehide", () => {
+    if (storeTimer !== null) {
+        storeMapViews()
+    }
+})
+
+function storeMapViews() {
+    clearTimeout(storeTimer)
+    storeTimer = null
+
     try {
         sessionStorage.setItem(
             Const.sessionStore.mapViews,
-            JSON.stringify(Object.fromEntries(views)),
+            JSON.stringify(Object.fromEntries(rememberedMapViews())),
         )
     } catch (error) {
-        console.warn("Could not store the map view", error)
+        console.warn("Could not store the map views", error)
     }
 }
 

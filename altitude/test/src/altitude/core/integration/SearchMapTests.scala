@@ -190,32 +190,39 @@ import altitude.core.util.SearchQuery
     persistAt(48.8606, 2.3376)
     testContext.persistAsset()
 
+    val cells = SearchQueries.mapCells(
+      searchDialect,
+      searchQuery(),
+      RequestContext.getRepository.persistedId,
+      BoundingBox.parse("48,2,49,3"),
+      SearchService.cellDegrees(12))
+
     // Postgres costs a plan by the table's statistics, and over a handful of rows every index on the repository costs the same,
     // so its choice would be a tie. At a library's scale - thousands of assets, most without a point, analyzed - it is not.
     // SQLite has no statistics before ANALYZE and prefers the index that constrains the most columns.
-    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-      testApp.txManager.withTransaction {
-        update(
-          """INSERT INTO asset
-            |SELECT (jsonb_populate_record(a, jsonb_build_object(
-            |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
-            |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
-            |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
-            |  FROM asset a, generate_series(1, 5000) g
-            | WHERE a.id = ?""".stripMargin,
-          inParis.persistedId
-        )
-        update("ANALYZE asset")
-      }
-    }
-
-    val plan = planOf(
-      SearchQueries.mapCells(
-        searchDialect,
-        searchQuery(),
-        RequestContext.getRepository.persistedId,
-        BoundingBox.parse("48,2,49,3"),
-        SearchService.cellDegrees(12)))
+    val plan =
+      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+        // The library is only scaled up for the plan: the schema is shared by every suite that follows, so the copies and their
+        // column statistics are rolled back once the plan is read in the same transaction. ANALYZE writes the table's row count
+        // estimate in place, which a rollback keeps, so the table is analyzed again over the rows that are left.
+        try
+          testApp.txManager.withTransaction {
+            update(
+              """INSERT INTO asset
+                |SELECT (jsonb_populate_record(a, jsonb_build_object(
+                |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
+                |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
+                |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
+                |  FROM asset a, generate_series(1, 5000) g
+                | WHERE a.id = ?""".stripMargin,
+              inParis.persistedId
+            )
+            update("ANALYZE asset")
+            try planOf(cells)
+            finally RequestContext.getConn.rollback()
+          }
+        finally testApp.txManager.withTransaction(update("ANALYZE asset"))
+      } else planOf(cells)
 
     withClue(plan) {
       plan should include("asset_geo")
