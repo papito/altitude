@@ -105,6 +105,21 @@ object TestVideos {
   /** A landscape encoding whose container says to show it as portrait, the way a phone held upright records */
   lazy val portrait: Path = clip(Seq(person("affleck.jpg", 2)), displayRotation = -90)
 
+  /**
+   * A clip whose media data is zeroed after encoding, so the container opens and probes as a two-second video but no frame of it
+   * decodes
+   */
+  lazy val undecodable: Path = {
+    val path = clip(Seq(person("affleck.jpg", 2)))
+    val bytes = Files.readAllBytes(path)
+    // The `mdat` box: a big-endian size (of the box, header included) then its type, then the media data
+    val mdat = bytes.indexOfSlice("mdat".getBytes)
+    val size = java.nio.ByteBuffer.wrap(bytes, mdat - 4, 4).getInt
+    java.util.Arrays.fill(bytes, mdat + 4, mdat - 4 + size, 0.toByte)
+    Files.write(path, bytes)
+    path
+  }
+
   /** An audio file, for a container FFmpeg opens but that has no video stream */
   def audio(name: String): Path = new File(getClass.getResource(s"/import/audio/$name").getPath).toPath
 
