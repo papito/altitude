@@ -64,7 +64,7 @@ CREATE TABLE asset (
   user_metadata TEXT,
   folder_id CHAR(36),
   filename TEXT NOT NULL,
-  size_bytes INT NOT NULL,
+  size_bytes BIGINT NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
   is_purged TINYINT NOT NULL DEFAULT 0,

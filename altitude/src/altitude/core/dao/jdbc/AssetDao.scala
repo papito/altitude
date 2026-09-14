@@ -69,7 +69,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       width = rec(FieldConst.Asset.WIDTH).asInstanceOf[Int],
       height = rec(FieldConst.Asset.HEIGHT).asInstanceOf[Int],
       durationMs = getLongField(rec(FieldConst.Asset.DURATION_MS)),
-      sizeBytes = rec(FieldConst.Asset.SIZE_BYTES).asInstanceOf[Int],
+      sizeBytes = getLongField(rec(FieldConst.Asset.SIZE_BYTES)).get,
       extractedMetadata = getJsonFromColumn(rec(FieldConst.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
       userMetadata = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)): UserMetadata,

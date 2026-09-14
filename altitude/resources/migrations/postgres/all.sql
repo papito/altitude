@@ -68,7 +68,7 @@ CREATE TABLE asset (
   extracted_metadata jsonb,
   folder_id CHAR(36),
   filename TEXT NOT NULL,
-  size_bytes INT NOT NULL,
+  size_bytes BIGINT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
   is_purged BOOLEAN NOT NULL DEFAULT FALSE,
