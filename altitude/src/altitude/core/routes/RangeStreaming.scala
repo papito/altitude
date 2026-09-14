@@ -20,6 +20,9 @@ object RangeStreaming:
 
   private val SingleRange = """^bytes=(\d*)-(\d*)$""".r
 
+  /** A range position; a run of digits too long for a Long is past the end of any file */
+  private def position(digits: String): Long = digits.toLongOption.getOrElse(Long.MaxValue)
+
   /** A `geny.Writable` over `length` bytes of a file from `start`, copied channel to channel as it is written */
   class FileWindow(path: Path, start: Long, length: Long, mime: String) extends geny.Writable:
     override def contentLength: Option[Long] = Some(length)
@@ -47,8 +50,8 @@ object RangeStreaming:
       case Some(SingleRange(first, last)) if first.nonEmpty || last.nonEmpty =>
         // `bytes=a-b`, `bytes=a-` to the end, or `bytes=-n` for the last n bytes
         val (from, to) =
-          if first.isEmpty then (Math.max(0L, size - last.toLong), size - 1)
-          else (first.toLong, if last.isEmpty then size - 1 else Math.min(last.toLong, size - 1))
+          if first.isEmpty then (Math.max(0L, size - position(last)), size - 1)
+          else (position(first), if last.isEmpty then size - 1 else Math.min(position(last), size - 1))
 
         if from >= size || from > to then
           Response(Response.Data.WritableData(""), 416, Seq(ACCEPT_RANGES, "Content-Range" -> s"bytes */$size"))

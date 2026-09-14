@@ -86,6 +86,12 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
         val pastTheEnd = range(s"bytes=$size-")
         pastTheEnd.statusCode shouldBe 416
         pastTheEnd.headers("content-range") shouldBe Seq(s"bytes */$size")
+
+        // A position too long for a Long is past the end too, not a server error
+        range("bytes=99999999999999999999-").statusCode shouldBe 416
+        val lastTooMany = range("bytes=-99999999999999999999")
+        lastTooMany.statusCode shouldBe 206
+        lastTooMany.bytes shouldBe importAsset.bytes
     }
   }
 
