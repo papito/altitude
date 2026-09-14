@@ -29,6 +29,33 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
     }
   }
 
+  test("A preview is gzipped for a client that names gzip among other codings, spaced or weighted or not") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+
+    val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+
+    login()
+
+    withServer(App) {
+      host =>
+        def preview(acceptEncoding: String) = requests.get(
+          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
+          headers = Map("Accept-Encoding" -> acceptEncoding),
+          cookies = testContext.cookies
+        )
+
+        Seq("gzip", "gzip,deflate", "deflate, gzip", "gzip;q=1.0, deflate", "GZIP").foreach {
+          acceptEncoding =>
+            withClue(acceptEncoding) {
+              preview(acceptEncoding).headers("content-encoding") shouldBe Seq("gzip")
+            }
+        }
+        preview("identity").headers.contains("content-encoding") shouldBe false
+    }
+  }
+
   test("View a file: the whole original, typed as detected, offering byte ranges") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

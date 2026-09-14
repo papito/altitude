@@ -25,10 +25,12 @@ object decorators:
    */
   class compress extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      // A comma-separated list of codings, each with an optional `;q=` weight
       val acceptsGzip = Option(req.exchange.getRequestHeaders.get("Accept-Encoding")).toSeq
         .flatMap(_.asScala)
-        .flatMap(_.split(", "))
-        .exists(_.trim.equalsIgnoreCase("gzip"))
+        .flatMap(_.split(","))
+        .map(_.takeWhile(_ != ';').trim)
+        .exists(_.equalsIgnoreCase("gzip"))
 
       delegate(req, Map()).transform {
         case v: Raw if acceptsGzip && !v.headers.contains(RangeStreaming.ACCEPT_RANGES) =>
