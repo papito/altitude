@@ -29,6 +29,7 @@ import altitude.core.service.PersonService
 import altitude.core.service.PurgePipelineService
 import altitude.core.service.RepositoryService
 import altitude.core.service.SearchService
+import altitude.core.service.StagingService
 import altitude.core.service.StatsService
 import altitude.core.service.SystemService
 import altitude.core.service.UrlService
@@ -249,6 +250,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val user: UserService = UserService(app)
     val repository: RepositoryService = RepositoryService(app)
     val metadataExtractor: MetadataExtractionService = MetadataExtractionService()
+    val staging: StagingService = StagingService(app)
     val metadata: UserMetadataService = UserMetadataService(app)
     val library: LibraryService = LibraryService(app)
     val search: SearchService = SearchService(app)
@@ -286,6 +288,10 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       1 // SQLite doesn't handle concurrent writes well, so we run the pipeline with a parallelism of 1 for SQLite
     case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
   }
+
+  // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
+  // services read as they are wired up.
+  service.staging.clear()
 
   def setIsInitializedState(): Unit =
     this.isInitialized = service.system.readMetadata.isInitialized

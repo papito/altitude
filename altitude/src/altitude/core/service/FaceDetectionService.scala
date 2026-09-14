@@ -293,6 +293,11 @@ class FaceDetectionService(app: Altitude):
    */
   def extractFaces(data: Array[Byte], fileName: Option[String] = None): List[(Face, FaceImages)] =
     val imageMat: Mat = matFromBytes(data)
+    try extractFaces(imageMat, fileName)
+    finally imageMat.release()
+
+  /** Extract faces from a decoded BGR image, such as a Sampled frame of a Video. The caller keeps ownership of the image. */
+  def extractFaces(imageMat: Mat, fileName: Option[String]): List[(Face, FaceImages)] =
     val results: List[Mat] = detectFacesWithYunet(imageMat)
 
     // Accumulate both the public result and the intermediate Mats needed for debug output in one pass
@@ -349,10 +354,11 @@ class FaceDetectionService(app: Altitude):
       FaceDetectionService.dumpDebugArtifacts(imageMat, debugData, baseName, debugDir)
 
     entries.foreach {
-      e => e.alignedColor.release()
-      // e.rawCrop is a submat view of imageMat — its data is freed with imageMat below
+      e =>
+        e.alignedColor.release()
+        e.detectionRow.release()
+      // e.rawCrop is a submat view of imageMat, whose data is the caller's to free
     }
-    imageMat.release()
 
     entries.map(e => (e.face, e.faceImages))
 

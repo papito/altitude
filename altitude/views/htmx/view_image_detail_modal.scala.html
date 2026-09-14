@@ -9,7 +9,8 @@
         place-items: center;
     }
 
-    #imageDetailView img {
+    #imageDetailView img,
+    #imageDetailView video {
         max-width: 100vw;
         max-height: 100vh;
         width: auto;
@@ -18,6 +19,9 @@
     }
 </style>
 
+@* The detail of an image or of a Video: the fragment holds both an <img> and a <video>, and the coordinator
+   (js/search-results/detail-navigator.js) shows the one the media type calls for and unloads the other. *@
+
 <div id="imageDetailView">
     @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }") { imgUrl =>
         <div data-app-fragment="image-detail"
@@ -25,8 +29,10 @@
              data-app-image-detail-title="@{ asset.fileName }"
              data-app-image-detail-width="@{ asset.width }"
              data-app-image-detail-height="@{ asset.height }"
+             data-app-image-detail-media-type="@{ asset.assetType.mediaType }"
              data-app-image-detail-asset-id="@{ asset.persistedId }">
-            <img src="" alt="@{ asset.fileName }">
+            <img src="" alt="@{ asset.fileName }" hidden>
+            <video controls preload="metadata" hidden></video>
         </div>
     }
 </div>

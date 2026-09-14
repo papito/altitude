@@ -16,7 +16,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
 
   test("Detect asset type JPEG") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
-    val assetType: AssetType = testApp.service.metadataExtractor.detectAssetType(importAsset.data)
+    val assetType: AssetType = testApp.service.metadataExtractor.detectAssetType(importAsset.path)
     assetType.mediaType should be("image")
     assetType.mediaSubtype should be("jpeg")
     assetType.mime should be("image/jpeg")
@@ -24,7 +24,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
 
   test("Detect asset type PNG") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/3.png")
-    val assetType: AssetType = testApp.service.metadataExtractor.detectAssetType(importAsset.data)
+    val assetType: AssetType = testApp.service.metadataExtractor.detectAssetType(importAsset.path)
     assetType.mediaType should be("image")
     assetType.mediaSubtype should be("png")
     assetType.mime should be("image/png")
@@ -32,14 +32,14 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
 
   test("Extract metadata") {
     val importAsset = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
-    val metadata: ExtractedMetadata = testApp.service.metadataExtractor.extract(importAsset.data)
+    val metadata: ExtractedMetadata = testApp.service.metadataExtractor.extract(importAsset.path)
     metadata.getFieldValues("JFIF").get("Resolution Units") should be(Some("inch"))
     metadata.getFieldValues("Exif IFD0").get("Make") should be(Some("NIKON CORPORATION"))
   }
 
   test("Resolve the capture wall clock from real extracted metadata") {
     val imported = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
-    val metadata = testApp.service.metadataExtractor.extract(imported.data)
+    val metadata = testApp.service.metadataExtractor.extract(imported.path)
     val capture =
       CaptureDateResolver.resolve(CaptureDateInputs(metadata, imported.fileName), LocalDateTime.of(2026, 9, 7, 0, 0)).get
     capture.at should be(LocalDateTime.of(2011, 5, 16, 17, 46, 24))
@@ -56,7 +56,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
       IntegrationTestUtil.generateRandomImagBytesBgr(),
       "XML:com.adobe.xmp",
       packet)
-    val metadata = testApp.service.metadataExtractor.extract(png)
+    val metadata = testApp.service.metadataExtractor.extract(testApp.service.staging.stage(png))
     metadata.getFieldValues("XMP").get("exif:DateTimeOriginal") should be(Some("2008:04:17 11:12:02"))
     metadata.getFieldValues("XMP").contains("XMP Value Count") should be(true)
   }
@@ -65,7 +65,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
     val png = IntegrationTestUtil.generateRandomImagBytesBgr()
     val dated = IntegrationTestUtil.pngWithTextChunk(png, "Creation Time", "Thu, 4 Jul 2024 08:09:10 GMT")
     val annotated = IntegrationTestUtil.pngWithTextChunk(dated, "Comment", "A cactus")
-    val metadata = testApp.service.metadataExtractor.extract(annotated)
+    val metadata = testApp.service.metadataExtractor.extract(testApp.service.staging.stage(annotated))
     metadata.getFieldValues("PNG-tEXt").get("Creation Time") should be(Some("Thu, 4 Jul 2024 08:09:10 GMT"))
     metadata.getFieldValues("PNG-tEXt").get("Comment") should be(Some("A cactus"))
     metadata.getFieldValues("PNG-tEXt").contains("Textual Data") should be(false)
@@ -74,7 +74,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
   test("Resolve GPS coordinates from real extracted metadata") {
     def resolved(fixture: String): Option[(Double, Double)] = {
       val imported = IntegrationTestUtil.getImportAsset(s"images/exif/$fixture.jpg")
-      GeoLocationResolver.resolve(testApp.service.metadataExtractor.extract(imported.data)).map(p => (p.latitude, p.longitude))
+      GeoLocationResolver.resolve(testApp.service.metadataExtractor.extract(imported.path)).map(p => (p.latitude, p.longitude))
     }
     for (
       (fixture, (latitude, longitude)) <- List(
@@ -94,7 +94,7 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
 
   test("A GPS coordinate without a ref has no description and is skipped rather than stored as null") {
     val imported = IntegrationTestUtil.getImportAsset("images/exif/gps-no-ref.jpg")
-    val metadata = testApp.service.metadataExtractor.extract(imported.data)
+    val metadata = testApp.service.metadataExtractor.extract(imported.path)
     metadata.getFieldValues("GPS") should be(Map())
     metadata.data.values.flatMap(_.values).exists(_ == null) should be(false)
     JsonCodec.read[ExtractedMetadata](metadata.toJson).getFieldValues("Exif IFD0").get("Make") should be(Some("FUJIFILM"))

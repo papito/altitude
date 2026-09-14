@@ -1,8 +1,9 @@
 package altitude.core.service
 
 import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
+import org.opencv.core.MatOfByte
+import org.opencv.imgcodecs.Imgcodecs
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
@@ -93,17 +94,36 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   private def genPreviewData(dataAsset: AssetWithData): Array[Byte] =
     dataAsset.asset.assetType.mediaType match
       case "image" =>
-        makeImageThumbnail(dataAsset.data, C.AssetView.PREVIEW_BOX_PIXELS)
+        makeImageThumbnail(dataAsset.bytes, C.AssetView.PREVIEW_BOX_PIXELS)
+      case "video" =>
+        // The Preview of a Video is one of its Sampled frames, thumbnailed like an image
+        val frame = app.service.video.previewFrame(dataAsset.path)
+        val png = new MatOfByte()
+        Imgcodecs.imencode(".png", frame.image, png)
+        frame.image.release()
+        val bytes = png.toArray
+        png.release()
+        makeImageThumbnail(bytes, C.AssetView.PREVIEW_BOX_PIXELS)
       case _ => new Array[Byte](0)
 
+  /** The display size: a Video's with the container's rotation applied, so a portrait phone recording is portrait */
   def getDimensions(dataAsset: AssetWithData): (Int, Int) /* width, height */ =
     dataAsset.asset.assetType.mediaType match
       case "image" =>
-        val img: BufferedImage = ImageIO.read(new ByteArrayInputStream(dataAsset.data))
+        val img: BufferedImage = ImageIO.read(dataAsset.path.toFile)
         (img.getWidth, img.getHeight)
+      case "video" =>
+        val info = app.service.video.probe(dataAsset.path)
+        (info.width, info.height)
       case _ =>
         // Default to 0, 0 for unsupported media types
         (0, 0)
+
+  /** A Video's length; nothing for anything else */
+  def getDuration(dataAsset: AssetWithData): Option[Long] =
+    dataAsset.asset.assetType.mediaType match
+      case "video" => Some(app.service.video.probe(dataAsset.path).durationMs)
+      case _ => None
 
   def addPreview(dataAsset: AssetWithData): Option[MimedPreviewData] =
     val previewData: Array[Byte] = genPreviewData(dataAsset)

@@ -41,7 +41,6 @@ Missing features:
 * Right now there is only the single-user, single-library mode.
 * Results are displayed in their default order and there are no advanced display features yet.
 * Search indexing is implemented but not yet wired to be a user-facing feature.
-* No support for video files yet.
 * No location editing or display.
 * No metadata view (but it IS being extracted and saved).
 

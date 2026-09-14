@@ -79,7 +79,9 @@ CREATE TABLE asset (
   original_created_at_source VARCHAR(32),
   -- WGS84 decimal degrees, parsed from the file's GPS metadata on import only (GeoLocationResolver). NULL when it carried none.
   latitude DOUBLE PRECISION,
-  longitude DOUBLE PRECISION
+  longitude DOUBLE PRECISION,
+  -- A Video's length; NULL for an image.
+  duration_ms BIGINT
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
@@ -129,7 +131,9 @@ CREATE TABLE face (
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
   features vector NOT NULL,
-  checksum INT NOT NULL
+  checksum INT NOT NULL,
+  -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
+  frame_time_ms INTEGER
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX face_01 ON face (repository_id, checksum);

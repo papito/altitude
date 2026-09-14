@@ -76,6 +76,8 @@ CREATE TABLE asset (
   -- WGS84 decimal degrees, parsed from the file's GPS metadata on import only (GeoLocationResolver). NULL when it carried none.
   latitude REAL,
   longitude REAL,
+  -- A Video's length; NULL for an image.
+  duration_ms INTEGER,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
@@ -134,6 +136,8 @@ CREATE TABLE face (
   detection_score FLOAT NOT NULL,
   features BLOB NOT NULL,
   checksum INT NOT NULL,
+  -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
+  frame_time_ms INTEGER,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (person_id) REFERENCES person (id) ON DELETE CASCADE,

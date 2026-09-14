@@ -22,8 +22,16 @@ class FaceRecognitionService(val app: Altitude):
   /** Number of nearest-neighbor results to retrieve for majority-vote matching. */
   private val matchCount: Int = app.config.getInt(Const.Conf.FACE_RECOGNITION_MATCH_COUNT)
 
+  /** Two detections closer than this are the same person, both in the vector index and within one Video */
+  private val cosineDistanceThreshold: Double = app.config.getDouble(Const.Conf.FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD)
+
   def processAsset(dataAsset: AssetWithData): Unit =
-    val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.data, Some(dataAsset.asset.fileName))
+    dataAsset.asset.assetType.mediaType match
+      case "video" => processVideo(dataAsset)
+      case _ => processImage(dataAsset)
+
+  private def processImage(dataAsset: AssetWithData): Unit =
+    val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.bytes, Some(dataAsset.asset.fileName))
     logger.info(s"Detected ${faceWithImages.size} faces")
 
     logger.info(s"Face rec on asset ${dataAsset.asset}")
@@ -36,6 +44,62 @@ class FaceRecognitionService(val app: Altitude):
       }
     }
     logger.info(s"Face rec DONE: ${dataAsset.asset}")
+
+  /**
+   * Faces in a Video: every Sampled frame is detected, the detections of the whole video are clustered by embedding, and each
+   * cluster's representative (its highest-scoring detection, whose crop, box and Frame time the Face keeps) is recognized. A
+   * Person gets one Face per Video: when two clusters resolve to the same Person, the lower-scoring one is dropped, so a pose
+   * change that splits a person in two does not fail the import.
+   */
+  private def processVideo(dataAsset: AssetWithData): Unit =
+    val durationMs = dataAsset.asset.durationMs.getOrElse(app.service.video.probe(dataAsset.path).durationMs)
+    val times = app.service.video.sampleTimes(durationMs)
+
+    val detections: List[(Face, FaceImages)] = app.service.video.sampledFrames(dataAsset.path, times) {
+      frames =>
+        frames.flatMap {
+          frame =>
+            val faces = app.service.faceDetection.extractFaces(frame.image, Some(dataAsset.asset.fileName))
+            frame.image.release()
+            faces.map { case (face, images) => (face.copy(frameTimeMs = Some(frame.timeMs)), images) }
+        }.toList
+    }
+    logger.info(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
+
+    val representatives = clusterRepresentatives(detections)
+    logger.info(s"${representatives.size} distinct faces in ${dataAsset.asset}")
+
+    txManager.withFaceVector {
+      representatives.foldLeft(Set.empty[String]) {
+        case (peopleWithAFace, (detectedFace, faceImages)) =>
+          val person = recognizeFace(detectedFace, dataAsset.asset)
+          if peopleWithAFace.contains(person.persistedId) then
+            logger.info(s"Person ${person.persistedId} already has a Face in ${dataAsset.asset}; dropping $detectedFace")
+            peopleWithAFace
+          else
+            val persistedFace = app.service.person.addFace(detectedFace, dataAsset.asset, person)
+            app.service.fileStore.addFace(persistedFace, faceImages)
+            peopleWithAFace + person.persistedId
+      }
+    }
+    logger.info(s"Face rec DONE: ${dataAsset.asset}")
+
+  /**
+   * In descending detection score, a detection joins the first cluster whose representative is within the cosine distance
+   * threshold, or starts a new cluster; the representative is the cluster's first detection. Embeddings are L2-normalized, so the
+   * cosine distance is one less the dot product.
+   */
+  private def clusterRepresentatives(detections: List[(Face, FaceImages)]): List[(Face, FaceImages)] =
+    detections.sortBy(-_._1.detectionScore).foldLeft(List.empty[(Face, FaceImages)]) {
+      case (representatives, detection) =>
+        val known = representatives.exists {
+          case (representative, _) => cosineDistance(representative.features, detection._1.features) < cosineDistanceThreshold
+        }
+        if known then representatives else representatives :+ detection
+    }
+
+  private def cosineDistance(a: Array[Float], b: Array[Float]): Double =
+    1.0 - a.zip(b).map { case (x, y) => x.toDouble * y }.sum
 
   /**
    * Returns an existing OR a new person, already persisted in the database.

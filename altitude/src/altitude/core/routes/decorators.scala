@@ -2,10 +2,14 @@ package altitude.core.routes
 import cask.model.Response
 import cask.model.Response.Raw
 import cask.router.Result
+import java.io.OutputStream
 import java.lang.System.currentTimeMillis
+import java.util.zip.GZIPOutputStream
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+
+import scala.jdk.CollectionConverters._
 
 import altitude.core.App
 import altitude.core.models.User
@@ -14,6 +18,32 @@ import altitude.core.util.Util
 
 object decorators:
   val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /**
+   * cask's gzip decorator, except for a response that offers byte ranges: a stored original is a compressed format already, and a
+   * range names its raw bytes, which a compressed body would not match.
+   */
+  class compress extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      val acceptsGzip = Option(req.exchange.getRequestHeaders.get("Accept-Encoding")).toSeq
+        .flatMap(_.asScala)
+        .flatMap(_.split(", "))
+        .exists(_.trim.equalsIgnoreCase("gzip"))
+
+      delegate(req, Map()).transform {
+        case v: Raw if acceptsGzip && !v.headers.contains(RangeStreaming.ACCEPT_RANGES) =>
+          val gzipped = new Response.Data {
+            override def write(out: OutputStream): Unit =
+              val wrap = new GZIPOutputStream(out)
+              v.data.write(wrap)
+              wrap.flush()
+              wrap.close()
+            // The compressed length is not known ahead of time
+            override def headers: Seq[(String, String)] = v.data.headers.filter(_._1 != "Content-Length")
+          }
+          Response(gzipped, v.statusCode, v.headers :+ ("Content-Encoding" -> "gzip"), v.cookies)
+        case v: Raw => v
+      }
 
   private val AUTH_HEADER_NAME = "Authorization"
   private val BEARER_PREFIX = "Bearer "

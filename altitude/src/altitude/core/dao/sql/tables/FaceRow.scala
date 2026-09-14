@@ -18,6 +18,7 @@ case class FaceRow[T[_]](
     height: T[Int],
     detectionScore: T[Double],
     checksum: T[Int],
+    frameTimeMs: T[Option[Long]],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

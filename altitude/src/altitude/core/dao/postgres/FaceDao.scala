@@ -2,6 +2,7 @@ package altitude.core.dao.postgres
 
 import com.typesafe.config.Config
 import java.sql.PreparedStatement
+import java.sql.Types
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -26,8 +27,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       s"""
         INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
                           ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.DETECTION_SCORE},
-                          ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?)
+                          ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM}, ${FieldConst.Face.FRAME_TIME_MS})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?, ?)
     """
 
     val conn = RequestContext.getConn
@@ -44,6 +45,9 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     preparedStatement.setDouble(9, face.detectionScore)
     preparedStatement.setString(10, toVectorString(face.features))
     preparedStatement.setInt(11, face.checksum)
+    face.frameTimeMs match
+      case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
+      case None => preparedStatement.setNull(12, Types.INTEGER)
 
     preparedStatement.execute()
 

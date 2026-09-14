@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import java.nio.file.Files
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
@@ -115,6 +116,9 @@ import altitude.core.pipeline.sinks.VoidAssetSink
       case (Right(invalid), _) => invalid.cause.get shouldBe a[UnsupportedMediaTypeException]
       case _ => fail("Expected the first element to be of type DuplicateException")
     }
+
+    // A dropped asset leaves no staged file behind
+    Files.exists(assetWithData.path) shouldBe false
   }
 
   test("Pipeline stores the coordinates a photo carries") {

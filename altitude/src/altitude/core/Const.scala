@@ -85,6 +85,7 @@ object Const:
     val FACE = "face"
     val FACES = "faces"
     val REPOSITORIES = "repositories"
+    val STAGING = "staging"
     val MODELS = "models"
 
   object PeopleTypeFilter:

@@ -1,6 +1,9 @@
 package altitude.core.service.filestore
 
 import java.io._
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.slf4j.Logger
@@ -35,8 +38,16 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
     MimedPreviewData(assetId = assetId, data = byteArray.get)
 
   override def addAsset(dataAsset: AssetWithData): Unit =
-    val destFile = new File(filePath(dataAsset.asset.persistedId))
-    putBinaryData(destFile, dataAsset.data)
+    val destFile = assetFile(dataAsset.asset.persistedId)
+    try
+      Files.createDirectories(destFile.getParent)
+      // Staging is on this filesystem, so this is a rename
+      Files.move(dataAsset.path, destFile, StandardCopyOption.REPLACE_EXISTING)
+    catch
+      case ex: IOException =>
+        throw StorageException(s"Error storing ${dataAsset.path} as $destFile: $ex")
+
+  override def assetFile(assetId: String): Path = Path.of(filePath(assetId))
 
   override def addFace(face: Face, faceImages: FaceImages): Unit =
     logger.debug(s"Creating face [${face.persistedId}] on file system")

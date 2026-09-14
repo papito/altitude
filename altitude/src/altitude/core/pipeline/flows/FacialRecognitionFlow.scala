@@ -24,7 +24,7 @@ object FacialRecognitionFlow:
           app.service.faceRecognition.processAsset(dataAsset)
         } catch {
           case e: DuplicateException =>
-            Future.successful(Right(InvalidAsset(dataAsset.asset, Some(SamePersonDetectedTwiceException(e.message.get)))), ctx)
+            Future.successful(Right(InvalidAsset(dataAsset, SamePersonDetectedTwiceException(e.message.get))), ctx)
         }
         Future.successful(Left(dataAsset), ctx)
       case (Right(invalid), ctx) => Future.successful(Right(invalid), ctx)

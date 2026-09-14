@@ -104,6 +104,12 @@ abstract class BaseDao[Model <: BaseModel]:
     case other => throw IllegalArgumentException(s"Invalid type for double field: $other")
   }
 
+  // A nullable integer column, which SQLite hands back as Integer or Long by the value's size
+  protected def getLongField(value: AnyRef): Option[Long] = Option(value).map {
+    case n: java.lang.Number => n.longValue
+    case other => throw IllegalArgumentException(s"Invalid type for long field: $other")
+  }
+
   protected def getNextVal(tableName: String): AnyRef
 
   private def queryRunner = new QueryRunner()

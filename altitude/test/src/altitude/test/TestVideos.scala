@@ -59,7 +59,7 @@ object TestVideos {
    * Encodes the scenes in order into an MP4 and releases their images. `displayRotation` is written to the container's display
    * matrix in javacv's convention, degrees counter-clockwise, so a phone's portrait recording is `-90`.
    */
-  def clip(scenes: Seq[Scene], displayRotation: Double = 0): Path = {
+  def clip(scenes: Seq[Scene], displayRotation: Double = 0, metadata: Map[String, String] = Map.empty): Path = {
     val file = Files.createTempFile(directory, "clip", ".mp4")
     file.toFile.deleteOnExit()
 
@@ -71,6 +71,7 @@ object TestVideos {
     // Enough that a face survives encoding recognizably
     recorder.setVideoBitrate(4_000_000)
     if (displayRotation != 0) recorder.setDisplayRotation(displayRotation)
+    metadata.foreach { case (key, value) => recorder.setMetadata(key, value) }
 
     val converter = new OpenCVFrameConverter.ToOrgOpenCvCoreMat()
     try {
@@ -97,6 +98,9 @@ object TestVideos {
 
   /** Two seconds of black, then one person for three seconds */
   lazy val blackLeader: Path = clip(Seq(black(2), person("affleck.jpg", 3)))
+
+  /** A clip whose container records when it was made, as the UTC instant 2023-06-09 12:34:56 */
+  lazy val dated: Path = clip(Seq(black(1)), metadata = Map("creation_time" -> "2023-06-09T12:34:56Z"))
 
   /** A landscape encoding whose container says to show it as portrait, the way a phone held upright records */
   lazy val portrait: Path = clip(Seq(person("affleck.jpg", 2)), displayRotation = -90)

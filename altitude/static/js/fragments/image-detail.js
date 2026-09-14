@@ -2,9 +2,10 @@ import { getModalOpenSource, ModalHost, openModal } from "../common/modal.js"
 
 /**
  * Asset detail fragment (`data-app-fragment="image-detail"`): opens the asset-detail host right
- * away, with its loading indicator, and hands the image load to the detail coordinator. The
- * coordinator only applies the result if this open is still active and the load was not
- * superseded by previous/next navigation.
+ * away, with its loading indicator, and hands the media load to the detail coordinator, which
+ * shows the fragment's `<img>` or its `<video>` by the asset's media type. The coordinator only
+ * applies the result if this open is still active and the load was not superseded by
+ * previous/next navigation.
  *
  * Navigation starts from the cell whose thumbnail requested the detail, when it was one: a grid can
  * hold an asset in several cells (a Location grouping), so the cell itself is remembered, not the
@@ -18,7 +19,8 @@ export function hydrateImageDetailFragment({ fragmentEl, coordinator }) {
     fragmentEl.dataset.appImageDetailBound = "true"
 
     const imgEl = fragmentEl.querySelector("img")
-    if (!imgEl) {
+    const videoEl = fragmentEl.querySelector("video")
+    if (!imgEl || !videoEl) {
         return
     }
 
@@ -27,9 +29,11 @@ export function hydrateImageDetailFragment({ fragmentEl, coordinator }) {
         title: fragmentEl.dataset.appImageDetailTitle,
     })
 
-    coordinator.showImage({
+    coordinator.showMedia({
         openId,
         imgEl,
+        videoEl,
+        mediaType: fragmentEl.dataset.appImageDetailMediaType,
         url: fragmentEl.dataset.appImageDetailUrl,
         title: fragmentEl.dataset.appImageDetailTitle,
         width: Number(fragmentEl.dataset.appImageDetailWidth),

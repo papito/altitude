@@ -14,8 +14,6 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.RequestContext
 import altitude.core.actors.ImportStatusWsActor
-import altitude.core.models.ImportAsset
-import altitude.core.models.UserMetadata
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.routes.decorators.requireLogin
 
@@ -65,15 +63,18 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
         logger.info("Next file")
 
         val fileItem = formValue.getFileItem
-        val inputStream = fileItem.getInputStream
-        val bytes = inputStream.readAllBytes()
-        inputStream.close()
-
         val fileName = formValue.getFileName
         logger.info(s"Received file: $fileName")
 
-        val importAsset = ImportAsset(fileName = fileName, data = bytes, metadata = UserMetadata())
-        val assetWithData = App.altitude.service.library.convImportAsset2dataAsset(importAsset)
+        // Undertow deletes its temp file when the request ends, before the queued pipeline runs, so the file is moved out
+        // of its hands; a small item it kept in memory is written out instead
+        val staged =
+          if fileItem.isInMemory then
+            val inputStream = fileItem.getInputStream
+            try App.altitude.service.staging.stage(inputStream.readAllBytes())
+            finally inputStream.close()
+          else App.altitude.service.staging.stageMove(fileItem.getFile)
+        val assetWithData = App.altitude.service.library.stagedFileToAsset(fileName, staged)
 
         logger.info(s"Adding file to import queue: $fileName")
         val fut = App.altitude.service.importPipeline.addToQueue((assetWithData, pipelineContext))

@@ -30,7 +30,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       personId = Option(row.personId),
       detectionScore = row.detectionScore,
       features = Array[Float](),
-      checksum = row.checksum
+      checksum = row.checksum,
+      frameTimeMs = row.frameTimeMs
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Face =
@@ -44,7 +45,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       personId = Option(rec(FieldConst.Face.PERSON_ID).asInstanceOf[String]),
       detectionScore = rec(FieldConst.Face.DETECTION_SCORE).asInstanceOf[Double],
       features = Array[Float](),
-      checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int]
+      checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int],
+      frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS))
     )
 
   def getAssetFaces(assetId: String): List[Face] =

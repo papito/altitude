@@ -3,6 +3,8 @@ package altitude.core.util
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZonedDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.time.format.ResolverStyle
@@ -54,14 +56,31 @@ object CaptureDateResolver:
         tag("XMP", _, XmpCreateDate)) ++
       iptc("Date Created", "Time Created") ++ iptc("Digital Date Created", "Digital Time Created") ++
       List("PNG-tEXt", "PNG-iTXt", "PNG-zTXt").flatMap(tag(_, "Creation Time", PngCreationTime)) ++
-      // PNG tIME and GPS explicitly describe UTC. Store that UTC wall clock below all local sources, without zone guessing.
+      // A phone's own recording date: a local wall clock with an offset, discarded like every other offset
+      tag("QuickTime Metadata", "Creation Date", QuickTimeCreationDate) ++
+      // PNG tIME, the container's creation time and GPS explicitly describe UTC. Store that UTC wall clock below all local
+      // sources, without zone guessing.
       tag("PNG-tIME", "Last Modification Time", PngModified) ++
+      containerCreationTime(field) ++
       parsed(
         for
           date <- field("GPS", "GPS Date Stamp")
           time <- field("GPS", "GPS Time-Stamp")
         yield s"$date ${time.trim.stripSuffix(" UTC")}",
         GpsTimestamp) ++ filenameCandidates(inputs.fileName)
+
+  /**
+   * The MP4 / QuickTime creation time, a UTC instant that metadata-extractor describes in the JVM's zone: the track directories
+   * spell it with a numeric offset, the container directories with a zone name. Either is turned back into the UTC wall clock, so
+   * the stored value does not depend on the server's zone. The track directories come first for that reason.
+   */
+  private def containerCreationTime(field: (String, String) => Option[String]): List[CaptureDate] =
+    List("MP4 Video", "QuickTime Video", "MP4", "QuickTime").flatMap {
+      directory =>
+        field(directory, "Creation Time")
+          .flatMap(WallClockParser.parseUtcInstant)
+          .map(CaptureDate(_, CaptureDateSource.ContainerCreationTime))
+    }
 
   // Anchor at the start and require a boundary after seconds: incidental digit runs are too weak to infer a capture time.
   private val filenamePatterns = List(
@@ -112,6 +131,25 @@ private[core] object WallClockParser:
         strict(dateBuilder('-')),
         DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH).withResolverStyle(ResolverStyle.STRICT)
       )
+
+  // metadata-extractor describes a Date tag in the JVM's zone and default locale, "Fri Jun 09 08:34:56 -04:00 2023"; a
+  // container's own creation time is a Date's toString, "Fri Jun 09 08:34:56 EDT 2023", always in English
+  private val instantWithOffset: List[DateTimeFormatter] =
+    List(Locale.getDefault(Locale.Category.FORMAT), Locale.ENGLISH).distinct.map {
+      locale => DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss xxx yyyy", locale)
+    }
+  private val instantWithZoneName: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH)
+
+  /** The UTC wall clock of an instant a description spells with its offset or zone; the JVM's zone plays no part */
+  def parseUtcInstant(raw: String): Option[LocalDateTime] =
+    Option(raw).flatMap {
+      value =>
+        val trimmed = value.trim.replaceAll("\\s+", " ")
+        (instantWithOffset :+ instantWithZoneName).iterator
+          .flatMap(formatter => Try(ZonedDateTime.parse(trimmed, formatter)).toOption)
+          .map(_.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime.truncatedTo(ChronoUnit.SECONDS))
+          .nextOption()
+    }
 
   def parse(raw: String): Option[LocalDateTime] =
     Option(raw).flatMap {

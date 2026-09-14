@@ -195,6 +195,10 @@ export function closeModal() {
     }
 
     console.debug(`Closing ${store.activeHost} modal (open ${store.openId})`)
+    // A video keeps playing in a hidden host otherwise
+    getContainer(store.activeHost)
+        ?.querySelectorAll("video")
+        .forEach((videoEl) => videoEl.pause())
     store.activeHost = null
     store.title = ""
     detachPlacementListeners?.()
