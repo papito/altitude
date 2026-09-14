@@ -133,7 +133,7 @@ CREATE TABLE face (
   features vector NOT NULL,
   checksum INT NOT NULL,
   -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
-  frame_time_ms INTEGER
+  frame_time_ms BIGINT
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX face_01 ON face (repository_id, checksum);

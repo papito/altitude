@@ -47,7 +47,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     preparedStatement.setInt(11, face.checksum)
     face.frameTimeMs match
       case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
-      case None => preparedStatement.setNull(12, Types.INTEGER)
+      case None => preparedStatement.setNull(12, Types.BIGINT)
 
     preparedStatement.execute()
 
