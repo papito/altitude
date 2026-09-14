@@ -3,6 +3,7 @@ package altitude.core.controller
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
+import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 
@@ -176,6 +177,13 @@ import altitude.core.Const
         membership.statusCode shouldBe 200
         membership.text() shouldBe ""
         testApp.service.location.getAssetIds(location.persistedId) shouldBe Set(first.persistedId, second.persistedId)
+        // The dialog reports what the server applied, not the size of the selection: a repeat adds nothing
+        def added(response: requests.Response): Int =
+          ujson.read(response.headers(Api.Field.SUCCESS_DETAIL_HEADER.toLowerCase).head)("added").num.toInt
+        added(membership) shouldBe 2
+        val repeat = put("assets", ujson.Obj("locationId" -> location.persistedId, "assetIds" -> first.persistedId))
+        repeat.statusCode shouldBe 200
+        added(repeat) shouldBe 0
         validation(
           put("assets", ujson.Obj("locationId" -> category.persistedId, "assetIds" -> first.persistedId)),
           "addToLocation")

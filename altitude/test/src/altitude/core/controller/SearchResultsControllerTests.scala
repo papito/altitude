@@ -71,6 +71,34 @@ import altitude.core.models.Asset
     }
   }
 
+  test("A Location page marks only its last cell for continuation, though that asset has a cell under an earlier Location") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val beach = testApp.service.location.addLocation("Beach", 1, 2)
+        val hills = testApp.service.location.addLocation("Hills", 3, 4)
+        val both = persistUndated("a.jpg")
+        val beachOnly = persistUndated("b.jpg")
+        persistUndated("c.jpg")
+        testApp.service.location.addAssets(beach.persistedId, Set(both.persistedId, beachOnly.persistedId))
+        testApp.service.location.addAssets(hills.persistedId, Set(both.persistedId))
+
+        // The page is Beach: a, b; Hills: a - and "No location" is still to come, so the page continues
+        val page = htmlSearch(host, repoId, Map("groupBy" -> "location", "rpp" -> "3", "sort" -> "filename0")).text()
+        ordered(
+          page,
+          s"""id="asset-${both.persistedId}-in-${beach.persistedId}"""",
+          s"""id="asset-${both.persistedId}-in-${hills.persistedId}"""")
+        cursorOf(page).size shouldBe 1
+        "class=\"cell last-cell\"".r.findAllMatchIn(page).size shouldBe 1
+        s"""(?s)id="asset-${both.persistedId}-in-${hills.persistedId}"\\s+class="cell last-cell".*?data-app-search-after=""".r
+          .findFirstIn(page)
+          .isDefined shouldBe true
+    }
+  }
+
   test("Location and bbox filter both grid shapes, and map layout ignores grouping and paging") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -152,10 +180,11 @@ import altitude.core.models.Asset
         ordered(page, header(""), cell(first))
         page should include("<span>No date</span>")
         page should include("""<span class="count" data-count="2">(2 items)</span>""")
+        page should include("""class="result-group"""")
         page.contains("""<time datetime="">""") shouldBe false
         val next = htmlSearch(host, repoId, params ++ Map("after" -> cursorOf(page).head, "isContinuousScroll" -> "true")).text()
         next should include(cell(second))
-        next.contains("""class="date-group"""") shouldBe false
+        next.contains("""class="result-group"""") shouldBe false
         cursorOf(next) shouldBe Nil
         val ascending = htmlSearch(host, repoId, params + ("groupDirection" -> "asc")).text()
         ordered(ascending, header(""), cell(first))
@@ -399,7 +428,7 @@ import altitude.core.models.Asset
         page should include("""data-results-group-by=""""")
         pressedLayout(page) shouldBe "grid"
         page.contains("""id="bboxScope"""") shouldBe false
-        page.contains("""class="date-group"""") shouldBe false // the style block names it; no header is rendered
+        page.contains("""class="result-group"""") shouldBe false // the style block names it; no header is rendered
 
         // Past the last page
         val scroll = htmlSearch(host, repoId, Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))

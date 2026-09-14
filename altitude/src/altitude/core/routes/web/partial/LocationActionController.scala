@@ -139,7 +139,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
   @cask.put(f"/$prefix/r/:repoId/assets")
   def addAssets(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
-    submit(
+    respond(
       errors => htmx.html.add_to_location_dialog(Const.UI.ADD_TO_LOCATION_DIALOG_TITLE, locations, errors, json),
       fields.LOCATION_ID) {
       normalize(json)
@@ -152,7 +152,9 @@ class LocationActionController(using logger: Logger) extends BaseController:
         val errors = ValidationException()
         errors.errors += Api.Field.ASSET_IDS -> Const.Msg.Err.VALUE_REQUIRED
         errors.trigger()
-      App.altitude.service.location.addAssets(json(fields.LOCATION_ID).str, ids)
+      val added = App.altitude.service.location.addAssets(json(fields.LOCATION_ID).str, ids)
+      // Assets already in the Location are skipped, so the dialog reports this count rather than the selection's size
+      dialogSuccessResponse(ujson.Obj("added" -> added))
     }
 
   @requireLogin()
@@ -186,9 +188,15 @@ class LocationActionController(using logger: Logger) extends BaseController:
 
   /** Both model violations and duplicate names are field errors; only a successful mutation completes the dialog. */
   private def submit(render: Map[String, String] => Html, operationField: String)(action: => Any): Response[String] =
-    try
+    respond(render, operationField) {
       action
       empty
+    }
+
+  /** `submit` for an operation whose success response is its own (`dialogSuccessResponse`) */
+  private def respond(render: Map[String, String] => Html, operationField: String)(
+      action: => Response[String]): Response[String] =
+    try action
     catch
       case ex: ValidationException => invalid(render, ex.errors.toMap)
       case ex: DuplicateException => invalid(render, Map(fields.NAME -> ex.message.getOrElse("Location name already exists")))

@@ -39,6 +39,8 @@ object Api:
     val MULTI_VALUE_DELIM = "+"
     val USER_TEST_HEADER_ID = "TEST-user-id"
     val REPO_TEST_HEADER_ID = "TEST-repo-id"
+    // JSON a dialog's operation adds to its declared success detail (`BaseController.dialogSuccessResponse`)
+    val SUCCESS_DETAIL_HEADER = "App-Success-Detail"
 
     val TOTAL_RECORDS = "totalRecords"
     val TOTAL_PAGES = "totalPages"

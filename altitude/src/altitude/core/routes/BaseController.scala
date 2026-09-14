@@ -5,6 +5,7 @@ import cask.model.Response
 import org.slf4j.Logger
 
 import altitude.core.{ Const => C }
+import altitude.core.Api
 import altitude.core.ValidationException
 
 abstract class BaseController(using logger: Logger) extends cask.Routes:
@@ -43,3 +44,11 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
         ("HX-Retarget", "this"),
         ("HX-Reswap", "outerHTML settle:0")
       ))
+
+  /**
+   * Response for a dialog operation that completed with an outcome only the server knows (how many assets a membership change
+   * applied): an empty body, as for any completed operation, and `detail` as JSON in `Api.Field.SUCCESS_DETAIL_HEADER`, which the
+   * client merges into the success detail the dialog declares (js/fragments/dialog-operations.js).
+   */
+  def dialogSuccessResponse(detail: ujson.Obj): Response[String] =
+    cask.Response("", 200, Seq(("Content-Type", "text/html"), (Api.Field.SUCCESS_DETAIL_HEADER, detail.toString)))

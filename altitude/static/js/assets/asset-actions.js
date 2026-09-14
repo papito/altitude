@@ -303,9 +303,27 @@ export function createAssetActions({
     }
 
     /**
+     * The outcome of adding assets to a Location, by a drop or the Add to location dialog: the
+     * server skips assets already in it and reports how many it `added`, so nothing added is a
+     * warning rather than a success. The dialog passes the `name` it offered the Location under,
+     * since its row is not rendered while another explorer tab is displayed.
+     */
+    function reportAddedToLocation({ locationId, added, name }) {
+        const label = name ?? locationName(locationId)
+
+        if (added === 0) {
+            showWarningSnackBar(`Already in location "${label}"`)
+            return
+        }
+
+        showSuccessSnackBar(
+            `${added > 1 ? `${added} assets` : "Asset"} added to location "${label}"`,
+        )
+    }
+
+    /**
      * Locations point at assets like albums do: adding leaves the assets where they are, so the
-     * grid does not change. Assets already in the Location are skipped by the server, hence the
-     * warning when the drop added nothing.
+     * grid does not change.
      */
     async function addAssetsToLocation({ locationId, assetIds }) {
         const payload = { locationId, assetIds }
@@ -315,17 +333,7 @@ export function createAssetActions({
                 `/api/location/r/${context.getRepoId()}/assets`,
                 payload,
             )
-            const added = response.data.added
-
-            if (added === 0) {
-                showWarningSnackBar(
-                    `Already in location "${locationName(locationId)}"`,
-                )
-            } else {
-                showSuccessSnackBar(
-                    `${added > 1 ? `${added} assets` : "Asset"} added to location "${locationName(locationId)}"`,
-                )
-            }
+            reportAddedToLocation({ locationId, added: response.data.added })
 
             if (shouldResetSelectedAssets(assetIds)) {
                 selectedAssets().reset()
@@ -370,6 +378,7 @@ export function createAssetActions({
         addAssetsToAlbum,
         removeAssetsFromAlbum,
         addAssetsToLocation,
+        reportAddedToLocation,
         removeAssetsFromLocation,
     }
 }

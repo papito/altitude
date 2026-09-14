@@ -1,6 +1,6 @@
 # Locations + Map View — implementation plan
 
-Status: **Units 1–8 done; Unit 9 not started.**
+Status: **Units 1–9 done.**
 
 Read first: `AGENTS.md`, `altitude/AGENTS.md`, `altitude/views/AGENTS.md`. Every Location piece copies the album shape
 (model, DAO, service, HTMX dialogs, client-rendered sidebar list, drag/drop, membership API).
@@ -421,7 +421,8 @@ Files
     `dialogs/rename-location`, `dialogs/delete-location`, `dialogs/move-location` and `dialogs/add-to-location`; the
     mutations `POST add` (name, latitude, longitude, categoryId?), `POST add-category`, `PUT rename`, `PUT move`,
     `PUT assets` (`{locationId, assetIds: "id,id"}` from the dialog's hidden field) and `DELETE /`. Mutations return an
-    empty 200.
+    empty 200; `PUT assets` also carries `{"added": n}` in the `App-Success-Detail` header
+    (`BaseController.dialogSuccessResponse`, `Api.Field.SUCCESS_DETAIL_HEADER`).
   - Every route calls `normalize(json)`, then the pure `validate(json, required, uuid, coordinates)`. `normalize`
     turns JSON numbers for the pin into strings and drops a null or empty `categoryId`.
   - A missing or out-of-range coordinate is reported once, as `Const.Msg.Err.PIN_REQUIRED` ("Place the pin on the
@@ -501,8 +502,12 @@ Tests: `controller/LocationControllerTests`, `LocationActionControllerTests`, `M
 - `static/js/fragments/add-to-location.js`, dispatched by `fragments/modal.js` on `data-app-dialog-kind`:
   - Fills the hidden `assetIds` from the `selectedAssets` store, only when empty, so a validation replacement keeps
     the submitted value.
-  - Keeps `data-app-success-detail` (`{locationId}`) in step with the select, because the operation reads the detail
-    when the request is issued and the listener names the Location after the modal is gone.
+  - Keeps `data-app-success-detail` (`{locationId, name}`, the name as the select labels it) in step with the select,
+    because the operation reads the detail when the request is issued and the listener names the Location after the
+    modal is gone, whichever explorer tab is displayed.
+  - `fragments/dialog-operations.js` merges the `App-Success-Detail` header over the declared detail, and
+    `assetsAddedToLocation` reports the server's `added` through `assetActions.reportAddedToLocation`, the report a drop
+    makes ("Already in location" when nothing was new).
 - `static/js/stores/search-params.js`: `locationId` in `DEFAULTS`; folder, person, album and Location clear each other.
   `context.js`: `getCurrentLocationId()`. `fragments/search-results.js` calls `setViewedLocation`.
 - `static/js/constants.js`: the events above; `attributes.locationId` (`data-location-id`), `attributes.categoryId`
@@ -529,7 +534,8 @@ Tests: `controller/LocationControllerTests`, `LocationActionControllerTests`, `M
 - **`views/htmx/results_grid_grouped.scala.html`**: a Location header's Category is `<span class="category">` + `›` + name.
   A cell's `id` is `asset-<id>` in day and ungrouped grids and in the "No location" group, and `asset-<id>-in-<locationId>`
   under a Location (`result_cell` takes a `cellId`); `data-asset-id` on `.drag-drop` and the image is what the client
-  addresses cells by.
+  addresses cells by. The page's last cell carries the cursor by position (the last group's last asset), since the same
+  asset can have a cell in an earlier group.
 - **Duplicate cells** (D7): `search-results/cells.js` (`cellsOf`, `thumbnailsOf`, `assetIdOf`) finds every cell of an asset.
   `selection.js` paints all of them; `asset-actions.js` removes, marks and un-triages all of them, running
   `decrementDateGroupOf` for each header a cell leaves, while the footer total drops once per asset. The detail
@@ -574,9 +580,11 @@ Tests: `controller/LocationControllerTests`, `LocationActionControllerTests`, `M
     the `HX-Replace-Url` of responses to such requests in `htmx:before:history:update`, putting `layout=map` back.
   - `fragments/search-results.js` hydrates the panel's fragment as the panel's grid: it reports the count to
     `#mapPanelCount`, scrolls the panel, and leaves the displayed map, the total store, the viewed scope and box selection alone.
-- **`static/js/map/map-state.js`**: center and zoom in memory, keyed by the scope fingerprint of the store's `view`,
-  `folderId`, `personId`, `albumId`, `locationId` and `q` (the sort, layout, grouping, paging and `bbox` do not key it),
-  so a re-render for a sort change or a panel does not reset the view. It also exposes the displayed map's live view.
+- **`static/js/map/map-state.js`**: center and zoom in `sessionStorage` (`Const.sessionStore.mapViews`, the 50 scopes
+  looked at last), keyed by the scope fingerprint of the repository and the store's `view`, `folderId`, `personId`,
+  `albumId`, `locationId` and `q` (the sort, layout, grouping, paging and `bbox` do not key it), so a re-render for a
+  sort change or a panel, or a reload of the tab, does not reset the view; a new tab fits the results. Unreadable
+  storage leaves the views in memory. It also exposes the displayed map's live view.
 - **Pin editor start view**: `fragments/location-editor.js` opens on the results map's center and zoom when a map is
   displayed, and on the world otherwise. A validation replacement still opens on the submitted pin at zoom 12.
 - **Layout persistence** (D14): `Const.localStore.resultsLayout`, written by the store's `merge` when `layout` changes;
@@ -665,55 +673,59 @@ geocoder remain manual checks in Unit 9.
 
 ## Unit 9 — Docs and verification
 
-**Not started.**
+**Done.** Docs, the tests below, and the verification matrix.
 
-Docs (anti-drift rule). Units 1–6 and 8 are already documented; this unit adds the map view and removes what goes stale.
-- `altitude/AGENTS.md`:
-  - **Coordinates**, **Locations**, **Search results and date grouping** (filters, `count`, **Group by Location**,
-    cursor v4, `SearchRequestParser`, `layout`), **Map** and **Schema migrations** are current.
-  - Replace the `layout` paragraph's closing "The interactive map renderer is a later unit" with the map view's client
-    behaviour.
-  - Drop the pointer to this plan at the end of **Locations**.
-- `altitude/views/AGENTS.md`:
-  - **Locations** and **Location pin editor** are current.
-  - Add the map fragment and panel, the layout toggle and persistence, `layout` / `bbox` in the store, the `bboxScope`
-    chip, `.result-group` and duplicate cells in the Location grid, the editor's start view, a `js/map/` row in the
-    directory table, and supercluster in the Stack line.
-  - Replace the "Unit 7 adds …" sentence after the pin editor paragraph, and fix the `js/common/` row, which still
-    says location-list "renders the parents and Locations".
-- `static/js/lib/README.md`: the supercluster row (Leaflet's is there).
-- `CONTEXT.md`: add **Plotted point** (**Location**, **Category** and **Pin** are there).
-- `docs/test-coverage.md`: the Locations, search, grouped search and Map sections are current; add rows for any
-  controller assertion Unit 7 adds.
+Docs
+- `altitude/AGENTS.md`: the `static/js/map/` and `cells.js` entries; the `layout` paragraph describes the map view's
+  client; the grouped grid's `result-group` header, `-in-<locationId>` cell IDs, the last cell by position and the
+  rendered-grid continuation; the dialog membership's `App-Success-Detail`; `asset_geo` and its plan test;
+  `TestContext.setAssetCoordinates`.
+- `altitude/views/AGENTS.md`: supercluster in the Stack line; the `js/map/`, `cells.js` and `listeners/map.js` rows and Key
+  Files; selection painting every cell of an asset; the detail navigator's cell origin (`getModalOpenSource`); Escape
+  closing the map panel; the pin editor's start view; the **Map view** and **Crowded-pin panel** sections; group headers;
+  the continuation's rendered-grid parameters; `bbox` / `layout` in **Search parameters** with the layout persistence
+  and `runSearch`'s `source`; the server-supplied success detail of dialogs.
+- `CONTEXT.md`: **Plotted point**, **Map area**, **Crowded pin**.
+- `docs/test-coverage.md`: the Map, Grouped search and Locations sections.
+
+Tests
+- `integration/SearchMapTests` "A cells query reads the geotagged assets through the asset_geo partial index": SQLite's
+  `EXPLAIN QUERY PLAN`, and Postgres' `EXPLAIN` over 5,000 analyzed rows (on a handful, every index on the repository
+  costs the same).
+- `controller/SearchResultsControllerTests` "A Location page marks only its last cell for continuation, though that
+  asset has a cell under an earlier Location"; the `result-group` absence checks.
+- `controller/LocationActionControllerTests`: the dialog membership's added count, zero on a repeat.
 
 Verification
-1. `make compile`, `make lint`, `make test-unit`, `make test-sqlite`, `make test-controllers`; `make test-psql` with the
-   test container up (the map SQL is the part most likely to differ between engines).
-2. The user recreates the dev database and re-imports the dev library so assets get coordinates; restart the dev server
-   (`ENV=dev mill altitude.runBackground`). Confirm with `EXPLAIN` that a cells query uses `asset_geo` on both engines.
-3. Browser, dev server on :8080. Run `mill altitude.resources` after static changes. The automation tab is hidden: no
-   pointer drags, no `requestAnimationFrame`, no IntersectionObserver callbacks. Verify through DOM APIs and mark the
-   manual rows for the user.
+1. `make lint`, `make test-unit`, `make test-controllers`, `make test-sqlite`, `make test-psql` pass.
+2. The dev database carries synthetic coordinates for the browser matrix: 20 assets at one point in Paris, 10 around
+   Rome, a pair on each side of the antimeridian, 5 singles, 8 without a point (plotted at their Location's pin).
+3. Browser, dev server on :8080, through the hidden automation tab (Leaflet driven with `setView`, `flyTo` spied,
+   synthetic clicks, continuations through `loadNextPage`).
 
-| Scenario | Expect |
-|---|---|
-| Locations tab, empty | only the centered "Add your first location"; it opens the Add location modal with the map |
-| Add a Location by clicking the map, then dragging the pin (**manual**) | readout and hidden inputs follow the pin; the list shows the new Location |
-| Geocoder enabled in `application-dev.conf` (`map.geocoder.enabled=true`; the user's call, queries go to Nominatim) (**manual**) | search box present; a result click places the pin and fills an empty name; disabled → no box |
-| Validation error after placing the pin (duplicate name, across kinds) | error in place, name kept, map re-created on the pin at zoom 12 |
-| Add location while the map layout is open | the editor opens on the results map's view |
-| Add a Category; move a Location under it via the menu; rename; delete the Category | Category wording everywhere; the Location returns to the top level |
-| Drop one asset, then a selection, onto a Location (**manual**); footer "Add to location (n)" | counts update; "Already in location" on a repeat |
-| Click a Location row | grid scoped, row marked green, URL carries `locationId`, footer offers "Remove from location" |
-| Group by Location | headers `Category › Location`, an asset in two Locations appears twice, "No location" last, a header selects its cells, recycling a duplicated asset removes both cells and fixes both counts, infinite scroll continues within and across groups |
-| Layout → map | toolbar stays, Group disabled, map fits the results, tiles load; pins render on a blank canvas when tiles are blocked (D17) |
-| Zoom in/out, pan, pan across the antimeridian | cells re-request and merge; single-asset pins show thumbnails; Location pins are distinct |
-| Click a single pin | asset detail modal |
-| Click a Location pin | results scoped to the Location |
-| Click a crowded pin at max zoom | panel with a scrollable grid, sort applies, drag from the panel to a Location works (**manual**), "Show only these in the grid" switches layout with the bbox chip, closing clears it |
-| Reload the page | layout and the last map view are remembered; a bookmarked `layout=map&bbox=` URL opens the same panel |
-| Trash and triage views in map layout | plotted from the same scope rules |
-| Folders and Albums tabs afterwards | unchanged |
+| Scenario | Expect | How |
+|---|---|---|
+| Locations tab, empty | only the centered "Add your first location" | covered by Unit 6; the dev repository has Locations |
+| Add a Location by clicking the map | readout and hidden inputs follow the pin; the list shows the new Location | automated |
+| Drag the pin in the editor | readout and hidden inputs follow the pin | **manual** |
+| Geocoder enabled (`map.geocoder.enabled=true`; queries go to Nominatim) | search box present; a result click places the pin and fills an empty name; disabled → no box | disabled path automated; enabled **manual** |
+| Validation error after placing the pin (duplicate name, across kinds) | error in place, name kept, map re-created on the pin at zoom 12 | automated |
+| Add location while the map layout is open | the editor opens on the results map's view | automated |
+| Add a Category; move a Location under it; rename; delete the Category | Category wording; the Location returns to the top level | automated |
+| Footer "Add to location (n)", and a repeat | counts update; "Already in location" when nothing was new, from any explorer tab | automated |
+| Drop one asset, then a selection, onto a Location row | counts update; "Already in location" on a repeat | drop events automated; a real drag **manual** |
+| Click a Location row | grid scoped, row marked green, URL carries `locationId`, footer offers "Remove from location" | automated |
+| Group by Location | `Category › Location` headers, an asset in two Locations twice, a header selects its cells with duplicates painted, the detail modal steps within the group, recycling a duplicated asset removes both cells and fixes both counts, a continuation lands after the last cell | automated |
+| Layout → map | toolbar stays, Group disabled, map fits the results, tiles load; pins render when tiles fail (D17) | automated |
+| Zoom, pan, pan across the antimeridian | cells re-request; clusters split; single-asset pins show thumbnails; Location pins are distinct | automated |
+| Fly animation on a crowded pin | the map flies to the expansion zoom | **manual** |
+| Click a single pin | asset detail modal, no previous/next | automated |
+| Click a Location pin | results scoped to the Location, map fitted to it | automated |
+| Crowded pin at max zoom | panel with its count and grid, sort applies, continuation stays a plain grid, "Show only these in the grid" with the chip, ×, Escape | automated |
+| Drag from the panel to a Location row | membership added | **manual** |
+| Reload the page | layout and the last map view are remembered in the tab; a new tab fits the results; a bookmarked `layout=map&bbox=` URL opens the same panel | automated |
+| Trash and triage views in map layout | plotted from the same scope rules; triage empty on the world view | automated |
+| Folders and Albums tabs afterwards | unchanged | automated |
 
 ---
 

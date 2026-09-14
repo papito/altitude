@@ -5,9 +5,18 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+import scalasql.core.SqlStr
+import scalasql.core.SqlStr.SqlStringSyntax
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.FieldConst
+import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
+import altitude.core.dao.sql.search.PostgresSearchDialect
+import altitude.core.dao.sql.search.SearchDialect
+import altitude.core.dao.sql.search.SearchQueries
+import altitude.core.dao.sql.search.SqliteSearchDialect
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Location
@@ -15,6 +24,7 @@ import altitude.core.models.MapBounds
 import altitude.core.models.MapCell
 import altitude.core.models.MapCells
 import altitude.core.models.MapLocation
+import altitude.core.service.SearchService
 import altitude.core.util.BoundingBox
 import altitude.core.util.SearchQuery
 
@@ -58,6 +68,22 @@ import altitude.core.util.SearchQuery
     locations.map(location => (location.name, location.categoryName, location.count)).sorted
 
   private def bounds(query: SearchQuery = searchQuery()): Option[MapBounds] = testApp.service.library.mapBounds(query)
+
+  private def searchDialect: SearchDialect =
+    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) PostgresSearchDialect else SqliteSearchDialect
+
+  /** The engine's plan for `statement` as text: the lines of Postgres' EXPLAIN, or the details of SQLite's EXPLAIN QUERY PLAN */
+  private def planOf(statement: SqlStr): String = {
+    val engine = searchDialect
+    import engine.dialect.*
+
+    testApp.txManager.asReadOnly {
+      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+        Db.read(engine.dialect)(_.runSql[String](sql"EXPLAIN $statement")).mkString("\n")
+      else
+        Db.read(engine.dialect)(_.runSql[(Int, Int, Int, String)](sql"EXPLAIN QUERY PLAN $statement")).map(_._4).mkString("\n")
+    }
+  }
 
   test("Cells aggregate the plotted points: an asset at its own point, or at its Locations' pins without one") {
     val italy = testApp.service.location.addCategory("Italy")
@@ -157,6 +183,43 @@ import altitude.core.util.SearchQuery
     summary(cellsOf(BoundingBox.parse("-1,179,1,-179"), zoom = 10).cells) shouldEqual
       List((1, east.persistedId), (1, west.persistedId)).sorted
     cellsOf(BoundingBox.parse("-1,-179,1,179")).cells shouldBe Nil
+  }
+
+  test("A cells query reads the geotagged assets through the asset_geo partial index") {
+    val inParis = persistAt(paris._1, paris._2)
+    persistAt(48.8606, 2.3376)
+    testContext.persistAsset()
+
+    // Postgres costs a plan by the table's statistics, and over a handful of rows every index on the repository costs the same,
+    // so its choice would be a tie. At a library's scale - thousands of assets, most without a point, analyzed - it is not.
+    // SQLite has no statistics before ANALYZE and prefers the index that constrains the most columns.
+    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+      testApp.txManager.withTransaction {
+        update(
+          """INSERT INTO asset
+            |SELECT (jsonb_populate_record(a, jsonb_build_object(
+            |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
+            |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
+            |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
+            |  FROM asset a, generate_series(1, 5000) g
+            | WHERE a.id = ?""".stripMargin,
+          inParis.persistedId
+        )
+        update("ANALYZE asset")
+      }
+    }
+
+    val plan = planOf(
+      SearchQueries.mapCells(
+        searchDialect,
+        searchQuery(),
+        RequestContext.getRepository.persistedId,
+        BoundingBox.parse("48,2,49,3"),
+        SearchService.cellDegrees(12)))
+
+    withClue(plan) {
+      plan should include("asset_geo")
+    }
   }
 
   test("Bounds cover both point sources, count plotted points, and are absent when nothing is plotted") {

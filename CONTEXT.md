@@ -29,6 +29,23 @@ _Avoid_: Parent, Folder, Group.
 The point of a Location, placed by clicking a map or from a place-name search.
 _Avoid_: Coordinates, Lat/Long in user-facing text.
 
+**Plotted point**:
+Where the map draws an asset of a search: at the asset's own GPS position, or,
+when it has none, at the Pin of each Location it is in. Counts on the map count
+plotted points, so an asset without a position in two Locations counts twice.
+_Avoid_: Marker, Geotag.
+
+**Map area**:
+A rectangle of the map that narrows a search to the assets plotted inside it.
+A Crowded pin opens one, and "Show only these in the grid" keeps it.
+_Avoid_: Bounding box, bbox in user-facing text.
+
+**Crowded pin**:
+A map pin standing for several Plotted points, shown as a representative
+thumbnail with a count. It zooms in until its points separate, and opens their
+Map area when they cannot.
+_Avoid_: Cluster in user-facing text.
+
 **Date Group**:
 The images in a search result whose selected date, either Date Taken or Date
 Imported, falls on the same calendar day.

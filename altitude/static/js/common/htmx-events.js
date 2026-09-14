@@ -40,6 +40,11 @@ export function getResponseRetarget(event) {
     return event.detail.ctx.hx?.retarget
 }
 
+/** A response header by name (fetch `Headers`, case-insensitive), or null before a response arrived. */
+export function getResponseHeader(event, name) {
+    return event.detail.ctx.response?.headers?.get(name) ?? null
+}
+
 /** The element that issued the request, if it is still known. */
 export function getRequestSource(event) {
     return event.detail.ctx.sourceElement ?? null

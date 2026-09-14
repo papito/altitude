@@ -6,7 +6,8 @@
 - **Alpine.js** — reactive state and UI behavior (`x-data`, `x-show`, `$store`)
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
 - Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
-  Viselect for box selection, Leaflet for the Location pin editor and the map); versions and sources are listed in `static/js/lib/README.md`
+  Viselect for box selection, Leaflet for the Location pin editor and the map, supercluster for the map's on-screen
+  clustering); versions and sources are listed in `static/js/lib/README.md`
 
 ## Template Layout
 
@@ -51,14 +52,15 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); and the `document`-level dialog request wiring (`dialogs.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the date headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the parents and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell and its column sizing), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a date header's checkbox over its day's cells) and `context-menu.js` (native popover menus of folders and albums, and the functions that close one from outside); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/frontend-app.js` and `js/stores/app-stores.js`)
 
@@ -136,7 +138,7 @@ Two-layer event bus, both on `document.body`:
 
 - Lifecycle events carry the request context under `event.detail.ctx`. Read it through the helpers
   in `js/common/htmx-events.js` (`getRequestPath`, `getResponseStatus`, `isRequestSuccessful`,
-  `getResponseText`, `getRequestSource`, `getResponseRetarget`) instead of touching the detail
+  `getResponseText`, `getResponseHeader`, `getRequestSource`, `getResponseRetarget`) instead of touching the detail
   directly.
 - `htmx:after:request` fires when the response has arrived but **before** it is swapped in.
   Cancelling it (`preventDefault()`) drops the swap. Once the issuing element has left the DOM, htmx
@@ -196,17 +198,18 @@ helpers or `Alpine.store(Const.state.*)` calls; no module reads the store key st
 An asset cell has no Alpine component. What is selected is the reactive `Set` of asset IDs in the
 `selectedAssets` store (`js/search-results/selection.js`), and the store is the one place a
 selection changes: `select`, `deselect`, `toggle`, `reset`, and `setDragging` update the set and
-paint the cell they concern (`.selected` / `.masked` on `#asset-<id> .drag-drop`). One delegated
+paint the cells they concern (`.selected` / `.masked` on every `.drag-drop[data-asset-id]` of the asset, found
+through `js/search-results/cells.js`: a Location grouping holds an asset once under each of its Locations). One delegated
 click listener per displayed grid toggles an asset from its checkmark or a Shift-click on its
 image; box selection commits through the same methods; drag handlers read `contains(id)` to
 decide whether a drop escalates to a batch and call `setDragging` to dim the selection while it
 moves. Cells entering or leaving the grid are announced with `noteGridChange()`, which bumps a
-reactive counter the date headers read (the DOM itself is not reactive). The footer binds to the
+reactive counter the group headers read (the DOM itself is not reactive). The footer binds to the
 set (`x-show`, `x-text`), and `reset()` from its Deselect All button clears it.
 
 ### 3. Coordination around native UI
 `x-data="contextMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
-`alpine/components/context-menu.js`) wraps each folder's or album's ⋯ trigger and its native
+`alpine/components/context-menu.js`) wraps each folder's, album's or Location row's ⋯ trigger and its native
 `popover="auto"` panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
 outside clicks); the component only places the panel, closes it when focus leaves or when the page scrolls or the explorer
 resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
@@ -230,7 +233,8 @@ swaps once the user dismissed or replaced it. Visibility is bound through the Al
 `js/app.js` contains focus and hides the page from assistive tech; its documented local patch
 cancels delayed activation when a trap is released or removed). Escape (`global.js`) closes the
 active modal and any open context menu and is consumed by them, so a background inline edit
-survives; general dialogs ignore backdrop clicks, asset detail closes on them. Explorer action dialogs
+survives; with neither open it closes the map view's crowded-pin panel, and with none of those it is
+broadcast for such an edit to cancel. General dialogs ignore backdrop clicks, asset detail closes on them. Explorer action dialogs
 are anchored below the row's ⋯ trigger, or the Add button. Their request buttons declare
 `data-app-modal-anchor` with that control's selector; `modal.js` preserves it through validation,
 repositions on content/viewport/explorer resizing and scrolling, and releases its observers on close
@@ -255,7 +259,10 @@ survive the page update the dialog triggers), and `kind`, naming wiring a dialog
 form (the view settings checkboxes, hydrated in `js/fragments/inline-dialog.js`, and the Add to
 location selection, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-location.js`). Its success
 event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
-`-detail-target-attr-*`) on the fragment root. The one attribute that describes the modal host is
+`-detail-target-attr-*`) on the fragment root. An outcome only the server knows (how many assets a
+membership change applied) arrives as JSON in the `App-Success-Detail` response header
+(`BaseController.dialogSuccessResponse`, `Const.http.successDetailHeader`), which
+`dialog-operations.js` merges over the declared detail. The one attribute that describes the modal host is
 `data-app-modal-title`. Folder, album, Location, and category actions, including the Add controls,
 are **modal dialogs**, as are the people dialogs and purge confirmation. Only View settings is an
 **inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its checkboxes apply
@@ -289,8 +296,10 @@ Asset detail: `js/fragments/image-detail.js` opens the host with its spinner imm
 the image load to the detail coordinator, which gives each image request a token so only the latest
 request for the active open may change the image, box size, title, loading state, or current asset
 (rapid previous/next navigation, page fetches, and loads that finish after closing are ignored).
-The navigation origin is set to the requested asset before its image loads, so previous/next
-already uses the newly opened asset while the spinner is showing.
+The navigation origin is the cell whose thumbnail requested the detail (`modal.js` keeps the element
+that issued an open's request, `getModalOpenSource()`), set before the image loads, so previous/next
+already steps from the newly opened cell while the spinner is showing. A detail opened from no cell
+(a map pin) has no previous or next.
 Arrow-key navigation works only while asset detail is active and no text field is focused.
 
 **Context menus** — Each folder's, album's or Location row's ⋯ button (its **trigger**, `.menu-trigger`) is a real
@@ -421,7 +430,10 @@ deletes the memberships of the selected assets and removes their cells. The foot
 to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
 `add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
 `assetIds` field from the selection and keeps the fragment's success detail naming the chosen
-Location; on success `assetsAddedToLocation` resets the selection and refreshes the counts.
+Location (its ID, and its label as the select offers it, since the row is not rendered while another
+explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
+reports that through `assetActions.reportAddedToLocation`, the report a drop makes too ("Already in
+location" when nothing was new), then resets the selection and refreshes the counts.
 
 Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the pin editor below) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
 `#addFirstLocationBtn`; Add category also opens a modal from `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
@@ -443,7 +455,8 @@ handling alone): a click places the pin, a drag moves it, and every placement wr
 hidden `latitude` / `longitude` inputs (six decimals) and the read-only `#locationPinReadout` under
 the map (four decimals; "No pin yet" before). The hidden inputs are all the server sees, and a
 validation replacement re-renders them with the submitted values, so the re-hydrated editor opens on
-that pin at zoom 12 instead of the world view. One editor exists at a time: hydrating disposes of the
+that pin at zoom 12. Otherwise the editor opens where the results map is looking when one is displayed
+(`getDisplayedMapView()`, `js/map/map-state.js`), and on the world when not. One editor exists at a time: hydrating disposes of the
 previous map. Leaflet measures its container on creation, when the modal host is still hidden, so the
 hydrator sizes the map once the container is displayed and on every resize. A missing or
 out-of-range coordinate is one error, "Place the pin on the map", rendered once under the map. The
@@ -454,7 +467,68 @@ results are buttons, and a click jumps the map to the place, places the pin, and
 it is empty with the label's first segment; a failed search is a snackbar. Leaflet is loaded as a
 plain script (`window.L`) with its stylesheet by `index.scala.html`.
 
-The server also accepts `bbox` and `layout=grid|map` for results, mirrored as `data-results-*` attributes. In map layout `search_results` disables Group and renders `htmx/map_view` without the `#assets` wrapper; there `bbox` is the crowded-pin panel's scope, so the total and `data-map-bounds` cover the whole search and the cells request sends the store's parameters verbatim plus `viewport` and `zoom`. That shell carries `#map`, `data-map-bounds="s,w,n,e"` (empty when no points), `data-map-count`, `data-map-tile-url` and `data-map-attribution`. Unit 7 adds the map hydrator, panel, layout toggle and the `layout` / `bbox` parameters to the client store.
+**Map view** — `layout` (`grid` | `map`) is a search parameter (see **Search parameters**). The
+toolbar's `#layoutToggle` in `includes/search_results` is two `data-app-search="click"` buttons with a
+literal `data-app-search-layout`, the current one `aria-pressed="true"`. In map layout the server
+disables the Group `<select>`, gives the fragment root `class="map-layout"` (a flex column, so the map
+takes every pixel under the controls) and renders `htmx/map_view` in place of `#assets`: `#mapView`
+holds `#map` (`data-map-bounds="s,w,n,e"`, empty when nothing is plotted, `data-map-count`,
+`data-map-tile-url`, `data-map-attribution`; `isolation: isolate`, so Leaflet's panes stay under the
+modals) and the hidden `<aside id="mapPanel">`. The pin styles (`.asset-pin`, `.location-pin.on-map`)
+live in that template; `.location-pin` itself is in `core.css`, shared with the pin editor. While the
+results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip, whose
+`data-app-search-bbox=""` clears it, in either layout.
+
+`js/map/map-view.js` hydrates `#map` (`data-app-fragment="map-view"`, after the results hydrator). One
+map exists at a time: the results hydrator calls `disposeMapView()` for every new results fragment,
+which cancels the pending cells request, disconnects the `ResizeObserver` that tells Leaflet the column
+was resized (the Split.js drag, the window), and removes the map. The initial view is the one last
+looked at in this scope (`map-state.js`), else `fitBounds` on `data-map-bounds` (padded, never past zoom
+15), else the world. Every `moveend`, debounced 150 ms, requests `/api/map/r/:repoId/cells` with the
+store's query string plus `viewport` and `zoom`, and a response older than the latest request is
+dropped. The viewport is sent in the server's form: latitudes clamped to ±90, longitudes wrapped into
+-180..180 with `west > east` across the antimeridian, and the whole world once the view spans 360°.
+The browser never receives a result set: the cells go into a supercluster index (radius 60 px,
+`extent: 256` to match Leaflet's tiles; a cluster's count is the sum of its cells', and its largest
+cell's asset represents it), and every cluster or cell in view becomes an `L.divIcon` marker, placed
+in the world copy nearest the map's center so a view across the antimeridian shows both sides:
+
+- a cell of one point is a thumbnail pin (`/content/r/:repoId/preview/:assetId`) carrying the same
+  asset-detail `hx-get` a grid image does, processed with `htmx.process`;
+- a **crowded pin** (a cluster, or a cell of several points) is the representative thumbnail with a
+  `.drag-count-badge` count. A cluster flies to its expansion zoom when that is within the maximum zoom
+  (19), and otherwise opens the panel for the union of its cells' extents; a cell of several points
+  flies two levels in, and at the maximum zoom opens the panel for its own extent (a cell is
+  `360 / 2^zoom / 4` degrees on a grid from the origin, the server's rule);
+- a Location pin is the `.location-pin` glyph and `Category › Name`, drawn for each Location in view
+  that holds a matching asset; a click runs `runSearch({ params: { locationId } })`.
+
+Tiles that fail to load leave a blank canvas with the pins on it, and no notice.
+
+**Crowded-pin panel** — `openMapPanel({ bbox })` (`js/map/map-panel.js`) shows `#mapPanel`, a column
+laid over the map's right edge, and runs `runSearch` with `params: { bbox }`, `transient: { layout:
+"grid", groupBy: null, groupDirection: null }`, `target: "#mapPanelContent"` and the panel as `source`.
+`bbox` is a real store parameter, so the panel's grid is an ordinary search: infinite scroll, cursor
+continuation, selection, the detail modal and dragging to a Location row work in it unchanged, and the
+URL is bookmarkable, since the map hydrator reopens the panel for the `data-results-bbox` its fragment
+carries. The map endpoints and the map layout's total and bounds ignore `bbox`, so the map behind the
+panel keeps plotting the whole search. `js/fragments/search-results.js` hydrates a fragment inside
+`#mapPanel` as the panel's grid: it writes the count into `#mapPanelCount` ("n items here") and leaves
+the displayed map, the total store, the viewed scope and box selection alone; the fragment's own
+`#searchControl` is hidden there. The panel's continuations stay a plain grid (see **Infinite scroll +
+lazy load**). The server's `HX-Replace-Url` for a panel request says `layout=grid`, so
+`js/listeners/map.js` puts `layout=map` back in `htmx:before:history:update` for requests issued from
+the panel. The panel's ×, Escape and the chip clear `bbox` through the funnel, which re-renders the map
+without a panel; "Show only these in the grid" runs `runSearch({ params: { layout: "grid" } })`, which
+keeps the area, so the grid opens scoped to it with the chip to clear it.
+
+`js/map/map-state.js` keeps the center and zoom per scope fingerprint (the repository and the
+store's `view`, `folderId`, `personId`, `albumId`, `locationId` and `q`; not the sort, layout,
+grouping, paging or `bbox`) in `sessionStorage` (`Const.sessionStore.mapViews`, the 50 scopes looked
+at last), so a re-render for a sort change, a panel, a trip to the grid and back, or a reload of the
+tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. Storage that
+cannot be read or written leaves the views in memory only. It also holds the displayed map's live
+view, which the pin editor opens on.
 
 **Explorer action dialogs** — The folder, album, Location, and category forms declare
 `data-app-fragment="modal"` and `data-app-modal-title`; the shared host supplies their heading and
@@ -475,7 +549,8 @@ rules and Escape returns focus to the trigger.
 `js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
 user-supplied names and server errors, without HTML markup or pre-escaping. Auto-dismisses after 3 s.
 
-**Infinite scroll + lazy load** — The last `.cell` gets class `last-cell` and carries how the next
+**Infinite scroll + lazy load** — The last `.cell` (by position: a Location page can hold its last
+asset in an earlier cell too) gets class `last-cell` and carries how the next
 page is reached: its number in `data-app-search-next-page` (an ungrouped grid) or the encoded
 cursor in `data-app-search-after` (a grouped grid). An `IntersectionObserver` in
 `js/search-results/infinite-scroll.js` watches it and calls `loadNextPage(lastCellEl)`, exported from the
@@ -486,31 +561,40 @@ no page is requested twice; the detail modal is that second caller when it steps
 loaded cell. A cell loses its attribute as it loads, so scrolling back over it loads nothing again.
 A page the server rejects is reported through the snackbar like every failed request
 (`js/listeners/htmx-requests.js`), which matters here because no visible control is behind it.
-Each page appended is announced to the selection store (`noteGridChange`) so the date headers
-recount.
+Each page appended is announced to the selection store (`noteGridChange`) so the group headers
+recount. A continuation continues the grid as it was rendered: it also sends the layout and grouping
+of the results fragment the cell is in (`data-results-layout`, `data-results-group-by`,
+`data-results-group-direction`) as transient parameters. For the main grid those are the store's own
+values; for the crowded-pin panel's grid they are the plain grid it was requested as, while the store
+says map.
 
-**Date headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each day with a
-`.date-group` header: a checkbox over the day, a `<time datetime="yyyy-MM-dd">` with the
-server-formatted day (**Saturday, January 2, 2025**), and the day's full match count across every
-page in `.count` — as text (**(3 items)**, **(1 item)**) with the number itself in `data-count`,
-which is what the client reads and decrements. The header spans
+**Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day or
+a Location, with a `.result-group` header: a checkbox over the group; its name - a
+`<time datetime="yyyy-MM-dd">` with the server-formatted day (**Saturday, January 2, 2025**), "No date",
+`<span class="category">Italy</span> › Rome` (the category dimmed), or "No location"; `data-group-key`
+naming it; and the group's full match count across every page in `.count` — as text (**(3 items)**,
+**(1 item)**) with the number itself in `data-count`, which is what the client reads and decrements. The header spans
 the row and is `position: sticky` at the top of `#content` (CSS only, in
 `includes/search_results.scala.html`; `#assets` is an isolation root so the drag stand-in still
 paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
-A continuation of a day already on screen repeats no header, so the new cells read as the same
+A continuation of a group already on screen repeats no header, so the new cells read as the same
 group. The one client-side change to a header is its count: `removeAssetsFromGrid`
 (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` from
 `js/search-results/date-groups.js` before a cell leaves, which walks back to the nearest header,
 takes one off, and removes the header at zero; a header whose loaded cells are all gone but whose
-count is positive stays, since the day has matches on pages not loaded yet.
+count is positive stays, since the group has matches on pages not loaded yet. Under Group by Location
+an asset in two Locations has a cell in each group (`asset-<id>-in-<locationId>`; elsewhere a cell is
+`asset-<id>`), so every per-asset change goes through `js/search-results/cells.js`, which finds all of
+an asset's cells by `data-asset-id`: removal takes every cell out, decrementing each header a cell
+leaves, while the footer total, which counts assets, drops once per asset.
 
 The header's checkbox is `x-data="initDateGroupSelectable()"`
-(`js/alpine/components/date-group-selectable.js`). Its set is the day's cells *in the grid*, read off
+(`js/alpine/components/date-group-selectable.js`). Its set is the group's cells *in the grid*, read off
 the DOM as the header's following siblings up to the next header — a group owns no element of its
-own, which is what lets a continued day append cells with no header of its own. Clicking it selects
+own, which is what lets a continued group append cells with no header of its own. Clicking it selects
 or deselects them through the `selectedAssets` store, the same path a click on a thumbnail's
-checkmark takes; it never fetches the day's unloaded pages. It shows checked only when the whole day is both loaded and selected, and the
-indeterminate dash otherwise, so a day still scrolling in never reads as fully selected. `paint()`
+checkmark takes; it never fetches the group's unloaded pages. It shows checked only when the whole group is both loaded and selected, and the
+indeterminate dash otherwise, so a group still scrolling in never reads as fully selected. `paint()`
 writes that state into the box: it is the box's `x-effect`, and the box's `change` handler calls it
 again after `toggle()`, since a click that changes neither count re-runs no effect. The click is not
 cancelled on purpose: the browser restores a cancelled checkbox's `checked` and `indeterminate` once
@@ -518,7 +602,7 @@ the click is dispatched, after the microtask Alpine runs effects in, so a `@clic
 show its pre-click state. Its counts are
 reactive: they read the store's set (so a Shift-click, a box selection and Deselect All all repaint
 it) and its grid version, bumped by `removeAssetsFromGrid` when cells leave and by the infinite
-scroll when a page is appended into a day already on screen. Alpine batches effects per microtask,
+scroll when a page is appended into a group already on screen. Alpine batches effects per microtask,
 so a box selection over hundreds of cells repaints each header once. Headers are never
 selectable (box selection targets `[data-asset-id]`), never draggable, and carry no `img` or
 `.metadata`, so lazy loading and metadata visibility skip them. Images use `data-src` instead of `src`; the same centralized
@@ -557,8 +641,10 @@ page fits without a scrollbar does not autoscroll in that gesture.
 
 **Detail navigation** — Next/previous navigation and modal asset-detail loading are coordinated
 from `js/search-results/detail-navigator.js`. The results grid is the modal's source of truth:
-the coordinator remembers the asset it shows, and next/previous move to the nearest `.cell`
-sibling of that asset's cell (`#asset-<id>`) in document order, skipping `.date-group` headers.
+the coordinator remembers the cell it shows (not the asset: a Location grouping holds an asset in a
+cell under each of its Locations, and stepping from the cell keeps the walk in the group the user was
+looking at), and next/previous move to the nearest `.cell` sibling of that cell in document order,
+skipping `.result-group` headers. A detail opened from no cell, such as a map pin, has nowhere to step.
 At the end of the loaded grid, next calls `loadNextPage` on the last cell - the same page load the
 scroll observer makes, shared if already in flight - and continues into the cells it appended; at
 the true end, and at the first cell, nothing happens. There is no shadow list and no JSON: a cell
@@ -603,13 +689,13 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), explorer dialog anchoring, `setAssetDetailSize` |
+| `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), explorer dialog anchoring, `setAssetDetailSize` |
 | `static/js/common/anchored-panel.js` | viewport placement shared by popover menus and anchored explorer modals |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
-| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a date header's checkbox: selects its day's loaded cells as a set |
+| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day or a Location) as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through the store on release |
 | `static/js/search-results/infinite-scroll.js` | `loadNextPage` and the observer on the last cell |
 | `static/js/search-results/lazy-images.js` | loads thumbnails as they approach the viewport, placeholders them once far past it |
@@ -617,24 +703,30 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, declared success events, tab selection, fragment hydration |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
-| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's or album's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |
+| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells and image loading in the asset-detail modal |
-| `static/js/search-results/date-groups.js` | keeps a date header's count current as cells leave the grid |
+| `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
+| `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
-| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder or album and the dialog-trigger buttons |
+| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row and the dialog-trigger buttons |
 | `static/js/common/album-list.js` | renders the album list, its counts, and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
 | `static/js/common/location-list.js` | renders the categories and Locations, their counts, and each row's menu from the JSON list endpoint; patches the counts in place; marks the viewed Location |
-| `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location |
+| `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell and the column sizing shared by the folder tree and the album list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls; the controller passes in the rendered grid partial |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by page number |
-| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a date header per day, infinite-scroll trigger by cursor |
+| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
+| `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, the crowded-pin panel `#mapPanel`, and the pin styles |
+| `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
+| `static/js/map/map-panel.js` | the crowded-pin panel: `openMapPanel` runs the `bbox` search into `#mapPanelContent`; close, "Show only these in the grid" |
+| `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |
+| `static/js/listeners/map.js` | puts `layout=map` back into the URL the server pushes for a panel request |
 
 ## Search parameters
 
@@ -645,9 +737,11 @@ it knows about; the `searchParams` store supplies the rest. Nothing else builds 
 `/htmx/search/r/:repoId`.
 
 `js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
-`locationId`, `q`, `sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them:
+`locationId`, `q`, `bbox`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them:
 choosing a folder, a person, an album, or a Location clears the other three, a view clears all four, and any change other than paging
-returns to page 1. Grouping is a reorder like the sort and survives all of those. A parameter still at
+returns to page 1. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
+drawn on, so a view, a folder, a person, an album, a Location or a new `q` clears it too. The layout,
+the sort and the grouping narrow or reorder what is already in scope and survive all of those. A parameter still at
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
@@ -657,7 +751,10 @@ grouping" sets both to empty, which the store normalizes to `null`. A grouped se
 number: the serializer leaves `p` out whenever `groupBy` is set (the server rejects the pair), and
 the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
 remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
-URL.
+URL. The layout is the one exception: the store's `merge` writes a changed `layout` to
+`localStorage` (`Const.localStore.resultsLayout`), and seeding takes the layout from the URL first and
+from `localStorage` when the URL has none, so a map user opens on the map (`Const.search.layout`
+names the two values).
 
 The browser URL is authoritative exactly once, at page load: `index.scala.html` seeds the store from
 `window.location.search`, so a bookmarked or shared search still opens. After that the store is the
@@ -674,13 +771,18 @@ has settled):
 <select data-app-search="change" data-app-search-from-value="sort">  <!-- parameter from the element's value -->
 <select data-app-search="change" data-app-search-from-selected-option>  <!-- every data-app-search-<param> literal of the selected <option> -->
   <option data-app-search-group-by="dateTaken" data-app-search-group-direction="desc">
+<button data-app-search="click" data-app-search-bbox="">             <!-- an empty literal clears the parameter -->
 ```
 
 The hydrator also owns the rule that folder navigation does nothing in triage and trash, so that
 guard lives in one place rather than in markup.
 
 Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's `p` or
-`after`) are passed as `transient` and are serialized into that one request only. A server-side action that should change what is
+`after`, and the grid layout and no grouping of the crowded-pin panel's request while the store says
+map) are passed as `transient` and are serialized into that one request only. `runSearch` also takes
+a `target` and `swap` (the panel searches into `#mapPanelContent`) and a `source`, the element htmx
+issues the request from, for a caller that recognises its responses in the lifecycle events
+(`js/listeners/map.js`). A server-side action that should change what is
 displayed reports it as a custom event and lets JS run the search — as the people merge does with
 `personMerged` — rather than redirecting to a search URL of its own.
 

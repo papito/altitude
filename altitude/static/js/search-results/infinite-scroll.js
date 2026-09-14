@@ -108,7 +108,7 @@ function continuationOf(lastCellEl) {
 /**
  * Watches the displayed grid's last cell, and every last cell of the pages appended to it. A page
  * arriving is also the one moment cells enter the grid, which the selection store is told about
- * so a date header can recount its day.
+ * so a group header can recount its group.
  */
 export function bindInfiniteScroll({ assetsElement }) {
     const observer = getNextPageObserver()

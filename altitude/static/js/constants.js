@@ -46,7 +46,6 @@ export const Const = {
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
-        mapPanelRequested: "MAP_PANEL_REQUESTED_EVENT",
     },
 
     /**
@@ -95,11 +94,21 @@ export const Const = {
         resultsLayout: "resultsLayout",
     },
 
+    sessionStore: {
+        // The map view last looked at per search scope (js/map/map-state.js)
+        mapViews: "mapViews",
+    },
+
     search: {
         layout: {
             grid: "grid",
             map: "map",
         },
+    },
+
+    http: {
+        // JSON the server adds to a dialog operation's success detail (`Api.Field.SUCCESS_DETAIL_HEADER`)
+        successDetailHeader: "App-Success-Detail",
     },
 }
 

@@ -111,10 +111,8 @@ export function registerLocationListeners(app) {
     document.body.addEventListener(
         Const.events.assetsAddedToLocation,
         (event) => {
-            const count = selectedAssets().size
-            showSuccessSnackBar(
-                `${count > 1 ? `${count} assets` : "Asset"} added to location "${locationName(event.detail.locationId)}"`,
-            )
+            // `added` is the server's count (the dialog operation merges it into the detail)
+            app.assetActions.reportAddedToLocation(event.detail)
             selectedAssets().reset()
             app.reloadLocationCounts()
         },
