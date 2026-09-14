@@ -69,7 +69,7 @@ import altitude.core.Const
         val membership = get("dialogs/add-to-location")
         membership should include("""id="addToLocation"""")
         membership should include(s"""data-app-modal-title="${Const.UI.ADD_TO_LOCATION_DIALOG_TITLE}"""")
-        membership should include("Italy - Beach")
+        membership should include("Italy › Beach")
         membership should include("Park")
         (membership should not).include(s"""value="${category.persistedId}"""")
     }
