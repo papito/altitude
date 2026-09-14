@@ -39,9 +39,9 @@ object IntegrationTestUtil {
     }
   }
 
-  /** Convert a file system resource to an import asset (this reads the actual binary content of the file). */
+  /** A file system resource as an import asset; the pipeline stages a copy, so the resource is never touched */
   def fileToImportAsset(file: File): ImportAsset =
-    new ImportAsset(fileName = file.getName, data = FileUtils.readFileToByteArray(file), metadata = UserMetadata())
+    new ImportAsset(fileName = file.getName, path = file.toPath, metadata = UserMetadata())
 
   def getImportAsset(relPath: String): ImportAsset = {
     val path = getClass.getResource(s"/import/$relPath").getPath

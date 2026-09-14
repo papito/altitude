@@ -46,7 +46,7 @@ CREATE TABLE repository (
 CREATE TABLE stats (
   repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
   dimension VARCHAR(60),
-  dim_val INT NOT NULL DEFAULT 0
+  dim_val BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);
@@ -68,7 +68,7 @@ CREATE TABLE asset (
   extracted_metadata jsonb,
   folder_id CHAR(36),
   filename TEXT NOT NULL,
-  size_bytes INT NOT NULL,
+  size_bytes BIGINT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
   is_purged BOOLEAN NOT NULL DEFAULT FALSE,
@@ -79,7 +79,9 @@ CREATE TABLE asset (
   original_created_at_source VARCHAR(32),
   -- WGS84 decimal degrees, parsed from the file's GPS metadata on import only (GeoLocationResolver). NULL when it carried none.
   latitude DOUBLE PRECISION,
-  longitude DOUBLE PRECISION
+  longitude DOUBLE PRECISION,
+  -- A Video's length; NULL for an image.
+  duration_ms BIGINT
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
@@ -129,7 +131,9 @@ CREATE TABLE face (
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
   features vector NOT NULL,
-  checksum INT NOT NULL
+  checksum INT NOT NULL,
+  -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
+  frame_time_ms BIGINT
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX face_01 ON face (repository_id, checksum);

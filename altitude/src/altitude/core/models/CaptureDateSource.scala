@@ -10,7 +10,9 @@ enum CaptureDateSource(val dbValue: String):
   case XmpCreateDate extends CaptureDateSource("xmp_create_date")
   case IptcCreated extends CaptureDateSource("iptc_created")
   case PngCreationTime extends CaptureDateSource("png_creation_time")
+  case QuickTimeCreationDate extends CaptureDateSource("qt_creation_date")
   case PngModified extends CaptureDateSource("png_modified")
+  case ContainerCreationTime extends CaptureDateSource("container_creation_time")
   case GpsTimestamp extends CaptureDateSource("gps_timestamp")
   case FileName extends CaptureDateSource("filename")
 

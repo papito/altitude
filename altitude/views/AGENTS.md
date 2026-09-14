@@ -672,7 +672,11 @@ decides once, when the drag starts, whether the container can scroll, so a box b
 page fits without a scrollbar does not autoscroll in that gesture.
 
 **Detail navigation** — Next/previous navigation and modal asset-detail loading are coordinated
-from `js/search-results/detail-navigator.js`. The results grid is the modal's source of truth:
+from `js/search-results/detail-navigator.js`. The detail fragment (`views/htmx/view_image_detail_modal.scala.html`)
+holds an `<img>` and a `<video controls preload="metadata">`, and its dataset carries the media type; `showMedia` shows
+the one the type calls for, unloads the other (`hidden`, `src` cleared), waits for `load` or `loadedmetadata`, and sizes
+the box from the stored width and height for both. Stepping to another asset pauses a playing video, and `closeModal`
+pauses any video in the host it closes; the video streams from the same `/content/.../file/` URL by byte ranges. The results grid is the modal's source of truth:
 the coordinator remembers the cell it shows (not the asset: a Location grouping holds an asset in a
 cell under each of its Locations, and stepping from the cell keeps the walk in the group the user was
 looking at), and next/previous move to the nearest `.cell` sibling of that cell in document order,
@@ -751,7 +755,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
-| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor. `data-media-type` names what the asset is; a Video's cell wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Video Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by page number |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, the crowded-pin panel `#mapPanel`, and the pin styles |

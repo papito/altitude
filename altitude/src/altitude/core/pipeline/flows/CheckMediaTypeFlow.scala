@@ -29,6 +29,6 @@ object CheckMediaTypeFlow:
           case e: UnsupportedMediaTypeException =>
             logger.error(
               s"Unsupported media type \"${dataAsset.asset.assetType.mediaType}\" for asset ${dataAsset.asset.fileName}")
-            (Right(InvalidAsset(dataAsset.asset, Some(e))), ctx)
+            (Right(InvalidAsset(dataAsset, e)), ctx)
         }
     }

@@ -12,16 +12,22 @@ import { assetIdOf } from "./cells.js"
 import { loadNextPage } from "./infinite-scroll.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
-// Pending load listeners per image element, removed when a newer `src` supersedes the load
-const pendingImageLoads = new WeakMap()
+// Pending load listeners per media element, removed when a newer `src` supersedes the load
+const pendingMediaLoads = new WeakMap()
 
-export function setImgSrcAndWait({ img, url }) {
-    pendingImageLoads.get(img)?.()
+/**
+ * Sets the element's `src` and resolves once it can be shown: an image once loaded, a video once
+ * its metadata (its size and duration) is in, so playback needs nothing more than the ranges the
+ * player asks for.
+ */
+export function setMediaSrcAndWait({ mediaEl, url }) {
+    pendingMediaLoads.get(mediaEl)?.()
+    const loadedEvent = mediaEl.tagName === "VIDEO" ? "loadedmetadata" : "load"
 
     return new Promise((resolve, reject) => {
         const onLoad = () => {
             cleanup()
-            resolve(img)
+            resolve(mediaEl)
         }
         const onError = (e) => {
             cleanup()
@@ -29,18 +35,25 @@ export function setImgSrcAndWait({ img, url }) {
         }
 
         const cleanup = () => {
-            pendingImageLoads.delete(img)
-            img.removeEventListener("load", onLoad)
-            img.removeEventListener("error", onError)
+            pendingMediaLoads.delete(mediaEl)
+            mediaEl.removeEventListener(loadedEvent, onLoad)
+            mediaEl.removeEventListener("error", onError)
         }
 
-        pendingImageLoads.set(img, cleanup)
-        img.addEventListener("load", onLoad, { once: true })
-        img.addEventListener("error", onError, { once: true })
+        pendingMediaLoads.set(mediaEl, cleanup)
+        mediaEl.addEventListener(loadedEvent, onLoad, { once: true })
+        mediaEl.addEventListener("error", onError, { once: true })
 
         // Important: set src AFTER listeners are attached
-        img.src = url
+        mediaEl.src = url
     })
+}
+
+/** Stops and unloads a video, so nothing keeps playing or downloading behind the next asset */
+function unloadVideo(videoEl) {
+    videoEl.pause()
+    videoEl.removeAttribute("src")
+    videoEl.load()
 }
 
 /**
@@ -57,9 +70,12 @@ export function setImgSrcAndWait({ img, url }) {
  * the walk in the group the user was looking at. A detail opened with no cell (a map pin) has
  * nowhere to step to.
  *
- * Every image request gets its own token. Only the latest request for the still-active
- * asset-detail open may change the image, box size, title, or loading state; superseded or
+ * Every media request gets its own token. Only the latest request for the still-active
+ * asset-detail open may change the media, box size, title, or loading state; superseded or
  * orphaned completions are ignored, and none can reopen a modal.
+ *
+ * The fragment holds an `<img>` and a `<video>`; the asset's media type decides which one is shown
+ * and loaded, and the other is hidden and unloaded. A video is paused when navigation moves on.
  */
 export function createSearchDetailCoordinator({ context }) {
     // The cell the modal shows, or is loading: where navigation starts from
@@ -150,12 +166,15 @@ export function createSearchDetailCoordinator({ context }) {
 
     /**
      * Makes `cellEl` (the cell the asset is shown in, or null for a detail opened from no cell) the
-     * navigation origin immediately, then loads the image. If the request is still current when
-     * the image arrives, applies the asset's size and title.
+     * navigation origin immediately, then loads the media into the element its type calls for,
+     * unloading the other. If the request is still current when the media is ready, applies the
+     * asset's size and title.
      */
-    async function showImage({
+    async function showMedia({
         openId,
         imgEl,
+        videoEl,
+        mediaType,
         url,
         title,
         width,
@@ -164,17 +183,28 @@ export function createSearchDetailCoordinator({ context }) {
         token = ++imageRequestToken,
     }) {
         const loading = Alpine.store(Const.state.imageDetailLoading)
-        // Navigation starts from the requested cell while its image is still loading.
+        // Navigation starts from the requested cell while its media is still loading.
         currentCell = cellEl
         loading.value = true
 
+        const isVideo = mediaType === "video"
+        const mediaEl = isVideo ? videoEl : imgEl
+        unloadVideo(videoEl)
+        if (!isVideo) {
+            videoEl.hidden = true
+        } else {
+            imgEl.removeAttribute("src")
+            imgEl.hidden = true
+        }
+
         try {
-            await setImgSrcAndWait({ img: imgEl, url })
+            await setMediaSrcAndWait({ mediaEl, url })
 
             if (!isCurrentImageRequest({ token, openId })) {
                 return
             }
 
+            mediaEl.hidden = false
             setAssetDetailSize({ width, height })
             Alpine.store(Const.state.modal).title = title
             loading.value = false
@@ -183,24 +213,31 @@ export function createSearchDetailCoordinator({ context }) {
                 return
             }
 
-            console.error("Error loading asset image", error)
+            console.error("Error loading asset media", error)
             loading.value = false
-            showErrorSnackBar("Could not load the image")
+            showErrorSnackBar(
+                isVideo
+                    ? "Could not load the video"
+                    : "Could not load the image",
+            )
         }
     }
 
     /**
      * Navigates the active asset-detail modal to `assetId`, shown by `cellEl`: fetches the asset's
-     * metadata, then its image. Both steps are skipped if the request is superseded or the modal
-     * goes away.
+     * metadata, then its media. Both steps are skipped if the request is superseded or the modal
+     * goes away. A playing video is paused first.
      */
     async function loadAssetDetail(assetId, cellEl) {
         const repoId = context.getRepoId()
         const imgEl = document.querySelector("#imageDetailModalContent img")
+        const videoEl = document.querySelector("#imageDetailModalContent video")
 
-        if (!imgEl || !isAssetDetailActive()) {
+        if (!imgEl || !videoEl || !isAssetDetailActive()) {
             return
         }
+
+        videoEl.pause()
 
         const openId = getModalOpenId()
         const token = ++imageRequestToken
@@ -229,9 +266,11 @@ export function createSearchDetailCoordinator({ context }) {
             return
         }
 
-        await showImage({
+        await showMedia({
             openId,
             imgEl,
+            videoEl,
+            mediaType: assetData.asset_type?.media_type,
             url: `/content/r/${repoId}/file/${assetId}`,
             title: assetData.file_name,
             width: assetData.width,
@@ -244,7 +283,7 @@ export function createSearchDetailCoordinator({ context }) {
     return {
         handleShowNext,
         handleShowPrevious,
-        showImage,
+        showMedia,
         loadAssetDetail,
     }
 }

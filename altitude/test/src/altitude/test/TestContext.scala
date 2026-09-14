@@ -139,9 +139,10 @@ class TestContext(val testApp: Altitude) {
     )
   }
 
+  /** An asset over a staged random image, the way an upload hands one to the pipeline */
   def makeAssetWithData(asset: Option[Asset] = None): AssetWithData = AssetWithData(
     asset = asset.getOrElse(makeAsset()),
-    data = generateRandomImagBytesBgr(dimensions = 150)
+    path = testApp.service.staging.stage(generateRandomImagBytesBgr(dimensions = 150))
   )
 
   def persistAsset(

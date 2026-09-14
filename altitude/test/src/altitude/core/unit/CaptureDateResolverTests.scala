@@ -48,6 +48,44 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     CaptureDateResolver.resolve(inputs(("GPS", "GPS Date Stamp", "2024:07:04")), ceiling) shouldBe None
   }
 
+  test("A video's container dates resolve: the phone's local creation date, then the UTC creation time in any zone") {
+    val expected = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
+    val local = ("QuickTime Metadata", "Creation Date", "2024-07-04T08:09:10+0200")
+    CaptureDateResolver.resolve(inputs(local), ceiling) shouldBe Some(
+      CaptureDate(expected, CaptureDateSource.QuickTimeCreationDate))
+
+    // metadata-extractor describes the container's UTC instant in the JVM's zone; the stored value is the UTC wall clock
+    List(
+      ("MP4 Video", "Thu Jul 04 04:09:10 -04:00 2024"),
+      ("QuickTime Video", "Thu Jul 04 10:09:10 +02:00 2024"),
+      ("MP4", "Thu Jul 04 04:09:10 EDT 2024"),
+      ("QuickTime", "Thu Jul 04 17:09:10 JST 2024"),
+      ("MP4", "Thu Jul 04 08:09:10 UTC 2024")
+    ).foreach {
+      case (directory, raw) =>
+        withClue(s"$directory: $raw") {
+          CaptureDateResolver.resolve(inputs((directory, "Creation Time", raw)), ceiling) shouldBe
+            Some(CaptureDate(expected, CaptureDateSource.ContainerCreationTime))
+        }
+    }
+
+    // The phone's local date outranks the container's UTC instant, which outranks GPS and the filename
+    val container = ("MP4", "Creation Time", "Thu Jul 04 04:09:10 EDT 2024")
+    CaptureDateResolver.resolve(inputs(local, container), ceiling).map(_.source) shouldBe Some(
+      CaptureDateSource.QuickTimeCreationDate)
+    val gps = List(("GPS", "GPS Date Stamp", "2024:07:05"), ("GPS", "GPS Time-Stamp", "01:00:00 UTC"))
+    CaptureDateResolver.resolve(inputs(container :: gps*), ceiling).map(_.source) shouldBe Some(
+      CaptureDateSource.ContainerCreationTime)
+    CaptureDateResolver
+      .resolve(inputs(("Exif SubIFD", "Date/Time Original", "2024:01:01 01:00:00"), local), ceiling)
+      .map(_.source) shouldBe
+      Some(CaptureDateSource.ExifOriginal)
+
+    // The container epoch is a sentinel, in whichever zone it is described
+    CaptureDateResolver.resolve(inputs(("MP4", "Creation Time", "Fri Jan 01 00:00:00 UTC 1904")), ceiling) shouldBe None
+    CaptureDateResolver.resolve(inputs(("MP4 Video", "Creation Time", "Thu Dec 31 19:00:00 -05:00 1903")), ceiling) shouldBe None
+  }
+
   test("The first plausible rung wins and diagnostics retain implausible parsed candidates") {
     val fields = List(
       ("Exif SubIFD", "Date/Time Original", "2024:01:01 01:00:00"),
@@ -56,8 +94,10 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
       ("XMP", "xmp:CreateDate", "2024-01-04T01:00:00Z"),
       ("IPTC", "Date Created", "2024:01:05"),
       ("PNG-tEXt", "Creation Time", "2024:01:06"),
-      ("PNG-tIME", "Last Modification Time", "2024:01:07 01:00:00"),
-      ("GPS", "GPS Date Stamp", "2024:01:08"),
+      ("QuickTime Metadata", "Creation Date", "2024-01-07T01:00:00+0100"),
+      ("PNG-tIME", "Last Modification Time", "2024:01:08 01:00:00"),
+      ("MP4", "Creation Time", "Tue Jan 09 01:00:00 UTC 2024"),
+      ("GPS", "GPS Date Stamp", "2024:01:10"),
       ("GPS", "GPS Time-Stamp", "01:00:00 UTC")
     )
     val expectedSources = CaptureDateSource.values.toList.filterNot(_ == CaptureDateSource.FileName)

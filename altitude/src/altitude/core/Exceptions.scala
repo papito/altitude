@@ -37,3 +37,6 @@ case class StorageException(msg: String) extends Exception(msg)
 case class GeocoderException(msg: String) extends Exception(msg)
 
 case class SamePersonDetectedTwiceException(msg: String) extends Exception(msg)
+
+/** A Video FFmpeg could not open, or a file it opened that has no video stream */
+case class VideoException(msg: String) extends Exception(msg)

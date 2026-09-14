@@ -54,6 +54,14 @@ object Util:
    */
   def humanReadableItemCount(count: Int): String = if count == 1 then "(1 item)" else s"($count items)"
 
+  /** A Video's length as a cell shows it, "m:ss" under an hour and "h:mm:ss" from there, rounded to the second */
+  def humanReadableDuration(durationMs: Long): String =
+    val totalSeconds = Math.round(Math.max(0L, durationMs) / 1000.0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    if hours > 0 then f"$hours:$minutes%02d:$seconds%02d" else f"$minutes:$seconds%02d"
+
   def humanReadableByteCount(bytes: Long): String =
     if bytes <= 0 then return "0 B"
 

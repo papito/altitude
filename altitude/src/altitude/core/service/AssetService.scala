@@ -1,8 +1,9 @@
 package altitude.core.service
 
 import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
+import org.opencv.core.MatOfByte
+import org.opencv.imgcodecs.Imgcodecs
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
@@ -93,17 +94,37 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   private def genPreviewData(dataAsset: AssetWithData): Array[Byte] =
     dataAsset.asset.assetType.mediaType match
       case "image" =>
-        makeImageThumbnail(dataAsset.data, C.AssetView.PREVIEW_BOX_PIXELS)
+        makeImageThumbnail(dataAsset.bytes, C.AssetView.PREVIEW_BOX_PIXELS)
+      case "video" =>
+        // The Preview of a Video is one of its Sampled frames, thumbnailed like an image
+        val frame = app.service.video.previewFrame(dataAsset.path, videoDuration(dataAsset))
+        val png = new MatOfByte()
+        Imgcodecs.imencode(".png", frame.image, png)
+        frame.image.release()
+        val bytes = png.toArray
+        png.release()
+        makeImageThumbnail(bytes, C.AssetView.PREVIEW_BOX_PIXELS)
       case _ => new Array[Byte](0)
 
-  def getDimensions(dataAsset: AssetWithData): (Int, Int) /* width, height */ =
+  /**
+   * The display size and, for a Video, the length, from one read of the file. A Video's size has the container's rotation
+   * applied, so a portrait phone recording is portrait.
+   */
+  def getDimensionsAndDuration(dataAsset: AssetWithData): (Int, Int, Option[Long]) /* width, height, duration */ =
     dataAsset.asset.assetType.mediaType match
       case "image" =>
-        val img: BufferedImage = ImageIO.read(new ByteArrayInputStream(dataAsset.data))
-        (img.getWidth, img.getHeight)
+        val img: BufferedImage = ImageIO.read(dataAsset.path.toFile)
+        (img.getWidth, img.getHeight, None)
+      case "video" =>
+        val info = app.service.video.probe(dataAsset.path)
+        (info.width, info.height, Some(info.durationMs))
       case _ =>
         // Default to 0, 0 for unsupported media types
-        (0, 0)
+        (0, 0, None)
+
+  /** A Video's length: the asset's once the pipeline has extracted it, else probed from the file */
+  def videoDuration(dataAsset: AssetWithData): Long =
+    dataAsset.asset.durationMs.getOrElse(app.service.video.probe(dataAsset.path).durationMs)
 
   def addPreview(dataAsset: AssetWithData): Option[MimedPreviewData] =
     val previewData: Array[Byte] = genPreviewData(dataAsset)

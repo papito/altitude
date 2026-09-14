@@ -76,7 +76,7 @@ For folders A (expanded) → B (expanded) → B1, then C (expanded) → C1 under
 
 ## Existing implementation
 
-- `altitude/static/js/common/asset-count.js` builds the `.asset-count` cell (`buildAssetCountEl`, `setAssetCount`) and
+- `../../altitude/static/js/common/asset-count.js` builds the `.asset-count` cell (`buildAssetCountEl`, `setAssetCount`) and
   sizes a list's count column (`sizeCountColumn`). `core.css` styles `.asset-count` dimmed and `justify-self: end`.
   `common/folder-tree.js`, `common/album-list.js`, and `common/location-list.js` place the count before the icon and
   call `sizeCountColumn` after each render and count patch.
@@ -107,9 +107,9 @@ For folders A (expanded) → B (expanded) → B1, then C (expanded) → C1 under
 
 ## Language
 
-`CONTEXT.md` needs no change. **Location** and **Category** already cover what these decisions refer to: a top-level
+`../../CONTEXT.md` needs no change. **Location** and **Category** already cover what these decisions refer to: a top-level
 Location and a Category are separate entities, and a Category holds no assets of its own. Expansion and group spacing
-are presentation terms and are documented in `altitude/views/AGENTS.md`.
+are presentation terms and are documented in `../../altitude/views/AGENTS.md`.
 
 ## Implementation tasks
 
@@ -176,11 +176,11 @@ are presentation terms and are documented in `altitude/views/AGENTS.md`.
 ### Unit D: documentation and verification
 
 8. **Update documentation and nearby comments.**
-   In `altitude/views/AGENTS.md`, update **Folder asset counts** (count after the name, no column sizing), **Folder
+   In `../../altitude/views/AGENTS.md`, update **Folder asset counts** (count after the name, no column sizing), **Folder
    tree expansion and viewed scope** (root is never marked; group spacing rule), **Albums** (row order), and
    **Locations** (nesting, the category button and badge, collapsed start and restored expansion, add behavior,
-   spacing), plus the Key Files entries for the three renderers and `asset-count.js`. In `altitude/AGENTS.md`, update
-   the `common/album-list.js` and Location entries that mention the count cell. Review root `AGENTS.md` for drift.
+   spacing), plus the Key Files entries for the three renderers and `asset-count.js`. In `../../altitude/AGENTS.md`, update
+   the `common/album-list.js` and Location entries that mention the count cell. Review root `../../AGENTS.md` for drift.
 
 9. **Compile, test, and verify in the browser.**
    Run `make test-controllers` for task 4 and `make compile`, then `mill altitude.resources` so the dev server serves

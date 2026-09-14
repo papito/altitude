@@ -23,6 +23,11 @@ object Const:
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
 
+    // How a Video is sampled for its Faces and its Preview, see reference.conf
+    val VIDEO_FACES_SAMPLE_INTERVAL_MS = "video.faces.sample_interval_ms"
+    val VIDEO_FACES_MAX_SAMPLED_FRAMES = "video.faces.max_sampled_frames"
+    val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
+
     // The map's basemap and the place-name search behind the Add Location dialog; both talk to third parties, see reference.conf
     val MAP_TILE_URL = "map.tile.url"
     val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
@@ -80,6 +85,7 @@ object Const:
     val FACE = "face"
     val FACES = "faces"
     val REPOSITORIES = "repositories"
+    val STAGING = "staging"
     val MODELS = "models"
 
   object PeopleTypeFilter:

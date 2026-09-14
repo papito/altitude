@@ -11,6 +11,7 @@ import altitude.core.unit.DynamicFilterTests
 import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
+import altitude.core.unit.MurmurHashTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RowColumnTests
 import altitude.core.unit.SearchQueryModelTests
@@ -19,6 +20,7 @@ import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.UrlServiceTests
 import altitude.core.unit.UtilTests
+import altitude.core.unit.VideoServiceTests
 
 abstract class AllUnitTestSuites
   extends Suites(
@@ -38,5 +40,7 @@ abstract class AllUnitTestSuites
     new SessionControllerTests,
     new BaseControllerTests,
     new UrlServiceTests,
-    new UtilTests
+    new UtilTests,
+    new MurmurHashTests,
+    new VideoServiceTests
   )
