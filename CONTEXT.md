@@ -69,3 +69,19 @@ _Avoid_: Keyframe.
 The moment within a Video, measured from its start, that a Face or the Preview
 was taken from.
 _Avoid_: Timestamp, Offset, Position.
+
+**Face quality**:
+How recognizable a detected face is: the norm of its raw embedding, higher is
+better. It drops with blur and occlusion and decides the face's tier.
+_Avoid_: Confidence, Score (the detector's), Sharpness.
+
+**Enrolled face**:
+A Face whose quality clears the enroll threshold: it may start a new Person and
+is a candidate when other faces are matched.
+_Avoid_: Good face, Reference face.
+
+**Match-only face**:
+A Face of lesser quality, or seen in too few Sampled frames of a Video: it may
+join a known Person but never starts one, is never a match candidate, and is
+dropped when it matches nobody.
+_Avoid_: Weak face, Low-quality face in user-facing text.

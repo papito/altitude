@@ -25,20 +25,30 @@ object TestVideos {
   val HEIGHT = 480
   val FPS = 10
 
+  /**
+   * Gaussian sigmas, in pixels, that put a face between the two quality thresholds of reference.conf (match-only) or below the
+   * floor (dropped). Blur only counts relative to the face: LIGHT_BLUR is about 5% of the 576 px face of `affleck.jpg`, and
+   * `CLIP_BLUR` about 8% of the same face once letterboxed into a frame; HEAVY_BLUR is about 9% of the 78 px face of
+   * `meme-ben.jpg`.
+   */
+  val LIGHT_BLUR = 30.0
+  val CLIP_BLUR = 12.0
+  val HEAVY_BLUR = 7.0
+
   Loader.load(classOf[opencv_java])
   avutil.av_log_set_level(avutil.AV_LOG_ERROR)
 
   /** A still, in BGR at the clip's size, held for a span of the clip */
   case class Scene(image: Mat, seconds: Double)
 
-  /** A `people/` image letterboxed on black */
-  def person(image: String, seconds: Double): Scene = Scene(personFrame(image), seconds)
+  /** A `people/` image letterboxed on black, Gaussian-blurred at `blurSigma` pixels of the frame when not zero */
+  def person(image: String, seconds: Double, blurSigma: Double = 0): Scene = Scene(personFrame(image, blurSigma), seconds)
 
   def black(seconds: Double): Scene = Scene(blackFrame(), seconds)
 
   def blackFrame(): Mat = Mat.zeros(HEIGHT, WIDTH, org.opencv.core.CvType.CV_8UC3)
 
-  def personFrame(image: String): Mat = {
+  def personFrame(image: String, blurSigma: Double = 0): Mat = {
     val path = getClass.getResource(s"/import/people/$image").getPath
     val still = Imgcodecs.imread(path, Imgcodecs.IMREAD_COLOR)
     if (still.empty()) throw new RuntimeException(s"Could not read $path")
@@ -47,6 +57,7 @@ object TestVideos {
     val scaled = new Mat()
     Imgproc.resize(still, scaled, new Size(), scale, scale, Imgproc.INTER_AREA)
     still.release()
+    if (blurSigma > 0) Imgproc.GaussianBlur(scaled, scaled, new Size(0, 0), blurSigma)
 
     val frame = blackFrame()
     val inset = new Rect((WIDTH - scaled.cols()) / 2, (HEIGHT - scaled.rows()) / 2, scaled.cols(), scaled.rows())
@@ -118,6 +129,19 @@ object TestVideos {
     java.util.Arrays.fill(bytes, mdat + 4, mdat - 4 + size, 0.toByte)
     Files.write(path, bytes)
     path
+  }
+
+  /** A `people/` image as a PNG on disk, Gaussian-blurred at `blurSigma` pixels when not zero, for an image import */
+  def still(image: String, blurSigma: Double = 0): Path = {
+    val path = getClass.getResource(s"/import/people/$image").getPath
+    val mat = Imgcodecs.imread(path, Imgcodecs.IMREAD_COLOR)
+    if (mat.empty()) throw new RuntimeException(s"Could not read $path")
+    if (blurSigma > 0) Imgproc.GaussianBlur(mat, mat, new Size(0, 0), blurSigma)
+    val file = Files.createTempFile(directory, "still", ".png")
+    file.toFile.deleteOnExit()
+    Imgcodecs.imwrite(file.toString, mat)
+    mat.release()
+    file
   }
 
   /** An audio file, for a container FFmpeg opens but that has no video stream */

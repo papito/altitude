@@ -33,7 +33,20 @@ import altitude.core.util.Util
     byId(inImage.persistedId) shouldBe None
   }
 
-  private def makeFace(frameTimeMs: Option[Long]): Face = Face(
+  test("A Face's quality and tier are stored and read back") {
+    val asset = testContext.persistAsset()
+    val person = testApp.service.person.addPerson(Person())
+    val matchOnly = testApp.service.person.addFace(makeFace(quality = 12.5, isEnrolled = false), asset, person)
+    val enrolled = testApp.service.person.addFace(makeFace(quality = 27.25, isEnrolled = true), asset, person)
+
+    val byId = testApp.service.person.getAssetFaces(asset.persistedId).map(face => face.persistedId -> face).toMap
+    byId(matchOnly.persistedId).quality shouldBe 12.5
+    byId(matchOnly.persistedId).isEnrolled shouldBe false
+    byId(enrolled.persistedId).quality shouldBe 27.25
+    byId(enrolled.persistedId).isEnrolled shouldBe true
+  }
+
+  private def makeFace(frameTimeMs: Option[Long] = None, quality: Double = 20.0, isEnrolled: Boolean = true): Face = Face(
     x1 = 1,
     y1 = 1,
     width = 10,
@@ -41,6 +54,8 @@ import altitude.core.util.Util
     detectionScore = 0.9,
     checksum = Random.nextInt(),
     features = Array.fill(512)(Random.nextFloat()),
+    quality = quality,
+    isEnrolled = isEnrolled,
     frameTimeMs = frameTimeMs
   )
 
@@ -412,7 +427,9 @@ import altitude.core.util.Util
       personLabel = Some(1),
       detectionScore = 0.99,
       checksum = Random.nextInt(),
-      features = Array.fill(128)(0.1f)
+      features = Array.fill(512)(0.1f),
+      quality = 20.0,
+      isEnrolled = true
     )
 
     testApp.service.person.addFace(face, triagedAsset, person)

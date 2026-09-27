@@ -5,40 +5,106 @@ import altitude.test.TestVideos
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
+import scala.util.Random
+
 import altitude.core.Altitude
 import altitude.core.models.Asset
+import altitude.core.models.Face
 import altitude.core.models.Person
+import altitude.core.service.FaceDetectionService
+import altitude.core.service.FaceRecognitionService
 
 @DoNotDiscover class FaceRecognitionServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Recognize a person") {
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
-    val importedAsset1: Asset = testApp.service.library.addImportAsset(importAsset1)
+    testApp.service.library.addImportAsset(importAsset1)
     val (face1, faceImages) = testApp.service.faceDetection.extractFaces(importAsset1.bytes).head
     faceImages.image should not be empty
     faceImages.displayImage should not be empty
     faceImages.alignedImage should not be empty
     faceImages.alignedImageGs should not be empty
-    val recognizedPerson: Person = testApp.service.faceRecognition.recognizeFace(face1, importedAsset1)
+    val recognizedPerson: Person = testApp.service.faceRecognition.recognizeFace(face1).value
 
     // Recognize
     val importAsset2 = IntegrationTestUtil.getImportAsset("people/meme-ben3.png")
-    val importedAsset2: Asset = testApp.service.library.addImportAsset(importAsset2)
+    testApp.service.library.addImportAsset(importAsset2)
     val (face2, _) = testApp.service.faceDetection.extractFaces(importAsset2.bytes).head
 
-    val samePerson: Person = testApp.service.faceRecognition.recognizeFace(face2, importedAsset2)
+    val samePerson: Person = testApp.service.faceRecognition.recognizeFace(face2).value
     samePerson.persistedId shouldBe recognizedPerson.persistedId
 
     val persistedPerson = testApp.service.person.getPersonById(recognizedPerson.persistedId)
     persistedPerson.numOfFaces should be(2)
   }
 
-  test("One person in a clip gives one Face, with a Frame time inside the clip") {
+  test("Only enrolled Faces of people who are not a bad match are match candidates, for either tier of query") {
+    val asset = testContext.persistAsset()
+    val vector = unitVector(1)
+    val enrolled = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(enrolled, asset, vector)
+    val matchOnly = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(matchOnly, asset, vector, isEnrolled = false)
+    val badMatch = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(badMatch, asset, vector)
+    testApp.service.person.markAsBadMatch(badMatch)
+
+    testApp.service.faceRecognition
+      .recognizeFace(query(vector, isEnrolled = true))
+      .value
+      .persistedId shouldBe enrolled.persistedId
+    testApp.service.faceRecognition
+      .recognizeFace(query(vector, isEnrolled = false))
+      .value
+      .persistedId shouldBe enrolled.persistedId
+  }
+
+  test("With no candidate, an enrolled Face starts a Person and a match-only Face is nobody's") {
+    val asset = testContext.persistAsset()
+    val vector = unitVector(2)
+    val matchOnly = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(matchOnly, asset, vector, isEnrolled = false)
+
+    testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = false)) shouldBe None
+    val started = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+    started.persistedId should not be matchOnly.persistedId
+  }
+
+  test("A tied vote goes to the closest Face") {
+    val asset = testContext.persistAsset()
+    val vector = unitVector(3)
+    val nearby = FaceRecognitionService.meanNormalized(Seq(vector, unitVector(4)))
+    val personAtVector = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(personAtVector, asset, vector)
+    val personNearby = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(personNearby, asset, nearby)
+
+    testApp.service.faceRecognition
+      .recognizeFace(query(vector, isEnrolled = true))
+      .value
+      .persistedId shouldBe personAtVector.persistedId
+    testApp.service.faceRecognition
+      .recognizeFace(query(nearby, isEnrolled = true))
+      .value
+      .persistedId shouldBe personNearby.persistedId
+  }
+
+  test("A match-only face of nobody leaves neither a Person nor a Face behind") {
+    val blurred: Asset = testApp.service.library.addImportAsset(
+      IntegrationTestUtil.fileToImportAsset(TestVideos.still("affleck.jpg", TestVideos.LIGHT_BLUR).toFile))
+
+    testApp.service.person.getAssetFaces(blurred.persistedId) shouldBe empty
+    testApp.service.person.getPeopleForAsset(blurred.persistedId) shouldBe empty
+    testApp.service.person.getAll shouldBe empty
+  }
+
+  test("One person in a clip gives one enrolled Face, with a Frame time inside the clip") {
     val clip: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.oneFace.toFile))
 
     val faces = testApp.service.person.getAssetFaces(clip.persistedId)
     faces.size should be(1)
     faces.head.frameTimeMs.value should ((be >= 0L).and(be <= clip.durationMs.value))
+    faces.head.isEnrolled should be(true)
     testApp.service.person.getPeopleForAsset(clip.persistedId).size should be(1)
   }
 
@@ -68,6 +134,39 @@ import altitude.core.models.Person
     testApp.service.person.getPersonById(people.head.head.persistedId).numOfFaces should be(3)
   }
 
+  test("A person seen in only one Sampled frame does not start a Person") {
+    // Sampled at 0, 1000 and 2000 ms, so the person is in the first frame only
+    val clip: Asset = testApp.service.library.addImportAsset(
+      IntegrationTestUtil.fileToImportAsset(
+        TestVideos.clip(Seq(TestVideos.person("bullock.jpg", 0.5), TestVideos.black(2.5))).toFile))
+
+    testApp.service.person.getAssetFaces(clip.persistedId) shouldBe empty
+    testApp.service.person.getAll shouldBe empty
+  }
+
+  test("A person seen in only one Sampled frame still joins a known person, as a match-only Face") {
+    val photo: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/affleck.jpg"))
+    val clip: Asset = testApp.service.library.addImportAsset(
+      IntegrationTestUtil.fileToImportAsset(
+        TestVideos.clip(Seq(TestVideos.person("affleck.jpg", 0.5), TestVideos.black(2.5))).toFile))
+
+    val faces = testApp.service.person.getAssetFaces(clip.persistedId)
+    faces.size should be(1)
+    faces.head.isEnrolled should be(false)
+    val person = testApp.service.person.getPeopleForAsset(photo.persistedId).head
+    faces.head.personId.value shouldBe person.persistedId
+    testApp.service.person.getPersonById(person.persistedId).numOfFaces should be(2)
+  }
+
+  test("A clip of only a blurred face starts no Person") {
+    val clip: Asset = testApp.service.library.addImportAsset(
+      IntegrationTestUtil.fileToImportAsset(
+        TestVideos.clip(Seq(TestVideos.person("affleck.jpg", 3, TestVideos.CLIP_BLUR))).toFile))
+
+    testApp.service.person.getAssetFaces(clip.persistedId) shouldBe empty
+    testApp.service.person.getAll shouldBe empty
+  }
+
   test("Recognize two new people") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
@@ -75,4 +174,23 @@ import altitude.core.models.Person
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
     people.size should be(2)
   }
+
+  /** A reproducible unit vector; two seeds give vectors about a cosine distance of 1 apart */
+  private def unitVector(seed: Int): Array[Float] =
+    val random = new Random(seed)
+    FaceRecognitionService.meanNormalized(
+      Seq(Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(random.nextGaussian().toFloat)))
+
+  /** An unsaved detection with the given embedding, as recognition receives it */
+  private def query(features: Array[Float], isEnrolled: Boolean): Face =
+    Face(
+      x1 = 0,
+      y1 = 0,
+      width = 10,
+      height = 10,
+      detectionScore = 0.9,
+      checksum = Random.nextInt(),
+      features = features,
+      quality = 20.0,
+      isEnrolled = isEnrolled)
 }

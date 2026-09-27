@@ -133,10 +133,15 @@ CREATE TABLE face (
   features vector NOT NULL,
   checksum INT NOT NULL,
   -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
-  frame_time_ms BIGINT
+  frame_time_ms BIGINT,
+  -- L2 norm of the raw ArcFace embedding: higher is a more recognizable face. See face.quality.* in reference.conf.
+  quality FLOAT NOT NULL,
+  -- An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join one.
+  is_enrolled BOOLEAN NOT NULL
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX face_01 ON face (repository_id, checksum);
+-- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo)
+CREATE UNIQUE INDEX face_01 ON face (repository_id, asset_id, checksum);
 CREATE INDEX face_02 ON face (person_id, detection_score);
 
 CREATE TABLE metadata_field (

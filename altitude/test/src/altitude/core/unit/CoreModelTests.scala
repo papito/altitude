@@ -60,10 +60,15 @@ import altitude.core.util.JsonCodec.given
       detectionScore = 0.5,
       checksum = 7,
       features = Array(0.1f),
+      quality = 21.5,
+      isEnrolled = false,
       frameTimeMs = Some(1500L))
     face.toJson("frame_time_ms").num should be(1500)
     (face.toJson: Face).frameTimeMs should be(Some(1500L))
     (face.copy(frameTimeMs = None).toJson: Face).frameTimeMs should be(None)
+    face.toJson("quality").num should be(21.5)
+    face.toJson("is_enrolled").bool should be(false)
+    (face.toJson: Face).isEnrolled should be(false)
   }
 
   test("The device model comes from EXIF, or from a phone video's QuickTime keys when EXIF has none") {

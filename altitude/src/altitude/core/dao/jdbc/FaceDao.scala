@@ -31,6 +31,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       detectionScore = row.detectionScore,
       features = Array[Float](),
       checksum = row.checksum,
+      quality = row.quality,
+      isEnrolled = row.isEnrolled,
       frameTimeMs = row.frameTimeMs
     )
 
@@ -46,6 +48,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       detectionScore = rec(FieldConst.Face.DETECTION_SCORE).asInstanceOf[Double],
       features = Array[Float](),
       checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int],
+      quality = rec(FieldConst.Face.QUALITY).asInstanceOf[Double],
+      isEnrolled = getBooleanField(rec(FieldConst.Face.IS_ENROLLED)),
       frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS))
     )
 

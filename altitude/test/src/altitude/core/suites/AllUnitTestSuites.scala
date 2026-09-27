@@ -8,6 +8,7 @@ import altitude.core.unit.CaptureDateResolverTests
 import altitude.core.unit.CoreModelTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
+import altitude.core.unit.FaceClusteringTests
 import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
@@ -25,6 +26,7 @@ import altitude.core.unit.VideoServiceTests
 abstract class AllUnitTestSuites
   extends Suites(
     new CoreModelTests,
+    new FaceClusteringTests,
     new CaptureDateResolverTests,
     new FolderModelTests,
     new GeoLocationResolverTests,

@@ -1,11 +1,16 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestVideos
+import java.nio.file.Files
+import org.opencv.core.Mat
+import org.opencv.core.Size
+import org.opencv.imgproc.Imgproc
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.be
-import org.scalatest.matchers.should.Matchers.should
+import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
+import altitude.core.util.ImageUtil.matFromBytes
 
 @DoNotDiscover class FaceDetectionTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -44,4 +49,42 @@ import altitude.core.Altitude
     val faces = testApp.service.faceDetection.extractFaces(importAsset.bytes, Some(importAsset.fileName))
     faces.length should be(1)
   }
+
+  test("A blurred copy of a portrait has a lower embedding norm than the sharp one") {
+    val sharp = matFromBytes(IntegrationTestUtil.getImportAsset("people/affleck.jpg").bytes)
+    val blurred = new Mat()
+    // Relative to the 576 px face; a blur small against the face disappears in the 112 px alignment
+    Imgproc.GaussianBlur(sharp, blurred, new Size(0, 0), TestVideos.LIGHT_BLUR)
+
+    embeddingNorm(sharp) should be > embeddingNorm(blurred)
+  }
+
+  test("A sharp portrait is enrolled") {
+    val face = testApp.service.faceDetection.extractFaces(IntegrationTestUtil.getImportAsset("people/affleck.jpg").bytes).head._1
+    face.quality should be > 0.0
+    face.isEnrolled should be(true)
+  }
+
+  test("A blurred face is kept as match-only") {
+    val bytes = Files.readAllBytes(TestVideos.still("affleck.jpg", TestVideos.LIGHT_BLUR))
+    testApp.service.faceDetection.detectFacesWithYunet(matFromBytes(bytes)).size should be(1)
+
+    val faces = testApp.service.faceDetection.extractFaces(bytes)
+    faces.size should be(1)
+    faces.head._1.isEnrolled should be(false)
+  }
+
+  test("A heavily blurred face is detected but not kept") {
+    val bytes = Files.readAllBytes(TestVideos.still("meme-ben.jpg", TestVideos.HEAVY_BLUR))
+    // Detected, so an empty result below is the quality floor at work rather than YuNet giving up
+    testApp.service.faceDetection.detectFacesWithYunet(matFromBytes(bytes)).size should be(1)
+
+    testApp.service.faceDetection.extractFaces(bytes) shouldBe empty
+  }
+
+  /** The norm of the raw ArcFace embedding of the first face YuNet finds in the image */
+  private def embeddingNorm(image: Mat): Float =
+    val detection = testApp.service.faceDetection.detectFacesWithYunet(image).head
+    val aligned = testApp.service.faceDetection.alignCropFaceFromDetection(image, detection)
+    testApp.service.faceDetection.getArcFaceEmbedding(aligned).norm
 }

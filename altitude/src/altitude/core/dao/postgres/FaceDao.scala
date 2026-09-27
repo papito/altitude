@@ -4,6 +4,7 @@ import com.typesafe.config.Config
 import java.sql.PreparedStatement
 import java.sql.Types
 
+import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
@@ -27,8 +28,9 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       s"""
         INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
                           ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.DETECTION_SCORE},
-                          ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM}, ${FieldConst.Face.FRAME_TIME_MS})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?, ?)
+                          ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM}, ${FieldConst.Face.FRAME_TIME_MS},
+                          ${FieldConst.Face.QUALITY}, ${FieldConst.Face.IS_ENROLLED})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?, ?, ?, ?)
     """
 
     val conn = RequestContext.getConn
@@ -48,6 +50,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     face.frameTimeMs match
       case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
       case None => preparedStatement.setNull(12, Types.BIGINT)
+    preparedStatement.setDouble(13, face.quality)
+    preparedStatement.setBoolean(14, face.isEnrolled)
 
     preparedStatement.execute()
 
@@ -56,19 +60,22 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
     val featuresStr = toVectorString(features)
 
+    // face.* rather than *: the join would put the person's id and dates into the row map under the same keys
     val sql =
       """
-        SELECT *,
-               features <=> ?::vector AS distance
-        FROM face
-        WHERE repository_id = ?
-          AND features <=> ?::vector < ?
-        ORDER BY features <=> ?::vector
+        SELECT face.*,
+               face.features <=> ?::vector AS distance
+        FROM face JOIN person ON person.id = face.person_id
+        WHERE face.repository_id = ?
+          AND face.is_enrolled = TRUE
+          AND person.is_bad_match = FALSE
+          AND face.features <=> ?::vector < ?
+        ORDER BY face.features <=> ?::vector
         LIMIT ?;
         """
 
-    val matchCount = config.getInt("face.recognition.match_count")
-    val threshold = config.getDouble("face.recognition.cosine_distance_threshold")
+    val matchCount = config.getInt(Const.Conf.FACE_RECOGNITION_MATCH_COUNT)
+    val threshold = config.getDouble(Const.Conf.FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD)
 
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(

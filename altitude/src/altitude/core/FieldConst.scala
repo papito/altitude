@@ -43,6 +43,8 @@ object FieldConst:
     val DETECTION_SCORE = "detection_score"
     val FEATURES = "features"
     val CHECKSUM = "checksum"
+    val QUALITY = "quality"
+    val IS_ENROLLED = "is_enrolled"
     val FRAME_TIME_MS = "frame_time_ms"
 
   object Person:

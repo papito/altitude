@@ -23,6 +23,10 @@ case class Face(
     detectionScore: Double,
     checksum: Int,
     features: Array[Float],
+    // The L2 norm of the raw ArcFace embedding: how recognizable the face is, higher is better
+    quality: Double,
+    // An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join a Person
+    isEnrolled: Boolean,
     // The Frame time the crop and box were taken from, for a Face in a Video; None for a Face in an image
     frameTimeMs: Option[Long] = None)
   extends BaseModel:
@@ -33,7 +37,8 @@ case class Face(
   override val updatedAt: Option[LocalDateTime] = None
 
   override def toString: String =
-    s"FACE $id. Label: $personLabel. Score: $detectionScore, ${width}x$height at ($x1, $y1)${frameTimeMs.map(t => s" at $t ms").getOrElse("")}"
+    f"FACE $id. Label: $personLabel. Score: $detectionScore, quality $quality%.1f ${if isEnrolled then "enrolled" else "match-only"}, " +
+      s"${width}x$height at ($x1, $y1)${frameTimeMs.map(t => s" at $t ms").getOrElse("")}"
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Face]
 
