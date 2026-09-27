@@ -27,12 +27,11 @@ object TestVideos {
 
   /**
    * Gaussian sigmas, in pixels, that put a face between the two quality thresholds of reference.conf (match-only) or below the
-   * floor (dropped). Blur only counts relative to the face: LIGHT_BLUR is about 5% of the 576 px face of `affleck.jpg`, and
-   * `CLIP_BLUR` about 8% of the same face once letterboxed into a frame; HEAVY_BLUR is about 9% of the 78 px face of
-   * `meme-ben.jpg`.
+   * floor (dropped). Blur only counts relative to the face: FRAME_BLUR is about 8% of the 160 px face of `affleck.jpg` once
+   * letterboxed into a frame (`personFrame`, `frameStill`, `person`), HEAVY_BLUR about 9% of the 79 px face of `meme-ben.jpg` at
+   * its own size (`still`). Both keep the detector above its confidence floor.
    */
-  val LIGHT_BLUR = 30.0
-  val CLIP_BLUR = 12.0
+  val FRAME_BLUR = 12.0
   val HEAVY_BLUR = 7.0
 
   Loader.load(classOf[opencv_java])
@@ -131,12 +130,19 @@ object TestVideos {
     path
   }
 
-  /** A `people/` image as a PNG on disk, Gaussian-blurred at `blurSigma` pixels when not zero, for an image import */
+  /** A `people/` image at its own size as a PNG on disk, Gaussian-blurred at `blurSigma` pixels when not zero */
   def still(image: String, blurSigma: Double = 0): Path = {
     val path = getClass.getResource(s"/import/people/$image").getPath
     val mat = Imgcodecs.imread(path, Imgcodecs.IMREAD_COLOR)
     if (mat.empty()) throw new RuntimeException(s"Could not read $path")
     if (blurSigma > 0) Imgproc.GaussianBlur(mat, mat, new Size(0, 0), blurSigma)
+    writePng(mat)
+  }
+
+  /** A `people/` image letterboxed like a frame of a clip, as a PNG on disk, so a still and a clip share one face size */
+  def frameStill(image: String, blurSigma: Double = 0): Path = writePng(personFrame(image, blurSigma))
+
+  private def writePng(mat: Mat): Path = {
     val file = Files.createTempFile(directory, "still", ".png")
     file.toFile.deleteOnExit()
     Imgcodecs.imwrite(file.toString, mat)

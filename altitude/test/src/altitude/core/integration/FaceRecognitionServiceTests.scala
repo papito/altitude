@@ -91,7 +91,7 @@ import altitude.core.service.FaceRecognitionService
 
   test("A match-only face of nobody leaves neither a Person nor a Face behind") {
     val blurred: Asset = testApp.service.library.addImportAsset(
-      IntegrationTestUtil.fileToImportAsset(TestVideos.still("affleck.jpg", TestVideos.LIGHT_BLUR).toFile))
+      IntegrationTestUtil.fileToImportAsset(TestVideos.frameStill("affleck.jpg", TestVideos.FRAME_BLUR).toFile))
 
     testApp.service.person.getAssetFaces(blurred.persistedId) shouldBe empty
     testApp.service.person.getPeopleForAsset(blurred.persistedId) shouldBe empty
@@ -161,7 +161,7 @@ import altitude.core.service.FaceRecognitionService
   test("A clip of only a blurred face starts no Person") {
     val clip: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(
-        TestVideos.clip(Seq(TestVideos.person("affleck.jpg", 3, TestVideos.CLIP_BLUR))).toFile))
+        TestVideos.clip(Seq(TestVideos.person("affleck.jpg", 3, TestVideos.FRAME_BLUR))).toFile))
 
     testApp.service.person.getAssetFaces(clip.persistedId) shouldBe empty
     testApp.service.person.getAll shouldBe empty

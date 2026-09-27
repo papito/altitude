@@ -4,8 +4,6 @@ import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
 import java.nio.file.Files
 import org.opencv.core.Mat
-import org.opencv.core.Size
-import org.opencv.imgproc.Imgproc
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
@@ -51,12 +49,9 @@ import altitude.core.util.ImageUtil.matFromBytes
   }
 
   test("A blurred copy of a portrait has a lower embedding norm than the sharp one") {
-    val sharp = matFromBytes(IntegrationTestUtil.getImportAsset("people/affleck.jpg").bytes)
-    val blurred = new Mat()
-    // Relative to the 576 px face; a blur small against the face disappears in the 112 px alignment
-    Imgproc.GaussianBlur(sharp, blurred, new Size(0, 0), TestVideos.LIGHT_BLUR)
-
-    embeddingNorm(sharp) should be > embeddingNorm(blurred)
+    // The same letterboxed frame sharp and blurred; a blur small against the face disappears in the 112 px alignment
+    embeddingNorm(TestVideos.personFrame("affleck.jpg")) should be > embeddingNorm(
+      TestVideos.personFrame("affleck.jpg", TestVideos.FRAME_BLUR))
   }
 
   test("A sharp portrait is enrolled") {
@@ -66,7 +61,7 @@ import altitude.core.util.ImageUtil.matFromBytes
   }
 
   test("A blurred face is kept as match-only") {
-    val bytes = Files.readAllBytes(TestVideos.still("affleck.jpg", TestVideos.LIGHT_BLUR))
+    val bytes = Files.readAllBytes(TestVideos.frameStill("affleck.jpg", TestVideos.FRAME_BLUR))
     testApp.service.faceDetection.detectFacesWithYunet(matFromBytes(bytes)).size should be(1)
 
     val faces = testApp.service.faceDetection.extractFaces(bytes)

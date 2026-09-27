@@ -14,12 +14,12 @@ Out of scope: a dedicated face image quality model, merge suggestions between pe
 
 `FaceDetectionService.getArcFaceEmbedding` returns an `Embedding`: the L2-normalized ArcFace vector and the norm the raw
 output had before normalization. The norm is the face's quality, stored as `face.quality`. On the test portraits, sharp
-faces measure 19 to 22, the same faces blurred at 5% of their width 15 to 19.6, at 8% 14 to 17, eyes covered 16 to
+faces measure 18.8 to 22.4, the same faces blurred at 5% of their width 15 to 19.6, at 8% 14 to 17, eyes covered 16 to
 19.5. The thresholds in `reference.conf` are calibrated on those fixtures:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `face.quality.enroll_threshold` | 18.5 | At least this to start a Person and be a match candidate |
+| `face.quality.enroll_threshold` | 18.0 | At least this to start a Person and be a match candidate |
 | `face.quality.keep_threshold` | 15.0 | At least this to be stored at all |
 | `video.faces.min_cluster_frames` | 2 | Fewer distinct Sampled frames than this makes a Video's Face match-only |
 
@@ -54,8 +54,8 @@ higher-quality cluster winning.
 
 ## Tests
 
-- `FaceDetectionTests`: a face-relative blur lowers the norm; sharp is enrolled, `TestVideos.LIGHT_BLUR` is match-only,
-  `HEAVY_BLUR` is detected but dropped.
+- `FaceDetectionTests`: a face-relative blur lowers the norm; sharp is enrolled, a letterboxed frame at
+  `TestVideos.FRAME_BLUR` is match-only, `meme-ben.jpg` at `HEAVY_BLUR` is detected but dropped.
 - `FaceRecognitionServiceTests`: candidate eligibility, tie-break and the no-candidate rule on known vectors
   (`TestContext.addTestFace`); a blurred photo or clip of nobody leaves nothing; one frame of a clip starts no Person but
   joins a known one; the same person across clips and a photo is one Person.

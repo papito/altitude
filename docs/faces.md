@@ -30,10 +30,12 @@ column: on SQLite it loads the `sqlite-vector` extension and runs `vector_init('
 returns a `(Face, FaceImages)` per face it keeps.
 
 1. **YuNet** (`resources/opencv/face_detection_yunet_2023mar.onnx`, OpenCV `FaceDetectorYN`, one instance per thread)
-   finds faces. The image is downscaled to fit `face.detection.bounding_box_size` (960 px) first and the boxes and
-   landmarks scaled back; the score is not. A detection needs a score of at least `face.yunet.confidence_threshold`
-   (0.80, applied inside the detector with NMS `face.yunet.nms_threshold`) and a box, clamped to the image, of at least
-   `face.detection.min_face_size` (50 px) each way. An image whose smaller side is under that size is skipped.
+   finds faces. The image is downscaled to fit `face.detection.bounding_box_size` (1280 px) first and the boxes and
+   landmarks scaled back; the score is not, so that size decides how small a face in a 12 to 48 MP photo can be found.
+   A detection needs a score of at least `face.yunet.confidence_threshold` (0.85, applied inside the detector with NMS
+   `face.yunet.nms_threshold`, 0.3, OpenCV's default; tighter and one of two cheek-to-cheek faces is suppressed) and a
+   box, clamped to the image, of at least `face.detection.min_face_size` (50 px) each way. An image whose smaller side
+   is under that size is skipped.
 2. **Alignment**: the five YuNet landmarks (eyes, nose, mouth corners) are warped by a similarity transform
    (`Calib3d.estimateAffinePartial2D`) onto the ArcFace 112×112 reference template (`ARCFACE_REF_LANDMARKS_112`,
    `alignCropFaceFromDetection`).
@@ -42,10 +44,10 @@ returns a `(Face, FaceImages)` per face it keeps.
    is compared by cosine distance, and the **norm** the raw output had before normalization.
 4. **Quality** is that norm (`Face.quality`). For a net trained with the ArcFace loss the norm tracks how
    recognizable a face was: it drops with blur and occlusion, and it costs nothing extra. It does not respond to low
-   resolution, and sharp faces differ by identity. On the test portraits sharp faces measure 19 to 22, the same faces
+   resolution, and sharp faces differ by identity. On the test portraits sharp faces measure 18.8 to 22.4, the same faces
    blurred at 5% of their width 15 to 19.6, eyes covered 16 to 19.5. Blur only counts relative to the face: the
    112 px alignment hides any blur small against a large face.
-5. **Tier**: `Face.isEnrolled` is `quality >= face.quality.enroll_threshold` (18.5). A detection under
+5. **Tier**: `Face.isEnrolled` is `quality >= face.quality.enroll_threshold` (18.0). A detection under
    `face.quality.keep_threshold` (15.0) is dropped here, after the debug dump, with an INFO log.
 6. **Crops** (`FaceImages`): the raw crop as PNG, an 80 px display thumbnail, the aligned 112×112 colour crop and a
    histogram-equalized grayscale copy of it. The Face's `checksum` is `MurmurHash.hash32` of the raw crop PNG.
@@ -60,7 +62,7 @@ one's own files.
 
 `FaceRecognitionService.recognizeFace(face): Option[Person]` finds the Person for an unsaved Face:
 
-1. `FaceDao.searchClosestFaceMatches` returns the `face.recognition.match_count` (3) nearest stored Faces within
+1. `FaceDao.searchClosestFaceMatches` returns the `face.recognition.match_count` (5) nearest stored Faces within
    `face.recognition.cosine_distance_threshold` (0.55), in distance order. The SQL is hand-written per engine
    (pgvector `<=>`, or `vector_full_scan` on SQLite; neither has a vector index, so it is an exact scan of the
    repository) and sees only **enrolled** Faces of people who are **not a bad match**. Hidden people stay matchable:
@@ -136,13 +138,13 @@ The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilte
 
 | Key | Default | Meaning |
 |---|---|---|
-| `face.yunet.confidence_threshold` | 0.80 | Detector score floor |
-| `face.yunet.nms_threshold` | 0.2 | Detector non-maximum suppression |
-| `face.detection.bounding_box_size` | 960 | Detection runs on the image downscaled to fit this |
+| `face.yunet.confidence_threshold` | 0.85 | Detector score floor; a non-face rarely scores this, a sharp face 0.91 to 0.95 |
+| `face.yunet.nms_threshold` | 0.3 | Detector non-maximum suppression, OpenCV's default |
+| `face.detection.bounding_box_size` | 1280 | Detection runs on the image downscaled to fit this |
 | `face.detection.min_face_size` | 50 | Smallest face box, in original pixels |
 | `face.recognition.cosine_distance_threshold` | 0.55 | Two embeddings closer than this are the same person, in the index and within a Video |
-| `face.recognition.match_count` | 3 | Nearest candidates that vote |
-| `face.quality.enroll_threshold` | 18.5 | Quality to start a Person and be a candidate |
+| `face.recognition.match_count` | 5 | Nearest candidates that vote |
+| `face.quality.enroll_threshold` | 18.0 | Quality to start a Person and be a candidate |
 | `face.quality.keep_threshold` | 15.0 | Quality to be stored at all |
 | `face.debug.enabled` | false | Write the debug artifacts above |
 | `video.faces.sample_interval_ms` | 1000 | Spacing of Sampled frames |
@@ -152,7 +154,7 @@ The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilte
 ## Tests
 
 [FaceDetectionTests](../altitude/test/src/altitude/core/integration/FaceDetectionTests.scala) covers detection on the
-`people/` fixtures and the tiers on blurred copies (`TestVideos.still`, `LIGHT_BLUR`, `HEAVY_BLUR`);
+`people/` fixtures and the tiers on blurred copies (`TestVideos.frameStill` at `FRAME_BLUR`, `still` at `HEAVY_BLUR`);
 [FaceRecognitionServiceTests](../altitude/test/src/altitude/core/integration/FaceRecognitionServiceTests.scala) covers
 candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`), and the
 Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);

@@ -89,11 +89,11 @@ A Video is an asset whose `media_type` is `video` (there is no flag column); `Li
 
 The full walk-through, from detection to the People tab, is [docs/faces.md](../docs/faces.md).
 
-A Face is a YuNet detection (`FaceDetectionService.detectFacesWithYunet`: score at least `face.yunet.confidence_threshold`, box at least `face.detection.min_face_size`) with a 5-point-aligned 112 px crop and its ArcFace w600k_r50 embedding (`getArcFaceEmbedding`, an `Embedding` of the L2-normalized 512-d vector and the norm the raw output had). That norm is the Face's **quality** (`face.quality`): for a net trained with the ArcFace loss it tracks how recognizable the face was, dropping with blur and occlusion, and it costs nothing extra. On the test portraits sharp faces measure 19 to 22, the same faces blurred at 5% of their width 15 to 19.6, eyes covered 16 to 19.5; the numbers are commented in `reference.conf` and `face.debug.enabled` labels every crop with its quality for calibrating on one's own files.
+A Face is a YuNet detection (`FaceDetectionService.detectFacesWithYunet`: score at least `face.yunet.confidence_threshold`, box at least `face.detection.min_face_size`) with a 5-point-aligned 112 px crop and its ArcFace w600k_r50 embedding (`getArcFaceEmbedding`, an `Embedding` of the L2-normalized 512-d vector and the norm the raw output had). That norm is the Face's **quality** (`face.quality`): for a net trained with the ArcFace loss it tracks how recognizable the face was, dropping with blur and occlusion, and it costs nothing extra. On the test portraits sharp faces measure 18.8 to 22.4, the same faces blurred at 5% of their width 15 to 19.6, eyes covered 16 to 19.5; the numbers are commented in `reference.conf` and `face.debug.enabled` labels every crop with its quality for calibrating on one's own files.
 
 Quality decides a Face's **tier**, stored as `face.is_enrolled` at import so a later change of the thresholds does not silently re-tier history:
 
-- **Enrolled** (quality at least `face.quality.enroll_threshold`, default 18.5): may start a new Person and is a candidate in the vector search.
+- **Enrolled** (quality at least `face.quality.enroll_threshold`, default 18.0): may start a new Person and is a candidate in the vector search.
 - **Match-only** (at least `face.quality.keep_threshold`, default 15, or a video cluster with too little support): may join an existing Person but never starts one and is never a candidate. A match-only Face that matches nobody is dropped, not stored (`FaceRecognitionService.recognizeFace` returns `None`).
 - Below `keep_threshold` the detection is dropped by `extractFaces`, after the debug dump.
 
