@@ -14,6 +14,7 @@ import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
 import altitude.core.unit.MurmurHashTests
 import altitude.core.unit.PersonModelTests
+import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
 import altitude.core.unit.SearchQueryModelTests
 import altitude.core.unit.SearchSqlTests
@@ -44,5 +45,6 @@ abstract class AllUnitTestSuites
     new UrlServiceTests,
     new UtilTests,
     new MurmurHashTests,
-    new VideoServiceTests
+    new VideoServiceTests,
+    new RangeStreamingTests
   )

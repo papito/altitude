@@ -3,7 +3,7 @@ import { getModalOpenSource, ModalHost, openModal } from "../common/modal.js"
 /**
  * Asset detail fragment (`data-app-fragment="image-detail"`): opens the asset-detail host right
  * away, with its loading indicator, and hands the media load to the detail coordinator, which
- * shows the fragment's `<img>` or its `<video>` by the asset's media type. The coordinator only
+ * shows the fragment's `<img>` or its video player by the asset's media type. The coordinator only
  * applies the result if this open is still active and the load was not superseded by
  * previous/next navigation.
  *
@@ -38,6 +38,7 @@ export function hydrateImageDetailFragment({ fragmentEl, coordinator }) {
         title: fragmentEl.dataset.appImageDetailTitle,
         width: Number(fragmentEl.dataset.appImageDetailWidth),
         height: Number(fragmentEl.dataset.appImageDetailHeight),
+        assetId: fragmentEl.dataset.appImageDetailAssetId,
         cellEl: getModalOpenSource()?.closest?.(".cell") ?? null,
     })
 }

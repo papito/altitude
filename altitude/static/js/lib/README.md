@@ -17,6 +17,7 @@ this table whenever a file is replaced. `.prettierignore` excludes this director
 | `leaflet.js`          | Leaflet                           | 1.9.4                  | `dist/leaflet.js` in https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz, byte-identical; its BSD-2 license is `leaflet.LICENSE`. `dist/leaflet.css` of the same tarball is `static/css/leaflet.css`; the marker images it references are not vendored, every pin is an `L.divIcon` |
 | `supercluster.min.js` | supercluster                      | 9.1.0                  | `dist/supercluster.min.js` in https://registry.npmjs.org/supercluster/-/supercluster-9.1.0.tgz, byte-identical (kdbush is bundled); its ISC license is `supercluster.LICENSE` |
 | `viselect.esm.js`     | Viselect (`@viselect/vanilla`)    | 3.9.0                  | `dist/viselect.mjs` in https://registry.npmjs.org/@viselect/vanilla/-/vanilla-3.9.0.tgz, byte-identical; renamed to `.js` so it is served as JavaScript. Its MIT license is `viselect.LICENSE` |
+| `media-chrome.js`     | media-chrome                      | 4.19.2                 | `dist/iife/index.js` in https://registry.npmjs.org/media-chrome/-/media-chrome-4.19.2.tgz, byte-identical, renamed; its MIT license is `media-chrome.LICENSE` |
 
 htmx configuration lives in the `htmx-config` meta tag in `views/includes/header_common.scala.html`.
 Extensions activate by script inclusion (`hx-ext` no longer exists): `json-enc.js` is loaded by the
@@ -26,9 +27,14 @@ markup.
 
 Leaflet is loaded as a plain script (`window.L`, like interact.js) by `index.scala.html`, for the
 Location pin editor (`js/fragments/location-editor.js`) and the map view; supercluster (`window.Supercluster`)
-the same way, for the map view's on-screen clustering (`js/map/map-view.js`).
+the same way, for the map view's on-screen clustering (`js/map/map-view.js`). media-chrome is loaded as a
+plain script by `index.scala.html` too, where it defines the `<media-*>` custom elements of asset
+detail's video player; no module imports it.
 
 The focus plugin is registered with `Alpine.plugin(focus)` in `static/js/app.js` before Alpine starts;
 the modal hosts in `views/includes/html_common.scala.html` rely on its `x-trap` directive.
-`alpine-focus.esm.js` has a local patch that cancels delayed trap activation when the trap is
-released or its element is removed, preventing a closed dialog from intercepting Tab.
+`alpine-focus.esm.js` has two local patches. One cancels delayed trap activation when the trap is
+released or its element is removed, preventing a closed dialog from intercepting Tab. The other
+passes `tabbableOptions: { getShadowRoot: true }` to every trap, so controls inside open shadow
+roots count as inside it: without it Tab cannot enter the sliders of asset detail's video player,
+whose inputs are in shadow DOM, and focus is pulled back to the control before them.

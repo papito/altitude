@@ -4,23 +4,47 @@
 @(asset: Asset)
 
 <style>
-    #imageDetailView {
-        display: grid;
-        place-items: center;
+    /* The media fill the box's width at the asset's stored ratio (the box is fitted in core.css). The height cap holds
+       for an asset without a stored size, and `vertical-align` drops the inline baseline gap below the media. A Video's
+       player is the media-chrome controller: its slotted <video> fills it and letterboxes itself (the user agent's
+       `object-fit: contain` for video), and its control bar overlays the video's bottom. */
+    #imageDetailView img,
+    #imageDetailView media-controller {
+        width: 100%;
+        max-height: calc(100dvh - var(--modal-toolbar-height));
+        aspect-ratio: var(--asset-width) / var(--asset-height);
+        vertical-align: top;
     }
 
-    #imageDetailView img,
-    #imageDetailView video {
-        max-width: 100vw;
-        max-height: 100vh;
-        width: auto;
-        height: auto;
+    /* `contain` keeps a picture whose decoded ratio differs from the stored one undistorted */
+    #imageDetailView img {
         object-fit: contain;
+    }
+
+    #imageDetailView media-controller {
+        --media-font-family: var(--font);
+    }
+
+    /* The controller's own display (inline-block) outranks the user agent's [hidden] rule */
+    #imageDetailView media-controller[hidden] {
+        display: none;
+    }
+
+    /* A control the browser cannot perform is left out (picture-in-picture in Firefox, volume on iOS), as
+       media-chrome's themes do, and the volume slider gives way on a player narrower than media-chrome's `sm`
+       breakpoint (384 px), so the timeline keeps its room */
+    #imageDetailView media-pip-button[mediapipunavailable],
+    #imageDetailView media-fullscreen-button[mediafullscreenunavailable],
+    #imageDetailView media-volume-range[mediavolumeunavailable],
+    #imageDetailView media-controller:not([breakpointsm]) media-volume-range {
+        display: none;
     }
 </style>
 
-@* The detail of an image or of a Video: the fragment holds both an <img> and a <video>, and the coordinator
-   (js/search-results/detail-navigator.js) shows the one the media type calls for and unloads the other. *@
+@* The detail of an image or of a Video: the fragment holds both an <img> and a media-chrome player (a
+   <media-controller> around the <video> and its control bar), and the coordinator
+   (js/search-results/detail-navigator.js) shows the one the media type calls for and unloads the other.
+   `hotkeys` turns off the player's ←/→ seeking: the arrows switch assets (js/global.js). *@
 
 <div id="imageDetailView">
     @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }") { imgUrl =>
@@ -32,8 +56,18 @@
              data-app-image-detail-media-type="@{ asset.assetType.mediaType }"
              data-app-image-detail-asset-id="@{ asset.persistedId }">
             <img src="" alt="@{ asset.fileName }" hidden>
-            <video controls preload="metadata" hidden></video>
+            <media-controller hidden hotkeys="noarrowleft noarrowright">
+                <video slot="media" preload="metadata" playsinline></video>
+                <media-control-bar>
+                    <media-play-button></media-play-button>
+                    <media-mute-button></media-mute-button>
+                    <media-volume-range></media-volume-range>
+                    <media-time-range></media-time-range>
+                    <media-time-display showduration></media-time-display>
+                    <media-pip-button></media-pip-button>
+                    <media-fullscreen-button></media-fullscreen-button>
+                </media-control-bar>
+            </media-controller>
         </div>
     }
 </div>
-

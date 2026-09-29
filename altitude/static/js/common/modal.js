@@ -23,6 +23,7 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { placeAnchoredPanel } from "./anchored-panel.js"
+import { clearMediaSession, unloadVideo } from "./video-playback.js"
 import {
     closeOpenContextMenu,
     getContextMenuTrigger,
@@ -195,10 +196,12 @@ export function closeModal() {
     }
 
     console.debug(`Closing ${store.activeHost} modal (open ${store.openId})`)
-    // A video keeps playing in a hidden host otherwise
+    // A video keeps playing in a hidden host otherwise, and a paused one that still has its source
+    // keeps the browser's media overlay, whose play button would resume it there
     getContainer(store.activeHost)
         ?.querySelectorAll("video")
-        .forEach((videoEl) => videoEl.pause())
+        .forEach(unloadVideo)
+    clearMediaSession()
     store.activeHost = null
     store.title = ""
     detachPlacementListeners?.()
@@ -213,21 +216,19 @@ export function closeModal() {
 }
 
 /**
- * Sizes the asset-detail box to the image, scaled to fit the viewport. Without dimensions the box
- * falls back to its CSS size, which is what the host shows while the first image loads.
+ * Hands the asset's stored size to the asset-detail box, which CSS fits into the viewport below the
+ * toolbar and refits when the viewport changes (core.css). Without dimensions the box falls back to
+ * the whole viewport, which is what the host shows while the first asset loads.
  */
 export function setAssetDetailSize({ width, height } = {}) {
     const box = getContainer(ModalHost.assetDetail).querySelector(".modal-box")
 
     if (width && height) {
-        const maxW = window.innerWidth - 10
-        const maxH = window.innerHeight - 40
-        const scale = Math.min(1, maxW / width, maxH / height)
-        box.style.width = `${Math.round(width * scale)}px`
-        box.style.height = `${Math.round(height * scale) + 40}px` // +40 for toolbar
+        box.style.setProperty("--asset-width", width)
+        box.style.setProperty("--asset-height", height)
     } else {
-        box.style.width = ""
-        box.style.height = ""
+        box.style.removeProperty("--asset-width")
+        box.style.removeProperty("--asset-height")
     }
 }
 

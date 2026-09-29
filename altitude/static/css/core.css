@@ -16,6 +16,7 @@
     --modal-content-width: 400px;
     --modal-content-padding: 15px;
     --modal-viewport-gap: 10px;
+    --modal-toolbar-height: 30px;
 
     --result-border: 1px solid #837c7c;
 
@@ -432,7 +433,7 @@ form input.error, form input.error:focus {
 
 .modal-box {
     display: grid;
-    grid-template-rows: 30px auto;
+    grid-template-rows: var(--modal-toolbar-height) auto;
     background-color: var(--background-secondary-color);
     margin: auto;
     width: fit-content;
@@ -482,10 +483,16 @@ form input.error, form input.error:focus {
     background-color: rgba(0, 0, 0, 0.9);
 }
 
+/* The asset's stored size (--asset-width, --asset-height, from setAssetDetailSize) fitted into the viewport below the
+   toolbar, 5 px from each side and never enlarged. Until a size is set, --fit-width and --fit-height are undefined
+   and the box spans the viewport, which is what the host shows while the first asset loads. */
 #imageDetailModalContainer .modal-box {
+    --fit-width: min(var(--asset-width) * 1px, 100dvw - 10px,
+                     (100dvh - var(--modal-toolbar-height)) * var(--asset-width) / var(--asset-height));
+    --fit-height: calc(var(--fit-width) * var(--asset-height) / var(--asset-width) + var(--modal-toolbar-height));
     border: none;
-    width: 100%;
-    height: 100%;
+    width: var(--fit-width, 100%);
+    height: var(--fit-height, 100%);
     background-color: transparent;
     box-shadow: none;
     border-radius: 0;
