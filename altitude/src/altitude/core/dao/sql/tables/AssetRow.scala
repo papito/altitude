@@ -29,7 +29,7 @@ case class AssetRow[T[_]](
     extractedMetadata: T[Option[String]],
     folderId: T[String],
     filename: T[String],
-    sizeBytes: T[Int],
+    sizeBytes: T[Long],
     isTriaged: T[Boolean],
     isRecycled: T[Boolean],
     isPurged: T[Boolean],
@@ -38,6 +38,7 @@ case class AssetRow[T[_]](
     originalCreatedAtSource: T[Option[String]],
     latitude: T[Option[Double]],
     longitude: T[Option[Double]],
+    durationMs: T[Option[Long]],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

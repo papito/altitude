@@ -2,11 +2,12 @@ package altitude.core.controller
 
 import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.models.Asset
+import altitude.core.models.AssetType
 
 /** The grouped HTML grid of the search results route, its continuation by cursor, and the untouched ungrouped grid next to it */
 @DoNotDiscover class SearchResultsControllerTests extends ControllerTestCore {
@@ -34,6 +35,34 @@ import altitude.core.models.Asset
     val asset = persistDated("2026-09-06T10:00:00", filename)
     testContext.setAssetDates(asset.persistedId, None, OffsetDateTime.parse("2026-09-06T12:00:00Z"))
     asset
+  }
+
+  test("A cell names its media type, and a Video's cell wears a play badge and shows its duration") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val image = testContext.persistAsset()
+        val clip = testApp.service.asset.add(
+          testContext
+            .makeAsset(filename = "clip.mp4")
+            .copy(assetType = AssetType("video", "mp4", "video/mp4"), durationMs = Some(65_000L)))
+        testApp.service.asset.markAsCompleted(clip)
+
+        val page = htmlSearch(host, repoId, Map("sort" -> "filename0")).text()
+        // Each cell's markup runs from its id to the next cell's
+        val cells = page.split("""(?=id="asset-)""").toList
+        val imageCell = cells.find(_.startsWith(cell(image))).get
+        val clipCell = cells.find(_.startsWith(cell(clip))).get
+
+        imageCell should include("""data-media-type="image"""")
+        (imageCell should not).include("play-badge")
+        (imageCell should not).include("Duration:")
+        clipCell should include("""data-media-type="video"""")
+        clipCell should include("play-badge")
+        clipCell should include("<span>Duration:</span> 1:05")
+    }
   }
 
   test("Location grouping renders paths and continues by cursor to No location") {

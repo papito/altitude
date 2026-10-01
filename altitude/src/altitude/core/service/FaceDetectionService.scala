@@ -40,6 +40,13 @@ object FaceDetectionService:
   val EMBEDDING_DIMENSIONS = 512
 
   /**
+   * An ArcFace embedding: the L2-normalized feature vector, compared by cosine distance, and the L2 norm the raw output had
+   * before normalization. For a net trained with the ArcFace loss the norm tracks how recognizable the face was (AdaFace, Kim et
+   * al. 2022, uses it as its image-quality proxy), so it is the Face's quality.
+   */
+  case class Embedding(features: Array[Float], norm: Float)
+
+  /**
    * Standard ArcFace / InsightFace 112x112 reference landmark coordinates.
    *
    * These are the canonical destination positions for a 5-point alignment warp. The base coordinates assume a 96-wide active
@@ -136,9 +143,10 @@ object FaceDetectionService:
    * Dump face detection debug artifacts to the given directory.
    *
    * Writes:
-   *   - `{baseName}-annotated.jpg` — original image with green bounding boxes and 5-point landmark dots drawn for every detection
-   *   - `{baseName}-{N}-{score}.png` — raw face crop (N 1-based, score is 0–100 integer from detectionScore)
-   *   - `{baseName}-{N}-{score}-aligned.png` — 112×112 aligned color crop (ArcFace model input)
+   *   - `{baseName}-annotated.jpg` — original image with green bounding boxes and 5-point landmark dots drawn for every
+   *     detection, each labelled with its quality (the embedding norm) and detection score
+   *   - `{baseName}-{N}-q{quality}-aligned.png` — 112×112 aligned color crop, the exact ArcFace input (N 1-based), so a quality
+   *     can be read against the crop that produced it when calibrating the `face.quality.*` thresholds
    *
    * @param imageMat
    *   the original source image
@@ -158,22 +166,24 @@ object FaceDetectionService:
     val green = new Scalar(0, 255, 0)
 
     val annotated = imageMat.clone()
-    faceData.foreach {
-      case (face, detectionRow, _, _) =>
+    faceData.zipWithIndex.foreach {
+      case ((face, detectionRow, _, alignedColor), idx) =>
         val rect = new Rect(face.x1, face.y1, face.width, face.height)
         Imgproc.rectangle(annotated, rect, green, 2)
         extractLandmarksFromDetection(detectionRow).foreach(pt => Imgproc.circle(annotated, pt, 3, green, -1))
+        val label = f"q=${face.quality}%.1f d=${face.detectionScore}%.2f"
+        Imgproc.putText(
+          annotated,
+          label,
+          new Point(face.x1, Math.max(12, face.y1 - 4)),
+          Imgproc.FONT_HERSHEY_SIMPLEX,
+          0.5,
+          green,
+          1)
+        Imgcodecs.imwrite(FilenameUtils.concat(debugDir, f"$baseName-${idx + 1}-q${face.quality}%.1f-aligned.png"), alignedColor)
     }
     Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$baseName-annotated.jpg"), annotated)
     annotated.release()
-
-    // Per-face crops
-//    faceData.zipWithIndex.foreach { case ((face, _, rawCrop, alignedColor), idx) =>
-//      val score = (face.detectionScore * 100).toInt
-//      val prefix = s"$baseName-${idx + 1}-$score"
-//      Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix.png"), rawCrop)
-//    Imgcodecs.imwrite(FilenameUtils.concat(debugDir, s"$prefix-aligned.png"), alignedColor)
-//    }
 
 class FaceDetectionService(app: Altitude):
 
@@ -194,6 +204,9 @@ class FaceDetectionService(app: Altitude):
   private val yunetNmsThreshold: Float = app.config.getDouble(Const.Conf.FACE_YUNET_NMS_THRESHOLD).toFloat
   private val boundingBoxSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_BOUNDING_BOX_SIZE)
   private val minFaceSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_MIN_FACE_SIZE)
+  // The two quality tiers, on the embedding norm: at least enroll to start a Person, at least keep to be stored at all
+  private val enrollThreshold: Double = app.config.getDouble(Const.Conf.FACE_QUALITY_ENROLL_THRESHOLD)
+  private val keepThreshold: Double = app.config.getDouble(Const.Conf.FACE_QUALITY_KEEP_THRESHOLD)
   private val faceDebugEnabled: Boolean = app.config.getBoolean(Const.Conf.FACE_DEBUG_ENABLED)
 
   private val debugDir: String = FilenameUtils.concat(Environment.ROOT_PATH, "debug")
@@ -293,6 +306,11 @@ class FaceDetectionService(app: Altitude):
    */
   def extractFaces(data: Array[Byte], fileName: Option[String] = None): List[(Face, FaceImages)] =
     val imageMat: Mat = matFromBytes(data)
+    try extractFaces(imageMat, fileName)
+    finally imageMat.release()
+
+  /** Extract faces from a decoded BGR image, such as a Sampled frame of a Video. The caller keeps ownership of the image. */
+  def extractFaces(imageMat: Mat, fileName: Option[String]): List[(Face, FaceImages)] =
     val results: List[Mat] = detectFacesWithYunet(imageMat)
 
     // Accumulate both the public result and the intermediate Mats needed for debug output in one pass
@@ -302,7 +320,7 @@ class FaceDetectionService(app: Altitude):
       res =>
         val alignedFaceImage = alignCropFaceFromDetection(imageMat, res)
         val alignedFaceImageGs = getHistEqualizedGrayScImage(alignedFaceImage)
-        val features = getArcFaceEmbedding(alignedFaceImage)
+        val embedding = getArcFaceEmbedding(alignedFaceImage)
 
         val rect = FaceDetectionService.faceDetectToRect(res, imageMat.cols(), imageMat.rows())
         val faceImage: Mat = imageMat.submat(rect)
@@ -324,9 +342,12 @@ class FaceDetectionService(app: Altitude):
           width = rect.width,
           height = rect.height,
           detectionScore = res.get(0, 14)(0).asInstanceOf[Float],
-          features = features,
+          features = embedding.features,
+          quality = embedding.norm,
+          isEnrolled = embedding.norm >= enrollThreshold,
           checksum = MurmurHash.hash32(imageBytes.toArray)
         )
+        logger.debug(s"$face in ${fileName.getOrElse("image")}")
 
         val faceImages = FaceImages(
           image = imageBytes.toArray,
@@ -349,12 +370,16 @@ class FaceDetectionService(app: Altitude):
       FaceDetectionService.dumpDebugArtifacts(imageMat, debugData, baseName, debugDir)
 
     entries.foreach {
-      e => e.alignedColor.release()
-      // e.rawCrop is a submat view of imageMat — its data is freed with imageMat below
+      e =>
+        e.alignedColor.release()
+        e.detectionRow.release()
+      // e.rawCrop is a submat view of imageMat, whose data is the caller's to free
     }
-    imageMat.release()
 
-    entries.map(e => (e.face, e.faceImages))
+    // Dropped after the debug dump, so a face below the floor can still be looked at when calibrating the thresholds
+    val (kept, dropped) = entries.partition(_.face.quality >= keepThreshold)
+    dropped.foreach(e => logger.info(s"Dropped below the quality floor $keepThreshold: ${e.face}"))
+    kept.map(e => (e.face, e.faceImages))
 
   /**
    * Align and crop a face from the source image using a 5-point similarity transform.
@@ -382,14 +407,14 @@ class FaceDetectionService(app: Altitude):
     aligned
 
   /**
-   * Compute a 512-d ArcFace (InsightFace w600k_r50) embedding for an aligned face image.
+   * Compute the 512-d ArcFace (InsightFace w600k_r50) [[FaceDetectionService.Embedding]] of an aligned face image.
    *
    * The model expects a 112x112 BGR image normalized to [0,1]. The output is L2-normalized so that cosine distance can be used
-   * directly for comparison.
+   * directly for comparison, and its norm before normalization is returned alongside as the face's quality.
    *
    * The input is expected to already be 112x112 (as produced by [[alignCropFaceFromDetection]]); no resize is performed.
    */
-  def getArcFaceEmbedding(alignedFaceImage: Mat): Array[Float] =
+  def getArcFaceEmbedding(alignedFaceImage: Mat): FaceDetectionService.Embedding =
     val blob = blobFromImage(
       alignedFaceImage,
       1.0 / 255.0,
@@ -414,7 +439,7 @@ class FaceDetectionService(app: Altitude):
         embedding(i) = embedding(i) / norm
       }
 
-    embedding
+    FaceDetectionService.Embedding(embedding, norm)
 
   def getHistEqualizedGrayScImage(cropAlignedFace: Mat): Mat =
     val grayAlignedImage = new Mat()

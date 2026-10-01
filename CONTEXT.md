@@ -5,13 +5,13 @@ Altitude organizes and searches a library of media assets.
 ## Language
 
 **Date Taken**:
-The date and time an image was captured, distinct from when it was added to the
+The date and time an asset was captured, distinct from when it was added to the
 library. Its calendar day follows the camera's recorded date and does not change
 with the viewer's timezone.
 _Avoid_: Date Added, Date Imported when referring to capture time.
 
 **Date Imported**:
-The date and time an image was added to the library, distinct from when it was
+The date and time an asset was added to the library, distinct from when it was
 captured. Its calendar day is determined in UTC.
 _Avoid_: Date Taken when referring to import time.
 
@@ -47,5 +47,41 @@ Map area when they cannot.
 _Avoid_: Cluster in user-facing text.
 
 **Date Group**:
-The images in a search result whose selected date, either Date Taken or Date
+The assets in a search result whose selected date, either Date Taken or Date
 Imported, falls on the same calendar day.
+
+**Video**:
+An asset whose media type is video: a stored original with a duration, one
+Preview, and Faces each pinned to a Frame time.
+_Avoid_: Movie, Clip, Film.
+
+**Preview**:
+The small still image standing for an asset in the grid and on the map. For a
+Video it is one of its Sampled frames.
+_Avoid_: Thumbnail, Poster.
+
+**Sampled frame**:
+One of the evenly spaced frames of a Video from which its Faces and its Preview
+are chosen.
+_Avoid_: Keyframe.
+
+**Frame time**:
+The moment within a Video, measured from its start, that a Face or the Preview
+was taken from.
+_Avoid_: Timestamp, Offset, Position.
+
+**Face quality**:
+How recognizable a detected face is: the norm of its raw embedding, higher is
+better. It drops with blur and occlusion and decides the face's tier.
+_Avoid_: Confidence, Score (the detector's), Sharpness.
+
+**Enrolled face**:
+A Face whose quality clears the enroll threshold: it may start a new Person and
+is a candidate when other faces are matched.
+_Avoid_: Good face, Reference face.
+
+**Match-only face**:
+A Face of lesser quality, or seen in too few Sampled frames of a Video: it may
+join a known Person but never starts one, is never a match candidate, and is
+dropped when it matches nobody.
+_Avoid_: Weak face, Low-quality face in user-facing text.

@@ -1,6 +1,8 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestVideos
+import java.nio.file.Files
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
@@ -114,6 +116,36 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     pipelineRes.head match {
       case (Right(invalid), _) => invalid.cause.get shouldBe a[UnsupportedMediaTypeException]
       case _ => fail("Expected the first element to be of type DuplicateException")
+    }
+
+    // A dropped asset leaves no staged file behind
+    Files.exists(assetWithData.path) shouldBe false
+  }
+
+  test("Pipeline should complete on a video no frame of which decodes, and go on importing") {
+    val clip =
+      testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.undecodable.toFile))
+    val photo = testContext.makeAssetWithData()
+
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source(List(clip, photo)).map((_, pipelineContext))
+
+    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
+      testApp.service.importPipeline.run(source, AssetSeqOutputSink())
+
+    val pipelineRes = Await.result(pipelineResFuture, Duration.Inf)
+    pipelineRes should have size 2
+
+    // The Preview has no frame to take, which drops the clip rather than failing the pipeline
+    pipelineRes.head match {
+      case (Right(invalid), _) => invalid.cause.get shouldBe a[RuntimeException]
+      case _ => fail("Expected the clip to be dropped")
+    }
+    Files.exists(clip.path) shouldBe false
+
+    pipelineRes(1) match {
+      case (Left(asset), _) => testApp.service.asset.getById(asset.persistedId).isPipelineProcessed shouldBe true
+      case _ => fail("Expected the photo to be imported")
     }
   }
 

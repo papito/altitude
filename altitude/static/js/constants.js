@@ -46,6 +46,7 @@ export const Const = {
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
+        togglePlayback: "TOGGLE_PLAYBACK_EVENT",
     },
 
     /**

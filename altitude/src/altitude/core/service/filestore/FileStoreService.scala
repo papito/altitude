@@ -1,5 +1,7 @@
 package altitude.core.service.filestore
 
+import java.nio.file.Path
+
 import altitude.core.models.AssetWithData
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
@@ -8,7 +10,11 @@ import altitude.core.models.MimedFaceData
 import altitude.core.models.MimedPreviewData
 
 trait FileStoreService:
+  /** Renames the asset's staged file into the store; the asset's data is at [[assetFile]] after */
   def addAsset(assetWithData: AssetWithData): Unit
+
+  /** The stored original of an asset, for streaming; it need not exist */
+  def assetFile(assetId: String): Path
   def getAssetById(id: String): MimedAssetData
   def purgeAssetById(id: String): Unit
 

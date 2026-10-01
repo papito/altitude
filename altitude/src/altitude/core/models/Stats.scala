@@ -13,31 +13,31 @@ object Stats:
 case class Stats(stats: List[Stat]):
   private val lookup: Map[String, Stat] = stats.foldLeft(Map[String, Stat]())((res, stat) => res + (stat.dimension -> stat))
 
-  def getStatValue(key: String): Int =
+  def getStatValue(key: String): Long =
     if !lookup.contains(key) then throw RuntimeException(s"No stats for '$key'")
 
     lookup(key).dimVal
 
-  def getTotalAssetCount: Int =
+  def getTotalAssetCount: Long =
     getStatValue(Stats.TOTAL_ASSETS)
 
-  def getTotalBytes: Int =
+  def getTotalBytes: Long =
     getStatValue(Stats.TOTAL_BYTES)
 
-  def getSortedAssetCount: Int =
+  def getSortedAssetCount: Long =
     getStatValue(Stats.SORTED_ASSETS)
 
-  def getSortedBytes: Int =
+  def getSortedBytes: Long =
     getStatValue(Stats.SORTED_BYTES)
 
-  def getTriageAssetCount: Int =
+  def getTriageAssetCount: Long =
     getStatValue(Stats.TRIAGE_ASSETS)
 
-  def getTriageBytes: Int =
+  def getTriageBytes: Long =
     getStatValue(Stats.TRIAGE_BYTES)
 
-  def getRecycledAssetCount: Int =
+  def getRecycledAssetCount: Long =
     getStatValue(Stats.RECYCLED_ASSETS)
 
-  def getRecycledBytes: Int =
+  def getRecycledBytes: Long =
     getStatValue(Stats.RECYCLED_BYTES)

@@ -915,7 +915,9 @@ function src_default(Alpine) {
       let options = {
         escapeDeactivates: false,
         allowOutsideClick: true,
-        fallbackFocus: () => el
+        fallbackFocus: () => el,
+        // Controls inside open shadow roots (the video player's sliders) are part of the trap.
+        tabbableOptions: { getShadowRoot: true }
       };
       if (modifiers.includes("noautofocus")) {
         options.initialFocus = false;

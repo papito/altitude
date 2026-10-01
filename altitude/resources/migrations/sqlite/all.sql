@@ -40,7 +40,7 @@ CREATE TABLE repository (
 CREATE TABLE stats (
   repository_id CHAR(36) NOT NULL,
   dimension VARCHAR(60),
-  dim_val INT NOT NULL DEFAULT 0,
+  dim_val BIGINT NOT NULL DEFAULT 0,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
@@ -64,7 +64,7 @@ CREATE TABLE asset (
   user_metadata TEXT,
   folder_id CHAR(36),
   filename TEXT NOT NULL,
-  size_bytes INT NOT NULL,
+  size_bytes BIGINT NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   is_triaged TINYINT NOT NULL DEFAULT 0,
   is_purged TINYINT NOT NULL DEFAULT 0,
@@ -76,6 +76,8 @@ CREATE TABLE asset (
   -- WGS84 decimal degrees, parsed from the file's GPS metadata on import only (GeoLocationResolver). NULL when it carried none.
   latitude REAL,
   longitude REAL,
+  -- A Video's length; NULL for an image.
+  duration_ms INTEGER,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
@@ -134,6 +136,12 @@ CREATE TABLE face (
   detection_score FLOAT NOT NULL,
   features BLOB NOT NULL,
   checksum INT NOT NULL,
+  -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
+  frame_time_ms INTEGER,
+  -- L2 norm of the raw ArcFace embedding: higher is a more recognizable face. See face.quality.* in reference.conf.
+  quality FLOAT NOT NULL,
+  -- An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join one.
+  is_enrolled BOOLEAN NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (person_id) REFERENCES person (id) ON DELETE CASCADE,
@@ -141,7 +149,8 @@ CREATE TABLE face (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX face_01 ON face (repository_id, checksum);
+-- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo)
+CREATE UNIQUE INDEX face_01 ON face (repository_id, asset_id, checksum);
 CREATE INDEX face_02 ON face (person_id, detection_score);
 
 CREATE TABLE metadata_field (

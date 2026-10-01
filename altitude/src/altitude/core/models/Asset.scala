@@ -19,7 +19,11 @@ object Asset:
 
   def getPublicMetadata(extractedMetadata: ExtractedMetadata): PublicMetadata =
     PublicMetadata(
-      deviceModel = extractedMetadata.getFieldValues("Exif IFD0").get("Model"),
+      // A phone video names its model in the QuickTime keys rather than EXIF
+      deviceModel = extractedMetadata
+        .getFieldValues("Exif IFD0")
+        .get("Model")
+        .orElse(extractedMetadata.getFieldValues("QuickTime Metadata").get("Model")),
       fNumber = extractedMetadata.getFieldValues("Exif SubIFD").get("F-Number"),
       focalLength = extractedMetadata.getFieldValues("Exif SubIFD").get("Focal Length"),
       iso = extractedMetadata.getFieldValues("Exif SubIFD").get("ISO Speed Ratings"),
@@ -37,6 +41,8 @@ case class Asset(
     folderId: String,
     width: Int = 0,
     height: Int = 0,
+    // A Video's length; None for an image
+    durationMs: Option[Long] = None,
     userMetadata: UserMetadata = UserMetadata(),
     publicMetadata: PublicMetadata = PublicMetadata(),
     extractedMetadata: ExtractedMetadata = ExtractedMetadata(),

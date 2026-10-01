@@ -42,13 +42,15 @@ import altitude.core.util.Query
 
     val assetWithFolder = testContext.makeAsset().copy(folderId = folder1.persistedId)
     val dataAsset = testContext.makeAssetWithData(asset = Some(assetWithFolder))
+    // The pipeline consumes a staged file, so the second import needs its own copy
+    val secondCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
     val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
 
     // recycle the asset
     testApp.service.library.recycleAssets(Set(persistedAsset.persistedId))
 
     // import a new copy of it (should be allowed)
-    testApp.service.library.addAsset(dataAsset)
+    testApp.service.library.addAsset(secondCopy)
 
     // now restore the previously deleted copy into itself
     intercept[DuplicateException] {

@@ -2,7 +2,7 @@
 
 Avoid documentation drift. When related code is added, changed, or removed, update AGENTS.md, CLAUDE.md, and ARCHITECTURE.md if they exist.
 
-Read [altitude/AGENTS.md](altitude/AGENTS.md) for architecture and build/test commands. For frontend work, including JavaScript under `altitude/static/js/`, also read [altitude/views/AGENTS.md](altitude/views/AGENTS.md) for template, event, and component conventions.
+Read [altitude/AGENTS.md](altitude/AGENTS.md) for architecture and build/test commands. For face detection and recognition, read [docs/faces.md](docs/faces.md). For frontend work, including JavaScript under `altitude/static/js/`, also read [altitude/views/AGENTS.md](altitude/views/AGENTS.md) for template, event, and component conventions.
 
 When adding features or modifying existing behavior, review nearby code comments and update them where needed.
 
@@ -23,28 +23,17 @@ Write the minimal amount of code that preserves clarity, readability, and mainta
 
 ### Front-end
 
-Use the fewest props and the least markup needed to accomplish the task.
+Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
 
 Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `altitude/static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog.
 
 Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified.
 
-Strongly prefer CSS Grid and Flexbox.
+Always prefer CSS Grid and Flexbox.
 
 The main stylesheet is `altitude/static/css/core.css`; reuse its `:root` variables. Component styles also live in Twirl partials, such as the folder tree and popover styles in `altitude/views/htmx/folders.scala.html`.
 
-Identify the main CSS file and use :root variables. Example:
-
-```css
-:root {
-    color-scheme: light dark;
-
-    --background-color: #363636;
-    --background-form-color: #363535;
-    --background-secondary-color: rgb(56, 56, 65);
-    --background-tertiary-color: rgb(75, 75, 87);
-}
-```
+Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 
 ### Database migrations
 

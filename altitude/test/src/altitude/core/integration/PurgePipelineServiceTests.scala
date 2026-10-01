@@ -165,7 +165,7 @@ import altitude.core.util.Query
       path =>
         val importAsset = IntegrationTestUtil.getImportAsset(path)
         val asset = testApp.service.library.addImportAsset(importAsset)
-        AssetWithData(asset, importAsset.data)
+        AssetWithData(asset, testApp.service.staging.stageCopy(importAsset.path))
     }
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
@@ -214,7 +214,7 @@ import altitude.core.util.Query
       path =>
         val importAsset = IntegrationTestUtil.getImportAsset(path)
         val asset = testApp.service.library.addImportAsset(importAsset)
-        AssetWithData(asset, importAsset.data)
+        AssetWithData(asset, testApp.service.staging.stageCopy(importAsset.path))
     }
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)

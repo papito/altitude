@@ -62,26 +62,6 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 - [ ] Exercise cache hits and misses in `getById`, plus lookup after repository update/deletion, so cached data cannot silently remain authoritative forever. [MEDIUM]
 - [ ] Define/test `getDefaultRepository` with no repositories and with multiple repositories. [EDGE]
 
-## System initialization and metadata
-
-Sources: [SystemService](../altitude/src/altitude/core/service/SystemService.scala). Evidence: [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala).
-
-- ✅ Initialize an administrator and repository; assert persisted and in-memory initialized flags, user/repository counts, and the administrator in request context.
-- [ ] Inject failure during initialization and verify user, repository, root folder, statistics, initialized flags, and request context do not leave a partial installation. [CRITICAL]
-- [ ] Define/test repeated and concurrent initialization attempts so setup cannot create unintended additional administrators/repositories. The current test starts with fixture data but does not repeat `initializeSystem`. [MEDIUM]
-- [ ] Directly verify `setVersion`/`version` persistence and `readMetadata`; distinguish an absent schema from other SQL failures currently caught by `version`. [MEDIUM]
-
-## Database migrations
-
-Sources: [MigrationService](../altitude/src/altitude/core/service/MigrationService.scala). Evidence: [SqliteSuiteBundle](../altitude/test/src/altitude/core/suites/SqliteSuiteBundle.scala), [PostgresSuiteBundle](../altitude/test/src/altitude/core/suites/PostgresSuiteBundle.scala). Migration execution is shared setup, not a dedicated assertion suite.
-
-- ✅ Fresh-schema migration is exercised as a setup smoke check before each engine's integration bundle; subsequent tests use the resulting tables.
-- [ ] Starting at a nonzero older version, verify the existing upgrade scripts run in order, preserve seeded user data, and stamp the resulting version. Test the current migration machinery without introducing new migrations. [CRITICAL]
-- [ ] Fail a migration script and verify rollback/version behavior, then retry; separately test failure after script commit but before version stamping. [CRITICAL]
-- [ ] Assert `migrationRequired` for a fresh database, an older schema, the current schema, and a newer-than-supported schema. [MEDIUM]
-- [ ] Re-run `migrate` on the current schema and assert no schema/data changes; assert the exact version after fresh-schema setup. [MEDIUM]
-- [ ] Cover missing/unreadable migration resources and ensure failure does not advance the schema version. [EDGE]
-
 ## Asset persistence, queries, and previews
 
 Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala).
@@ -380,6 +360,7 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 
 - ✅ Detect one face in the supplied small-face and large-portrait fixtures and two faces in the exercised two-person image.
 - ✅ Produce nonempty detected, display, aligned-color, and aligned-grayscale image buffers for a recognized face.
+- ✅ A face-relative blur lowers the embedding norm; a sharp portrait is enrolled, a blurred one is kept match-only, a heavily blurred one is detected but dropped below the quality floor.
 - [ ] Assert zero detections for a no-face image, empty image, and image smaller than the configured minimum; define corrupt-byte behavior. [MEDIUM]
 - [ ] Verify minimum-size/confidence boundaries, downscaled bounding boxes/landmarks mapped back to the original image, and preservation of confidence scores during scaling. [MEDIUM]
 - [ ] Test clamping for negative/out-of-bounds/zero-size face boxes and confirm crops stay inside the image. [MEDIUM]
@@ -394,9 +375,11 @@ Sources: [FaceRecognitionService](../altitude/src/altitude/core/service/FaceReco
 
 - ✅ Two photographs of the same person resolve to the same person ID and a persisted face count of two.
 - ✅ Importing the exercised two-person image creates two people; the multi-occurrence fixture resolves to one person with two faces.
-- [ ] Construct controlled nearest-neighbor candidates and assert majority selection, tie behavior, fewer-than-configured matches, and no-match behavior. The comment promises a clear majority, while the implementation selects the largest vote group even on a tie. [MEDIUM]
+- ✅ With known vectors on both engines: only enrolled faces of people who are not a bad match are candidates; a tied vote goes to the closest face; without a candidate an enrolled face starts a Person and a match-only face is nobody's.
+- ✅ A match-only face of nobody (a blurred photo, a blurred clip) leaves neither a Person nor a Face; a person in one Sampled frame of a clip starts no Person but joins a known one as a match-only Face; the same person across two clips and a photo is one Person through the centroid vector.
+- ✅ Unit: the normalized mean, quality-ordered leader clustering, the highest-quality representative, and the centroid merge pass on synthetic vectors.
 - [ ] Test distance-threshold boundaries and configured match counts on both database engines with known vectors. [MEDIUM]
-- [ ] Verify matching never selects a face from another repository and define/test eligibility of recycled, merged, hidden, and bad-match people. [CRITICAL]
+- [ ] Verify matching never selects a face from another repository and define/test eligibility of recycled and merged people. [CRITICAL]
 - [ ] Reject already persisted or already associated face objects without adding a new person/face. [EDGE]
 - [ ] Fail persistence of a later face or its binary variants and verify the transaction/recovery contract for all faces and people created by that asset. [CRITICAL]
 

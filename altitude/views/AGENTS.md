@@ -7,7 +7,7 @@
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
 - Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
   Viselect for box selection, Leaflet for the Location pin editor and the map, supercluster for the map's on-screen
-  clustering); versions and sources are listed in `static/js/lib/README.md`
+  clustering, media-chrome for the asset detail's video player); versions and sources are listed in `static/js/lib/README.md`
 
 ## Template Layout
 
@@ -58,7 +58,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
 
@@ -230,8 +230,9 @@ control that opened it, using the visible ⋯ trigger for a menu action), and id
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
 swaps once the user dismissed or replaced it. Visibility is bound through the Alpine `modal` store
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
-`js/app.js` contains focus and hides the page from assistive tech; its documented local patch
-cancels delayed activation when a trap is released or removed). Escape (`global.js`) closes the
+`js/app.js` contains focus and hides the page from assistive tech; its documented local patches
+cancel delayed activation when a trap is released or removed, and count controls in open shadow
+roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes the
 active modal and any open context menu and is consumed by them, so a background inline edit
 survives; with neither open it closes the map view's crowded-pin panel, and with none of those it is
 broadcast for such an edit to cancel. General dialogs ignore backdrop clicks, asset detail closes on them. Explorer action dialogs
@@ -244,7 +245,7 @@ horizontal placement constrained to the viewport. The box is hidden until measur
 flash at the default position. Anchored forms use natural content width in `core.css`, keeping
 inputs at their existing width and only the standard padding at the right. The Location map editor
 retains its explicitly declared width. Other general dialogs retain `--modal-content-width` and the
-host's centered placement; asset detail is sized with `setAssetDetailSize()` in its own host. Opening any modal closes an open context menu first, so a
+host's centered placement; asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host. Opening any modal closes an open context menu first, so a
 modal never appears over one.
 
 Both modal hosts use `.close-modal` in `core.css`: the X stays white (`--modal-close-color`)
@@ -300,7 +301,9 @@ The navigation origin is the cell whose thumbnail requested the detail (`modal.j
 that issued an open's request, `getModalOpenSource()`), set before the image loads, so previous/next
 already steps from the newly opened cell while the spinner is showing. A detail opened from no cell
 (a map pin) has no previous or next.
-Arrow-key navigation works only while asset detail is active and no text field is focused.
+Arrow-key navigation works only while asset detail is active and no text field is focused, or the video player's
+timeline or volume slider, which the arrows step; Space plays or pauses the current Video, through media-chrome inside
+the player, and does nothing on an image.
 
 **Context menus** — Each folder's, album's or Location row's ⋯ button (its **trigger**, `.menu-trigger`) is a real
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
@@ -672,7 +675,20 @@ decides once, when the drag starts, whether the container can scroll, so a box b
 page fits without a scrollbar does not autoscroll in that gesture.
 
 **Detail navigation** — Next/previous navigation and modal asset-detail loading are coordinated
-from `js/search-results/detail-navigator.js`. The results grid is the modal's source of truth:
+from `js/search-results/detail-navigator.js`. The detail fragment (`views/htmx/view_image_detail_modal.scala.html`)
+holds an `<img>` and a media-chrome player (`<media-controller>` around a `<video preload="metadata">` and its
+control bar), and its dataset carries the media type; `showMedia` hides the player while any asset loads, so an emptied
+player never shows in the previous frame, shows the image or the player as the type calls for, unloads the other
+(`hidden`, `src` cleared), waits for `load` or `loadedmetadata`, and hands the stored width and height to the box, which
+CSS fits into the viewport below the toolbar and refits on resize. `showMedia` starts a shown Video with `play()`,
+falling back to muted playback where the browser refuses sound, and interrupted plays (`AbortError`) are ignored; a clip
+shorter than ten seconds loops (`LOOP_MAX_DURATION_SECONDS`). Volume and mute are media-chrome's preferences
+(`localStorage` keys `media-chrome-pref-volume` and `media-chrome-pref-muted`), applied once per open and never written
+by the muted fallback, which sets `muted` on the element. A shown Video is described to the Media Session
+(`js/common/video-playback.js`: title, Preview, play/pause/seek, previous/next when there is a cell), cleared when
+another asset loads and on close. Stepping to another asset pauses a playing video, and `closeModal` unloads the videos
+of the host it closes instead of pausing them, so no OS media control can resume one behind a closed modal; the video
+streams from the same `/content/.../file/` URL by byte ranges. The results grid is the modal's source of truth:
 the coordinator remembers the cell it shows (not the asset: a Location grouping holds an asset in a
 cell under each of its Locations, and stepping from the cell keeps the walk in the group the user was
 looking at), and next/previous move to the nearest `.cell` sibling of that cell in document order,
@@ -722,6 +738,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
 | `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), explorer dialog anchoring, `setAssetDetailSize` |
+| `static/js/common/video-playback.js` | the asset-detail Video beyond its element: `unloadVideo`, and the Media Session (`describeInMediaSession`, `clearMediaSession`) |
 | `static/js/common/anchored-panel.js` | viewport placement shared by popover menus and anchored explorer modals |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
@@ -739,7 +756,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
-| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells and image loading in the asset-detail modal |
+| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, media loading in the asset-detail modal, and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
@@ -751,7 +768,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
-| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor. `data-media-type` names what the asset is; a Video's cell wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Video Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by page number |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, the crowded-pin panel `#mapPanel`, and the pin styles |

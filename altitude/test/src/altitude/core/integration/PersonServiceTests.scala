@@ -22,11 +22,48 @@ import altitude.core.util.Util
   // default face count for a person
   val NUM_OF_FACES = 12
 
+  test("A Face's Frame time is stored and read back, and a Face in an image has none") {
+    val asset = testContext.persistAsset()
+    val person = testApp.service.person.addPerson(Person())
+    val inVideo = testApp.service.person.addFace(makeFace(frameTimeMs = Some(4500L)), asset, person)
+    val inImage = testApp.service.person.addFace(makeFace(frameTimeMs = None), asset, person)
+
+    val byId = testApp.service.person.getAssetFaces(asset.persistedId).map(face => face.persistedId -> face.frameTimeMs).toMap
+    byId(inVideo.persistedId) shouldBe Some(4500L)
+    byId(inImage.persistedId) shouldBe None
+  }
+
+  test("A Face's quality and tier are stored and read back") {
+    val asset = testContext.persistAsset()
+    val person = testApp.service.person.addPerson(Person())
+    val matchOnly = testApp.service.person.addFace(makeFace(quality = 12.5, isEnrolled = false), asset, person)
+    val enrolled = testApp.service.person.addFace(makeFace(quality = 27.25, isEnrolled = true), asset, person)
+
+    val byId = testApp.service.person.getAssetFaces(asset.persistedId).map(face => face.persistedId -> face).toMap
+    byId(matchOnly.persistedId).quality shouldBe 12.5
+    byId(matchOnly.persistedId).isEnrolled shouldBe false
+    byId(enrolled.persistedId).quality shouldBe 27.25
+    byId(enrolled.persistedId).isEnrolled shouldBe true
+  }
+
+  private def makeFace(frameTimeMs: Option[Long] = None, quality: Double = 20.0, isEnrolled: Boolean = true): Face = Face(
+    x1 = 1,
+    y1 = 1,
+    width = 10,
+    height = 10,
+    detectionScore = 0.9,
+    checksum = Random.nextInt(),
+    features = Array.fill(512)(Random.nextFloat()),
+    quality = quality,
+    isEnrolled = isEnrolled,
+    frameTimeMs = frameTimeMs
+  )
+
   test("Can save and retrieve a face object") {
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
-    val faces = testApp.service.faceDetection.extractFaces(importAsset.data)
+    val faces = testApp.service.faceDetection.extractFaces(importAsset.bytes)
     faces.size should be(2)
 
     val persistedFaces = testApp.service.person.getAssetFaces(importedAsset.persistedId)
@@ -252,7 +289,7 @@ import altitude.core.util.Util
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     // two people  - one asset
-    val faces = testApp.service.faceDetection.extractFaces(importAsset.data)
+    val faces = testApp.service.faceDetection.extractFaces(importAsset.bytes)
     faces.size should be(2)
 
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
@@ -390,7 +427,9 @@ import altitude.core.util.Util
       personLabel = Some(1),
       detectionScore = 0.99,
       checksum = Random.nextInt(),
-      features = Array.fill(128)(0.1f)
+      features = Array.fill(512)(0.1f),
+      quality = 20.0,
+      isEnrolled = true
     )
 
     testApp.service.person.addFace(face, triagedAsset, person)

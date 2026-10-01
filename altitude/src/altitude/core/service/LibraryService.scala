@@ -1,4 +1,7 @@
 package altitude.core.service
+
+import java.nio.file.Files
+import java.nio.file.Path
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
@@ -33,6 +36,7 @@ import altitude.core.util.SearchResult
 object LibraryService:
   private val SUPPORTED_MEDIA_TYPES: Set[String] = Set(
     "image",
+    "video",
     "x-none" // in test, this is used to force zero-length preview data
   )
 
@@ -43,19 +47,22 @@ class LibraryService(val app: Altitude):
   def checkMediaType(asset: Asset): Unit =
     if !LibraryService.SUPPORTED_MEDIA_TYPES.contains(asset.assetType.mediaType) then throw UnsupportedMediaTypeException(asset)
 
+  /** Stages a copy of the file to import and describes it; see [[stagedFileToAsset]] */
   def convImportAsset2dataAsset(importAsset: ImportAsset): AssetWithData =
-    val assetType = app.service.metadataExtractor.detectAssetType(importAsset.data)
+    stagedFileToAsset(importAsset.fileName, app.service.staging.stageCopy(importAsset.path))
 
+  /** The asset of a staged file: its media type by content, its checksum streamed, its size; the pipeline owns the file from here */
+  def stagedFileToAsset(fileName: String, staged: Path): AssetWithData =
     val asset = Asset(
       userId = RequestContext.account.value.get.persistedId,
-      fileName = importAsset.fileName,
-      checksum = MurmurHash.hash32(importAsset.data),
-      assetType = assetType,
-      sizeBytes = importAsset.data.length,
+      fileName = fileName,
+      checksum = MurmurHash.hash32(staged),
+      assetType = app.service.metadataExtractor.detectAssetType(staged),
+      sizeBytes = Files.size(staged),
       isTriaged = true,
       folderId = ""
     )
-    AssetWithData(asset, importAsset.data)
+    AssetWithData(asset, staged)
 
   def addImportAsset(importAsset: ImportAsset): Asset =
     logger.info(s"Importing asset '$importAsset'")

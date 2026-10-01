@@ -18,6 +18,8 @@ object FileStoreFlow:
 
         debugInfo(s"\tStoring asset ${dataAsset.asset.fileName}")
         app.service.fileStore.addAsset(dataAsset)
-        Future.successful((Left(dataAsset), ctx))
+        // The staged file is gone: what follows reads the stored one
+        val stored = dataAsset.copy(path = app.service.fileStore.assetFile(dataAsset.asset.persistedId))
+        Future.successful((Left(stored), ctx))
       case (Right(invalid), ctx) => Future.successful((Right(invalid), ctx))
     }

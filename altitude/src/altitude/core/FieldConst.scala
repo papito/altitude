@@ -43,6 +43,9 @@ object FieldConst:
     val DETECTION_SCORE = "detection_score"
     val FEATURES = "features"
     val CHECKSUM = "checksum"
+    val QUALITY = "quality"
+    val IS_ENROLLED = "is_enrolled"
+    val FRAME_TIME_MS = "frame_time_ms"
 
   object Person:
     val NAME = "name"
@@ -75,6 +78,7 @@ object FieldConst:
     val ORIGINAL_CREATED_AT_SOURCE = "original_created_at_source"
     val LATITUDE = "latitude"
     val LONGITUDE = "longitude"
+    val DURATION_MS = "duration_ms"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

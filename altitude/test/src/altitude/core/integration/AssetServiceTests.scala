@@ -10,6 +10,18 @@ import altitude.core.models.Asset
 import altitude.core.util.Query
 
 @DoNotDiscover class AssetServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+  test("A Video's duration is stored and read back, and an image has none") {
+    val video: Asset = testApp.service.asset.add(testContext.makeAsset().copy(durationMs = Some(123456789L)))
+    val image: Asset = testApp.service.asset.add(testContext.makeAsset())
+
+    testApp.service.asset.getById(video.persistedId).durationMs shouldBe Some(123456789L)
+    testApp.service.asset.getById(image.persistedId).durationMs shouldBe None
+
+    val queried = testApp.service.asset.query(new Query()).records.map(asset => asset.persistedId -> asset.durationMs).toMap
+    queried(video.persistedId) shouldBe Some(123456789L)
+    queried(image.persistedId) shouldBe None
+  }
+
   test("Getting asset by invalid ID should raise NotFoundException") {
     intercept[NotFoundException] {
       testApp.service.asset.getById("invalid")

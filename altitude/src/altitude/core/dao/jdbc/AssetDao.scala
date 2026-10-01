@@ -36,6 +36,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       assetType = assetType,
       width = row.width,
       height = row.height,
+      durationMs = row.durationMs,
       sizeBytes = row.sizeBytes,
       extractedMetadata = getJsonFromColumn(row.extractedMetadata.orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(row.publicMetadata.orNull): PublicMetadata,
@@ -67,7 +68,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       assetType = assetType,
       width = rec(FieldConst.Asset.WIDTH).asInstanceOf[Int],
       height = rec(FieldConst.Asset.HEIGHT).asInstanceOf[Int],
-      sizeBytes = rec(FieldConst.Asset.SIZE_BYTES).asInstanceOf[Int],
+      durationMs = getLongField(rec(FieldConst.Asset.DURATION_MS)),
+      sizeBytes = getLongField(rec(FieldConst.Asset.SIZE_BYTES)).get,
       extractedMetadata = getJsonFromColumn(rec(FieldConst.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
       userMetadata = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)): UserMetadata,
@@ -117,9 +119,9 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
              ${FieldConst.Asset.LATITUDE}, ${FieldConst.Asset.LONGITUDE},
              ${FieldConst.CREATED_AT},
-             ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE},
+             ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE}, ${FieldConst.Asset.DURATION_MS},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
@@ -131,6 +133,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val captureSource: Any = asset.originalCreatedAtSource.map(_.dbValue).orNull
     val latitude: Any = asset.latitude.map(Double.box).orNull
     val longitude: Any = asset.longitude.map(Double.box).orNull
+    val durationMs: Any = asset.durationMs.map(Long.box).orNull
 
     val sqlVals: List[Any] = List(
       id,
@@ -153,6 +156,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.width,
       asset.height,
       asset.width * asset.height,
+      durationMs,
       UserMetadata.withIds(asset.userMetadata).toJson.toString,
       asset.extractedMetadata.toJson.toString,
       asset.publicMetadata.toJson.toString

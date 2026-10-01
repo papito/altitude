@@ -32,6 +32,41 @@ import altitude.core.util.GeoLocationResolver
     expect(resolved(sydney*), 33.857, 151.2152)
   }
 
+  test("A phone video's ISO 6709 location resolves in each of its forms, below EXIF GPS") {
+    def iso(value: String): ExtractedMetadata = ExtractedMetadata(Map("QuickTime Metadata" -> Map("ISO 6709" -> value)))
+    def resolvedIso(value: String): (Double, Double) = {
+      val point = GeoLocationResolver.resolve(iso(value)).getOrElse(fail(s"No point resolved from $value"))
+      (point.latitude, point.longitude)
+    }
+
+    expect(resolvedIso("+37.3318-122.0312+015.000/"), 37.3318, -122.0312)
+    expect(resolvedIso("-33.8570+151.2152/"), -33.857, 151.2152)
+    expect(resolvedIso("+37.3318-122.0312"), 37.3318, -122.0312)
+    // Degrees and minutes, then degrees, minutes and seconds
+    expect(resolvedIso("+4012.22-07500.25/"), 40.2037, -75.0042)
+    expect(resolvedIso("+401213.1-0750015.1/"), 40.2036, -75.0042)
+
+    GeoLocationResolver.resolve(iso("+00.0000+000.0000/")) shouldBe None
+    GeoLocationResolver.resolve(iso("+95.0000-010.0000/")) shouldBe None
+    GeoLocationResolver.resolve(iso("somewhere")) shouldBe None
+
+    val both = ExtractedMetadata(
+      Map(
+        "GPS" -> (sydney ++ List("GPS Latitude Ref" -> "N", "GPS Longitude Ref" -> "E")).toMap,
+        "QuickTime Metadata" -> Map("ISO 6709" -> "+37.3318-122.0312/")))
+    val point = GeoLocationResolver.resolve(both).get
+    expect((point.latitude, point.longitude), 33.857, 151.2152)
+  }
+
+  test("An MP4's decimal coordinates resolve when nothing else places it") {
+    def mp4(fields: (String, String)*): ExtractedMetadata = ExtractedMetadata(Map("MP4" -> fields.toMap))
+    val point = GeoLocationResolver.resolve(mp4("Latitude" -> "48.8566", "Longitude" -> "2.3522")).get
+    expect((point.latitude, point.longitude), 48.8566, 2.3522)
+    GeoLocationResolver.resolve(mp4("Latitude" -> "48.8566")) shouldBe None
+    GeoLocationResolver.resolve(mp4("Latitude" -> "0", "Longitude" -> "0")) shouldBe None
+    GeoLocationResolver.resolve(mp4("Latitude" -> "48.8566", "Longitude" -> "181")) shouldBe None
+  }
+
   test("The ref restores the sign a sub-degree description loses") {
     val london = List("GPS Latitude" -> "51° 30' 2.52\"", "GPS Latitude Ref" -> "N", "GPS Longitude" -> "0° 7' 39.36\"")
     expect(resolved(london :+ ("GPS Longitude Ref" -> "W")*), 51.5007, -0.1276)

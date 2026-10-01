@@ -19,9 +19,17 @@ object Const:
     val FACE_DETECTION_BOUNDING_BOX_SIZE = "face.detection.bounding_box_size"
     val FACE_DETECTION_MIN_FACE_SIZE = "face.detection.min_face_size"
     val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
-    val FACE_RECOGNITION_MAX_COMPARISONS_PER_PERSON = "face.recognition.max_comparisons_per_person"
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
+    // The two tiers of Face quality, see reference.conf
+    val FACE_QUALITY_ENROLL_THRESHOLD = "face.quality.enroll_threshold"
+    val FACE_QUALITY_KEEP_THRESHOLD = "face.quality.keep_threshold"
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
+
+    // How a Video is sampled for its Faces and its Preview, see reference.conf
+    val VIDEO_FACES_SAMPLE_INTERVAL_MS = "video.faces.sample_interval_ms"
+    val VIDEO_FACES_MAX_SAMPLED_FRAMES = "video.faces.max_sampled_frames"
+    val VIDEO_FACES_MIN_CLUSTER_FRAMES = "video.faces.min_cluster_frames"
+    val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
 
     // The map's basemap and the place-name search behind the Add Location dialog; both talk to third parties, see reference.conf
     val MAP_TILE_URL = "map.tile.url"
@@ -80,6 +88,7 @@ object Const:
     val FACE = "face"
     val FACES = "faces"
     val REPOSITORIES = "repositories"
+    val STAGING = "staging"
     val MODELS = "models"
 
   object PeopleTypeFilter:

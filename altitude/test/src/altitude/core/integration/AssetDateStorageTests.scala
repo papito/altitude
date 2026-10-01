@@ -8,7 +8,6 @@ import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqua
 
 import altitude.core.{ Altitude, Const }
 import altitude.core.models.{ Asset, CaptureDateSource, ExtractedMetadata, PublicMetadata }
-import altitude.core.models.{ ImportAsset, UserMetadata }
 import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery, SearchSort, SortDirection }
 
 /**
@@ -154,8 +153,8 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
       IntegrationTestUtil.generateRandomImagBytesBgr(),
       "Creation Time",
       "Thu, 4 Jul 2024 08:09:10 GMT")
-    val imported =
-      testApp.service.library.addImportAsset(ImportAsset(fileName = "cactus.png", data = data, metadata = UserMetadata()))
+    val staged = testApp.service.staging.stage(data)
+    val imported = testApp.service.library.addAsset(testApp.service.library.stagedFileToAsset("cactus.png", staged))
     imported.originalCreatedAt shouldBe Some(LocalDateTime.of(2024, 7, 4, 8, 9, 10))
     imported.originalCreatedAtSource shouldBe Some(CaptureDateSource.PngCreationTime)
     val reread = testApp.service.asset.getById(imported.persistedId)

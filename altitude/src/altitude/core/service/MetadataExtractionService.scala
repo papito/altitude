@@ -5,8 +5,8 @@ import com.drew.lang.KeyValuePair
 import com.drew.metadata.Directory
 import com.drew.metadata.png.PngDirectory
 import com.drew.metadata.xmp.XmpDirectory
-import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.nio.file.Path
 import org.apache.tika.detect.DefaultDetector
 import org.apache.tika.detect.Detector
 import org.apache.tika.io.TikaInputStream
@@ -23,11 +23,11 @@ import altitude.core.models.ExtractedMetadata
 class MetadataExtractionService:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def extract(data: Array[Byte]): ExtractedMetadata =
+  def extract(path: Path): ExtractedMetadata =
     val extractedMetadata = ExtractedMetadata()
 
     try
-      val rawMetadata: com.drew.metadata.Metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(data))
+      val rawMetadata: com.drew.metadata.Metadata = ImageMetadataReader.readMetadata(path.toFile)
 
       for (directory: Directory <- rawMetadata.getDirectories.asScala) {
         for (tag <- directory.getTags.asScala) {
@@ -61,12 +61,13 @@ class MetadataExtractionService:
   private def addValue(extractedMetadata: ExtractedMetadata, directoryName: String, key: String, value: String): Unit =
     Option(value).foreach(v => extractedMetadata.addValue(directoryName, key, v.replace("\u0000", "")))
 
-  def detectAssetType(data: Array[Byte]): AssetType =
+  /** The media type of a file by its content: a staged file carries no name to go by */
+  def detectAssetType(path: Path): AssetType =
     var inputStream: Option[InputStream] = None
 
     try
       val metadata: TikaMetadata = new TikaMetadata
-      inputStream = Some(TikaInputStream.get(data, metadata))
+      inputStream = Some(TikaInputStream.get(path, metadata))
 
       val detector: Detector = new DefaultDetector
       val tikaMediaType: TikaMediaType = detector.detect(inputStream.get, metadata)

@@ -8,13 +8,15 @@
    number (an ungrouped search) or the encoded cursor (a grouped one), never both. Every other cell carries neither.
    `alt-has-no-date` keeps its name: the controller tests assert on it. The cell's `id` is `asset-<id>` unless the grid
    holds the asset more than once (a Location grouping passes `asset-<id>-in-<locationId>`); `data-asset-id` on the
-   thumbnail box is how the client finds every cell of an asset. *@
+   thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; a Video's cell
+   wears a play badge over its Preview and shows its duration among the metadata. *@
 @(asset: Asset, isContinuousScroll: Boolean, nextPage: Option[Int] = None, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
 @defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
 <div id="@{Option(cellId).getOrElse(s"asset-${asset.persistedId}")}"
      class="@if(nextPage.isDefined || nextCursor.isDefined) {cell last-cell} else {cell}"
      data-folder-id="@{asset.folderId}"
+     data-media-type="@{asset.assetType.mediaType}"
      @if(asset.isTriaged){data-is-triaged="true"}
      @if(showNoDate && asset.originalCreatedAt.isEmpty){alt-has-no-date="true"}
      @if(nextPage.isDefined){data-app-search-next-page="@{nextPage.get}"}
@@ -32,6 +34,9 @@
         }
         @if(showNoDate && asset.originalCreatedAt.isEmpty) {
           <div class="no-date-marker">no date</div>
+        }
+        @if(asset.durationMs.isDefined) {
+          <div class="play-badge" aria-hidden="true"><i class="fas fa-play"></i></div>
         }
 
         <img data-asset-id="@{asset.persistedId}"
@@ -66,6 +71,14 @@
         <div class="dimensions" title="@{ dimensions }px">
             <span>Dimensions:</span> @{ dimensions } px
         </div>
+        }
+
+        @if(asset.durationMs.isDefined) {
+          @defining(Util.humanReadableDuration(asset.durationMs.get)) { duration =>
+          <div class="duration" title="@{ duration }">
+              <span>Duration:</span> @{ duration }
+          </div>
+          }
         }
 
         @defining(Util.humanReadableByteCount(asset.sizeBytes)) { fileSize =>

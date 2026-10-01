@@ -138,7 +138,7 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
 
-  #assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-fileSize) .cell .metadata {
+  #assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-duration, .show-fileSize) .cell .metadata {
     display: grid;
   }
 
@@ -146,6 +146,7 @@
   #assets.show-originalCreatedAt .metadata > .originalCreatedAt,
   #assets.show-importedAt .metadata > .importedAt,
   #assets.show-dimensions .metadata > .dimensions,
+  #assets.show-duration .metadata > .duration,
   #assets.show-fileSize .metadata > .fileSize {
     display: block;
   }
@@ -262,6 +263,23 @@
 
   #searchControl .total strong {
     color: var(--faded-font-color);
+  }
+
+  /* A Video's Preview wears a play badge, so a still and a clip tell apart in the grid */
+  #assets .cell .drag-drop .play-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.55);
+    font-size: 18px;
+    pointer-events: none;
   }
 
   #assets .cell .drag-drop .triage-marker,

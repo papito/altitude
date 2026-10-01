@@ -29,7 +29,7 @@ object IndexFlow:
             Future.successful((Left(persistedData), ctx))
           } catch {
             case e: DuplicateException =>
-              Future.successful(Right(InvalidAsset(dataAsset.asset, Some(e))), ctx)
+              Future.successful(Right(InvalidAsset(dataAsset, e)), ctx)
           }
         }
       case (Right(invalid), ctx) =>

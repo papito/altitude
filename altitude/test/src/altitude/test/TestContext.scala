@@ -27,6 +27,7 @@ import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
+import altitude.core.service.FaceDetectionService
 import altitude.core.util.Util
 
 object TestContext {
@@ -139,9 +140,10 @@ class TestContext(val testApp: Altitude) {
     )
   }
 
+  /** An asset over a staged random image, the way an upload hands one to the pipeline */
   def makeAssetWithData(asset: Option[Asset] = None): AssetWithData = AssetWithData(
     asset = asset.getOrElse(makeAsset()),
-    data = generateRandomImagBytesBgr(dimensions = 150)
+    path = testApp.service.staging.stage(generateRandomImagBytesBgr(dimensions = 150))
   )
 
   def persistAsset(
@@ -214,6 +216,22 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
+  /** A Face of the person in the asset with the given embedding, so recognition can be exercised on known vectors */
+  def addTestFace(person: Person, asset: Asset, features: Array[Float], isEnrolled: Boolean = true): Face =
+    testApp.service.person.addFace(
+      Face(
+        x1 = 1,
+        y1 = 1,
+        width = 10,
+        height = 10,
+        detectionScore = 0.9,
+        checksum = Random.nextInt(),
+        features = features,
+        quality = 20.0,
+        isEnrolled = isEnrolled),
+      asset,
+      person)
+
   def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {
     require(people.count(_.id.isEmpty) == 0, "Person must have an ID for a mock face to be added")
 
@@ -234,7 +252,9 @@ class TestContext(val testApp: Altitude) {
             personId = Some(person.persistedId),
             personLabel = Some(idx),
             detectionScore = Random.nextDouble(),
-            features = Array.fill(128)(Random.nextFloat()),
+            features = Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(Random.nextFloat()),
+            quality = 20.0,
+            isEnrolled = true,
             checksum = Random.nextInt()
           )
 
