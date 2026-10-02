@@ -415,6 +415,38 @@ import altitude.core.models.AssetType
     }
   }
 
+  test("An ungrouped page is bounded: rpp and p out of range are plain-text 400 errors") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val asset = persistDated("2026-09-06T10:00:00", "a1.jpg")
+
+        def rejected(params: Map[String, String]): String = {
+          val response = htmlSearch(host, repoId, params)
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("text/plain")
+          response.text()
+        }
+
+        // No page size reads every match, so it is refused like one past the bound
+        for (rpp <- List("0", "-1", "501")) withClue(s"rpp=$rpp: ") {
+          rejected(Map(Api.Field.Search.RESULTS_PER_PAGE -> rpp)) shouldBe "rpp must be between 1 and 500"
+        }
+        for (page <- List("0", "-1")) withClue(s"p=$page: ") {
+          rejected(Map(Api.Field.Search.PAGE -> page)) shouldBe "p must be 1 or more"
+          rejected(Map(Api.Field.Search.PAGE -> page, Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")) shouldBe
+            "p must be 1 or more"
+        }
+
+        val largest = htmlSearch(host, repoId, Map(Api.Field.Search.RESULTS_PER_PAGE -> "500"))
+        largest.statusCode shouldBe 200
+        largest.text() should include(cell(asset))
+    }
+  }
+
   test("Text is sorted by Relevance unless the request says otherwise, and Relevance needs text") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

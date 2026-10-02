@@ -103,7 +103,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         personIds = Set(persistedDest.persistedId)
       )
 
-      val mergedFaceCount = app.service.library.search(recountQuery).total
+      val mergedFaceCount = app.service.library.count(recountQuery)
 
       val updatedDest = persistedDest.copy(
         numOfFaces = mergedFaceCount,

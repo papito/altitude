@@ -40,8 +40,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
-   * With `groupBy`, a header opens each date or Location, and the page is continued by the `after` cursor the last cell carries
-   * (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
+   * Without `groupBy`, the page is the `p`-th of `rpp` assets (`parsePage`). With it, a header opens each date or Location, and
+   * the page is continued by the `after` cursor the last cell carries (`data-app-search-after`), never by page number
+   * (`parseGroupedQuery`). Either way `rpp` is 1 to `Const.Search.MAX_RPP`.
    *
    * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
    * them (`bbox` scopes the panel and the grid, and stays in the URL).
@@ -176,7 +177,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    val page = p.getOrElse(1)
+    val page = parsePage(rpp, p) match
+      case Left(message) => return badRequest(message)
+      case Right(page) => page
 
     val searchQuery = scope.query(rpp = rpp, page = page, searchSort = List(searchSort))
 
@@ -217,7 +220,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * A grouped request, validated up front. A problem is the message of a 400:
    *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
    *     and is refused with `location`, whose order is fixed; `after` needs `groupBy`
-   *   - `sort` was parsed by the caller (`parseSort`); `rpp` is 1 to the grouped maximum
+   *   - `sort` was parsed by the caller (`parseSort`); `rpp` is 1 to `Const.Search.MAX_RPP`
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
   private def parseGroupedQuery(
@@ -242,8 +245,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
-    if rpp < 1 || rpp > Const.Search.MAX_GROUPED_RPP then
-      return Left(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_GROUPED_RPP}")
+    pageSizeError(rpp) match
+      case Some(message) => return Left(message)
+      case None => ()
     if p.isDefined then
       return Left(s"${Api.Field.Search.PAGE} is not used by a grouped search, which is continued with ${Api.Field.Search.AFTER}")
 
@@ -261,6 +265,17 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         grouping = Some(SearchGrouping(by, direction)),
         cursor = cursor
       ))
+
+  /** The page number of an ungrouped request, which is bounded like a grouped one; a problem is the message of a 400 */
+  private def parsePage(rpp: Int, p: Option[Int]): Either[String, Int] =
+    pageSizeError(rpp)
+      .toLeft(p.getOrElse(1))
+      .filterOrElse(_ >= 1, s"${Api.Field.Search.PAGE} must be 1 or more")
+
+  /** A page size outside the bound every grid page has. Zero is outside it too: to a flat search it means no limit, every match. */
+  private def pageSizeError(rpp: Int): Option[String] =
+    Option.when(rpp < 1 || rpp > Const.Search.MAX_RPP)(
+      s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}")
 
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))

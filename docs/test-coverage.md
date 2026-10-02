@@ -284,6 +284,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ Unit tests check the Location and bounding-box filters are bound semi-joins, and that `count` renders one `COUNT` over the matching relation with no ordering or page.
 - ✅ Include descendant folders, treat root search as unrestricted folder scope including triage, filter by one/multiple people, and filter by album.
 - ✅ Paginate results with totals and page counts; handle an oversized page and a page beyond the end.
+- ✅ HTTP: an ungrouped page is bounded like a grouped one: `rpp` outside 1 to 500 (no page size included) and `p` below 1 are plain-text 400s, on a first page and a continuation alike; `rpp=500` is served.
 - ✅ Return sort metadata and hide unfinished imports from search.
 - ✅ Unit tests check generated SQL for text, metadata, folder, and sort predicates on the engine-specific builders.
 - [ ] Assert ordinary ascending/descending result order. Both existing creation-date tests compute `.forall(...)` and discard the Boolean; their comparisons also point opposite to the test names. [MEDIUM]
