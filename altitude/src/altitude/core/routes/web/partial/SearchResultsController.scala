@@ -142,6 +142,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         "HX-Replace-Url" -> browserUrl
       )
 
+    // Every grid page is bounded; zero is refused too, since to a flat search it means no limit, every match
+    if rpp < 1 || rpp > Const.Search.MAX_RPP then
+      return badRequest(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}")
+
     if groupBy.isDefined || groupDirection.isDefined || after.isDefined then
       val searchQuery =
         parseGroupedQuery(scope, rpp, p, searchSort, groupBy, groupDirection, after, isContinuousScroll) match
@@ -177,7 +181,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    val page = parsePage(rpp, p) match
+    val page = parsePage(p, rpp) match
       case Left(message) => return badRequest(message)
       case Right(page) => page
 
@@ -220,7 +224,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * A grouped request, validated up front. A problem is the message of a 400:
    *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
    *     and is refused with `location`, whose order is fixed; `after` needs `groupBy`
-   *   - `sort` was parsed by the caller (`parseSort`); `rpp` is 1 to `Const.Search.MAX_RPP`
+   *   - `sort` was parsed by the caller (`parseSort`), and `rpp` checked by it
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
   private def parseGroupedQuery(
@@ -245,9 +249,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
-    pageSizeError(rpp) match
-      case Some(message) => return Left(message)
-      case None => ()
     if p.isDefined then
       return Left(s"${Api.Field.Search.PAGE} is not used by a grouped search, which is continued with ${Api.Field.Search.AFTER}")
 
@@ -266,16 +267,15 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         cursor = cursor
       ))
 
-  /** The page number of an ungrouped request, which is bounded like a grouped one; a problem is the message of a 400 */
-  private def parsePage(rpp: Int, p: Option[Int]): Either[String, Int] =
-    pageSizeError(rpp)
-      .toLeft(p.getOrElse(1))
-      .filterOrElse(_ >= 1, s"${Api.Field.Search.PAGE} must be 1 or more")
-
-  /** A page size outside the bound every grid page has. Zero is outside it too: to a flat search it means no limit, every match. */
-  private def pageSizeError(rpp: Int): Option[String] =
-    Option.when(rpp < 1 || rpp > Const.Search.MAX_RPP)(
-      s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}")
+  /**
+   * The page number of an ungrouped request of `rpp` assets a page, or the message of a 400. The page is an offset of
+   * `(p - 1) * rpp` rows, which the query takes as an `Int`, so the last page is the last one whose every row an `Int` can number
+   * (`p * rpp`).
+   */
+  private def parsePage(p: Option[Int], rpp: Int): Either[String, Int] =
+    val lastPage = Int.MaxValue / rpp
+    val page = p.getOrElse(1)
+    Either.cond(page >= 1 && page <= lastPage, page, s"${Api.Field.Search.PAGE} must be between 1 and $lastPage")
 
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))

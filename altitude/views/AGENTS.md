@@ -812,7 +812,11 @@ default applies (Relevance with text, newest import without). The two combinatio
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
 change): `q` with the trash view becomes the repository view, and `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
-the text it ranked. A parameter still at
+the text it ranked. The server also refuses a page size outside 1 to 500 and a page number an `Int`
+does not hold; the store keeps only whole numbers in those ranges (`normalize`, with
+`Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
+default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every
+search. How far `p` may go for a given page size is the server's alone to say. A parameter still at
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 

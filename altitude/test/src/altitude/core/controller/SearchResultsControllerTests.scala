@@ -422,7 +422,9 @@ import altitude.core.models.AssetType
 
     withServer(App) {
       host =>
-        val asset = persistDated("2026-09-06T10:00:00", "a1.jpg")
+        val older = persistDated("2026-09-06T10:00:00", "a1.jpg")
+        val newer = persistDated("2026-09-07T10:00:00", "a2.jpg")
+        val continuation = Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
 
         def rejected(params: Map[String, String]): String = {
           val response = htmlSearch(host, repoId, params)
@@ -434,16 +436,24 @@ import altitude.core.models.AssetType
         // No page size reads every match, so it is refused like one past the bound
         for (rpp <- List("0", "-1", "501")) withClue(s"rpp=$rpp: ") {
           rejected(Map(Api.Field.Search.RESULTS_PER_PAGE -> rpp)) shouldBe "rpp must be between 1 and 500"
+          rejected(continuation + (Api.Field.Search.RESULTS_PER_PAGE -> rpp)) shouldBe "rpp must be between 1 and 500"
         }
-        for (page <- List("0", "-1")) withClue(s"p=$page: ") {
-          rejected(Map(Api.Field.Search.PAGE -> page)) shouldBe "p must be 1 or more"
+        // The last page is the last one whose every row an Int can number: 42949672 at the default 50
+        for (page <- List("0", "-1", "42949673", Int.MaxValue.toString)) withClue(s"p=$page: ") {
+          rejected(Map(Api.Field.Search.PAGE -> page)) shouldBe "p must be between 1 and 42949672"
           rejected(Map(Api.Field.Search.PAGE -> page, Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")) shouldBe
-            "p must be 1 or more"
+            "p must be between 1 and 42949672"
         }
+        htmlSearch(host, repoId, Map(Api.Field.Search.PAGE -> "42949672")).statusCode shouldBe 200
+        // One asset a page reaches the largest page an Int numbers
+        val last = Map(Api.Field.Search.RESULTS_PER_PAGE -> "1", Api.Field.Search.PAGE -> Int.MaxValue.toString)
+        htmlSearch(host, repoId, last).statusCode shouldBe 200
 
+        val one = htmlSearch(host, repoId, Map(Api.Field.Search.RESULTS_PER_PAGE -> "1")).text()
+        List(older, newer).count(asset => one.contains(cell(asset))) shouldBe 1
         val largest = htmlSearch(host, repoId, Map(Api.Field.Search.RESULTS_PER_PAGE -> "500"))
         largest.statusCode shouldBe 200
-        largest.text() should include(cell(asset))
+        List(older, newer).foreach(asset => largest.text() should include(cell(asset)))
     }
   }
 

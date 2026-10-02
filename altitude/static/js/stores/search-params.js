@@ -59,14 +59,23 @@ const CLEARS = {
     q: ["view", ...PLACES, "bbox"],
 }
 
-const NUMERIC = new Set(["p", "rpp"])
+/**
+ * The numbers the server reads, each held to the whole values it accepts: a page size up to its
+ * bound, and a page number an `Int` holds. How far a page may go also depends on the page size, and
+ * the server's default for it, so that bound stays the server's.
+ */
+const NUMBER_RANGES = {
+    rpp: { min: 1, max: Const.search.maxRpp },
+    p: { min: 1, max: 2 ** 31 - 1 },
+}
 
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
- * Search parameters read out of a browser URL's query string. Unknown parameters are ignored. The
- * layout is the one exception to "the URL, then the defaults": a URL that says nothing about it gets
- * the layout last chosen in this browser (`localStorage`), so a map user opens on the map.
+ * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
+ * is a page size or page number the server would refuse (`normalize`). The layout is the one
+ * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
+ * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
 export function seedSearchParams(search) {
     const urlParams = new URLSearchParams(search || "")
@@ -145,7 +154,8 @@ export function applySearchParamChanges(current, changes) {
  *
  * A grouped search has no page number - it is continued by cursor - so `p` is left out whenever
  * `groupBy` is set: the server rejects the pair, and a `p` seeded from a hand-edited URL would
- * otherwise turn the whole search into a 400.
+ * otherwise turn the whole search into a 400. A `p` or `rpp` that is not a whole number in range
+ * never gets this far (`normalize`).
  */
 export function serializeSearchParams(params, overrides = {}) {
     const query = new URLSearchParams()
@@ -224,14 +234,21 @@ function isOmitted(name, value) {
     return name !== "view" && value === DEFAULTS[name]
 }
 
+/**
+ * A parameter's value as the store keeps it. A number the server would refuse is no opinion, like an
+ * empty one, so a hand-edited URL cannot turn every search into a 400: the server's default applies.
+ */
 function normalize(name, value) {
     if (value === null || value === undefined || value === "") {
         return DEFAULTS[name]
     }
 
-    if (NUMERIC.has(name)) {
+    if (name in NUMBER_RANGES) {
         const num = Number(value)
-        return Number.isFinite(num) ? num : DEFAULTS[name]
+        const { min, max } = NUMBER_RANGES[name]
+        return Number.isInteger(num) && num >= min && num <= max
+            ? num
+            : DEFAULTS[name]
     }
 
     return String(value)

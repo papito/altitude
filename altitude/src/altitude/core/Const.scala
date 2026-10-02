@@ -56,7 +56,7 @@ object Const:
 
   object Search:
     val DEFAULT_RPP = 50
-    // Every grid page is bounded: a flat page holds full asset rows, and a grouped one carries counts for every day on it
+    // Every grid page is bounded: a flat page holds full asset rows, and a grouped one carries a count for each of its groups
     val MAX_RPP = 500
 
     // The asset columns the results UI offers as a sort; a request may sort by nothing else but Relevance
