@@ -8,7 +8,6 @@ import scala.annotation.tailrec
 import altitude.core.Altitude
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
-import altitude.core.models.FieldType
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCells
 import altitude.core.models.UserMetadataField
@@ -27,7 +26,6 @@ import altitude.core.util.SearchTerm
 import altitude.core.util.SearchWords
 
 object SearchService:
-  private val NON_FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.TEXT)
 
   /** The map's zoom levels: a web-mercator tile pyramid, from the whole world in one tile to street level */
   val MIN_ZOOM = 0
@@ -61,16 +59,16 @@ class SearchService(val app: Altitude):
   /**
    * The Search text with each term resolved against the names of the repository's people, Locations, Categories, folders and
    * albums, none of which is stored in a Search document: the candidates of every name source are read in one read-only
-   * transaction and matched in memory by their [[SearchWords]], the rule a document is matched by. A Category's matches become
-   * the IDs of its Locations, and a folder's the folder with every folder below it, so each source is a plain ID filter for the
-   * search that follows.
+   * transaction and matched in memory by the readings of their [[SearchWords]], the rule a document is matched by. A Category's
+   * matches become the IDs of its Locations, and a folder's the folder with every folder below it, so each source is a plain ID
+   * filter for the search that follows.
    */
   def resolveText(expression: SearchExpression): ResolvedSearchText =
     txManager.asReadOnly {
       val started = System.currentTimeMillis
       val names = searchDao.searchNames
-      // The words of each name once, however many terms there are
-      val words = names.view.mapValues(_.map(name => name.id -> SearchWords.of(name.name))).toMap
+      // The readings of each name once, however many terms there are
+      val variants = names.view.mapValues(_.map(name => name.id -> SearchWords.variants(name.name))).toMap
       val locationsByCategory = names(SearchSource.Location).groupMap(_.parentId)(_.id)
       val foldersByParent = names(SearchSource.Folder).groupMap(_.parentId)(_.id)
 
@@ -80,7 +78,7 @@ class SearchService(val app: Altitude):
         if children.isEmpty then found else withDescendants(found ++ children, children)
 
       def resolve(term: SearchTerm): ResolvedSearchTerm =
-        val hits = words.view.mapValues(_.collect { case (id, nameWords) if term.isIn(nameWords) => id }.toSet).toMap
+        val hits = variants.view.mapValues(_.collect { case (id, nameVariants) if term.isIn(nameVariants) => id }.toSet).toMap
         val ids = hits
           .updated(SearchSource.Category, hits(SearchSource.Category).flatMap(id => locationsByCategory.getOrElse(Some(id), Nil)))
           .updated(SearchSource.Folder, withDescendants(hits(SearchSource.Folder), hits(SearchSource.Folder)))
@@ -95,7 +93,8 @@ class SearchService(val app: Altitude):
             .flatMap(_.alternatives)
             .map(
               term =>
-                s"[${term.term.words.mkString(" ")}] ${term.ids.map((source, ids) => s"$source=${ids.size}").mkString(" ")}")
+                s"[${term.term.variants.map(_.mkString(" ")).mkString(" | ")}] " +
+                  term.ids.map((source, ids) => s"$source=${ids.size}").mkString(" "))
             .mkString(", "))
 
       resolved
@@ -161,14 +160,13 @@ class SearchService(val app: Altitude):
 
     result
 
+  /**
+   * Indexes a value just added to the asset, of any field type: a metadata parameter when the type is faceted, and the asset's
+   * Search document rewritten from the asset as given, which must already carry the value
+   */
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
-    // some fields are not eligible for parameterized search
-    if SearchService.NON_FACETED_FIELD_TYPES.contains(field.fieldType) then return
-
     searchDao.addMetadataValue(asset, field, value)
 
+  /** [[addMetadataValue]] for several values of one field */
   def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
-    // some fields are not eligible for parameterized search
-    if SearchService.NON_FACETED_FIELD_TYPES.contains(field.fieldType) then return
-
     searchDao.addMetadataValues(asset, field, values)

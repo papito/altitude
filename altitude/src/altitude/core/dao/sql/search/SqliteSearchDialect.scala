@@ -39,10 +39,11 @@ object SqliteSearchDialect extends SearchDialect:
    * subquery the name is the index's own.
    *
    * The term's words are letters and digits only, so they are safe to join into one quoted FTS5 string, which matches as the
-   * phrase of its words; a `*` after the string makes its last word a prefix (`"img 12" *`).
+   * phrase of its words; a `*` after the string makes its last word a prefix (`"img 12" *`). The readings of a term are
+   * alternatives joined by `OR` (`"mc donald" * OR "mcdonald" *`).
    */
   override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
-    val ftsQuery = term.words.mkString("\"", " ", "\"") + (if term.isPhrase then "" else " *")
+    val ftsQuery = term.variants.map(_.mkString("\"", " ", "\"") + (if term.isPhrase then "" else " *")).mkString(" OR ")
     Expr[Boolean](implicit ctx => sql"rowid IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH $ftsQuery)")
 
   /**

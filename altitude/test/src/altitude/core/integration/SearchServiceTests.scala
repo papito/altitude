@@ -393,10 +393,35 @@ import altitude.core.util.*
   }
 
   test("An imported asset has a Search document of its file name words") {
+    val asset = importAsset("IMG_1234-beach.final.jpg")
+
+    documentBody(asset) shouldBe Some("img 1234 beach final jpg")
+    testApp.service.library.search(new SearchQuery(text = Some("beach"))).total shouldBe 1
+  }
+
+  test("A Search document holds both readings of a value with a camelCase hump, with and without it") {
     val asset = importAsset("IMG_1234-beachSunset.final.jpg")
 
-    documentBody(asset) shouldBe Some("img 1234 beach sunset final jpg")
-    testApp.service.library.search(new SearchQuery(text = Some("sunset"))).total shouldBe 1
+    documentBody(asset) shouldBe Some("img 1234 beach sunset final jpg img 1234 beachsunset final jpg")
+  }
+
+  test("Search text: a word with a camelCase hump is found by the word in one case, a prefix of it, and its parts") {
+    val humped = importAsset("McDonald_beachSunset.jpg").persistedId
+    importAsset("donut.jpg")
+
+    List("mcdonald", "mcdon", "McDonald", "donald", "sunset", "beachsunset").foreach {
+      text => withClue(s"[$text] ")(found(text) shouldBe Set(humped))
+    }
+  }
+
+  test("Search text: a word typed with a camelCase hump finds the word written in one case") {
+    val capitalized = importAsset("Mcdonald.jpg").persistedId
+    val upperCase = importAsset("MCDONALD.jpg").persistedId
+    val spaced = importAsset("Mc Donald.jpg").persistedId
+    importAsset("donald.jpg")
+
+    found("McDonald") shouldBe Set(capitalized, upperCase, spaced)
+    found("\"McDonald\"") shouldBe Set(capitalized, upperCase, spaced)
   }
 
   test("Renaming an asset rewrites its Search document") {
@@ -423,6 +448,51 @@ import altitude.core.util.*
 
     testApp.service.metadata.deleteMetadataValue(assetId = asset.persistedId, valueId = value.persistedId)
     documentBody(asset) shouldBe Some("beach jpg")
+  }
+
+  test("A TEXT value added to an asset is found by the next search") {
+    val notes = testApp.service.metadata.addField(UserMetadataField(name = "notes", fieldType = FieldType.TEXT))
+    val asset = importAsset("one.jpg")
+    importAsset("two.jpg")
+
+    testApp.service.metadata.addMetadataValue(asset.persistedId, fieldId = notes.persistedId, newValue = "The tide comes in")
+
+    found("tide") shouldBe Set(asset.persistedId)
+    parameterFields(asset) shouldBe List()
+  }
+
+  test("An imported or reindexed asset has metadata parameters for its faceted values only, and is found by all of them") {
+    def addField(name: String, fieldType: FieldType): String =
+      testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = fieldType)).persistedId
+
+    val keywords = addField("keywords", FieldType.KEYWORD)
+    val count = addField("count", FieldType.NUMBER)
+    val isFlagged = addField("flagged", FieldType.BOOL)
+    val notes = addField("notes", FieldType.TEXT)
+    val shotAt = addField("shot at", FieldType.DATETIME)
+    val metadata = Map(
+      keywords -> Set("harbor", "boats"),
+      count -> Set("3"),
+      isFlagged -> Set("true"),
+      notes -> Set("The tide comes in"),
+      shotAt -> Set("2024-05-01 10:00"))
+    val asset = importAsset("one.jpg", metadata = UserMetadata(metadata))
+    importAsset("two.jpg")
+
+    def isIndexed(): Unit = {
+      parameterFields(asset) shouldBe List(keywords, keywords, count, isFlagged).sorted
+      found("tide") shouldBe Set(asset.persistedId)
+      found("2024") shouldBe Set(asset.persistedId)
+      found("harbor") shouldBe Set(asset.persistedId)
+      val filters = Map[String, Any](keywords -> "boats", count -> 3, isFlagged -> true)
+      testApp.service.library.search(new SearchQuery(metadataFilters = filters)).records.map(_.persistedId) shouldBe
+        List(asset.persistedId)
+    }
+
+    isIndexed()
+    // A rename reindexes the asset
+    testApp.service.asset.rename(asset.persistedId, "renamed.jpg")
+    isIndexed()
   }
 
   test("Recycling an asset keeps its Search document") {
@@ -735,6 +805,49 @@ import altitude.core.util.*
     found("\"mary an\"") shouldBe Set()
   }
 
+  test("Search names: a name with a camelCase hump is found by the word in one case and by the part after the hump") {
+    val byPerson = importAsset("one.jpg")
+    val byFolder = importAsset("two.jpg", Some(testApp.service.folder.add("MacArthur"))).persistedId
+    val byAlbum = importAsset("three.jpg").persistedId
+    val byLocation = importAsset("four.jpg").persistedId
+    val byCategory = importAsset("five.jpg").persistedId
+    val byOneCaseName = importAsset("six.jpg")
+    importAsset("seven.jpg")
+
+    addFace(addPerson("DeShawn"), byPerson)
+    testApp.service.album.addAssets(testApp.service.album.add("LaGuardia").persistedId, Set(byAlbum))
+    testApp.service.location.addAssets(testApp.service.location.addLocation("McAllen", 26.2, -98.2).persistedId, Set(byLocation))
+    val dekalb = testApp.service.location.addCategory("DeKalb")
+    val sycamore = testApp.service.location.addLocation("Sycamore", 41.9, -88.7, Some(dekalb.persistedId))
+    testApp.service.location.addAssets(sycamore.persistedId, Set(byCategory))
+    addFace(addPerson("Leblanc"), byOneCaseName)
+
+    found("deshawn") shouldBe Set(byPerson.persistedId)
+    found("shawn") shouldBe Set(byPerson.persistedId)
+    found("macarthur") shouldBe Set(byFolder)
+    found("arthur") shouldBe Set(byFolder)
+    found("laguardia") shouldBe Set(byAlbum)
+    found("guardia") shouldBe Set(byAlbum)
+    found("mcallen") shouldBe Set(byLocation)
+    found("allen") shouldBe Set(byLocation)
+    found("dekalb") shouldBe Set(byCategory)
+    found("kalb") shouldBe Set(byCategory)
+    // And the other way round: a name in one case is found by the word typed with a hump
+    found("LeBlanc") shouldBe Set(byOneCaseName.persistedId)
+  }
+
+  test("Search names: a phrase matches within one reading of a name with a camelCase hump") {
+    val airport = testApp.service.location.addLocation("LaGuardia Airport", 40.8, -73.9)
+    val asset = importAsset("one.jpg").persistedId
+    testApp.service.location.addAssets(airport.persistedId, Set(asset))
+
+    found("\"laguardia airport\"") shouldBe Set(asset)
+    found("\"la guardia airport\"") shouldBe Set(asset)
+    found("\"LaGuardia airport\"") shouldBe Set(asset)
+    // The two readings are not one run of words: the end of one does not lead into the other
+    found("\"airport laguardia\"") shouldBe Set()
+  }
+
   test("Search names: terms combine across sources, and an exclusion holds in every source") {
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5)
     val folder: Folder = testApp.service.folder.add("Rome trip")
@@ -882,15 +995,21 @@ import altitude.core.util.*
       .ids
       .getOrElse(SearchSource.Person, Set())
 
-  private def importAsset(fileName: String, folder: Option[Folder] = None): Asset =
+  private def importAsset(fileName: String, folder: Option[Folder] = None, metadata: UserMetadata = UserMetadata()): Asset =
     testApp.service.library.addAsset(
-      testContext.makeAssetWithData(Some(testContext.makeAsset(filename = fileName, folder = folder))))
+      testContext.makeAssetWithData(Some(testContext.makeAsset(filename = fileName, folder = folder, userMetadata = metadata))))
 
   private def addPerson(name: String): Person = testApp.service.person.addPerson(Person(name = Some(name)))
 
   /** A Face of the person in the asset; the vector is irrelevant to search */
   private def addFace(person: Person, asset: Asset): Face =
     testContext.addTestFace(person, asset, Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(Random.nextFloat()))
+
+  /** The fields of an asset's metadata parameter rows, one per indexed value, sorted */
+  private def parameterFields(asset: Asset): List[String] =
+    testApp.txManager.asReadOnly {
+      query("SELECT field_id FROM metadata_parameter WHERE asset_id = ?", asset.persistedId).map(_("field_id").toString).sorted
+    }
 
   /** The stored body of an asset's Search document, if it has one */
   private def documentBody(asset: Asset): Option[String] =

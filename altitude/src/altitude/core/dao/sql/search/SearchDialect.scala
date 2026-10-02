@@ -32,8 +32,8 @@ trait SearchDialect:
   def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]]
 
   /**
-   * The engine's full-text predicate over one search document: whether it has the term's words, consecutively and in order, the
-   * last one as a prefix unless the term is a phrase. Exclusion is the caller's to apply.
+   * The engine's full-text predicate over one search document: whether it has the words of any of the term's readings,
+   * consecutively and in order, the last one as a prefix unless the term is a phrase. Exclusion is the caller's to apply.
    */
   def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean]
 

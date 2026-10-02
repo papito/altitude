@@ -18,8 +18,8 @@ import altitude.core.util.SearchText
 
 @DoNotDiscover class SearchTextTests extends AnyFunSuite {
 
-  private def bare(words: String*): SearchTerm = SearchTerm(words)
-  private def phrase(words: String*): SearchTerm = SearchTerm(words, isPhrase = true)
+  private def bare(words: String*): SearchTerm = SearchTerm(Seq(words))
+  private def phrase(words: String*): SearchTerm = SearchTerm(Seq(words), isPhrase = true)
   private def not(term: SearchTerm): SearchTerm = term.copy(isExcluded = true)
 
   /** The expression whose groups are the given alternatives, in order */
@@ -47,7 +47,14 @@ import altitude.core.util.SearchText
   }
 
   test("A bare term is its words in sequence") {
-    SearchText.parse("IMG_1234 beachSunset") shouldBe expression(Seq(bare("img", "1234")), Seq(bare("beach", "sunset")))
+    SearchText.parse("IMG_1234 beach.sunset") shouldBe expression(Seq(bare("img", "1234")), Seq(bare("beach", "sunset")))
+  }
+
+  test("A term with a camelCase hump, bare or a phrase, is both of its readings") {
+    SearchText.parse("beachSunset \"McDonald farm\"") shouldBe expression(
+      Seq(SearchTerm(Seq(Seq("beach", "sunset"), Seq("beachsunset")))),
+      Seq(SearchTerm(Seq(Seq("mc", "donald", "farm"), Seq("mcdonald", "farm")), isPhrase = true))
+    )
   }
 
   test("OR makes alternatives of its neighbours and binds tighter than AND") {
@@ -141,7 +148,7 @@ import altitude.core.util.SearchText
   }
 
   test("A term is in a name that has its words consecutively and in order, the last one as a prefix") {
-    val name = Seq("img", "1234", "beach", "sunset")
+    val name = Seq(Seq("img", "1234", "beach", "sunset"))
 
     bare("beach").isIn(name) shouldBe true
     bare("sun").isIn(name) shouldBe true
@@ -156,12 +163,23 @@ import altitude.core.util.SearchText
   }
 
   test("A phrase is in a name that has its words whole") {
-    val name = Seq("golden", "gate", "bridge")
+    val name = Seq(Seq("golden", "gate", "bridge"))
 
     phrase("golden", "gate").isIn(name) shouldBe true
     phrase("bridge").isIn(name) shouldBe true
     phrase("golden", "gat").isIn(name) shouldBe false
     phrase("gate", "golden").isIn(name) shouldBe false
     phrase("golden", "gate", "bridge", "park").isIn(name) shouldBe false
+  }
+
+  test("A term is in a name when any of its readings is within one reading of the name") {
+    val name = Seq(Seq("la", "guardia", "airport"), Seq("laguardia", "airport"))
+
+    bare("laguar").isIn(name) shouldBe true
+    bare("guardia", "air").isIn(name) shouldBe true
+    phrase("laguardia", "airport").isIn(name) shouldBe true
+    SearchTerm(Seq(Seq("mc", "donald"), Seq("mcdonald"))).isIn(Seq(Seq("mcdonald", "farm"))) shouldBe true
+    // The readings of a name are not one run of words
+    phrase("airport", "laguardia").isIn(name) shouldBe false
   }
 }

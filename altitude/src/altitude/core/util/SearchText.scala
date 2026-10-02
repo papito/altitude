@@ -3,14 +3,20 @@ package altitude.core.util
 import org.slf4j.LoggerFactory
 
 /**
- * One thing to look for, as [[SearchWords]] (never empty) that must appear consecutively and in order within one name or one
- * Search document. In a phrase every word is a whole word; otherwise the last word matches the start of a word and the ones
- * before it are whole. An excluded term must not match in any source.
+ * One thing to look for: the [[SearchWords.variants]] of what was typed (never empty, none empty), any one of which must appear
+ * consecutively and in order within one name or one Search document. In a phrase every word is a whole word; otherwise the last
+ * word matches the start of a word and the ones before it are whole. An excluded term must not match in any source.
  */
-case class SearchTerm(words: Seq[String], isPhrase: Boolean = false, isExcluded: Boolean = false):
+case class SearchTerm(variants: Seq[Seq[String]], isPhrase: Boolean = false, isExcluded: Boolean = false):
 
-  /** Whether a name of these [[SearchWords]] has the term: the rule a Search document is matched by, applied in memory */
-  def isIn(nameWords: Seq[String]): Boolean =
+  /**
+   * Whether a name, given as its [[SearchWords.variants]], has the term: the rule a Search document is matched by, applied in
+   * memory to each reading of the name on its own
+   */
+  def isIn(nameVariants: Seq[Seq[String]]): Boolean =
+    variants.exists(words => nameVariants.exists(nameWords => isWithin(words, nameWords)))
+
+  private def isWithin(words: Seq[String], nameWords: Seq[String]): Boolean =
     nameWords.sliding(words.size).exists {
       window =>
         // A name shorter than the term still yields one, short, window
@@ -54,7 +60,10 @@ object SearchText:
           val typed = if isPhrase then found.group(2) else found.group(3)
 
           if !isPhrase && !isExcluded && typed == Or then Some(None)
-          else Some(SearchWords.of(typed)).filter(_.nonEmpty).map(words => Some(SearchTerm(words, isPhrase, isExcluded)))
+          else
+            Some(SearchWords.variants(typed))
+              .filter(_.nonEmpty)
+              .map(variants => Some(SearchTerm(variants, isPhrase, isExcluded)))
       }
       .toSeq
 

@@ -113,6 +113,15 @@ import altitude.core.util.SortValue
     textBinds(SqliteSearchDialect, text) shouldBe List("\"beach\" *", "\"img 12\" *", "\"golden gate\"", "\"lake\"")
   }
 
+  test("A term with a camelCase hump is bound as one query string, the OR of its readings") {
+    val text = """McDonald "LaGuardia airport""""
+
+    textBinds(PostgresSearchDialect, text) shouldBe
+      List("mc <-> donald:* | mcdonald:*", "la <-> guardia <-> airport | laguardia <-> airport")
+    textBinds(SqliteSearchDialect, text) shouldBe
+      List("\"mc donald\" * OR \"mcdonald\" *", "\"la guardia airport\" OR \"laguardia airport\"")
+  }
+
   test("Text without a usable term adds no filter") {
     for ((engine, dialect) <- engines) withClue(engine) {
       flat(dialect, new SearchQuery(text = Some("- !!! OR"))).contains("search_document") shouldBe false

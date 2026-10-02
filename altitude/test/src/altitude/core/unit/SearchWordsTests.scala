@@ -40,4 +40,24 @@ import altitude.core.util.SearchWords
     SearchWords.of("") shouldBe empty
     SearchWords.of(" -_. \"") shouldBe empty
   }
+
+  test("Text with a camelCase hump has two readings: its words, then the same rule without the hump boundary") {
+    SearchWords.variants("McDonald_beachSunset.jpg") shouldBe
+      Seq(Seq("mc", "donald", "beach", "sunset", "jpg"), Seq("mcdonald", "beachsunset", "jpg"))
+    SearchWords.variants("ÉcoleMaternelle") shouldBe Seq(Seq("ecole", "maternelle"), Seq("ecolematernelle"))
+  }
+
+  test("Text without a camelCase hump has one reading, its words") {
+    SearchWords.variants("IMG_1234-beach.final.jpg") shouldBe Seq(Seq("img", "1234", "beach", "final", "jpg"))
+    SearchWords.variants("HTMLParser MCDONALD mcdonald") shouldBe Seq(Seq("htmlparser", "mcdonald", "mcdonald"))
+  }
+
+  test("Both readings split letters from digits") {
+    SearchWords.variants("iPhone12Pro") shouldBe Seq(Seq("i", "phone", "12", "pro"), Seq("iphone", "12", "pro"))
+  }
+
+  test("Text without a letter or a digit has no reading") {
+    SearchWords.variants("") shouldBe empty
+    SearchWords.variants(" -_. \"") shouldBe empty
+  }
 }

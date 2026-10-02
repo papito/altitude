@@ -38,10 +38,11 @@ object PostgresSearchDialect extends SearchDialect:
    * query is read with the `simple` configuration the vector is generated with.
    *
    * The term's words are letters and digits only, so they are safe to join into tsquery syntax: `<->` is "directly followed by",
-   * and `:*` makes the last word a prefix (`img <-> 12:*`).
+   * and `:*` makes the last word a prefix (`img <-> 12:*`). The readings of a term are alternatives joined by `|`, which binds
+   * looser than `<->` (`mc <-> donald:* | mcdonald:*`).
    */
   override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
-    val tsQuery = term.words.mkString(" <-> ") + (if term.isPhrase then "" else ":*")
+    val tsQuery = term.variants.map(_.mkString(" <-> ") + (if term.isPhrase then "" else ":*")).mkString(" | ")
     Expr[Boolean](implicit ctx => sql"tsv @@ to_tsquery('simple', $tsQuery)")
 
   override def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?] =

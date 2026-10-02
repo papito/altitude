@@ -34,6 +34,12 @@ import altitude.core.util.SearchWords
 import altitude.core.util.SortValue
 
 object SearchDao:
+  /**
+   * The field types a metadata filter can match: the ones with a value column in `metadata_parameter` that the insert writes. A
+   * value of any other type is searchable through the Search document only.
+   */
+  private val FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.KEYWORD, FieldType.NUMBER, FieldType.BOOL)
+
   private val VALUE_INSERT_SQL: String = s"""
             INSERT INTO metadata_parameter (
                         ${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID},
@@ -177,10 +183,13 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     if isFirstPage then Db.read(dialect)(_.runSql[(Row, Int)](statement)).map((row, total) => (row, Some(total)))
     else Db.read(dialect)(_.runSql[Row](statement)).map(row => (row, None))
 
-  /** Writes the asset's Search document, new or not: the words of its file name, then those of every user metadata value */
+  /**
+   * Writes the asset's Search document, new or not: the words of its file name, then those of every user metadata value, each in
+   * every one of its readings ([[SearchWords.variants]])
+   */
   protected def writeDocument(asset: Asset): Unit =
     val metadataValues = asset.userMetadata.data.values.flatten.map(_.value)
-    val body = (asset.fileName +: metadataValues.toSeq).flatMap(SearchWords.of).mkString(" ")
+    val body = (asset.fileName +: metadataValues.toSeq).flatMap(SearchWords.variants).flatten.mkString(" ")
     logger.debug(s"Writing the search document of asset ${asset.persistedId}: [$body]")
     updateByBySql(SearchDao.DOCUMENT_UPSERT_SQL, List(RequestContext.getRepository.persistedId, asset.persistedId, body))
 
@@ -218,7 +227,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
           val field = metadataFields(fieldId)
           val values = m._2
           logger.debug(s"Processing field [${field.nameLowercase}] with values [$values]")
-          addMetadataValues(asset = asset, field = field, values = values.map(_.value))
+          addParameters(asset = asset, field = field, values = values.map(_.value))
         else logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
     }
 
@@ -226,6 +235,15 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     addMetadataValues(asset = asset, field = field, values = Set(value))
 
   override def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
+    addParameters(asset = asset, field = field, values = values)
+    writeDocument(asset)
+
+  /** One `metadata_parameter` row per value of a faceted field type; nothing for any other type */
+  private def addParameters(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
+    if !SearchDao.FACETED_FIELD_TYPES.contains(field.fieldType) then
+      logger.debug(s"Field [${field.nameLowercase}] of type ${field.fieldType} has no metadata parameters")
+      return
+
     logger.debug(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString}")
     val preparedStatement: PreparedStatement = RequestContext.getConn.prepareStatement(SearchDao.VALUE_INSERT_SQL)
     values.foreach {
@@ -246,4 +264,3 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         BaseDao.incrWriteQueryCount()
         preparedStatement.execute()
     }
-    writeDocument(asset)
