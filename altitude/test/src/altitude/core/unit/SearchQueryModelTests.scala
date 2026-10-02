@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 
 import altitude.core.util.BoundingBox
 import altitude.core.util.SearchQuery
+import altitude.core.util.SearchSort
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {
 
@@ -22,6 +23,12 @@ import altitude.core.util.SearchQuery
     intercept[IllegalArgumentException] {
       new SearchQuery(page = -1)
     }
+  }
+
+  test("The Relevance sort needs Search text with a usable term") {
+    new SearchQuery(text = Some("beach"), searchSort = List(SearchSort.Relevance)).isText shouldBe true
+    intercept[IllegalArgumentException](new SearchQuery(searchSort = List(SearchSort.Relevance)))
+    intercept[IllegalArgumentException](new SearchQuery(text = Some("- OR"), searchSort = List(SearchSort.Relevance)))
   }
 
   test("A bounding box parses south,west,north,east, checks its ranges and knows the antimeridian") {

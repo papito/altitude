@@ -9,6 +9,7 @@ import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
+import altitude.core.util.SearchTerm
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
@@ -30,8 +31,11 @@ trait SearchDialect:
    */
   def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]]
 
-  /** The engine's full-text predicate over one search document */
-  def textMatch(document: SearchDocumentRow[Expr], text: String): Expr[Boolean]
+  /**
+   * The engine's full-text predicate over one search document: whether it has the term's words, consecutively and in order, the
+   * last one as a prefix unless the term is a phrase. Exclusion is the caller's to apply.
+   */
+  def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean]
 
   /** The ORDER BY term for the sort within a group. Engines may decorate it to steer their planner. */
   def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?]

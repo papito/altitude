@@ -3,6 +3,8 @@ package altitude.core.service
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.annotation.tailrec
+
 import altitude.core.Altitude
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
@@ -13,9 +15,16 @@ import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchResult
+import altitude.core.util.ResolvedSearchGroup
+import altitude.core.util.ResolvedSearchTerm
+import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchCursor
+import altitude.core.util.SearchExpression
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import altitude.core.util.SearchSource
+import altitude.core.util.SearchTerm
+import altitude.core.util.SearchWords
 
 object SearchService:
   private val NON_FACETED_FIELD_TYPES: Set[FieldType] = Set(FieldType.TEXT)
@@ -49,6 +58,49 @@ class SearchService(val app: Altitude):
     val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
     searchDao.reindexAsset(asset, metadataFields)
 
+  /**
+   * The Search text with each term resolved against the names of the repository's people, Locations, Categories, folders and
+   * albums, none of which is stored in a Search document: the candidates of every name source are read in one read-only
+   * transaction and matched in memory by their [[SearchWords]], the rule a document is matched by. A Category's matches become
+   * the IDs of its Locations, and a folder's the folder with every folder below it, so each source is a plain ID filter for the
+   * search that follows.
+   */
+  def resolveText(expression: SearchExpression): ResolvedSearchText =
+    txManager.asReadOnly {
+      val started = System.currentTimeMillis
+      val names = searchDao.searchNames
+      // The words of each name once, however many terms there are
+      val words = names.view.mapValues(_.map(name => name.id -> SearchWords.of(name.name))).toMap
+      val locationsByCategory = names(SearchSource.Location).groupMap(_.parentId)(_.id)
+      val foldersByParent = names(SearchSource.Folder).groupMap(_.parentId)(_.id)
+
+      /** The folders with every folder below them, level by level; a folder already found is never revisited */
+      @tailrec def withDescendants(found: Set[String], level: Set[String]): Set[String] =
+        val children = level.flatMap(id => foldersByParent.getOrElse(Some(id), Nil)) -- found
+        if children.isEmpty then found else withDescendants(found ++ children, children)
+
+      def resolve(term: SearchTerm): ResolvedSearchTerm =
+        val hits = words.view.mapValues(_.collect { case (id, nameWords) if term.isIn(nameWords) => id }.toSet).toMap
+        val ids = hits
+          .updated(SearchSource.Category, hits(SearchSource.Category).flatMap(id => locationsByCategory.getOrElse(Some(id), Nil)))
+          .updated(SearchSource.Folder, withDescendants(hits(SearchSource.Folder), hits(SearchSource.Folder)))
+        ResolvedSearchTerm(term, ids.filter((_, matching) => matching.nonEmpty))
+
+      val resolved =
+        ResolvedSearchText(expression.groups.map(group => ResolvedSearchGroup(group.alternatives.map(resolve))))
+
+      logger.debug(
+        s"Resolved the Search text against ${names.values.map(_.size).sum} names in ${System.currentTimeMillis - started}ms: " +
+          resolved.groups
+            .flatMap(_.alternatives)
+            .map(
+              term =>
+                s"[${term.term.words.mkString(" ")}] ${term.ids.map((source, ids) => s"$source=${ids.size}").mkString(" ")}")
+            .mkString(", "))
+
+      resolved
+    }
+
   def search(query: SearchQuery): SearchResult =
     searchDao.search(query)
 
@@ -72,7 +124,8 @@ class SearchService(val app: Altitude):
 
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
-   * points at the last returned image and carries the scope fingerprint of the search as requested.
+   * points at the last returned image and carries the scope fingerprint of the search as requested; under the Relevance sort,
+   * which orders by the capture time next, it carries that too.
    */
   def searchGrouped(query: SearchQuery, scopeFingerprint: String): GroupedSearchResult =
     val started = System.currentTimeMillis
@@ -85,7 +138,9 @@ class SearchService(val app: Altitude):
         groupId = last.group.cursorGroupId,
         sortValue = last.sortValue,
         id = last.asset.persistedId,
-        scope = scopeFingerprint)
+        scope = scopeFingerprint,
+        secondSortValue = Option.when(query.searchSort.head.isRelevance)(last.secondSortValue)
+      )
     }
 
     val groups = GroupedSearchResult.groupsOf(page.rows)

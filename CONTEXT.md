@@ -85,3 +85,31 @@ A Face of lesser quality, or seen in too few Sampled frames of a Video: it may
 join a known Person but never starts one, is never a match candidate, and is
 dropped when it matches nobody.
 _Avoid_: Weak face, Low-quality face in user-facing text.
+
+**Search text**:
+What the user types into the search input: Search terms, optionally joined by
+`OR`, excluded with a leading `-`, or quoted into a phrase. It always searches
+the whole repository outside the trash.
+_Avoid_: Query, Keywords, Search string in user-facing text.
+
+**Search term**:
+One word or one quoted phrase of the Search text. A word matches the start of a
+word; a phrase matches whole consecutive words within a single name.
+_Avoid_: Token, Keyword.
+
+**Search source**:
+A kind of name a Search term can match: a Person, a Location, a Category, a
+folder on the asset's folder path, an album, or the asset's Search document.
+_Avoid_: Field, Facet.
+
+**Search document**:
+The searchable words kept for one asset itself: those of its file name and of
+its user metadata values. Names of people, Locations, Categories, folders and
+albums are not part of it.
+_Avoid_: Index entry, Search index when referring to one asset's words.
+
+**Relevance**:
+How strongly an asset matches the Search text: each Search term counts for the
+most important Search source it matched (Person, then Location, Category, folder
+or album, Search document), and the terms add up.
+_Avoid_: Rank, Score, Weight in user-facing text.

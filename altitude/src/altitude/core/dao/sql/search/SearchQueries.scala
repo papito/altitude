@@ -28,10 +28,13 @@ import altitude.core.models.LocationKind
 import altitude.core.util.BoundingBox
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
+import altitude.core.util.ResolvedSearchGroup
+import altitude.core.util.ResolvedSearchTerm
+import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchCursor
-import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
+import altitude.core.util.SearchSource
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
@@ -67,8 +70,8 @@ object SearchQueries:
     AssetRow.select
       .filter(asset => (asset.repositoryId `=` repositoryId) && (asset.isPipelineProcessed `=` true))
       .filter(asset => DynamicFilter(AssetRow, Columns.of(AssetRow, asset, engine.dialect), query, engine.dialect))
-      .filterIf(query.folderIds.nonEmpty)(asset => Columns.isIn(asset.folderId, query.folderIds, engine.dialect))
-      .filterIf(query.isText)(asset => textFilter(engine, asset, query.text.get, repositoryId))
+      .filterIf(query.folderIds.nonEmpty)(asset => folderFilter(engine, asset, query.folderIds))
+      .filterIf(query.isText)(asset => textFilter(engine, asset, query.requireResolvedText, repositoryId))
       .filterIf(query.hasMetadataFilters)(asset => metadataFilter(engine, asset, query, repositoryId))
       .filterIf(query.personIds.nonEmpty)(asset => personFilter(engine, asset, query.personIds))
       .filterIf(query.albumIds.nonEmpty)(asset => albumFilter(engine, asset, query.albumIds))
@@ -84,9 +87,13 @@ object SearchQueries:
   /**
    * One page of a flat search, with the count of every match carried on each row.
    *
-   * The window count is added before the ordering and the page, so it counts the whole match rather than the page. A missing
-   * capture time creates a large tie group, so the ID is always the last ordering term: without it an offset page is not
-   * deterministic. The last `sortBy` call is the leading `ORDER BY` term, and every one of them has to precede the page.
+   * The window count is added before the ordering and the page, so it counts the whole match rather than the page. The order is
+   * the one a grouped page has within a group ([[orderWithinGroup]]): the sort, then the ID. A missing capture time creates a
+   * large tie group, and without the ID an offset page is not deterministic.
+   *
+   * The `ORDER BY` is rendered over the asset's own columns ([[orderedBy]]) rather than as typed `sortBy` terms, which name the
+   * select list's aliases: PostgreSQL accepts an alias as a whole ordering term but not inside an expression, and the Relevance
+   * is an expression over the asset's columns.
    */
   def flat(
       engine: SearchDialect,
@@ -96,12 +103,8 @@ object SearchQueries:
 
     val counted = matching(engine, query, repositoryId).mapAggregate((asset, aggregate) => (asset, aggregate.size.over))
 
-    val sorted = query.searchSort.headOption.fold(counted) {
-      sort =>
-        val byId = counted.sortBy(_._1.id).asc
-        val ordered = byId.sortBy(row => Columns.required(AssetRow, row._1, sort.field, engine.dialect))
-        if sort.direction == SortDirection.DESC then ordered.desc else ordered.asc
-    }
+    val asset = WithSqlExpr.get(counted)._1
+    val sorted = if query.isSorted then orderedBy(counted, orderWithinGroup(engine, query, repositoryId, asset)) else counted
 
     if query.rpp > 0 then sorted.drop((query.page - 1) * query.rpp).take(query.rpp) else sorted
 
@@ -115,7 +118,8 @@ object SearchQueries:
    *
    * A page reached by cursor skips the overall count: it is the dominant cost of the statement on a large library, and the footer
    * total was set by the first page. Ordering is day, then the sort, then the ID as a deterministic tiebreaker. Nulls fall where
-   * the engine puts them natively; an explicit NULLS clause would forfeit index-ordered reads on both engines.
+   * the engine puts them natively; an explicit NULLS clause would forfeit index-ordered reads on both engines. The Relevance sort
+   * is the exception ([[orderWithinGroup]]): no index orders a computed value, so its capture-time tiebreaker places them itself.
    *
    * The shell is hand-written on purpose: `MATERIALIZED`, the guarded `LIMIT CASE`, SQLite's planner hint and native null
    * placement are all tuned against the two engines' plans, and none of them can be expressed through a typed query.
@@ -140,16 +144,18 @@ object SearchQueries:
 
     /** The narrow candidate relation, ordered and sliced in the context that names its own columns */
     def candidates(extra: Option[AssetRow[Expr] => Expr[Boolean]], limit: SqlStr): SqlStr =
-      val projected = extra.fold(base)(base.filter).map(row => (row.id, day(row), sortValue(engine, row, sort)))
+      val projected = extra
+        .fold(base)(base.filter)
+        .map(row => (row.id, day(row), sortValue(engine, query, repositoryId, row), secondSortValue(engine, sort, row)))
       sliced(
         engine,
         projected,
-        sql"${day(asset)} ${towards(grouping.direction)}, ${engine.secondarySort(asset, sort, grouping)} ${towards(sort.direction)}, ${asset.id} ASC",
+        sql"${day(asset)} ${towards(grouping.direction)}, ${orderWithinGroup(engine, query, repositoryId, asset)}",
         limit
       )
 
     val continuation =
-      query.cursor.map(cursor => (row: AssetRow[Expr]) => afterDay(engine, cursor, cursorDay, dateField, grouping, sort, row))
+      query.cursor.map(_ => (row: AssetRow[Expr]) => afterDay(engine, query, repositoryId, cursorDay, dateField, row))
     val dated = candidates(continuation, SqlStr.raw(s" LIMIT ${query.rpp + 1}"))
 
     // A day range never reaches NULL. Only a transition from dated rows to the trailing null group needs a second slice.
@@ -160,7 +166,7 @@ object SearchQueries:
         val undated = candidates(Some(isUndated), guardedLimit("dated", query.rpp))
         sql"""dated $narrowColumns AS MATERIALIZED ($dated), undated $narrowColumns AS MATERIALIZED ($undated),
           candidates $narrowColumns AS MATERIALIZED (
-            SELECT id, day, sort_value FROM dated UNION ALL SELECT id, day, sort_value FROM undated)"""
+            SELECT $narrowColumnList FROM dated UNION ALL SELECT $narrowColumnList FROM undated)"""
       else sql"candidates $narrowColumns AS MATERIALIZED ($dated)"
 
     // Separate equality and IS NULL probes keep both counts on the day index. The null driver is empty on dated-only pages.
@@ -176,25 +182,25 @@ object SearchQueries:
     val (totalCte, totalColumn, totalJoin) = totalFragments(engine, base, isFirstPage)
 
     def order(prefix: String): SqlStr =
-      SqlStr.raw(s"$prefix.day ${grouping.direction}, $prefix.sort_value ${sort.direction}, $prefix.id ASC")
+      SqlStr.raw(s"${prefix}day ${grouping.direction}, ${candidateOrderWithinGroup(prefix, sort)}")
 
     sql"""
       WITH $candidatesCte, page $narrowColumns AS MATERIALIZED (
-        SELECT id, day, sort_value FROM candidates
-         ORDER BY ${SqlStr.raw(s"day ${grouping.direction}, sort_value ${sort.direction}, id ASC")}
+        SELECT $narrowColumnList FROM candidates
+         ORDER BY ${order("")}
          LIMIT ${SqlStr.raw(query.rpp.toString)}
       ), day_counts AS MATERIALIZED (
         SELECT p.day AS day,
                (SELECT count(*) FROM (${matchingIds(engine, base, Some(isCursorDay))}) AS m) AS n
           FROM (SELECT DISTINCT day FROM page$datedDriver) AS p$nullCount
       )$totalCte
-      SELECT $assetColumns, p.day AS day, p.sort_value AS sort_value, d.n AS day_total,
+      SELECT $assetColumns, p.day AS day, p.sort_value AS sort_value, p.second_sort_value AS second_sort_value, d.n AS day_total,
              (SELECT count(*) FROM candidates) AS candidate_count$totalColumn
         FROM page AS p
              JOIN asset ON asset.id = p.id
              LEFT JOIN day_counts AS d ON d.day = p.day$nullJoin
              $totalJoin
-       ORDER BY ${order("p")}
+       ORDER BY ${order("p.")}
     """
 
   /**
@@ -214,7 +220,6 @@ object SearchQueries:
     import engine.dialect.*
     given TypeMapper[SortValue] = engine.sortValueMapper
 
-    val grouping = query.grouping.getOrElse(throw IllegalArgumentException("A grouped search needs a grouping"))
     val sort = query.searchSort.head
     val base = matching(engine, query, repositoryId)
     val isFirstPage = query.cursor.isEmpty
@@ -238,7 +243,7 @@ object SearchQueries:
     def afterLocation(cursor: SearchCursor): Expr[Boolean] =
       val key = cursor.key.get
       val groupId = cursor.groupId.getOrElse(throw IllegalArgumentException("A Location cursor needs its group ID"))
-      val after = afterBySort(engine, cursor, sort, asset, idOnly = false)
+      val after = afterBySort(engine, query, repositoryId, asset, idOnly = false)
       Expr[Boolean] {
         implicit ctx =>
           sql"($pathKey > $key OR ($pathKey = $key AND (${location.id} > $groupId OR (${location.id} = $groupId AND $after))))"
@@ -248,8 +253,18 @@ object SearchQueries:
       engine,
       located
         .filterIf(query.cursor.isDefined && inLocatedPart)(_ => afterLocation(query.cursor.get))
-        .map(_ => (asset.id, location.id, pathKey, location.name, categoryName, sortValue(engine, asset, sort))),
-      sql"$pathKey ASC, ${location.id} ASC, ${engine.secondarySort(asset, sort, grouping)} ${towards(sort.direction)}, ${asset.id} ASC",
+        .map {
+          _ =>
+            (
+              asset.id,
+              location.id,
+              pathKey,
+              location.name,
+              categoryName,
+              sortValue(engine, query, repositoryId, asset),
+              secondSortValue(engine, sort, asset))
+        },
+      sql"$pathKey ASC, ${location.id} ASC, ${orderWithinGroup(engine, query, repositoryId, asset)}",
       SqlStr.raw(s" LIMIT ${query.rpp + 1}")
     )
 
@@ -258,9 +273,19 @@ object SearchQueries:
     val unlocatedSlice = sliced(
       engine,
       unlocatedBase
-        .filterIf(!inLocatedPart)(row => afterBySort(engine, query.cursor.get, sort, row, idOnly = false))
-        .map(row => (row.id, nullText, nullText, nullText, nullText, sortValue(engine, row, sort))),
-      sql"${engine.secondarySort(unlocatedAsset, sort, grouping)} ${towards(sort.direction)}, ${unlocatedAsset.id} ASC",
+        .filterIf(!inLocatedPart)(row => afterBySort(engine, query, repositoryId, row, idOnly = false))
+        .map {
+          row =>
+            (
+              row.id,
+              nullText,
+              nullText,
+              nullText,
+              nullText,
+              sortValue(engine, query, repositoryId, row),
+              secondSortValue(engine, sort, row))
+        },
+      sql"${orderWithinGroup(engine, query, repositoryId, unlocatedAsset)}",
       if inLocatedPart then guardedLimit("located", query.rpp) else SqlStr.raw(s" LIMIT ${query.rpp + 1}")
     )
 
@@ -282,13 +307,13 @@ object SearchQueries:
 
     // Located rows first whatever the engine's null placement, then path order
     def order(prefix: String): SqlStr = SqlStr.raw(
-      s"CASE WHEN $prefix.location_id IS NULL THEN 1 ELSE 0 END, $prefix.path_key ASC, $prefix.location_id ASC, " +
-        s"$prefix.sort_value ${sort.direction}, $prefix.id ASC")
+      s"CASE WHEN ${prefix}location_id IS NULL THEN 1 ELSE 0 END, ${prefix}path_key ASC, ${prefix}location_id ASC, " +
+        candidateOrderWithinGroup(prefix, sort))
 
     sql"""
       WITH $candidatesCte, page $locationColumns AS MATERIALIZED (
         SELECT $locationColumnList FROM candidates AS c
-         ORDER BY ${order("c")}
+         ORDER BY ${order("c.")}
          LIMIT ${SqlStr.raw(query.rpp.toString)}
       ), group_counts AS MATERIALIZED (
         SELECT p.location_id AS location_id,
@@ -300,13 +325,14 @@ object SearchQueries:
           FROM (SELECT DISTINCT location_id FROM page WHERE location_id IS NULL) AS p
       )$totalCte
       SELECT $assetColumns, p.location_id AS location_id, p.path_key AS path_key, p.location_name AS location_name,
-             p.category_name AS category_name, p.sort_value AS sort_value, g.n AS group_total,
+             p.category_name AS category_name, p.sort_value AS sort_value, p.second_sort_value AS second_sort_value,
+             g.n AS group_total,
              (SELECT count(*) FROM candidates) AS candidate_count$totalColumn
         FROM page AS p
              JOIN asset ON asset.id = p.id
              LEFT JOIN group_counts AS g ON g.location_id = p.location_id OR (g.location_id IS NULL AND p.location_id IS NULL)
              $totalJoin
-       ORDER BY ${order("p")}
+       ORDER BY ${order("p.")}
     """
 
   /**
@@ -407,18 +433,19 @@ object SearchQueries:
    */
   private def afterDay(
       engine: SearchDialect,
-      cursor: SearchCursor,
+      query: SearchQuery,
+      repositoryId: String,
       cursorDay: Option[LocalDate],
       dateField: String,
-      grouping: SearchGrouping,
-      sort: SearchSort,
       row: AssetRow[Expr]): Expr[Boolean] =
     import engine.dialect.*
 
+    val grouping = query.grouping.get
     val dayOp = SqlStr.raw(if grouping.direction == SortDirection.DESC then "<" else ">")
     val day = engine.day(row, dateField)
     // Sorting by capture time inside its null group reduces to ID order; every capture sort value there is NULL.
-    val after = afterBySort(engine, cursor, sort, row, idOnly = cursorDay.isEmpty && sort.field == dateField)
+    val idOnly = cursorDay.isEmpty && query.searchSort.head.field == dateField
+    val after = afterBySort(engine, query, repositoryId, row, idOnly)
 
     cursorDay match
       case Some(anchor) =>
@@ -434,46 +461,77 @@ object SearchQueries:
    * Rows of the anchor's own group strictly after it: a later sort value, or the same sort value and a greater ID. Where the sort
    * column can be null, nulls sit where the engine natively orders them and the comparison honors that placement. With `idOnly`
    * every sort value in the group is known to be null, and the comparison is the ID alone.
+   *
+   * Under the Relevance sort the position is a triple: between the Relevance and the ID comes the capture time
+   * ([[afterByCaptureTime]]). The Relevance is not a column, so it is computed again wherever it is compared, and it is never
+   * null.
    */
   private def afterBySort(
       engine: SearchDialect,
-      cursor: SearchCursor,
-      sort: SearchSort,
+      query: SearchQuery,
+      repositoryId: String,
       row: AssetRow[Expr],
       idOnly: Boolean): Expr[Boolean] =
     import engine.dialect.*
     given TypeMapper[SortValue] = engine.sortValueMapper
 
+    val cursor = query.cursor.get
+    val sort = query.searchSort.head
     val sortOp = SqlStr.raw(if sort.direction == SortDirection.DESC then "<" else ">")
-    val column = sortColumn(engine, row, sort)
-    val id = row.id
+    val column = sortColumn(engine, query, repositoryId, row)
+    val afterById = Expr[Boolean](implicit ctx => sql"${row.id} > ${cursor.id}")
 
-    if idOnly then Expr[Boolean](implicit ctx => sql"$id > ${cursor.id}")
+    if idOnly then afterById
     else
       cursor.sortValue match
         case SortValue.Null if engine.nullsFirst(sort.direction) =>
-          Expr[Boolean](implicit ctx => sql"($column IS NOT NULL OR $id > ${cursor.id})")
+          Expr[Boolean](implicit ctx => sql"($column IS NOT NULL OR $afterById)")
         case SortValue.Null =>
-          Expr[Boolean](implicit ctx => sql"($column IS NULL AND $id > ${cursor.id})")
+          Expr[Boolean](implicit ctx => sql"($column IS NULL AND $afterById)")
         case value =>
+          // What decides among the rows of the anchor's own sort value
+          val afterTie =
+            if sort.isRelevance then afterByCaptureTime(engine, cursor.requireSecondSortValue, row, afterById) else afterById
           Expr[Boolean] {
             implicit ctx =>
               val nullsAfter =
                 if engine.isNullableTimestamp(sort.field) && !engine.nullsFirst(sort.direction) then sql" OR $column IS NULL"
                 else SqlStr.empty
-              sql"($column $sortOp $value OR ($column = $value AND $id > ${cursor.id})$nullsAfter)"
+              sql"($column $sortOp $value OR ($column = $value AND $afterTie)$nullsAfter)"
           }
 
-  /** A narrow candidate relation with a hand-written ORDER BY and LIMIT, rendered in the context that names its own columns */
-  private def sliced[Q, R](engine: SearchDialect, projected: Select[Q, R], order: Context ?=> SqlStr, limit: SqlStr): SqlStr =
-    val ordered = Select.withExprSuffix(
-      Select.toSimpleFrom(projected),
+  /**
+   * Rows of the anchor's own Relevance strictly after it, newest capture first: an older capture time, or the anchor's own and a
+   * greater ID. Rows without a capture time are last on both engines, as [[orderWithinGroup]] places them: they all follow an
+   * anchor that has one, and an anchor without one is followed only by those of them with a greater ID.
+   */
+  private def afterByCaptureTime(
+      engine: SearchDialect,
+      anchor: SortValue,
+      row: AssetRow[Expr],
+      afterById: Expr[Boolean]): Expr[Boolean] =
+    given TypeMapper[SortValue] = engine.sortValueMapper
+
+    val taken = row.originalCreatedAt
+
+    anchor match
+      case SortValue.Null => Expr[Boolean](implicit ctx => sql"($taken IS NULL AND $afterById)")
+      case value =>
+        Expr[Boolean](implicit ctx => sql"($taken < $value OR $taken IS NULL OR ($taken = $value AND $afterById))")
+
+  /** A relation with a hand-written ORDER BY, rendered in the context that names the relation's own columns */
+  private def orderedBy[Q, R](select: Select[Q, R], order: Context ?=> SqlStr): Select[Q, R] =
+    Select.withExprSuffix(
+      Select.toSimpleFrom(select),
       false,
       ctx =>
         given Context = ctx
-        sql" ORDER BY " + order + limit
+        sql" ORDER BY " + order
     )
-    Db.render(ordered, engine.dialect).withCompleteQuery(false)
+
+  /** A narrow candidate relation with a hand-written ORDER BY and LIMIT */
+  private def sliced[Q, R](engine: SearchDialect, projected: Select[Q, R], order: Context ?=> SqlStr, limit: SqlStr): SqlStr =
+    Db.render(orderedBy(projected, order + limit), engine.dialect).withCompleteQuery(false)
 
   /** A trailing slice that fills the page only once the leading one has run out, which is when it fetched no more than a page */
   private def guardedLimit(leading: String, rpp: Int): SqlStr =
@@ -499,36 +557,130 @@ object SearchQueries:
         SqlStr.raw("CROSS JOIN total AS t"))
     else (SqlStr.empty, SqlStr.empty, SqlStr.empty)
 
-  /** The column a search sorts within a group by */
-  private def sortColumn(engine: SearchDialect, row: AssetRow[Expr], sort: SearchSort): Expr[?] =
-    Columns.required(AssetRow, row, sort.field, engine.dialect)
+  /** What a search sorts by: the sort's column or, under the Relevance sort, the Relevance computed from the Search text */
+  private def sortColumn(engine: SearchDialect, query: SearchQuery, repositoryId: String, row: AssetRow[Expr]): Expr[?] =
+    val sort = query.searchSort.head
+    if sort.isRelevance then relevance(engine, row, query.requireResolvedText, repositoryId)
+    else Columns.required(AssetRow, row, sort.field, engine.dialect)
 
-  /** The sort column read as the engine stores it, so a cursor can bind it back unchanged */
-  private def sortValue(engine: SearchDialect, row: AssetRow[Expr], sort: SearchSort): Expr[SortValue] =
+  /** What a search sorts by, read as the engine stores it, so a cursor can bind it back unchanged */
+  private def sortValue(engine: SearchDialect, query: SearchQuery, repositoryId: String, row: AssetRow[Expr]): Expr[SortValue] =
     given TypeMapper[SortValue] = engine.sortValueMapper
-    Expr[SortValue](implicit ctx => sql"${sortColumn(engine, row, sort)}")
+    Expr[SortValue](implicit ctx => sql"${sortColumn(engine, query, repositoryId, row)}")
+
+  /**
+   * What a candidate carries for the term after the sort: under the Relevance sort the capture time as stored, for the page's
+   * order and the cursor; NULL under a column sort, whose next term is the ID, so every candidate relation has the same columns.
+   */
+  private def secondSortValue(engine: SearchDialect, sort: SearchSort, row: AssetRow[Expr]): Expr[SortValue] =
+    given TypeMapper[SortValue] = engine.sortValueMapper
+    if sort.isRelevance then Expr[SortValue](implicit ctx => sql"${row.originalCreatedAt}")
+    else Expr[SortValue](implicit ctx => sql"NULL")
+
+  /**
+   * The ORDER BY terms within a group, or of a whole flat page, over the asset's own columns: the sort, then the ID as a
+   * deterministic tiebreaker. Under the Relevance sort the newest capture time comes between them, and the assets with none read
+   * last on both engines: no index orders a computed value, so there is no index-ordered read for an explicit null placement to
+   * forfeit. Within a group the engine may decorate a column sort's term to steer its planner.
+   */
+  private def orderWithinGroup(engine: SearchDialect, query: SearchQuery, repositoryId: String, row: AssetRow[Expr])(using
+      Context): SqlStr =
+    val sort = query.searchSort.head
+    val direction = towards(sort.direction)
+    val column = sortColumn(engine, query, repositoryId, row)
+    if sort.isRelevance then sql"$column $direction, ${row.originalCreatedAt} DESC NULLS LAST, ${row.id} ASC"
+    else sql"${query.grouping.fold(column)(engine.secondarySort(row, sort, _))} $direction, ${row.id} ASC"
+
+  /** [[orderWithinGroup]] over the columns of a candidate relation, which carries what the slice computed */
+  private def candidateOrderWithinGroup(prefix: String, sort: SearchSort): String =
+    val byCaptureTime = if sort.isRelevance then s"${prefix}second_sort_value DESC NULLS LAST, " else ""
+    s"${prefix}sort_value ${sort.direction}, $byCaptureTime${prefix}id ASC"
 
   private def towards(direction: SortDirection): SqlStr = SqlStr.raw(direction.toString)
 
   /** The day candidates' columns. Naming them on the CTE keeps the projection free to alias its own columns however. */
-  private val narrowColumns: SqlStr = SqlStr.raw("(id, day, sort_value)")
+  private val narrowColumnList: SqlStr = SqlStr.raw("id, day, sort_value, second_sort_value")
+  private val narrowColumns: SqlStr = sql"($narrowColumnList)"
 
-  /** The Location candidates' columns: the asset, its Location and what heads the group, and the sort key */
-  private val locationColumnList: SqlStr = SqlStr.raw("id, location_id, path_key, location_name, category_name, sort_value")
+  /** The Location candidates' columns: the asset, its Location and what heads the group, and the sort keys */
+  private val locationColumnList: SqlStr =
+    SqlStr.raw("id, location_id, path_key, location_name, category_name, sort_value, second_sort_value")
   private val locationColumns: SqlStr = sql"($locationColumnList)"
 
   /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */
   private val assetColumns: SqlStr =
     SqlStr.raw(Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", "))
 
-  /** Assets whose search document matches the text */
-  private def textFilter(engine: SearchDialect, asset: AssetRow[Expr], text: String, repositoryId: String): Expr[Boolean] =
+  /**
+   * Assets that satisfy the Search text: every group, by any of its alternatives. A term is satisfied by any of its sources and
+   * an excluded term by none of them, so an asset without the term's words anywhere (or without a document) satisfies an
+   * exclusion.
+   */
+  private def textFilter(
+      engine: SearchDialect,
+      asset: AssetRow[Expr],
+      text: ResolvedSearchText,
+      repositoryId: String): Expr[Boolean] =
     import engine.dialect.*
 
-    SearchDocumentRow.select
-      .filter(document => (document.repositoryId `=` repositoryId) && engine.textMatch(document, text))
+    def isSatisfied(term: ResolvedSearchTerm): Expr[Boolean] =
+      val inAnySource = termMatches(engine, asset, term, repositoryId).map(_._2).reduce(_ || _)
+      if term.term.isExcluded then !inAnySource else inAnySource
+
+    text.groups.map(_.alternatives.map(isSatisfied).reduce(_ || _)).reduce(_ && _)
+
+  /**
+   * The Relevance of an asset to the Search text: the sum of what each group of the text scores, a group scoring as the best
+   * source any of its alternatives matched the asset in. The alternatives' sources are the branches of one `CASE`, the highest
+   * score first, so alternatives joined by `OR` count once, as the best of them. An excluded term scores nothing, and neither
+   * does text made of exclusions alone: every asset it matches is as relevant as the next.
+   */
+  private def relevance(engine: SearchDialect, asset: AssetRow[Expr], text: ResolvedSearchText, repositoryId: String): Expr[Int] =
+    import engine.dialect.*
+
+    def score(group: ResolvedSearchGroup): Option[Expr[Int]] =
+      val matches = group.alternatives
+        .filterNot(_.term.isExcluded)
+        .flatMap(termMatches(engine, asset, _, repositoryId))
+        .sortBy((source, _) => -source.relevance)
+      Option.when(matches.nonEmpty) {
+        Expr[Int] {
+          implicit ctx =>
+            val branches = matches.map((source, isMatch) => sql"WHEN $isMatch THEN ${SqlStr.raw(source.relevance.toString)}")
+            sql"CASE ${SqlStr.join(branches, sql" ")} ELSE 0 END"
+        }
+      }
+
+    text.groups.flatMap(score).reduceOption(_ + _).getOrElse(Expr(0))
+
+  /**
+   * Where a term can match an asset, each source with its own predicate, in the order the sources are declared: the name sources
+   * the term resolved to any IDs in, as the semi-joins and the folder filter a search already scopes by, and always the asset's
+   * Search document, as the engine's own match. Exclusion is the caller's to apply.
+   */
+  private def termMatches(
+      engine: SearchDialect,
+      asset: AssetRow[Expr],
+      term: ResolvedSearchTerm,
+      repositoryId: String): Seq[(SearchSource, Expr[Boolean])] =
+    import engine.dialect.*
+
+    val inNames = term.ids.toSeq.sortBy(_._1.ordinal).map {
+      (source, ids) =>
+        source -> (source match
+          case SearchSource.Person => personFilter(engine, asset, ids)
+          case SearchSource.Location | SearchSource.Category => locationFilter(engine, asset, ids)
+          case SearchSource.Folder => folderFilter(engine, asset, ids)
+          case SearchSource.Album => albumFilter(engine, asset, ids)
+          case SearchSource.Document => throw IllegalArgumentException("A Search document is matched by words, not by ID"))
+    }
+
+    val inDocument = SearchDocumentRow.select
+      .filter(document => (document.repositoryId `=` repositoryId) && engine.textMatch(document, term.term))
       .map(_.assetId)
       .contains(asset.id)
+
+    inNames :+ (SearchSource.Document -> inDocument)
 
   /**
    * Assets carrying every one of the requested metadata values.
@@ -575,13 +727,17 @@ object SearchQueries:
 
     (parameter.fieldId `=` fieldId) && Columns.equalTo(column, plain, engine.dialect)
 
+  /** Assets in any of the given folders themselves; a subtree is the caller's to expand */
+  private def folderFilter(engine: SearchDialect, asset: AssetRow[Expr], folderIds: Set[String]): Expr[Boolean] =
+    Columns.isInSet(asset.folderId, folderIds, engine.dialect)
+
   /** Assets any of the given people appear in */
   private def personFilter(engine: SearchDialect, asset: AssetRow[Expr], personIds: Set[String]): Expr[Boolean] =
     import engine.dialect.*
 
     FaceRow.select
       .join(PersonRow)((face, person) => face.personId `=` person.id)
-      .filter((_, person) => Columns.isIn(person.id, personIds, engine.dialect))
+      .filter((_, person) => Columns.isInSet(person.id, personIds, engine.dialect))
       .map((face, _) => face.assetId)
       .contains(asset.id)
 
@@ -590,7 +746,7 @@ object SearchQueries:
     import engine.dialect.*
 
     AlbumAssetRow.select
-      .filter(link => Columns.isIn(link.albumId, albumIds, engine.dialect))
+      .filter(link => Columns.isInSet(link.albumId, albumIds, engine.dialect))
       .map(_.assetId)
       .contains(asset.id)
 
@@ -599,7 +755,7 @@ object SearchQueries:
     import engine.dialect.*
 
     LocationAssetRow.select
-      .filter(link => Columns.isIn(link.locationId, locationIds, engine.dialect))
+      .filter(link => Columns.isInSet(link.locationId, locationIds, engine.dialect))
       .map(_.assetId)
       .contains(asset.id)
 

@@ -18,8 +18,17 @@ import altitude.core.util.Query.QueryParam
  * The group is `key`, the value the groups are ordered by (the ISO day of a date grouping, the path key of a Location grouping),
  * and for a Location also `groupId`, the Location's ID. Both absent means the trailing group of images with no date or no
  * Location.
+ *
+ * The Relevance sort orders by two values before the ID, so its position has `secondSortValue` as well: the image's capture time,
+ * [[SortValue.Null]] when it has none. Under any other sort it is absent, and it is read only under that sort.
  */
-case class SearchCursor(key: Option[String], groupId: Option[String], sortValue: SortValue, id: String, scope: String):
+case class SearchCursor(
+    key: Option[String],
+    groupId: Option[String],
+    sortValue: SortValue,
+    id: String,
+    scope: String,
+    secondSortValue: Option[SortValue] = None):
 
   def encode: String =
     val json = ujson.Obj(
@@ -27,6 +36,7 @@ case class SearchCursor(key: Option[String], groupId: Option[String], sortValue:
       "k" -> key.map(ujson.Str.apply).getOrElse(ujson.Null),
       "g" -> groupId.map(ujson.Str.apply).getOrElse(ujson.Null),
       "s" -> SearchCursor.sortValueToJson(sortValue),
+      "s2" -> secondSortValue.map(SearchCursor.sortValueToJson).getOrElse(ujson.Null),
       "i" -> id,
       "f" -> scope
     )
@@ -36,8 +46,12 @@ case class SearchCursor(key: Option[String], groupId: Option[String], sortValue:
   def requireScope(currentScope: String): Unit =
     if scope != currentScope then throw SearchCursorException("The cursor does not belong to this search")
 
+  /** The second value of a position under the Relevance sort; a cursor without it cannot continue such a search */
+  def requireSecondSortValue: SortValue =
+    secondSortValue.getOrElse(throw SearchCursorException("Malformed cursor"))
+
 object SearchCursor:
-  private val VERSION = 4
+  private val VERSION = 5
 
   def decode(token: String): SearchCursor =
     try
@@ -48,7 +62,8 @@ object SearchCursor:
         groupId = json("g").strOpt,
         sortValue = sortValueFromJson(json("s")),
         id = json("i").str,
-        scope = json("f").str
+        scope = json("f").str,
+        secondSortValue = Option.unless(json("s2").isNull)(sortValueFromJson(json("s2")))
       )
     catch
       case ex: SearchCursorException => throw ex

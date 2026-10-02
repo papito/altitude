@@ -30,17 +30,33 @@ const DEFAULTS = {
  * Choosing a folder, a person, an album, or a Location are all "look somewhere else", so each clears
  * the other three; a view is a different place again and clears all four. The map area (`bbox`, the
  * crowded-pin panel's scope) belongs to the search it was drawn on, so looking somewhere else clears
- * it too. Everything else narrows or reorders what is already in scope - the layout, the sort and
- * the grouping survive all of them. This table is what the server's old `newSearch=true` flag used
- * to express, and it is the whole reason a widget can send just the one parameter it knows about.
+ * it too.
+ *
+ * Search text (`q`) is one more place to look: the whole repository outside the trash. So text
+ * clears the four and returns to the repository view (a cleared parameter is back at its default),
+ * and each of the four, and a view, clears the text.
+ *
+ * The layout, the grouping and the sort narrow or reorder what is already in scope and survive all
+ * of them; the one sort that does not outlive its search is Relevance, which goes with the text
+ * (`withoutRefusedCombinations`). This table is what the server's old `newSearch=true` flag used to express, and it is the whole
+ * reason a widget can send just the one parameter it knows about.
  */
+const PLACES = ["folderId", "personId", "albumId", "locationId"]
+
+/** What looking at `place` (or, with none, at another view) clears */
+const elsewhere = (place) => [
+    ...PLACES.filter((name) => name !== place),
+    "bbox",
+    "q",
+]
+
 const CLEARS = {
-    view: ["folderId", "personId", "albumId", "locationId", "bbox"],
-    folderId: ["personId", "albumId", "locationId", "bbox"],
-    personId: ["folderId", "albumId", "locationId", "bbox"],
-    albumId: ["folderId", "personId", "locationId", "bbox"],
-    locationId: ["folderId", "personId", "albumId", "bbox"],
-    q: ["bbox"],
+    view: elsewhere(),
+    folderId: elsewhere("folderId"),
+    personId: elsewhere("personId"),
+    albumId: elsewhere("albumId"),
+    locationId: elsewhere("locationId"),
+    q: ["view", ...PLACES, "bbox"],
 }
 
 const NUMERIC = new Set(["p", "rpp"])
@@ -62,7 +78,25 @@ export function seedSearchParams(search) {
         }
     })
 
-    return seeded
+    return withoutRefusedCombinations(seeded)
+}
+
+/**
+ * The two combinations the server refuses, settled the way the scope rules would have: text
+ * searches the repository view, not the trash, and the Relevance sort goes with the text: a change
+ * that clears the text drops it, so the server's default applies, while any other sort stays. A URL
+ * can ask for either combination as well.
+ */
+function withoutRefusedCombinations(params) {
+    if (params.q !== null && params.view === Const.views.trashbin) {
+        params.view = DEFAULTS.view
+    }
+
+    if (params.q === null && params.sort === Const.search.sortRelevance) {
+        params.sort = DEFAULTS.sort
+    }
+
+    return params
 }
 
 function rememberedLayout() {
@@ -99,7 +133,7 @@ export function applySearchParamChanges(current, changes) {
         next.p = DEFAULTS.p
     }
 
-    return next
+    return withoutRefusedCombinations(next)
 }
 
 /**

@@ -38,7 +38,9 @@ class MapController(using logger: Logger) extends BaseController:
       albumId: Option[String] = None,
       locationId: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
-    val scope = mapScope(view, q, folderId, personId, albumId, locationId)
+    val scope = mapScope(view, q, folderId, personId, albumId, locationId) match
+      case Left(message) => return jsonError(message, 400)
+      case Right(scope) => scope
     val box = viewport match
       case None => return jsonError("viewport is required", 400)
       case Some(value) =>
@@ -84,7 +86,10 @@ class MapController(using logger: Logger) extends BaseController:
       albumId: Option[String] = None,
       locationId: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
-    val result = App.altitude.service.library.mapBounds(mapScope(view, q, folderId, personId, albumId, locationId).query())
+    val scope = mapScope(view, q, folderId, personId, albumId, locationId) match
+      case Left(message) => return jsonError(message, 400)
+      case Right(scope) => scope
+    val result = App.altitude.service.library.mapBounds(scope.query())
     logger.debug(s"Map bounds: $result")
     jsonResponse(
       result.fold(ujson.Obj("count" -> 0))(
@@ -109,16 +114,17 @@ class MapController(using logger: Logger) extends BaseController:
             .map(place => ujson.Obj("label" -> place.label, "latitude" -> place.latitude, "longitude" -> place.longitude))))
     catch case ex: GeocoderException => jsonError(ex.getMessage, 502)
 
-  /** The search scope without the `bbox` filter: the map plots the whole search, only the panel and the grid apply `bbox`. */
+  /**
+   * The search scope without the `bbox` filter: the map plots the whole search, only the panel and the grid apply `bbox`. A scope
+   * the parser refuses (Search text with the trash view) is the message of a JSON 400.
+   */
   private def mapScope(
       view: String,
       q: Option[String],
       folderId: Option[String],
       personId: Option[String],
       albumId: Option[String],
-      locationId: Option[String]): SearchRequestParser.Scope =
-    SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox = None) match
-      case Right(scope) => scope
-      case Left(message) => throw IllegalStateException(message) // unreachable without a bbox
+      locationId: Option[String]): Either[String, SearchRequestParser.Scope] =
+    SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox = None)
 
   initialize()

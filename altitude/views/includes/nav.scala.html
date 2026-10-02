@@ -3,7 +3,8 @@
 @import altitude.core.models.Stats
 @import altitude.core.RequestContext
 
-@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId)
+@* `search` adds the Search input, which only the main page has: its results are that page's grid *@
+@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, search: Boolean = false)
 
 <div class="brand">
     <a href="/">Altitude</a>
@@ -36,6 +37,15 @@
         <i class="fas fa-trash"></i><span>Trash (0)</span>
     </div>
   }
+
+@* Bound by js/search-results/search-input.js. `hx-preserve` keeps this very element, and with it the text being typed, when
+   the nav is reloaded for fresh counts. *@
+@if(search) {
+  <form id="searchForm" role="search" hx-preserve>
+    <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Search" autocomplete="off">
+    <button type="submit" class="action-button small">Search</button>
+  </form>
+}
 
 <div class="menu import">
     <a href="/pipeline/r/@repoId"><i class="fas fa-plus-square">

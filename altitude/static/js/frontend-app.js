@@ -8,6 +8,7 @@ import { hydrateAppFragments } from "./fragments/index.js"
 import { handlePeopleEscapeKeyPressed } from "./listeners/people.js"
 import { registerAppEventListeners } from "./listeners/index.js"
 import { createSearchDetailCoordinator } from "./search-results/detail-navigator.js"
+import { bindSearchInput } from "./search-results/search-input.js"
 import { initializeFrontendStores } from "./stores/app-stores.js"
 
 /**
@@ -41,6 +42,7 @@ export class FrontendApp {
         registerAppEventListeners(this)
         Alpine.start()
         bindAppDragDrop(this)
+        bindSearchInput()
 
         /*
          * Hydrate any declarative app fragments already present in the initial page HTML.
@@ -72,10 +74,15 @@ export class FrontendApp {
     }
 
     reloadNav() {
-        htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}`, {
-            swap: "innerHTML",
-            target: "nav",
-        })
+        // `search`: this page's nav holds the Search input, which the reload keeps (`hx-preserve`)
+        htmx.ajax(
+            "GET",
+            `/htmx/nav/r/${this.context.getRepoId()}?search=true`,
+            {
+                swap: "innerHTML",
+                target: "nav",
+            },
+        )
     }
 
     reloadFolderCounts() {

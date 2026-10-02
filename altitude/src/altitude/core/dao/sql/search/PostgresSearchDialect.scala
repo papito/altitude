@@ -18,6 +18,7 @@ import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
+import altitude.core.util.SearchTerm
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
@@ -32,11 +33,16 @@ object PostgresSearchDialect extends SearchDialect:
     Expr[Option[LocalDate]](implicit ctx => sql"$column::date")
 
   /**
-   * `tsv` is not part of the shared row class - SQLite's fts4 table has no such column - so it is named directly. The subquery
-   * this lands in has `search_document` as its only table and no asset column is called `tsv`, so the reference is unambiguous.
+   * `tsv` is not part of the shared row class - SQLite's table has no such column - so it is named directly. The subquery this
+   * lands in has `search_document` as its only table and no asset column is called `tsv`, so the reference is unambiguous. The
+   * query is read with the `simple` configuration the vector is generated with.
+   *
+   * The term's words are letters and digits only, so they are safe to join into tsquery syntax: `<->` is "directly followed by",
+   * and `:*` makes the last word a prefix (`img <-> 12:*`).
    */
-  override def textMatch(document: SearchDocumentRow[Expr], text: String): Expr[Boolean] =
-    Expr[Boolean](implicit ctx => sql"tsv @@ to_tsquery($text)")
+  override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
+    val tsQuery = term.words.mkString(" <-> ") + (if term.isPhrase then "" else ":*")
+    Expr[Boolean](implicit ctx => sql"tsv @@ to_tsquery('simple', $tsQuery)")
 
   override def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
     Columns.required(AssetRow, asset, sort.field, dialect)

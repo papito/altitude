@@ -59,13 +59,17 @@ object Const:
     // Grouped pages are bounded: they carry counts for every day on the page
     val MAX_GROUPED_RPP = 500
 
-    // The sort fields the results UI offers; a grouped request may sort by nothing else
+    // The asset columns the results UI offers as a sort; a request may sort by nothing else but Relevance
     val SORT_FIELDS: Set[String] = Set(
       FieldConst.Asset.ORIGINAL_CREATED_AT,
       FieldConst.CREATED_AT,
       FieldConst.Asset.FILENAME,
       FieldConst.Asset.SIZE_BYTES,
       FieldConst.Asset.AREA_SIZE)
+
+    // The sort that is not a column: how well an asset matches the Search text, best first. It is the whole `sort` value,
+    // with no direction digit.
+    val SORT_RELEVANCE = "relevance"
 
     object Layout:
       val GRID = "grid"

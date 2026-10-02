@@ -415,6 +415,129 @@ import altitude.core.models.AssetType
     }
   }
 
+  test("Text is sorted by Relevance unless the request says otherwise, and Relevance needs text") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val album = testApp.service.album.add("Beach days")
+        val byName = persistDated("2026-09-06T10:00:00", "beach.jpg")
+        val inAlbum = persistDated("2026-09-05T10:00:00", "sand.jpg")
+        testApp.service.album.addAssets(album.persistedId, Set(inAlbum.persistedId))
+        val text = Map(Api.Field.Search.QUERY_TEXT -> "beach")
+        def effectiveSort(params: Map[String, String]): String = {
+          val response = htmlSearch(host, repoId, params)
+          response.statusCode shouldBe 200
+          "sort=([^&#]+)".r.findFirstMatchIn(response.headers("hx-replace-url").head).get.group(1)
+        }
+
+        // The album outranks the file name, on a flat page and within a day or a Location
+        for (group <- List(Map.empty[String, String], Map("groupBy" -> "location"), Map("groupBy" -> "dateTaken")))
+          withClue(s"$group: ") {
+            effectiveSort(text ++ group) shouldBe "relevance"
+            if (!group.get("groupBy").contains("dateTaken"))
+              ordered(htmlSearch(host, repoId, text ++ group).text(), cell(inAlbum), cell(byName))
+          }
+        effectiveSort(text + (Api.Field.Search.LAYOUT -> "map")) shouldBe "relevance"
+        // A sort the request names wins
+        effectiveSort(text + (Api.Field.Search.SORT -> "filename0")) shouldBe "filename0"
+        ordered(htmlSearch(host, repoId, text + (Api.Field.Search.SORT -> "filename0")).text(), cell(byName), cell(inAlbum))
+        // No text, or text without a usable term, reads newest import first
+        effectiveSort(Map()) shouldBe "created_at1"
+        effectiveSort(Map(Api.Field.Search.QUERY_TEXT -> "- OR")) shouldBe "created_at1"
+
+        // A Relevance page is continued by its cursor
+        val grouped = text ++ Map("groupBy" -> "location", Api.Field.Search.RESULTS_PER_PAGE -> "1")
+        val first = htmlSearch(host, repoId, grouped).text()
+        first should include(cell(inAlbum))
+        first.contains(cell(byName)) shouldBe false
+        val next = htmlSearch(
+          host,
+          repoId,
+          grouped ++ Map(Api.Field.Search.AFTER -> cursorOf(first).head, Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))
+        next.statusCode shouldBe 200
+        next.text() should include(cell(byName))
+
+        def rejected(params: Map[String, String]): String = {
+          val response = htmlSearch(host, repoId, params)
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("text/plain")
+          response.text()
+        }
+
+        val byRelevance = Map(Api.Field.Search.SORT -> "relevance")
+        rejected(byRelevance) should include("Search text")
+        rejected(byRelevance + (Api.Field.Search.QUERY_TEXT -> "")) should include("Search text")
+        rejected(byRelevance + (Api.Field.Search.QUERY_TEXT -> "- OR")) should include("Search text")
+        rejected(byRelevance + ("groupBy" -> "dateTaken")) should include("Search text")
+        rejected(byRelevance + (Api.Field.Search.LAYOUT -> "map")) should include("Search text")
+        // Relevance is the whole value: it has no direction to append
+        rejected(text + (Api.Field.Search.SORT -> "relevance0")) should include("sort")
+    }
+  }
+
+  test("Results carry their Search text and offer the Relevance sort only with it") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        persistDated("2026-09-06T10:00:00", "beach.jpg")
+        val relevanceOption = """<option value="relevance""""
+        val text = Map(Api.Field.Search.QUERY_TEXT -> "beach")
+
+        for (shape <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"), Map(Api.Field.Search.LAYOUT -> "map")))
+          withClue(s"$shape: ") {
+            val withText = htmlSearch(host, repoId, text ++ shape).text()
+            withText should include("""data-results-q="beach"""")
+            withText should include(s"$relevanceOption selected")
+
+            // A sort the request names leaves Relevance on offer, not selected
+            val byName = htmlSearch(host, repoId, text ++ shape + (Api.Field.Search.SORT -> "filename0")).text()
+            byName should include(relevanceOption)
+            byName.contains(s"$relevanceOption selected") shouldBe false
+
+            // No text, or text without a usable term, is no text: the server would refuse the Relevance sort
+            for (noText <- List(Map.empty[String, String], Map(Api.Field.Search.QUERY_TEXT -> "- OR"))) {
+              val page = htmlSearch(host, repoId, noText ++ shape).text()
+              page should include("""data-results-q=""""")
+              page.contains(relevanceOption) shouldBe false
+            }
+          }
+    }
+  }
+
+  test("Search text with the trash view is a plain-text 400") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trash = Map(Api.Field.Search.VIEW -> "trashbin")
+        val text = trash + (Api.Field.Search.QUERY_TEXT -> "beach")
+        for (shape <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"), Map(Api.Field.Search.LAYOUT -> "map")))
+          withClue(s"$shape: ") {
+            val response = htmlSearch(host, repoId, text ++ shape)
+            response.statusCode shouldBe 400
+            response.headers("content-type").head should include("text/plain")
+            response.text() should include("trash")
+          }
+
+        // The trash itself still opens, and text without a usable term is no text
+        htmlSearch(host, repoId, trash).statusCode shouldBe 200
+        htmlSearch(host, repoId, trash + (Api.Field.Search.QUERY_TEXT -> "- OR")).statusCode shouldBe 200
+        // Every other view takes text
+        htmlSearch(
+          host,
+          repoId,
+          Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.QUERY_TEXT -> "beach")).statusCode shouldBe 200
+    }
+  }
+
   test("Grouped requests require authentication and a repository the user can see") {
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

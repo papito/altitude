@@ -55,8 +55,9 @@ import altitude.core.util.SearchQuery
   private def searchQuery(
       params: Map[String, Any] = Map(FieldConst.Asset.IS_RECYCLED -> false),
       folderIds: Set[String] = Set(),
-      locationIds: Set[String] = Set()): SearchQuery =
-    new SearchQuery(params = params, folderIds = folderIds, locationIds = locationIds)
+      locationIds: Set[String] = Set(),
+      text: Option[String] = None): SearchQuery =
+    new SearchQuery(text = text, params = params, folderIds = folderIds, locationIds = locationIds)
 
   private def cellsOf(bbox: BoundingBox = world, zoom: Int = 12, query: SearchQuery = searchQuery()): MapCells =
     testApp.service.library.mapCells(query, bbox, zoom)
@@ -290,5 +291,30 @@ import altitude.core.util.SearchQuery
     // The root folder is the whole repository
     val root = searchQuery(folderIds = Set(testContext.repositories.head.rootFolderId))
     bounds(root).value.count shouldBe 2
+  }
+
+  test("The map follows the Search text: cells, Location counts and bounds are those of the assets the names find") {
+    val trips: Folder = testApp.service.folder.add("Trips")
+    val inFolder = persistAt(paris._1, paris._2, folder = Some(trips))
+    persistAt(35.6762, 139.6503)
+    val rome = addLocation("Rome", (41.9028, 12.4964))
+    val pinned = testContext.persistAsset()
+    testApp.service.location.addAssets(rome.persistedId, Set(pinned.persistedId, inFolder.persistedId))
+
+    bounds().value.count shouldBe 3
+
+    val byFolder = searchQuery(text = Some("trips"))
+    summary(cellsOf(query = byFolder).cells) shouldEqual List((1, inFolder.persistedId))
+    locationSummary(cellsOf(query = byFolder).locations) shouldEqual List(("Rome", None, 1))
+    bounds(byFolder).value shouldBe MapBounds(south = paris._1, west = paris._2, north = paris._1, east = paris._2, count = 1)
+
+    val byLocation = searchQuery(text = Some("rome"))
+    summary(cellsOf(query = byLocation).cells) shouldEqual List((1, inFolder.persistedId), (1, pinned.persistedId)).sorted
+    locationSummary(cellsOf(query = byLocation).locations) shouldEqual List(("Rome", None, 2))
+    bounds(byLocation).value.count shouldBe 2
+    bounds(byLocation).value.south shouldBe 41.9028 +- 1e-6
+
+    bounds(searchQuery(text = Some("rome -trips"))).value.count shouldBe 1
+    bounds(searchQuery(text = Some("nowhere"))) shouldBe None
   }
 }

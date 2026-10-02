@@ -105,6 +105,8 @@ export const Const = {
             grid: "grid",
             map: "map",
         },
+        // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
+        sortRelevance: "relevance",
     },
 
     http: {

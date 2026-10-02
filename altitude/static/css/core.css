@@ -578,6 +578,12 @@ nav input {
     width: 90%;
 }
 
+/* The Search input and its button, side by side */
+nav form {
+    display: flex;
+    align-items: center;
+}
+
 nav input::placeholder {
     color: #a5a2a2;
 }

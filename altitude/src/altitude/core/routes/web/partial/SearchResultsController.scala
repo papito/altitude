@@ -37,6 +37,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
    *
+   * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
+   * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
+   *
    * With `groupBy`, a header opens each date or Location, and the page is continued by the `after` cursor the last cell carries
    * (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
    *
@@ -54,7 +57,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       rpp: Int = Const.Search.DEFAULT_RPP,
       p: Option[Int] = None,
       q: Option[String] = None,
-      sort: String = s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}",
+      sort: Option[String] = None,
       folderId: Option[String] = None,
       personId: Option[String] = None,
       albumId: Option[String] = None,
@@ -85,13 +88,21 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return badRequest("Unknown layout")
 
-    val searchSort = parseSort(sort) match
+    val effectiveSort = sort.getOrElse(
+      if scope.text.isDefined then Const.Search.SORT_RELEVANCE
+      else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
+
+    val searchSort = parseSort(effectiveSort) match
       case None => return badRequest("Unknown sort")
       case Some(searchSort) => searchSort
 
+    if searchSort.isRelevance && scope.text.isEmpty then
+      return badRequest(
+        s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})")
+
     val browserUrl = browserViewUrl(
       view,
-      sort,
+      effectiveSort,
       q,
       folderId,
       personId,
@@ -124,7 +135,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           albumId = albumId,
           locationId = locationId,
           bbox = bbox,
-          layout = layout
+          layout = layout,
+          text = scope.text
         ),
         "HX-Replace-Url" -> browserUrl
       )
@@ -158,7 +170,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           folderId = folderId,
           albumId = albumId,
           locationId = locationId,
-          bbox = bbox
+          bbox = bbox,
+          text = scope.text
         ),
         ("HX-Replace-Url", browserUrl)
       )
@@ -194,7 +207,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         folderId = folderId,
         albumId = albumId,
         locationId = locationId,
-        bbox = bbox
+        bbox = bbox,
+        text = scope.text
       ),
       ("HX-Replace-Url", browserUrl)
     )
@@ -203,7 +217,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * A grouped request, validated up front. A problem is the message of a 400:
    *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
    *     and is refused with `location`, whose order is fixed; `after` needs `groupBy`
-   *   - `sort` is one of the results UI's fields with a direction digit; `rpp` is 1 to the grouped maximum
+   *   - `sort` was parsed by the caller (`parseSort`); `rpp` is 1 to the grouped maximum
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
   private def parseGroupedQuery(
@@ -251,8 +265,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))
 
-  /** The sort argument is the field name with the direction appended as a single digit, e.g. "filename0" */
+  /**
+   * The sort argument is one of the results UI's fields with the direction appended as a single digit, e.g. "filename0", or
+   * "relevance" alone, which has one direction: best match first
+   */
   private def parseSort(sort: String): Option[SearchSort] =
+    if sort == Const.Search.SORT_RELEVANCE then return Some(SearchSort.Relevance)
+
     val field = sort.dropRight(1)
     Try(SortDirection(sort.takeRight(1).toInt)).toOption
       .filter(_ => Const.Search.SORT_FIELDS.contains(field))

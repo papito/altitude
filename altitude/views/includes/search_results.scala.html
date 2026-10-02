@@ -8,8 +8,9 @@
 
 @* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
    controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
-   `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. *@
-@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID)
+   `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. `text` is the Search text the
+   results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. *@
+@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None)
 
 <style>
   #searchControl {
@@ -336,6 +337,7 @@
      data-results-album-id="@{albumId.getOrElse("")}"
      data-results-location-id="@{locationId.getOrElse("")}"
      data-results-bbox="@{bbox.getOrElse("")}"
+     data-results-q="@{text.getOrElse("")}"
      data-results-layout="@{layout}"
      data-results-group-by="@{grouping.map(_.by.apiValue).getOrElse("")}"
      data-results-group-direction="@{grouping.filter(_.by.dateField.isDefined).map(_.direction.toString.toLowerCase).getOrElse("")}">
@@ -397,6 +399,13 @@
             class="sort-dropdown"
             data-app-search="change"
             data-app-search-from-value="sort">
+
+      @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
+      @if(text.isDefined) {
+        <option value="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {selected}>
+          Relevance
+        </option>
+      }
 
       <option value="original_created_at1" @if(sort.field == "original_created_at" && sort.direction.id == 1) {selected}>
         Date Created (Newest)

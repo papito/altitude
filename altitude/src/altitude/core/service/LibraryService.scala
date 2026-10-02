@@ -98,37 +98,46 @@ class LibraryService(val app: Altitude):
 
   def search(query: SearchQuery): SearchResult =
     txManager.asReadOnly {
-      app.service.search.search(withResolvedFolderScope(query))
+      app.service.search.search(withResolvedScope(query))
     }
 
   /** How many assets a search matches, scoped like `search`, for a result that renders no rows of its own */
   def count(query: SearchQuery): Int =
     txManager.asReadOnly {
-      app.service.search.count(withResolvedFolderScope(query))
+      app.service.search.count(withResolvedScope(query))
     }
 
   /** The map's cells and Locations for a viewport at a zoom, scoped like `search`; both aggregates read one snapshot */
   def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
     txManager.asReadOnly {
-      app.service.search.mapCells(withResolvedFolderScope(query), bbox, zoom)
+      app.service.search.mapCells(withResolvedScope(query), bbox, zoom)
     }
 
   /** The box around every point a search plots, scoped like `search`; nothing when nothing is plotted */
   def mapBounds(query: SearchQuery): Option[MapBounds] =
     txManager.asReadOnly {
-      app.service.search.mapBounds(withResolvedFolderScope(query))
+      app.service.search.mapBounds(withResolvedScope(query))
     }
 
   /**
    * A grouped page with its assets, for the grouped grid. A cursor is accepted only for the search it was issued for,
-   * fingerprinted as requested: a folder filter by the folder given, since its descendants are resolved afresh on every page.
+   * fingerprinted as requested: a folder filter by the folder given and the Search text as typed, since a folder's descendants
+   * and the names the text matches are resolved afresh on every page.
    */
   def searchGrouped(query: SearchQuery): GroupedSearchResult =
     txManager.asReadOnly {
       val scope = SearchCursor.scopeFingerprint(query, RequestContext.getRepository.persistedId, app.dataSourceType)
       query.cursor.foreach(_.requireScope(scope))
-      app.service.search.searchGrouped(withResolvedFolderScope(query), scope)
+      app.service.search.searchGrouped(withResolvedScope(query), scope)
     }
+
+  /** What every search resolves against the repository as it is now, in the caller's transaction, before it reaches the DAO */
+  private def withResolvedScope(query: SearchQuery): SearchQuery =
+    withResolvedText(withResolvedFolderScope(query))
+
+  /** The names a Search text matches are resolved on every request, so a rename, a merge or a move shows in the next search */
+  private def withResolvedText(query: SearchQuery): SearchQuery =
+    query.textExpression.fold(query)(expression => query.withResolvedText(app.service.search.resolveText(expression)))
 
   /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */
   private def withResolvedFolderScope(query: SearchQuery): SearchQuery =

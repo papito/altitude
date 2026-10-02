@@ -23,6 +23,8 @@ Write the minimal amount of code that preserves clarity, readability, and mainta
 
 ### Front-end
 
+For UI work, prompt the developer to run "make db" and "make watch" if localhost:8080 is not accessible or if the repo is not initialized (setup form visible or no assets present).
+
 Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
 
 Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `altitude/static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog.

@@ -227,27 +227,13 @@ CREATE TABLE metadata_parameter (
   field_value_dt TIMESTAMP WITH TIME ZONE
 );
 
+-- body holds words already split by the application, so the vector takes them as they are: no stemming, no stop words
 CREATE TABLE search_document (
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) REFERENCES asset (id) ON DELETE CASCADE,
-  metadata_values TEXT NOT NULL,
+  repository_id CHAR(36) NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
   body TEXT NOT NULL,
-  tsv TSVECTOR NOT NULL
+  tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', body)) STORED
 );
 
 CREATE UNIQUE INDEX search_document_01 ON search_document (repository_id, asset_id);
 CREATE INDEX search_document_02 ON search_document USING gin (tsv);
-
-CREATE FUNCTION update_search_document_rank() RETURNS trigger AS $$
-BEGIN
-  NEW.tsv :=
-    setweight(to_tsvector('pg_catalog.english', NEW.metadata_values), 'A') ||
-    setweight(to_tsvector('pg_catalog.english', NEW.body), 'B');
-  RETURN NEW;
-END
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER search_document_trigger
-BEFORE INSERT OR UPDATE ON search_document
-FOR EACH ROW
-EXECUTE PROCEDURE update_search_document_rank();

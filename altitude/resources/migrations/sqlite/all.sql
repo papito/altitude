@@ -260,4 +260,35 @@ CREATE TABLE metadata_parameter (
   FOREIGN KEY (field_id) REFERENCES metadata_field (id) ON DELETE CASCADE
 );
 
-CREATE VIRTUAL TABLE search_document USING fts4 (repository_id, asset_id, body);
+CREATE TABLE search_document (
+  repository_id CHAR(36) NOT NULL,
+  asset_id CHAR(36) NOT NULL,
+  body TEXT NOT NULL,
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX search_document_01 ON search_document (repository_id, asset_id);
+
+-- The full-text index over search_document.body. It stores no text of its own (external content) and is kept in step by the
+-- triggers below. body holds words already split by the application, so the tokenizer takes them as they are.
+CREATE VIRTUAL TABLE search_document_fts USING fts5 (
+  body,
+  content='search_document',
+  tokenize='unicode61 remove_diacritics 0',
+  prefix='2 3 4'
+);
+
+CREATE TRIGGER search_document_after_insert AFTER INSERT ON search_document BEGIN
+  INSERT INTO search_document_fts (rowid, body) VALUES (new.rowid, new.body);
+END;
+
+-- An external-content index is told what to forget with the text it was given: a 'delete' command carrying the old row
+CREATE TRIGGER search_document_after_delete AFTER DELETE ON search_document BEGIN
+  INSERT INTO search_document_fts (search_document_fts, rowid, body) VALUES ('delete', old.rowid, old.body);
+END;
+
+CREATE TRIGGER search_document_after_update AFTER UPDATE ON search_document BEGIN
+  INSERT INTO search_document_fts (search_document_fts, rowid, body) VALUES ('delete', old.rowid, old.body);
+  INSERT INTO search_document_fts (rowid, body) VALUES (new.rowid, new.body);
+END;

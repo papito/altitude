@@ -459,6 +459,50 @@ import altitude.core.util.*
       List((Some("Rome"), Some("Italy"), 3, List(a3, a4)), (None, None, 2, List(a5, a6)))
   }
 
+  test("Under the Relevance sort every group reads best match first, then newest capture, and continues by cursor") {
+    val album = testApp.service.album.add("Beach days")
+    val a1 = persistDated("2026-09-06T10:00:00", "beach-1.jpg").persistedId
+    val a2 = persistDated("2026-09-06T09:00:00", "two.jpg").persistedId
+    val a3 = persistDated("2026-09-06T11:00:00", "beach-3.jpg").persistedId
+    val b1 = persistDated("2026-09-05T08:00:00", "beach-4.jpg").persistedId
+    val b2 = persistDated("2026-09-05T07:00:00", "five.jpg").persistedId
+    val undated = persistUndated("beach-6.jpg").persistedId
+    persistDated("2026-09-06T12:00:00", "unrelated.jpg")
+    // The album outranks a file name, so its assets lead their day although they are its oldest
+    testApp.service.album.addAssets(album.persistedId, Set(a2, b2))
+    val beach = Some("beach")
+
+    def page(by: GroupBy, cursor: Option[SearchCursor]): GroupedSearchResult =
+      grouped(by = by, sort = SearchSort.Relevance, rpp = 2, text = beach, cursor = cursor)
+
+    /** Every page of the search, two assets each, walked by cursor */
+    def pages(by: GroupBy): List[GroupedSearchResult] =
+      List.unfold(Option(page(by, None)))(_.map(current => (current, current.nextCursor.map(cursor => page(by, Some(cursor))))))
+
+    val days = List((day("2026-09-06"), 3, List(a2, a3, a1)), (day("2026-09-05"), 2, List(b2, b1)))
+    val noDate = (None, 1, List(undated))
+    val byDay = if (nullDaysFirst(SortDirection.DESC)) noDate :: days else days :+ noDate
+    summary(grouped(sort = SearchSort.Relevance, text = beach)) shouldEqual byDay
+    val dayPages = pages(GroupBy.DateTaken)
+    dayPages.flatMap(ids) shouldEqual byDay.flatMap(_._3)
+    dayPages.map(_.total) shouldEqual List(Some(6), None, None)
+    // A day's count is the whole day's on every page it spans
+    dayPages.flatMap(summary).map(group => group._1 -> group._2).distinct shouldEqual byDay.map(group => group._1 -> group._2)
+
+    val rome = addLocation("Rome")
+    val berlin = addLocation("Berlin")
+    testApp.service.location.addAssets(rome.persistedId, Set(a1, a2, undated))
+    testApp.service.location.addAssets(berlin.persistedId, Set(a3, b2, a2))
+    // In a group the undated asset is the last of its Relevance on both engines; an asset in two Locations is in both
+    val byLocation =
+      List((Some("Berlin"), None, 3, List(a2, b2, a3)), (Some("Rome"), None, 3, List(a2, a1, undated)), (None, None, 1, List(b1)))
+    locationSummary(grouped(by = GroupBy.Location, sort = SearchSort.Relevance, text = beach)) shouldEqual byLocation
+    val locationPages = pages(GroupBy.Location)
+    locationPages.flatMap(ids) shouldEqual byLocation.flatMap(_._4)
+    // Each page but the one that opens the trailing group continues the group the page before it ended in
+    locationPages.map(_.continuesGroup) shouldEqual List(false, true, true, false)
+  }
+
   test("Every filter bounds the Location groups and their counts, and the Location filter scopes a search") {
     val rome = addLocation("Rome")
     val berlin = addLocation("Berlin")

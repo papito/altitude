@@ -19,6 +19,7 @@ import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
+import altitude.core.util.SearchTerm
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
@@ -32,8 +33,17 @@ object SqliteSearchDialect extends SearchDialect:
     val column = Columns.required(AssetRow, asset, field, dialect)
     Expr[Option[LocalDate]](implicit ctx => sql"date($column)")
 
-  override def textMatch(document: SearchDocumentRow[Expr], text: String): Expr[Boolean] =
-    Expr[Boolean](implicit ctx => sql"${document.body} MATCH $text")
+  /**
+   * The full-text index is `search_document_fts`, which shares its `rowid` with the document. `rowid` is not part of the row
+   * class, so it is named directly: the subquery this lands in has `search_document` as its only table, and inside the index
+   * subquery the name is the index's own.
+   *
+   * The term's words are letters and digits only, so they are safe to join into one quoted FTS5 string, which matches as the
+   * phrase of its words; a `*` after the string makes its last word a prefix (`"img 12" *`).
+   */
+  override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
+    val ftsQuery = term.words.mkString("\"", " ", "\"") + (if term.isPhrase then "" else " *")
+    Expr[Boolean](implicit ctx => sql"rowid IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH $ftsQuery)")
 
   /**
    * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort

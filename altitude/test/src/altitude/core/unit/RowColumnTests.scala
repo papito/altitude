@@ -125,11 +125,7 @@ import altitude.core.dao.sql.tables._
   private def selectedColumns(sql: String): List[String] =
     "[a-z_]+[0-9]+\\.([a-z_0-9]+) AS ".r.findAllMatchIn(sql).map(_.group(1)).toList
 
-  /**
-   * `CREATE TABLE` column names per table, with PostgreSQL's inherited `_core` columns folded in.
-   *
-   * SQLite's `search_document` is an fts4 virtual table, declared on one line and inheriting nothing, so it is read separately.
-   */
+  /** `CREATE TABLE` column names per table, with PostgreSQL's inherited `_core` columns folded in */
   private def schemaColumns(engine: String): Map[String, List[String]] = {
     val source = Source.fromInputStream(getClass.getResourceAsStream(s"/migrations/$engine/all.sql"))
     val ddl =
@@ -141,13 +137,8 @@ import altitude.core.dao.sql.tables._
       .map(m => m.group(1) -> (columnNames(m.group(2)), m.group(3).contains("INHERITS")))
       .toMap
 
-    val virtualTables = "CREATE VIRTUAL TABLE (\\w+) USING \\w+ \\(([^)]*)\\)".r
-      .findAllMatchIn(ddl)
-      .map(m => m.group(1) -> m.group(2).split(",").map(_.trim).toList)
-      .toMap
-
     val core = tables.get("_core").map(_._1).getOrElse(List())
-    tables.map { case (name, (columns, inherits)) => name -> (if (inherits) core ++ columns else columns) } ++ virtualTables
+    tables.map { case (name, (columns, inherits)) => name -> (if (inherits) core ++ columns else columns) }
   }
 
   private def columnNames(body: String): List[String] =

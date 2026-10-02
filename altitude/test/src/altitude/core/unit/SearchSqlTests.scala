@@ -3,11 +3,13 @@ package altitude.core.unit
 import altitude.test.TestFocus
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
-import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.matchers.should.Matchers.*
 import scalasql.Table
 import scalasql.core.DbApi
+import scalasql.core.Queryable
 import scalasql.core.SqlStr
 
+import altitude.core.SearchCursorException
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.PostgresSearchDialect
 import altitude.core.dao.sql.search.SearchDialect
@@ -17,10 +19,15 @@ import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupBy
 import altitude.core.util.Query
+import altitude.core.util.ResolvedSearchGroup
+import altitude.core.util.ResolvedSearchTerm
+import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
+import altitude.core.util.SearchSource
+import altitude.core.util.SearchText
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
@@ -65,21 +72,103 @@ import altitude.core.util.SortValue
   }
 
   test("Text search is a semi-join on the search document, in the engine's own dialect") {
-    val postgres = flat(PostgresSearchDialect, new SearchQuery(text = Some("beach")))
-    val sqlite = flat(SqliteSearchDialect, new SearchQuery(text = Some("beach")))
+    val postgres = flat(PostgresSearchDialect, textQuery("beach"))
+    val sqlite = flat(SqliteSearchDialect, textQuery("beach"))
 
     withClue(postgres) {
       postgres.contains("asset0.id IN (SELECT") shouldBe true
       postgres.contains("FROM search_document search_document1") shouldBe true
-      postgres.contains("tsv @@ to_tsquery(?)") shouldBe true
+      postgres.contains("tsv @@ to_tsquery('simple', ?)") shouldBe true
       // repository, pipeline flag, the document's repository and the text
       placeholders(postgres) shouldBe 4
     }
 
     withClue(sqlite) {
       sqlite.contains("asset0.id IN (SELECT") shouldBe true
-      sqlite.contains("search_document1.body MATCH ?") shouldBe true
+      sqlite.contains("FROM search_document search_document1") shouldBe true
+      sqlite.contains("rowid IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH ?)") shouldBe true
       placeholders(sqlite) shouldBe 4
+    }
+  }
+
+  test("Each term of the Search text is its own semi-join: groups AND-ed, alternatives OR-ed, an exclusion negated") {
+    for ((engine, dialect) <- engines) {
+      val sql = flat(dialect, textQuery("""beach OR -lake "golden gate""""))
+
+      withClue(s"$engine: $sql") {
+        """\(\(asset0\.id IN \(SELECT .*?\)\) OR \(NOT \(asset0\.id IN \(SELECT .*?\)\)\)\) AND \(asset0\.id IN \(SELECT""".r
+          .findFirstIn(sql)
+          .isDefined shouldBe true
+        "FROM search_document ".r.findAllIn(sql).size shouldBe 3
+        // repository and pipeline flag, then the document's repository and the engine's query string per term
+        placeholders(sql) shouldBe 8
+      }
+    }
+  }
+
+  test("A term is bound as one query string in the engine's syntax: a prefix on the last word unless it is a phrase") {
+    val text = """beach IMG_12 "golden gate" -"lake""""
+
+    textBinds(PostgresSearchDialect, text) shouldBe List("beach:*", "img <-> 12:*", "golden <-> gate", "lake")
+    textBinds(SqliteSearchDialect, text) shouldBe List("\"beach\" *", "\"img 12\" *", "\"golden gate\"", "\"lake\"")
+  }
+
+  test("Text without a usable term adds no filter") {
+    for ((engine, dialect) <- engines) withClue(engine) {
+      flat(dialect, new SearchQuery(text = Some("- !!! OR"))).contains("search_document") shouldBe false
+    }
+  }
+
+  test("A term is the OR of the name sources it resolved to and the document, each ID set bound as one parameter") {
+    val ids = Map(
+      SearchSource.Album -> Set("a1"),
+      SearchSource.Person -> Set("p1", "p2"),
+      SearchSource.Folder -> Set("f1", "f2", "f3"),
+      SearchSource.Category -> Set("l2"),
+      SearchSource.Location -> Set("l1")
+    )
+
+    for ((engine, dialect) <- engines) {
+      val sql = flat(dialect, textQuery("alice", ids))
+      val inSet = if (dialect == PostgresSearchDialect) raw"= ANY\(\?\)" else raw"IN \(SELECT value FROM json_each\(\?\)\)"
+      val semiJoin = raw"\(asset0\.id IN \(SELECT "
+
+      withClue(s"$engine: $sql") {
+        // Sources in declaration order: person, Location, Category (as its Locations), folder, album, document
+        (raw"${semiJoin}face\d\.asset_id .*?person\d\.id $inSet\)+ OR " +
+          raw"$semiJoin.*?location_asset\d\.location_id $inSet\)+ OR " +
+          raw"$semiJoin.*?location_asset\d\.location_id $inSet\)+ OR " +
+          raw"asset0\.folder_id $inSet\)+ OR " +
+          raw"$semiJoin.*?album_asset\d\.album_id $inSet\)+ OR " +
+          raw"${semiJoin}search_document\d\.asset_id").r.findFirstIn(sql).isDefined shouldBe true
+        // repository and pipeline flag, one parameter per ID set, the document's repository and query string
+        placeholders(sql) shouldBe 9
+      }
+    }
+  }
+
+  test("An excluded term must not match in any source") {
+    for ((engine, dialect) <- engines) {
+      val sql = flat(dialect, textQuery("-alice", Map(SearchSource.Person -> Set("p1"))))
+
+      withClue(s"$engine: $sql") {
+        """\(NOT \(\(asset0\.id IN \(SELECT face.*?\)\) OR \(asset0\.id IN \(SELECT search_document.*?\)\)\)\)""".r
+          .findFirstIn(sql)
+          .isDefined shouldBe true
+      }
+    }
+  }
+
+  test("An ID set is bound whole: an array on PostgreSQL, a JSON array on SQLite") {
+    val query = new SearchQuery(folderIds = Set("f1", "f2"))
+
+    bound(PostgresSearchDialect, query) should contain(Set("f1", "f2"))
+    bound(SqliteSearchDialect, query) should contain("""["f1","f2"]""")
+  }
+
+  test("Text that was not resolved against the names is refused, not searched by the document alone") {
+    for ((engine, dialect) <- engines) withClue(engine) {
+      intercept[IllegalStateException](flat(dialect, new SearchQuery(text = Some("beach"))))
     }
   }
 
@@ -107,18 +196,18 @@ import altitude.core.util.SortValue
 
   test("Person and album filters are semi-joins too") {
     val people = flat(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2")))
-    val albums = flat(SqliteSearchDialect, new SearchQuery(albumIds = Set("a1")))
+    val albums = flat(PostgresSearchDialect, new SearchQuery(albumIds = Set("a1")))
 
     withClue(people) {
       people.contains("asset0.id IN (SELECT") shouldBe true
       people.contains("FROM face face1") shouldBe true
       people.contains("JOIN person person2") shouldBe true
-      people.contains("person2.id IN (?, ?)") shouldBe true
+      people.contains("person2.id IN (SELECT value FROM json_each(?))") shouldBe true
     }
 
     withClue(albums) {
       albums.contains("FROM album_asset album_asset1") shouldBe true
-      albums.contains("album_asset1.album_id IN (?)") shouldBe true
+      albums.contains("album_asset1.album_id = ANY(?)") shouldBe true
     }
   }
 
@@ -127,8 +216,9 @@ import altitude.core.util.SortValue
     withClue(byLocation) {
       byLocation.contains("asset0.id IN (SELECT") shouldBe true
       byLocation.contains("FROM location_asset location_asset1") shouldBe true
-      byLocation.contains("location_asset1.location_id IN (?, ?)") shouldBe true
-      placeholders(byLocation) shouldBe 4
+      byLocation.contains("location_asset1.location_id IN (SELECT value FROM json_each(?))") shouldBe true
+      // repository, pipeline flag and the ID set
+      placeholders(byLocation) shouldBe 3
     }
 
     // An asset's own point, or - with no point of its own - the pin of a Location it is in
@@ -153,7 +243,7 @@ import altitude.core.util.SortValue
 
   test("A count is one COUNT over the matching relation") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      val query = new SearchQuery(params = Map("is_recycled" -> false), text = Some("beach"), locationIds = Set("l1"))
+      val query = textQuery("beach", params = Map("is_recycled" -> false), locationIds = Set("l1"))
       val sql = DbApi.renderSql(SearchQueries.count(dialect, query, "repo-1"), Db.config, dialect.dialect)
 
       withClue(sql) {
@@ -173,8 +263,9 @@ import altitude.core.util.SortValue
 
     withClue(sql) {
       sql.contains("asset0.is_recycled = ?") shouldBe true
-      sql.contains("asset0.folder_id IN (?, ?)") shouldBe true
-      placeholders(sql) shouldBe 5
+      sql.contains("asset0.folder_id IN (SELECT value FROM json_each(?))") shouldBe true
+      // repository, pipeline flag, the recycled flag and the folder set
+      placeholders(sql) shouldBe 4
     }
   }
 
@@ -213,7 +304,7 @@ import altitude.core.util.SortValue
       val leads = if (engine == "sqlite") direction == SortDirection.ASC else direction == SortDirection.DESC
 
       withClue(s"$engine/$direction/$position/$field: $text") {
-        text.contains("undated (id, day, sort_value) AS MATERIALIZED") shouldBe (position == "dated" && !leads)
+        text.contains("undated (id, day, sort_value, second_sort_value) AS MATERIALIZED") shouldBe (position == "dated" && !leads)
         text.contains(
           "LIMIT CASE WHEN (SELECT count(*) FROM dated) > 50 THEN 0 ELSE 51 END") shouldBe (position == "dated" && !leads)
         text.contains("FROM page WHERE day IS NOT NULL") shouldBe true
@@ -273,6 +364,7 @@ import altitude.core.util.SortValue
       params = Map("is_recycled" -> false),
       rpp = 50,
       text = Some("beach"),
+      resolvedText = resolved("beach"),
       searchSort = List(SearchSort("filename", SortDirection.ASC)),
       grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
     )
@@ -280,7 +372,7 @@ import altitude.core.util.SortValue
 
     // The candidate slice, both day-count probes and the overall count: four copies of the same predicate
     withClue(text) {
-      "search_document\\d+\\.body MATCH \\?".r.findAllIn(text).size shouldBe 4
+      "search_document_fts MATCH \\?".r.findAllIn(text).size shouldBe 4
       "asset0\\.is_recycled = \\?".r.findAllIn(text).size shouldBe 4
     }
   }
@@ -293,7 +385,9 @@ import altitude.core.util.SortValue
     val text = SearchQueries.grouped(PostgresSearchDialect, query, "repo-1").toString.replaceAll("\\s+", " ")
 
     val declared = Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", ")
-    text.contains(s"SELECT $declared, p.day AS day, p.sort_value AS sort_value, d.n AS day_total") shouldBe true
+    text.contains(
+      s"SELECT $declared, p.day AS day, p.sort_value AS sort_value, p.second_sort_value AS second_sort_value, " +
+        "d.n AS day_total") shouldBe true
   }
 
   /**
@@ -319,13 +413,14 @@ import altitude.core.util.SortValue
         rpp = 50,
         folderIds = Set("folder"),
         text = Some("beach"),
+        resolvedText = resolved("beach"),
         searchSort = List(SearchSort(field, SortDirection.ASC)),
         grouping = Some(SearchGrouping(GroupBy.Location)),
         cursor = cursor
       )
       val statement = SearchQueries.groupedByLocation(dialect, query, "repo-1")
       val text = statement.toString.replaceAll("\\s+", " ").trim
-      val columns = "(id, location_id, path_key, location_name, category_name, sort_value)"
+      val columns = "(id, location_id, path_key, location_name, category_name, sort_value, second_sort_value)"
 
       withClue(s"$engine/$position/$field: $text") {
         // The located slice and its guard on the unlocated one exist until the anchor is in the trailing group
@@ -349,7 +444,7 @@ import altitude.core.util.SortValue
         text.contains("total AS MATERIALIZED") shouldBe (position == "first")
         text.count(_ == '?') shouldBe binds(statement)
         // Every branch applies the same filters: the located slice, the unlocated slice, both group counts and the total
-        "search_document\\d+\\.body MATCH \\?|tsv @@ to_tsquery\\(\\?\\)".r.findAllIn(text).size shouldBe
+        "search_document_fts MATCH \\?|tsv @@ to_tsquery\\('simple', \\?\\)".r.findAllIn(text).size shouldBe
           (if (position == "unlocated") 3 else if (position == "first") 5 else 4)
 
         if (position == "located") {
@@ -390,7 +485,79 @@ import altitude.core.util.SortValue
     val declared = Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", ")
     text.contains(
       s"SELECT $declared, p.location_id AS location_id, p.path_key AS path_key, p.location_name AS location_name, " +
-        "p.category_name AS category_name, p.sort_value AS sort_value, g.n AS group_total") shouldBe true
+        "p.category_name AS category_name, p.sort_value AS sort_value, p.second_sort_value AS second_sort_value, " +
+        "g.n AS group_total") shouldBe true
+  }
+
+  test("Relevance is rendered only under its sort: one CASE per scoring group, the best source first") {
+    val ids = Map(SearchSource.Folder -> Set("f1"), SearchSource.Person -> Set("p1"))
+    val text = "alice OR bob paris -lake"
+
+    for ((engine, dialect) <- engines) {
+      val sql = flat(dialect, textQuery(text, ids, searchSort = List(SearchSort.Relevance)))
+
+      withClue(s"$engine: $sql") {
+        // The alternatives share one CASE, so their group scores once, as its best match; the exclusion scores nothing
+        "CASE WHEN".r.findAllIn(sql).size shouldBe 2
+        "THEN (\\d)".r.findAllMatchIn(sql).map(_.group(1)).mkString shouldBe "552211521"
+        ("ORDER BY \\(CASE WHEN .* ELSE 0 END \\+ CASE WHEN .* ELSE 0 END\\) DESC, " +
+          "asset0\\.original_created_at DESC NULLS LAST, asset0\\.id ASC").r.findFirstIn(sql).isDefined shouldBe true
+      }
+
+      val byFilename = List(SearchSort("filename", SortDirection.ASC))
+      flat(dialect, textQuery(text, ids, searchSort = byFilename)).contains("CASE WHEN") shouldBe false
+    }
+  }
+
+  test("A Relevance page orders by Relevance, newest capture and ID, and its cursor compares all three") {
+    val relevance = "CASE WHEN .*? THEN 1 ELSE 0 END"
+    val taken = "asset0\\.original_created_at"
+
+    for {
+      (engine, dialect) <- engines
+      by <- GroupBy.values.toList
+      second <- List(SortValue.Text("2026-09-06 10:00:00"), SortValue.Null)
+    } {
+      // A day's anchor, or one in the trailing "No location" group
+      val cursor = SearchCursor(
+        key = Option.when(by == GroupBy.DateTaken)("2026-09-06"),
+        groupId = None,
+        sortValue = SortValue.Num(1),
+        id = "id",
+        scope = "scope",
+        secondSortValue = Some(second))
+      def page(cursor: SearchCursor): SqlStr =
+        val query = new SearchQuery(
+          rpp = 50,
+          text = Some("beach"),
+          resolvedText = resolved("beach"),
+          searchSort = List(SearchSort.Relevance),
+          grouping = Some(SearchGrouping(by)),
+          cursor = Some(cursor)
+        )
+        if by == GroupBy.DateTaken then SearchQueries.grouped(dialect, query, "repo-1")
+        else SearchQueries.groupedByLocation(dialect, query, "repo-1")
+      val statement = page(cursor)
+      val text = statement.toString.replaceAll("\\s+", " ").trim
+
+      withClue(s"$engine/$by/$second: $text") {
+        // Among the anchor's Relevance an older capture follows it, and so does every asset with none: they are last
+        val afterTie =
+          if (second == SortValue.Null) s"\\($taken IS NULL AND asset0\\.id > \\?\\)"
+          else s"\\($taken < \\? OR $taken IS NULL OR \\($taken = \\? AND asset0\\.id > \\?\\)\\)"
+        s"\\($relevance < \\? OR \\($relevance = \\? AND $afterTie\\)\\)".r.findFirstIn(text).isDefined shouldBe true
+        // The slice computes what it orders by; the page orders its candidates by the columns they carry
+        s"$relevance DESC, $taken DESC NULLS LAST, asset0\\.id ASC LIMIT".r.findFirstIn(text).isDefined shouldBe true
+        "(c\\.)?sort_value DESC, (c\\.)?second_sort_value DESC NULLS LAST, (c\\.)?id ASC LIMIT 50".r
+          .findFirstIn(text)
+          .isDefined shouldBe true
+        text.contains("p.sort_value DESC, p.second_sort_value DESC NULLS LAST, p.id ASC") shouldBe true
+        text.count(_ == '?') shouldBe binds(statement)
+      }
+
+      // A cursor without the capture time is no position under this sort
+      intercept[SearchCursorException](page(cursor.copy(secondSortValue = None)))
+    }
   }
 
   test("The map's cells are one statement: the plotted points in the box, gridded, one window pass, the newest per cell") {
@@ -409,7 +576,9 @@ import altitude.core.util.SortValue
         text.contains("JOIN location location2 ON") shouldBe true
         text.contains("(location2.latitude BETWEEN ? AND ? AND location2.longitude BETWEEN ? AND ?)") shouldBe true
         // Both branches carry the search's own filters
-        "location_asset\\S*\\.location_id IN \\(\\?\\)".r.findAllIn(text).size shouldBe 2
+        raw"location_asset\S*\.location_id (= ANY\(\?\)|IN \(SELECT value FROM json_each\(\?\)\))".r
+          .findAllIn(text)
+          .size shouldBe 2
         text.contains("floor(longitude / ?) AS cell_x, floor(latitude / ?) AS cell_y") shouldBe true
         text.contains("COUNT(*) OVER w AS n, AVG(latitude) OVER w AS latitude, AVG(longitude) OVER w AS longitude") shouldBe true
         text.contains(
@@ -425,7 +594,7 @@ import altitude.core.util.SortValue
 
   test("The map's bounds are one aggregate over the same plotted points, over the whole search") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      val query = new SearchQuery(params = Map("is_recycled" -> false), text = Some("beach"))
+      val query = textQuery("beach", params = Map("is_recycled" -> false))
       val statement = SearchQueries.mapBounds(dialect, query, "repo-1")
       val text = statement.toString.replaceAll("\\s+", " ")
 
@@ -457,7 +626,7 @@ import altitude.core.util.SortValue
         // The count is a correlated subquery over the search's own matching relation, and only Locations with one are listed
         sql.contains("FROM location_asset") shouldBe true
         sql.contains("asset_id IN (SELECT asset") shouldBe true
-        sql.contains("folder_id IN (?)") shouldBe true
+        (sql.contains("folder_id = ANY(?)") || sql.contains("folder_id IN (SELECT value FROM json_each(?))")) shouldBe true
         sql.contains("> ?") shouldBe true
       }
     }
@@ -465,6 +634,39 @@ import altitude.core.util.SortValue
 
   private def flat(engine: SearchDialect, query: SearchQuery): String =
     DbApi.renderSql(SearchQueries.flat(engine, query, "repo-1"), Db.config, engine.dialect)
+
+  /** The engine query strings a Search text binds, in term order: every text value bound other than the repository */
+  private def textBinds(engine: SearchDialect, text: String): List[String] =
+    bound(engine, textQuery(text)).collect { case value: String if value != "repo-1" => value }
+
+  /** Every value the search's matching relation binds, in order */
+  private def bound(engine: SearchDialect, query: SearchQuery): List[Any] =
+    def values[Q, R](query: Q)(using queryable: Queryable[Q, R]): List[Any] =
+      DbApi.unpackQueryable(query, queryable, Db.config, engine.dialect).interpsIterator.map(_.value).toList
+
+    values(SearchQueries.matching(engine, query, "repo-1"))
+
+  /** A query whose Search text is resolved as a service would hand it to the DAO, every term having matched the given names */
+  private def textQuery(
+      text: String,
+      ids: Map[SearchSource, Set[String]] = Map(),
+      params: Map[String, Any] = Map(),
+      locationIds: Set[String] = Set(),
+      searchSort: List[SearchSort] = Nil): SearchQuery =
+    new SearchQuery(
+      text = Some(text),
+      params = params,
+      locationIds = locationIds,
+      searchSort = searchSort,
+      resolvedText = resolved(text, ids))
+
+  /** The Search text with every one of its terms resolved to the given names */
+  private def resolved(text: String, ids: Map[SearchSource, Set[String]] = Map()): Option[ResolvedSearchText] =
+    SearchText.parse(text).map {
+      expression =>
+        ResolvedSearchText(
+          expression.groups.map(group => ResolvedSearchGroup(group.alternatives.map(ResolvedSearchTerm(_, ids)))))
+    }
 
   private def placeholders(sql: String): Int = sql.count(_ == '?')
 
