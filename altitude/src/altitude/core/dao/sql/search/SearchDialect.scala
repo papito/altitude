@@ -37,8 +37,14 @@ trait SearchDialect:
    */
   def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean]
 
-  /** The ORDER BY term for the sort within a group. Engines may decorate it to steer their planner. */
-  def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?]
+  /** The ORDER BY term for a column sort within a group. Engines may decorate it to steer their planner. */
+  def secondarySort(column: Expr[?], sort: SearchSort, grouping: SearchGrouping): Expr[?]
+
+  /**
+   * An asset that is in none of a relation's rows, the relation being a CTE of asset IDs: the anti-join of a group of one
+   * excluded term, written the way the engine plans one well
+   */
+  def excludes(assetId: Expr[String], relation: String): Expr[Boolean]
 
   /** Whether the engine's schema lets this timestamp column be null */
   def isNullableTimestamp(field: String): Boolean

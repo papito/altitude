@@ -69,6 +69,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `Const.state.selectedAssets` | Reactive `Set` of the selected asset IDs, and the one place a selection changes (see **Selection** below) |
 | `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
 | `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
+| `Const.state.resultsTotal` | The toolbar's results total: `count` and `isCapped`, set from the results fragment's `data-results-total` and `data-results-total-capped` (`js/fragments/search-results.js`). `label` reads the count followed by "+" when the server counted only up to its cap (`js/common/total-label.js`, "10000+"); `decrement` lowers an uncapped total as assets leave the grid and leaves a capped one alone, since it says only that there are more than the cap |
 | `Const.context.repoId` | Active repo ID — set from Twirl via `window.ctx.setRepoId(...)` |
 | `Const.context.gridMetadataFields` | Reactive `Set` of metadata field names shown in the grid; persisted in `localStorage` as a JSON array |
 
@@ -547,7 +548,7 @@ continuation, selection, the detail modal and dragging to a Location row work in
 URL is bookmarkable, since the map hydrator reopens the panel for the `data-results-bbox` its fragment
 carries. The map endpoints and the map layout's total and bounds ignore `bbox`, so the map behind the
 panel keeps plotting the whole search. `js/fragments/search-results.js` hydrates a fragment inside
-`#mapPanel` as the panel's grid: it writes the count into `#mapPanelCount` ("n items here") and leaves
+`#mapPanel` as the panel's grid: it writes the count into `#mapPanelCount` ("n items here", "10000+ items here" when the total is capped, `setMapPanelCount`) and leaves
 the displayed map, the total store, the viewed scope and box selection alone; the fragment's own
 `#searchControl` is hidden there. The panel's continuations stay a plain grid (see **Infinite scroll +
 lazy load**). The server's `HX-Replace-Url` for a panel request says `layout=grid`, so
@@ -621,7 +622,7 @@ count is positive stays, since the group has matches on pages not loaded yet. Un
 an asset in two Locations has a cell in each group (`asset-<id>-in-<locationId>`; elsewhere a cell is
 `asset-<id>`), so every per-asset change goes through `js/search-results/cells.js`, which finds all of
 an asset's cells by `data-asset-id`: removal takes every cell out, decrementing each header a cell
-leaves, while the footer total, which counts assets, drops once per asset.
+leaves, while the footer total, which counts assets, drops once per asset (unless it is capped: see `resultsTotal` under **Alpine.js Stores**).
 
 The header's checkbox is `x-data="initDateGroupSelectable()"`
 (`js/alpine/components/date-group-selectable.js`). Its set is the group's cells *in the grid*, read off

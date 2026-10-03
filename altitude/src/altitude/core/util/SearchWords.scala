@@ -24,11 +24,25 @@ object SearchWords:
   def of(text: String): Seq[String] = words(unmarked(text), Boundary)
 
   /**
+   * How many texts [[variants]] remembers, least recently read first out: a search reads the readings of every name of the
+   * repository on every request, and an import those of every file name and metadata value it indexes
+   */
+  private val MEMO_SIZE = 50000
+
+  // The readings of a text are a pure function of it, so a remembered one never goes stale
+  private val memo: java.util.Map[String, Seq[Seq[String]]] =
+    java.util.Collections.synchronizedMap(new java.util.LinkedHashMap[String, Seq[Seq[String]]](1024, 0.75f, true) {
+      override def removeEldestEntry(eldest: java.util.Map.Entry[String, Seq[Seq[String]]]): Boolean = size > MEMO_SIZE
+    })
+
+  /**
    * The word sequences the text can be read as, none for text without a word. The first is [[of]]; the second is the same rule
    * without the camelCase hump, present only when the text has one, so that a word written with a hump and the same word written
    * in one case can find each other: `McDonald_beachSunset.jpg` is `mc donald beach sunset jpg` or `mcdonald beachsunset jpg`.
    */
-  def variants(text: String): Seq[Seq[String]] =
+  def variants(text: String): Seq[Seq[String]] = memo.computeIfAbsent(text, readings)
+
+  private def readings(text: String): Seq[Seq[String]] =
     val plain = unmarked(text)
     Seq(words(plain, Boundary), words(plain, CaseFreeBoundary)).distinct.filter(_.nonEmpty)
 

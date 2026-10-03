@@ -13,7 +13,7 @@ import altitude.core.util.*
  * Grouped search: date groups with full-day totals, page contents, and counts that honor every search filter; Location groups in
  * path order with an asset under each of its Locations; the Location and bounding-box filters and the bare count.
  */
-@DoNotDiscover class SearchGroupingTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class SearchGroupingTests(override val testApp: Altitude) extends IntegrationTestCore with TextSearchPaths {
 
   private val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
 
@@ -49,7 +49,7 @@ import altitude.core.util.*
       locationIds: Set[String] = Set(),
       bbox: Option[BoundingBox] = None,
       by: GroupBy = GroupBy.DateTaken): GroupedSearchResult =
-    testApp.service.library.searchGrouped(
+    searchGrouped(
       new SearchQuery(
         text = text,
         params = params,
@@ -526,18 +526,18 @@ import altitude.core.util.*
 
     // The Location filter on a flat search, on a day grouping, and on the bare count
     val query = flat(locationIds = Set(rome.persistedId))
-    testApp.service.library.search(query).records.map(_.persistedId) should contain theSameElementsAs
+    search(query).records.map(_.persistedId) should contain theSameElementsAs
       List(inFolder.persistedId, elsewhere.persistedId)
-    testApp.service.library.count(query) shouldBe 2
+    count(query) shouldBe 2
     summary(grouped(locationIds = Set(rome.persistedId), folderIds = Set(folder.persistedId))) shouldEqual
       List((day("2026-09-06"), 1, List(inFolder.persistedId)))
-    testApp.service.library.count(flat(locationIds = Set(rome.persistedId), folderIds = Set(folder.persistedId))) shouldBe 1
+    count(flat(locationIds = Set(rome.persistedId), folderIds = Set(folder.persistedId))) shouldBe 1
 
     // Recycling drops the memberships, and with them the asset from the Location's group and count
     testApp.service.library.recycleAssets(Set(elsewhere.persistedId))
     locationSummary(grouped(by = GroupBy.Location)) shouldEqual
       List((Some("Rome"), None, 1, List(inFolder.persistedId)), (None, None, 1, List(unlocated.persistedId)))
-    testApp.service.library.count(flat()) shouldBe 2
+    count(flat()) shouldBe 2
   }
 
   test("The bounding-box filter plots an asset at its own point, or at its Locations' pins without one") {
@@ -556,7 +556,7 @@ import altitude.core.util.*
     testApp.service.location.removeAssets(sydney.persistedId, Set(nowhere.persistedId))
 
     def found(box: String): List[String] =
-      testApp.service.library.search(flat(bbox = Some(BoundingBox.parse(box)))).records.map(_.persistedId).sorted
+      search(flat(bbox = Some(BoundingBox.parse(box)))).records.map(_.persistedId).sorted
 
     found("48,2,49,3") shouldEqual List(own.persistedId)
     // An asset with a point of its own is never plotted at its Location's pin
@@ -568,9 +568,9 @@ import altitude.core.util.*
     found("-90,-180,90,180") shouldEqual List(own, pinned, pointAndPin, east, west).map(_.persistedId).sorted
 
     // The same predicate bounds the count and a grouped page
-    testApp.service.library.count(flat(bbox = Some(BoundingBox.parse("-1,179,1,-179")))) shouldBe 2
+    count(flat(bbox = Some(BoundingBox.parse("-1,179,1,-179")))) shouldBe 2
     summary(grouped(bbox = Some(BoundingBox.parse("-34,151,-33,152")))) shouldEqual
       List((day("2026-09-06"), 1, List(pinned.persistedId)))
-    testApp.service.library.count(flat()) shouldBe 6
+    count(flat()) shouldBe 6
   }
 }

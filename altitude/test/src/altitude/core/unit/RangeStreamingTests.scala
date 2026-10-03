@@ -36,20 +36,23 @@ import altitude.core.routes.RangeStreaming.FileWindow
   test("A window of a file is written whole") {
     val bytes = Array.tabulate[Byte](1000)(_.toByte)
 
-    withFile(bytes) { path =>
-      val out = ByteArrayOutputStream()
-      FileWindow(path, 100, 50, MIME).writeBytesTo(out)
-      out.toByteArray shouldBe bytes.slice(100, 150)
+    withFile(bytes) {
+      path =>
+        val out = ByteArrayOutputStream()
+        FileWindow(path, 100, 50, MIME).writeBytesTo(out)
+        out.toByteArray shouldBe bytes.slice(100, 150)
     }
   }
 
   test("A client that goes away mid-stream ends the response without an error") {
     // A player drops the connection whenever it has what it wants: the metadata of a Video, the asset the user left
-    withFile(Array.fill[Byte](100000)(1)) { path =>
-      Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe")).foreach { failure =>
-        val client = DepartingClient(accepted = 0, failure())
-        noException should be thrownBy FileWindow(path, 0, 100000, MIME).writeBytesTo(client)
-      }
+    withFile(Array.fill[Byte](100000)(1)) {
+      path =>
+        Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe")).foreach {
+          failure =>
+            val client = DepartingClient(accepted = 0, failure())
+            noException should be thrownBy FileWindow(path, 0, 100000, MIME).writeBytesTo(client)
+        }
     }
   }
 
@@ -59,8 +62,8 @@ import altitude.core.routes.RangeStreaming.FileWindow
     a[NoSuchFileException] should be thrownBy FileWindow(missing, 0, 10, MIME).writeBytesTo(ByteArrayOutputStream())
 
     // A window past the end of the file has nothing to transfer
-    withFile(Array.fill[Byte](10)(1)) { path =>
-      an[IOException] should be thrownBy FileWindow(path, 0, 20, MIME).writeBytesTo(ByteArrayOutputStream())
+    withFile(Array.fill[Byte](10)(1)) {
+      path => an[IOException] should be thrownBy FileWindow(path, 0, 20, MIME).writeBytesTo(ByteArrayOutputStream())
     }
   }
 }

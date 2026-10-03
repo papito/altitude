@@ -9,8 +9,9 @@
 @* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
    controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
    `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. `text` is the Search text the
-   results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. *@
-@(total: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None)
+   results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
+   up to one past `totalCap`, which means more than the cap. *@
+@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None)
 
 <style>
   #searchControl {
@@ -330,7 +331,8 @@
    the store says map. *@
 <div data-app-fragment="search-results"
      @if(layout == Const.Search.Layout.MAP) {class="map-layout"}
-     data-results-total="@{total}"
+     data-results-total="@{total.min(totalCap)}"
+     data-results-total-capped="@{total > totalCap}"
      data-results-repo-id="@{RequestContext.getRepository.persistedId}"
      data-results-view="@{view}"
      data-results-folder-id="@{folderId.getOrElse("")}"
@@ -353,7 +355,7 @@
 <div id="searchControl" x-data>
   <div class="total">
     <div>
-      <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.count"></span>
+      <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.label"></span>
       @* The map-area scope of the crowded-pin panel (js/map/map-panel.js); its × clears `bbox` in either layout *@
       @if(bbox.isDefined) {
         <button id="bboxScope" type="button" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>

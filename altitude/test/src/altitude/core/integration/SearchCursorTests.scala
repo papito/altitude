@@ -12,7 +12,7 @@ import altitude.core.service.FaceDetectionService
 import altitude.core.util.*
 
 /** Cursor continuation of a grouped search: every supported ordering, live changes around the anchor, and scope checks */
-@DoNotDiscover class SearchCursorTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class SearchCursorTests(override val testApp: Altitude) extends IntegrationTestCore with TextSearchPaths {
 
   /** What a fixture asset was given, so the expected order can be computed independently of SQL */
   private case class Dated(id: String, taken: Option[LocalDateTime], imported: OffsetDateTime, filename: String)
@@ -101,7 +101,7 @@ import altitude.core.util.*
     blocks.flatMap(_.sorted(sortThenId(sort)).map(_.id))
 
   private def firstPage(grouping: SearchGrouping, sort: SearchSort, rpp: Int, text: Option[String] = None): GroupedSearchResult =
-    testApp.service.library.searchGrouped(
+    searchGrouped(
       new SearchQuery(
         text = text,
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -115,7 +115,7 @@ import altitude.core.util.*
       sort: SearchSort,
       rpp: Int,
       text: Option[String] = None): GroupedSearchResult =
-    testApp.service.library.searchGrouped(
+    searchGrouped(
       new SearchQuery(
         text = text,
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -234,7 +234,7 @@ import altitude.core.util.*
     val folder = testApp.service.folder.add("scoped")
     val location = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
     def scoped(folderIds: Set[String] = Set(), locationIds: Set[String] = Set(), bbox: Option[BoundingBox] = None) =
-      testApp.service.library.searchGrouped(
+      searchGrouped(
         new SearchQuery(
           params = Map(FieldConst.Asset.IS_RECYCLED -> false),
           folderIds = folderIds,

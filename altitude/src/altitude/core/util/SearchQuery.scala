@@ -33,7 +33,12 @@ class SearchQuery(
     val searchSort: List[SearchSort] = List(),
     val grouping: Option[SearchGrouping] = None,
     val cursor: Option[SearchCursor] = None,
-    val resolvedText: Option[ResolvedSearchText] = None)
+    val resolvedText: Option[ResolvedSearchText] = None,
+    // How far a first page's total counts: one past it means more. With textProbeLimit, tuning carried here so that a test can
+    // reach it, and not part of what identifies the search to a cursor.
+    val totalCap: Int = Const.Search.TOTAL_CAP,
+    // How many hits a group of the Search text may have and still be answered from them (SearchService.resolveText)
+    val textProbeLimit: Int = Const.Search.TEXT_PROBE_LIMIT)
   extends Query(params = metadataFilters, rpp = rpp, page = page):
 
   if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
@@ -84,6 +89,9 @@ class SearchQuery(
   def withResolvedText(resolved: ResolvedSearchText): SearchQuery =
     copyWith(resolvedText = Some(resolved))
 
+  def withTextProbeLimit(limit: Int): SearchQuery =
+    copyWith(textProbeLimit = limit)
+
   override def add(_params: (String, Any)*): SearchQuery =
     copyWith(params = params ++ _params)
 
@@ -92,7 +100,8 @@ class SearchQuery(
       params: Map[String, Any] = params,
       metadataFilters: Map[String, Any] = metadataFilters,
       folderIds: Set[String] = folderIds,
-      resolvedText: Option[ResolvedSearchText] = resolvedText): SearchQuery =
+      resolvedText: Option[ResolvedSearchText] = resolvedText,
+      textProbeLimit: Int = textProbeLimit): SearchQuery =
     SearchQuery(
       text = text,
       params = params,
@@ -107,5 +116,7 @@ class SearchQuery(
       searchSort = searchSort,
       grouping = grouping,
       cursor = cursor,
-      resolvedText = resolvedText
+      resolvedText = resolvedText,
+      totalCap = totalCap,
+      textProbeLimit = textProbeLimit
     )

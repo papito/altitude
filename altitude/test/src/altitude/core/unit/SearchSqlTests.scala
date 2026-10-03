@@ -9,6 +9,7 @@ import scalasql.core.DbApi
 import scalasql.core.Queryable
 import scalasql.core.SqlStr
 
+import altitude.core.Const
 import altitude.core.SearchCursorException
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.PostgresSearchDialect
@@ -44,7 +45,7 @@ import altitude.core.util.SortValue
 
   test("Every search is scoped to its repository and to processed assets alone") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      val sql = flat(dialect, new SearchQuery())
+      val sql = matchingSql(dialect, new SearchQuery())
 
       sql.contains("FROM asset asset0") shouldBe true
       sql.contains("asset0.repository_id = ?") shouldBe true
@@ -53,55 +54,69 @@ import altitude.core.util.SortValue
     }
   }
 
-  test("A flat page is one SELECT with a window count, ordered by the sort and then the ID") {
+  test("A flat page picks its rows over narrow ones, one past the page, then reads the page in full") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      val query = new SearchQuery(rpp = 25, page = 3, searchSort = List(SearchSort("filename", SortDirection.DESC)))
-      val sql = flat(dialect, query)
+      def page(number: Int): SqlStr = SearchQueries.flat(
+        dialect,
+        new SearchQuery(rpp = 25, page = number, searchSort = List(SearchSort("filename", SortDirection.DESC))),
+        "repo-1")
+      val third = page(3)
+      val text = third.toString.replaceAll("\\s+", " ").trim
 
-      withClue(sql) {
-        // One SELECT level: the total is a window over the match, not a wrapping subquery over a comma join
-        "SELECT".r.findAllIn(sql).size shouldBe 1
-        sql.contains("COUNT(1) OVER ()") shouldBe true
-        "ORDER BY \\S*filename DESC, \\S*id ASC".r.findFirstIn(sql).isDefined shouldBe true
-        sql.contains("LIMIT ?") shouldBe true
-        sql.contains("OFFSET ?") shouldBe true
-        sql.contains("NULLS FIRST") shouldBe false
-        sql.contains("NULLS LAST") shouldBe false
+      withClue(text) {
+        text.contains("WITH page (id, sort_value, second_sort_value) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
+        // Narrow rows, ordered by the slice's own columns, one past the page at the page's offset
+        "ORDER BY \\w+ DESC, \\w+ ASC LIMIT \\? OFFSET \\?\\)".r.findFirstIn(text).isDefined shouldBe true
+        bound(third).takeRight(2) shouldBe List(26, 50)
+        text.contains("COUNT(1) OVER") shouldBe false
+        // Only the page's own rows are read in full, in the same order
+        text.contains("FROM page AS p JOIN asset ON asset.id = p.id") shouldBe true
+        text.contains("(SELECT count(*) FROM page) AS page_count") shouldBe true
+        text.contains("ORDER BY p.sort_value DESC, p.id ASC LIMIT 25") shouldBe true
+        text.contains("NULLS FIRST") shouldBe false
+        text.contains("NULLS LAST") shouldBe false
+        // Only a first page counts the matches, up to one past the cap
+        text.contains("total AS MATERIALIZED") shouldBe false
+        page(1).toString.replaceAll("\\s+", " ") should include("LIMIT 10001) AS m)")
+        text.count(_ == '?') shouldBe binds(third)
       }
+
+      // Every flat page is bounded
+      intercept[IllegalArgumentException](SearchQueries.flat(dialect, new SearchQuery(), "repo-1"))
     }
   }
 
-  test("Text search is a semi-join on the search document, in the engine's own dialect") {
-    val postgres = flat(PostgresSearchDialect, textQuery("beach"))
-    val sqlite = flat(SqliteSearchDialect, textQuery("beach"))
+  test("A term's document source is a CTE at the head of the statement, matched in the engine's own dialect") {
+    val postgres = countSql(PostgresSearchDialect, textQuery("beach"))
+    val sqlite = countSql(SqliteSearchDialect, textQuery("beach"))
 
-    withClue(postgres) {
-      postgres.contains("asset0.id IN (SELECT") shouldBe true
-      postgres.contains("FROM search_document search_document1") shouldBe true
-      postgres.contains("tsv @@ to_tsquery('simple', ?)") shouldBe true
-      // repository, pipeline flag, the document's repository and the text
-      placeholders(postgres) shouldBe 4
+    for (sql <- List(postgres, sqlite)) withClue(sql) {
+      "^WITH text_0_0_document \\(asset_id\\) AS MATERIALIZED \\(SELECT search_document\\d\\.asset_id AS \\w+ FROM search_document search_document\\d WHERE ".r
+        .findFirstIn(sql)
+        .isDefined shouldBe true
+      sql.contains("(asset0.id IN (SELECT asset_id FROM text_0_0_document))") shouldBe true
+      // The document source carries no repository of its own: the asset is scoped to it
+      sql.contains("search_document0.repository_id") shouldBe false
+      // the text, then the repository and the pipeline flag
+      placeholders(sql) shouldBe 3
     }
-
-    withClue(sqlite) {
-      sqlite.contains("asset0.id IN (SELECT") shouldBe true
-      sqlite.contains("FROM search_document search_document1") shouldBe true
-      sqlite.contains("rowid IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH ?)") shouldBe true
-      placeholders(sqlite) shouldBe 4
-    }
+    postgres.contains("WHERE tsv @@ to_tsquery('simple', ?))") shouldBe true
+    sqlite.contains("WHERE id IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH ?))") shouldBe true
   }
 
-  test("Each term of the Search text is its own semi-join: groups AND-ed, alternatives OR-ed, an exclusion negated") {
+  test("Each term tests membership in its sources: groups AND-ed, alternatives OR-ed, an excluded alternative negated") {
     for ((engine, dialect) <- engines) {
-      val sql = flat(dialect, textQuery("""beach OR -lake "golden gate""""))
+      val sql = countSql(dialect, textQuery("""beach OR -lake "golden gate""""))
 
       withClue(s"$engine: $sql") {
-        """\(\(asset0\.id IN \(SELECT .*?\)\) OR \(NOT \(asset0\.id IN \(SELECT .*?\)\)\)\) AND \(asset0\.id IN \(SELECT""".r
-          .findFirstIn(sql)
-          .isDefined shouldBe true
+        sql.contains(
+          "(asset0.id IN (SELECT asset_id FROM text_0_0_document)) OR " +
+            "(NOT (asset0.id IN (SELECT asset_id FROM text_0_1_document)))") shouldBe true
+        sql.contains("AND (asset0.id IN (SELECT asset_id FROM text_1_0_document))") shouldBe true
+        // Each source is built once, at the head of the statement
         "FROM search_document ".r.findAllIn(sql).size shouldBe 3
-        // repository and pipeline flag, then the document's repository and the engine's query string per term
-        placeholders(sql) shouldBe 8
+        // the engine's query string per term, then the repository and the pipeline flag
+        placeholders(sql) shouldBe 5
       }
     }
   }
@@ -124,7 +139,7 @@ import altitude.core.util.SortValue
 
   test("Text without a usable term adds no filter") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      flat(dialect, new SearchQuery(text = Some("- !!! OR"))).contains("search_document") shouldBe false
+      matchingSql(dialect, new SearchQuery(text = Some("- !!! OR"))).contains("search_document") shouldBe false
     }
   }
 
@@ -138,32 +153,93 @@ import altitude.core.util.SortValue
     )
 
     for ((engine, dialect) <- engines) {
-      val sql = flat(dialect, textQuery("alice", ids))
+      val sql = countSql(dialect, textQuery("alice", ids))
       val inSet = if (dialect == PostgresSearchDialect) raw"= ANY\(\?\)" else raw"IN \(SELECT value FROM json_each\(\?\)\)"
-      val semiJoin = raw"\(asset0\.id IN \(SELECT "
+      def in(source: String) = raw"\(asset0\.id IN \(SELECT asset_id FROM text_0_0_$source\)\)"
 
       withClue(s"$engine: $sql") {
-        // Sources in declaration order: person, Location, Category (as its Locations), folder, album, document
-        (raw"${semiJoin}face\d\.asset_id .*?person\d\.id $inSet\)+ OR " +
-          raw"$semiJoin.*?location_asset\d\.location_id $inSet\)+ OR " +
-          raw"$semiJoin.*?location_asset\d\.location_id $inSet\)+ OR " +
-          raw"asset0\.folder_id $inSet\)+ OR " +
-          raw"$semiJoin.*?album_asset\d\.album_id $inSet\)+ OR " +
-          raw"${semiJoin}search_document\d\.asset_id").r.findFirstIn(sql).isDefined shouldBe true
-        // repository and pipeline flag, one parameter per ID set, the document's repository and query string
-        placeholders(sql) shouldBe 9
+        // Sources in declaration order: person, Location, Category (as its Locations), folder, album, document. The folder is
+        // the asset's own column; every other source is a CTE.
+        (raw"${in("person")}\)* OR ${in("location")}\)* OR ${in("category")}\)* OR \(?asset0\.folder_id $inSet\)* OR " +
+          raw"${in("album")}\)* OR ${in("document")}").r.findFirstIn(sql).isDefined shouldBe true
+        raw"text_0_0_person \(asset_id\) AS MATERIALIZED \(SELECT face\d\.asset_id AS \w+ FROM face face\d WHERE \(?face\d\.person_id $inSet".r
+          .findFirstIn(sql)
+          .isDefined shouldBe true
+        sql.contains("text_0_0_folder") shouldBe false
+        // one parameter per ID set, the document's query string, then the repository and the pipeline flag
+        placeholders(sql) shouldBe 8
       }
     }
   }
 
-  test("An excluded term must not match in any source") {
+  test("A group of one excluded term is an anti-join on each of its sources") {
+    val postgres = countSql(PostgresSearchDialect, textQuery("-alice", Map(SearchSource.Person -> Set("p1"))))
+    val sqlite = countSql(SqliteSearchDialect, textQuery("-alice", Map(SearchSource.Person -> Set("p1"))))
+
+    withClue(postgres) {
+      postgres.contains(
+        "(NOT EXISTS (SELECT 1 FROM text_0_0_person WHERE text_0_0_person.asset_id = asset0.id)) AND " +
+          "(NOT EXISTS (SELECT 1 FROM text_0_0_document WHERE text_0_0_document.asset_id = asset0.id))") shouldBe true
+    }
+    withClue(sqlite) {
+      sqlite.contains(
+        "(asset0.id NOT IN (SELECT asset_id FROM text_0_0_person)) AND " +
+          "(asset0.id NOT IN (SELECT asset_id FROM text_0_0_document))") shouldBe true
+    }
+  }
+
+  test("The probe is one statement: a branch per positive group, one row past the limit, every source scoped to its repository") {
     for ((engine, dialect) <- engines) {
-      val sql = flat(dialect, textQuery("-alice", Map(SearchSource.Person -> Set("p1"))))
+      // Every term resolved to one person
+      val text = resolved("alice OR bob beach -lake", Map(SearchSource.Person -> Set("p1"))).get
+      val statement = SearchQueries.textProbe(dialect, text, "repo-1", 10).get
+      val sql = statement.toString.replaceAll("\\s+", " ").trim
 
       withClue(s"$engine: $sql") {
-        """\(NOT \(\(asset0\.id IN \(SELECT face.*?\)\) OR \(asset0\.id IN \(SELECT search_document.*?\)\)\)\)""".r
-          .findFirstIn(sql)
-          .isDefined shouldBe true
+        // The first two groups are positive; the excluded term has no hits to read
+        "SELECT \\d+ AS grp, hits\\.\\* FROM \\(".r.findAllIn(sql).toList shouldBe
+          List("SELECT 0 AS grp, hits.* FROM (", "SELECT 1 AS grp, hits.* FROM (")
+        "LIMIT 11\\) AS hits".r.findAllIn(sql).size shouldBe 2
+        // alice, bob and beach, each through its person and its document, every one scoped to the repository
+        "face\\d+\\.repository_id = \\?".r.findAllIn(sql).size shouldBe 3
+        "search_document\\d+\\.repository_id = \\?".r.findAllIn(sql).size shouldBe 3
+        sql.count(_ == '?') shouldBe binds(statement)
+      }
+
+      SearchQueries.textProbe(dialect, resolved("-lake").get, "repo-1", 10) shouldBe None
+    }
+  }
+
+  test("On the selective path the text is the candidate set, and what remains of it is tested on the asset's own row") {
+    for ((engine, dialect) <- engines) {
+      val text = resolved("alice beach -lake", Map(SearchSource.Person -> Set("p1"))).get
+      // The probe found alice complete and beach too broad; an exclusion is never complete
+      val selective = text.copy(
+        groups = text.groups.zipWithIndex.map((group, index) => group.copy(isComplete = index == 0)),
+        candidates = Some(Set("a1", "a2")))
+      val query = new SearchQuery(
+        text = Some("alice beach -lake"),
+        resolvedText = Some(selective),
+        rpp = 50,
+        searchSort = List(SearchSort.Relevance))
+      val count = countSql(dialect, query)
+      val page = flatSql(dialect, query)
+      val candidates =
+        if (dialect == PostgresSearchDialect) "asset0.id = ANY(?)" else "asset0.id IN (SELECT value FROM json_each(?))"
+      val probe =
+        "EXISTS \\(SELECT (face|search_document)\\d+\\.asset_id AS \\w+ FROM (face|search_document) \\w+ WHERE \\(*\\w+\\.asset_id = asset0\\.id"
+
+      withClue(s"$engine: $count") {
+        count.contains("text_") shouldBe false
+        count.contains(candidates) shouldBe true
+        // beach and lake, each through its person and its document; the candidates stand for alice, and lake is in none of its
+        // sources
+        probe.r.findAllIn(count).size shouldBe 4
+        "\\(NOT \\(EXISTS \\(SELECT".r.findAllIn(count).size shouldBe 2
+      }
+      withClue(s"$engine: $page") {
+        // The Relevance of alice and of beach, each a CASE over its sources' probes
+        "CASE WHEN \\(EXISTS \\(SELECT face".r.findAllIn(page).size shouldBe 2
       }
     }
   }
@@ -177,14 +253,14 @@ import altitude.core.util.SortValue
 
   test("Text that was not resolved against the names is refused, not searched by the document alone") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      intercept[IllegalStateException](flat(dialect, new SearchQuery(text = Some("beach"))))
+      intercept[IllegalStateException](matchingSql(dialect, new SearchQuery(text = Some("beach"))))
     }
   }
 
   test("Metadata filters are one semi-join that counts the values an asset carries") {
     val query =
       new SearchQuery(metadataFilters = Map("kw_field" -> "beach", "num_field" -> 12, "bool_field" -> Query.EQUALS(false)))
-    val sql = flat(PostgresSearchDialect, query)
+    val sql = matchingSql(PostgresSearchDialect, query)
 
     withClue(sql) {
       sql.contains("asset0.id IN (SELECT") shouldBe true
@@ -204,14 +280,15 @@ import altitude.core.util.SortValue
   }
 
   test("Person and album filters are semi-joins too") {
-    val people = flat(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2")))
-    val albums = flat(PostgresSearchDialect, new SearchQuery(albumIds = Set("a1")))
+    val people = matchingSql(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2")))
+    val albums = matchingSql(PostgresSearchDialect, new SearchQuery(albumIds = Set("a1")))
 
+    // The face's own person ID is all the filter reads
     withClue(people) {
       people.contains("asset0.id IN (SELECT") shouldBe true
       people.contains("FROM face face1") shouldBe true
-      people.contains("JOIN person person2") shouldBe true
-      people.contains("person2.id IN (SELECT value FROM json_each(?))") shouldBe true
+      people.contains("JOIN person") shouldBe false
+      people.contains("face1.person_id IN (SELECT value FROM json_each(?))") shouldBe true
     }
 
     withClue(albums) {
@@ -221,7 +298,7 @@ import altitude.core.util.SortValue
   }
 
   test("Location and bounding-box filters are semi-joins that bind their values") {
-    val byLocation = flat(SqliteSearchDialect, new SearchQuery(locationIds = Set("l1", "l2")))
+    val byLocation = matchingSql(SqliteSearchDialect, new SearchQuery(locationIds = Set("l1", "l2")))
     withClue(byLocation) {
       byLocation.contains("asset0.id IN (SELECT") shouldBe true
       byLocation.contains("FROM location_asset location_asset1") shouldBe true
@@ -231,7 +308,7 @@ import altitude.core.util.SortValue
     }
 
     // An asset's own point, or - with no point of its own - the pin of a Location it is in
-    val box = flat(PostgresSearchDialect, new SearchQuery(bbox = Some(BoundingBox(48.0, 2.0, 49.0, 3.0))))
+    val box = matchingSql(PostgresSearchDialect, new SearchQuery(bbox = Some(BoundingBox(48.0, 2.0, 49.0, 3.0))))
     withClue(box) {
       box.contains("asset0.latitude BETWEEN ? AND ? AND asset0.longitude BETWEEN ? AND ?") shouldBe true
       box.contains("(asset0.latitude IS NULL) AND (asset0.id IN (SELECT") shouldBe true
@@ -243,32 +320,35 @@ import altitude.core.util.SortValue
     }
 
     // Across the antimeridian the longitude range is two open-ended halves
-    val across = flat(SqliteSearchDialect, new SearchQuery(bbox = Some(BoundingBox(-1.0, 179.0, 1.0, -179.0))))
+    val across = matchingSql(SqliteSearchDialect, new SearchQuery(bbox = Some(BoundingBox(-1.0, 179.0, 1.0, -179.0))))
     withClue(across) {
       across.contains("(asset0.longitude >= ? OR asset0.longitude <= ?)") shouldBe true
       across.contains("BETWEEN ? AND ? AND (") shouldBe true
     }
   }
 
-  test("A count is one COUNT over the matching relation") {
+  test("A count is one COUNT over the matching relation; a capped one stops one past its cap") {
     for ((engine, dialect) <- engines) withClue(engine) {
-      val query = textQuery("beach", params = Map("is_recycled" -> false), locationIds = Set("l1"))
-      val sql = DbApi.renderSql(SearchQueries.count(dialect, query, "repo-1"), Db.config, dialect.dialect)
+      val query = textQuery("beach", params = Map("is_recycled" -> false), locationIds = Set("l1"), totalCap = 2)
+      val exact = SearchQueries.count(dialect, query, "repo-1").toString.replaceAll("\\s+", " ").trim
+      val capped = SearchQueries.cappedCount(dialect, query, "repo-1").toString.replaceAll("\\s+", " ").trim
 
-      withClue(sql) {
-        sql.startsWith("SELECT COUNT(1)") shouldBe true
+      for (sql <- List(exact, capped)) withClue(sql) {
+        // after the text's CTE
+        sql.contains(") SELECT count(*) FROM (SELECT asset0.id AS ") shouldBe true
         sql.contains("FROM asset asset0") shouldBe true
         sql.contains("asset0.is_recycled = ?") shouldBe true
         sql.contains("location_asset") shouldBe true
         sql.contains("ORDER BY") shouldBe false
-        sql.contains("LIMIT") shouldBe false
       }
+      exact.contains("LIMIT") shouldBe false
+      capped.endsWith("LIMIT 3) AS m") shouldBe true
     }
   }
 
   test("Folder and column filters bind their values") {
     val query = new SearchQuery(params = Map("is_recycled" -> false), folderIds = Set("f1", "f2"))
-    val sql = flat(SqliteSearchDialect, query)
+    val sql = matchingSql(SqliteSearchDialect, query)
 
     withClue(sql) {
       sql.contains("asset0.is_recycled = ?") shouldBe true
@@ -321,8 +401,9 @@ import altitude.core.util.SortValue
         text.contains("OR (d.day IS NULL AND p.day IS NULL)") shouldBe true
         text.contains("NULLS FIRST") shouldBe false
         text.contains("NULLS LAST") shouldBe false
-        // Only a first page pays for the overall count
+        // Only a first page pays for the overall count, which stops one past the cap
         text.contains("total AS MATERIALIZED") shouldBe (position == "first")
+        text.contains("LIMIT 10001) AS m)") shouldBe (position == "first")
         text.count(_ == '?') shouldBe binds(statement)
 
         if (position == "undated" && field == "original_created_at") {
@@ -379,9 +460,11 @@ import altitude.core.util.SortValue
     )
     val text = SearchQueries.grouped(SqliteSearchDialect, query, "repo-1").toString.replaceAll("\\s+", " ")
 
-    // The candidate slice, both day-count probes and the overall count: four copies of the same predicate
+    // The candidate slice, both day-count probes and the overall count: four copies of the same predicate, all reading the one
+    // CTE of the term's document source
     withClue(text) {
-      "search_document_fts MATCH \\?".r.findAllIn(text).size shouldBe 4
+      "search_document_fts MATCH \\?".r.findAllIn(text).size shouldBe 1
+      "IN \\(SELECT asset_id FROM text_0_0_document\\)".r.findAllIn(text).size shouldBe 4
       "asset0\\.is_recycled = \\?".r.findAllIn(text).size shouldBe 4
     }
   }
@@ -437,8 +520,10 @@ import altitude.core.util.SortValue
         text.contains(s"unlocated $columns AS MATERIALIZED") shouldBe (position != "unlocated")
         text.contains("LIMIT CASE WHEN (SELECT count(*) FROM located) > 50 THEN 0 ELSE 51 END") shouldBe (position != "unlocated")
         text.contains(s"candidates $columns AS MATERIALIZED") shouldBe true
-        // The located relation is the asset joined to its memberships, the Location and its category
-        text.contains("JOIN location_asset location_asset1 ON") shouldBe (position != "unlocated")
+        // The located relation is the asset joined to its memberships, the Location and its category; the group counts join
+        // the memberships alone
+        text.contains("JOIN location_asset location_asset1 ON") shouldBe true
+        text.contains("JOIN location location2 ON") shouldBe (position != "unlocated")
         text.contains("LEFT JOIN location location3 ON") shouldBe (position != "unlocated")
         // The unlocated relation is the matching set less every asset in a Location
         text.contains("(NOT EXISTS (SELECT location_asset1.asset_id") shouldBe true
@@ -452,8 +537,10 @@ import altitude.core.util.SortValue
         // Only a first page pays for the overall count, which counts assets, not memberships
         text.contains("total AS MATERIALIZED") shouldBe (position == "first")
         text.count(_ == '?') shouldBe binds(statement)
-        // Every branch applies the same filters: the located slice, the unlocated slice, both group counts and the total
-        "search_document_fts MATCH \\?|tsv @@ to_tsquery\\('simple', \\?\\)".r.findAllIn(text).size shouldBe
+        // Every branch applies the same filters: the located slice, the unlocated slice, both group counts and the total, all
+        // reading the one CTE of the term's document source
+        "search_document_fts MATCH \\?|tsv @@ to_tsquery\\('simple', \\?\\)".r.findAllIn(text).size shouldBe 1
+        "IN \\(SELECT asset_id FROM text_0_0_document\\)".r.findAllIn(text).size shouldBe
           (if (position == "unlocated") 3 else if (position == "first") 5 else 4)
 
         if (position == "located") {
@@ -498,30 +585,31 @@ import altitude.core.util.SortValue
         "g.n AS group_total") shouldBe true
   }
 
-  test("Relevance is rendered only under its sort: one CASE per scoring group, the best source first") {
+  test("Relevance is rendered only under its sort, once on a flat page: one CASE per scoring group, the best source first") {
     val ids = Map(SearchSource.Folder -> Set("f1"), SearchSource.Person -> Set("p1"))
     val text = "alice OR bob paris -lake"
 
     for ((engine, dialect) <- engines) {
-      val sql = flat(dialect, textQuery(text, ids, searchSort = List(SearchSort.Relevance)))
+      val sql = flatSql(dialect, textQuery(text, ids, searchSort = List(SearchSort.Relevance), rpp = 50))
 
       withClue(s"$engine: $sql") {
         // The alternatives share one CASE, so their group scores once, as its best match; the exclusion scores nothing
         "CASE WHEN".r.findAllIn(sql).size shouldBe 2
         "THEN (\\d)".r.findAllMatchIn(sql).map(_.group(1)).mkString shouldBe "552211521"
-        ("ORDER BY \\(CASE WHEN .* ELSE 0 END \\+ CASE WHEN .* ELSE 0 END\\) DESC, " +
-          "asset0\\.original_created_at DESC NULLS LAST, asset0\\.id ASC").r.findFirstIn(sql).isDefined shouldBe true
+        // The slice orders by what it selected, so the Relevance is not computed again for the order
+        "\\(CASE WHEN .* ELSE 0 END \\+ CASE WHEN .* ELSE 0 END\\) AS \\w+, asset0\\.original_created_at AS".r
+          .findFirstIn(sql)
+          .isDefined shouldBe true
+        "ORDER BY \\w+ DESC, \\w+ DESC NULLS LAST, \\w+ ASC LIMIT".r.findFirstIn(sql).isDefined shouldBe true
+        sql.contains("ORDER BY p.sort_value DESC, p.second_sort_value DESC NULLS LAST, p.id ASC LIMIT 50") shouldBe true
       }
 
       val byFilename = List(SearchSort("filename", SortDirection.ASC))
-      flat(dialect, textQuery(text, ids, searchSort = byFilename)).contains("CASE WHEN") shouldBe false
+      flatSql(dialect, textQuery(text, ids, searchSort = byFilename, rpp = 50)).contains("CASE WHEN") shouldBe false
     }
   }
 
-  test("A Relevance page orders by Relevance, newest capture and ID, and its cursor compares all three") {
-    val relevance = "CASE WHEN .*? THEN 1 ELSE 0 END"
-    val taken = "asset0\\.original_created_at"
-
+  test("A grouped Relevance page scores every match once, then orders, slices and continues over the scores") {
     for {
       (engine, dialect) <- engines
       by <- GroupBy.values.toList
@@ -548,15 +636,25 @@ import altitude.core.util.SortValue
         else SearchQueries.groupedByLocation(dialect, query, "repo-1")
       val statement = page(cursor)
       val text = statement.toString.replaceAll("\\s+", " ").trim
+      val scored = "scored\\d+"
 
       withClue(s"$engine/$by/$second: $text") {
+        // The Relevance is computed once per match, into scored, and read from there
+        text.contains("scored (id, day, sort_value, second_sort_value) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
+        "CASE WHEN \\(asset0".r.findAllIn(text).size shouldBe 1
         // Among the anchor's Relevance an older capture follows it, and so does every asset with none: they are last
         val afterTie =
-          if (second == SortValue.Null) s"\\($taken IS NULL AND asset0\\.id > \\?\\)"
-          else s"\\($taken < \\? OR $taken IS NULL OR \\($taken = \\? AND asset0\\.id > \\?\\)\\)"
-        s"\\($relevance < \\? OR \\($relevance = \\? AND $afterTie\\)\\)".r.findFirstIn(text).isDefined shouldBe true
-        // The slice computes what it orders by; the page orders its candidates by the columns they carry
-        s"$relevance DESC, $taken DESC NULLS LAST, asset0\\.id ASC LIMIT".r.findFirstIn(text).isDefined shouldBe true
+          if (second == SortValue.Null) s"\\($scored\\.second_sort_value IS NULL AND $scored\\.id > \\?\\)"
+          else
+            s"\\($scored\\.second_sort_value < \\? OR $scored\\.second_sort_value IS NULL OR " +
+              s"\\($scored\\.second_sort_value = \\? AND $scored\\.id > \\?\\)\\)"
+        s"\\($scored\\.sort_value < \\? OR \\($scored\\.sort_value = \\? AND $afterTie\\)\\)".r
+          .findFirstIn(text)
+          .isDefined shouldBe true
+        // The slice orders by the scores; the page orders its candidates by the columns they carry
+        s"$scored\\.sort_value DESC, $scored\\.second_sort_value DESC NULLS LAST, $scored\\.id ASC LIMIT".r
+          .findFirstIn(text)
+          .isDefined shouldBe true
         "(c\\.)?sort_value DESC, (c\\.)?second_sort_value DESC NULLS LAST, (c\\.)?id ASC LIMIT 50".r
           .findFirstIn(text)
           .isDefined shouldBe true
@@ -608,45 +706,82 @@ import altitude.core.util.SortValue
       val text = statement.toString.replaceAll("\\s+", " ")
 
       withClue(text) {
-        text.contains("WITH points (asset_id, latitude, longitude, taken) AS (") shouldBe true
+        text.contains(", points (asset_id, latitude, longitude, taken) AS (") shouldBe true
         text.contains("UNION ALL") shouldBe true
         text.contains("SELECT min(latitude), max(latitude), min(longitude), max(longitude), count(*) FROM points") shouldBe true
         text.contains("BETWEEN") shouldBe false
-        // The text filter is applied to both point sources
-        "FROM search_document ".r.findAllIn(text).size shouldBe 2
+        // The text filter is applied to both point sources, which read the one CTE of the term's document source
+        "FROM search_document ".r.findAllIn(text).size shouldBe 1
+        "IN \\(SELECT asset_id FROM text_0_0_document\\)".r.findAllIn(text).size shouldBe 2
         text.count(_ == '?') shouldBe binds(statement)
       }
     }
   }
 
-  test("The map's Locations are the pinned ones in the box, counted over the matching assets, with their category's name") {
+  test("The map's Locations are one statement: the matches once, then the pinned Locations in the box joined to their members") {
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(params = Map("is_recycled" -> false), folderIds = Set("f1"))
-      val select = SearchQueries.mapLocations(dialect, query, "repo-1", BoundingBox(-1.0, 179.0, 1.0, -179.0))
-      val sql = DbApi.renderSql(select, Db.config, dialect.dialect)
+      val statement = SearchQueries.mapLocations(dialect, query, "repo-1", BoundingBox(-1.0, 179.0, 1.0, -179.0))
+      val text = statement.toString.replaceAll("\\s+", " ").trim
 
-      withClue(sql) {
-        sql.contains("FROM location location0") shouldBe true
-        sql.contains("LEFT JOIN location location1 ON location0.category_id = location1.id") shouldBe true
-        sql.contains("location0.repository_id = ?") shouldBe true
-        sql.contains("location0.kind = ?") shouldBe true
+      withClue(text) {
+        // The matching relation is evaluated once, not once per Location
+        text.startsWith("WITH matched (id) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
+        "FROM asset ".r.findAllIn(text).size shouldBe 1
+        (text.contains("folder_id = ANY(?)") || text.contains("folder_id IN (SELECT value FROM json_each(?))")) shouldBe true
+        text.contains(
+          "FROM location JOIN location_asset ON location_asset.location_id = location.id " +
+            "JOIN matched ON matched.id = location_asset.asset_id " +
+            "LEFT JOIN location AS category ON category.id = location.category_id") shouldBe true
+        text.contains("WHERE location.repository_id = ? AND location.kind = ?") shouldBe true
         // A box across the antimeridian covers both sides of it
-        sql.contains("(location0.longitude >= ? OR location0.longitude <= ?)") shouldBe true
-        // The count is a correlated subquery over the search's own matching relation, and only Locations with one are listed
-        sql.contains("FROM location_asset") shouldBe true
-        sql.contains("asset_id IN (SELECT asset") shouldBe true
-        (sql.contains("folder_id = ANY(?)") || sql.contains("folder_id IN (SELECT value FROM json_each(?))")) shouldBe true
-        sql.contains("> ?") shouldBe true
+        text.contains("(location.longitude >= ? OR location.longitude <= ?)") shouldBe true
+        text.contains("GROUP BY location.id, location.name, category.name, location.latitude, location.longitude") shouldBe true
+        text.count(_ == '?') shouldBe binds(statement)
       }
     }
   }
 
-  private def flat(engine: SearchDialect, query: SearchQuery): String =
-    DbApi.renderSql(SearchQueries.flat(engine, query, "repo-1"), Db.config, engine.dialect)
+  test("A Location's group count is driven by its own members, not by a pass over the library") {
+    for ((engine, dialect) <- engines) withClue(engine) {
+      val query = new SearchQuery(
+        params = Map("is_recycled" -> false),
+        rpp = 50,
+        searchSort = List(SearchSort("filename", SortDirection.ASC)),
+        grouping = Some(SearchGrouping(GroupBy.Location)))
+      val text = SearchQueries.groupedByLocation(dialect, query, "repo-1").toString.replaceAll("\\s+", " ").trim
+      val counts = text.substring(text.indexOf("group_counts AS MATERIALIZED"), text.indexOf("UNION ALL SELECT p.location_id"))
+
+      withClue(counts) {
+        // The page Location's memberships joined to the asset, under the search's own predicates
+        "FROM asset asset\\d+ JOIN location_asset location_asset\\d+ ON \\(?asset\\d+\\.id = location_asset\\d+\\.asset_id".r
+          .findFirstIn(counts)
+          .isDefined shouldBe true
+        "location_asset\\d+\\.location_id = p\\.location_id".r.findFirstIn(counts).isDefined shouldBe true
+        counts.contains("asset0.is_recycled = ?") shouldBe true
+        counts.contains("IN (SELECT location_asset") shouldBe false
+      }
+    }
+  }
+
+  /** The matching relation alone, which every statement of a search is a shell over */
+  private def matchingSql(engine: SearchDialect, query: SearchQuery): String =
+    DbApi.renderSql(SearchQueries.matching(engine, query, "repo-1"), Db.config, engine.dialect)
+
+  /** The exact count's statement, whitespace collapsed: the matching relation with the text's CTEs at its head */
+  private def countSql(engine: SearchDialect, query: SearchQuery): String =
+    SearchQueries.count(engine, query, "repo-1").toString.replaceAll("\\s+", " ").trim
+
+  /** A flat page's statement, whitespace collapsed */
+  private def flatSql(engine: SearchDialect, query: SearchQuery): String =
+    SearchQueries.flat(engine, query, "repo-1").toString.replaceAll("\\s+", " ").trim
 
   /** The engine query strings a Search text binds, in term order: every text value bound other than the repository */
   private def textBinds(engine: SearchDialect, text: String): List[String] =
-    bound(engine, textQuery(text)).collect { case value: String if value != "repo-1" => value }
+    bound(SearchQueries.count(engine, textQuery(text), "repo-1")).collect { case value: String if value != "repo-1" => value }
+
+  /** Every value a statement binds, in order */
+  private def bound(statement: SqlStr): List[Any] = SqlStr.flatten(statement).interpsIterator.map(_.value).toList
 
   /** Every value the search's matching relation binds, in order */
   private def bound(engine: SearchDialect, query: SearchQuery): List[Any] =
@@ -661,12 +796,16 @@ import altitude.core.util.SortValue
       ids: Map[SearchSource, Set[String]] = Map(),
       params: Map[String, Any] = Map(),
       locationIds: Set[String] = Set(),
-      searchSort: List[SearchSort] = Nil): SearchQuery =
+      searchSort: List[SearchSort] = Nil,
+      rpp: Int = 0,
+      totalCap: Int = Const.Search.TOTAL_CAP): SearchQuery =
     new SearchQuery(
       text = Some(text),
       params = params,
       locationIds = locationIds,
       searchSort = searchSort,
+      rpp = rpp,
+      totalCap = totalCap,
       resolvedText = resolved(text, ids))
 
   /** The Search text with every one of its terms resolved to the given names */

@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import scala.annotation.tailrec
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
 import altitude.core.models.MapBounds
@@ -62,8 +63,10 @@ class SearchService(val app: Altitude):
    * transaction and matched in memory by the readings of their [[SearchWords]], the rule a document is matched by. A Category's
    * matches become the IDs of its Locations, and a folder's the folder with every folder below it, so each source is a plain ID
    * filter for the search that follows.
+   *
+   * In the same transaction the resolution is probed ([[probed]]), which decides how the search matches the text.
    */
-  def resolveText(expression: SearchExpression): ResolvedSearchText =
+  def resolveText(expression: SearchExpression, probeLimit: Int = Const.Search.TEXT_PROBE_LIMIT): ResolvedSearchText =
     txManager.asReadOnly {
       val started = System.currentTimeMillis
       val names = searchDao.searchNames
@@ -85,7 +88,9 @@ class SearchService(val app: Altitude):
         ResolvedSearchTerm(term, ids.filter((_, matching) => matching.nonEmpty))
 
       val resolved =
-        ResolvedSearchText(expression.groups.map(group => ResolvedSearchGroup(group.alternatives.map(resolve))))
+        probed(
+          ResolvedSearchText(expression.groups.map(group => ResolvedSearchGroup(group.alternatives.map(resolve)))),
+          probeLimit)
 
       logger.debug(
         s"Resolved the Search text against ${names.values.map(_.size).sum} names in ${System.currentTimeMillis - started}ms: " +
@@ -95,16 +100,37 @@ class SearchService(val app: Altitude):
               term =>
                 s"[${term.term.variants.map(_.mkString(" ")).mkString(" | ")}] " +
                   term.ids.map((source, ids) => s"$source=${ids.size}").mkString(" "))
-            .mkString(", "))
+            .mkString(", ") +
+          resolved.candidates.fold(". Broad: matched over the library")(
+            candidates => s". Selective: ${candidates.size} candidates"))
 
       resolved
     }
+
+  /**
+   * The resolution with what its probe found: each positive group whose hits number at most the limit is complete, and the
+   * candidates are the intersection of the complete groups' hits. Text with no complete group, or with no positive group at all,
+   * which is not probed, is left broad.
+   */
+  private def probed(text: ResolvedSearchText, limit: Int): ResolvedSearchText =
+    val positive = text.groups.indices.filter(text.groups(_).isPositive)
+    if positive.isEmpty then return text
+
+    val hits = searchDao.probeText(text, limit)
+    val complete = positive.filter(index => hits.getOrElse(index, Nil).size <= limit).toSet
+    ResolvedSearchText(
+      groups = text.groups.zipWithIndex.map((group, index) => group.copy(isComplete = complete.contains(index))),
+      candidates = Option.when(complete.nonEmpty)(complete.map(index => hits.getOrElse(index, Nil).toSet).reduce(_ intersect _))
+    )
 
   def search(query: SearchQuery): SearchResult =
     searchDao.search(query)
 
   def count(query: SearchQuery): Int =
     searchDao.count(query)
+
+  def cappedCount(query: SearchQuery): Int =
+    searchDao.cappedCount(query)
 
   /** What the map draws for a viewport at a zoom: the cells over the plotted points in the box, and the Locations pinned in it */
   def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =

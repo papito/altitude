@@ -6,7 +6,9 @@ import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
-import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldNot }
+import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldNot }
+import scalasql.core.SqlStr
+import scalasql.core.SqlStr.SqlStringSyntax
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -17,6 +19,8 @@ import scala.util.Random
 import altitude.core.Altitude
 import altitude.core.Api
 import altitude.core.FieldConst
+import altitude.core.RequestContext
+import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.*
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.sinks.VoidAssetSink
@@ -24,7 +28,10 @@ import altitude.core.service.FaceDetectionService
 import altitude.core.service.PersonService
 import altitude.core.util.*
 
-@DoNotDiscover class SearchServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class SearchServiceTests(override val testApp: Altitude)
+  extends IntegrationTestCore
+  with SearchPlans
+  with TextSearchPaths {
 
   test("Index and search by term") {
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
@@ -73,13 +80,13 @@ import altitude.core.util.*
 
     testContext.persistAsset(metadata = UserMetadata(data))
 
-    var results: SearchResult = testApp.service.library.search(new SearchQuery(text = Some("keanu")))
+    var results: SearchResult = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("keanu")))
     results.nonEmpty shouldBe true
-    results.total shouldBe 1
+    results.total shouldBe Some(1)
 
-    results = testApp.service.library.search(new SearchQuery(text = Some("TERI")))
+    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("TERI")))
     results.nonEmpty shouldBe true
-    results.total shouldBe 2
+    results.total shouldBe Some(2)
   }
 
   test("Filter by folder") {
@@ -98,17 +105,17 @@ import altitude.core.util.*
     (1 to 3).foreach(_ => testContext.persistAsset(folder = Some(folder1_1), metadata = metadata))
     (1 to 3).foreach(_ => testContext.persistAsset(folder = Some(folder1), metadata = metadata))
 
-    val qFolder1_1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1_1.persistedId))
-    var results: SearchResult = testApp.service.library.search(qFolder1_1)
-    results.total shouldBe 3
+    val qFolder1_1 = new SearchQuery(rpp = PAGE_SIZE, text = Some("space"), folderIds = Set(folder1_1.persistedId))
+    var results: SearchResult = search(qFolder1_1)
+    results.total shouldBe Some(3)
 
-    val qFolder1 = new SearchQuery(text = Some("space"), folderIds = Set(folder1.persistedId))
-    results = testApp.service.library.search(qFolder1)
-    results.total shouldBe 6
+    val qFolder1 = new SearchQuery(rpp = PAGE_SIZE, text = Some("space"), folderIds = Set(folder1.persistedId))
+    results = search(qFolder1)
+    results.total shouldBe Some(6)
 
-    val qAllFolders = new SearchQuery()
-    results = testApp.service.library.search(qAllFolders)
-    results.total shouldBe 6
+    val qAllFolders = new SearchQuery(rpp = PAGE_SIZE)
+    results = search(qAllFolders)
+    results.total shouldBe Some(6)
 
   }
 
@@ -122,8 +129,8 @@ import altitude.core.util.*
 
     val rootFolderId = testContext.repository.rootFolderId
 
-    val results = testApp.service.library.search(new SearchQuery(folderIds = Set(rootFolderId)))
-    results.total shouldBe 3
+    val results = search(new SearchQuery(rpp = PAGE_SIZE, folderIds = Set(rootFolderId)))
+    results.total shouldBe Some(3)
   }
 
   def fixtureForPersonFilter: Object { val assetsPerPersonCount: Int; val people: Seq[Person] } = new {
@@ -141,58 +148,78 @@ import altitude.core.util.*
 
   test("Filter by one person") {
     val f = fixtureForPersonFilter
-    val q = new SearchQuery(personIds = Set(f.people.head.persistedId))
-    val results = testApp.service.library.search(q)
-    results.total shouldBe f.assetsPerPersonCount
+    val q = new SearchQuery(rpp = PAGE_SIZE, personIds = Set(f.people.head.persistedId))
+    val results = search(q)
+    results.total shouldBe Some(f.assetsPerPersonCount)
   }
 
   test("Filter by more than one person") {
     val f = fixtureForPersonFilter
-    val q = new SearchQuery(personIds = f.people.map(_.persistedId).toSet)
-    val results = testApp.service.library.search(q)
-    results.total shouldBe f.assetsPerPersonCount * f.people.length
+    val q = new SearchQuery(rpp = PAGE_SIZE, personIds = f.people.map(_.persistedId).toSet)
+    val results = search(q)
+    results.total shouldBe Some(f.assetsPerPersonCount * f.people.length)
   }
 
   test("Pagination") {
     (1 to 6).foreach(n => testContext.persistAsset())
 
-    val q = new SearchQuery(rpp = 2, page = 1)
-    val results = testApp.service.library.search(q)
-    results.total shouldBe 6
+    // A first page counts the matches; a page reached by scrolling does not, and says whether another follows it
+    val results = search(new SearchQuery(rpp = 2, page = 1))
+    results.total shouldBe Some(6)
     results.records.length shouldBe 2
     results.nonEmpty shouldBe true
-    results.totalPages shouldBe 3
+    results.hasMore shouldBe true
 
-    val q2 = new SearchQuery(rpp = 2, page = 2)
-    val results2 = testApp.service.library.search(q2)
-    results2.total shouldBe 6
+    val results2 = search(new SearchQuery(rpp = 2, page = 2))
+    results2.total shouldBe None
     results2.records.length shouldBe 2
-    results2.totalPages shouldBe 3
+    results2.hasMore shouldBe true
 
-    val q3 = new SearchQuery(rpp = 2, page = 3)
-    val results3 = testApp.service.library.search(q3)
-    results3.total shouldBe 6
+    val results3 = search(new SearchQuery(rpp = 2, page = 3))
+    results3.total shouldBe None
     results3.records.length shouldBe 2
-    results3.totalPages shouldBe 3
+    results3.hasMore shouldBe false
 
     // page too far
-    val q4 = new SearchQuery(rpp = 2, page = 4)
-    val results4 = testApp.service.library.search(q4)
-    results4.total shouldBe 0
+    val results4 = search(new SearchQuery(rpp = 2, page = 4))
+    results4.total shouldBe None
     results4.records.length shouldBe 0
-    results4.totalPages shouldBe 0
+    results4.hasMore shouldBe false
 
-    val q5 = new SearchQuery(rpp = 6, page = 1)
-    val results5 = testApp.service.library.search(q5)
-    results5.total shouldBe 6
+    val results5 = search(new SearchQuery(rpp = 6, page = 1))
+    results5.total shouldBe Some(6)
     results5.records.length shouldBe 6
-    results5.totalPages shouldBe 1
+    results5.hasMore shouldBe false
 
-    val q6 = new SearchQuery(rpp = 20, page = 1)
-    val results6 = testApp.service.library.search(q6)
-    results6.total shouldBe 6
+    val results6 = search(new SearchQuery(rpp = 20, page = 1))
+    results6.total shouldBe Some(6)
     results6.records.length shouldBe 6
-    results6.totalPages shouldBe 1
+    results6.hasMore shouldBe false
+
+    // Every flat page is bounded
+    intercept[IllegalArgumentException](search(new SearchQuery()))
+  }
+
+  test("A total counts up to its cap and reads one past it when there are more; an exact count does not stop") {
+    (1 to 4).foreach(_ => testContext.persistAsset())
+    val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false)
+    val byName = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
+
+    search(new SearchQuery(params = view, rpp = 3, totalCap = 2)).total shouldBe Some(3)
+    testApp.service.library
+      .searchGrouped(
+        new SearchQuery(
+          params = view,
+          rpp = 3,
+          searchSort = byName,
+          grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC)),
+          totalCap = 2))
+      .total shouldBe Some(3)
+    testApp.service.library.cappedCount(new SearchQuery(params = view, totalCap = 2)) shouldBe 3
+
+    // Within the cap a total is exact
+    testApp.service.library.cappedCount(new SearchQuery(params = view, totalCap = 4)) shouldBe 4
+    count(new SearchQuery(params = view, totalCap = 2)) shouldBe 4
   }
 
   test("Create assets and search by metadata") {
@@ -215,13 +242,15 @@ import altitude.core.util.*
     testContext.persistAsset(metadata = UserMetadata(data))
 
     // simple value search
-    var results = testApp.service.library.search(new SearchQuery(text = Some("one")))
-    results.total shouldBe 1
+    var results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
+    results.total shouldBe Some(1)
 
-    results = testApp.service.library.search(
-      new SearchQuery(metadataFilters = Map(field3.persistedId -> Query.EQUALS(true), field2.persistedId -> Query.EQUALS(1)))
+    results = search(
+      new SearchQuery(
+        rpp = PAGE_SIZE,
+        metadataFilters = Map(field3.persistedId -> Query.EQUALS(true), field2.persistedId -> Query.EQUALS(1)))
     )
-    results.total shouldBe 2
+    results.total shouldBe Some(2)
   }
 
   /** What happens if we have a number field and search by integer? */
@@ -236,10 +265,10 @@ import altitude.core.util.*
     )
     testContext.persistAsset(metadata = UserMetadata(data))
 
-    val results = testApp.service.library.search(
-      new SearchQuery(metadataFilters = Map(field1.persistedId -> Query.EQUALS(1)))
+    val results = search(
+      new SearchQuery(rpp = PAGE_SIZE, metadataFilters = Map(field1.persistedId -> Query.EQUALS(1)))
     )
-    results.total shouldBe 0
+    results.total shouldBe Some(0)
   }
 
   test("Parametarized search") {
@@ -259,15 +288,16 @@ import altitude.core.util.*
     testApp.service.metadata.addMetadataValue(asset2.persistedId, fieldId = field2.persistedId, newValue = 1)
     testApp.service.metadata.addMetadataValue(asset3.persistedId, fieldId = field2.persistedId, newValue = 2)
 
-    val results = testApp.service.library.search(
+    val results = search(
       new SearchQuery(
+        rpp = PAGE_SIZE,
         metadataFilters = Map(
           field1.persistedId -> Query.EQUALS("one"),
           field2.persistedId -> Query.EQUALS(1)
         )
       )
     )
-    results.total shouldBe 2
+    results.total shouldBe Some(2)
   }
 
   test("Updating and removing metadata values updates search index") {
@@ -285,12 +315,13 @@ import altitude.core.util.*
     // tag a second field for posterity
     testApp.service.metadata.addMetadataValue(asset1.persistedId, fieldId = field2.persistedId, newValue = 3)
 
-    var results = testApp.service.library.search(new SearchQuery(text = Some("one")))
-    results.total shouldBe 1
+    var results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
+    results.total shouldBe Some(1)
 
     // parametarized search
-    results = testApp.service.library.search(
+    results = search(
       new SearchQuery(
+        rpp = PAGE_SIZE,
         metadataFilters = Map(
           field1.persistedId -> "one",
           field2.persistedId -> 3
@@ -298,16 +329,17 @@ import altitude.core.util.*
       )
     )
     results.records.length shouldBe 1
-    results.total shouldBe 1
+    results.total shouldBe Some(1)
 
     // update the value and search again
     testApp.service.metadata.updateMetadataValue(asset1.persistedId, mdVal.persistedId, "newone")
-    results = testApp.service.library.search(new SearchQuery(text = Some("newone")))
-    results.total shouldBe 1
+    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("newone")))
+    results.total shouldBe Some(1)
 
     // parametarized search
-    results = testApp.service.library.search(
+    results = search(
       new SearchQuery(
+        rpp = PAGE_SIZE,
         metadataFilters = Map(
           field1.persistedId -> "newone",
           field2.persistedId -> 3
@@ -315,12 +347,12 @@ import altitude.core.util.*
       )
     )
     results.records.length shouldBe 1
-    results.total shouldBe 1
+    results.total shouldBe Some(1)
 
     // remove the value and search again
     testApp.service.metadata.deleteMetadataValue(assetId = asset1.persistedId, valueId = mdVal.persistedId)
 
-    results = testApp.service.library.search(new SearchQuery(text = Some("one")))
+    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
     results.isEmpty shouldBe true
   }
 
@@ -336,7 +368,7 @@ import altitude.core.util.*
     }
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
-    val resultsAsc = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
+    val resultsAsc = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
     val sortedAssetsAsc: List[Asset] = resultsAsc.records
 
     sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get >= assets.last.createdAt.get)
@@ -354,7 +386,7 @@ import altitude.core.util.*
     }
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.DESC)
-    val resultsAsc = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
+    val resultsAsc = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
     val sortedAssetsAsc: List[Asset] = resultsAsc.records
 
     sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get <= assets.last.createdAt.get)
@@ -368,7 +400,7 @@ import altitude.core.util.*
 
     // try with no sort info at all
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
-    val results = testApp.service.library.search(new SearchQuery(searchSort = List(sort)))
+    val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
     results.sort shouldNot be(empty)
     results.sort.head.direction shouldBe SortDirection.ASC
     results.sort.head.field shouldBe "created_at"
@@ -389,14 +421,14 @@ import altitude.core.util.*
     testApp.service.asset.updateByQuery(assetQuery, updateData)
 
     val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
-    testApp.service.library.search(assetSearchQuery).total shouldBe 0
+    search(assetSearchQuery).total shouldBe Some(0)
   }
 
   test("An imported asset has a Search document of its file name words") {
     val asset = importAsset("IMG_1234-beach.final.jpg")
 
     documentBody(asset) shouldBe Some("img 1234 beach final jpg")
-    testApp.service.library.search(new SearchQuery(text = Some("beach"))).total shouldBe 1
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("beach"))).total shouldBe Some(1)
   }
 
   test("A Search document holds both readings of a value with a camelCase hump, with and without it") {
@@ -431,8 +463,8 @@ import altitude.core.util.*
 
     documentBody(asset) shouldBe Some("mountain lake jpg")
     // The full-text index follows the document, not just the stored body
-    testApp.service.library.search(new SearchQuery(text = Some("sunset"))).total shouldBe 0
-    testApp.service.library.search(new SearchQuery(text = Some("lake"))).total shouldBe 1
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("sunset"))).total shouldBe Some(0)
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("lake"))).total shouldBe Some(1)
   }
 
   test("Editing metadata rewrites the Search document") {
@@ -485,7 +517,7 @@ import altitude.core.util.*
       found("2024") shouldBe Set(asset.persistedId)
       found("harbor") shouldBe Set(asset.persistedId)
       val filters = Map[String, Any](keywords -> "boats", count -> 3, isFlagged -> true)
-      testApp.service.library.search(new SearchQuery(metadataFilters = filters)).records.map(_.persistedId) shouldBe
+      search(new SearchQuery(rpp = PAGE_SIZE, metadataFilters = filters)).records.map(_.persistedId) shouldBe
         List(asset.persistedId)
     }
 
@@ -516,9 +548,95 @@ import altitude.core.util.*
     // A document written after the purge may take the purged one's place in the table: the full-text index must have
     // forgotten the purged words, or they would now lead to this asset
     importAsset("mountain.jpg")
-    testApp.service.library.search(new SearchQuery(text = Some("beach"))).total shouldBe 0
-    testApp.service.library.search(new SearchQuery(text = Some("mountain"))).total shouldBe 1
-    testApp.service.library.search(new SearchQuery(text = Some("lake"))).total shouldBe 1
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("beach"))).total shouldBe Some(0)
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("mountain"))).total shouldBe Some(1)
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("lake"))).total shouldBe Some(1)
+  }
+
+  test("Rewriting an unchanged Search document updates no row") {
+    val asset: Asset = testApp.service.asset.getById(importAsset("beach.jpg").persistedId)
+
+    documentRowsWrittenBy(testApp.service.search.reindexAsset(asset)) shouldBe 0
+    documentRowsWrittenBy(testApp.service.search.reindexAsset(asset.copy(fileName = "lake.jpg"))) should be > 0L
+    documentBody(asset) shouldBe Some("lake jpg")
+  }
+
+  test("Folder browsing reads the folder index") {
+    val folder: Folder = testApp.service.folder.add("Trips")
+    val template = testContext.persistAsset(folder = Some(folder))
+    val query = new SearchQuery(params = browsingView, folderIds = Set(folder.persistedId), rpp = 50, searchSort = byImport)
+
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(flatPage(query)))
+
+    withClue(plan)(plan should include("asset_folder"))
+  }
+
+  test("A Date Imported page reads the import-time index") {
+    val template = testContext.persistAsset()
+    val query = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport)
+
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(flatPage(query)))
+
+    withClue(plan)(plan should include("asset_search_created"))
+  }
+
+  test("An asset's faces, Search document and metadata parameters are found by the index that leads with the asset") {
+    val engine = searchDialect
+    import engine.dialect.*
+    val asset = importAsset("beach.jpg")
+
+    for (
+      (table, index) <- List(
+        "face" -> "face_01",
+        "search_document" -> "search_document_01",
+        "metadata_parameter" -> "metadata_parameter_01")
+    ) {
+      val plan = lookupPlanOf(sql"SELECT asset_id FROM ${SqlStr.raw(table)} WHERE asset_id = ${asset.persistedId}")
+      // A seek on the asset, not a pass over an index that happens to hold the column
+      val seek =
+        if (isPostgres) s"(?s)$index.*Index Cond: \\(asset_id = "
+        else s"SEARCH $table USING (COVERING )?INDEX $index \\(asset_id=\\?"
+
+      withClue(plan)(seek.r.findFirstIn(plan).isDefined shouldBe true)
+    }
+  }
+
+  // PostgreSQL plans `NOT IN` over a subquery as a SubPlan probed per asset; NOT EXISTS over the source's CTE is a hash anti-join
+  if (isPostgres) test("An excluded term is an anti-join on PostgreSQL") {
+    importAsset("beach.jpg")
+    importAsset("lake.jpg")
+    val query = new SearchQuery(text = Some("-beach"), params = browsingView)
+    val resolved = query.withResolvedText(testApp.service.search.resolveText(query.textExpression.value))
+
+    val plan = planOf(SearchQueries.cappedCount(searchDialect, resolved, RequestContext.getRepository.persistedId))
+
+    withClue(plan)(plan should include("Anti Join"))
+  }
+
+  test("Text with a positive group that has no hit matches nothing, and an exclusion alone is matched over the library") {
+    val beach = importAsset("beach.jpg").persistedId
+
+    testApp.service.search.resolveText(SearchText.parse("zzz OR qqq beach").value).candidates shouldBe Some(Set())
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some("zzz OR qqq beach"))).total shouldBe Some(0)
+    found("zzz") shouldBe Set()
+
+    // An excluded term has no hits to read
+    testApp.service.search.resolveText(SearchText.parse("-zzz").value).candidates shouldBe None
+    found("-zzz") shouldBe Set(beach)
+  }
+
+  test("A selective search reads the assets by their primary key") {
+    val template = importAsset("beach.jpg")
+    val query = new SearchQuery(text = Some("beach"), params = browsingView)
+
+    // The copies have no Search document, so the text's one hit is the template
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500)) {
+      val resolved = query.withResolvedText(testApp.service.search.resolveText(query.textExpression.value))
+      resolved.requireResolvedText.candidates shouldBe Some(Set(template.persistedId))
+      planOf(SearchQueries.cappedCount(searchDialect, resolved, RequestContext.getRepository.persistedId))
+    }
+
+    withClue(plan)(plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1"))
   }
 
   /** Three assets whose file names and "place" metadata values share words in different orders */
@@ -873,7 +991,7 @@ import altitude.core.util.*
     importAsset("c.jpg")
 
     def page(cursor: Option[SearchCursor]): GroupedSearchResult =
-      testApp.service.library.searchGrouped(
+      searchGrouped(
         new SearchQuery(
           text = Some("trips"),
           rpp = 1,
@@ -882,7 +1000,7 @@ import altitude.core.util.*
           cursor = cursor
         ))
 
-    testApp.service.library.count(new SearchQuery(text = Some("trips"))) shouldBe 2
+    count(new SearchQuery(text = Some("trips"))) shouldBe 2
 
     val firstPage = page(None)
     firstPage.total shouldBe Some(2)
@@ -970,10 +1088,8 @@ import altitude.core.util.*
   }
 
   /** The IDs of the assets a Search text matches, most relevant first */
-  private def ranked(text: String, rpp: Int = 0, page: Int = 1): List[String] =
-    testApp.service.library
-      .search(new SearchQuery(text = Some(text), rpp = rpp, page = page, searchSort = List(SearchSort.Relevance)))
-      .records
+  private def ranked(text: String, rpp: Int = PAGE_SIZE, page: Int = 1): List[String] =
+    search(new SearchQuery(text = Some(text), rpp = rpp, page = page, searchSort = List(SearchSort.Relevance))).records
       .map(_.persistedId)
 
   /** Gives the asset a capture time, the tiebreaker of equally relevant matches */
@@ -982,7 +1098,7 @@ import altitude.core.util.*
 
   /** The IDs of the assets a Search text matches */
   private def found(text: String): Set[String] =
-    testApp.service.library.search(new SearchQuery(text = Some(text))).records.map(_.persistedId).toSet
+    search(new SearchQuery(rpp = PAGE_SIZE, text = Some(text))).records.map(_.persistedId).toSet
 
   /** The people a one-term Search text resolves to */
   private def personHits(text: String): Set[String] =
@@ -1010,6 +1126,36 @@ import altitude.core.util.*
     testApp.txManager.asReadOnly {
       query("SELECT field_id FROM metadata_parameter WHERE asset_id = ?", asset.persistedId).map(_("field_id").toString).sorted
     }
+
+  /**
+   * The rows of `search_document` that `write` inserted or updated, counted in its own transaction: the transaction's table
+   * statistics on PostgreSQL, the connection's change count on SQLite (an asset without metadata changes no other table)
+   */
+  private def documentRowsWrittenBy(write: => Unit): Long =
+    testApp.txManager.withTransaction {
+      def written: Long =
+        if (isPostgres)
+          query("SELECT n_tup_ins + n_tup_upd AS n FROM pg_stat_xact_user_tables WHERE relname = 'search_document'")
+            .head("n")
+            .toString
+            .toLong
+        else query("SELECT total_changes() AS n").head("n").toString.toLong
+
+      val before = written
+      write
+      written - before
+    }
+
+  /** Every flat search reads a bounded page; one of this size holds every fixture */
+  private val PAGE_SIZE = 100
+
+  /** The default view and sort of the grid */
+  private val browsingView = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false)
+  private val byImport = List(SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
+
+  /** A flat page's statement, for its plan */
+  private def flatPage(query: SearchQuery): SqlStr =
+    SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
 
   /** The stored body of an asset's Search document, if it has one */
   private def documentBody(asset: Asset): Option[String] =

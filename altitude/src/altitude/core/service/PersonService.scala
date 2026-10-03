@@ -139,10 +139,14 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * If an asset is restored, we just do the reverse of this and everyone is happy.
    */
   def recycleFacesForAssets(assetIds: Set[String]): Unit =
-    dao.recycleFacesForAssets(assetIds)
+    txManager.withTransaction {
+      dao.recycleFacesForAssets(assetIds)
+    }
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
-    dao.restoreFacesForAssets(assetIds)
+    txManager.withTransaction {
+      dao.restoreFacesForAssets(assetIds)
+    }
 
   def getAssetFaces(assetId: String): List[Face] =
     txManager.asReadOnly {

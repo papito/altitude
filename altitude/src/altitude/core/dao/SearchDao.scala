@@ -7,6 +7,7 @@ import altitude.core.models.MapLocation
 import altitude.core.models.UserMetadataField
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchPage
+import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchName
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
@@ -18,8 +19,11 @@ trait SearchDao:
   /** One ordered page of a grouped search: its assets with their group and count data */
   def searchGrouped(query: SearchQuery): GroupedSearchPage
 
-  /** The number of assets a search matches, without reading any of them */
+  /** The number of assets a search matches, exact, without reading any of them */
   def count(query: SearchQuery): Int
+
+  /** The number of assets a search matches up to the query's cap; one past the cap means more than it */
+  def cappedCount(query: SearchQuery): Int
 
   /** The map's cells for a viewport: the plotted points in the box, aggregated into square cells of the given size in degrees */
   def mapCells(query: SearchQuery, bbox: BoundingBox, cellDegrees: Double): List[MapCell]
@@ -31,11 +35,18 @@ trait SearchDao:
   def mapBounds(query: SearchQuery): Option[MapBounds]
 
   /**
-   * The ID and name of every candidate of each name source a Search text can match, keyed by every name source, even one with
-   * no candidates: people who are named and neither hidden, merged away nor a bad match; Locations with their Category as the
+   * The ID and name of every candidate of each name source a Search text can match, keyed by every name source, even one with no
+   * candidates: people who are named and neither hidden, merged away nor a bad match; Locations with their Category as the
    * parent; Categories; folders with their parent, less the recycled ones and the root; albums.
    */
   def searchNames: Map[SearchSource, Seq[SearchName]]
+
+  /**
+   * The hits of each positive group of the Search text, by group index, one past `limit` at most: a group with at most `limit`
+   * hits has none other. An asset is a hit once per source it is in. Groups with no hit, and groups that are not positive, have
+   * no entry.
+   */
+  def probeText(text: ResolvedSearchText, limit: Int): Map[Int, Seq[String]]
 
   def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit
 

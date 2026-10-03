@@ -72,9 +72,9 @@ object Columns:
     Expr[Boolean](implicit ctx => sql"$column IN ($bound)")
 
   /**
-   * The column is one of the IDs, with the whole set bound as one parameter, so a set of thousands (a folder subtree) neither
-   * grows the statement nor reaches an engine's parameter limit: an array on PostgreSQL, a JSON array read back through
-   * `json_each` on SQLite.
+   * The column is one of the IDs, with the whole set bound as one parameter, so a set of thousands (a folder subtree, the
+   * candidates of a selective text search) neither grows the statement nor reaches an engine's parameter limit: an array on
+   * PostgreSQL, a JSON array read back through `json_each` on SQLite. An empty set matches nothing.
    */
   def isInSet(column: Expr[?], ids: Set[String], dialect: Dialect): Expr[Boolean] =
     import dialect.*

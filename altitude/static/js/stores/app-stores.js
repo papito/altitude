@@ -1,6 +1,7 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { createModalStore } from "../common/modal.js"
+import { totalLabel } from "../common/total-label.js"
 import { createSelectedAssetsStore } from "../search-results/selection.js"
 import { createSearchParamsStore } from "./search-params.js"
 
@@ -11,15 +12,25 @@ export function initializeFrontendStores() {
     // The selected asset IDs (search-results/selection.js)
     Alpine.store(Const.state.selectedAssets, createSelectedAssetsStore())
 
+    // The results total in the toolbar; a capped one was counted only up to the server's cap
     Alpine.store(Const.state.resultsTotal, {
         count: 0,
+        isCapped: false,
 
-        set(n) {
+        set(n, isCapped = false) {
             this.count = n
+            this.isCapped = isCapped
         },
 
+        // A capped total says only that there are more than the cap, which removing assets does not change
         decrement(n = 1) {
-            this.count = Math.max(0, this.count - n)
+            if (!this.isCapped) {
+                this.count = Math.max(0, this.count - n)
+            }
+        },
+
+        get label() {
+            return totalLabel(this.count, this.isCapped)
         },
     })
 

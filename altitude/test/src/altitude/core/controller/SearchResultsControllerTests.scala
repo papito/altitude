@@ -171,6 +171,7 @@ import altitude.core.models.AssetType
         page should include("""data-map-bounds="1.0,2.0,1.0,2.0"""")
         page should include("""data-map-count="1"""")
         page should include("""data-results-total="1"""")
+        page should include("""data-results-total-capped="false"""")
         page.contains("""id="assets"""") shouldBe false
         "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
         page should include("""id="mapPanel" hidden""")
@@ -298,6 +299,7 @@ import altitude.core.models.AssetType
         page1 should include("""<time datetime="2026-09-06">Sunday, September 6, 2026</time>""")
         page1 should include("""<span class="count" data-count="3">(3 items)</span>""")
         page1 should include("""data-results-total="4"""")
+        page1 should include("""data-results-total-capped="false"""")
         page1.contains(header("2026-09-05")) shouldBe false
         ordered(page1, header("2026-09-06"), cell(a1))
         ordered(page1, cell(a1), cell(a2))
@@ -600,6 +602,36 @@ import altitude.core.models.AssetType
           headers = jsonHeaders,
           check = false)
         json.statusCode shouldBe 401
+    }
+  }
+
+  test(
+    "An ungrouped page carries the next page number until the last page; the first page carries the total and whether it is capped") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val List(a1, a2, a3) = List("a1.jpg", "a2.jpg", "a3.jpg").map(persistDated("2026-09-06T10:00:00", _)): @unchecked
+        val params = Map(Api.Field.Search.RESULTS_PER_PAGE -> "2", Api.Field.Search.SORT -> "filename0")
+
+        val page1 = htmlSearch(host, repoId, params).text()
+        page1 should include("""data-results-total="3"""")
+        page1 should include("""data-results-total-capped="false"""")
+        ordered(page1, cell(a1), cell(a2))
+        ordered(page1, cell(a2), """data-app-search-next-page="2"""")
+        page1.contains(cell(a3)) shouldBe false
+
+        val scroll = params + (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
+        val page2 = htmlSearch(host, repoId, scroll + (Api.Field.Search.PAGE -> "2"))
+        page2.statusCode shouldBe 200
+        page2.text() should include(cell(a3))
+        page2.text().contains("data-app-search-next-page") shouldBe false
+        page2.text().contains("data-results-total") shouldBe false
+
+        // A continuation that finds no rows has nothing to append
+        htmlSearch(host, repoId, scroll + (Api.Field.Search.PAGE -> "3")).statusCode shouldBe 204
     }
   }
 

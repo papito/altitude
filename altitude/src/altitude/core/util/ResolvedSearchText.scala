@@ -23,11 +23,21 @@ case class SearchName(id: String, name: String, parentId: Option[String] = None)
  */
 case class ResolvedSearchTerm(term: SearchTerm, ids: Map[SearchSource, Set[String]])
 
-/** A [[SearchGroup]] with its terms resolved */
-case class ResolvedSearchGroup(alternatives: Seq[ResolvedSearchTerm])
+/**
+ * A [[SearchGroup]] with its terms resolved. A complete group is a positive one whose every possible match the probe read, no
+ * more of them than its limit: the candidates of the text are within those matches, so a search tests it no further.
+ */
+case class ResolvedSearchGroup(alternatives: Seq[ResolvedSearchTerm], isComplete: Boolean = false):
+
+  /** A group none of whose alternatives is excluded: the only kind whose matches can be read as a set of assets */
+  def isPositive: Boolean = alternatives.forall(!_.term.isExcluded)
 
 /**
  * A [[SearchExpression]] with its terms resolved against the names of the repository as they were when it was read. It is what a
  * search matches text by, and is resolved afresh for every search and every page of one.
+ *
+ * `candidates` are what the probe found the text can match, the intersection of its complete groups' matches: the search reads
+ * those assets alone (the selective path), and an empty set answers it with nothing. Without them, when no positive group is
+ * complete or the text has none, the text is matched over the whole library (the broad path).
  */
-case class ResolvedSearchText(groups: Seq[ResolvedSearchGroup])
+case class ResolvedSearchText(groups: Seq[ResolvedSearchGroup], candidates: Option[Set[String]] = None)

@@ -7,6 +7,7 @@ import org.slf4j.Logger
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.GeocoderException
+import altitude.core.QueryTimeoutException
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
 import altitude.core.routes.decorators.requireLogin
@@ -50,7 +51,9 @@ class MapController(using logger: Logger) extends BaseController:
       case None => return jsonError("zoom must be an integer", 400)
       case Some(level) => level
     logger.debug(s"Map cells in $box at zoom $level")
-    val result = App.altitude.service.library.mapCells(scope.query(), box, level)
+    val result =
+      try App.altitude.service.library.mapCells(scope.query(), box, level)
+      catch case _: QueryTimeoutException => return jsonError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
     jsonResponse(
       ujson.Obj(
         "cells" -> ujson.Arr.from(
@@ -89,7 +92,9 @@ class MapController(using logger: Logger) extends BaseController:
     val scope = mapScope(view, q, folderId, personId, albumId, locationId) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
-    val result = App.altitude.service.library.mapBounds(scope.query())
+    val result =
+      try App.altitude.service.library.mapBounds(scope.query())
+      catch case _: QueryTimeoutException => return jsonError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
     logger.debug(s"Map bounds: $result")
     jsonResponse(
       result.fold(ujson.Obj("count" -> 0))(

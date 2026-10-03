@@ -34,9 +34,9 @@ object SqliteSearchDialect extends SearchDialect:
     Expr[Option[LocalDate]](implicit ctx => sql"date($column)")
 
   /**
-   * The full-text index is `search_document_fts`, which shares its `rowid` with the document. `rowid` is not part of the row
-   * class, so it is named directly: the subquery this lands in has `search_document` as its only table, and inside the index
-   * subquery the name is the index's own.
+   * The full-text index is `search_document_fts`, whose `rowid` is the document's declared `id`. `id` is not part of the row
+   * class (PostgreSQL's table has no such column), so it is named directly: the subquery this lands in reads `search_document` as
+   * its innermost table, so the name is the document's, and inside the index subquery `rowid` is the index's own.
    *
    * The term's words are letters and digits only, so they are safe to join into one quoted FTS5 string, which matches as the
    * phrase of its words; a `*` after the string makes its last word a prefix (`"img 12" *`). The readings of a term are
@@ -44,16 +44,19 @@ object SqliteSearchDialect extends SearchDialect:
    */
   override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
     val ftsQuery = term.variants.map(_.mkString("\"", " ", "\"") + (if term.isPhrase then "" else " *")).mkString(" OR ")
-    Expr[Boolean](implicit ctx => sql"rowid IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH $ftsQuery)")
+    Expr[Boolean](implicit ctx => sql"id IN (SELECT rowid FROM search_document_fts WHERE search_document_fts MATCH $ftsQuery)")
 
   /**
    * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort
    * every matching row; the unary plus keeps any term other than the grouping date from being matched, leaving the day index in
    * charge. A Location grouping has no such index, and every sort term of one gets the plus.
    */
-  override def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
-    val column = Columns.required(AssetRow, asset, sort.field, dialect)
+  override def secondarySort(column: Expr[?], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
     if grouping.by.dateField.contains(sort.field) then column else Expr[Any](implicit ctx => sql"+$column")
+
+  // NOT IN over a CTE builds an index of the set once; NOT EXISTS would scan the CTE, which has no index, for every asset
+  override def excludes(assetId: Expr[String], relation: String): Expr[Boolean] =
+    Expr[Boolean](implicit ctx => sql"($assetId NOT IN (SELECT asset_id FROM ${SqlStr.raw(relation)}))")
 
   // Capture time is null when no metadata rung succeeds; import time only on legacy rows, and only ever as a sort column
   override def isNullableTimestamp(field: String): Boolean =

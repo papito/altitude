@@ -13,6 +13,7 @@
 
     <logger name="altitude.core" level="INFO" />
     <logger name="org.xnio" level="WARN" />
+    <logger name="com.zaxxer.hikari" level="WARN" />
     <logger name="io.undertow" level="INFO" />
     <logger name="org.apache.tika.config.TikaConfig" level="ERROR" />
 

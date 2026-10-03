@@ -167,39 +167,35 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   def recycleFacesForAssets(assetIds: Set[String]): Unit =
     val placeHolders = List.fill(assetIds.size)("?").mkString(",")
 
-    txManager.withTransaction {
-      val sql = s"""
-        UPDATE person
-           SET num_of_faces = num_of_faces - (
-              SELECT COUNT(*)
-              FROM face f
-              WHERE f.person_id = person.id
-                AND f.asset_id IN ($placeHolders))
-           WHERE EXISTS (
-            SELECT 1
-                FROM face
-                WHERE person.id = face.person_id
-                  AND face.asset_id IN ($placeHolders))
-      """
-      updateByBySql(sql, assetIds.toList ++ assetIds.toList)
-    }
+    val sql = s"""
+      UPDATE person
+         SET num_of_faces = num_of_faces - (
+            SELECT COUNT(*)
+            FROM face f
+            WHERE f.person_id = person.id
+              AND f.asset_id IN ($placeHolders))
+         WHERE EXISTS (
+          SELECT 1
+              FROM face
+              WHERE person.id = face.person_id
+                AND face.asset_id IN ($placeHolders))
+    """
+    updateByBySql(sql, assetIds.toList ++ assetIds.toList)
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
     val placeHolders = List.fill(assetIds.size)("?").mkString(",")
 
-    txManager.withTransaction {
-      val sql = s"""
-        UPDATE person
-           SET num_of_faces = num_of_faces + (
-              SELECT COUNT(*)
-              FROM face f
-              WHERE f.person_id = person.id
-                AND f.asset_id IN ($placeHolders))
-           WHERE EXISTS (
-            SELECT 1
-                FROM face
-                WHERE person.id = face.person_id
-                  AND face.asset_id IN ($placeHolders))
-      """
-      updateByBySql(sql, assetIds.toList ++ assetIds.toList)
-    }
+    val sql = s"""
+      UPDATE person
+         SET num_of_faces = num_of_faces + (
+            SELECT COUNT(*)
+            FROM face f
+            WHERE f.person_id = person.id
+              AND f.asset_id IN ($placeHolders))
+         WHERE EXISTS (
+          SELECT 1
+              FROM face
+              WHERE person.id = face.person_id
+                AND face.asset_id IN ($placeHolders))
+    """
+    updateByBySql(sql, assetIds.toList ++ assetIds.toList)

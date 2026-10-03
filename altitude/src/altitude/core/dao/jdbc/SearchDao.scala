@@ -25,6 +25,7 @@ import altitude.core.util.BoundingBox
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.GroupedSearchRow
+import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchName
 import altitude.core.util.SearchQuery
@@ -50,33 +51,64 @@ object SearchDao:
                  VALUES (?, ?, ?, ?, ?, ?)
             """
 
-  // Both engines take the same upsert: an asset has one document, keyed by the table's unique index
+  /**
+   * Both engines take the same upsert: an asset has one document, keyed by the table's unique index. An unchanged body is not
+   * rewritten, which on SQLite also spares the full-text entry its update trigger.
+   */
   private val DOCUMENT_UPSERT_SQL: String = s"""
             INSERT INTO search_document (${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID}, body)
                  VALUES (?, ?, ?)
-            ON CONFLICT (${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID}) DO UPDATE SET body = excluded.body
+            ON CONFLICT (${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID})
+            DO UPDATE SET body = excluded.body WHERE search_document.body <> excluded.body
             """
 abstract class SearchDao(override val config: Config) extends AssetDao(config) with altitude.core.dao.SearchDao:
   /** What this engine says differently in a search */
   protected def searchDialect: SearchDialect
 
   override def search(searchQuery: SearchQuery): SearchResult =
-    val page = SearchQueries.flat(searchDialect, searchQuery, RequestContext.getRepository.persistedId)
-    val rows = Db.read(dialect)(_.run(page))
-    val total: Int = rows.headOption.map(_._2).getOrElse(0)
+    import dialect.*
 
-    logger.debug(s"Found [$total] records. Retrieved [${rows.length}] records")
+    val isFirstPage = searchQuery.page == 1
+    if matchesNothing(searchQuery) then
+      return SearchResult(
+        Nil,
+        Option.when(isFirstPage)(0),
+        hasMore = false,
+        searchQuery.rpp,
+        searchQuery.page,
+        searchQuery.searchSort)
+
+    val statement = SearchQueries.flat(searchDialect, searchQuery, RequestContext.getRepository.persistedId)
+    // Each row is the asset, then the count of the page's slice, which fetched one row past the page
+    val rows = readPage[(AssetRow[Sc], Int)](statement, isFirstPage)
+    // A first page carries the overall count on every row; an empty first page has no rows because nothing matches
+    val total = Option.when(isFirstPage)(rows.headOption.flatMap(_._2).getOrElse(0))
+    val hasMore = rows.headOption.exists(_._1._2 > searchQuery.rpp)
+
+    logger.debug(s"Retrieved [${rows.length}] records, total ${total.getOrElse("not counted")}, more: $hasMore")
 
     SearchResult(
-      records = rows.map((row, _) => toModel(row)).toList,
+      records = rows.map { case ((asset, _), _) => toModel(asset) }.toList,
       total = total,
+      hasMore = hasMore,
       rpp = searchQuery.rpp,
       page = searchQuery.page,
-      sort = searchQuery.searchSort)
+      sort = searchQuery.searchSort
+    )
 
   override def count(query: SearchQuery): Int =
+    import dialect.*
+
+    if matchesNothing(query) then return 0
     val statement = SearchQueries.count(searchDialect, query, RequestContext.getRepository.persistedId)
-    Db.read(dialect)(_.run(statement))
+    Db.read(dialect)(_.runSql[Int](statement)).head
+
+  override def cappedCount(query: SearchQuery): Int =
+    import dialect.*
+
+    if matchesNothing(query) then return 0
+    val statement = SearchQueries.cappedCount(searchDialect, query, RequestContext.getRepository.persistedId)
+    Db.read(dialect)(_.runSql[Int](statement)).head
 
   override def searchGrouped(query: SearchQuery): GroupedSearchPage =
     import dialect.*
@@ -85,21 +117,21 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val repositoryId = RequestContext.getRepository.persistedId
     val grouping = query.grouping.getOrElse(throw IllegalArgumentException("A grouped search needs a grouping"))
     val isFirstPage = query.cursor.isEmpty
+    if matchesNothing(query) then return GroupedSearchPage(Nil, Option.when(isFirstPage)(0), hasMore = false)
 
     // Each statement selects the asset columns, then what names the row's group, its two sort keys, the group's count and
     // the candidate count; the shape of the group columns is the grouping's
     val page: IndexedSeq[(GroupedSearchRow, Int, Option[Int])] = grouping.by match
       case GroupBy.DateTaken =>
         val statement = SearchQueries.grouped(searchDialect, query, repositoryId)
-        readGrouped[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int, Int)](statement, isFirstPage).map {
+        readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int, Int)](statement, isFirstPage).map {
           case ((asset, day, sortValue, secondSortValue, groupTotal, candidates), total) =>
             val row = GroupedSearchRow(toModel(asset), SearchGroupKey.Day(day), sortValue, secondSortValue, groupTotal)
             (row, candidates, total)
         }
       case GroupBy.Location =>
         val statement = SearchQueries.groupedByLocation(searchDialect, query, repositoryId)
-        readGrouped[
-          (AssetRow[Sc], Option[String], Option[String], Option[String], Option[String], SortValue, SortValue, Int, Int)](
+        readPage[(AssetRow[Sc], Option[String], Option[String], Option[String], Option[String], SortValue, SortValue, Int, Int)](
           statement,
           isFirstPage).map {
           case ((asset, locationId, pathKey, name, categoryName, sortValue, secondSortValue, groupTotal, candidates), total) =>
@@ -117,14 +149,18 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   override def mapCells(query: SearchQuery, bbox: BoundingBox, cellDegrees: Double): List[MapCell] =
     import dialect.*
 
+    if matchesNothing(query) then return Nil
     val statement = SearchQueries.mapCells(searchDialect, query, RequestContext.getRepository.persistedId, bbox, cellDegrees)
     val cells = Db.read(dialect)(_.runSql[(Int, Double, Double, String)](statement)).map(MapCell.apply).toList
     logger.debug(s"Map cells of $cellDegrees degrees in $bbox: ${cells.length} cells over ${cells.map(_.count).sum} points")
     cells
 
   override def mapLocations(query: SearchQuery, bbox: BoundingBox): List[MapLocation] =
-    val select = SearchQueries.mapLocations(searchDialect, query, RequestContext.getRepository.persistedId, bbox)
-    Db.read(dialect)(_.run(select)).toList.map {
+    import dialect.*
+
+    if matchesNothing(query) then return Nil
+    val statement = SearchQueries.mapLocations(searchDialect, query, RequestContext.getRepository.persistedId, bbox)
+    Db.read(dialect)(_.runSql[(String, String, Option[String], Option[Double], Option[Double], Int)](statement)).toList.map {
       // The kind filter guarantees a pin; a Location row without one cannot exist under the schema's CHECK
       case (id, name, categoryName, latitude, longitude, count) =>
         MapLocation(id, name, categoryName, latitude.get, longitude.get, count)
@@ -133,6 +169,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   override def mapBounds(query: SearchQuery): Option[MapBounds] =
     import dialect.*
 
+    if matchesNothing(query) then return None
     val statement = SearchQueries.mapBounds(searchDialect, query, RequestContext.getRepository.persistedId)
     val (south, north, west, east, count) =
       Db.read(dialect)(_.runSql[(Option[Double], Option[Double], Option[Double], Option[Double], Int)](statement)).head
@@ -176,8 +213,21 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     logger.debug(s"Search name candidates: ${names.map((source, candidates) => s"$source=${candidates.size}").mkString(", ")}")
     names
 
-  /** Runs a grouped statement: a first page's rows end with the overall total, which a page reached by cursor never selects */
-  private def readGrouped[Row](statement: SqlStr, isFirstPage: Boolean)(using
+  override def probeText(text: ResolvedSearchText, limit: Int): Map[Int, Seq[String]] =
+    import dialect.*
+
+    SearchQueries
+      .textProbe(searchDialect, text, RequestContext.getRepository.persistedId, limit)
+      .fold(Map.empty)(statement => Db.read(dialect)(_.runSql[(Int, String)](statement)).groupMap(_._1)(_._2))
+
+  /**
+   * Whether the Search text's probe found that no asset can match it, a positive group having no hit at all: such a search is
+   * answered with nothing, without reading the library
+   */
+  private def matchesNothing(query: SearchQuery): Boolean = query.resolvedText.exists(_.candidates.exists(_.isEmpty))
+
+  /** Runs a page's statement: a first page's rows end with the overall total, which a later page never selects */
+  private def readPage[Row](statement: SqlStr, isFirstPage: Boolean)(using
       Queryable.Row[?, Row],
       Queryable.Row[?, (Row, Int)]): IndexedSeq[(Row, Option[Int])] =
     if isFirstPage then Db.read(dialect)(_.runSql[(Row, Int)](statement)).map((row, total) => (row, Some(total)))
@@ -190,8 +240,9 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   protected def writeDocument(asset: Asset): Unit =
     val metadataValues = asset.userMetadata.data.values.flatten.map(_.value)
     val body = (asset.fileName +: metadataValues.toSeq).flatMap(SearchWords.variants).flatten.mkString(" ")
-    logger.debug(s"Writing the search document of asset ${asset.persistedId}: [$body]")
-    updateByBySql(SearchDao.DOCUMENT_UPSERT_SQL, List(RequestContext.getRepository.persistedId, asset.persistedId, body))
+    val written =
+      updateByBySql(SearchDao.DOCUMENT_UPSERT_SQL, List(RequestContext.getRepository.persistedId, asset.persistedId, body))
+    logger.debug(s"Search document of asset ${asset.persistedId} ${if written > 0 then "written" else "unchanged"}: [$body]")
 
   override def indexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit =
     logger.debug(s"Indexing asset ${asset.persistedId} for search")

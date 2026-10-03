@@ -1,5 +1,6 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
+import { totalLabel } from "../common/total-label.js"
 import { runSearch } from "../search-results/search.js"
 
 /**
@@ -68,11 +69,12 @@ export function isInMapPanel(el) {
     return Boolean(el?.closest?.("#mapPanel"))
 }
 
-/** Writes the panel's heading from the results it just received */
-export function setMapPanelCount(total) {
+/** Writes the panel's heading from the results it just received; a capped total reads "10000+" */
+export function setMapPanelCount(total, isCapped) {
     const countEl = document.getElementById("mapPanelCount")
     if (countEl) {
-        countEl.textContent = `${total} ${total === 1 ? "item" : "items"} here`
+        const noun = total === 1 && !isCapped ? "item" : "items"
+        countEl.textContent = `${totalLabel(total, isCapped)} ${noun} here`
     }
 }
 

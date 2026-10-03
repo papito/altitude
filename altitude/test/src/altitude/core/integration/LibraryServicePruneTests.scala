@@ -18,7 +18,7 @@ import altitude.core.util.SearchQuery
     testApp.service.asset.queryAll(assetQuery).total shouldBe assetCount
 
     val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
-    testApp.service.library.search(assetSearchQuery).total shouldBe assetCount
+    testApp.service.library.search(assetSearchQuery).total shouldBe Some(assetCount)
 
     // make all assets "dangling"
     val updateData = Map(
@@ -39,6 +39,6 @@ import altitude.core.util.SearchQuery
     testApp.service.asset.queryAll(assetQuery).total shouldBe 0
     // The items are still in the search index but not discoverable.
     // Not tidy but will do for now.
-    testApp.service.library.search(assetSearchQuery).total shouldBe 0
+    testApp.service.library.search(assetSearchQuery).total shouldBe Some(0)
   }
 }

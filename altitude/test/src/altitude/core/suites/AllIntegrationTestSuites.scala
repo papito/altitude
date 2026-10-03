@@ -8,6 +8,7 @@ import altitude.core.integration.*
 abstract class AllIntegrationTestSuites(val testApp: Altitude)
   extends Suites(
     new SystemServiceTests(testApp),
+    new TransactionManagerTests(testApp),
     new AssetQueryTests(testApp),
     new AssetServiceTests(testApp),
     new AssetDateStorageTests(testApp),

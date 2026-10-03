@@ -24,6 +24,9 @@ case class UnsupportedMediaTypeException(asset: Asset) extends Exception()
 
 case class IllegalOperationException(msg: String) extends IllegalArgumentException(msg)
 
+/** A read statement ran past the engine's time limit for reads and was cancelled */
+case class QueryTimeoutException(msg: String) extends Exception(msg)
+
 /** A grouped-search continuation cursor that is malformed or belongs to a different search */
 case class SearchCursorException(msg: String) extends IllegalArgumentException(msg)
 

@@ -5,11 +5,14 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+import scalasql.core.SqlStr.SqlStringSyntax
 
 import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const.FaceRecognition
+import altitude.core.DuplicateException
+import altitude.core.RequestContext
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
@@ -17,7 +20,7 @@ import altitude.core.util.Query
 import altitude.core.util.SearchQuery
 import altitude.core.util.Util
 
-@DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
   // default face count for a person
   val NUM_OF_FACES = 12
@@ -173,13 +176,12 @@ import altitude.core.util.Util
     val mergedBPersisted: Person = testApp.service.person.getById(mergedB.persistedId)
 
     val mergedSearchTotal = testApp.service.library
-      .search(
+      .count(
         new SearchQuery(
           params = Map(altitude.core.FieldConst.Asset.IS_RECYCLED -> false),
           personIds = Set(mergedB.persistedId)
         )
       )
-      .total
 
     // merged person should have the correct face number
     mergedBPersisted.numOfFaces should be(NEW_FACES_TOTAL)
@@ -282,6 +284,43 @@ import altitude.core.util.Util
     // at this point mergedFromName should be available for use
     val personC: Person = testApp.service.person.addPerson(Person(name = Some(mergedFromName)))
     personC.name.get should be(mergedFromName)
+  }
+
+  test("A live person cannot take the name of another live person") {
+    testApp.service.person.addPerson(Person(name = Some("Alice")))
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "Alice"))
+  }
+
+  test("A person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover") {
+    val first: Person = testApp.service.person.addPerson(Person())
+    val second: Person = testApp.service.person.addPerson(Person())
+    val third: Person = testApp.service.person.addPerson(Person())
+    List(first, second, third).foreach(testContext.addTestFacesAndAssets(_))
+    val firstCover = testApp.service.person.getById(first.persistedId).coverFaceId.value
+
+    testApp.service.person.merge(dest = second, source = first)
+    testApp.service.person.setFaceAsCover(second, testApp.service.person.getFaceById(firstCover))
+    testApp.service.person.merge(dest = third, source = testApp.service.person.getById(second.persistedId))
+
+    val mergedAway = testApp.txManager.asReadOnly {
+      query("SELECT cover_face_id FROM person WHERE id IN (?, ?) AND is_deleted = ?", first.persistedId, second.persistedId, true)
+    }
+    mergedAway.map(_("cover_face_id").toString.trim) shouldBe List(firstCover, firstCover)
+  }
+
+  test("Listing the live people reads a partial index over them") {
+    val engine = searchDialect
+    import engine.dialect.*
+    val repositoryId = RequestContext.getRepository.persistedId
+
+    // The predicates of PersonDao.getAll, written as it writes them; no other index serves them
+    val plan =
+      lookupPlanOf(sql"SELECT id FROM person WHERE repository_id = $repositoryId AND num_of_faces > 0 AND is_deleted = FALSE")
+
+    // person_03 serves it; over a handful of rows PostgreSQL may scan person_02 instead, also partial on the live people
+    withClue(plan)("person_0[23]".r.findFirstIn(plan).isDefined shouldBe true)
   }
 
   test("Merging of people in the same asset results in correct face counts") {

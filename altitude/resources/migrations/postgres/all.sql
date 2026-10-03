@@ -3,6 +3,9 @@ CREATE SCHEMA public;
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Every ID column (id and every *_id, the foreign keys included) is CHAR(36) COLLATE "C": IDs are compared, sorted and grouped
+-- byte-wise, which is about twice as fast as under the database's default collation and orders them the same on both engines.
+
 CREATE TABLE _core (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
@@ -18,43 +21,45 @@ CREATE UNIQUE INDEX system_01 ON system (id);
 INSERT INTO system (version, is_initialized) VALUES (1, False);
 
 CREATE TABLE account (
-  id CHAR(36) PRIMARY KEY,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
   email TEXT NOT NULL,
   name TEXT NOT NULL,
   account_type TEXT NOT NULL
     CHECK (account_type IN ('Admin', 'User', 'Guest')),
   password_hash TEXT NOT NULL,
-  last_active_repo_id CHAR(36)
+  last_active_repo_id CHAR(36) COLLATE "C"
 ) INHERITS (_core);
 
 CREATE TABLE user_token (
-  account_id CHAR(36) REFERENCES account (id) ON DELETE CASCADE,
+  account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
   token TEXT NOT NULL,
   expires_at TIMESTAMP WITH TIME ZONE
 );
 
 CREATE TABLE repository (
-  id CHAR(36) PRIMARY KEY,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
-  owner_account_id CHAR(36) REFERENCES account (id) ON DELETE CASCADE,
-  root_folder_id CHAR(36) NOT NULL,
+  owner_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
+  root_folder_id CHAR(36) COLLATE "C" NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config jsonb
 ) INHERITS (_core);
 
 CREATE TABLE stats (
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   dimension VARCHAR(60),
   dim_val BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);
 
+-- toast_tuple_target: the jsonb metadata columns are moved out of line once a row passes 128 bytes, so the heap row a search
+-- reads stays narrow
 CREATE TABLE asset (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
-  user_id CHAR(36) REFERENCES account (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  user_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
   checksum INT NOT NULL,
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
@@ -66,7 +71,7 @@ CREATE TABLE asset (
   user_metadata jsonb,
   public_metadata jsonb,
   extracted_metadata jsonb,
-  folder_id CHAR(36),
+  folder_id CHAR(36) COLLATE "C",
   filename TEXT NOT NULL,
   size_bytes BIGINT NOT NULL,
   is_triaged BOOLEAN NOT NULL DEFAULT FALSE,
@@ -82,15 +87,19 @@ CREATE TABLE asset (
   longitude DOUBLE PRECISION,
   -- A Video's length; NULL for an image.
   duration_ms BIGINT
-) INHERITS (_core);
+) INHERITS (_core) WITH (toast_tuple_target = 128);
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
-CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processed);
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
--- day-count probe seeks directly and a grouped, date-sorted page reads in index order.
+-- day-count probe seeks directly and a grouped, date-sorted page reads in index order. It carries the ID and the folder, so a
+-- pass over the library that tests text membership, a folder or a day reads the index and not the table.
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
-);
+) INCLUDE (id, folder_id);
+-- The default flat sort, Date Imported, as an ordered read
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at);
+-- Folder browsing and the folder source of Search text
+CREATE INDEX asset_folder ON asset (folder_id);
 -- Map viewport queries: a bounding-box range over the located assets of a repository only.
 CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
   WHERE latitude IS NOT NULL;
@@ -98,12 +107,12 @@ CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_process
 CREATE SEQUENCE person_label;
 
 CREATE TABLE person (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   -- this is taken from the person_label table, where its primary key is a sequence
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
-  cover_face_id CHAR(36),
+  cover_face_id CHAR(36) COLLATE "C",
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named BOOLEAN NOT NULL DEFAULT FALSE,
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
@@ -111,20 +120,22 @@ CREATE TABLE person (
   is_bad_match BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
 
+-- The partial person indexes cover the live people, the ones every person query reads; a merged-away person keeps its name and
+-- its cover face, which another person may take
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
-    WHERE is_deleted = TRUE;
+    WHERE is_deleted = FALSE;
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
-    WHERE is_deleted = TRUE;
+    WHERE is_deleted = FALSE;
 
 CREATE TABLE face (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
-  person_id CHAR(36) NOT NULL REFERENCES person (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
+  person_id CHAR(36) COLLATE "C" NOT NULL REFERENCES person (id) ON DELETE CASCADE,
   x1 INT NOT NULL,
   y1 INT NOT NULL,
   width INT NOT NULL,
@@ -140,13 +151,15 @@ CREATE TABLE face (
   is_enrolled BOOLEAN NOT NULL
 ) INHERITS (_core);
 
--- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo)
-CREATE UNIQUE INDEX face_01 ON face (repository_id, asset_id, checksum);
-CREATE INDEX face_02 ON face (person_id, detection_score);
+-- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
+-- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text.
+CREATE UNIQUE INDEX face_01 ON face (asset_id, repository_id, checksum);
+-- A person's faces, best first; the asset rides along, so the person source of Search text reads the index alone
+CREATE INDEX face_02 ON face (person_id, detection_score) INCLUDE (asset_id);
 
 CREATE TABLE metadata_field (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
   field_type VARCHAR(255) NOT NULL
@@ -156,11 +169,11 @@ CREATE INDEX metadata_field_01 ON metadata_field (repository_id);
 CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_lc);
 
 CREATE TABLE folder (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
-  parent_id CHAR(36) NOT NULL,
+  parent_id CHAR(36) COLLATE "C" NOT NULL,
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
 
@@ -169,8 +182,8 @@ CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_lc);
 CREATE INDEX folder_03 ON folder (is_recycled, parent_id);
 
 CREATE TABLE album (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL
 ) INHERITS (_core);
@@ -178,9 +191,9 @@ CREATE TABLE album (
 CREATE UNIQUE INDEX album_01 ON album (repository_id, name_lc);
 
 CREATE TABLE album_asset (
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
-  album_id CHAR(36) NOT NULL REFERENCES album (id) ON DELETE CASCADE,
-  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  album_id CHAR(36) COLLATE "C" NOT NULL REFERENCES album (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
@@ -189,10 +202,10 @@ CREATE INDEX album_asset_02 ON album_asset (asset_id);
 -- A user-defined place. Categories (kind 'category') are pure containers, one level deep; Locations (kind 'location') are a pin
 -- and hold assets through location_asset. Both kinds share one name pool per repository.
 CREATE TABLE location (
-  id CHAR(36) PRIMARY KEY,
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   -- NULL = top level. No cascade: deleting a Category moves its Locations to the top level first (LocationService).
-  category_id CHAR(36) REFERENCES location (id),
+  category_id CHAR(36) COLLATE "C" REFERENCES location (id),
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
@@ -209,31 +222,36 @@ CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
 CREATE INDEX location_02 ON location (repository_id, category_id);
 
 CREATE TABLE location_asset (
-  repository_id CHAR(36) REFERENCES repository (id) ON DELETE CASCADE,
-  location_id CHAR(36) NOT NULL REFERENCES location (id) ON DELETE CASCADE,
-  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  location_id CHAR(36) COLLATE "C" NOT NULL REFERENCES location (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
 CREATE INDEX location_asset_02 ON location_asset (asset_id);
 
 CREATE TABLE metadata_parameter (
-  repository_id CHAR(36) REFERENCES repository (id),
-  asset_id CHAR(36) REFERENCES asset (id) ON DELETE CASCADE,
-  field_id CHAR(36) REFERENCES metadata_field (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id),
+  asset_id CHAR(36) COLLATE "C" REFERENCES asset (id) ON DELETE CASCADE,
+  field_id CHAR(36) COLLATE "C" REFERENCES metadata_field (id) ON DELETE CASCADE,
   field_value_kw TEXT NULL,
   field_value_num DECIMAL,
   field_value_bool BOOLEAN,
   field_value_dt TIMESTAMP WITH TIME ZONE
 );
 
+-- The purge cascade and clearing an asset's parameters
+CREATE INDEX metadata_parameter_01 ON metadata_parameter (asset_id);
+
 -- body holds words already split by the application, so the vector takes them as they are: no stemming, no stop words
 CREATE TABLE search_document (
-  repository_id CHAR(36) NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
   body TEXT NOT NULL,
   tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', body)) STORED
 );
 
-CREATE UNIQUE INDEX search_document_01 ON search_document (repository_id, asset_id);
+-- An asset has one document. Leading with the asset, it serves the purge cascade and the per-asset probes of Search text; the
+-- upsert's ON CONFLICT (repository_id, asset_id) still finds it, since a conflict target names a set of columns.
+CREATE UNIQUE INDEX search_document_01 ON search_document (asset_id, repository_id);
 CREATE INDEX search_document_02 ON search_document USING gin (tsv);

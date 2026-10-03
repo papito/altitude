@@ -101,10 +101,19 @@ class LibraryService(val app: Altitude):
       app.service.search.search(withResolvedScope(query))
     }
 
-  /** How many assets a search matches, scoped like `search`, for a result that renders no rows of its own */
+  /** How many assets a search matches, exactly, scoped like `search`: what merging people recounts a person's assets by */
   def count(query: SearchQuery): Int =
     txManager.asReadOnly {
       app.service.search.count(withResolvedScope(query))
+    }
+
+  /**
+   * How many assets a search matches up to the query's cap, scoped like `search`, for a total the results UI shows without
+   * rendering rows of its own (the map layout); one past the cap means more than it
+   */
+  def cappedCount(query: SearchQuery): Int =
+    txManager.asReadOnly {
+      app.service.search.cappedCount(withResolvedScope(query))
     }
 
   /** The map's cells and Locations for a viewport at a zoom, scoped like `search`; both aggregates read one snapshot */
@@ -137,7 +146,8 @@ class LibraryService(val app: Altitude):
 
   /** The names a Search text matches are resolved on every request, so a rename, a merge or a move shows in the next search */
   private def withResolvedText(query: SearchQuery): SearchQuery =
-    query.textExpression.fold(query)(expression => query.withResolvedText(app.service.search.resolveText(expression)))
+    query.textExpression.fold(query)(
+      expression => query.withResolvedText(app.service.search.resolveText(expression, query.textProbeLimit)))
 
   /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */
   private def withResolvedFolderScope(query: SearchQuery): SearchQuery =

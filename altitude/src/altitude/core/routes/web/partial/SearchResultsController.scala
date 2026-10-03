@@ -10,6 +10,7 @@ import scala.util.Try
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.QueryTimeoutException
 import altitude.core.SearchCursorException
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
@@ -46,6 +47,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    *
    * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
    * them (`bbox` scopes the panel and the grid, and stays in the URL).
+   *
+   * A first page's total, and the map layout's, counts the matches up to `SearchQuery.totalCap`; the template says when there are
+   * more.
    *
    * Results are HTML only: the detail modal walks the rendered grid, so nothing asks for them as JSON, and a JSON request is
    * refused.
@@ -121,13 +125,17 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val query = scope.copy(bbox = None).query()
       logger.info(s"MAP QUERY: $query")
       val library = App.altitude.service.library
+      val (total, bounds) =
+        try (library.cappedCount(query), library.mapBounds(query))
+        catch case _: QueryTimeoutException => return timedOut
       return html(
         includes.html.search_results(
-          total = library.count(query),
+          total = total,
+          totalCap = query.totalCap,
           sort = searchSort,
           grouping = None,
           grid = htmx.html.map_view(
-            library.mapBounds(query),
+            bounds,
             App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
             App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION)),
           person = personOf(personId),
@@ -156,7 +164,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
       val results: GroupedSearchResult =
         try App.altitude.service.library.searchGrouped(searchQuery)
-        catch case ex: SearchCursorException => return badRequest(ex.getMessage)
+        catch
+          case ex: SearchCursorException => return badRequest(ex.getMessage)
+          case _: QueryTimeoutException => return timedOut
 
       if isContinuousScroll then
         // The continuation ran dry: results are live, and the images past the cursor may be gone by now
@@ -167,6 +177,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       return html(
         includes.html.search_results(
           total = results.total.getOrElse(0),
+          totalCap = searchQuery.totalCap,
           sort = results.sort,
           grouping = Some(results.grouping),
           grid = htmx.html.results_grid_grouped(results = results),
@@ -189,11 +200,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     logger.info(s"QUERY: ${searchQuery.toString}")
 
-    val results = App.altitude.service.library.search(searchQuery)
+    val results =
+      try App.altitude.service.library.search(searchQuery)
+      catch case _: QueryTimeoutException => return timedOut
 
     if isContinuousScroll then
-      // no more pages
-      if page > results.totalPages then return noContent
+      // The continuation ran dry: results are live, and the page past the last has no rows
+      if results.isEmpty then return noContent
 
       /** This is a request for another page of search results for continuous scroll. */
       return html(htmx.html.results_grid(results = results, p = page, isContinuousScroll = true))
@@ -205,7 +218,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
      */
     html(
       includes.html.search_results(
-        total = results.total,
+        total = results.total.getOrElse(0),
+        totalCap = searchQuery.totalCap,
         sort = searchSort,
         grouping = None,
         grid = htmx.html.results_grid(isContinuousScroll = false, p = page, results = results),
@@ -295,6 +309,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /** A plain-text 400; the snackbar reports the status, since no visible control is behind a continuation */
   private def badRequest(message: String): Response[String] =
     cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
+
+  /** A plain-text 503 for a search that ran past the engine's time limit for reads */
+  private def timedOut: Response[String] =
+    cask.Response(Const.Msg.Err.SEARCH_TIMED_OUT, 503, Seq(("Content-Type", "text/plain")))
 
   private def html(payload: Html, headers: (String, String)*): Response[String] =
     cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)

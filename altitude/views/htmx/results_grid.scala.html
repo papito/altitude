@@ -9,5 +9,5 @@
     asset = results.records(idx),
     isContinuousScroll = isContinuousScroll,
     showNoDate = results.sort.headOption.exists(_.field == FieldConst.Asset.ORIGINAL_CREATED_AT),
-    nextPage = Option.when(idx == results.records.length - 1 && results.hasMoreResults)(p + 1))
+    nextPage = Option.when(idx == results.records.length - 1 && results.hasMore)(p + 1))
 }

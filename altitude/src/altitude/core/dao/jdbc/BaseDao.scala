@@ -30,7 +30,6 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicAssignments
 import altitude.core.dao.sql.DynamicFilter
 import altitude.core.models.BaseModel
-import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SortDirection
@@ -48,7 +47,6 @@ abstract class BaseDao[Model <: BaseModel]:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   val config: Config
-  protected def txManager: TransactionManager = TransactionManager(config)
 
   val tableName: String
 
