@@ -18,6 +18,8 @@ import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
 import altitude.core.unit.SearchQueryModelTests
 import altitude.core.unit.SearchSqlTests
+import altitude.core.unit.SearchTextTests
+import altitude.core.unit.SearchWordsTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.UrlServiceTests
@@ -33,6 +35,8 @@ abstract class AllUnitTestSuites
     new GeoLocationResolverTests,
     new GeocoderServiceTests,
     new SearchSqlTests,
+    new SearchWordsTests,
+    new SearchTextTests,
     new RowColumnTests,
     new DynamicFilterTests,
     new SqlDialectTests,

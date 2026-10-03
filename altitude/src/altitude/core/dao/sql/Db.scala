@@ -1,10 +1,12 @@
 package altitude.core.dao.sql
 
+import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import scalasql.core.Context
 import scalasql.dialects.Dialect
 
+import altitude.core.QueryTimeoutException
 import altitude.core.RequestContext
 
 /**
@@ -22,10 +24,20 @@ object Db:
     override def logSql(sql: String, file: String, line: Int): Unit =
       logger.debug(s"SQL: $sql ($file:$line)")
 
-  /** Exactly one read query, counted as the raw paths count theirs */
+  /** The SQLSTATE of a statement PostgreSQL cancelled, as it does one that runs past its `statement_timeout` */
+  private val QUERY_CANCELED = "57014"
+
+  /**
+   * Exactly one read query, counted as the raw paths count theirs. A statement the engine cancelled at its time limit for reads
+   * is a [[QueryTimeoutException]].
+   */
   def read[R](dialect: Dialect)(f: scalasql.DbApi => R): R =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
-    f(api(dialect))
+    try f(api(dialect))
+    catch
+      case ex: SQLException if ex.getSQLState == QUERY_CANCELED =>
+        logger.warn(s"A read statement ran past its time limit: ${ex.getMessage}")
+        throw QueryTimeoutException(ex.getMessage)
 
   /** Exactly one write query, counted as the raw paths count theirs */
   def write[R](dialect: Dialect)(f: scalasql.DbApi => R): R =

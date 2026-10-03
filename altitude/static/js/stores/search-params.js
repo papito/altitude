@@ -30,27 +30,52 @@ const DEFAULTS = {
  * Choosing a folder, a person, an album, or a Location are all "look somewhere else", so each clears
  * the other three; a view is a different place again and clears all four. The map area (`bbox`, the
  * crowded-pin panel's scope) belongs to the search it was drawn on, so looking somewhere else clears
- * it too. Everything else narrows or reorders what is already in scope - the layout, the sort and
- * the grouping survive all of them. This table is what the server's old `newSearch=true` flag used
- * to express, and it is the whole reason a widget can send just the one parameter it knows about.
+ * it too.
+ *
+ * Search text (`q`) is one more place to look: the whole repository outside the trash. So text
+ * clears the four and returns to the repository view (a cleared parameter is back at its default),
+ * and each of the four, and a view, clears the text.
+ *
+ * The layout, the grouping and the sort narrow or reorder what is already in scope and survive all
+ * of them; the one sort that does not outlive its search is Relevance, which goes with the text
+ * (`withoutRefusedCombinations`). This table is what the server's old `newSearch=true` flag used to express, and it is the whole
+ * reason a widget can send just the one parameter it knows about.
  */
+const PLACES = ["folderId", "personId", "albumId", "locationId"]
+
+/** What looking at `place` (or, with none, at another view) clears */
+const elsewhere = (place) => [
+    ...PLACES.filter((name) => name !== place),
+    "bbox",
+    "q",
+]
+
 const CLEARS = {
-    view: ["folderId", "personId", "albumId", "locationId", "bbox"],
-    folderId: ["personId", "albumId", "locationId", "bbox"],
-    personId: ["folderId", "albumId", "locationId", "bbox"],
-    albumId: ["folderId", "personId", "locationId", "bbox"],
-    locationId: ["folderId", "personId", "albumId", "bbox"],
-    q: ["bbox"],
+    view: elsewhere(),
+    folderId: elsewhere("folderId"),
+    personId: elsewhere("personId"),
+    albumId: elsewhere("albumId"),
+    locationId: elsewhere("locationId"),
+    q: ["view", ...PLACES, "bbox"],
 }
 
-const NUMERIC = new Set(["p", "rpp"])
+/**
+ * The numbers the server reads, each held to the whole values it accepts: a page size up to its
+ * bound, and a page number an `Int` holds. How far a page may go also depends on the page size, and
+ * the server's default for it, so that bound stays the server's.
+ */
+const NUMBER_RANGES = {
+    rpp: { min: 1, max: Const.search.maxRpp },
+    p: { min: 1, max: 2 ** 31 - 1 },
+}
 
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
- * Search parameters read out of a browser URL's query string. Unknown parameters are ignored. The
- * layout is the one exception to "the URL, then the defaults": a URL that says nothing about it gets
- * the layout last chosen in this browser (`localStorage`), so a map user opens on the map.
+ * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
+ * is a page size or page number the server would refuse (`normalize`). The layout is the one
+ * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
+ * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
 export function seedSearchParams(search) {
     const urlParams = new URLSearchParams(search || "")
@@ -62,7 +87,25 @@ export function seedSearchParams(search) {
         }
     })
 
-    return seeded
+    return withoutRefusedCombinations(seeded)
+}
+
+/**
+ * The two combinations the server refuses, settled the way the scope rules would have: text
+ * searches the repository view, not the trash, and the Relevance sort goes with the text: a change
+ * that clears the text drops it, so the server's default applies, while any other sort stays. A URL
+ * can ask for either combination as well.
+ */
+function withoutRefusedCombinations(params) {
+    if (params.q !== null && params.view === Const.views.trashbin) {
+        params.view = DEFAULTS.view
+    }
+
+    if (params.q === null && params.sort === Const.search.sortRelevance) {
+        params.sort = DEFAULTS.sort
+    }
+
+    return params
 }
 
 function rememberedLayout() {
@@ -99,7 +142,7 @@ export function applySearchParamChanges(current, changes) {
         next.p = DEFAULTS.p
     }
 
-    return next
+    return withoutRefusedCombinations(next)
 }
 
 /**
@@ -111,7 +154,8 @@ export function applySearchParamChanges(current, changes) {
  *
  * A grouped search has no page number - it is continued by cursor - so `p` is left out whenever
  * `groupBy` is set: the server rejects the pair, and a `p` seeded from a hand-edited URL would
- * otherwise turn the whole search into a 400.
+ * otherwise turn the whole search into a 400. A `p` or `rpp` that is not a whole number in range
+ * never gets this far (`normalize`).
  */
 export function serializeSearchParams(params, overrides = {}) {
     const query = new URLSearchParams()
@@ -190,14 +234,21 @@ function isOmitted(name, value) {
     return name !== "view" && value === DEFAULTS[name]
 }
 
+/**
+ * A parameter's value as the store keeps it. A number the server would refuse is no opinion, like an
+ * empty one, so a hand-edited URL cannot turn every search into a 400: the server's default applies.
+ */
 function normalize(name, value) {
     if (value === null || value === undefined || value === "") {
         return DEFAULTS[name]
     }
 
-    if (NUMERIC.has(name)) {
+    if (name in NUMBER_RANGES) {
         const num = Number(value)
-        return Number.isFinite(num) ? num : DEFAULTS[name]
+        const { min, max } = NUMBER_RANGES[name]
+        return Number.isInteger(num) && num >= min && num <= max
+            ? num
+            : DEFAULTS[name]
     }
 
     return String(value)

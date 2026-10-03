@@ -103,6 +103,19 @@ import altitude.core.App
               else error should include("zoom")
             }
         }
+        // Search text does not reach the trash, on either endpoint; text without a usable term is no text
+        for (endpoint <- List("cells", "bounds")) withClue(s"$endpoint: ") {
+          def inTrash(q: String) = requests.get(
+            s"$host/api/map/r/$repoId/$endpoint",
+            params = valid ++ Map("view" -> "trashbin", "q" -> q),
+            cookies = testContext.cookies,
+            check = false)
+          val refused = inTrash("beach")
+          refused.statusCode shouldBe 400
+          refused.headers("content-type").head should include("application/json")
+          ujson.read(refused.text())("error").str should include("trash")
+          inTrash("- OR").statusCode shouldBe 200
+        }
         // The bbox search filter is not the map's: a malformed one is ignored rather than refused
         val ignoredBounds = requests.get(
           s"$host/api/map/r/$repoId/bounds",

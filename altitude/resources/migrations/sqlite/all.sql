@@ -59,9 +59,6 @@ CREATE TABLE asset (
   height INT NOT NULL DEFAULT 0,
   -- area size of the image in pixels (width * height)
   area_size INT NOT NULL,
-  extracted_metadata TEXT,
-  public_metadata TEXT,
-  user_metadata TEXT,
   folder_id CHAR(36),
   filename TEXT NOT NULL,
   size_bytes BIGINT NOT NULL,
@@ -80,16 +77,26 @@ CREATE TABLE asset (
   duration_ms INTEGER,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
+  -- The metadata JSON is declared last: a row's columns are stored in order, and reading any column after a large value walks
+  -- that value's overflow pages
+  extracted_metadata TEXT,
+  public_metadata TEXT,
+  user_metadata TEXT,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
-CREATE INDEX asset_02 ON asset (repository_id, is_recycled, is_pipeline_processed);
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
 -- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
+-- It carries the ID and the folder, so a pass over the library that tests text membership, a folder or a day reads the index
+-- and not the table.
 CREATE INDEX asset_search_date_taken ON asset (
-  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at
+  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
 );
+-- The default flat sort, Date Imported, as an ordered read
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at);
+-- Folder browsing and the folder source of Search text; it also lets an OR of text sources be planned as a multi-index OR
+CREATE INDEX asset_folder ON asset (folder_id);
 -- Map viewport queries: a bounding-box range over the located assets of a repository only.
 CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
   WHERE latitude IS NOT NULL;
@@ -115,14 +122,17 @@ CREATE TABLE person (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
+-- The partial person indexes cover the live people, the ones every person query reads; a merged-away person keeps its name and
+-- its cover face, which another person may take. The predicates are written as the queries write them: SQLite uses a partial
+-- index only for a query whose own terms imply it, and `is_deleted = FALSE` does not imply `is_deleted = 0`.
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
-    WHERE is_deleted = 1 AND is_bad_match = FALSE;
+    WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
-WHERE is_deleted = 1;
+    WHERE is_deleted = FALSE;
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
-WHERE is_deleted = 1;
+    WHERE is_deleted = FALSE;
 
 CREATE TABLE face (
   id CHAR(36) PRIMARY KEY,
@@ -149,9 +159,11 @@ CREATE TABLE face (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
--- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo)
-CREATE UNIQUE INDEX face_01 ON face (repository_id, asset_id, checksum);
-CREATE INDEX face_02 ON face (person_id, detection_score);
+-- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
+-- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text.
+CREATE UNIQUE INDEX face_01 ON face (asset_id, repository_id, checksum);
+-- A person's faces, best first; the asset rides along, so the person source of Search text reads the index alone
+CREATE INDEX face_02 ON face (person_id, detection_score, asset_id);
 
 CREATE TABLE metadata_field (
   id CHAR(36) PRIMARY KEY,
@@ -254,10 +266,49 @@ CREATE TABLE metadata_parameter (
   field_value_kw TEXT NULL,
   field_value_num DECIMAL,
   field_value_bool BOOLEAN,
-  field_value_dt DATEN,
+  field_value_dt DATETIME,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
   FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE,
   FOREIGN KEY (field_id) REFERENCES metadata_field (id) ON DELETE CASCADE
 );
 
-CREATE VIRTUAL TABLE search_document USING fts4 (repository_id, asset_id, body);
+-- The purge cascade and clearing an asset's parameters
+CREATE INDEX metadata_parameter_01 ON metadata_parameter (asset_id);
+
+-- id is the declared key the full-text index follows: an implicit rowid may be renumbered by VACUUM
+CREATE TABLE search_document (
+  id INTEGER PRIMARY KEY,
+  repository_id CHAR(36) NOT NULL,
+  asset_id CHAR(36) NOT NULL,
+  body TEXT NOT NULL,
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE
+);
+
+-- An asset has one document. Leading with the asset, it serves the purge cascade and the per-asset probes of Search text; the
+-- upsert's ON CONFLICT (repository_id, asset_id) still finds it, since a conflict target names a set of columns.
+CREATE UNIQUE INDEX search_document_01 ON search_document (asset_id, repository_id);
+
+-- The full-text index over search_document.body. It stores no text of its own (external content) and is kept in step by the
+-- triggers below. body holds words already split by the application, so the tokenizer takes them as they are.
+CREATE VIRTUAL TABLE search_document_fts USING fts5 (
+  body,
+  content='search_document',
+  content_rowid='id',
+  tokenize='unicode61 remove_diacritics 0',
+  prefix='2 3 4'
+);
+
+CREATE TRIGGER search_document_after_insert AFTER INSERT ON search_document BEGIN
+  INSERT INTO search_document_fts (rowid, body) VALUES (new.id, new.body);
+END;
+
+-- An external-content index is told what to forget with the text it was given: a 'delete' command carrying the old row
+CREATE TRIGGER search_document_after_delete AFTER DELETE ON search_document BEGIN
+  INSERT INTO search_document_fts (search_document_fts, rowid, body) VALUES ('delete', old.id, old.body);
+END;
+
+CREATE TRIGGER search_document_after_update AFTER UPDATE ON search_document BEGIN
+  INSERT INTO search_document_fts (search_document_fts, rowid, body) VALUES ('delete', old.id, old.body);
+  INSERT INTO search_document_fts (rowid, body) VALUES (new.id, new.body);
+END;

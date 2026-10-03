@@ -53,7 +53,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
@@ -69,6 +69,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `Const.state.selectedAssets` | Reactive `Set` of the selected asset IDs, and the one place a selection changes (see **Selection** below) |
 | `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
 | `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
+| `Const.state.resultsTotal` | The toolbar's results total: `count` and `isCapped`, set from the results fragment's `data-results-total` and `data-results-total-capped` (`js/fragments/search-results.js`). `label` reads the count followed by "+" when the server counted only up to its cap (`js/common/total-label.js`, "10000+"); `decrement` lowers an uncapped total as assets leave the grid and leaves a capped one alone, since it says only that there are more than the cap |
 | `Const.context.repoId` | Active repo ID — set from Twirl via `window.ctx.setRepoId(...)` |
 | `Const.context.gridMetadataFields` | Reactive `Set` of metadata field names shown in the grid; persisted in `localStorage` as a JSON array |
 
@@ -547,7 +548,7 @@ continuation, selection, the detail modal and dragging to a Location row work in
 URL is bookmarkable, since the map hydrator reopens the panel for the `data-results-bbox` its fragment
 carries. The map endpoints and the map layout's total and bounds ignore `bbox`, so the map behind the
 panel keeps plotting the whole search. `js/fragments/search-results.js` hydrates a fragment inside
-`#mapPanel` as the panel's grid: it writes the count into `#mapPanelCount` ("n items here") and leaves
+`#mapPanel` as the panel's grid: it writes the count into `#mapPanelCount` ("n items here", "10000+ items here" when the total is capped, `setMapPanelCount`) and leaves
 the displayed map, the total store, the viewed scope and box selection alone; the fragment's own
 `#searchControl` is hidden there. The panel's continuations stay a plain grid (see **Infinite scroll +
 lazy load**). The server's `HX-Replace-Url` for a panel request says `layout=grid`, so
@@ -621,7 +622,7 @@ count is positive stays, since the group has matches on pages not loaded yet. Un
 an asset in two Locations has a cell in each group (`asset-<id>-in-<locationId>`; elsewhere a cell is
 `asset-<id>`), so every per-asset change goes through `js/search-results/cells.js`, which finds all of
 an asset's cells by `data-asset-id`: removal takes every cell out, decrementing each header a cell
-leaves, while the footer total, which counts assets, drops once per asset.
+leaves, while the footer total, which counts assets, drops once per asset (unless it is capped: see `resultsTotal` under **Alpine.js Stores**).
 
 The header's checkbox is `x-data="initDateGroupSelectable()"`
 (`js/alpine/components/date-group-selectable.js`). Its set is the group's cells *in the grid*, read off
@@ -710,8 +711,13 @@ Folder deletion also recycles assets throughout its subtree, so the `folderDelet
 calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
 from event listeners; it loads the nav fragment with:
 ```js
-htmx.ajax("GET", `/htmx/nav/r/${window.ctx.getRepoId()}`, { swap: "innerHTML", target: "nav" })
+htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?search=true`, { swap: "innerHTML", target: "nav" })
 ```
+
+`includes/nav` renders the Search input only when its `search` parameter is true: `index.scala.html`
+passes it, and `search=true` asks `NavController` for it on a reload, so the main page's nav keeps
+its input while the import page's nav (and its polling reload) has none. The form is `hx-preserve`,
+so the swap keeps the element itself, with its listeners and the text being typed.
 
 Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 `app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
@@ -756,6 +762,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
+| `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, media loading in the asset-detail modal, and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
@@ -779,8 +786,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 
 ## Search parameters
 
-Every search in the app — the initial load, folder and person navigation, the Sort and Group
-dropdowns, continuous scroll, the page the detail modal loads at the end of the grid — goes through
+Every search in the app — the initial load, folder and person navigation, the Search input, the Sort
+and Group dropdowns, continuous scroll, the page the detail modal loads at the end of the grid — goes through
 **one** function, `runSearch` in `js/search-results/search.js`. A caller supplies only the parameter
 it knows about; the `searchParams` store supplies the rest. Nothing else builds a URL for
 `/htmx/search/r/:repoId`.
@@ -789,10 +796,47 @@ it knows about; the `searchParams` store supplies the rest. Nothing else builds 
 `locationId`, `q`, `bbox`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them:
 choosing a folder, a person, an album, or a Location clears the other three, a view clears all four, and any change other than paging
 returns to page 1. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
-drawn on, so a view, a folder, a person, an album, a Location or a new `q` clears it too. The layout,
-the sort and the grouping narrow or reorder what is already in scope and survive all of those. A parameter still at
+drawn on, so a view, a folder, a person, an album, a Location or a new `q` clears it too. Search text
+(`q`) is one more place to look, the whole repository outside the trash: a change of `q` clears the
+folder, person, album and Location and returns `view` to the repository view, and each of those four,
+and a view, clears `q`. The whole `CLEARS` table:
+
+| Changed | Cleared (back to its default) |
+|---|---|
+| `view` | `folderId`, `personId`, `albumId`, `locationId`, `bbox`, `q` |
+| `folderId`, `personId`, `albumId` or `locationId` | the other three, `bbox`, `q` |
+| `q` | `view`, `folderId`, `personId`, `albumId`, `locationId`, `bbox` |
+
+The layout, the grouping, `rpp` and the sort narrow or reorder what is already in scope and survive
+all of those: a chosen sort is kept from one place to the next, and with no sort chosen the server's
+default applies (Relevance with text, newest import without). The two combinations the server refuses
+are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
+change): `q` with the trash view becomes the repository view, and `sort=relevance`
+(`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
+the text it ranked. The server also refuses a page size outside 1 to 500 and a page number an `Int`
+does not hold; the store keeps only whole numbers in those ranges (`normalize`, with
+`Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
+default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every
+search. How far `p` may go for a given page size is the server's alone to say. A parameter still at
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
+
+The Search input is `#searchForm` in `includes/nav` (`role="search"`: an `<input type="search" name="q">`
+and a Search button), rendered in the main page's nav only (see **Nav refresh**) and bound once by
+`bindSearchInput()` (`js/search-results/search-input.js`) from `FrontendApp.start()`. Enter and the
+button submit the form, which runs `runSearch({ params: { q } })` with the trimmed value; the input's
+native clear (the `search` event with an empty value) and an empty submit clear `q` the same way, and an
+empty submit with no `q` in the store does nothing, so it never leaves the folder or view being looked
+at. The input holds no state: an Alpine effect writes `searchParams.q` into it, so a URL with `q` fills
+it on load and choosing a folder, person, album, Location or view empties it. The page is laid out for
+the view it was loaded with, so from Triage or Trash a text search is not a swap: the store is merged
+and the browser navigates to `/r/<repoId>?<the store's query string>`, a full load of Browse that
+seeds the store from that URL, layout and grouping included.
+
+`includes/search_results` takes the Search text the results were matched by (`text`, set when `q` had a
+usable term) and puts it on the fragment as `data-results-q`. The Sort dropdown offers "Relevance"
+only then, selected when it is the effective sort, since the server
+refuses it without text.
 
 `groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
 day; the Group dropdown in `search_results.scala.html` sets both from its selected option, and "No

@@ -5,18 +5,11 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
-import scalasql.core.SqlStr
-import scalasql.core.SqlStr.SqlStringSyntax
 
 import altitude.core.Altitude
-import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.RequestContext
-import altitude.core.dao.sql.Db
-import altitude.core.dao.sql.search.PostgresSearchDialect
-import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SearchQueries
-import altitude.core.dao.sql.search.SqliteSearchDialect
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Location
@@ -32,7 +25,7 @@ import altitude.core.util.SearchQuery
  * The map's data: viewport cells over the plotted points of a search (an asset at its own point, or at the pin of each Location
  * it is in when it has none), the Locations in the viewport with matching assets, and the bounds of every plotted point.
  */
-@DoNotDiscover class SearchMapTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class SearchMapTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
   private val paris = (48.8566, 2.3522)
   private val world = BoundingBox.parse("-90,-180,90,180")
@@ -55,8 +48,9 @@ import altitude.core.util.SearchQuery
   private def searchQuery(
       params: Map[String, Any] = Map(FieldConst.Asset.IS_RECYCLED -> false),
       folderIds: Set[String] = Set(),
-      locationIds: Set[String] = Set()): SearchQuery =
-    new SearchQuery(params = params, folderIds = folderIds, locationIds = locationIds)
+      locationIds: Set[String] = Set(),
+      text: Option[String] = None): SearchQuery =
+    new SearchQuery(text = text, params = params, folderIds = folderIds, locationIds = locationIds)
 
   private def cellsOf(bbox: BoundingBox = world, zoom: Int = 12, query: SearchQuery = searchQuery()): MapCells =
     testApp.service.library.mapCells(query, bbox, zoom)
@@ -68,22 +62,6 @@ import altitude.core.util.SearchQuery
     locations.map(location => (location.name, location.categoryName, location.count)).sorted
 
   private def bounds(query: SearchQuery = searchQuery()): Option[MapBounds] = testApp.service.library.mapBounds(query)
-
-  private def searchDialect: SearchDialect =
-    if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) PostgresSearchDialect else SqliteSearchDialect
-
-  /** The engine's plan for `statement` as text: the lines of Postgres' EXPLAIN, or the details of SQLite's EXPLAIN QUERY PLAN */
-  private def planOf(statement: SqlStr): String = {
-    val engine = searchDialect
-    import engine.dialect.*
-
-    testApp.txManager.asReadOnly {
-      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
-        Db.read(engine.dialect)(_.runSql[String](sql"EXPLAIN $statement")).mkString("\n")
-      else
-        Db.read(engine.dialect)(_.runSql[(Int, Int, Int, String)](sql"EXPLAIN QUERY PLAN $statement")).map(_._4).mkString("\n")
-    }
-  }
 
   test("Cells aggregate the plotted points: an asset at its own point, or at its Locations' pins without one") {
     val italy = testApp.service.location.addCategory("Italy")
@@ -201,28 +179,20 @@ import altitude.core.util.SearchQuery
     // so its choice would be a tie. At a library's scale - thousands of assets, most without a point, analyzed - it is not.
     // SQLite has no statistics before ANALYZE and prefers the index that constrains the most columns.
     val plan =
-      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-        // The library is only scaled up for the plan: the schema is shared by every suite that follows, so the copies and their
-        // column statistics are rolled back once the plan is read in the same transaction. ANALYZE writes the table's row count
-        // estimate in place, which a rollback keeps, so the table is analyzed again over the rows that are left.
-        try
-          testApp.txManager.withTransaction {
-            update(
-              """INSERT INTO asset
-                |SELECT (jsonb_populate_record(a, jsonb_build_object(
-                |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
-                |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
-                |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
-                |  FROM asset a, generate_series(1, 5000) g
-                | WHERE a.id = ?""".stripMargin,
-              inParis.persistedId
-            )
-            update("ANALYZE asset")
-            try planOf(cells)
-            finally RequestContext.getConn.rollback()
-          }
-        finally testApp.txManager.withTransaction(update("ANALYZE asset"))
-      } else planOf(cells)
+      if (isPostgres)
+        atScale {
+          update(
+            """INSERT INTO asset
+              |SELECT (jsonb_populate_record(a, jsonb_build_object(
+              |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
+              |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
+              |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
+              |  FROM asset a, generate_series(1, 5000) g
+              | WHERE a.id = ?""".stripMargin,
+            inParis.persistedId
+          )
+        }(planOf(cells))
+      else planOf(cells)
 
     withClue(plan) {
       plan should include("asset_geo")
@@ -290,5 +260,30 @@ import altitude.core.util.SearchQuery
     // The root folder is the whole repository
     val root = searchQuery(folderIds = Set(testContext.repositories.head.rootFolderId))
     bounds(root).value.count shouldBe 2
+  }
+
+  test("The map follows the Search text: cells, Location counts and bounds are those of the assets the names find") {
+    val trips: Folder = testApp.service.folder.add("Trips")
+    val inFolder = persistAt(paris._1, paris._2, folder = Some(trips))
+    persistAt(35.6762, 139.6503)
+    val rome = addLocation("Rome", (41.9028, 12.4964))
+    val pinned = testContext.persistAsset()
+    testApp.service.location.addAssets(rome.persistedId, Set(pinned.persistedId, inFolder.persistedId))
+
+    bounds().value.count shouldBe 3
+
+    val byFolder = searchQuery(text = Some("trips"))
+    summary(cellsOf(query = byFolder).cells) shouldEqual List((1, inFolder.persistedId))
+    locationSummary(cellsOf(query = byFolder).locations) shouldEqual List(("Rome", None, 1))
+    bounds(byFolder).value shouldBe MapBounds(south = paris._1, west = paris._2, north = paris._1, east = paris._2, count = 1)
+
+    val byLocation = searchQuery(text = Some("rome"))
+    summary(cellsOf(query = byLocation).cells) shouldEqual List((1, inFolder.persistedId), (1, pinned.persistedId)).sorted
+    locationSummary(cellsOf(query = byLocation).locations) shouldEqual List(("Rome", None, 2))
+    bounds(byLocation).value.count shouldBe 2
+    bounds(byLocation).value.south shouldBe 41.9028 +- 1e-6
+
+    bounds(searchQuery(text = Some("rome -trips"))).value.count shouldBe 1
+    bounds(searchQuery(text = Some("nowhere"))) shouldBe None
   }
 }

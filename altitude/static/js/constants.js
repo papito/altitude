@@ -105,6 +105,10 @@ export const Const = {
             grid: "grid",
             map: "map",
         },
+        // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
+        sortRelevance: "relevance",
+        // The largest page size the server serves (`Const.Search.MAX_RPP`); it refuses a larger one
+        maxRpp: 500,
     },
 
     http: {

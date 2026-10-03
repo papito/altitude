@@ -27,6 +27,7 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
     const contentElement = document.getElementById("content")
     const assetsElement = fragmentEl.querySelector("#assets")
     const total = Number(fragmentEl.dataset.resultsTotal || 0)
+    const isTotalCapped = fragmentEl.dataset.resultsTotalCapped === "true"
 
     Alpine.store(Const.state.selectedAssets).reset()
 
@@ -34,14 +35,14 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
         document
             .getElementById("mapPanelContent")
             ?.scrollTo({ top: 0, behavior: "auto" })
-        setMapPanelCount(total)
+        setMapPanelCount(total, isTotalCapped)
     } else {
         contentElement?.scrollTo({ top: 0, behavior: "auto" })
 
         // The previous fragment is gone, and with it the map it held, if any
         disposeMapView()
 
-        Alpine.store(Const.state.resultsTotal).set(total)
+        Alpine.store(Const.state.resultsTotal).set(total, isTotalCapped)
         syncViewedScope(fragmentEl)
         ensureViewSettingsControl(fragmentEl)
 

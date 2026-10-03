@@ -4,11 +4,15 @@ import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
+import scala.util.Random
+
 import altitude.core.{ Altitude, Const, FieldConst, SearchCursorException }
+import altitude.core.models.{ Asset, Person }
+import altitude.core.service.FaceDetectionService
 import altitude.core.util.*
 
 /** Cursor continuation of a grouped search: every supported ordering, live changes around the anchor, and scope checks */
-@DoNotDiscover class SearchCursorTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class SearchCursorTests(override val testApp: Altitude) extends IntegrationTestCore with TextSearchPaths {
 
   /** What a fixture asset was given, so the expected order can be computed independently of SQL */
   private case class Dated(id: String, taken: Option[LocalDateTime], imported: OffsetDateTime, filename: String)
@@ -97,7 +101,7 @@ import altitude.core.util.*
     blocks.flatMap(_.sorted(sortThenId(sort)).map(_.id))
 
   private def firstPage(grouping: SearchGrouping, sort: SearchSort, rpp: Int, text: Option[String] = None): GroupedSearchResult =
-    testApp.service.library.searchGrouped(
+    searchGrouped(
       new SearchQuery(
         text = text,
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -111,7 +115,7 @@ import altitude.core.util.*
       sort: SearchSort,
       rpp: Int,
       text: Option[String] = None): GroupedSearchResult =
-    testApp.service.library.searchGrouped(
+    searchGrouped(
       new SearchQuery(
         text = text,
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -124,13 +128,13 @@ import altitude.core.util.*
   private def ids(result: GroupedSearchResult): List[String] = result.assets.map(_.persistedId)
 
   /** Walks every page through encoded cursors, as a client would, and returns the IDs in order */
-  private def traverse(grouping: SearchGrouping, sort: SearchSort, rpp: Int): List[String] = {
-    var page = firstPage(grouping, sort, rpp)
+  private def traverse(grouping: SearchGrouping, sort: SearchSort, rpp: Int, text: Option[String] = None): List[String] = {
+    var page = firstPage(grouping, sort, rpp, text)
     var walked = ids(page)
     while (page.nextCursor.isDefined) {
       val cursor = SearchCursor.decode(page.nextCursor.get.encode)
       cursor shouldEqual page.nextCursor.get
-      page = continue(cursor, grouping, sort, rpp)
+      page = continue(cursor, grouping, sort, rpp, text)
       page.continuesGroup shouldBe page.groups.headOption.exists(_.key.continues(cursor))
       page.assets.nonEmpty shouldBe true
       walked.size should be < 100
@@ -230,7 +234,7 @@ import altitude.core.util.*
     val folder = testApp.service.folder.add("scoped")
     val location = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
     def scoped(folderIds: Set[String] = Set(), locationIds: Set[String] = Set(), bbox: Option[BoundingBox] = None) =
-      testApp.service.library.searchGrouped(
+      searchGrouped(
         new SearchQuery(
           params = Map(FieldConst.Asset.IS_RECYCLED -> false),
           folderIds = folderIds,
@@ -251,7 +255,7 @@ import altitude.core.util.*
     SearchCursor.decode(nullCursor.encode) shouldBe nullCursor
     val oldJson =
       ujson.read(new String(java.util.Base64.getUrlDecoder.decode(cursor.encode), java.nio.charset.StandardCharsets.UTF_8))
-    oldJson("v") = 3
+    oldJson("v") = 4
     val oldToken = java.util.Base64.getUrlEncoder.withoutPadding
       .encodeToString(ujson.write(oldJson).getBytes(java.nio.charset.StandardCharsets.UTF_8))
     intercept[SearchCursorException](SearchCursor.decode(oldToken)).getMessage shouldBe "Unsupported cursor version"
@@ -344,5 +348,114 @@ import altitude.core.util.*
       cursor = page.nextCursor
     }
     remaining shouldEqual afterRome
+  }
+
+  private val img = Some("img")
+
+  /**
+   * Makes the text "img" match the fixture in three sources: every file name, an album for a third of the assets and a person for
+   * a quarter of them. Returns the Relevance of each asset: the score of the best source it is matched in.
+   */
+  private def rankByImg(assets: List[Dated]): Map[String, Int] = {
+    val album = testApp.service.album.add("Img picks")
+    val person = testApp.service.person.addPerson(Person(name = Some("Img Model")))
+    val inAlbum = assets.zipWithIndex.collect { case (asset, index) if index % 3 == 0 => asset.id }.toSet
+    val withPerson = assets.zipWithIndex.collect { case (asset, index) if index % 4 == 0 => asset.id }.toSet
+    testApp.service.album.addAssets(album.persistedId, inAlbum)
+    withPerson.foreach {
+      id =>
+        val asset: Asset = testApp.service.asset.getById(id)
+        testContext.addTestFace(person, asset, Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(Random.nextFloat()))
+    }
+    assets
+      .map(
+        asset =>
+          asset.id -> (if (withPerson(asset.id)) SearchSource.Person
+                       else if (inAlbum(asset.id)) SearchSource.Album
+                       else SearchSource.Document).relevance)
+      .toMap
+  }
+
+  /** The order within a group under the Relevance sort: best match, then newest capture with the undated last, then the ID */
+  private def relevanceThenId(relevance: Map[String, Int]): Ordering[Dated] =
+    Ordering.by[Dated, (Int, Boolean, Long, String)](
+      asset =>
+        (-relevance(asset.id), asset.taken.isEmpty, -asset.taken.map(_.toEpochSecond(ZoneOffset.UTC)).getOrElse(0L), asset.id))
+
+  test("Cursor traversal under the Relevance sort matches the complete order by day, in both directions") {
+    val assets = fixture()
+    val relevance = rankByImg(assets)
+    // The fixture has to tie on Relevance and on capture time, and to rank an older capture above a newer one
+    relevance.values.toSet shouldBe Set(5, 2, 1)
+
+    for (direction <- SortDirection.values.toList; rpp <- List(1, 2, 5)) {
+      val grouping = SearchGrouping(GroupBy.DateTaken, direction)
+      val dayOrdering = Ordering.by[Dated, Option[String]](_.taken.map(_.toLocalDate.toString))(nativeOrder(direction))
+      withClue(s"$grouping, $rpp a page: ") {
+        traverse(grouping, SearchSort.Relevance, rpp, img) shouldEqual
+          assets.sorted(dayOrdering.orElse(relevanceThenId(relevance))).map(_.id)
+      }
+    }
+  }
+
+  test("Cursor traversal under the Relevance sort matches the complete order by Location") {
+    val assets = fixture()
+    val relevance = rankByImg(assets)
+    val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
+    val berlin = testApp.service.location.addLocation("Berlin", 52.5, 13.4, None)
+    // Both Locations and the trailing group mix dated and undated assets of every Relevance
+    val inRome = assets.slice(0, 6) ++ assets.slice(12, 13)
+    val inBerlin = assets.slice(3, 9) ++ assets.slice(13, 15)
+    val inNone = assets.slice(9, 12) ++ assets.slice(15, 16)
+    testApp.service.location.addAssets(rome.persistedId, inRome.map(_.id).toSet)
+    testApp.service.location.addAssets(berlin.persistedId, inBerlin.map(_.id).toSet)
+    val expected = List(inBerlin, inRome, inNone).flatMap(_.sorted(relevanceThenId(relevance)).map(_.id))
+
+    for (rpp <- List(1, 2, 5)) withClue(s"$rpp a page: ") {
+      traverse(SearchGrouping(GroupBy.Location), SearchSort.Relevance, rpp, img) shouldEqual expected
+    }
+  }
+
+  test("A Relevance cursor carries the capture time beside the Relevance, and a column sort's cursor does not") {
+    val assets = fixture()
+    val relevance = rankByImg(assets)
+    val grouping = SearchGrouping(GroupBy.Location)
+    val expected = assets.sorted(relevanceThenId(relevance))
+
+    val cursor = firstPage(grouping, SearchSort.Relevance, 1, img).nextCursor.get
+    cursor.id shouldBe expected.head.id
+    cursor.sortValue shouldBe SortValue.Num(5)
+    cursor.secondSortValue.isDefined shouldBe true
+    SearchCursor.decode(cursor.encode) shouldBe cursor
+
+    // The last asset has no capture time: its cursor says so, rather than saying nothing
+    val last = firstPage(grouping, SearchSort.Relevance, 15, img).nextCursor.get
+    last.id shouldBe expected(14).id
+    last.secondSortValue shouldBe Some(SortValue.Null)
+    SearchCursor.decode(last.encode) shouldBe last
+    ids(continue(last, grouping, SearchSort.Relevance, 5, img)) shouldEqual List(expected(15).id)
+
+    // Without its capture time a Relevance cursor is no position
+    intercept[SearchCursorException](continue(cursor.copy(secondSortValue = None), grouping, SearchSort.Relevance, 1, img))
+    // It belongs to its sort like any other cursor
+    val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
+    intercept[SearchCursorException](continue(cursor, grouping, byFilename, 1, img))
+
+    val columnCursor = firstPage(grouping, byFilename, 1, img).nextCursor.get
+    columnCursor.secondSortValue shouldBe None
+    SearchCursor.decode(columnCursor.encode) shouldBe columnCursor
+  }
+
+  test("Text of exclusions alone is traversed under the Relevance sort by the tiebreakers") {
+    val assets = fixture()
+    val nothing = assets.map(_.id -> 0).toMap
+    val excluded = Some("-nothing")
+
+    traverse(SearchGrouping(GroupBy.Location), SearchSort.Relevance, rpp = 3, excluded) shouldEqual
+      assets.sorted(relevanceThenId(nothing)).map(_.id)
+    val byDay = SearchGrouping(GroupBy.DateTaken)
+    val dayOrdering = Ordering.by[Dated, Option[String]](_.taken.map(_.toLocalDate.toString))(nativeOrder(byDay.direction))
+    traverse(byDay, SearchSort.Relevance, rpp = 3, excluded) shouldEqual
+      assets.sorted(dayOrdering.orElse(relevanceThenId(nothing))).map(_.id)
   }
 }

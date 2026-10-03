@@ -25,8 +25,16 @@ enum SearchGroupKey:
   /** Whether this is the group the cursor's anchor was in */
   def continues(cursor: SearchCursor): Boolean = cursorKey == cursor.key && cursorGroupId == cursor.groupId
 
-/** One page row of a grouped search, as the DAO reads it: the asset with its group, its sort key as stored, and its group's count */
-case class GroupedSearchRow(asset: Asset, group: SearchGroupKey, sortValue: SortValue, groupTotal: Int)
+/**
+ * One page row of a grouped search, as the DAO reads it: the asset with its group, its sort key as stored, and its group's count.
+ * `secondSortValue` is the capture time as stored under the Relevance sort, which orders by it next, and null under any other.
+ */
+case class GroupedSearchRow(
+    asset: Asset,
+    group: SearchGroupKey,
+    sortValue: SortValue,
+    secondSortValue: SortValue,
+    groupTotal: Int)
 
 /**
  * What one grouped search statement returns: the ordered page rows, whether a further match exists past the page and, on a first

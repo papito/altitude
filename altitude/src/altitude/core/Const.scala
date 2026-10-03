@@ -11,8 +11,13 @@ object Const:
     val POSTGRES_USER = "db.postgres.user"
     val POSTGRES_PASSWORD = "db.postgres.password"
     val POSTGRES_URL = "db.postgres.url"
+    // The connection pools and what every connection opens with, see reference.conf
+    val POSTGRES_POOL_SIZE = "db.postgres.pool_size"
+    val POSTGRES_OPTIONS = "db.postgres.options"
+    val POSTGRES_READ_STATEMENT_TIMEOUT = "db.postgres.read_statement_timeout"
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
+    val SQLITE_READ_POOL_SIZE = "db.sqlite.read_pool_size"
 
     val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
     val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
@@ -56,16 +61,27 @@ object Const:
 
   object Search:
     val DEFAULT_RPP = 50
-    // Grouped pages are bounded: they carry counts for every day on the page
-    val MAX_GROUPED_RPP = 500
+    // Every grid page is bounded: a flat page holds full asset rows, and a grouped one carries a count for each of its groups
+    val MAX_RPP = 500
 
-    // The sort fields the results UI offers; a grouped request may sort by nothing else
+    // A first page's total counts the matches up to this many; one past it reads "10000+"
+    val TOTAL_CAP = 10000
+
+    // A group of the Search text with at most this many hits is answered from those hits; one with more is matched over the
+    // whole library
+    val TEXT_PROBE_LIMIT = 5000
+
+    // The asset columns the results UI offers as a sort; a request may sort by nothing else but Relevance
     val SORT_FIELDS: Set[String] = Set(
       FieldConst.Asset.ORIGINAL_CREATED_AT,
       FieldConst.CREATED_AT,
       FieldConst.Asset.FILENAME,
       FieldConst.Asset.SIZE_BYTES,
       FieldConst.Asset.AREA_SIZE)
+
+    // The sort that is not a column: how well an asset matches the Search text, best first. It is the whole `sort` value,
+    // with no direction digit.
+    val SORT_RELEVANCE = "relevance"
 
     object Layout:
       val GRID = "grid"
@@ -115,6 +131,7 @@ object Const:
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
       val PIN_REQUIRED = "Place the pin on the map"
+      val SEARCH_TIMED_OUT = "The search took too long"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in

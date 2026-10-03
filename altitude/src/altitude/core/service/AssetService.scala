@@ -47,7 +47,10 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       )
       updateById(asset.persistedId, data)
 
-      asset.copy(fileName = newFilename)
+      // The Search document holds the words of the file name
+      val renamed = asset.copy(fileName = newFilename)
+      app.service.search.reindexAsset(renamed)
+      renamed
     }
 
   override def query(q: Query): QueryResult[Asset] =

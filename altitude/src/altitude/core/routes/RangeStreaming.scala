@@ -64,7 +64,8 @@ object RangeStreaming:
           remaining -= transferred
       catch
         case e: ClientDisconnectedException =>
-          logger.debug(s"The client went away while $path was streamed, around byte $position of $start-${start + length - 1}: ${e.getCause}")
+          logger.debug(
+            s"The client went away while $path was streamed, around byte $position of $start-${start + length - 1}: ${e.getCause}")
       finally channel.close()
 
   def respond(path: Path, mime: String, rangeHeader: Option[String]): Response.Raw =

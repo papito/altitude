@@ -6,9 +6,12 @@ import com.typesafe.config.ConfigValueFactory
 import java.io.File
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
+import org.apache.pekko.actor.Cancellable
 import org.apache.pekko.actor.typed.ActorSystem
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.duration.DurationInt
 
 import altitude.core.dao.jdbc.PersonDao
 import altitude.core.dao.jdbc.SystemMetadataDao
@@ -66,6 +69,10 @@ class Altitude(val dbEngineOverride: Option[String] = None):
    * release)
    */
 
+  // Short, so the test of the time limit for reads does not wait long. The main reference.conf comes first on the test
+  // classpath, so a key both reference files set keeps the main value; test values are set here instead.
+  private val TEST_READ_STATEMENT_TIMEOUT = "2s"
+
   // the config before final actual config as we need to dynamically figure out some values
   private val preConfig: Config = Environment.CURRENT match {
     case Environment.Name.DEV =>
@@ -93,6 +100,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
             .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
             .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
             .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
+            .withValue(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT, ConfigValueFactory.fromAnyRef(TEST_READ_STATEMENT_TIMEOUT))
 
         case None =>
           ConfigFactory
@@ -102,6 +110,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
             .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
             .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
             .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
+            .withValue(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT, ConfigValueFactory.fromAnyRef(TEST_READ_STATEMENT_TIMEOUT))
       }
 
     case _ =>
@@ -150,6 +159,11 @@ class Altitude(val dbEngineOverride: Option[String] = None):
 
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
+
+  // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
+  private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
+    actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
+  }
 
   object DAO {
     val systemMetadata: SystemMetadataDao = dataSourceType match {
@@ -283,11 +297,9 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     }
   }
 
-  val parallelism: Int = dataSourceType match {
-    case Const.DbEngineName.SQLITE =>
-      1 // SQLite doesn't handle concurrent writes well, so we run the pipeline with a parallelism of 1 for SQLite
-    case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
-  }
+  // How many assets the import and purge queues buffer and admit at once, on both engines: a pipeline stage does its work before
+  // it hands an asset on, so this does not multiply the concurrent work, which the pipeline's asynchronous boundaries decide
+  val parallelism: Int = Runtime.getRuntime.availableProcessors()
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
   // services read as they are wired up.
@@ -308,6 +320,10 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     logger.info("Cleaning up resources")
     service.importPipeline.shutdown()
     logger.info("Pipeline system terminated")
+
+    sqliteOptimizing.foreach(_.cancel())
+    txManager.optimize()
+    txManager.shutdown()
 
     // This is already done by default and will cause a warning
     // actorSystem.terminate()

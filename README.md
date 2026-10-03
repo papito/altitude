@@ -33,6 +33,7 @@ This project is still in its "technology preview" stage. At this point it featur
 * Facial detection and recognition
 * Default result display with lazy loading and infinite scrolling
 * Drag-and-drop file and folder management
+* Text search over people, locations, folders, albums, file names and metadata, sorted by relevance
 * Rudimentary results display
 * A test suite that runs against both Postgres and Sqlite
 
@@ -40,7 +41,6 @@ Missing features:
 
 * Right now there is only the single-user, single-library mode.
 * Results are displayed in their default order and there are no advanced display features yet.
-* Search indexing is implemented but not yet wired to be a user-facing feature.
 * No location editing or display.
 * No metadata view (but it IS being extracted and saved).
 

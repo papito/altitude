@@ -3,11 +3,11 @@ package altitude.core.dao.sql.tables
 import scalasql.Table
 
 /**
- * The `search_document` table, with only the columns both engines have.
+ * The `search_document` table: one row per asset, whose `body` is the words of the asset's file name and user metadata values.
  *
- * The engines disagree about the rest of it: PostgreSQL keeps a `metadata_values` column and the `tsv` vector the GIN index is
- * built on, while SQLite's is an fts4 virtual table whose text lives in `body` alone. The one column that is not shared and is
- * still needed - PostgreSQL's `tsv` - is written as a raw fragment by [[altitude.core.dao.sql.search.PostgresSearchDialect]].
+ * The full-text index over `body` is each engine's own and is not part of this row: PostgreSQL's generated `tsv` column, and
+ * SQLite's `search_document_fts` table, keyed by the SQLite table's own `id` (a declared key, so `VACUUM` cannot renumber it).
+ * Both are written as raw fragments by the engine's [[altitude.core.dao.sql.search.SearchDialect]].
  */
 case class SearchDocumentRow[T[_]](repositoryId: T[String], assetId: T[String], body: T[String])
 

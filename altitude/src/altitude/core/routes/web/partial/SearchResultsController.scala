@@ -10,6 +10,7 @@ import scala.util.Try
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.QueryTimeoutException
 import altitude.core.SearchCursorException
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
@@ -37,11 +38,18 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
    *
-   * With `groupBy`, a header opens each date or Location, and the page is continued by the `after` cursor the last cell carries
-   * (`data-app-search-after`), never by page number. `parseGroupedQuery` validates the request.
+   * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
+   * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
+   *
+   * Without `groupBy`, the page is the `p`-th of `rpp` assets (`parsePage`). With it, a header opens each date or Location, and
+   * the page is continued by the `after` cursor the last cell carries (`data-app-search-after`), never by page number
+   * (`parseGroupedQuery`). Either way `rpp` is 1 to `Const.Search.MAX_RPP`.
    *
    * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
    * them (`bbox` scopes the panel and the grid, and stays in the URL).
+   *
+   * A first page's total, and the map layout's, counts the matches up to `SearchQuery.totalCap`; the template says when there are
+   * more.
    *
    * Results are HTML only: the detail modal walks the rendered grid, so nothing asks for them as JSON, and a JSON request is
    * refused.
@@ -54,7 +62,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       rpp: Int = Const.Search.DEFAULT_RPP,
       p: Option[Int] = None,
       q: Option[String] = None,
-      sort: String = s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}",
+      sort: Option[String] = None,
       folderId: Option[String] = None,
       personId: Option[String] = None,
       albumId: Option[String] = None,
@@ -85,13 +93,21 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return badRequest("Unknown layout")
 
-    val searchSort = parseSort(sort) match
+    val effectiveSort = sort.getOrElse(
+      if scope.text.isDefined then Const.Search.SORT_RELEVANCE
+      else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
+
+    val searchSort = parseSort(effectiveSort) match
       case None => return badRequest("Unknown sort")
       case Some(searchSort) => searchSort
 
+    if searchSort.isRelevance && scope.text.isEmpty then
+      return badRequest(
+        s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})")
+
     val browserUrl = browserViewUrl(
       view,
-      sort,
+      effectiveSort,
       q,
       folderId,
       personId,
@@ -109,13 +125,17 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val query = scope.copy(bbox = None).query()
       logger.info(s"MAP QUERY: $query")
       val library = App.altitude.service.library
+      val (total, bounds) =
+        try (library.cappedCount(query), library.mapBounds(query))
+        catch case _: QueryTimeoutException => return timedOut
       return html(
         includes.html.search_results(
-          total = library.count(query),
+          total = total,
+          totalCap = query.totalCap,
           sort = searchSort,
           grouping = None,
           grid = htmx.html.map_view(
-            library.mapBounds(query),
+            bounds,
             App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
             App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION)),
           person = personOf(personId),
@@ -124,10 +144,15 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           albumId = albumId,
           locationId = locationId,
           bbox = bbox,
-          layout = layout
+          layout = layout,
+          text = scope.text
         ),
         "HX-Replace-Url" -> browserUrl
       )
+
+    // Every grid page is bounded; zero is refused too, since to a flat search it means no limit, every match
+    if rpp < 1 || rpp > Const.Search.MAX_RPP then
+      return badRequest(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}")
 
     if groupBy.isDefined || groupDirection.isDefined || after.isDefined then
       val searchQuery =
@@ -139,7 +164,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
       val results: GroupedSearchResult =
         try App.altitude.service.library.searchGrouped(searchQuery)
-        catch case ex: SearchCursorException => return badRequest(ex.getMessage)
+        catch
+          case ex: SearchCursorException => return badRequest(ex.getMessage)
+          case _: QueryTimeoutException => return timedOut
 
       if isContinuousScroll then
         // The continuation ran dry: results are live, and the images past the cursor may be gone by now
@@ -150,6 +177,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       return html(
         includes.html.search_results(
           total = results.total.getOrElse(0),
+          totalCap = searchQuery.totalCap,
           sort = results.sort,
           grouping = Some(results.grouping),
           grid = htmx.html.results_grid_grouped(results = results),
@@ -158,22 +186,27 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           folderId = folderId,
           albumId = albumId,
           locationId = locationId,
-          bbox = bbox
+          bbox = bbox,
+          text = scope.text
         ),
         ("HX-Replace-Url", browserUrl)
       )
 
-    val page = p.getOrElse(1)
+    val page = parsePage(p, rpp) match
+      case Left(message) => return badRequest(message)
+      case Right(page) => page
 
     val searchQuery = scope.query(rpp = rpp, page = page, searchSort = List(searchSort))
 
     logger.info(s"QUERY: ${searchQuery.toString}")
 
-    val results = App.altitude.service.library.search(searchQuery)
+    val results =
+      try App.altitude.service.library.search(searchQuery)
+      catch case _: QueryTimeoutException => return timedOut
 
     if isContinuousScroll then
-      // no more pages
-      if page > results.totalPages then return noContent
+      // The continuation ran dry: results are live, and the page past the last has no rows
+      if results.isEmpty then return noContent
 
       /** This is a request for another page of search results for continuous scroll. */
       return html(htmx.html.results_grid(results = results, p = page, isContinuousScroll = true))
@@ -185,7 +218,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
      */
     html(
       includes.html.search_results(
-        total = results.total,
+        total = results.total.getOrElse(0),
+        totalCap = searchQuery.totalCap,
         sort = searchSort,
         grouping = None,
         grid = htmx.html.results_grid(isContinuousScroll = false, p = page, results = results),
@@ -194,7 +228,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         folderId = folderId,
         albumId = albumId,
         locationId = locationId,
-        bbox = bbox
+        bbox = bbox,
+        text = scope.text
       ),
       ("HX-Replace-Url", browserUrl)
     )
@@ -203,7 +238,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * A grouped request, validated up front. A problem is the message of a 400:
    *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
    *     and is refused with `location`, whose order is fixed; `after` needs `groupBy`
-   *   - `sort` is one of the results UI's fields with a direction digit; `rpp` is 1 to the grouped maximum
+   *   - `sort` was parsed by the caller (`parseSort`), and `rpp` checked by it
    *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
    */
   private def parseGroupedQuery(
@@ -228,8 +263,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
-    if rpp < 1 || rpp > Const.Search.MAX_GROUPED_RPP then
-      return Left(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_GROUPED_RPP}")
     if p.isDefined then
       return Left(s"${Api.Field.Search.PAGE} is not used by a grouped search, which is continued with ${Api.Field.Search.AFTER}")
 
@@ -248,11 +281,26 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         cursor = cursor
       ))
 
+  /**
+   * The page number of an ungrouped request of `rpp` assets a page, or the message of a 400. The page is an offset of
+   * `(p - 1) * rpp` rows, which the query takes as an `Int`, so the last page is the last one whose every row an `Int` can number
+   * (`p * rpp`).
+   */
+  private def parsePage(p: Option[Int], rpp: Int): Either[String, Int] =
+    val lastPage = Int.MaxValue / rpp
+    val page = p.getOrElse(1)
+    Either.cond(page >= 1 && page <= lastPage, page, s"${Api.Field.Search.PAGE} must be between 1 and $lastPage")
+
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))
 
-  /** The sort argument is the field name with the direction appended as a single digit, e.g. "filename0" */
+  /**
+   * The sort argument is one of the results UI's fields with the direction appended as a single digit, e.g. "filename0", or
+   * "relevance" alone, which has one direction: best match first
+   */
   private def parseSort(sort: String): Option[SearchSort] =
+    if sort == Const.Search.SORT_RELEVANCE then return Some(SearchSort.Relevance)
+
     val field = sort.dropRight(1)
     Try(SortDirection(sort.takeRight(1).toInt)).toOption
       .filter(_ => Const.Search.SORT_FIELDS.contains(field))
@@ -261,6 +309,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /** A plain-text 400; the snackbar reports the status, since no visible control is behind a continuation */
   private def badRequest(message: String): Response[String] =
     cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
+
+  /** A plain-text 503 for a search that ran past the engine's time limit for reads */
+  private def timedOut: Response[String] =
+    cask.Response(Const.Msg.Err.SEARCH_TIMED_OUT, 503, Seq(("Content-Type", "text/plain")))
 
   private def html(payload: Html, headers: (String, String)*): Response[String] =
     cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)

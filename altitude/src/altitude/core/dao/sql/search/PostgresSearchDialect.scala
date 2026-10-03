@@ -7,6 +7,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import scalasql.core.Expr
+import scalasql.core.SqlStr
 import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.core.TypeMapper
 import scalasql.dialects.Dialect
@@ -18,6 +19,7 @@ import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
+import altitude.core.util.SearchTerm
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
@@ -32,14 +34,25 @@ object PostgresSearchDialect extends SearchDialect:
     Expr[Option[LocalDate]](implicit ctx => sql"$column::date")
 
   /**
-   * `tsv` is not part of the shared row class - SQLite's fts4 table has no such column - so it is named directly. The subquery
-   * this lands in has `search_document` as its only table and no asset column is called `tsv`, so the reference is unambiguous.
+   * `tsv` is not part of the shared row class - SQLite's table has no such column - so it is named directly. The subquery this
+   * lands in reads `search_document` as its innermost table (a source's CTE, the probe, or a probe on one asset's row) and no
+   * asset column is called `tsv`, so the reference is unambiguous. The query is read with the `simple` configuration the vector
+   * is generated with.
+   *
+   * The term's words are letters and digits only, so they are safe to join into tsquery syntax: `<->` is "directly followed by",
+   * and `:*` makes the last word a prefix (`img <-> 12:*`). The readings of a term are alternatives joined by `|`, which binds
+   * looser than `<->` (`mc <-> donald:* | mcdonald:*`).
    */
-  override def textMatch(document: SearchDocumentRow[Expr], text: String): Expr[Boolean] =
-    Expr[Boolean](implicit ctx => sql"tsv @@ to_tsquery($text)")
+  override def textMatch(document: SearchDocumentRow[Expr], term: SearchTerm): Expr[Boolean] =
+    val tsQuery = term.variants.map(_.mkString(" <-> ") + (if term.isPhrase then "" else ":*")).mkString(" | ")
+    Expr[Boolean](implicit ctx => sql"tsv @@ to_tsquery('simple', $tsQuery)")
 
-  override def secondarySort(asset: AssetRow[Expr], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
-    Columns.required(AssetRow, asset, sort.field, dialect)
+  override def secondarySort(column: Expr[?], sort: SearchSort, grouping: SearchGrouping): Expr[?] = column
+
+  // NOT EXISTS is planned as a hash anti-join; NOT IN over a subquery is a SubPlan probed for every asset
+  override def excludes(assetId: Expr[String], relation: String): Expr[Boolean] =
+    val cte = SqlStr.raw(relation)
+    Expr[Boolean](implicit ctx => sql"(NOT EXISTS (SELECT 1 FROM $cte WHERE $cte.asset_id = $assetId))")
 
   // Capture time is the only nullable timestamp: it is unknown when no metadata rung succeeds.
   override def isNullableTimestamp(field: String): Boolean = field == FieldConst.Asset.ORIGINAL_CREATED_AT

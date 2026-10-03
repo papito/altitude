@@ -20,7 +20,7 @@ import altitude.core.util.SearchQuery
     testApp.service.album.getAll.map(album => album.persistedId -> album.numOfAssets).toMap
 
   private def searchAlbum(album: Album): Set[String] =
-    val query = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false), albumIds = Set(album.persistedId))
+    val query = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false), albumIds = Set(album.persistedId), rpp = 100)
     testApp.service.library.search(query).records.map(r => (r: Asset).persistedId).toSet
 
   test("Album names are trimmed and cannot be empty") {
@@ -216,7 +216,7 @@ import altitude.core.util.SearchQuery
 
     // Assets from any folder show up, ones outside the album do not
     searchAlbum(album) shouldEqual Set(inAlbum1.persistedId, inAlbum2.persistedId)
-    testApp.service.library.search(new SearchQuery()).records.length shouldEqual 3
+    testApp.service.library.search(new SearchQuery(rpp = 100)).records.length shouldEqual 3
 
     testApp.service.library.recycleAssets(Set(inAlbum2.persistedId))
     searchAlbum(album) shouldEqual Set(inAlbum1.persistedId)

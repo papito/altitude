@@ -1,10 +1,16 @@
 package altitude.core.dao.sql
 
+import java.sql.JDBCType
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 import scalasql.Table
 import scalasql.core.Expr
 import scalasql.core.SqlStr
 import scalasql.core.SqlStr.SqlStringSyntax
+import scalasql.core.TypeMapper
 import scalasql.dialects.Dialect
+import scalasql.dialects.PostgresDialect
+import scalasql.dialects.SqliteDialect
 
 /**
  * Resolves the string-keyed `Query` parameters and update maps of the DAO API against a table's typed columns.
@@ -64,3 +70,32 @@ object Columns:
   def isIn(column: Expr[?], values: Iterable[Any], dialect: Dialect): Expr[Boolean] =
     val bound = SqlStr.join(values.toList.map(literal(_, dialect)), SqlStr.commaSep)
     Expr[Boolean](implicit ctx => sql"$column IN ($bound)")
+
+  /**
+   * The column is one of the IDs, with the whole set bound as one parameter, so a set of thousands (a folder subtree, the
+   * candidates of a selective text search) neither grows the statement nor reaches an engine's parameter limit: an array on
+   * PostgreSQL, a JSON array read back through `json_each` on SQLite. An empty set matches nothing.
+   */
+  def isInSet(column: Expr[?], ids: Set[String], dialect: Dialect): Expr[Boolean] =
+    import dialect.*
+
+    dialect match
+      case _: PostgresDialect =>
+        given TypeMapper[Set[String]] = varcharArrayMapper
+        Expr[Boolean](implicit ctx => sql"$column = ANY($ids)")
+      case _: SqliteDialect =>
+        val json = ujson.write(ids)
+        Expr[Boolean](implicit ctx => sql"$column IN (SELECT value FROM json_each($json))")
+      case other => throw IllegalArgumentException(s"No ID set binding for dialect $other")
+
+  /**
+   * Binds a set of strings as a PostgreSQL `varchar[]`. The element type matters: against a `CHAR(36)` ID column a `varchar[]` is
+   * cast to the column's type and the column's index is used, where a `text[]` would cast the column instead and scan.
+   */
+  private val varcharArrayMapper: TypeMapper[Set[String]] = new TypeMapper[Set[String]]:
+    def jdbcType: JDBCType = JDBCType.ARRAY
+
+    def get(r: ResultSet, idx: Int): Set[String] = throw UnsupportedOperationException("An ID set is only ever bound")
+
+    def put(r: PreparedStatement, idx: Int, v: Set[String]): Unit =
+      r.setArray(idx, r.getConnection.createArrayOf("varchar", v.toArray[AnyRef]))
