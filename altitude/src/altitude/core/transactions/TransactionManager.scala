@@ -175,8 +175,9 @@ class TransactionManager(val config: Config):
     RequestContext.conn.value.get.commit()
 
   /**
-   * The PostgreSQL pool. Unless `db.postgres.pool_size` says otherwise, it is as large as the import pipeline's parallelism (one
-   * worker per core, each holding a transaction while it detects faces) plus room for requests, and never below 10.
+   * The PostgreSQL pool. Unless `db.postgres.pool_size` says otherwise, it has a connection per core, for requests running at
+   * once, plus four for the import pipeline (a transaction at most per asynchronous stage of each repository's import), and never
+   * fewer than 10.
    */
   private def postgresPool(): HikariDataSource =
     val hikari = new HikariConfig()

@@ -14,11 +14,12 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 ## Where it runs
 
 Face recognition is a stage of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists
-and the file is stored. On SQLite `IndexAndFaceRecFlow` persists, indexes and recognizes in one `withFaceVector`
-transaction; on Postgres `FacialRecognitionFlow` is its own async stage. Both call
+and is indexed: `FacialRecognitionFlow`, its own async stage on both engines. It calls
 `FaceRecognitionService.processAsset`, which dispatches on the asset's media type: `processImage` or `processVideo`.
+Both detect the faces first, outside any transaction, and then match and store them in a short `withFaceVector`
+transaction, so the detection never holds SQLite's one write connection.
 Whatever the stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
-is reported as `SamePersonDetectedTwiceException` on Postgres.
+rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`.
 
 `withFaceVector` (`transactions/TransactionManager.scala`) wraps every read or write that touches the `features`
 column: on SQLite it loads the `sqlite-vector` extension and runs `vector_init('face', 'features',

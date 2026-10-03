@@ -29,7 +29,6 @@ import altitude.core.pipeline.flows.CheckMediaTypeFlow
 import altitude.core.pipeline.flows.ExtractMetadataFlow
 import altitude.core.pipeline.flows.FacialRecognitionFlow
 import altitude.core.pipeline.flows.FileStoreFlow
-import altitude.core.pipeline.flows.IndexAndFaceRecFlow
 import altitude.core.pipeline.flows.IndexFlow
 import altitude.core.pipeline.flows.MarkAsCompleteFlow
 import altitude.core.pipeline.flows.StripBinaryDataFlow
@@ -43,7 +42,6 @@ class ImportPipelineService(app: Altitude):
 
   private val checkMediaTypeFlow = CheckMediaTypeFlow(app)
   private val assignIdFlow = AssignIdFlow(app)
-  private val indexAndFaceRecFlow = IndexAndFaceRecFlow(app)
   private val indexFlow = IndexFlow(app)
   private val facialRecognitionFlow = FacialRecognitionFlow(app)
   private val extractMetadataFlow = ExtractMetadataFlow(app)
@@ -55,24 +53,13 @@ class ImportPipelineService(app: Altitude):
   private val wsNotificationSink = WsAssetProcessedNotificationSink(app)
   private val errorLoggingSink = AssetErrorLoggingSink()
 
-  private val sqliteFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] =
-    Flow[TDataAssetWithContext]
-      // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
-      .groupBy(Int.MaxValue, _._2.repository.id)
-      .via(checkMediaTypeFlow)
-      .via(checkDuplicateFlow)
-      .via(assignIdFlow)
-      .via(extractMetadataFlow)
-      .via(indexAndFaceRecFlow)
-      .via(fileStoreFlow)
-      .via(addPreviewFlow)
-      .via(stripBinaryDataFlow)
-      .via(markAsCompleteFlow)
-      .mergeSubstreams
-      .alsoTo(wsNotificationSink)
-      .alsoTo(errorLoggingSink)
-
-  private val postgresFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
+  /**
+   * One pipeline for both engines. Every stage does its work before it hands the asset on, so a stage holds one asset at a time;
+   * the asynchronous boundaries let up to four of them work on different assets at once. Each stage's writes are a short
+   * transaction of its own (faces are detected before theirs opens), which SQLite's single write connection runs one after
+   * another, and each stage commits before the next one reads the asset.
+   */
+  private val combinedFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
     // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
     .groupBy(Int.MaxValue, _._2.repository.id)
     .via(checkMediaTypeFlow)
@@ -91,12 +78,6 @@ class ImportPipelineService(app: Altitude):
     .mergeSubstreams
     .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)
-
-  private val combinedFlow = app.dataSourceType match
-    case "sqlite" => sqliteFlow
-    case "postgres" => postgresFlow
-    case other =>
-      throw RuntimeException("Unsupported data source type for import pipeline: " + other)
 
   private val queueImportPipeline = runAsQueue()
 

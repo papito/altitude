@@ -6,16 +6,22 @@ import java.nio.file.Files
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
+import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.must.Matchers.a
 import org.scalatest.matchers.must.Matchers.have
 import org.scalatest.matchers.should.Matchers.{ be, convertNumericToPlusOrMinusWrapper, should, shouldBe }
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
+import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
 import altitude.core.DuplicateException
+import altitude.core.RequestContext
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -61,6 +67,28 @@ import altitude.core.pipeline.sinks.VoidAssetSink
         persistedAsset.isPipelineProcessed shouldBe true
 
       case (Right(_), _) => fail("Expected all elements to be of type AssetWithData")
+    }
+  }
+
+  test("Assets queued at once, as concurrent uploads queue them, are all imported") {
+    val batchSize = 6
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val repositoryId = RequestContext.getRepository.persistedId
+
+    // Every offer is made before any is awaited
+    val offers =
+      (1 to batchSize).map(_ => testApp.service.importPipeline.addToQueue((testContext.makeAssetWithData(), pipelineContext)))
+    Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
+
+    def imported: Int = testApp.txManager.asReadOnly {
+      query("SELECT count(*) AS n FROM asset WHERE repository_id = ? AND is_pipeline_processed = ?", repositoryId, true)
+        .head("n")
+        .toString
+        .toInt
+    }
+
+    Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(200, Millis))) {
+      imported shouldBe batchSize
     }
   }
 

@@ -20,19 +20,13 @@ import altitude.core.Environment
     .parseFile(new File("application-dev.conf"))
     .withFallback(ConfigFactory.defaultReference())
 
+  val dataDir = config.getString(Const.Conf.FS_DATA_DIR)
   val dbEngine = config.getString(Const.Conf.DB_ENGINE)
 
   dbEngine match
     case Const.DbEngineName.SQLITE =>
-      val dataDir = config.getString(Const.Conf.FS_DATA_DIR)
       val relDbPath = config.getString(Const.Conf.REL_SQLITE_DB_PATH)
-      val dbDir = new File(dataDir, new File(relDbPath).getParent)
-
-      if dbDir.exists() && dbDir.isDirectory then
-        println(s"Clearing SQLite database files in: ${dbDir.getCanonicalPath}")
-        FileUtils.cleanDirectory(dbDir)
-        println("Done.")
-      else println(s"SQLite database directory not found: ${dbDir.getPath}. Nothing to clear.")
+      clearDir(new File(dataDir, new File(relDbPath).getParent), "SQLite database files")
 
     case Const.DbEngineName.POSTGRES =>
       val url = config.getString(Const.Conf.POSTGRES_URL)
@@ -60,3 +54,15 @@ import altitude.core.Environment
     case other =>
       System.err.println(s"ERROR: Unknown db.engine value: '$other'. Aborting.")
       sys.exit(1)
+
+  // Files, previews, and faces are stored under repository and asset IDs that no longer exist once the database is gone.
+  // Cleared after the database, so a failed database clear leaves both intact.
+  clearDir(new File(dataDir, Const.DataStore.REPOSITORIES), "repository files")
+
+/** Empties a directory, keeping the directory itself */
+private def clearDir(dir: File, label: String): Unit =
+  if dir.isDirectory then
+    println(s"Clearing $label in: ${dir.getCanonicalPath}")
+    FileUtils.cleanDirectory(dir)
+    println("Done.")
+  else println(s"Directory not found: ${dir.getPath}. Nothing to clear.")

@@ -92,9 +92,10 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ An unsupported media type returns an `InvalidAsset` with `UnsupportedMediaTypeException`.
 - ✅ Synchronous import rejects a duplicate, produces a triaged image, and persists extracted/public metadata, checksum, size, dimensions, and preview data.
 - [ ] Inject failures in metadata/dimension extraction, indexing, recognition, original-file storage, preview storage, and final completion; assert failure results, persisted state, files, and statistics rather than allowing a silently partial import. [CRITICAL]
-- [ ] Exercise a duplicate/error during recognition on both engine-specific flows and assert it reaches the caller as the intended invalid result. The PostgreSQL recognition flow has a distinct catch path. [MEDIUM]
+- [ ] Exercise a duplicate/error during recognition and assert it reaches the caller as the intended invalid result (`SamePersonDetectedTwiceException` for a duplicate crop) with the asset's faces rolled back. Both engines now share the recognition flow. [MEDIUM]
 - [ ] Feed one stream interleaved assets from two repositories/accounts; assert every database row, file, index entry, statistic, and notification belongs to its supplied pipeline context. [CRITICAL]
-- [ ] Exercise `addToQueue` through eventual completion, including backpressure, queue closure/failure, and shutdown with pending work. Existing import tests use finite `run` streams. [MEDIUM]
+- ✅ Assets offered to the queue at once (`addToQueue`, as concurrent uploads offer them) are all imported, on both engines, through the one pipeline.
+- [ ] Exercise `addToQueue` backpressure past the queue's size, queue closure/failure, and shutdown with pending work. [MEDIUM]
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
 - [ ] Mix unsupported/corrupt inputs with valid inputs and assert the documented continuation policy; the unsupported-type test contains only one invalid input. [MEDIUM]
 - [ ] Verify user-scoped success/error notifications identify the correct asset and recipient and are not duplicated. [MEDIUM]

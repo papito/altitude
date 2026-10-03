@@ -297,11 +297,9 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     }
   }
 
-  val parallelism: Int = dataSourceType match {
-    case Const.DbEngineName.SQLITE =>
-      1 // SQLite doesn't handle concurrent writes well, so we run the pipeline with a parallelism of 1 for SQLite
-    case _ => Runtime.getRuntime.availableProcessors() // For other data sources, we can run with max parallelism
-  }
+  // How many assets the import and purge queues buffer and admit at once, on both engines: a pipeline stage does its work before
+  // it hands an asset on, so this does not multiply the concurrent work, which the pipeline's asynchronous boundaries decide
+  val parallelism: Int = Runtime.getRuntime.availableProcessors()
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
   // services read as they are wired up.
