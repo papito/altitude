@@ -576,12 +576,15 @@ nav input {
     padding: 5px;
     background-color: #e8e8e8;
     width: 90%;
+    /* a flex item's min-width:auto would keep the input from shrinking to fit the fixed last column */
+    min-width: 0;
 }
 
-/* The Search input and its button, side by side */
+/* The Search input and its button, side by side, in the nav's right-most cell */
 nav form {
     display: flex;
     align-items: center;
+    grid-column: -2 / -1;
 }
 
 nav input::placeholder {

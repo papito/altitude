@@ -38,6 +38,12 @@
     </div>
   }
 
+<div class="menu import">
+    <a href="/pipeline/r/@repoId"><i class="fas fa-plus-square">
+        </i><span>Import</span>
+    </a>
+</div>
+
 @* Bound by js/search-results/search-input.js. `hx-preserve` keeps this very element, and with it the text being typed, when
    the nav is reloaded for fresh counts. *@
 @if(search) {
@@ -46,9 +52,3 @@
     <button type="submit" class="action-button small">Search</button>
   </form>
 }
-
-<div class="menu import">
-    <a href="/pipeline/r/@repoId"><i class="fas fa-plus-square">
-        </i><span>Import</span>
-    </a>
-</div>
