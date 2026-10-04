@@ -81,6 +81,25 @@ class LibraryService(val app: Altitude):
       case (Right(invalid), _) => throw invalid.cause.getOrElse(new Exception("Unknown error"))
     }
 
+  /** The import pipeline's index stage: the asset persisted and its Search document written, together or not at all */
+  def persistAndIndex(asset: Asset): Asset =
+    txManager.withTransaction {
+      val persisted = app.service.asset.add(asset)
+      app.service.search.indexAsset(persisted)
+      persisted
+    }
+
+  /**
+   * The import pipeline's last stage: the asset marked complete and counted in the stats. An asset that never gets here is purged
+   * at startup, so it is never counted.
+   */
+  def completeImport(asset: Asset): Asset =
+    txManager.withTransaction {
+      val completed = app.service.asset.markAsCompleted(asset)
+      app.service.stats.addAsset(asset)
+      completed
+    }
+
   def query(query: Query): QueryResult[Asset] =
     txManager.asReadOnly {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
@@ -185,40 +204,51 @@ class LibraryService(val app: Altitude):
       recycleAssets(assetIdsToRecycle)
     }
 
-  def restoreRecycledAssets(assetIds: Set[String]): Unit =
+  /**
+   * Restores recycled assets, all in one transaction: an asset whose content is live again (imported anew after it was recycled)
+   * stays in the trash and is reported, and any other failure restores nothing. An asset that is not recycled is ignored.
+   */
+  def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
     logger.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
-    assetIds.foreach {
-      assetId =>
-        logger.info(s"Restoring recycled asset [$assetId]")
+    val result = txManager.withTransaction {
+      assetIds.foldLeft(RestoreResult(restored = Set.empty, duplicates = Set.empty)) {
+        (result, assetId) =>
+          val asset: Asset = app.service.asset.getById(assetId)
 
-        val asset: Asset = app.service.asset.getById(assetId)
-        val existing = app.service.asset.getByChecksum(asset.checksum)
-
-        if existing.isDefined then throw DuplicateException()
-
-        txManager.withTransaction {
-          if asset.isRecycled then
-            app.service.asset.setRecycledProp(asset, isRecycled = false)
-
-            // Assets recycled directly from triage have no folder assigned — skip folder restoration
-            if !asset.isTriaged then
-              // Restore the full ancestor chain (top-down) so the folder tree is consistent.
-              // getAncestors returns from root -> direct parent, so we can iterate in order.
-              val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
-              ancestors.foreach {
-                ancestor => if ancestor.isRecycled then app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
-              }
-
-              // Restore the immediate folder of the asset
-              val folder: Folder = app.service.folder.getById(asset.folderId)
-              if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
-
-            val restoredAsset: Asset = app.service.asset.getById(assetId)
-            app.service.stats.restoreAsset(restoredAsset)
-            app.service.person.restoreFacesForAssets(Set(assetId))
-        }
+          if !asset.isRecycled then result
+          else if app.service.asset.getByChecksum(asset.checksum).isDefined then
+            logger.debug(s"Not restoring asset [$assetId]: an asset with the same content is live")
+            result.copy(duplicates = result.duplicates + assetId)
+          else
+            restoreRecycledAsset(asset)
+            result.copy(restored = result.restored + assetId)
+      }
     }
+
+    logger.info(s"Restored ${result.restored.size} assets; ${result.duplicates.size} left in the trash as duplicates")
+    result
+
+  private def restoreRecycledAsset(asset: Asset): Unit =
+    logger.info(s"Restoring recycled asset [${asset.persistedId}]")
+    app.service.asset.setRecycledProp(asset, isRecycled = false)
+
+    // Assets recycled directly from triage have no folder assigned — skip folder restoration
+    if !asset.isTriaged then
+      // Restore the full ancestor chain (top-down) so the folder tree is consistent.
+      // getAncestors returns from root -> direct parent, so we can iterate in order.
+      val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
+      ancestors.foreach {
+        ancestor => if ancestor.isRecycled then app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
+      }
+
+      // Restore the immediate folder of the asset
+      val folder: Folder = app.service.folder.getById(asset.folderId)
+      if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
+
+    val restoredAsset: Asset = app.service.asset.getById(asset.persistedId)
+    app.service.stats.restoreAsset(restoredAsset)
+    app.service.person.restoreFacesForAssets(Set(asset.persistedId))
 
   /** Note that this is also how we restore assets from the recycle bin or move them from triage. */
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit =
@@ -388,7 +418,7 @@ class LibraryService(val app: Altitude):
     val callerRepository = RequestContext.repository.value
 
     txManager.withTransaction {
-      val repositories = app.DAO.repository.getAll
+      val repositories = app.service.repository.getAll
 
       try
         repositories.foreach {

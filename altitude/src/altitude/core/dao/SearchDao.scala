@@ -53,5 +53,3 @@ trait SearchDao:
   def reindexAsset(asset: Asset, metadataFields: Map[String, UserMetadataField]): Unit
 
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit
-
-  def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit

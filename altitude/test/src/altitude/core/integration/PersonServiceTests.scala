@@ -12,6 +12,7 @@ import scala.util.Random
 import altitude.core.Altitude
 import altitude.core.Const.FaceRecognition
 import altitude.core.DuplicateException
+import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 import altitude.core.models.Face
@@ -480,5 +481,22 @@ import altitude.core.util.Util
 
     persistedPerson = testApp.service.person.getById(person.persistedId)
     persistedPerson.numOfFaces shouldBe 1
+  }
+
+  test("Incrementing a counter opens its own transaction") {
+    val person = testApp.service.person.addPerson(Person())
+    testApp.service.person.increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
+    testApp.service.person.getPersonById(person.persistedId).numOfFaces shouldBe 1
+  }
+
+  test("An asset's faces are read with their people") {
+    val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+
+    val facesWithPeople = testApp.service.person.getAssetFacesWithPeople(importedAsset.persistedId)
+    facesWithPeople.size should be(2)
+    facesWithPeople.foreach { case (face, person) => face.personId shouldBe Some(person.persistedId) }
+
+    testApp.service.person.getAssetFacesWithPeople(testContext.persistAsset().persistedId) shouldBe empty
   }
 }

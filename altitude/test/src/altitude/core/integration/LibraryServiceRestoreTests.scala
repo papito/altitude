@@ -52,10 +52,51 @@ import altitude.core.util.Query
     // import a new copy of it (should be allowed)
     testApp.service.library.addAsset(secondCopy)
 
-    // now restore the previously deleted copy into itself
-    intercept[DuplicateException] {
-      testApp.service.library.restoreRecycledAssets(Set(persistedAsset.persistedId))
+    // now restore the previously deleted copy: its content is live again, so it is skipped and reported
+    val result = testApp.service.library.restoreRecycledAssets(Set(persistedAsset.persistedId))
+    result.restored shouldBe Set.empty
+    result.duplicates shouldBe Set(persistedAsset.persistedId)
+    (testApp.service.asset.getById(persistedAsset.persistedId): Asset).isRecycled shouldBe true
+  }
+
+  test("Restore skips an asset whose content is live again and restores the rest") {
+    val folder1: Folder = testApp.service.folder.add("folder1")
+    val restorable: Asset = testContext.persistAsset(folder = Some(folder1))
+
+    val dataAsset = testContext.makeAssetWithData(asset = Some(testContext.makeAsset(folder = Some(folder1))))
+    val secondCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
+    val duplicate: Asset = testApp.service.library.addAsset(dataAsset)
+
+    testApp.service.library.recycleAssets(Set(restorable.persistedId, duplicate.persistedId))
+    testApp.service.library.addAsset(secondCopy)
+
+    val result = testApp.service.library.restoreRecycledAssets(Set(restorable.persistedId, duplicate.persistedId))
+
+    result.restored shouldBe Set(restorable.persistedId)
+    result.duplicates shouldBe Set(duplicate.persistedId)
+    (testApp.service.asset.getById(restorable.persistedId): Asset).isRecycled shouldBe false
+    (testApp.service.asset.getById(duplicate.persistedId): Asset).isRecycled shouldBe true
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
+    // the restored asset and the copy imported again
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
+  }
+
+  test("A restore that fails restores nothing") {
+    val folder1: Folder = testApp.service.folder.add("folder1")
+    val asset: Asset = testContext.persistAsset(folder = Some(folder1))
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+
+    // A two-element set keeps its insertion order: the asset is restored before the unknown ID fails
+    intercept[NotFoundException] {
+      testApp.service.library.restoreRecycledAssets(Set(asset.persistedId, "00000000-0000-0000-0000-000000000000"))
     }
+
+    (testApp.service.asset.getById(asset.persistedId): Asset).isRecycled shouldBe true
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
   }
 
   test("Restoring an asset into a recycled folder should restore the folder") {

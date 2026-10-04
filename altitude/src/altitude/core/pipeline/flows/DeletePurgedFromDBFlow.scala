@@ -16,10 +16,8 @@ object DeletePurgedFromDBFlow:
       case (asset, ctx) =>
         setThreadLocalRequestContext(ctx)
 
-        app.txManager.withTransaction {
-          debugInfo(s"\tDeleting purged asset from the database ${asset.persistedId}")
-          app.service.asset.deleteById(asset.persistedId)
-        }
+        debugInfo(s"\tDeleting purged asset from the database ${asset.persistedId}")
+        app.service.asset.deleteById(asset.persistedId)
 
         Future.successful(asset, ctx)
     }

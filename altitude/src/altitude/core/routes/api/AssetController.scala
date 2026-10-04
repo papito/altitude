@@ -41,9 +41,13 @@ class AssetController(using logger: Logger) extends BaseController:
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.info(s"Restoring assets ${assetIdSet.mkString(", ")}")
 
-    App.altitude.service.library.restoreRecycledAssets(assetIdSet)
+    val result = App.altitude.service.library.restoreRecycledAssets(assetIdSet)
 
-    cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
+    jsonResponse(
+      ujson.Obj(
+        Api.Field.Asset.RESTORED -> result.restored.toSeq,
+        Api.Field.Asset.DUPLICATES -> result.duplicates.toSeq
+      ))
 
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/purge")

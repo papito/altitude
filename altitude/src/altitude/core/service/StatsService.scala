@@ -34,10 +34,14 @@ class StatsService(val app: Altitude):
     }
 
   def incrementStat(statName: String, count: Long = 1): Unit =
-    dao.incrementStat(statName, count)
+    txManager.withTransaction {
+      dao.incrementStat(statName, count)
+    }
 
   def decrementStat(statName: String, count: Long = 1): Unit =
-    dao.decrementStat(statName, count)
+    txManager.withTransaction {
+      dao.decrementStat(statName, count)
+    }
 
   def createStat(dimension: String): Stat =
     txManager.withTransaction {
@@ -60,31 +64,6 @@ class StatsService(val app: Altitude):
         app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
     }
 
-  def moveAsset(asset: Asset): Unit =
-    logger.debug(s"Moving asset [${asset.id}]")
-
-    if asset.isRecycled then
-      logger.debug(s"Asset [${asset.id}] is recycled")
-      moveRecycledAsset(asset)
-      return
-
-    if asset.isTriaged then
-      logger.debug(s"Asset [${asset.id}] is triaged")
-      moveTriagedAsset(asset)
-      return
-
-    logger.debug(s"Asset [${asset.id}] WITHIN sorted.")
-
-  private def moveTriagedAsset(asset: Asset): Unit =
-    logger.debug(s"Moving triaged asset [${asset.id}]. Decrementing TRIAGE")
-
-    app.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
-    app.service.stats.decrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-
-    logger.debug(s"Triaged asset [${asset.id}] moving TO sorted. Incrementing SORTED")
-    app.service.stats.incrementStat(Stats.SORTED_ASSETS)
-    app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
-
   private def moveRecycledAsset(asset: Asset): Unit =
     logger.debug(s"Moving recycled asset [${asset.id}]. Decrementing RECYCLED")
 
@@ -100,20 +79,8 @@ class StatsService(val app: Altitude):
       app.service.stats.incrementStat(Stats.SORTED_ASSETS)
       app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
 
-  def recycleAsset(asset: Asset): Unit =
-    logger.debug(s"Recycling asset [${asset.id}]. Incrementing RECYCLED")
-
-    if asset.isTriaged then
-      logger.debug(s"Asset [${asset.id}] recycled and moving FROM triage. Decrementing TRIAGE")
-      app.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
-      app.service.stats.decrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
-    else
-      logger.debug(s"Asset [${asset.id}] recycled and moving FROM sorted. Decrementing SORTED")
-      app.service.stats.decrementStat(Stats.SORTED_ASSETS)
-      app.service.stats.decrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
-
-    app.service.stats.incrementStat(Stats.RECYCLED_ASSETS)
-    app.service.stats.incrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
-
+  /** The stats of a recycled asset moved back to where it was recycled from */
   def restoreAsset(asset: Asset): Unit =
-    moveRecycledAsset(asset)
+    txManager.withTransaction {
+      moveRecycledAsset(asset)
+    }

@@ -728,8 +728,10 @@ using `reloadFolderTree`, which renders fresh counts as part of the rebuild. `ap
 and `app.reloadLocationCounts()` do the same for the album and Location lists (`refreshAlbumCounts`,
 `refreshLocationCounts`), and fetch nothing while another explorer tab is active.
 
-Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`,
-and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
+Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`.
+A restore answers `{restored, duplicates}`: an asset whose content was imported again after it was recycled stays in
+the trash, so only the `restored` cells leave the grid and the snackbar warns about the rest.
+Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 

@@ -82,13 +82,14 @@ class FaceRecognitionService(val app: Altitude):
     logger.info(s"Detected ${faceWithImages.size} faces")
 
     logger.info(s"Face rec on asset ${dataAsset.asset}")
-    txManager.withFaceVector {
-      faceWithImages.foreach {
-        case (detectedFace: Face, faceImages: FaceImages) =>
-          recognizeFace(detectedFace) match
-            case Some(person) => store(detectedFace, faceImages, dataAsset.asset, person)
-            case None => logger.info(s"Match-only $detectedFace matches nobody; dropped")
-      }
+    withFaceFiles {
+      store =>
+        faceWithImages.foreach {
+          case (detectedFace: Face, faceImages: FaceImages) =>
+            recognizeFace(detectedFace) match
+              case Some(person) => store(detectedFace, faceImages, dataAsset.asset, person)
+              case None => logger.info(s"Match-only $detectedFace matches nobody; dropped")
+        }
     }
     logger.info(s"Face rec DONE: ${dataAsset.asset}")
 
@@ -120,33 +121,53 @@ class FaceRecognitionService(val app: Altitude):
       mergeClusters(cluster(detections, features, _._1.quality, cosineDistanceThreshold), features, cosineDistanceThreshold)
     logger.info(s"${clusters.size} distinct faces in ${dataAsset.asset}")
 
-    txManager.withFaceVector {
-      clusters.foldLeft(Set.empty[String]) {
-        case (peopleWithAFace, cluster) =>
-          val (best, faceImages) = cluster.best
-          val support = cluster.members.map(_._1.frameTimeMs).distinct.size
-          val face = best.copy(
-            features = meanNormalized(cluster.members.map(features)),
-            isEnrolled = best.isEnrolled && support >= minClusterFrames)
-          logger.debug(s"Cluster of ${cluster.members.size} detections in $support frames: $face")
+    withFaceFiles {
+      store =>
+        clusters.foldLeft(Set.empty[String]) {
+          case (peopleWithAFace, cluster) =>
+            val (best, faceImages) = cluster.best
+            val support = cluster.members.map(_._1.frameTimeMs).distinct.size
+            val face = best.copy(
+              features = meanNormalized(cluster.members.map(features)),
+              isEnrolled = best.isEnrolled && support >= minClusterFrames)
+            logger.debug(s"Cluster of ${cluster.members.size} detections in $support frames: $face")
 
-          recognizeFace(face) match
-            case Some(person) if peopleWithAFace.contains(person.persistedId) =>
-              logger.info(s"Person ${person.persistedId} already has a Face in ${dataAsset.asset}; dropping $face")
-              peopleWithAFace
-            case Some(person) =>
-              store(face, faceImages, dataAsset.asset, person)
-              peopleWithAFace + person.persistedId
-            case None =>
-              logger.info(s"Match-only $face matches nobody in ${dataAsset.asset}; dropped")
-              peopleWithAFace
-      }
+            recognizeFace(face) match
+              case Some(person) if peopleWithAFace.contains(person.persistedId) =>
+                logger.info(s"Person ${person.persistedId} already has a Face in ${dataAsset.asset}; dropping $face")
+                peopleWithAFace
+              case Some(person) =>
+                store(face, faceImages, dataAsset.asset, person)
+                peopleWithAFace + person.persistedId
+              case None =>
+                logger.info(s"Match-only $face matches nobody in ${dataAsset.asset}; dropped")
+                peopleWithAFace
+        }
     }
     logger.info(s"Face rec DONE: ${dataAsset.asset}")
 
-  private def store(face: Face, faceImages: FaceImages, asset: Asset, person: Person): Unit =
-    val persistedFace = app.service.person.addFace(face, asset, person)
-    app.service.fileStore.addFace(persistedFace, faceImages)
+  /** Persists a recognized Face and writes its files */
+  private type StoreFace = (Face, FaceImages, Asset, Person) => Unit
+
+  /**
+   * Runs the storing of an asset's Faces in one transaction, the files of each Face written as it is stored. When the transaction
+   * rolls back, the files already written are deleted: a Face in the database always has its files, and one that is not leaves
+   * none behind.
+   */
+  private def withFaceFiles[A](f: StoreFace => A): A =
+    val written = scala.collection.mutable.ListBuffer.empty[String]
+
+    val store: StoreFace = (face, faceImages, asset, person) =>
+      val persistedFace = app.service.person.addFace(face, asset, person)
+      written += persistedFace.persistedId
+      app.service.fileStore.addFace(persistedFace, faceImages)
+
+    try txManager.withFaceVector(f(store))
+    catch
+      case ex: Exception =>
+        logger.info(s"Face rec rolled back; deleting the files of ${written.size} faces")
+        written.foreach(app.service.fileStore.purgeFaceById)
+        throw ex
 
   /**
    * The Person for a Face, already persisted: the top-K nearest enrolled Faces within the distance threshold vote, the Person

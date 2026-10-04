@@ -283,10 +283,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     }
 
   override def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
-    addMetadataValues(asset = asset, field = field, values = Set(value))
-
-  override def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
-    addParameters(asset = asset, field = field, values = values)
+    addParameters(asset = asset, field = field, values = Set(value))
     writeDocument(asset)
 
   /** One `metadata_parameter` row per value of a faceted field type; nothing for any other type */

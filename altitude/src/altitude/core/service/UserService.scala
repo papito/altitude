@@ -25,8 +25,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
   def switchContextToUser(user: User): Unit =
     RequestContext.account.value = Some(user)
 
+  /** Only reads, so on SQLite a login does not wait for the write connection behind import writes */
   def loginAndSetUser(email: String, password: String): Option[(User, String)] =
-    txManager.withTransaction {
+    txManager.asReadOnly {
       // Attempt to get password hash - returns None if user doesn't exist
       val passwordHashOpt = getPasswordHashByEmailSafe(email)
 

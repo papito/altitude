@@ -2,13 +2,26 @@ package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
+import java.awt.Color
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
+import javax.imageio.ImageIO
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
+import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
 import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.DuplicateException
 import altitude.core.models.Asset
+import altitude.core.models.AssetWithData
 import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.service.FaceDetectionService
@@ -174,6 +187,52 @@ import altitude.core.service.FaceRecognitionService
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
     people.size should be(2)
   }
+
+  test("Faces rolled back with their asset leave no files behind") {
+    val asset = testContext.persistAsset()
+    val dataAsset = AssetWithData(asset, testApp.service.staging.stage(samePortraitTwice("people/bullock.jpg")))
+
+    // The second crop is byte-identical to the first, which the face checksum index refuses after the first face's files are
+    // written
+    intercept[DuplicateException] {
+      testApp.service.faceRecognition.processAsset(dataAsset)
+    }
+
+    testApp.service.person.getAssetFaces(asset.persistedId) shouldBe empty
+    faceFiles shouldBe empty
+  }
+
+  /**
+   * One portrait drawn twice side by side, at an offset that is a multiple of the detector's largest stride and in an image small
+   * enough not to be resized, so both detections, and their crops, are the same
+   */
+  private def samePortraitTwice(relPath: String): Array[Byte] =
+    val portrait = ImageIO.read(new ByteArrayInputStream(IntegrationTestUtil.getImportAsset(relPath).bytes))
+    val (width, height) = (384, 576)
+    val scaled = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR)
+    val scaling = scaled.createGraphics()
+    scaling.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+    scaling.drawImage(portrait, 0, 0, width, height, null)
+    scaling.dispose()
+
+    val canvas = new BufferedImage(1280, 704, BufferedImage.TYPE_3BYTE_BGR)
+    val drawing = canvas.createGraphics()
+    drawing.setColor(Color.WHITE)
+    drawing.fillRect(0, 0, canvas.getWidth, canvas.getHeight)
+    drawing.drawImage(scaled, 64, 64, null)
+    drawing.drawImage(scaled, 64 + 576, 64, null)
+    drawing.dispose()
+
+    val out = new ByteArrayOutputStream()
+    ImageIO.write(canvas, "png", out)
+    out.toByteArray
+
+  /** Every face file of the repository */
+  private def faceFiles: List[File] =
+    val facesDir =
+      Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, testContext.repository.persistedId, Const.DataStore.FACES)
+    if !Files.exists(facesDir) then Nil
+    else Files.walk(facesDir).iterator.asScala.filter(Files.isRegularFile(_)).map(_.toFile).toList
 
   /** A reproducible unit vector; two seeds give vectors about a cosine distance of 1 apart */
   private def unitVector(seed: Int): Array[Float] =

@@ -18,19 +18,13 @@ object IndexFlow:
       case (Left(dataAsset), ctx) =>
         setThreadLocalRequestContext(ctx)
 
-        app.txManager.withFaceVector {
-          try {
-            debugInfo(s"\tPersisting asset ${dataAsset.asset.fileName}")
-            val persisted = app.service.asset.add(dataAsset.asset)
-            val persistedData = dataAsset.copy(asset = persisted)
-            debugInfo(s"\tIndexing asset ${dataAsset.asset.fileName}")
-            app.service.search.indexAsset(persisted)
-
-            Future.successful((Left(persistedData), ctx))
-          } catch {
-            case e: DuplicateException =>
-              Future.successful(Right(InvalidAsset(dataAsset, e)), ctx)
-          }
+        try {
+          debugInfo(s"\tPersisting and indexing asset ${dataAsset.asset.fileName}")
+          val persisted = app.service.library.persistAndIndex(dataAsset.asset)
+          Future.successful((Left(dataAsset.copy(asset = persisted)), ctx))
+        } catch {
+          case e: DuplicateException =>
+            Future.successful(Right(InvalidAsset(dataAsset, e)), ctx)
         }
       case (Right(invalid), ctx) =>
         Future.successful((Right(invalid), ctx))

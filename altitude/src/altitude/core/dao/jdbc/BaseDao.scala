@@ -262,9 +262,6 @@ abstract class BaseDao[Model <: BaseModel]:
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, id)
 
-  def decrement(id: String, field: String, count: Int = 1): Unit =
-    increment(id, field, -count)
-
   /** Every row of this table the query selects, as a typed relation */
   private def matching(q: Query) =
     import dialect.*

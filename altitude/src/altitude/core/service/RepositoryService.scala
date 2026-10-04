@@ -72,8 +72,11 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
    * Right now there is just one repo - we will deal with multiple once later.
    */
   def getDefaultRepository: Repository =
+    getAll.head
+
+  def getAll: List[Repository] =
     txManager.asReadOnly {
-      dao.getAll.head
+      dao.getAll
     }
 
   override def getById(id: String): Repository =

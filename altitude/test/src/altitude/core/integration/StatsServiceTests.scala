@@ -256,4 +256,15 @@ import altitude.core.util.Query
   }
    */
 
+  test("Stat writes open their own transaction") {
+    testApp.service.stats.incrementStat(Stats.TRIAGE_ASSETS, 3)
+    testApp.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
+    testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2
+
+    val recycled = testContext.makeAsset(isTriaged = true, isRecycled = true)
+    testApp.service.stats.restoreAsset(recycled)
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 3
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe -1
+  }
 }

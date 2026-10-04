@@ -21,22 +21,18 @@ object DeletePersonFilesFlow:
         debugInfo(s"\tRemoving PERSON files for asset ${asset.persistedId}")
 
         try {
-          val peopleInAsset = app.service.person.getPeopleForAsset(asset.persistedId)
-          val personLookup = peopleInAsset.map(person => person.persistedId -> person).toMap
-          val assetFaces = app.service.person.getAssetFaces(asset.persistedId)
-
-          assetFaces
+          app.service.person
+            .getAssetFacesWithPeople(asset.persistedId)
             .foreach {
-              face =>
-                val person = personLookup(face.personId.get)
+              case (face, person) =>
                 if !person.coverFaceId.contains(face.persistedId) then {
                   debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
                   app.service.fileStore.purgeFaceById(face.persistedId)
                 }
             }
         } catch {
-          case _: Exception =>
-            logger.error(s"Error purging PERSON file data for asset ${asset.persistedId}")
+          case ex: Exception =>
+            logger.error(s"Error purging PERSON file data for asset ${asset.persistedId}", ex)
         }
         (asset, ctx)
     }

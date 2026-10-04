@@ -92,7 +92,6 @@ abstract class BaseService[Model <: BaseModel]:
     }
 
   def increment(id: String, field: String, count: Int = 1): Unit =
-    dao.increment(id, field, count)
-
-  def decrement(id: String, field: String, count: Int = 1): Unit =
-    dao.decrement(id, field, count)
+    txManager.withTransaction {
+      dao.increment(id, field, count)
+    }

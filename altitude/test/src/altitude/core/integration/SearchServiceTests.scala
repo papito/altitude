@@ -1157,6 +1157,39 @@ import altitude.core.util.*
   private def flatPage(query: SearchQuery): SqlStr =
     SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
 
+  test("Indexing writes open their own transaction") {
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
+    val asset = testContext.persistAsset()
+
+    val withValue = asset.copy(userMetadata = UserMetadata(Map(field.persistedId -> Set("giraffe"))))
+    testApp.service.search.addMetadataValue(withValue, field, "giraffe")
+    documentBody(asset).get should include("giraffe")
+
+    val renamed = asset.copy(fileName = "zebra.jpg")
+    testApp.service.search.reindexAsset(renamed)
+    documentBody(asset).get should include("zebra")
+  }
+
+  test("Search reads open their own transaction") {
+    val asset = testContext.persistAsset()
+    testContext.setAssetCoordinates(asset.persistedId, latitude = 10, longitude = 20)
+    val q = new SearchQuery(rpp = PAGE_SIZE)
+
+    testApp.service.search.search(q).records.map(_.persistedId) shouldBe List(asset.persistedId)
+    testApp.service.search.count(q) shouldBe 1
+    testApp.service.search.cappedCount(q) shouldBe 1
+    testApp.service.search.mapCells(q, BoundingBox(-90, -180, 90, 180), zoom = 0).cells.map(_.count).sum shouldBe 1
+    testApp.service.search.mapBounds(q).map(_.count) shouldBe Some(1)
+
+    val grouped = new SearchQuery(
+      rpp = PAGE_SIZE,
+      searchSort = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)),
+      grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
+    )
+    testApp.service.search.searchGrouped(grouped, scopeFingerprint = "test").assets.map(_.persistedId) shouldBe
+      List(asset.persistedId)
+  }
+
   /** The stored body of an asset's Search document, if it has one */
   private def documentBody(asset: Asset): Option[String] =
     testApp.txManager.asReadOnly {

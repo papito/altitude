@@ -155,15 +155,26 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   def getPeopleForAsset(assetId: String): List[Person] =
     txManager.asReadOnly {
-      val faces = getAssetFaces(assetId)
-      val personIds = faces.map(_.personId.get)
-
-      if personIds.isEmpty then List()
-      else
-        val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
-        val qRes: QueryResult[Person] = dao.query(q)
-        qRes.records
+      peopleOf(getAssetFaces(assetId))
     }
+
+  /** An asset's faces, each with its person, read in one snapshot so a merge cannot come between the two */
+  def getAssetFacesWithPeople(assetId: String): List[(Face, Person)] =
+    txManager.asReadOnly {
+      val faces = getAssetFaces(assetId)
+      val peopleById = peopleOf(faces).map(person => person.persistedId -> person).toMap
+      faces.map(face => face -> peopleById(face.personId.get))
+    }
+
+  /** The people the faces belong to; to be called in the transaction the faces were read in */
+  private def peopleOf(faces: List[Face]): List[Person] =
+    val personIds = faces.map(_.personId.get)
+
+    if personIds.isEmpty then List()
+    else
+      val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
+      val qRes: QueryResult[Person] = dao.query(q)
+      qRes.records
 
   def setFaceAsCover(person: Person, face: Face): Person =
     txManager.withTransaction {

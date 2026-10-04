@@ -162,7 +162,14 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
       mvn"com.lihaoyi::utest::0.8.4",
       mvn"com.lihaoyi::requests::0.9.0",
       mvn"org.scalatest::scalatest:3.2.19",
-      mvn"org.mockito:mockito-core:5.14.2"
+      mvn"org.mockito:mockito-core:5.14.2",
+      // Parses the application's sources for the architecture tests
+      mvn"org.scalameta::scalameta:4.17.4"
     )
+
+    // Tests run in a sandbox directory: the architecture tests find the application's sources through this
+    def forkEnv: T[Map[String, String]] = Task {
+      super.forkEnv() ++ Map("ALTITUDE_SOURCE_DIR" -> (moduleDir / os.up / "src").toString)
+    }
   }
 }

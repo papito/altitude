@@ -75,6 +75,8 @@ object Api:
       val METADATA = "metadata"
       val METADATA_FIELD_ID = "metadataFieldId"
       val METADATA_VALUE_ID = "metadataValueId"
+      val RESTORED = "restored"
+      val DUPLICATES = "duplicates"
 
     object Folder:
       val FOLDER = "folder"

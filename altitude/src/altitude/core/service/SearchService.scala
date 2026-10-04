@@ -54,8 +54,11 @@ class SearchService(val app: Altitude):
 
   def reindexAsset(asset: Asset): Unit =
     logger.info(s"Reindexing asset $asset")
-    val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
-    searchDao.reindexAsset(asset, metadataFields)
+
+    txManager.withTransaction {
+      val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
+      searchDao.reindexAsset(asset, metadataFields)
+    }
 
   /**
    * The Search text with each term resolved against the names of the repository's people, Locations, Categories, folders and
@@ -124,20 +127,29 @@ class SearchService(val app: Altitude):
     )
 
   def search(query: SearchQuery): SearchResult =
-    searchDao.search(query)
+    txManager.asReadOnly {
+      searchDao.search(query)
+    }
 
   def count(query: SearchQuery): Int =
-    searchDao.count(query)
+    txManager.asReadOnly {
+      searchDao.count(query)
+    }
 
   def cappedCount(query: SearchQuery): Int =
-    searchDao.cappedCount(query)
+    txManager.asReadOnly {
+      searchDao.cappedCount(query)
+    }
 
   /** What the map draws for a viewport at a zoom: the cells over the plotted points in the box, and the Locations pinned in it */
   def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
     val started = System.currentTimeMillis
-    val result = MapCells(
-      cells = searchDao.mapCells(query, bbox, SearchService.cellDegrees(zoom)),
-      locations = searchDao.mapLocations(query, bbox))
+    // Both aggregates read one snapshot
+    val result = txManager.asReadOnly {
+      MapCells(
+        cells = searchDao.mapCells(query, bbox, SearchService.cellDegrees(zoom)),
+        locations = searchDao.mapLocations(query, bbox))
+    }
     logger.debug(
       s"Map at zoom $zoom in $bbox: ${result.cells.length} cells, ${result.locations.length} Locations, " +
         s"in ${System.currentTimeMillis - started}ms")
@@ -145,7 +157,9 @@ class SearchService(val app: Altitude):
 
   /** The box around every point the search plots, for fitting the map to a result; nothing when nothing is plotted */
   def mapBounds(query: SearchQuery): Option[MapBounds] =
-    searchDao.mapBounds(query)
+    txManager.asReadOnly {
+      searchDao.mapBounds(query)
+    }
 
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
@@ -154,7 +168,9 @@ class SearchService(val app: Altitude):
    */
   def searchGrouped(query: SearchQuery, scopeFingerprint: String): GroupedSearchResult =
     val started = System.currentTimeMillis
-    val page = searchDao.searchGrouped(query)
+    val page = txManager.asReadOnly {
+      searchDao.searchGrouped(query)
+    }
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
@@ -191,8 +207,6 @@ class SearchService(val app: Altitude):
    * Search document rewritten from the asset as given, which must already carry the value
    */
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
-    searchDao.addMetadataValue(asset, field, value)
-
-  /** [[addMetadataValue]] for several values of one field */
-  def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
-    searchDao.addMetadataValues(asset, field, values)
+    txManager.withTransaction {
+      searchDao.addMetadataValue(asset, field, value)
+    }

@@ -225,7 +225,7 @@ class UserMetadataService(val app: Altitude):
         updateMetadata(assetId, UserMetadata(newData))
     }
 
-  def clean(metadata: UserMetadata): UserMetadata =
+  private def clean(metadata: UserMetadata): UserMetadata =
     // get all metadata fields configured for this repository
     val fields = getAllFields
 
@@ -279,7 +279,7 @@ class UserMetadataService(val app: Altitude):
 
     UserMetadata(data = cleanData)
 
-  def validate(metadata: UserMetadata): Unit =
+  private def validate(metadata: UserMetadata): Unit =
     if metadata.data.isEmpty then return
 
     // get all metadata fields configured for this repository
@@ -316,7 +316,7 @@ class UserMetadataService(val app: Altitude):
    * @return
    *   clean, de-duplicated copy of the metadata
    */
-  def cleanAndValidate(metadata: UserMetadata): UserMetadata =
+  private def cleanAndValidate(metadata: UserMetadata): UserMetadata =
     val cleanMetadata = clean(metadata)
     validate(cleanMetadata)
     cleanMetadata

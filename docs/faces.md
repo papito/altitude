@@ -19,7 +19,9 @@ and is indexed: `FacialRecognitionFlow`, its own async stage on both engines. It
 Both detect the faces first, outside any transaction, and then match and store them in a short `withFaceVector`
 transaction, so the detection never holds SQLite's one write connection.
 Whatever the stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
-rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`.
+rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`. Each Face's files are written as it
+is stored, inside that transaction, and a rollback deletes the files already written (`withFaceFiles`), so a Face in the
+database always has its files and a rolled-back one leaves none.
 
 `withFaceVector` (`transactions/TransactionManager.scala`) wraps every read or write that touches the `features`
 column: on SQLite it loads the `sqlite-vector` extension and runs `vector_init('face', 'features',

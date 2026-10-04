@@ -119,4 +119,35 @@ import altitude.core.models.Asset
         restoredAsset.isRecycled.shouldBe(false)
     }
   }
+
+  test("Restoring assets reports the restored ones and the ones whose content is live again") {
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val restorable = testContext.persistAsset()
+
+        val dataAsset = testContext.makeAssetWithData()
+        val secondCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
+        val duplicate: Asset = testApp.service.library.addAsset(dataAsset)
+
+        testApp.service.library.recycleAssets(Set(restorable.persistedId, duplicate.persistedId))
+        testApp.service.library.addAsset(secondCopy)
+
+        val payload = ujson.Obj(Api.Field.ASSET_IDS -> Seq(restorable.persistedId, duplicate.persistedId))
+
+        val response = requests.put(
+          s"$host/api/asset/r/$repoId/restore",
+          cookies = testContext.cookies,
+          data = ujson.write(payload)
+        )
+
+        response.statusCode.shouldBe(200)
+        val json = ujson.read(response.text())
+        json(Api.Field.Asset.RESTORED).arr.map(_.str).toList.shouldBe(List(restorable.persistedId))
+        json(Api.Field.Asset.DUPLICATES).arr.map(_.str).toList.shouldBe(List(duplicate.persistedId))
+    }
+  }
 }
