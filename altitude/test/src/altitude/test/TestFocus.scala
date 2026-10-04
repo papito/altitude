@@ -11,13 +11,15 @@ trait TestFocus {
    *
    * }
    *
-   * To run:
+   * To run in every suite bundle (Postgres included):
    *
-   * sbt> test-only -- -n focused
+   * make test-focused
    *
-   * For specific DB suite:
+   * For a specific bundle:
    *
-   * sbt> test-only software.altitude.test.core.suites.SqliteSuite -- -n focused
+   * make test-focused-sqlite (or -psql, -unit, -controllers)
+   *
+   * A test name filter (-z) does not reach the suites a bundle nests, so the tag is the way to run a single test.
    */
   object Focused extends Tag("focused")
 }
