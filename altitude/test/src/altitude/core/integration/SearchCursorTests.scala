@@ -1,6 +1,6 @@
 package altitude.core.integration
 
-import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
+import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
@@ -338,20 +338,20 @@ import altitude.core.util.*
     ids(continue(cursor, grouping, sort, rpp = 5)).length shouldBe 5
   }
 
-  test("A cursor continues correctly through a legacy null import time") {
+  if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
+    test("A cursor continues correctly through a legacy null import time") {
 
-    /**
-     * Setup:
-     *
-     * SQLite only: the fixture without its undated assets, with one asset's import time cleared to NULL, as a legacy row may have
-     * it.
-     *
-     * Assertions:
-     *
-     * Grouped by capture day and sorted by import time in either direction, walking one and two assets a page keeps that asset in
-     * its day, first or last in it as SQLite puts nulls for the direction.
-     */
-    if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
+      /**
+       * Setup:
+       *
+       * SQLite only: the fixture without its undated assets, with one asset's import time cleared to NULL, as a legacy row may
+       * have it. Only SQLite's legacy rows can hold a NULL import time, so the test is registered on SQLite only.
+       *
+       * Assertions:
+       *
+       * Grouped by capture day and sorted by import time in either direction, walking one and two assets a page keeps that asset
+       * in its day, first or last in it as SQLite puts nulls for the direction.
+       */
       val assets = fixture(includeUndated = false)
       val undated = assets(2)
       testApp.txManager.withTransaction {

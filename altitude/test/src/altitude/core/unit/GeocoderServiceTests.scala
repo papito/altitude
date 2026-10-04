@@ -69,6 +69,7 @@ import altitude.core.service.GeocoderService
      *
      * It reports itself disabled, refuses a search, and never sends a request to the stub.
      */
+    lastQuery = None
     val service = GeocoderService(config(enabled = false))
     service.isEnabled shouldBe false
     intercept[IllegalOperationException] {

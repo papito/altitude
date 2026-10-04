@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import java.net.URLEncoder
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 
@@ -30,7 +31,7 @@ import altitude.core.App
      *
      * Assertions:
      *
-     * The repository's main page answers with a redirect instead of the page.
+     * The repository's main page answers with a redirect to the login page, which carries the page's address to return to.
      */
     val repo = testContext.persistRepository()
     testApp.service.system.readMetadata.isInitialized shouldBe true
@@ -39,6 +40,7 @@ import altitude.core.App
       host =>
         val response = requests.get(s"$host/r/${repo.persistedId}", maxRedirects = 0, check = false)
         response.statusCode shouldBe 302
+        response.headers("location") shouldBe Seq(s"/login?redirect=${URLEncoder.encode(s"/r/${repo.persistedId}", "UTF-8")}")
     }
   }
 

@@ -89,9 +89,6 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def queryNotRecycled(q: Query): QueryResult[Asset] =
     queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository())
 
-  override def queryTriaged(q: Query): QueryResult[Asset] =
-    queryRecords(q.add(FieldConst.Asset.IS_TRIAGED -> true).withRepository())
-
   override def queryRecycled(q: Query): QueryResult[Asset] =
     queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository())
 

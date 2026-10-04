@@ -163,4 +163,83 @@ import altitude.core.util.Query
     asset2.isRecycled shouldBe true
     asset3.isRecycled shouldBe true
   }
+
+  test("Recycling a selection that includes a recycled asset counts only the newly recycled one") {
+
+    /**
+     * Setup:
+     *
+     * A Person with a Face on each of two assets. The first asset is recycled on its own, then both are recycled together.
+     *
+     * Assertions:
+     *
+     * The second recycle counts only the second asset: the recycled stats hold the two assets and their bytes, and the person's
+     * face count drops to zero rather than below it.
+     */
+    val person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, assetCount = 2)
+    val assets = testApp.service.asset.query(new Query()).records
+
+    testApp.service.library.recycleAssets(Set(assets.head.persistedId))
+    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe assets.map(_.sizeBytes).sum
+    testApp.service.person.getById(person.persistedId).numOfFaces shouldBe 0
+  }
+
+  test("Moving recycled and live assets together into a folder restores the recycled ones' face counts") {
+
+    /**
+     * Setup:
+     *
+     * A Person with a Face on each of two assets in the root folder. The first asset is recycled, then both are moved into a new
+     * folder.
+     *
+     * Assertions:
+     *
+     * The move takes the recycled asset out of the recycle bin and gives its Face back to the person, who counts both Faces
+     * again, and the recycled stats are back to zero.
+     */
+    val person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, assetCount = 2)
+    val assets = testApp.service.asset.query(new Query()).records
+    val folder: Folder = testApp.service.folder.add("folder1")
+
+    testApp.service.library.recycleAssets(Set(assets.head.persistedId))
+    testApp.service.library.moveAssetsToFolder(assets.map(_.persistedId).toSet, folder.persistedId)
+
+    testApp.service.person.getById(person.persistedId).numOfFaces shouldBe 2
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
+  }
+
+  test("Moving an asset recycled from triage into a folder takes it out of the recycled stats, not the triage ones") {
+
+    /**
+     * Setup:
+     *
+     * A triaged asset that is recycled, which keeps its triage flag, then moved into a new folder.
+     *
+     * Assertions:
+     *
+     * Recycling moved it from the triage stats to the recycled ones, so the move takes it out of the recycled stats and into the
+     * sorted ones, and the triage stats stay at zero.
+     */
+    val asset = testContext.persistAsset(isTriaged = true)
+    val folder: Folder = testApp.service.folder.add("folder1")
+
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+    testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), folder.persistedId)
+
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 0
+    stats.getStatValue(Stats.TRIAGE_BYTES) shouldBe 0
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+    stats.getStatValue(Stats.RECYCLED_BYTES) shouldBe 0
+    stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 1
+    stats.getStatValue(Stats.SORTED_BYTES) shouldBe asset.sizeBytes
+  }
 }

@@ -4,6 +4,7 @@ import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 import scalasql.core.SqlStr.SqlStringSyntax
 
@@ -109,7 +110,7 @@ import altitude.core.util.Util
     people.last.numOfFaces should be(1)
   }
 
-  test("An unknown person is marked as known edit") {
+  test("Renaming an unknown person marks it as named") {
 
     /**
      * Setup:
@@ -240,17 +241,22 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first reads back by ID as not hidden; the second is read back without any check.
+     * Both read back by ID as visible and unnamed, each with its own "Unknown N" name.
      */
     val person1Model = Person()
     val person1: Person = testApp.service.person.addPerson(person1Model)
 
     val retrievedPerson1: Person = testApp.service.person.getById(person1.persistedId)
     retrievedPerson1.isHidden should be(false)
+    retrievedPerson1.isNamed should be(false)
 
     val person2Model = Person()
     val person2: Person = testApp.service.person.addPerson(person2Model)
     val retrievedPerson2: Person = testApp.service.person.getById(person2.persistedId)
+    retrievedPerson2.isHidden should be(false)
+    retrievedPerson2.isNamed should be(false)
+    // Each unnamed person draws its own number from the label sequence
+    retrievedPerson2.name should not be retrievedPerson1.name
   }
 
   test("Merging people results in correct persistence state") {
@@ -316,7 +322,7 @@ import altitude.core.util.Util
     val mergedA: Person = testApp.service.person.merge(dest = personA, source = personB)
 
     //
-    // *** Sanity checks for persisted instances of source and destination2
+    // *** Sanity checks for persisted instances of source and destination
     //
     val aFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedA.persistedId)
     aFacesInDb.size should be(NUM_OF_FACES * 2)
@@ -522,7 +528,7 @@ import altitude.core.util.Util
     val mergedPerson: Person = testApp.service.person.merge(dest = people.head, source = people.last)
 
     /**
-     * After the merge, there should be still oen asset and one person with one asset. This is technically not a real scenario -
+     * After the merge, there should be still one asset and one person with one asset. This is technically not a real scenario -
      * except for twins, one person cannot be in the image twice, but the use case is real. As same person gets merged into
      * themselves across assets, the face count should not drift and reflect the actual search results
      */

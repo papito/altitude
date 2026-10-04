@@ -55,7 +55,8 @@ object SearchRequestParser:
       locationId: Option[String],
       bbox: Option[String]): Either[String, Scope] =
     val params: Map[String, Any] = view match
-      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true)
+      // An asset recycled from triage keeps its triage flag, so the trash is left out explicitly
+      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
       case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false)
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
 

@@ -133,11 +133,12 @@ import altitude.core.util.SearchQuery
      * Setup:
      *
      * Three assets at one Paris point, one undated, one taken on 2026-09-01 and one on 2026-09-05; the dated ones are recycled in
-     * turn and a second undated asset is added.
+     * turn and a second undated asset is added. Last, a lone asset at a Tokyo point.
      *
      * Assertions:
      *
-     * A cell is represented by its newest capture and, when none of its assets has a capture time, by the lowest asset ID.
+     * A cell is represented by its newest capture and, when none of its assets has a capture time, by the lowest asset ID. A cell
+     * of one is represented by its only asset.
      *
      * Edge cases:
      *
@@ -159,7 +160,11 @@ import altitude.core.util.SearchQuery
     testApp.service.library.recycleAssets(Set(older.persistedId))
     val alsoUndated = persistAt(paris._1, paris._2)
     setTaken(alsoUndated, None)
-    summary(cellsOf().cells) shouldEqual List((2, List(undated, alsoUndated).map(_.persistedId).min))
+    val lowestUndated = List(undated, alsoUndated).map(_.persistedId).min
+    summary(cellsOf().cells) shouldEqual List((2, lowestUndated))
+
+    val alone = persistAt(35.6762, 139.6503)
+    summary(cellsOf().cells) shouldEqual List((1, alone.persistedId), (2, lowestUndated))
   }
 
   test("Cells merge by the zoom's cell size, and the zoom is clamped to 0..20") {

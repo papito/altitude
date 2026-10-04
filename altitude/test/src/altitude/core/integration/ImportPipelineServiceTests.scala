@@ -81,12 +81,10 @@ import altitude.core.pipeline.sinks.VoidAssetSink
 
     pipelineRes.foreach {
       case (Left(asset), _) =>
-        asset shouldBe a[Asset]
-        val assetId = asset.persistedId
-        val persistedAsset: Asset = testApp.service.asset.getById(assetId)
+        val persistedAsset: Asset = testApp.service.asset.getById(asset.persistedId)
         persistedAsset.isPipelineProcessed shouldBe true
 
-      case (Right(_), _) => fail("Expected all elements to be of type AssetWithData")
+      case (Right(invalid), _) => fail(s"Expected every element to be imported: ${invalid.cause}")
     }
   }
 
@@ -132,7 +130,8 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * The pipeline completes with a result for every element: ten imports, and the repeated element rejected as a duplicate.
+     * The pipeline completes with a result for every element: ten imports, each pipeline-processed in the repository, and the
+     * repeated element rejected as a duplicate.
      */
     val batchSize = 10
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
@@ -150,7 +149,7 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     pipelineRes should have size batchSize + 1
 
     val validAssetsCount = pipelineRes.count {
-      case (Left(asset), _) => asset.isInstanceOf[Asset]
+      case (Left(asset), _) => testApp.service.asset.getById(asset.persistedId).isPipelineProcessed
       case (Right(_), _) => false
     }
     validAssetsCount shouldBe batchSize
@@ -164,7 +163,7 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     // the second element is a duplicate
     pipelineRes(1) match {
       case (Right(invalid), _) => invalid.cause.get shouldBe a[DuplicateException]
-      case _ => fail("Expected the second element to be of type DuplicateException")
+      case _ => fail("Expected the second element to be rejected as a duplicate")
     }
   }
 
@@ -194,7 +193,7 @@ import altitude.core.pipeline.sinks.VoidAssetSink
 
     pipelineRes.head match {
       case (Right(invalid), _) => invalid.cause.get shouldBe a[UnsupportedMediaTypeException]
-      case _ => fail("Expected the first element to be of type DuplicateException")
+      case _ => fail("Expected the first element to be rejected as an unsupported media type")
     }
 
     // A dropped asset leaves no staged file behind

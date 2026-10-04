@@ -2,15 +2,18 @@ package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
+import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDateTime
+import javax.imageio.ImageIO
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import scala.jdk.CollectionConverters.*
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.models.Asset
@@ -197,15 +200,17 @@ import altitude.core.models.MimedPreviewData
      *
      * Assertions:
      *
-     * A non-empty PNG preview is stored for the asset.
+     * The stored preview decodes as an image filling the square preview box.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     val preview: MimedPreviewData = testApp.service.asset.getPreview(asset.persistedId)
 
-    preview.mimeType should equal(MimedPreviewData.MIME_TYPE)
-    preview.data.length should not be 0
+    // ImageIO returns null for bytes no reader recognizes
+    val image = Option(ImageIO.read(new ByteArrayInputStream(preview.data))).value
+    image.getWidth shouldBe Const.AssetView.PREVIEW_BOX_PIXELS
+    image.getHeight shouldBe Const.AssetView.PREVIEW_BOX_PIXELS
   }
 
   test("Imported image is triaged") {

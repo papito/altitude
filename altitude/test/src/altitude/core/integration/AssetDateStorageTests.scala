@@ -1,8 +1,8 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.time.{ Duration, LocalDateTime, ZoneOffset }
-import java.util.TimeZone
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
@@ -29,13 +29,6 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     testApp.service.asset.getById(persisted.persistedId)
   }
 
-  private def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
-    val original = TimeZone.getDefault
-    TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
-    try f
-    finally TimeZone.setDefault(original)
-  }
-
   test("Capture timestamp is stored and read back as the camera's wall-clock time") {
 
     /**
@@ -60,8 +53,8 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * With the JVM in America/New_York (the default zone on the development machine), an asset with a capture time of
-     * 2026:03:08 02:30:00, which does not exist there: the clocks skip from 02:00 to 03:00 that night.
+     * With the JVM in America/New_York (the default zone on the development machine), an asset with a capture time of 2026:03:08
+     * 02:30:00, which does not exist there: the clocks skip from 02:00 to 03:00 that night.
      *
      * Assertions:
      *
@@ -107,8 +100,8 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * An asset with no capture time, and two more whose public metadata carry a display date, one well-formed
-     * ("2024:07:04 08:09:10") and one not a date at all; all three are written straight through the DAO.
+     * An asset with no capture time, and two more whose public metadata carry a display date, one well-formed ("2024:07:04
+     * 08:09:10") and one not a date at all; all three are written straight through the DAO.
      *
      * Assertions:
      *
@@ -164,8 +157,8 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24) and images/exif/DSCF1160.JPG
-     * (2008-04-17 11:12:02), imported through the pipeline.
+     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24) and images/exif/DSCF1160.JPG (2008-04-17
+     * 11:12:02), imported through the pipeline.
      *
      * Assertions:
      *

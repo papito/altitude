@@ -27,12 +27,11 @@ case class Folder(
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Folder]
 
+  // Folders are equal by ID, parent and case-insensitive name, and hash by the same fields
+  private def equalityKey = (id, parentId, nameLowercase)
+
   override def equals(that: Any): Boolean = that match
-    case that: Folder if !that.canEqual(this) => false
-    case that: Folder =>
-      val thisStringRepr = this.id.getOrElse("") + this.parentId + this.nameLowercase
-      val thatStringRepr = that.id.getOrElse("") + that.parentId + that.nameLowercase
-      thisStringRepr == thatStringRepr
+    case that: Folder => that.canEqual(this) && equalityKey == that.equalityKey
     case _ => false
 
-  override def hashCode: Int = super.hashCode
+  override def hashCode: Int = equalityKey.hashCode

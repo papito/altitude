@@ -5,6 +5,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.not
+import org.scalatest.matchers.should.Matchers.empty
 import org.scalatest.matchers.should.Matchers.should
 import org.scalatest.matchers.should.Matchers.shouldEqual
 
@@ -47,10 +48,13 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Setting the repository as the user's last active one completes without an error; the stored value is not read back.
+     * The repository is stored as the user's last active one: reading the user back yields its ID.
      */
     val user: User = testContext.persistUser()
     testApp.service.user.setLastActiveRepoId(user, testContext.repository.persistedId)
+
+    val storedUser: User = testApp.service.user.getById(user.persistedId)
+    storedUser.lastActiveRepoId shouldEqual Some(testContext.repository.persistedId)
   }
 
   test("Check valid user password") {
@@ -62,7 +66,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Logging in with the user's email and that password succeeds and yields the user and a session token.
+     * Logging in with the user's email and that password succeeds and yields that user and a non-empty session token.
      */
     val password = "MyPassword123"
 
@@ -72,14 +76,14 @@ import altitude.core.util.Util
       accountType = AccountType.User
     )
 
-    testContext.persistUser(Some(userModel), password = password)
+    val created: User = testContext.persistUser(Some(userModel), password = password)
 
     val loginResult = testApp.service.user.loginAndSetUser(userModel.email, password)
 
     loginResult match {
       case Some((user, token)) =>
-        user should not be None
-        token should not be None
+        user.persistedId shouldEqual created.persistedId
+        token should not be empty
       case None =>
         fail("Login failed: user or token is None")
     }

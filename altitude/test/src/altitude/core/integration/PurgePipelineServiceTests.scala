@@ -3,6 +3,11 @@ package altitude.core.integration
 import altitude.test.IntegrationTestUtil
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
+import org.scalatest.concurrent.Eventually
+import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import scala.concurrent.Await
 import scala.concurrent.Future
@@ -11,13 +16,10 @@ import scala.concurrent.duration.Duration
 import altitude.core.Altitude
 import altitude.core.NotFoundException
 import altitude.core.models.Asset
-import altitude.core.models.AssetWithData
 import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.pipeline.PipelineTypes.PipelineContext
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
-import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
 import altitude.core.util.Query
 
@@ -76,7 +78,8 @@ import altitude.core.util.Query
      * Assertions:
      *
      * Every face of the three people is gone from the database, and all four of its images from the file store, except each
-     * person's cover face, whose images a purge keeps.
+     * person's cover face, whose images a purge keeps. The decoy's faces, in assets outside the purge, keep their records and
+     * images.
      */
     val assetsPerPerson = 3
     val totalPeople = 3
@@ -126,6 +129,15 @@ import altitude.core.util.Query
         }
       }
     }
+
+    val decoyFaces = testApp.service.person.getPersonFaces(extraPerson.persistedId)
+    decoyFaces should have size assetsPerPerson
+    for (face <- decoyFaces) {
+      testApp.service.fileStore.getDisplayFaceById(face.persistedId)
+      testApp.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId)
+      testApp.service.fileStore.getAlignedFaceById(face.persistedId)
+      testApp.service.fileStore.getDetectedFaceById(face.persistedId)
+    }
   }
 
   test("Purging assets twice should be a NO-OP") {
@@ -133,12 +145,13 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Three people with a face each in three assets; the same assets run through the purge pipeline twice, without being
-     * recycled.
+     * Three people with a face each in three assets, all three recycled, and one more asset outside the purge. The recycled
+     * assets run through the purge pipeline twice.
      *
      * Assertions:
      *
-     * The second purge, of assets already purged, completes without throwing; nothing else is checked.
+     * The second purge, of assets already purged, completes and changes nothing: the purged assets and their files stay gone, and
+     * the asset outside the purge keeps its record and file.
      */
     val assetsPerPerson = 3
     val totalPeople = 3
@@ -146,17 +159,26 @@ import altitude.core.util.Query
     testContext.addTestFacesAndAssets(people, assetCount = assetsPerPerson)
 
     val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records
+    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
+
+    val survivor = testContext.persistAsset()
 
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
 
-    val pipelineResFuture1: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
-    Await.result(pipelineResFuture1, Duration.Inf)
+    Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
+    Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
 
-    val pipelineResFuture2: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
-    Await.result(pipelineResFuture2, Duration.Inf)
-
-    // Not testing any conditions - just that this code doesn't throw an exception
+    for (asset <- assets) {
+      intercept[NotFoundException] {
+        testApp.service.asset.getById(asset.persistedId)
+      }
+      intercept[NotFoundException] {
+        testApp.service.fileStore.getAssetById(asset.persistedId)
+      }
+    }
+    testApp.service.asset.getById(survivor.persistedId)
+    testApp.service.fileStore.getAssetById(survivor.persistedId)
   }
 
   test("Purging an asset does not delete a face asset that is marked as COVER") {
@@ -202,52 +224,28 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Three images of one face (people/meme-ben.jpg, meme-ben2.png, meme-ben3.png) imported, then fed through the import pipeline
-     * a second time. One of the assets is recycled and run straight through the purge pipeline, since purgeRecycleBin only queues
-     * the purge and cannot be awaited.
+     * Three images of one face (people/meme-ben.jpg, meme-ben2.png, meme-ben3.png) imported. The first is recycled and run
+     * straight through the purge pipeline.
      *
      * Assertions:
      *
-     * Every face image of the two assets that were not purged is still in the file store.
+     * The two assets that were not purged still have their faces, and every image of those faces is still in the file store.
      */
-    val importAssetPaths = List(
-      "people/meme-ben.jpg",
-      "people/meme-ben2.png",
-      "people/meme-ben3.png"
-    )
-
-    val assetsWithData = importAssetPaths.map {
-      path =>
-        val importAsset = IntegrationTestUtil.getImportAsset(path)
-        val asset = testApp.service.library.addImportAsset(importAsset)
-        AssetWithData(asset, testApp.service.staging.stageCopy(importAsset.path))
+    val assets = List("people/meme-ben.jpg", "people/meme-ben2.png", "people/meme-ben3.png").map {
+      path => testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset(path))
     }
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
-
-    val importSource = Source.fromIterator(() => assetsWithData.iterator).map((_, pipelineContext))
-    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
-      testApp.service.importPipeline.run(importSource, AssetSeqOutputSink())
-    Await.result(pipelineResFuture, Duration.Inf)
-
-    // Recycle one
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query(rpp = 1)).records
     val recycledAsset = assets.head
     testApp.service.library.recycleAssets(Set(recycledAsset.persistedId))
 
-    // Purge
-    // !!! NOTE: We cannot use purgeRecycleBin() directly as it creates a race condition -
-    // the assets are just added to the queue to be processed when the system is good and ready.
-    // This is a workaround to force the assets to be purged immediately so we can test the result.
-    val purgeSource = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
-    val purgePipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(purgeSource, VoidAssetSink())
-    Await.result(purgePipelineResFuture, Duration.Inf)
+    // purgeRecycleBin() only queues the purge, so the asset runs straight through the pipeline, which can be awaited
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val purgeSource = Source.single((recycledAsset, pipelineContext))
+    Await.result(testApp.service.purgePipeline.run(purgeSource, VoidAssetSink()), Duration.Inf)
 
-    // make sure the data for non-recycled assets is still there
-    val nonRecycledAssets = assetsWithData.filterNot(_.asset.persistedId == recycledAsset.persistedId).map(_.asset)
-
-    for (asset <- nonRecycledAssets) {
+    for (asset <- assets.tail) {
       val faces = testApp.service.person.getAssetFaces(asset.persistedId)
+      faces should not be empty
 
       for (face <- faces) {
         testApp.service.fileStore.getDisplayFaceById(face.persistedId)
@@ -263,45 +261,31 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Three portraits (people/damon.jpg, affleck.jpg, bullock.jpg) imported, then fed through the import pipeline a second time.
-     * Two of them are recycled and the recycle bin is purged.
+     * Three portraits (people/damon.jpg, affleck.jpg, bullock.jpg) imported. The first two are recycled and the recycle bin is
+     * purged, which only queues them, so the test polls for up to a minute until the purge has deleted their records.
      *
      * Assertions:
      *
-     * The asset that was not recycled is still in the database, with its preview, its file and every one of its face images.
+     * The asset that was not recycled is still in the database, with its preview, its file and its faces, every one of their
+     * images included.
      */
-    val importAssetPaths = List(
-      "people/damon.jpg",
-      "people/affleck.jpg",
-      "people/bullock.jpg"
-    )
-
-    val assetsWithData = importAssetPaths.map {
-      path =>
-        val importAsset = IntegrationTestUtil.getImportAsset(path)
-        val asset = testApp.service.library.addImportAsset(importAsset)
-        AssetWithData(asset, testApp.service.staging.stageCopy(importAsset.path))
+    val assets = List("people/damon.jpg", "people/affleck.jpg", "people/bullock.jpg").map {
+      path => testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset(path))
     }
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
-    val source = Source.fromIterator(() => assetsWithData.iterator).map((_, pipelineContext))
-
-    val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
-      testApp.service.importPipeline.run(source, AssetSeqOutputSink())
-
-    Await.result(pipelineResFuture, Duration.Inf)
-
-    // recycle some assets
-    val recycleCount = 2
-    val recycledAssets = assetsWithData.take(recycleCount).map {
-      assetWithData =>
-        testApp.service.library.recycleAssets(Set(assetWithData.asset.persistedId))
-        assetWithData.asset
-    }
+    val (recycledAssets, nonRecycledAssets) = assets.splitAt(2)
+    testApp.service.library.recycleAssets(recycledAssets.map(_.persistedId).toSet)
 
     testApp.service.library.purgeRecycleBin()
 
-    val nonRecycledAssets = assetsWithData.filterNot(assetWithData => recycledAssets.contains(assetWithData.asset)).map(_.asset)
+    // Deleting the records is the purge pipeline's last stage, so the files are gone by then too
+    Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(200, Millis))) {
+      for (asset <- recycledAssets) {
+        intercept[NotFoundException] {
+          testApp.service.asset.getById(asset.persistedId)
+        }
+      }
+    }
 
     for (asset <- nonRecycledAssets) {
       testApp.service.asset.getById(asset.persistedId)
@@ -309,6 +293,7 @@ import altitude.core.util.Query
       testApp.service.fileStore.getAssetById(asset.persistedId)
 
       val faces = testApp.service.person.getAssetFaces(asset.persistedId)
+      faces should not be empty
 
       for (face <- faces) {
         testApp.service.fileStore.getDisplayFaceById(face.persistedId)

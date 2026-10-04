@@ -6,10 +6,11 @@ import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 
-/** The grouped HTML grid of the search results route, its continuation by cursor, and the untouched ungrouped grid next to it */
+/** The grouped HTML grid of the search results route, its continuation by cursor, and the ungrouped grid next to it */
 @DoNotDiscover class SearchResultsControllerTests extends ControllerTestCore {
 
   private val jsonHeaders = Map("Accept" -> "application/json")
@@ -775,14 +776,23 @@ import altitude.core.models.AssetType
     /**
      * Setup:
      *
-     * A repository and no logged-in user.
+     * A logged-in user's repository, and a second user's repository holding one asset.
      *
      * Assertions:
      *
-     * An unauthenticated grouped request is redirected when it asks for HTML and refused with a 401 when it asks for JSON.
+     * An unauthenticated grouped request is redirected when it asks for HTML and refused with a 401 when it asks for JSON. A
+     * logged-in user asking for the other user's repository is a 404 that shows none of its assets, as for any foreign entity,
+     * and a repository that does not exist is the same 404.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
+    login()
+
+    val stranger = testContext.persistUser()
+    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    testApp.service.repository.switchContextToRepository(strangersRepo)
+    testApp.service.user.switchContextToUser(stranger)
+    val foreign = testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger))
 
     withServer(App) {
       host =>
@@ -800,6 +810,14 @@ import altitude.core.models.AssetType
           headers = jsonHeaders,
           check = false)
         json.statusCode shouldBe 401
+
+        // A logged-in user cannot read a repository that is not theirs
+        val foreignPage = htmlSearch(host, strangersRepo.persistedId, Map(Api.Field.Search.GROUP_BY -> "dateTaken"))
+        foreignPage.statusCode shouldBe 404
+        foreignPage.text().contains(cell(foreign)) shouldBe false
+
+        // A repository that does not exist is answered the same way, so the two cannot be told apart
+        htmlSearch(host, BaseDao.genId, Map(Api.Field.Search.GROUP_BY -> "dateTaken")).statusCode shouldBe 404
     }
   }
 
@@ -848,7 +866,7 @@ import altitude.core.models.AssetType
     }
   }
 
-  test("Ungrouped HTML results are unchanged, and results are HTML only") {
+  test("Ungrouped results are an HTML grid, and a JSON request is a JSON 400") {
 
     /**
      * Setup:
@@ -859,7 +877,7 @@ import altitude.core.models.AssetType
      *
      * Without an Accept header the ungrouped search is an HTML grid in grid layout, with no grouping, no group headers and no
      * bounding-box scope, and a continuation past the last page is a 204. Asking for JSON, by the Accept header or by the legacy
-     * Content-Type, is a 400 (a JSON error pointing to HTML for the Accept header).
+     * Content-Type, is a 400 with a JSON error pointing to HTML.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -895,6 +913,8 @@ import altitude.core.models.AssetType
 
         val legacy = search(host, repoId, Map(), headers = Map("Content-Type" -> "application/json"))
         legacy.statusCode shouldBe 400
+        legacy.headers("content-type").head should include("application/json")
+        ujson.read(legacy.text())("error").str should include("HTML")
     }
   }
 }

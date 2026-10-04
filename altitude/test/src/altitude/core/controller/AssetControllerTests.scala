@@ -196,4 +196,42 @@ import altitude.core.models.Asset
         json(Api.Field.Asset.DUPLICATES).arr.map(_.str).toList.shouldBe(List(duplicate.persistedId))
     }
   }
+
+  test("Assets in a repository the user does not own cannot be recycled") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second user's repository holding one asset.
+     *
+     * Assertions:
+     *
+     * Recycling that asset through the second user's repository is a JSON 404, as for any foreign entity, and the asset stays
+     * live.
+     */
+    testContext.persistRepository()
+    login()
+
+    val stranger = testContext.persistUser()
+    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    testApp.service.repository.switchContextToRepository(strangersRepo)
+    testApp.service.user.switchContextToUser(stranger)
+    val foreign = testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger))
+
+    withServer(App) {
+      host =>
+        val response = requests.delete(
+          s"$host/api/asset/r/${strangersRepo.persistedId}/move",
+          cookies = testContext.cookies,
+          data = ujson.write(ujson.Obj(Api.Field.ASSET_IDS -> Seq(foreign.persistedId))),
+          check = false
+        )
+
+        response.statusCode.shouldBe(404)
+        response.headers("content-type").head.shouldBe("application/json")
+    }
+
+    testApp.service.repository.switchContextToRepository(strangersRepo)
+    (testApp.service.asset.getById(foreign.persistedId): Asset).isRecycled.shouldBe(false)
+  }
 }

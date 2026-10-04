@@ -5,42 +5,10 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 
 import altitude.core.Altitude
 import altitude.core.FieldConst
-import altitude.core.IllegalOperationException
 import altitude.core.models.*
 import altitude.core.util.Query
 
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
-
-  test("Rename asset and attempt to rename a recycled asset") {
-
-    /**
-     * Setup:
-     *
-     * One asset in the root folder, renamed, then recycled.
-     *
-     * Assertions:
-     *
-     * The new name shows on the returned asset and on a fresh read, and renaming the asset once it is recycled is refused.
-     *
-     * Edge cases:
-     *
-     * A recycled asset cannot be renamed.
-     */
-    val asset: Asset = testContext.persistAsset()
-    var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
-    updatedAsset.fileName shouldBe "newName"
-
-    // get the asset again to make sure it has been updated
-    updatedAsset = testApp.service.asset.getById(asset.persistedId)
-    updatedAsset.fileName shouldBe "newName"
-
-    // attempt to rename a recycled asset
-    testApp.service.library.recycleAssets(Set(asset.persistedId))
-
-    intercept[IllegalOperationException] {
-      testApp.service.asset.rename(asset.persistedId, "newName2")
-    }
-  }
 
   test("Folder filtering") {
 
@@ -49,9 +17,7 @@ import altitude.core.util.Query
      *
      * Two top-level folders and a child of the second, with two assets in each:
      *
-     * folder1
-     * folder2
-     *   folder2_1
+     * folder1 folder2 folder2_1
      *
      * Assertions:
      *
@@ -103,7 +69,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The move completes without an exception; nothing else is checked.
+     * Every one of the nine assets ends up in the last folder.
      *
      * Edge cases:
      *
@@ -114,6 +80,10 @@ import altitude.core.util.Query
     val assets = folders.flatMap(folder => (1 to 3).map(_ => testContext.persistAsset(folder = Some(folder)))).toList
 
     testApp.service.library.moveAssetsToFolder(assets.map(_.persistedId).toSet, folders.last.persistedId)
+
+    for (asset <- assets) {
+      testApp.service.asset.getById(asset.persistedId).folderId shouldBe folders.last.persistedId
+    }
   }
 
   test("Move asset to a different folder") {

@@ -13,7 +13,6 @@ import scalasql.core.SqlStr.SqlStringSyntax
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.language.reflectiveCalls
-import scala.math.Ordered.orderingToOrdered
 import scala.util.Random
 
 import altitude.core.Altitude
@@ -381,7 +380,7 @@ import altitude.core.util.*
     results.total shouldBe Some(0)
   }
 
-  test("Parametarized search") {
+  test("Parameterized search") {
 
     /**
      * Setup:
@@ -449,7 +448,7 @@ import altitude.core.util.*
     var results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
     results.total shouldBe Some(1)
 
-    // parametarized search
+    // parameterized search
     results = search(
       new SearchQuery(
         rpp = PAGE_SIZE,
@@ -467,7 +466,7 @@ import altitude.core.util.*
     results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("newone")))
     results.total shouldBe Some(1)
 
-    // parametarized search
+    // parameterized search
     results = search(
       new SearchQuery(
         rpp = PAGE_SIZE,
@@ -483,7 +482,7 @@ import altitude.core.util.*
     // remove the value and search again
     testApp.service.metadata.deleteMetadataValue(assetId = asset1.persistedId, valueId = mdVal.persistedId)
 
-    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
+    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("newone")))
     results.isEmpty shouldBe true
   }
 
@@ -509,10 +508,9 @@ import altitude.core.util.*
     }
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
-    val resultsAsc = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
-    val sortedAssetsAsc: List[Asset] = resultsAsc.records
+    val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
 
-    sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get >= assets.last.createdAt.get)
+    results.records.map(_.persistedId) shouldBe assets.map(_.persistedId)
   }
 
   test("Can sort in DESC order by created at date") {
@@ -537,10 +535,9 @@ import altitude.core.util.*
     }
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.DESC)
-    val resultsAsc = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
-    val sortedAssetsAsc: List[Asset] = resultsAsc.records
+    val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
 
-    sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get <= assets.last.createdAt.get)
+    results.records.map(_.persistedId) shouldBe assets.reverse.map(_.persistedId)
   }
 
   test("Sort info should be returned with query results") {
@@ -548,11 +545,11 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * Two assets, searched with an ascending import-time sort.
+     * Two assets, searched first with no sort and then with an ascending import-time sort.
      *
      * Assertions:
      *
-     * The result carries the sort it was read with, its field and its direction.
+     * A search with no sort reports none, and a sorted one carries the sort it was read with, its field and its direction.
      */
     (1 to 2).foreach {
       idx =>
@@ -560,6 +557,8 @@ import altitude.core.util.*
     }
 
     // try with no sort info at all
+    search(new SearchQuery(rpp = PAGE_SIZE)).sort shouldBe Nil
+
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
     val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
     results.sort shouldNot be(empty)

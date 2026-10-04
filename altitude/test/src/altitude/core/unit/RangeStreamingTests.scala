@@ -59,21 +59,33 @@ import altitude.core.routes.RangeStreaming.FileWindow
     /**
      * Setup:
      *
-     * A 100,000-byte temporary file, written to a client that refuses its first write, once with a ClosedChannelException and
-     * once with a "Broken pipe" IOException.
+     * A 100,000-byte temporary file of counting bytes, written to clients that take the first 50,000 bytes and then refuse every
+     * write, once with a ClosedChannelException and once with a "Broken pipe" IOException.
      *
      * Assertions:
      *
-     * Either way the window ends quietly, without an exception: a player drops the connection whenever it has what it wants, the
-     * metadata of a Video or the asset the user left.
+     * Either way the window ends quietly, without an exception, and the client holds an unbroken start of the file no longer than
+     * it took: a player drops the connection whenever it has what it wants, the metadata of a Video or the asset the user left.
+     *
+     * Edge cases:
+     *
+     * A client that refuses the very first write, before any byte reaches it.
      */
-    withFile(Array.fill[Byte](100000)(1)) {
+    val bytes = Array.tabulate[Byte](100000)(_.toByte)
+
+    withFile(bytes) {
       path =>
-        Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe")).foreach {
-          failure =>
-            val client = DepartingClient(accepted = 0, failure())
-            noException should be thrownBy FileWindow(path, 0, 100000, MIME).writeBytesTo(client)
-        }
+        for
+          accepted <- Seq(0, 50000)
+          failure <- Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe"))
+        do
+          val client = DepartingClient(accepted, failure())
+          noException should be thrownBy FileWindow(path, 0, bytes.length, MIME).writeBytesTo(client)
+
+          val received = client.received.toByteArray
+          received.length should be <= accepted
+          received shouldBe bytes.take(received.length)
+          if accepted > 0 then received should not be empty
     }
   }
 
@@ -82,7 +94,7 @@ import altitude.core.routes.RangeStreaming.FileWindow
     /**
      * Setup:
      *
-     * A path to a file that does not exist, and a 10-byte temporary file.
+     * A path to a file that does not exist, in a temporary directory removed afterwards, and a 10-byte temporary file.
      *
      * Assertions:
      *
@@ -92,9 +104,11 @@ import altitude.core.routes.RangeStreaming.FileWindow
      *
      * A missing file, and a 20-byte window over the 10-byte file, which runs out of bytes to transfer.
      */
-    val missing = Files.createTempDirectory("range-streaming").resolve("missing.bin")
-
-    a[NoSuchFileException] should be thrownBy FileWindow(missing, 0, 10, MIME).writeBytesTo(ByteArrayOutputStream())
+    val dir = Files.createTempDirectory("range-streaming")
+    try
+      val missing = dir.resolve("missing.bin")
+      a[NoSuchFileException] should be thrownBy FileWindow(missing, 0, 10, MIME).writeBytesTo(ByteArrayOutputStream())
+    finally Files.deleteIfExists(dir)
 
     // A window past the end of the file has nothing to transfer
     withFile(Array.fill[Byte](10)(1)) {

@@ -12,6 +12,7 @@ import org.slf4j.MDC
 import scala.jdk.CollectionConverters._
 
 import altitude.core.App
+import altitude.core.RequestContext
 import altitude.core.models.User
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
@@ -64,7 +65,8 @@ object decorators:
 
   /**
    * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized
-   * response. For web requests, redirects to the login page.
+   * response. For web requests, redirects to the login page. A repository in the path that the user does not own is answered as
+   * not found, as any foreign entity is.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -73,14 +75,15 @@ object decorators:
       // without needing to log in repeatedly when working with the frontend
       val devUser = App.altitude.service.user.getDevUser
 
-      if devUser.isDefined then return delegate(req, Map("request" -> req, "user" -> devUser))
+      if devUser.isDefined then
+        return ownedRepositoryOnly(req, devUser.get)(delegate(req, Map("request" -> req, "user" -> devUser)))
 
       extractToken(req) match {
         case Some(token) =>
           App.altitude.service.user.getUserFromToken(token) match {
             case Some(user) =>
               logger.trace(s"User authenticated: ${user.email}")
-              delegate(req, Map("request" -> req, "user" -> user))
+              ownedRepositoryOnly(req, user)(delegate(req, Map("request" -> req, "user" -> user)))
             case None =>
               logger.warn("Invalid or expired token")
               handleUnauthenticated(req)
@@ -90,13 +93,37 @@ object decorators:
           handleUnauthenticated(req)
       }
 
-    private def handleUnauthenticated(req: cask.Request): Result[Raw] =
-      // Check if this is an API request (Accept: application/json or API path)
-      val acceptHeader = Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("")
-      val isApiRequest = acceptHeader.contains("application/json") ||
+    /**
+     * Runs `endpoint` unless the path names a repository that `user` does not own or that does not exist: both are answered as
+     * not found, so the two cannot be told apart
+     */
+    private def ownedRepositoryOnly(req: cask.Request, user: User)(endpoint: => Result[Raw]): Result[Raw] =
+      RequestContext.repository.value match
+        case Some(repo) if repo.ownerAccountId != user.persistedId =>
+          logger.warn(s"User [${user.persistedId}] denied repository [${repo.persistedId}] they do not own")
+          handleNotFound(req)
+        case None if RepoPath.matches(req.exchange.getRequestPath) =>
+          logger.debug(s"No repository found for [${req.exchange.getRequestPath}]")
+          handleNotFound(req)
+        case _ => endpoint
+
+    private def handleNotFound(req: cask.Request): Result[Raw] =
+      if isApiRequest(req) then
+        Result.Success(
+          Response(
+            """{"error": "Not Found", "message": "Repository not found"}""",
+            statusCode = 404,
+            headers = Seq("Content-Type" -> "application/json")
+          ))
+      else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
+
+    // An API request (one that accepts JSON, or an /api/ path) is answered in JSON
+    private def isApiRequest(req: cask.Request): Boolean =
+      Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
         req.exchange.getRequestPath.startsWith("/api/")
 
-      if isApiRequest then
+    private def handleUnauthenticated(req: cask.Request): Result[Raw] =
+      if isApiRequest(req) then
         Result.Success(
           Response(
             """{"error": "Unauthorized", "message": "Authentication required"}""",
@@ -106,7 +133,8 @@ object decorators:
       else
         // Redirect to login page for web requests, preserving the original URL
         val requestPath = req.exchange.getRequestPath
-        val queryString = Option(req.exchange.getQueryString).map(qs => s"?$qs").getOrElse("")
+        // Undertow reports a missing query string as empty rather than null
+        val queryString = Option(req.exchange.getQueryString).filter(_.nonEmpty).map(qs => s"?$qs").getOrElse("")
         val originalUrl = java.net.URLEncoder.encode(s"$requestPath$queryString", "UTF-8")
         Result.Success(
           Response(
@@ -150,6 +178,8 @@ object decorators:
 
   class repoContext extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      // Request threads are pooled, so a request starts with no account or repository rather than the last request's
+      RequestContext.clear()
       val path = req.exchange.getRequestPath
 
       path match {

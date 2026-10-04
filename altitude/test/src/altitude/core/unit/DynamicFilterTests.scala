@@ -103,8 +103,8 @@ import altitude.core.util.SortDirection
     /**
      * Setup:
      *
-     * A query for non-recycled assets, sorted by file name descending, for the second page of ten, rendered the way a paged
-     * read is built: a window count over the filtered rows, the sort, then the offset and limit.
+     * A query for non-recycled assets, sorted by file name descending, for the second page of ten, rendered the way a paged read
+     * is built: a window count over the filtered rows, the sort, then the offset and limit.
      *
      * Assertions:
      *

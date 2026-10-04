@@ -16,7 +16,7 @@ import altitude.core.util.Util
 
 @DoNotDiscover class UserMetadataServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  test("Number field type can be added") {
+  test("A NUMBER field accepts only numeric values") {
 
     /**
      * Setup:
@@ -25,7 +25,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Setting the field to a value that is not a number, "one" or a lone ".", fails validation.
+     * Setting the field to a value that is not a number, "one" or a lone ".", fails validation, while numbers in a variety of
+     * spellings are accepted and stored as given.
+     *
+     * Edge cases:
+     *
+     * Leading and trailing dots and leading zeros; a blank value among them is dropped rather than refused.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
     val asset: Asset = testContext.persistAsset()
@@ -42,9 +47,14 @@ import altitude.core.util.Util
 
     // these should be ok
     data = Map[String, Set[String]](field.persistedId -> Set("000.", "0", "", "0000.00123", ".000", "36352424", "234324221"))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+
+    // The blank value is dropped, the rest are stored as given
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe
+      Set("000.", "0", "0000.00123", ".000", "36352424", "234324221")
   }
 
-  test("Boolean field type can be added") {
+  test("A BOOL field accepts a single recognized boolean, in any letter case") {
 
     /**
      * Setup:
@@ -53,12 +63,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Values that are not booleans ("one", "on") and conflicting values (TRUE and FALSE together) fail validation, while a single
-     * boolean is accepted in any letter case.
+     * Values that are not booleans ("one", "on") and conflicting values (TRUE and FALSE together) fail validation. Letter-case
+     * variants of one boolean are a single value rather than a conflict, and every recognized spelling is stored as given.
      *
      * Edge cases:
      *
-     * TRUE, FALSE, true and False are all accepted.
+     * TRUE, FALSE, true, False, 1 and 0 are all recognized; TRUE and true together collapse into one value.
      */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.BOOL))
     val asset: Asset = testContext.persistAsset()
@@ -78,24 +88,18 @@ import altitude.core.util.Util
     intercept[ValidationException] {
       testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
-    // ... but non-conflicting duplicates are ok
-    data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "TRUE"))
-
-    // these should be ok
-    data = Map[String, Set[String]](field.persistedId -> Set("TRUE"))
+    // ... but letter-case variants of one value are non-conflicting duplicates, stored as one value
+    data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "true"))
     testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value.toLowerCase) shouldBe Set("true")
 
-    data = Map[String, Set[String]](field.persistedId -> Set("FALSE"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
-
-    data = Map[String, Set[String]](field.persistedId -> Set("true"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
-
-    data = Map[String, Set[String]](field.persistedId -> Set("False"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
-
-    data = Map[String, Set[String]](field.persistedId -> Set("False"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+    // every recognized spelling is ok, and stored as given
+    Seq("TRUE", "FALSE", "true", "False", "1", "0").foreach {
+      value =>
+        data = Map[String, Set[String]](field.persistedId -> Set(value))
+        testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+        testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe Set(value)
+    }
   }
 
   test("Setting metadata values") {
@@ -483,7 +487,7 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each value replaces the previous one without a duplicate error, so the field ends with a single value.
+     * Each value replaces the previous one without a duplicate error, so the field ends with the last value, false, alone.
      */
     val _metadataField = UserMetadataField(
       name = Util.randomStr(),
@@ -498,7 +502,7 @@ import altitude.core.util.Util
     testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, false)
 
     val metadata = testApp.service.metadata.getMetadata(asset.persistedId)
-    metadata.get(metadataField.persistedId).get.size shouldBe 1
+    metadata.get(metadataField.persistedId).value.map(_.value) shouldBe Set("false")
   }
 
   test("Text fields cannot be blank") {
@@ -654,5 +658,32 @@ import altitude.core.util.Util
     intercept[ValidationException] {
       testApp.service.metadata.updateMetadataValue(asset.persistedId, storedValue.persistedId, "  \t  ")
     }
+  }
+
+  test("A value that differs only in letter case is a duplicate, however many values the field holds") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field on one asset holding five values, "one" to "five".
+     *
+     * Assertions:
+     *
+     * Adding "THREE" fails validation as a duplicate of "three", and the field keeps its five values.
+     *
+     * Edge cases:
+     *
+     * Five values make the stored set a hashed set, which looks a value up by its hash code before comparing.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val asset: Asset = testContext.persistAsset()
+    val values = List("one", "two", "three", "four", "five")
+    values.foreach(testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, _))
+
+    intercept[ValidationException] {
+      testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "THREE")
+    }
+
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe values.toSet
   }
 }

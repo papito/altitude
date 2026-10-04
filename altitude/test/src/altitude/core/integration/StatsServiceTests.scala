@@ -66,14 +66,14 @@ import altitude.core.util.Query
 
     val stats2 = testApp.service.stats.getStats
     stats2.getStatValue(Stats.SORTED_ASSETS) shouldBe 2
-    stats.getStatValue(Stats.SORTED_BYTES) shouldBe
-      stats.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
+    stats2.getStatValue(Stats.SORTED_BYTES) shouldBe
+      stats2.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
     stats2.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 0
-    stats.getStatValue(Stats.TRIAGE_BYTES) shouldBe
-      stats.getStatValue(Stats.TRIAGE_ASSETS) * TestContext.ASSET_SIZE
+    stats2.getStatValue(Stats.TRIAGE_BYTES) shouldBe
+      stats2.getStatValue(Stats.TRIAGE_ASSETS) * TestContext.ASSET_SIZE
     stats2.getStatValue(Stats.TOTAL_ASSETS) shouldBe 4
-    stats.getStatValue(Stats.TOTAL_BYTES) shouldBe
-      stats.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
+    stats2.getStatValue(Stats.TOTAL_BYTES) shouldBe
+      stats2.getStatValue(Stats.TOTAL_ASSETS) * TestContext.ASSET_SIZE
 
     // SECOND REPO
     val repo2 = testContext.persistRepository()
@@ -84,7 +84,7 @@ import altitude.core.util.Query
     stats3.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
     stats3.getStatValue(Stats.SORTED_BYTES) shouldBe
       stats3.getStatValue(Stats.SORTED_ASSETS) * TestContext.ASSET_SIZE
-    stats2.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 0
+    stats3.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 0
     stats3.getStatValue(Stats.TRIAGE_BYTES) shouldBe
       stats3.getStatValue(Stats.TRIAGE_ASSETS) * TestContext.ASSET_SIZE
     stats3.getStatValue(Stats.TOTAL_ASSETS) shouldBe 0
@@ -226,7 +226,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Once the bin is purged, the recycled count and bytes are back to zero.
+     * All five imports succeed, and once the bin is purged, the recycled count and bytes are back to zero.
      */
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
@@ -236,6 +236,7 @@ import altitude.core.util.Query
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
       testApp.service.importPipeline.run(source, AssetSeqOutputSink())
     val pipelineRes = Await.result(pipelineResFuture, Duration.Inf)
+    pipelineRes.count(_._1.isLeft) shouldBe batchSize
 
     val allAssets: List[Asset] = testApp.service.asset.query(new Query()).records
 
@@ -326,8 +327,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Stat writes made outside any transaction: the triage count incremented by three and decremented by one, then the stats of
-     * a restore applied for a triaged, recycled asset that was never persisted.
+     * Stat writes made outside any transaction: the triage count incremented by three and decremented by one, then the stats of a
+     * restore applied for a triaged, recycled asset that was never persisted.
      *
      * Assertions:
      *

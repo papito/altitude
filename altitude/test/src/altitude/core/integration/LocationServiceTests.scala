@@ -160,8 +160,8 @@ import altitude.core.models.Repository
      *
      * Assertions:
      *
-     * A Location takes a category as its parent and lists with the category's name, while a Location or an unknown ID as the
-     * parent is refused.
+     * A Location takes a category as its parent and lists with the category's name, a top-level Location lists without one, and a
+     * Location or an unknown ID as the parent is refused.
      *
      * Edge cases:
      *
@@ -180,9 +180,9 @@ import altitude.core.models.Repository
       addLocation("Orphan", categoryId = Some("bogus"))
     }
 
-    val listed = testApp.service.location.getAll.find(_.persistedId == location.persistedId).get
-    listed.categoryName shouldEqual Some("France")
-    sibling.categoryName shouldEqual None
+    val categoryNames = testApp.service.location.getAll.map(listed => listed.persistedId -> listed.categoryName).toMap
+    categoryNames(location.persistedId) shouldEqual Some("France")
+    categoryNames(sibling.persistedId) shouldEqual None
   }
 
   test("Move a Location to a category and back to the top level") {
@@ -266,7 +266,8 @@ import altitude.core.models.Repository
      *
      * Assertions:
      *
-     * The category is gone, its Locations remain at the top level without a category, and they keep their asset memberships.
+     * The category is gone, the same two Locations remain at the top level without a category, and they keep their asset
+     * memberships.
      */
     val category: Location = testApp.service.location.addCategory("France")
     val paris: Location = addLocation("Paris", categoryId = Some(category.persistedId))
@@ -280,12 +281,11 @@ import altitude.core.models.Repository
       testApp.service.location.getById(category.persistedId)
     }
     val remaining = testApp.service.location.getAll
-    remaining.map(_.name) shouldEqual List("Lyon", "Paris")
+    remaining.map(_.persistedId) shouldEqual List(lyon.persistedId, paris.persistedId)
     remaining.map(_.categoryId) shouldEqual List(None, None)
     remaining.map(_.categoryName) shouldEqual List(None, None)
     // The Locations keep their memberships
     testApp.service.location.getAssetIds(paris.persistedId) shouldEqual Set(asset.persistedId)
-    lyon.persistedId.nonEmpty shouldBe true
   }
 
   test("Deleting a Location removes its memberships and leaves the assets alone") {

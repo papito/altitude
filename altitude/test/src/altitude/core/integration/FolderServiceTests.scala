@@ -61,7 +61,7 @@ import altitude.core.models.Repository
     /**
      * Setup:
      *
-     * Folder names that are empty or made only of spaces and tabs.
+     * Folder names that are empty or made only of whitespace: a space, a line break between spaces, and spaces and tabs.
      *
      * Assertions:
      *
@@ -74,14 +74,14 @@ import altitude.core.models.Repository
       testApp.service.folder.add(" ")
     }
     intercept[ValidationException] {
-      testApp.service.folder.add(" ")
+      testApp.service.folder.add(" \r\n ")
     }
     intercept[ValidationException] {
       testApp.service.folder.add("\t \t   ")
     }
   }
 
-  test("New folders  should be free of user-entered space characters") {
+  test("New folders should be free of user-entered space characters") {
 
     /**
      * Setup:
@@ -99,7 +99,7 @@ import altitude.core.models.Repository
     folder2.name shouldEqual "Folder one"
   }
 
-  test("Deleting a folder should also remove all children") {
+  test("Deleting a folder should also recycle all children") {
 
     /**
      * Setup:
@@ -225,17 +225,7 @@ import altitude.core.models.Repository
      * Three top-level folders: folder1 with a chain of three nested descendants, folder2 with four children added in reverse name
      * order, and folder3 with one child.
      *
-     * folder1
-     *   folder1_1
-     *     folder1_1_1
-     *       folder1_1_1_1
-     * folder2
-     *     folder2_1
-     *     folder2_2
-     *     folder2_3
-     *     folder2_4
-     * folder3
-     *     folder_3_1
+     * folder1 folder1_1 folder1_1_1 folder1_1_1_1 folder2 folder2_1 folder2_2 folder2_3 folder2_4 folder3 folder3_1
      *
      * Assertions:
      *
@@ -249,7 +239,7 @@ import altitude.core.models.Repository
 
     val folder1_1_1: Folder = testApp.service.folder.add(name = "folder1_1_1", parentId = folder1_1.id)
 
-    val folder1_1_1_1: Folder = testApp.service.folder.add(name = "folder1_1_1", parentId = folder1_1_1.id)
+    val folder1_1_1_1: Folder = testApp.service.folder.add(name = "folder1_1_1_1", parentId = folder1_1_1.id)
 
     val folder2: Folder = testApp.service.folder.add("folder2")
     val folder2_4: Folder = testApp.service.folder.add("folder2_4", parentId = folder2.id)
@@ -324,8 +314,7 @@ import altitude.core.models.Repository
      * Setup:
      *
      * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
-     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. A top-level folder3 is added, and a second folder named
-     * folder1_1_1 is added under folder2.
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. A second folder named folder1_1_1 is added under folder2.
      *
      * Assertions:
      *
@@ -337,8 +326,6 @@ import altitude.core.models.Repository
      * Moving a folder into a folder three levels below it.
      */
     val f = folderHierarchyFixture
-
-    testApp.service.folder.add("folder3")
 
     // create folder1_1_1 as a duplicate under a different parent
     testApp.service.folder.add(name = "folder1_1_1", parentId = f.folder2.id)
@@ -366,10 +353,7 @@ import altitude.core.models.Repository
      *
      * Two top-level folders, each with one child whose names differ only by case.
      *
-     * folder1
-     *   child
-     * folder2
-     *     CHILD
+     * folder1 child folder2 CHILD
      *
      * Assertions:
      *
@@ -389,7 +373,7 @@ import altitude.core.models.Repository
     }
   }
 
-  test("Moving into a folder that doe not exist should throw") {
+  test("Moving into a folder that does not exist should throw") {
 
     /**
      * Setup:
@@ -446,7 +430,7 @@ import altitude.core.models.Repository
     renamedFolder.name shouldEqual "Folder"
   }
 
-  test("Duplicate folder rename actions should thrown") {
+  test("Duplicate folder rename actions should throw") {
 
     /**
      * Setup:

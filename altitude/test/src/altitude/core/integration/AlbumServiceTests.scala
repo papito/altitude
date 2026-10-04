@@ -354,8 +354,8 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * An album search returns the album's assets from any folder and nothing else, drops an asset once it is recycled, and finds
-     * nothing in an empty album.
+     * An album search returns the album's assets from any folder and nothing else, while an unfiltered search still finds the
+     * asset outside it. The album search drops an asset once it is recycled, and finds nothing in an empty album.
      */
     val album: Album = testApp.service.album.add("album")
     val folder: Folder = testApp.service.folder.add("folder")
@@ -366,13 +366,13 @@ import altitude.core.util.SearchQuery
 
     // Assets from any folder show up, ones outside the album do not
     searchAlbum(album) shouldEqual Set(inAlbum1.persistedId, inAlbum2.persistedId)
-    testApp.service.library.search(new SearchQuery(rpp = 100)).records.length shouldEqual 3
+    val everything = testApp.service.library.search(new SearchQuery(rpp = 100)).records.map(_.persistedId).toSet
+    everything shouldEqual Set(inAlbum1.persistedId, inAlbum2.persistedId, notInAlbum.persistedId)
 
     testApp.service.library.recycleAssets(Set(inAlbum2.persistedId))
     searchAlbum(album) shouldEqual Set(inAlbum1.persistedId)
 
     val emptyAlbum: Album = testApp.service.album.add("empty")
     searchAlbum(emptyAlbum) shouldEqual Set()
-    notInAlbum.persistedId.nonEmpty shouldBe true
   }
 }

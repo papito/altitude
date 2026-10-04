@@ -58,8 +58,8 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * Durations from zero to two hours, given to the schedule both with an explicit one-second interval and 120-frame maximum
-     * and through a service that reads the same values from the shipped config.
+     * Durations from zero to two hours, given to the schedule both with an explicit one-second interval and 120-frame maximum and
+     * through a service that reads the same values from the shipped config.
      *
      * Assertions:
      *
@@ -151,13 +151,13 @@ import altitude.core.service.VideoService
     /**
      * Setup:
      *
-     * A one-second clip of a black landscape frame with a white band along its top, which the container says to show as
-     * portrait (a phone held upright).
+     * A one-second clip of a black landscape frame with a white band along its top, which the container says to show as portrait
+     * (a phone held upright).
      *
      * Assertions:
      *
-     * The decoded frame is portrait-sized and turned clockwise, so the band lands on the right edge of the portrait frame and
-     * the left edge stays dark.
+     * The decoded frame is portrait-sized and turned clockwise, so the band lands on the right edge of the portrait frame and the
+     * left edge stays dark.
      */
     val frame = TestVideos.blackFrame()
     frame.rowRange(0, 40).setTo(new Scalar(255, 255, 255))

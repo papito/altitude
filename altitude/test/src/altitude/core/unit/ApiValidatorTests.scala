@@ -103,8 +103,8 @@ import altitude.core.Validators.ApiRequestValidator
      *
      * Assertions:
      *
-     * Every failing field is reported at once: the two missing fields as required, and the email that is present but malformed
-     * as not an email.
+     * Every failing field is reported at once: the two missing fields as required, and the email that is present but malformed as
+     * not an email.
      */
     val validator: ApiRequestValidator = ApiRequestValidator(
       required = List(Api.Field.ID, Api.Field.Folder.NAME, Api.Field.Setup.ADMIN_EMAIL),

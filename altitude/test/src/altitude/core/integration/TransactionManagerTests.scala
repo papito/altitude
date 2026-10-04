@@ -42,8 +42,8 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
     /**
      * Setup:
      *
-     * One asset, then a read transaction that counts the assets, has another thread persist and commit a second asset, and
-     * counts again.
+     * One asset, then a read transaction that counts the assets, has another thread persist and commit a second asset, and counts
+     * again.
      *
      * Assertions:
      *
@@ -70,8 +70,8 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
      *
      * Assertions:
      *
-     * The caller gets the transaction's own failure rather than the rollback's, no connection is left in the request context,
-     * and the next transaction runs normally.
+     * The caller gets the transaction's own failure rather than the rollback's, no connection is left in the request context, and
+     * the next transaction runs normally.
      */
     intercept[IllegalStateException] {
       testApp.txManager.withTransaction {
@@ -194,8 +194,8 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
        *
        * Assertions:
        *
-       * A read transaction plans without JIT and with custom plans, and a statement that runs past the time limit is refused
-       * with a query timeout.
+       * A read transaction plans without JIT and with custom plans, and a statement that runs past the time limit is refused with
+       * a query timeout.
        */
       import AltitudePostgresDialect.*
 

@@ -13,8 +13,6 @@ trait AssetDao extends BaseDao[Asset]:
 
   def queryNotRecycled(q: Query): QueryResult[Asset]
 
-  def queryTriaged(q: Query): QueryResult[Asset]
-
   def queryRecycled(q: Query): QueryResult[Asset]
 
   def queryAll(q: Query): QueryResult[Asset]

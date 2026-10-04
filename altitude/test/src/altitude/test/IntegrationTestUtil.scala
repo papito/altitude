@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.TimeZone
 import java.util.zip.CRC32
 import javax.imageio.ImageIO
 import org.apache.commons.io.FileUtils
@@ -15,6 +16,14 @@ import altitude.core.models.ImportAsset
 import altitude.core.models.UserMetadata
 
 object IntegrationTestUtil {
+
+  /** Runs `f` with the JVM default time zone set to `zoneId`, restoring the original zone afterwards */
+  def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
+    val original = TimeZone.getDefault
+    TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
+    try f
+    finally TimeZone.setDefault(original)
+  }
 
   def createTestDir(testApp: Altitude): Unit = {
     val testDir = new File(testApp.config.getString(C.Conf.TEST_DIR))

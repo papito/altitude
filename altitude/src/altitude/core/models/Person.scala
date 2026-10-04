@@ -51,7 +51,7 @@ case class Person(
     case that: Person => that.canEqual(this) && this.id == that.id
     case _ => false
 
-  override def hashCode: Int = super.hashCode
+  override def hashCode: Int = id.hashCode
 
   override def toString: String =
     s"PERSON $id. Name: ${name.getOrElse("N/A")}. Faces: $numOfFaces"

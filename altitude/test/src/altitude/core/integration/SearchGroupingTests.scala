@@ -1,7 +1,7 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
-import java.util.TimeZone
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ contain, empty, should, shouldBe, shouldEqual, theSameElementsAs }
 
@@ -201,13 +201,6 @@ import altitude.core.util.*
       third.continuesGroup shouldBe true
       third.nextCursor shouldBe None
     }
-  }
-
-  private def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
-    val original = TimeZone.getDefault
-    TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
-    try f
-    finally TimeZone.setDefault(original)
   }
 
   test("Pages are grouped by capture day with full-day totals and continued by cursor to the end") {
@@ -477,23 +470,24 @@ import altitude.core.util.*
     result.assets.length shouldBe 4
   }
 
-  test("A legacy null import time keeps its capture day") {
+  if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
+    test("A legacy null import time keeps its capture day") {
 
-    /**
-     * Setup:
-     *
-     * On SQLite only: two assets taken on 2026-09-06, one of them with its import time (created_at) cleared to NULL as on a
-     * legacy row.
-     *
-     * Assertions:
-     *
-     * Sorted by import time, both assets are still grouped under their capture day and counted in it and in the total.
-     *
-     * Edge cases:
-     *
-     * The NULL import time, which only SQLite's legacy rows can have; on PostgreSQL the test asserts nothing.
-     */
-    if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
+      /**
+       * Setup:
+       *
+       * SQLite only: two assets taken on 2026-09-06, one of them with its import time (created_at) cleared to NULL as on a legacy
+       * row.
+       *
+       * Assertions:
+       *
+       * Sorted by import time, descending, both assets are still grouped under their capture day and counted in it and in the
+       * total, and the NULL import time sorts after the dated one, where SQLite puts nulls in a descending sort.
+       *
+       * Edge cases:
+       *
+       * The NULL import time, which only SQLite's legacy rows can have, so the test is registered on SQLite only.
+       */
       val dated = persistDated("2026-09-06T10:00:00", "a1.jpg")
       val undated = persistDated("2026-09-06T11:00:00", "a2.jpg")
       testApp.txManager.withTransaction {
@@ -502,7 +496,7 @@ import altitude.core.util.*
 
       // The row is grouped by its capture day and counted like any other; sorted by import time it sits where SQLite puts nulls
       val byCapture = grouped(sort = SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
-      ids(byCapture) should contain theSameElementsAs List(dated.persistedId, undated.persistedId)
+      ids(byCapture) shouldEqual List(dated.persistedId, undated.persistedId)
       byCapture.total shouldBe Some(2)
       byCapture.groups.map(group => (dayOf(group.key), group.total, group.assets.length)) shouldEqual List(
         (day("2026-09-06"), 2, 2))

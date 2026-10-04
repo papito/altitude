@@ -277,20 +277,21 @@ class LibraryService(val app: Altitude):
             case (
                   (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum),
                   asset) =>
-              if asset.isTriaged then
-                (
-                  triagedAssetsSum + 1,
-                  triagedBytesSum + asset.sizeBytes,
-                  recycledAssetsSum,
-                  recycledAssetsBytesSum,
-                  sortedAssetsSum + 1,
-                  sortedBytesSum + asset.sizeBytes)
-              else if asset.isRecycled then
+              // A recycled asset counts as recycled even when it was recycled from triage and keeps its triage flag
+              if asset.isRecycled then
                 (
                   triagedAssetsSum,
                   triagedBytesSum,
                   recycledAssetsSum + 1,
                   recycledAssetsBytesSum + asset.sizeBytes,
+                  sortedAssetsSum + 1,
+                  sortedBytesSum + asset.sizeBytes)
+              else if asset.isTriaged then
+                (
+                  triagedAssetsSum + 1,
+                  triagedBytesSum + asset.sizeBytes,
+                  recycledAssetsSum,
+                  recycledAssetsBytesSum,
                   sortedAssetsSum + 1,
                   sortedBytesSum + asset.sizeBytes)
               else
@@ -306,9 +307,9 @@ class LibraryService(val app: Altitude):
         app.service.stats.incrementStat(Stats.SORTED_ASSETS, sortedAssets)
         app.service.stats.incrementStat(Stats.SORTED_BYTES, sortedBytes)
 
-        // Restoring face counts is only valid when assets are coming out of recycle.
-        // Triage/folder moves should not mutate person.numOfFaces.
-        if assetsToMove.nonEmpty && assetsToMove.forall(_.isRecycled) then app.service.person.restoreFacesForAssets(assetIds)
+        // Only the assets coming out of recycle give their faces back; triage and folder moves leave face counts alone
+        val restoredIds = assetsToMove.filter(_.isRecycled).map(_.persistedId).toSet
+        if restoredIds.nonEmpty then app.service.person.restoreFacesForAssets(restoredIds)
     }
 
   def recycleAssets(assetIds: Set[String]): Unit =
@@ -336,14 +337,16 @@ class LibraryService(val app: Altitude):
         app.service.stats.decrementStat(Stats.SORTED_ASSETS, sortedAssets)
         app.service.stats.decrementStat(Stats.SORTED_BYTES, sortedBytes)
 
-        app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, assetIds.size)
+        // Only the assets not already in the recycle bin are counted and lose their faces
+        val recycledIds = assetsToRecycle.map(_.persistedId).toSet
+
+        app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, recycledIds.size)
         app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
 
-        app.service.person.recycleFacesForAssets(assetIds)
+        app.service.person.recycleFacesForAssets(recycledIds)
 
         // Albums and Locations only point at assets; a recycled asset leaves every one of them and a restore does not bring
         // it back
-        val recycledIds = assetsToRecycle.map(_.persistedId).toSet
         app.service.album.removeAssetsFromAllAlbums(recycledIds)
         app.service.location.removeAssetsFromAllLocations(recycledIds)
     }

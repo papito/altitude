@@ -127,6 +127,7 @@ import altitude.core.dao.sql.tables._
       "mime_type",
       "width",
       "height",
+      "duration_ms",
       "size_bytes",
       "extracted_metadata",
       "public_metadata",

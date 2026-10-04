@@ -33,13 +33,13 @@ Sources: [BaseService](../altitude/src/altitude/core/service/BaseService.scala),
 Sources: [UserService](../altitude/src/altitude/core/service/UserService.scala). Evidence: [UserServiceTests](../altitude/test/src/altitude/core/integration/UserServiceTests.scala), [LoginControllerTests](../altitude/test/src/altitude/core/controller/LoginControllerTests.scala).
 
 - ✅ Create a password-bearing user and retrieve the same persisted ID.
-- ✅ Correct credentials produce a login result; a wrong password or nonexistent user produces `None`.
-- ✅ A valid HTTP login returns a cookie that authenticates a subsequent page request; invalid HTTP credentials receive 401.
-- [ ] Assert the authenticated user's exact identity, account type, nonempty token, and `RequestContext.account` after login. The direct success test only checks that the result exists. [MEDIUM]
+- ✅ Correct credentials log in the created user with a nonempty token; a wrong password or nonexistent user produces `None`.
+- ✅ A valid HTTP login returns a cookie that authenticates a subsequent page request; an unknown email and a wrong password for an existing user both receive 401.
+- ✅ `setLastActiveRepoId` stores the repository: reading the user back yields its ID.
+- [ ] Assert the authenticated user's account type and `RequestContext.account` after login. [MEDIUM]
 - [ ] Assert failed login does not replace the current account with the attempted user; cover database lookup failure as well as invalid credentials. [MEDIUM]
 - [ ] Verify password storage contains a usable hash rather than plaintext, and define/test duplicate-email registration behavior without creating another account. [MEDIUM]
 - [ ] Verify both unknown-user and wrong-password paths perform a password check; use deterministic observation rather than a fragile wall-clock timing assertion. [MEDIUM]
-- [ ] Read the user back after `setLastActiveRepoId` and assert the saved repository ID. The existing test calls the setter without checking its result. [MEDIUM]
 - [ ] Cover `getDevUser` with complete valid credentials, invalid credentials, and either configuration value absent. [MINOR]
 - [ ] Verify adding a user through the passwordless overload is rejected without persistence. [EDGE]
 
@@ -70,14 +70,15 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 
 ## Asset persistence, queries, and previews
 
-Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala).
+Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala).
 
 - ✅ Unknown asset and preview IDs raise `NotFoundException`.
-- ✅ Persist an `isRecycled` update; query active assets; query an empty library and paginate ordinary results, including beyond the last page.
+- ✅ Persist an `isRecycled` update; a plain asset query leaves recycled assets out while `queryAll` filtered on the recycled flag finds them; query an empty library and paginate ordinary results, including beyond the last page.
 - ✅ Rename an active asset and verify persistence; reject renaming a recycled asset.
-- ✅ Import produces nonzero image dimensions and nonempty preview data with the expected MIME type.
-- [ ] Implement the empty `Search triage` test with active, recycled-triage, sorted, and foreign assets; explicitly establish `queryTriaged` filtering. [MEDIUM]
-- [ ] Replace the empty `Search recycled` test with combined-filter and pagination assertions. Basic recycled counts are already covered by recycle/restore tests. [MEDIUM]
+- ✅ Import produces nonzero image dimensions and a preview that decodes as an image filling the square preview box.
+- ✅ The triage view's scope returns the triaged assets that are not recycled, leaving out a sorted asset and a recycled triaged asset, which keeps its triage flag.
+- ✅ The trash view's scope returns the recycled assets not yet marked for purging.
+- [ ] Cover the trash view with combined filters and pagination. Basic recycled counts are already covered by recycle/restore tests. [MEDIUM]
 - [ ] Verify `getByChecksum` selects only an eligible asset in the current repository when the same checksum exists elsewhere or only in recycled records. [MEDIUM]
 - [ ] Define/test invalid filename handling on rename and ensure rejection preserves the old filename. [MINOR]
 - [ ] Assert preview size/aspect ratio and exact width/height for known images; cover corrupt/empty image bytes and the non-image zero-dimension/no-preview branches. [EDGE]
@@ -99,7 +100,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
 - [ ] Mix unsupported/corrupt inputs with valid inputs and assert the documented continuation policy; the unsupported-type test contains only one invalid input. [MEDIUM]
 - [ ] Verify user-scoped success/error notifications identify the correct asset and recipient and are not duplicated. [MEDIUM]
-- [ ] Assert the mapping from `ImportAsset` to `AssetWithData`, including supplied user metadata, user identity, filename, exact checksum/size, and detected type. Existing metadata fixtures mainly enter through `addAsset`; one type assertion compares a value to itself. [MEDIUM]
+- [ ] Assert the mapping from `ImportAsset` to `AssetWithData`, including supplied user metadata, user identity, filename, exact checksum/size, and detected type. Existing metadata fixtures mainly enter through `addAsset`. [MEDIUM]
 - [ ] Verify an empty finite source completes cleanly with no rows, files, statistics changes, or notifications. [EDGE]
 
 ## Extracted metadata and capture dates
@@ -113,7 +114,7 @@ Sources: [MetadataExtractionService](../altitude/src/altitude/core/service/Metad
 - ✅ Missing capture metadata stays null, public display metadata cannot supply a capture timestamp, and an undated imported image belongs to the No date group.
 - ✅ Unit tests cover fallback-source priority, metadata/filename parsing, malformed dates, sentinel/future-date rejection, and stable provenance serialization. These supplement the narrower real-import fixtures.
 - ✅ Resolve GPS coordinates from real JPEG fixtures (N/E, S/W, a sub-degree western longitude whose sign only the ref carries) and persist them through the import pipeline; a coordinate without a ref, and 0/0, resolve to nothing. Coordinates round-trip through storage on both engines and stay null when absent, on the typed and the row-map read paths.
-- ✅ Unit tests cover the DMS description format, hemisphere refs overriding the description's sign, a comma decimal separator, partial/garbage/out-of-range input, and the null-island rejection.
+- ✅ Unit tests cover the DMS description format, hemisphere refs overriding the description's sign, a comma decimal separator, partial/garbage/out-of-range input, the null-island rejection, and the source priority: EXIF GPS and ISO 6709 win over an MP4 pair, and an unreadable ISO 6709 string falls through to it.
 - ✅ A tag whose description is null (a GPS coordinate without its ref) is skipped rather than stored as a null value.
 - [ ] Verify corrupt/unsupported bytes yield empty extracted metadata under the service's error policy, without returning partially accumulated metadata. [MEDIUM]
 - [ ] Exercise null-character sanitization with real metadata values and persist the result on both engines. [MEDIUM]
@@ -146,7 +147,7 @@ Sources: [FolderService](../altitude/src/altitude/core/service/FolderService.sca
 Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala). Evidence: [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [AlbumControllerTests](../altitude/test/src/altitude/core/controller/AlbumControllerTests.scala), [AlbumActionControllerTests](../altitude/test/src/altitude/core/controller/AlbumActionControllerTests.scala).
 
 - ✅ Trim names, reject blank names, enforce case-insensitive uniqueness per repository, and permit casing-only renames.
-- ✅ List albums by name with empty/nonempty counts; create identically named albums in different repositories without listing/count leakage.
+- ✅ List albums by name ignoring case with empty/nonempty counts; create identically named albums in different repositories without listing/count leakage.
 - ✅ Add membership idempotently, return insertion counts, and allow an asset in multiple albums.
 - ✅ Ignore unknown/recycled asset IDs when adding to an album.
 - ✅ Remove memberships or delete an album while preserving assets and other albums' memberships.
@@ -164,7 +165,7 @@ Sources: [LocationService](../altitude/src/altitude/core/service/LocationService
 
 - ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across categories and Locations on add and rename, and permit casing-only renames.
 - ✅ Reject a pin out of range (including NaN); store the edges of the range; the model refuses a pinless Location, a pinned category and a nested category.
-- ✅ Add a Location under a category only: a Location as the category is an `IllegalOperationException`, an unknown category is `NotFoundException`; `getAll` fills `categoryName`.
+- ✅ Add a Location under a category only: a Location as the category is an `IllegalOperationException`, an unknown category is `NotFoundException`; `getAll` fills `categoryName` for a Location under a category and leaves it empty for a top-level one.
 - ✅ Move a Location between categories and back to the top level; refuse moving a category, moving under a Location or under itself; unknown IDs on either side are `NotFoundException`.
 - ✅ Delete a category: its Locations move to the top level and keep their memberships. Delete a Location: memberships go, assets stay, other Locations keep theirs; a repeated delete is `NotFoundException`.
 - ✅ Add membership idempotently with insertion counts, an empty set is a no-op, unknown and recycled assets are dropped, a category refuses assets, an unknown Location is `NotFoundException`.
@@ -178,13 +179,15 @@ Sources: [LocationService](../altitude/src/altitude/core/service/LocationService
 
 Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [AssetControllerTests](../altitude/test/src/altitude/core/controller/AssetControllerTests.scala).
 
-- ✅ Move an asset between folders and verify source/destination query results; HTTP tests also verify a two-asset move.
+- ✅ Move an asset between folders and verify source/destination query results; nine assets from three folders all land in the destination; HTTP tests also verify a two-asset move.
 - ✅ Move an asset from triage into a folder, update folder/count state, and leave existing person face counts unchanged.
 - ✅ Recycle several assets while preserving unselected assets; repeating a batch consisting entirely of already recycled assets leaves counts unchanged.
 - ✅ Recycle sorted and triaged assets together, and recycle folder descendants; adjust global statistics and person face counts while retaining face records until purge.
-- [ ] Recycle a batch mixing eligible, already recycled, and unknown IDs; assert statistics and person counts change only for eligible rows. The implementation uses the original ID set for some accounting. [MEDIUM]
-- [ ] Move a batch mixing sorted, triaged, and recycled assets; verify each flag, destination, byte/count transition, and restored person count. In particular, face restoration currently depends on every selected asset being recycled. [MEDIUM]
-- [ ] Move a recycled asset originally from triage into a folder and assert recycled statistics decrease while sorted statistics increase. Both original flags can be true. [MEDIUM]
+- ✅ Recycling a selection that includes an already recycled asset counts only the newly recycled one: the recycled statistics hold both assets and their bytes, and the person's face count stops at zero.
+- ✅ Moving recycled and live assets together into a folder gives the recycled asset's face back to its person and empties the recycled statistics.
+- ✅ Moving an asset recycled from triage into a folder takes it from the recycled statistics to the sorted ones and leaves the triage statistics at zero.
+- [ ] Recycle a batch that also holds unknown IDs; assert statistics and person counts change only for the eligible rows. [MEDIUM]
+- [ ] Move a batch mixing sorted, triaged, and recycled assets; verify each flag, destination, and byte/count transition. [MEDIUM]
 - [ ] Reject null, nonexistent, or otherwise invalid destination folders without altering assets or statistics; cover an invalid ID mixed with valid asset IDs. [MEDIUM]
 - [ ] Move assets to their current folder repeatedly and verify no count or face drift; cover an empty selection. [EDGE]
 - [ ] Verify a failure during recycling rolls back asset flags, album removals, statistics, and person counts together. [CRITICAL]
@@ -209,11 +212,11 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala), [PurgePipelineService](../altitude/src/altitude/core/service/PurgePipelineService.scala), [purge flows](../altitude/src/altitude/core/pipeline/flows/). Evidence: [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala), [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [FolderServiceTests](../altitude/test/src/altitude/core/integration/FolderServiceTests.scala).
 
 - ✅ A finite purge stream removes asset rows, original files, and previews; removes non-cover face records and their binary variants.
-- ✅ Preserve cover-face files after the face row is deleted, and keep other assets' face files accessible in the exercised scenario.
-- ✅ Repeating a finite purge stream completes without throwing (smoke coverage only).
-- ✅ `purgeRecycleBin` synchronously zeros recycled statistics; unselected active assets remain readable in its existing test.
+- ✅ Preserve cover-face files after the face row is deleted; the faces of assets outside the purge keep their records and all four images.
+- ✅ Repeating a finite purge stream of recycled assets completes, the purged rows and files stay gone, and an asset outside the purge keeps its record and file.
+- ✅ `purgeRecycleBin` synchronously zeros recycled statistics; once its queued purge has deleted the recycled assets' records, the asset that was not recycled keeps its record, preview, file, faces and every face image.
 - ✅ Calling `purgeSelectedAssets` for one recycled asset leaves folder counts unchanged; this does not assert eventual deletion or recycle-bin accounting.
-- [ ] Await actual completion of `purgeRecycleBin` and `purgeSelectedAssets`, then assert selected rows/files/faces are gone and every unselected asset survives. Most deletion assertions bypass the production queue via `run`. [CRITICAL]
+- [ ] Await actual completion of `purgeSelectedAssets`, then assert selected rows/files/faces are gone and every unselected asset survives; after `purgeRecycleBin`, assert the recycled assets' files and faces are gone as well as their records. Most deletion assertions bypass the production queue via `run`. [CRITICAL]
 - [ ] Select only part of the recycle bin and verify exact remaining asset/byte statistics; include active, unknown, empty, and already queued IDs. [MEDIUM]
 - [ ] Repeat a purge request before the first queued purge finishes and verify no double decrement, negative counts, or duplicate destructive side effects. [MEDIUM]
 - [ ] Inject file deletion failure and database deletion failure at each stage; verify retained state supports the documented retry/recovery policy instead of reporting success with orphaned files or missing originals. [CRITICAL]
@@ -227,22 +230,22 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 
 Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala), [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [LibraryServicePruneTests](../altitude/test/src/altitude/core/integration/LibraryServicePruneTests.scala).
 
-- ✅ Mark imported assets unfinished, prune them, and assert their rows and discoverable search results disappear.
+- ✅ Mark imported assets unfinished, prune them, and assert their rows, discoverable search results, and search documents disappear.
 - [ ] Prune multiple populated repositories and assert completed assets survive in every repository. The current fixture only verifies unfinished assets in one repository. [CRITICAL]
-- [ ] Assert `forEachRepository` visits every repository once and restores the caller's repository, including an initially empty context and a callback that throws. The existing test manually resets context afterward. [MEDIUM]
-- [ ] Define/test cleanup of original/preview/face files and people counts left by partially completed imports; the existing pruning test checks rows and search visibility only. [MEDIUM]
+- [ ] Assert `forEachRepository` visits every repository once and restores the caller's repository for an initially empty context and a callback that throws; the pruning test relies on the restore only in the ordinary case. [MEDIUM]
+- [ ] Define/test cleanup of original/preview/face files and people counts left by partially completed imports; the existing pruning test checks rows, search visibility, and search documents only. [MEDIUM]
 - [ ] Race pruning against an in-flight import and verify the lifecycle boundary prevents removal of work that is still progressing. [CRITICAL]
 
 ## Global statistics
 
 Sources: [StatsService](../altitude/src/altitude/core/service/StatsService.scala). Evidence: [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [LibraryServiceRestoreTests](../altitude/test/src/altitude/core/integration/LibraryServiceRestoreTests.scala).
 
-- ✅ Assemble totals from sorted, triaged, and recycled dimensions and verify initial byte totals.
-- ✅ Update counts/bytes for sorted-asset recycling and folder recycling; prevent changes on an entirely repeated recycle selection.
-- ✅ Update asset counts for triage-to-folder moves and direct restoration to triage/sorted state; zero recycled counts/bytes when marking the full bin for purge.
+- ✅ Assemble totals from sorted, triaged, and recycled dimensions and verify byte totals before and after moving the triaged asset into a folder.
+- ✅ Update counts/bytes for sorted-asset recycling and folder recycling; an entirely repeated recycle selection changes nothing, and a selection that includes an already recycled asset counts only the newly recycled one.
+- ✅ Update asset counts for triage-to-folder moves and direct restoration to triage/sorted state; moving an asset recycled from triage into a folder takes it from the recycled to the sorted counts and bytes; zero recycled counts/bytes when marking the full bin for purge.
 - ✅ Read zero total assets/bytes from a new repository while the previous repository has data.
-- [ ] Re-read and assert byte counters after every move/restore using assets of different sizes. `Test totals` checks several post-move bytes against the old `stats` snapshot, not `stats2`. [MEDIUM]
-- [ ] Verify all six dimensions in both populated repositories after mutations; one triage assertion in the second-repository block also reads `stats2` rather than `stats3`. [MEDIUM]
+- [ ] Re-read and assert byte counters after every move/restore using assets of different sizes; every `Test totals` fixture has the same size. [MEDIUM]
+- [ ] Verify all six dimensions in both populated repositories after mutations; the second repository in `Test totals` is empty. [MEDIUM]
 - [ ] Directly exercise public `moveAsset` and `recycleAsset` branches, including recycled-triage assets and ordinary moves. Library bulk operations perform their own accounting and do not test these methods. [MEDIUM]
 - [ ] Verify rollback and concurrent increments/decrements preserve totals with no lost updates. [MEDIUM]
 - [ ] Cover byte totals above `Int.MaxValue`, zero-sized assets, missing statistics dimensions, and invalid decrements according to the chosen contract. [EDGE]
@@ -254,16 +257,17 @@ Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadat
 - ✅ Add/retrieve/delete a metadata field; reject an exact duplicate field name.
 - ✅ Fields are shared by users in the same repository; reject supplied metadata field IDs that are not configured there.
 - ✅ Store keyword/number fields, omit empty value sets, merge partial updates, and delete fields whose supplied value set becomes empty.
-- ✅ Reject nonnumeric input, invalid Boolean strings, and multiple Boolean values; accept the exercised true/false casing variants.
-- ✅ Reject blank keyword/text additions and blank updates; replace Boolean values without accumulating multiple stored values.
+- ✅ Reject nonnumeric input, invalid Boolean strings, and conflicting Boolean values; accept numbers with leading/trailing dots and leading zeros and store them as given, dropping a blank one; accept `TRUE`/`FALSE` in any letter case and `1`/`0`, stored as given, with letter-case variants of one Boolean collapsing into one value.
+- ✅ Reject blank keyword/text additions and blank updates; replace Boolean values, leaving only the last one stored.
+- ✅ Reject adding a keyword value that differs from an existing one only in letter case, with five values already in the field.
 - ✅ Generate value IDs, preserve existing IDs when adding another field, and update values by ID including casing-only and unchanged updates.
 - ✅ Delete individual values; verify normal keyword/number edits feed search indexing.
 - [ ] Verify case-insensitive field-name collisions and independent same-name fields in two repositories. The current all-fields test switches users, not repositories. [MEDIUM]
 - [ ] Verify deleting a field already used by assets cleans or safely handles stored metadata and search entries; call `toJson` afterward. The deletion fixture uses an unused field. [MEDIUM]
-- [ ] Assert keyword whitespace compaction, text newline preservation, trimming, and duplicates that become equal after cleaning; reject duplicate additions and edits to another existing value. [MEDIUM]
+- [ ] Assert keyword whitespace compaction, text newline preservation, trimming, and duplicates that become equal after cleaning; reject edits to another existing value. [MEDIUM]
 - [ ] Define/test missing asset IDs, missing value IDs, and a value ID belonging to a different asset for update/delete; assert unrelated data survives. [MEDIUM]
 - [ ] Assert exact stored values after set/update, including preservation of omitted fields. Some current removal assertions compare `Set[UserMetadataValue]` with raw strings and can succeed without establishing value removal. [MEDIUM]
-- [ ] Exercise `0`/`1` Booleans, the numeric examples that are assigned but never submitted in `Number field type can be added`, non-finite numbers, and numeric overflow. [EDGE]
+- [ ] Exercise non-finite numbers and numeric overflow. [EDGE]
 - [ ] Define and test valid/invalid `DATETIME` values; `collectInvalidTypeValues` currently accepts every datetime string. [MEDIUM]
 - [ ] Inject an index-write failure during a value edit and assert metadata/index changes roll back together. [CRITICAL]
 
@@ -274,7 +278,7 @@ Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadat
 - ✅ Updating a keyword value makes the new value searchable; deleting a value removes the exercised text match.
 - ✅ Keyword/number additions participate in combined metadata filters.
 - [ ] Verify `toJson` includes configured empty fields, sorts names case-insensitively, preserves value IDs, omits internal timestamps/lowercase names, and honors a supplied field lookup. No direct assertions cover this transformer. [MINOR]
-- [ ] After Boolean replacement, require the new Boolean filter to match and the old one not to match; current tests only count stored values. [MEDIUM]
+- [ ] After Boolean replacement, require the new Boolean filter to match and the old one not to match; current tests check the stored value only. [MEDIUM]
 - [ ] After keyword/number update or deletion, verify both the old text term and old faceted value disappear and unrelated terms remain. [MEDIUM]
 - ✅ A TEXT value added through `addMetadataValue` is found by the next search and has no metadata parameter; an imported or reindexed asset's TEXT and DATETIME values have none either and are found by their words, while its keyword, number and Boolean values have one row each, after a reindex too, and match their filters.
 - [ ] Edit and delete a TEXT value through the public mutation API and assert its old words stop matching and the new ones match. [MINOR]
@@ -297,9 +301,9 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - [ ] A capped total in HTML (`data-results-total-capped="true"`, "10000+" in the toolbar and the map panel) needs more than 10,000 matches, so it is verified at the service level with a small cap and in the browser only. [MINOR]
 - ✅ HTTP: an ungrouped page is bounded like a grouped one: `rpp` outside 1 to 500 (no page size included) is a plain-text 400 on a first page and a continuation; `p` below 1 or past the last page whose rows an `Int` numbers (where the offset would wrap) is a plain-text 400 on both, the last page itself is served, at the default page size and at one asset a page; `rpp=1` limits the page to one of two matches and `rpp=500` serves both.
 - [ ] The `searchParams` store dropping an out-of-range `rpp` or `p` from a hand-edited URL is verified in the browser only; there is no JS test harness. [MINOR]
-- ✅ Return sort metadata and hide unfinished imports from search.
+- ✅ Return sort metadata (none for an unsorted search) and hide unfinished imports from search.
 - ✅ Unit tests check generated SQL for text, metadata, folder, and sort predicates on the engine-specific builders.
-- [ ] Assert ordinary ascending/descending result order. Both existing creation-date tests compute `.forall(...)` and discard the Boolean; their comparisons also point opposite to the test names. [MEDIUM]
+- ✅ Ascending and descending import-time sorts return the assets in exactly their import order and its reverse.
 - [ ] Verify ordering by filename, size, area, and capture time with unequal values and ties; assert page traversal contains no unexpected duplicates/omissions for a stable dataset. [MEDIUM]
 - ✅ Search document: an imported asset's document is its file name words, a value with a camelCase hump in both readings and one without a hump once; a rename and a metadata edit rewrite it, rewriting an unchanged one updates no row, recycling keeps it, and purging removes it.
 - ✅ Search text over the document on both engines: AND-ed terms across file name and metadata values, word-start prefixes, several-word terms in sequence, phrases, `OR` binding tighter than AND, exclusion, and text without a word being no text; a word with a camelCase hump is found by the word in one case, a prefix of it and its parts, and a word typed with a hump finds the word written in one case.
@@ -337,14 +341,14 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - [ ] Traverse size/area sorts using different numeric values. Current cursor fixtures give equal size/area values, so those cases primarily exercise the ID tiebreaker. [MEDIUM]
 - [ ] Check remaining-day counts after inserts/deletes and test mutations to an anchor's sort/day value; define the expected live-result semantics explicitly. [MEDIUM]
 - [ ] Reject malformed cursor field types, invalid dates, oversized tokens, and mismatched sort-value types with a domain error rather than leaking an internal exception. [EDGE]
-- [ ] Issue an authenticated request for another user's repository and assert the intended access rule. The test named `Grouped requests require authentication and a repository the user can see` only sends unauthenticated requests. [CRITICAL]
+- ✅ Repository access: an authenticated grouped request for another user's repository, or for one that does not exist, is a 404 that shows none of its assets, and recycling another user's asset through its repository's API path is a JSON 404 that leaves the asset live.
 
 ## Map cells, bounds and the geocoder
 
 Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQueries.scala), [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [GeocoderService](../altitude/src/altitude/core/service/GeocoderService.scala). Evidence: [SearchMapTests](../altitude/test/src/altitude/core/integration/SearchMapTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [GeocoderServiceTests](../altitude/test/src/altitude/core/unit/GeocoderServiceTests.scala), [MapControllerTests](../altitude/test/src/altitude/core/controller/MapControllerTests.scala), [SearchResultsControllerTests](../altitude/test/src/altitude/core/controller/SearchResultsControllerTests.scala).
 
 - ✅ Cells aggregate the plotted points on both engines: an asset at its own point, an asset without one at the pin of each Location it is in (counted once per Location), assets at one coordinate merged into one cell with the mean centroid, a Location listed with its matching count and its category's name, and absent without matching assets.
-- ✅ The representative asset of a cell is the newest capture, then the lowest ID, and follows the matching set when the newest is recycled.
+- ✅ The representative asset of a cell is the newest capture, then the lowest ID, and follows the matching set when the newest is recycled; a cell of one is represented by its only asset.
 - ✅ Cell size follows the zoom (one cell at zoom 0, two at zoom 10 for points a degree apart) and the zoom is clamped to 0..20.
 - ✅ Cells and Locations are clipped to the viewport, including a box across the antimeridian.
 - ✅ Bounds cover both point sources, count plotted points, follow the search's filters, and are absent when nothing is plotted.

@@ -22,4 +22,4 @@ case class UserMetadataValue(id: Option[String] = None, value: String) extends B
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
-  override def hashCode: Int = super.hashCode
+  override def hashCode: Int = checksum

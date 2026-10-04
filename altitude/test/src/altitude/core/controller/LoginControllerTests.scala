@@ -20,7 +20,7 @@ import altitude.core.App
      *
      * Logging in with the user's email and password redirects, and the session cookie it sets opens the repository's main page.
      */
-    val repo = testContext.persistRepository()
+    testContext.persistRepository()
     testApp.app.isInitialized = true
 
     withServer(App) {
@@ -51,27 +51,24 @@ import altitude.core.App
     /**
      * Setup:
      *
-     * An initialized instance with a user and their repository, and credentials that match no user.
+     * An initialized instance with a user and their repository.
      *
      * Assertions:
      *
-     * The login is refused with a 401.
+     * A login is refused with a 401 both for credentials that match no user and for the user's email with a wrong password.
      */
-    val repo = testContext.persistRepository()
+    testContext.persistRepository()
     testApp.app.isInitialized = true
 
     withServer(App) {
       host =>
-        val loginResponse = requests.post(
-          s"$host/login",
-          maxRedirects = 0,
-          check = false,
-          data = Map(
-            "login" -> "blah",
-            "password" -> "blahblahblah"
-          ))
+        def loginStatus(email: String, password: String): Int =
+          requests
+            .post(s"$host/login", maxRedirects = 0, check = false, data = Map("login" -> email, "password" -> password))
+            .statusCode
 
-        loginResponse.statusCode shouldBe 401
+        loginStatus("blah", "blahblahblah") shouldBe 401
+        loginStatus(testContext.user.email, s"wrong${TestContext.USER_PASSWORD}") shouldBe 401
     }
   }
 }

@@ -95,15 +95,19 @@ import altitude.core.util.GeoLocationResolver
     /**
      * Setup:
      *
-     * MP4 directories holding decimal Latitude and Longitude for Paris, a latitude alone, 0/0, and a longitude of 181.
+     * MP4 directories holding decimal Latitude and Longitude for Paris, a latitude alone, 0/0, and a longitude of 181. Paris's
+     * MP4 pair is then paired with EXIF GPS for Sydney, with an ISO 6709 string for Cupertino, and with an unreadable ISO 6709
+     * string.
      *
      * Assertions:
      *
-     * A complete, in-range pair resolves to its point.
+     * A complete, in-range pair resolves to its point, but only when no other source places the asset: GPS and ISO 6709 both win
+     * over it.
      *
      * Edge cases:
      *
-     * A missing longitude, null island and an out-of-range longitude resolve to nothing.
+     * A missing longitude, null island and an out-of-range longitude resolve to nothing, and an ISO 6709 string that cannot be
+     * read falls through to the MP4 pair.
      */
     def mp4(fields: (String, String)*): ExtractedMetadata = ExtractedMetadata(Map("MP4" -> fields.toMap))
     val point = GeoLocationResolver.resolve(mp4("Latitude" -> "48.8566", "Longitude" -> "2.3522")).get
@@ -111,6 +115,16 @@ import altitude.core.util.GeoLocationResolver
     GeoLocationResolver.resolve(mp4("Latitude" -> "48.8566")) shouldBe None
     GeoLocationResolver.resolve(mp4("Latitude" -> "0", "Longitude" -> "0")) shouldBe None
     GeoLocationResolver.resolve(mp4("Latitude" -> "48.8566", "Longitude" -> "181")) shouldBe None
+
+    // A source that places the asset wins over the MP4 pair, and one that cannot place it falls through to the pair
+    val paris = Map("Latitude" -> "48.8566", "Longitude" -> "2.3522")
+    def resolvedWith(directory: String, fields: Map[String, String]): (Double, Double) = {
+      val point = GeoLocationResolver.resolve(ExtractedMetadata(Map("MP4" -> paris, directory -> fields))).get
+      (point.latitude, point.longitude)
+    }
+    expect(resolvedWith("GPS", sydney.toMap), 33.857, 151.2152)
+    expect(resolvedWith("QuickTime Metadata", Map("ISO 6709" -> "+37.3318-122.0312/")), 37.3318, -122.0312)
+    expect(resolvedWith("QuickTime Metadata", Map("ISO 6709" -> "somewhere")), 48.8566, 2.3522)
   }
 
   test("The ref restores the sign a sub-degree description loses") {

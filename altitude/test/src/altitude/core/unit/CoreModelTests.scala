@@ -4,7 +4,6 @@ import altitude.test.TestFocus
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.must.Matchers.be
-import org.scalatest.matchers.must.Matchers.include
 import org.scalatest.matchers.should.Matchers.{ convertToStringShouldWrapperForVerb, should }
 
 import scala.language.implicitConversions
@@ -15,8 +14,7 @@ import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Face
 import altitude.core.models.Folder
 import altitude.core.models.Stat
-import altitude.core.util.JsonCodec
-import altitude.core.util.JsonCodec.given
+import altitude.core.models.UserMetadataValue
 
 @DoNotDiscover class CoreModelTests extends funsuite.AnyFunSuite with TestFocus {
 
@@ -57,13 +55,13 @@ import altitude.core.util.JsonCodec.given
     deserialized.parentId should be(folder.parentId)
   }
 
-  test("A Video's duration and a Face's Frame time travel through JSON, and are absent for an image") {
+  test("Video duration and Face Frame time, quality and enrollment travel through JSON, and the times are absent when unset") {
 
     /**
      * Setup:
      *
-     * A video asset with a 90.5 s duration and a copy of it as an image with none, plus a Face from a video Frame at 1.5 s with
-     * a quality and an enrollment flag, and a copy of the Face with no Frame time.
+     * A video asset with a 90.5 s duration and a copy of it as an image with none, plus a Face from a video Frame at 1.5 s with a
+     * quality and an enrollment flag, and a copy of the Face with no Frame time.
      *
      * Assertions:
      *
@@ -121,20 +119,51 @@ import altitude.core.util.JsonCodec.given
     Asset.getPublicMetadata(ExtractedMetadata()).deviceModel should be(None)
   }
 
-  test("Model toJson contains expected fields") {
+  test("Faces with the same ID are equal and hash alike") {
 
     /**
      * Setup:
      *
-     * A Stat with a dimension name and a value.
+     * Two Faces with one ID but different boxes and scores, and a third Face with another ID.
      *
      * Assertions:
      *
-     * The JSON text of the Stat contains both the dimension name and the value.
+     * The first two are equal and share a hash code, and the third equals neither.
      */
-    val stat = Stat(dimension = "my_dimension", dimVal = 100)
-    val jsonStr = stat.toJson.toString()
-    jsonStr should include("my_dimension")
-    jsonStr should include("100")
+    val face = Face(
+      id = Some("1"),
+      x1 = 1,
+      y1 = 2,
+      width = 3,
+      height = 4,
+      detectionScore = 0.5,
+      checksum = 7,
+      features = Array(0.1f),
+      quality = 21.5,
+      isEnrolled = false)
+    val sameId = face.copy(x1 = 10, detectionScore = 0.9)
+
+    sameId should be(face)
+    sameId.hashCode should be(face.hashCode)
+    (face.copy(id = Some("2")) == face) should be(false)
+  }
+
+  test("Metadata values that differ only in letter case are equal and hash alike") {
+
+    /**
+     * Setup:
+     *
+     * The values "Beach", "BEACH" (saved, with an ID) and "Lake".
+     *
+     * Assertions:
+     *
+     * "Beach" and "BEACH" are equal and share a hash code, and "Lake" equals neither.
+     */
+    val value = UserMetadataValue(value = "Beach")
+    val upper = UserMetadataValue(id = Some("1"), value = "BEACH")
+
+    upper should be(value)
+    upper.hashCode should be(value.hashCode)
+    (UserMetadataValue(value = "Lake") == value) should be(false)
   }
 }

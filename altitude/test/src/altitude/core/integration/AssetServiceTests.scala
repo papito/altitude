@@ -84,22 +84,26 @@ import altitude.core.util.Query
     (testApp.service.asset.getById(asset.persistedId): Asset).isRecycled shouldBe true
   }
 
-  test("Should be able to query by the recycled property") {
+  test("Asset queries leave recycled assets out unless the recycled flag is queried directly") {
 
     /**
      * Setup:
      *
-     * One live asset.
+     * One live asset and one recycled asset.
      *
      * Assertions:
      *
-     * A query for assets that are not recycled finds it.
+     * A plain asset query finds the live asset alone, and a query of every asset filtered on the recycled flag finds the recycled
+     * one alone.
      */
-    testContext.persistAsset()
+    val live = testContext.persistAsset()
+    val recycled = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(recycled.persistedId))
 
-    val q = new Query(params = Map(FieldConst.Asset.IS_RECYCLED -> false))
-    val result = testApp.service.asset.query(q)
+    val notRecycled = testApp.service.asset.query(new Query()).records
+    notRecycled.map(_.persistedId) shouldBe List(live.persistedId)
 
-    result.total shouldBe 1
+    val recycledOnly = testApp.service.asset.queryAll(new Query(params = Map(FieldConst.Asset.IS_RECYCLED -> true))).records
+    recycledOnly.map(_.persistedId) shouldBe List(recycled.persistedId)
   }
 }

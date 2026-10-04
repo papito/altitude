@@ -47,4 +47,4 @@ case class Face(
     case that: Face => that.id == this.id
     case _ => false
 
-  override def hashCode: Int = super.hashCode
+  override def hashCode: Int = id.hashCode

@@ -124,8 +124,9 @@ The crops live in the file store (`FileSystemStoreService.addFace`) as
 
 A `person` row carries `name`, `is_named`, `num_of_faces`, `cover_face_id`, `is_hidden`, `is_bad_match`, `is_deleted`.
 `PersonService.addFace` inserts the Face, increments `num_of_faces` and sets the cover face when it is the first.
-Recycling an asset decrements the counts of its people and restoring increments them; the faces themselves go with the
-asset on purge. Moving an asset between folders or triage does not touch the counts.
+Recycling an asset decrements the counts of its people and restoring increments them, whether it is restored or moved out
+of the trash into a folder; only the assets a call actually recycles or takes out of the trash are counted. The faces
+themselves go with the asset on purge. Moving a live asset between folders or out of triage does not touch the counts.
 
 The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilter`: complete (at least
 `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named), incomplete, hidden. Its actions:
