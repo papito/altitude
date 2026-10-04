@@ -13,14 +13,20 @@ import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.stage
 
-object FacialRecognitionFlow:
+/**
+ * Matches the faces `DetectFacesFlow` found to people and stores them, one asset at a time and in upload order, so a face can
+ * join the person an earlier asset of the batch started
+ */
+object RecognizeFacesFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     given ExecutionContext = app.importDispatcher
-    stage("Facial recognition", parallelism = 1) {
+    stage("Face recognition", parallelism = 1) {
       dataAsset =>
-        debugInfo(s"\tRunning facial recognition ${dataAsset.asset.fileName}")
+        debugInfo(s"\tRecognizing faces ${dataAsset.asset.fileName}")
+        val detected = dataAsset.detectedFaces.getOrElse(
+          throw IllegalStateException(s"The faces of ${dataAsset.asset.fileName} were not detected"))
         try
-          app.service.faceRecognition.processAsset(dataAsset)
+          app.service.faceRecognition.recognizeAndStore(dataAsset.asset, detected)
           Left(dataAsset)
         catch
           // The same face crop twice in one asset: the user is told why rather than shown a duplicate asset

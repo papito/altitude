@@ -399,7 +399,7 @@ import altitude.core.service.FaceRecognitionService
     // The second crop is byte-identical to the first, which the face checksum index refuses after the first face's files are
     // written
     intercept[DuplicateException] {
-      testApp.service.faceRecognition.processAsset(dataAsset)
+      testApp.service.faceRecognition.recognizeAndStore(asset, testApp.service.faceRecognition.detect(dataAsset))
     }
 
     testApp.service.person.getAssetFaces(asset.persistedId) shouldBe empty

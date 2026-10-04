@@ -10,12 +10,12 @@ import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.stage
 
-object AddPreviewFlow:
+/** Finds the asset's faces, several assets at once: no database is touched until `RecognizeFacesFlow` */
+object DetectFacesFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     given ExecutionContext = app.importDispatcher
-    stage("Preview", app.importParallelism) {
+    stage("Face detection", app.importParallelism) {
       dataAsset =>
-        debugInfo(s"\tGenerating preview ${dataAsset.asset.fileName}")
-        app.service.asset.addPreview(dataAsset)
-        Left(dataAsset)
+        debugInfo(s"\tDetecting faces ${dataAsset.asset.fileName}")
+        Left(dataAsset.copy(detectedFaces = Some(app.service.faceRecognition.detect(dataAsset))))
     }

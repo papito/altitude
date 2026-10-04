@@ -1,6 +1,5 @@
 package altitude.core.service
 
-import java.awt.image.BufferedImage
 import java.io.IOException
 import javax.imageio.ImageIO
 import org.opencv.core.MatOfByte
@@ -103,20 +102,25 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       case _ => new Array[Byte](0)
 
   /**
-   * The display size and, for a Video, the length, from one read of the file. A Video's size has the container's rotation
-   * applied, so a portrait phone recording is portrait. An image no reader can decode is an [[ImageException]], a Video FFmpeg
-   * cannot open a [[altitude.core.VideoException]].
+   * The display size and, for a Video, the length. An image's size is read from its header, without decoding it, which face
+   * detection and the preview each do; a Video's has the container's rotation applied, so a portrait phone recording is portrait.
+   * An image no reader takes, or whose header it cannot read, is an [[ImageException]], a Video FFmpeg cannot open a
+   * [[altitude.core.VideoException]].
    */
   def getDimensionsAndDuration(dataAsset: AssetWithData): (Int, Int, Option[Long]) /* width, height, duration */ =
     dataAsset.asset.assetType.mediaType match
       case "image" =>
-        // ImageIO answers a file no reader takes with null, and one a reader takes but cannot decode with an IOException
-        val img: BufferedImage =
+        val input = ImageIO.createImageInputStream(dataAsset.path.toFile)
+        try
+          val readers = ImageIO.getImageReaders(input)
+          if !readers.hasNext then throw ImageException(s"No image reader takes ${dataAsset.path}")
+          val reader = readers.next()
           try
-            Option(ImageIO.read(dataAsset.path.toFile))
-              .getOrElse(throw ImageException(s"No image reader takes ${dataAsset.path}"))
-          catch case ex: IOException => throw ImageException(s"Cannot decode ${dataAsset.path}: ${ex.getMessage}")
-        (img.getWidth, img.getHeight, None)
+            reader.setInput(input, true, true)
+            (reader.getWidth(0), reader.getHeight(0), None)
+          catch case ex: IOException => throw ImageException(s"Cannot read the header of ${dataAsset.path}: ${ex.getMessage}")
+          finally reader.dispose()
+        finally input.close()
       case "video" =>
         val info = app.service.video.probe(dataAsset.path)
         (info.width, info.height, Some(info.durationMs))

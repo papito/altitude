@@ -13,13 +13,18 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 
 ## Where it runs
 
-Face recognition is a stage of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists
-and is indexed: `FacialRecognitionFlow`, its own stage on both engines, its work on the import dispatcher's threads
-(`import.parallelism`). It calls `FaceRecognitionService.processAsset`, which dispatches on the asset's media type:
-`processImage` or `processVideo`.
-Both detect the faces first, outside any transaction, and then match and store them in a short `withFaceVector`
-transaction, so the detection never holds SQLite's one write connection.
-Whatever the stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
+Faces are two stages of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists and is
+indexed, on both engines, their work on the import dispatcher's threads (`import.parallelism`):
+
+- `DetectFacesFlow` calls `FaceRecognitionService.detect`, which finds the faces without touching the database: an
+  image's every detection (`extractFaces`), or a Video's clusters (see **Videos**). It works on up to
+  `import.parallelism` assets of a repository at once. The detections, a `DetectedFaces` of each Face with its crops,
+  ride on the pipeline element (`AssetWithData.detectedFaces`) to the next stage.
+- `RecognizeFacesFlow` calls `recognizeAndStore`, which matches and stores them in a short `withFaceVector`
+  transaction, so the detection never holds SQLite's one write connection. It works on one asset of a repository at a
+  time, in upload order, so a face can join the Person an earlier photo of the same upload started.
+
+Whatever a stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
 rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`. Each Face's files are written as it
 is stored, inside that transaction, and a rollback deletes the files already written (`withFaceFiles`), so a Face in the
 database always has its files and a rolled-back one leaves none.
@@ -98,7 +103,7 @@ fires mostly through the Video support rule below.
 
 ## Videos
 
-`processVideo` runs detection on every Sampled frame (`VideoService.sampleTimes`: every
+`detect` runs detection on every Sampled frame of a Video (`VideoService.sampleTimes`: every
 `video.faces.sample_interval_ms`, at most `video.faces.max_sampled_frames`), tags each Face with its Frame time, and
 holds all detections of the video in memory. Then, with the pure functions of the `FaceRecognitionService` companion:
 
@@ -113,8 +118,8 @@ holds all detections of the video in memory. Then, with the pure functions of th
 4. **Support** is the number of distinct Frame times in the cluster. Under `video.faces.min_cluster_frames` (2) the
    Face is match-only whatever its quality, so a passer-by in one frame cannot start a Person. A clip shorter than the
    sample interval has one frame, so nobody enrolls from it.
-5. One Face per Person per Video: when two clusters resolve to the same Person, the later, lower-quality one is
-   dropped with an INFO log, so a pose change that splits a person in two does not fail the import.
+5. One Face per Person per Video: when two clusters resolve to the same Person (`recognizeAndStore`), the later,
+   lower-quality one is dropped, so a pose change that splits a person in two does not fail the import.
 
 ## Storage
 

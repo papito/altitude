@@ -141,7 +141,7 @@ import altitude.core.util.SearchQuery
     testApp.service.fileStore.addAsset(dataAsset.copy(asset = persisted))
 
     val stored = AssetWithData(persisted, testApp.service.fileStore.assetFile(persisted.persistedId))
-    testApp.service.faceRecognition.processAsset(stored)
+    testApp.service.faceRecognition.recognizeAndStore(persisted, testApp.service.faceRecognition.detect(stored))
     testApp.service.asset.addPreview(stored)
     persisted
   }

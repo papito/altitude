@@ -18,11 +18,21 @@ import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
+import altitude.core.ImageException
+
 object ImageUtil:
 
   // Get OPENCV image Mat from a byte array
-  def matFromBytes(data: Array[Byte]): Mat =
-    Imgcodecs.imdecode(new MatOfByte(data*), Imgcodecs.IMREAD_ANYCOLOR)
+  def matFromBytes(data: Array[Byte]): Mat = decode(data, Imgcodecs.IMREAD_ANYCOLOR)
+
+  /**
+   * Decodes an image with OpenCV. Data no codec decodes is an [[ImageException]]: the size is read from the header alone, so a
+   * file whose data is corrupt, or a format OpenCV has no codec for, is found here.
+   */
+  private def decode(data: Array[Byte], flags: Int): Mat =
+    val image = Imgcodecs.imdecode(new MatOfByte(data*), flags)
+    if image.empty() then throw ImageException("OpenCV cannot decode the image")
+    image
 
   def determineImageScale(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): Double =
     val scaleX = targetWidth.toDouble / sourceWidth
@@ -44,7 +54,7 @@ object ImageUtil:
      * https://sirv.com/help/articles/rotate-photos-to-be-upright/
      * https://stackoverflow.com/questions/5905868/how-to-rotate-jpeg-images-based-on-the-orientation-metadata
      */
-    val imageMat = Imgcodecs.imdecode(new MatOfByte(data*), Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION)
+    val imageMat = decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION)
     val scaleFactor = determineImageScale(imageMat.width(), imageMat.height(), previewBoxSize, previewBoxSize)
 
     val resizedMat = new Mat()

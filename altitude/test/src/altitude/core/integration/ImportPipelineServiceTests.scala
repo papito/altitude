@@ -2,10 +2,18 @@ package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
+import java.awt.Color
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.zip.CRC32
+import javax.imageio.ImageIO
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.ActorAttributes
@@ -733,4 +741,96 @@ import altitude.core.util.Query
     testApp.service.person.getPersonById(person.persistedId).numOfFaces shouldBe 1
     faceFiles should contain theSameElementsAs filesOfOriginal
   }
+
+  test("More photos of one person than the import has threads, imported at once, are one Person") {
+
+    /**
+     * Setup:
+     *
+     * Two more distinct photos of the same face than the import dispatcher has threads (`people/affleck.jpg` scaled down, each on
+     * a canvas one pixel wider than the last), imported in one stream, so their faces are detected at once.
+     *
+     * Assertions:
+     *
+     * Every photo is imported, and the repository has one Person, with a Face from each: the faces were matched one at a time, in
+     * upload order, the first starting the Person and every other joining it.
+     */
+    val count = testApp.importParallelism + 2
+    val portrait = ImageIO.read(IntegrationTestUtil.getImportAsset("people/affleck.jpg").path.toFile)
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+
+    val photos = (0 until count).map {
+      i =>
+        val canvas = new BufferedImage(640 + i, 893, BufferedImage.TYPE_3BYTE_BGR)
+        val drawing = canvas.createGraphics()
+        drawing.setColor(Color.WHITE)
+        drawing.fillRect(0, 0, canvas.getWidth, canvas.getHeight)
+        drawing.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        drawing.drawImage(portrait, 0, 0, 640, 893, null)
+        drawing.dispose()
+
+        val png = new ByteArrayOutputStream()
+        ImageIO.write(canvas, "png", png)
+        (
+          testApp.service.library.stagedFileToAsset(s"affleck-$i.png", testApp.service.staging.stage(png.toByteArray)),
+          pipelineContext)
+    }
+
+    val pipelineRes = runPipeline(photos*)
+    pipelineRes.collect { case (Right(invalid), _) => invalid.cause } shouldBe empty
+
+    rowCount("person") shouldBe 1
+    val person = testApp.service.person.getAll.head
+    person.numOfFaces shouldBe count
+  }
+
+  test("An image imports with the dimensions its header gives") {
+
+    /**
+     * Setup:
+     *
+     * A JPEG and a PNG (`images/1.jpg`, `images/3.png`) imported.
+     *
+     * Assertions:
+     *
+     * Each is stored with the width and height of the image as `ImageIO` decodes it.
+     */
+    List("images/1.jpg", "images/3.png").foreach {
+      relPath =>
+        val (dataAsset, pipelineContext) = staged(relPath)
+        val decoded = ImageIO.read(dataAsset.path.toFile)
+
+        val asset = testApp.service.asset.getById(imported(runPipeline((dataAsset, pipelineContext))).persistedId)
+        (asset.width, asset.height) shouldBe (decoded.getWidth, decoded.getHeight)
+    }
+  }
+
+  test("An image whose header reads but whose data does not decode is dropped as undecodable") {
+
+    /**
+     * Setup:
+     *
+     * A random PNG whose image data is replaced by bytes that do not inflate, its header and chunk checksums intact.
+     *
+     * Assertions:
+     *
+     * It is dropped with `ImageException`, the cause the user is shown as "Cannot decode image".
+     */
+    val corrupt = pngWithUndecodableData(IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150))
+    val upload = testApp.service.library.stagedFileToAsset("corrupt.png", testApp.service.staging.stage(corrupt))
+
+    dropped(runPipeline((upload, PipelineContext(testContext.repository, testContext.user)))).cause.get shouldBe a[ImageException]
+  }
+
+  /** The PNG with the payload of its first IDAT chunk overwritten by bytes zlib refuses, and that chunk's CRC recomputed */
+  private def pngWithUndecodableData(png: Array[Byte]): Array[Byte] =
+    val bytes = png.clone()
+    val idat = bytes.indexOfSlice("IDAT".getBytes(StandardCharsets.US_ASCII))
+    val length = ByteBuffer.wrap(bytes, idat - 4, 4).getInt
+    java.util.Arrays.fill(bytes, idat + 4, idat + 4 + length, 0xff.toByte)
+
+    val crc = new CRC32()
+    crc.update(bytes, idat, 4 + length)
+    ByteBuffer.wrap(bytes, idat + 4 + length, 4).putInt(crc.getValue.toInt)
+    bytes
 }

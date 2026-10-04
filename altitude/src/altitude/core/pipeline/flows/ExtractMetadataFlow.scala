@@ -19,7 +19,7 @@ import altitude.core.util.GeoLocationResolver
 object ExtractMetadataFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     given ExecutionContext = app.importDispatcher
-    stage("Metadata extraction", parallelism = 1) {
+    stage("Metadata extraction", app.importParallelism) {
       dataAsset =>
         debugInfo(s"\tExtracting metadata for asset: ${dataAsset.asset.fileName}")
         // Merge upstream synthetic metadata so every resolver input remains available for a later replay.
