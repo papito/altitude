@@ -25,6 +25,7 @@ import altitude.core.util.SearchResult
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchTerm
 import altitude.core.util.SearchWords
+import altitude.core.util.SortValue
 
 object SearchService:
 
@@ -126,16 +127,48 @@ class SearchService(val app: Altitude):
       candidates = Option.when(complete.nonEmpty)(complete.map(index => hits.getOrElse(index, Nil).toSet).reduce(_ intersect _))
     )
 
-  def search(query: SearchQuery): SearchResult =
+  /**
+   * A flat page: the DAO returns the rows, the continuation cursor is assembled here ([[cursorAt]]). Sorted by capture time the
+   * search is ordered by day first, and the cursor carries the last image's day.
+   */
+  def search(query: SearchQuery, scopeFingerprint: String): SearchResult =
     val started = System.currentTimeMillis
-    val result = txManager.asReadOnly {
+    val page = txManager.asReadOnly {
       searchDao.search(query)
     }
+
+    val nextCursor = Option.when(page.hasMore) {
+      val last = page.rows.last
+      cursorAt(query, scopeFingerprint, last.day.map(_.toString), None, last.asset, last.sortValue, last.secondSortValue)
+    }
+    val result = SearchResult(page.rows.map(_.asset), page.total, nextCursor, query.rpp, query.searchSort)
+
     logger.trace(
-      s"Search page ${query.page}: ${result.records.length} assets" +
+      s"Search page: ${result.records.length} assets" +
         result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
         s", in ${System.currentTimeMillis - started}ms")
     result
+
+  /**
+   * The cursor that continues a search after the image at this position. It carries the scope fingerprint of the search as
+   * requested and, under the Relevance sort, which orders by the capture time next, that too.
+   */
+  private def cursorAt(
+      query: SearchQuery,
+      scopeFingerprint: String,
+      key: Option[String],
+      groupId: Option[String],
+      asset: Asset,
+      sortValue: SortValue,
+      secondSortValue: SortValue): SearchCursor =
+    SearchCursor(
+      key = key,
+      groupId = groupId,
+      sortValue = sortValue,
+      id = asset.persistedId,
+      scope = scopeFingerprint,
+      secondSortValue = Option.when(query.searchSort.exists(_.isRelevance))(secondSortValue)
+    )
 
   def count(query: SearchQuery): Int =
     val started = System.currentTimeMillis
@@ -144,6 +177,11 @@ class SearchService(val app: Altitude):
     }
     logger.trace(s"Counted $count matching assets in ${System.currentTimeMillis - started}ms")
     count
+
+  def countByFolder(): Map[String, Int] =
+    txManager.asReadOnly {
+      searchDao.countByFolder()
+    }
 
   def cappedCount(query: SearchQuery): Int =
     val started = System.currentTimeMillis
@@ -178,8 +216,7 @@ class SearchService(val app: Altitude):
 
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
-   * points at the last returned image and carries the scope fingerprint of the search as requested; under the Relevance sort,
-   * which orders by the capture time next, it carries that too.
+   * points at the last returned image ([[cursorAt]]).
    */
   def searchGrouped(query: SearchQuery, scopeFingerprint: String): GroupedSearchResult =
     val started = System.currentTimeMillis
@@ -189,14 +226,14 @@ class SearchService(val app: Altitude):
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
-      SearchCursor(
-        key = last.group.cursorKey,
-        groupId = last.group.cursorGroupId,
-        sortValue = last.sortValue,
-        id = last.asset.persistedId,
-        scope = scopeFingerprint,
-        secondSortValue = Option.when(query.searchSort.head.isRelevance)(last.secondSortValue)
-      )
+      cursorAt(
+        query,
+        scopeFingerprint,
+        last.group.cursorKey,
+        last.group.cursorGroupId,
+        last.asset,
+        last.sortValue,
+        last.secondSortValue)
     }
 
     val groups = GroupedSearchResult.groupsOf(page.rows)

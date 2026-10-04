@@ -185,36 +185,32 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
     if assetIds.isEmpty then return List.empty[Asset]
 
-    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
-
     val sql = s"""
       SELECT asset.*,
              NULL AS ${FieldConst.Asset.USER_METADATA},
              NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
         FROM asset
-       WHERE id IN ($placeHolders)
+       WHERE id $inIdSet
          $forUpdate
     """
 
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList)
+    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(idSet(assetIds)))
     res.map(makeModel)
 
   private def getAssetsByIdAndRecycledFlag(assetIds: Set[String], isRecycled: Boolean): List[Asset] =
     if assetIds.isEmpty then return List.empty[Asset]
 
-    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
-
     val sql = s"""
       SELECT asset.*,
              NULL AS ${FieldConst.Asset.USER_METADATA},
              NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
         FROM asset
-       WHERE id IN ($placeHolders)
+       WHERE id $inIdSet
          AND is_recycled = ?
          $forUpdate
     """
 
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(this.nativeBool(isRecycled)))
+    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(idSet(assetIds), nativeBool(isRecycled)))
     res.map(makeModel)
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
@@ -228,23 +224,3 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     logger.trace(s"New metadata -> $newMetadata")
 
     setUserMetadata(assetId, newMetadata)
-
-  override def countByFolder(): Map[String, Int] =
-    // Mirrors the search predicate (SearchQueryBuilder): a folder's count must match what clicking it shows
-    val sql = s"""
-      SELECT ${FieldConst.Asset.FOLDER_ID}, COUNT(*) AS ${FieldConst.Folder.NUM_OF_ASSETS}
-        FROM asset
-       WHERE ${FieldConst.REPO_ID} = ?
-         AND ${FieldConst.Asset.IS_RECYCLED} = ?
-         AND ${FieldConst.Asset.IS_TRIAGED} = ?
-         AND ${FieldConst.Asset.IS_PURGED} = ?
-         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?
-       GROUP BY ${FieldConst.Asset.FOLDER_ID}
-    """
-
-    val values =
-      List(RequestContext.getRepository.persistedId, nativeBool(false), nativeBool(false), nativeBool(false), nativeBool(true))
-
-    manyBySqlQuery(sql, values).map {
-      rec => rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String] -> getIntField(rec(FieldConst.Folder.NUM_OF_ASSETS))
-    }.toMap

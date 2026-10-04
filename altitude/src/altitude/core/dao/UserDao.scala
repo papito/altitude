@@ -8,3 +8,6 @@ trait UserDao extends BaseDao[User]:
 
   /** The stored hash for an account. It is not part of the `User` model, so it never travels with one. */
   def getPasswordHashByEmail(email: String): String
+
+  /** The account an email address names, whatever its case; a `NotFoundException` when it names none */
+  def getByEmail(email: String): User

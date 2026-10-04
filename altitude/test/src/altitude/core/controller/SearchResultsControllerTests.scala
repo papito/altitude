@@ -220,7 +220,6 @@ import altitude.core.models.AssetType
             "groupBy" -> "bad",
             "groupDirection" -> "up",
             "after" -> "bad",
-            "p" -> "99",
             "rpp" -> "0",
             "isContinuousScroll" -> "true")
         )
@@ -413,8 +412,7 @@ import altitude.core.models.AssetType
         page1 should include("""data-results-group-by="dateTaken"""")
         page1 should include("""data-results-group-direction="desc"""")
 
-        // The last cell, and only it, carries the cursor; no cell carries a page number
-        page1.contains("data-app-search-next-page") shouldBe false
+        // The last cell, and only it, carries the cursor
         val cursors = cursorOf(page1)
         cursors.length shouldBe 1
         ordered(page1, cell(a2), "data-app-search-after")
@@ -432,7 +430,6 @@ import altitude.core.models.AssetType
         page2 should include("""<time datetime="2026-09-05">Saturday, September 5, 2026</time>""")
         ordered(page2, header("2026-09-05"), cell(b1))
         page2.contains("data-app-search-after") shouldBe false
-        page2.contains("data-app-search-next-page") shouldBe false
 
         // Continuing past the end, after the remaining images left the results, has nothing to append
         testApp.service.library.recycleAssets(Set(a3.persistedId, b1.persistedId))
@@ -488,8 +485,8 @@ import altitude.core.models.AssetType
      *
      * Assertions:
      *
-     * Every malformed or contradictory grouping, direction, cursor, page size, page number or sort is a plain-text 400 naming the
-     * parameter at fault. A cursor is refused for a different search but accepted with another page size.
+     * Every malformed or contradictory grouping, direction, cursor, page size or sort is a plain-text 400 naming the parameter at
+     * fault. A cursor is refused for a different search but accepted with another page size.
      *
      * Edge cases:
      *
@@ -522,12 +519,11 @@ import altitude.core.models.AssetType
         // A Location grouping has a fixed order
         rejected(Map(Api.Field.Search.GROUP_BY -> "location", Api.Field.Search.GROUP_DIRECTION -> "asc")) should
           include("groupDirection")
-        rejected(Map(Api.Field.Search.AFTER -> "abc")) should include("groupBy")
+        rejected(Map(Api.Field.Search.AFTER -> "abc")) should include("cursor")
         rejected(grouped + (Api.Field.Search.AFTER -> "abc")) should include("cursor")
         rejected(grouped + (Api.Field.Search.AFTER -> "e30")) should include("cursor")
         rejected(grouped + (Api.Field.Search.RESULTS_PER_PAGE -> "0")) should include("rpp")
         rejected(grouped + (Api.Field.Search.RESULTS_PER_PAGE -> "501")) should include("rpp")
-        rejected(grouped + (Api.Field.Search.PAGE -> "2")) should include("p is not used")
         rejected(grouped + (Api.Field.Search.SORT -> "checksum0")) should include("sort")
         rejected(grouped + (Api.Field.Search.SORT -> "filename")) should include("sort")
         rejected(grouped + (Api.Field.Search.AFTER -> cursor)) should include("isContinuousScroll")
@@ -546,23 +542,21 @@ import altitude.core.models.AssetType
     }
   }
 
-  test("An ungrouped page is bounded: rpp and p out of range are plain-text 400 errors") {
+  test("An ungrouped page is bounded: rpp out of range is a plain-text 400 error") {
 
     /**
      * Setup:
      *
-     * Two dated assets.
+     * Two dated assets, and the cursor of a one-asset first page.
      *
      * Assertions:
      *
-     * Page sizes outside 1..500 and page numbers outside 1..42949672 (the last page whose rows an Int offset can number at the
-     * default 50) are plain-text 400s stating the bounds, on first pages and continuations alike; pages within the bounds are
-     * served, and a page size of 1 or 500 returns one asset or both.
+     * Page sizes outside 1..500 are plain-text 400s stating the bounds, on first pages and continuations alike, and a page size
+     * of 1 or 500 returns one asset or both.
      *
      * Edge cases:
      *
-     * The page sizes 0, -1 and 501; the pages 0, -1, one past the bound and Int.MaxValue; and Int.MaxValue accepted at one asset
-     * a page.
+     * The page sizes 0, -1 and 501.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -572,7 +566,10 @@ import altitude.core.models.AssetType
       host =>
         val older = persistDated("2026-09-06T10:00:00", "a1.jpg")
         val newer = persistDated("2026-09-07T10:00:00", "a2.jpg")
-        val continuation = Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
+
+        val one = htmlSearch(host, repoId, Map(Api.Field.Search.RESULTS_PER_PAGE -> "1")).text()
+        List(older, newer).count(asset => one.contains(cell(asset))) shouldBe 1
+        val continuation = Map(Api.Field.Search.AFTER -> cursorOf(one).head, Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
 
         def rejected(params: Map[String, String]): String = {
           val response = htmlSearch(host, repoId, params)
@@ -586,19 +583,7 @@ import altitude.core.models.AssetType
           rejected(Map(Api.Field.Search.RESULTS_PER_PAGE -> rpp)) shouldBe "rpp must be between 1 and 500"
           rejected(continuation + (Api.Field.Search.RESULTS_PER_PAGE -> rpp)) shouldBe "rpp must be between 1 and 500"
         }
-        // The last page is the last one whose every row an Int can number: 42949672 at the default 50
-        for (page <- List("0", "-1", "42949673", Int.MaxValue.toString)) withClue(s"p=$page: ") {
-          rejected(Map(Api.Field.Search.PAGE -> page)) shouldBe "p must be between 1 and 42949672"
-          rejected(Map(Api.Field.Search.PAGE -> page, Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")) shouldBe
-            "p must be between 1 and 42949672"
-        }
-        htmlSearch(host, repoId, Map(Api.Field.Search.PAGE -> "42949672")).statusCode shouldBe 200
-        // One asset a page reaches the largest page an Int numbers
-        val last = Map(Api.Field.Search.RESULTS_PER_PAGE -> "1", Api.Field.Search.PAGE -> Int.MaxValue.toString)
-        htmlSearch(host, repoId, last).statusCode shouldBe 200
 
-        val one = htmlSearch(host, repoId, Map(Api.Field.Search.RESULTS_PER_PAGE -> "1")).text()
-        List(older, newer).count(asset => one.contains(cell(asset))) shouldBe 1
         val largest = htmlSearch(host, repoId, Map(Api.Field.Search.RESULTS_PER_PAGE -> "500"))
         largest.statusCode shouldBe 200
         List(older, newer).foreach(asset => largest.text() should include(cell(asset)))
@@ -822,7 +807,7 @@ import altitude.core.models.AssetType
   }
 
   test(
-    "An ungrouped page carries the next page number until the last page; the first page carries the total and whether it is capped") {
+    "An ungrouped page carries the cursor of the next until the last page; the first page carries the total and whether it is capped") {
 
     /**
      * Setup:
@@ -831,12 +816,13 @@ import altitude.core.models.AssetType
      *
      * Assertions:
      *
-     * The first page carries the total, whether it is capped, and the next page number on its last cell; the second page holds
-     * the remaining asset with neither a next page nor a total.
+     * The first page carries the total, whether it is capped, and the cursor of the next page on its last cell alone; the second
+     * page, requested with that cursor, holds the remaining asset with neither a cursor nor a total. A cursor without
+     * isContinuousScroll, a malformed one and one sent with another sort are plain-text 400s.
      *
      * Edge cases:
      *
-     * A continuation past the last page is a 204 with nothing to append.
+     * A continuation whose remaining assets have left the results is a 204 with nothing to append.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -851,18 +837,34 @@ import altitude.core.models.AssetType
         page1 should include("""data-results-total="3"""")
         page1 should include("""data-results-total-capped="false"""")
         ordered(page1, cell(a1), cell(a2))
-        ordered(page1, cell(a2), """data-app-search-next-page="2"""")
+        val cursors = cursorOf(page1)
+        cursors.length shouldBe 1
+        ordered(page1, cell(a2), "data-app-search-after")
         page1.contains(cell(a3)) shouldBe false
 
-        val scroll = params + (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
-        val page2 = htmlSearch(host, repoId, scroll + (Api.Field.Search.PAGE -> "2"))
+        val scroll = params + (Api.Field.Search.AFTER -> cursors.head) + (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
+        val page2 = htmlSearch(host, repoId, scroll)
         page2.statusCode shouldBe 200
         page2.text() should include(cell(a3))
-        page2.text().contains("data-app-search-next-page") shouldBe false
+        page2.text().contains(cell(a2)) shouldBe false
+        page2.text().contains("data-app-search-after") shouldBe false
         page2.text().contains("data-results-total") shouldBe false
 
+        // A cursor continues the results of the search it was issued for
+        for (
+          refused <- List(
+            params + (Api.Field.Search.AFTER -> cursors.head),
+            scroll + (Api.Field.Search.AFTER -> "abc"),
+            scroll + (Api.Field.Search.SORT -> "filename1"))
+        ) {
+          val response = htmlSearch(host, repoId, refused)
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("text/plain")
+        }
+
         // A continuation that finds no rows has nothing to append
-        htmlSearch(host, repoId, scroll + (Api.Field.Search.PAGE -> "3")).statusCode shouldBe 204
+        testApp.service.library.recycleAssets(Set(a3.persistedId))
+        htmlSearch(host, repoId, scroll).statusCode shouldBe 204
     }
   }
 
@@ -876,8 +878,8 @@ import altitude.core.models.AssetType
      * Assertions:
      *
      * Without an Accept header the ungrouped search is an HTML grid in grid layout, with no grouping, no group headers and no
-     * bounding-box scope, and a continuation past the last page is a 204. Asking for JSON, by the Accept header or by the legacy
-     * Content-Type, is a 400 with a JSON error pointing to HTML.
+     * bounding-box scope. Asking for JSON, by the Accept header or by the legacy Content-Type, is a 400 with a JSON error
+     * pointing to HTML.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -899,12 +901,8 @@ import altitude.core.models.AssetType
         page.contains("""id="bboxScope"""") shouldBe false
         page.contains("""class="result-group"""") shouldBe false // the style block names it; no header is rendered
 
-        // Past the last page
-        val scroll = htmlSearch(host, repoId, Map(Api.Field.Search.PAGE -> "2", Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true"))
-        scroll.statusCode shouldBe 204
-
         // Nothing asks for results as JSON any more: the detail modal walks the grid
-        for (params <- Seq(Map(Api.Field.Search.PAGE -> "1"), Map(Api.Field.Search.GROUP_BY -> "dateTaken"))) {
+        for (params <- Seq(Map[String, String](), Map(Api.Field.Search.GROUP_BY -> "dateTaken"))) {
           val json = search(host, repoId, params)
           json.statusCode shouldBe 400
           json.headers("content-type").head should include("application/json")

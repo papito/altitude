@@ -116,6 +116,15 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected val forUpdate: String
 
+  /**
+   * The test of a hand-written statement for a column being one of a set of IDs, `column $inIdSet`, whose one placeholder takes
+   * the whole set as [[idSet]] binds it, so a selection of any size neither grows the statement nor reaches the engine's
+   * parameter limit. The typed twin is `Columns.isInSet`.
+   */
+  protected val inIdSet: String
+
+  protected def idSet(ids: Set[String]): Any
+
   def add(modelIn: Model): Model = throw NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): ujson.Obj =
@@ -158,17 +167,9 @@ abstract class BaseDao[Model <: BaseModel]:
     updateByQuery(q, data)
 
   def deleteByQuery(q: Query): Int =
-    logger.trace(s"Deleting record by query: $q")
-    BaseDao.incrWriteQueryCount()
-    val fieldPlaceholders: List[String] = q.params.keys.map(_ + " = ?").toList
-    val sql = s"""
-      DELETE
-        FROM $tableName
-       WHERE ${fieldPlaceholders.mkString(",")}
-      """
-    logger.trace(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
-    val runner = queryRunner
-    val numDeleted = runner.update(RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object])*)
+    import dialect.*
+
+    val numDeleted = Db.write(dialect)(_.run(table.delete(row => DynamicFilter(table, writeColumns(row), q, dialect))))
     logger.trace(s"Deleted records: $numDeleted")
     numDeleted
 
@@ -229,10 +230,10 @@ abstract class BaseDao[Model <: BaseModel]:
     import dialect.*
 
     val assignments = data.toSeq.map {
-      (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, updateColumns(row), name, value, dialect)
+      (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, writeColumns(row), name, value, dialect)
     }
 
-    val update = table.update(row => DynamicFilter(table, updateColumns(row), q, dialect)).set(assignments*)
+    val update = table.update(row => DynamicFilter(table, writeColumns(row), q, dialect)).set(assignments*)
     val numUpdated = Db.write(dialect)(_.run(update))
     logger.trace("Updated records: " + numUpdated)
     numUpdated
@@ -278,7 +279,7 @@ abstract class BaseDao[Model <: BaseModel]:
   private def selectColumns(row: Row[Expr]): Map[String, Expr[?]] =
     Columns.byName(table, rowQueryable.walkExprs(row))
 
-  private def updateColumns(row: Row[Column]): Map[String, Expr[?]] =
+  private def writeColumns(row: Row[Column]): Map[String, Expr[?]] =
     Columns.byName(table, rowQueryable.asInstanceOf[Queryable.Row[Row[Column], Row[Sc]]].walkExprs(row))
 
   protected given rowQueryable: Queryable.Row[Row[Expr], Row[Sc]] = table.containerQr(using dialect)

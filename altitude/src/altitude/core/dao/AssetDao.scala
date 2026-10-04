@@ -25,6 +25,3 @@ trait AssetDao extends BaseDao[Asset]:
   def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = throw NotImplementedError("")
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit
-
-  /** Direct (non-recursive) count of sorted assets per folder id in the context repository; folders with no assets are absent */
-  def countByFolder(): Map[String, Int]

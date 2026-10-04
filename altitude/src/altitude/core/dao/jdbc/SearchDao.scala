@@ -19,7 +19,6 @@ import altitude.core.dao.sql.tables.AlbumRow
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.FolderRow
 import altitude.core.dao.sql.tables.LocationRow
-import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.models._
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupBy
@@ -28,8 +27,9 @@ import altitude.core.util.GroupedSearchRow
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchName
+import altitude.core.util.SearchPage
 import altitude.core.util.SearchQuery
-import altitude.core.util.SearchResult
+import altitude.core.util.SearchRow
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchWords
 import altitude.core.util.SortValue
@@ -65,35 +65,28 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   /** What this engine says differently in a search */
   protected def searchDialect: SearchDialect
 
-  override def search(searchQuery: SearchQuery): SearchResult =
+  override def search(query: SearchQuery): SearchPage =
     import dialect.*
+    given TypeMapper[SortValue] = searchDialect.sortValueMapper
 
-    val isFirstPage = searchQuery.page == 1
-    if matchesNothing(searchQuery) then
-      return SearchResult(
-        Nil,
-        Option.when(isFirstPage)(0),
-        hasMore = false,
-        searchQuery.rpp,
-        searchQuery.page,
-        searchQuery.searchSort)
+    val isFirstPage = query.cursor.isEmpty
+    if matchesNothing(query) then return SearchPage(Nil, Option.when(isFirstPage)(0), hasMore = false)
 
-    val statement = SearchQueries.flat(searchDialect, searchQuery, RequestContext.getRepository.persistedId)
-    // Each row is the asset, then the count of the page's slice, which fetched one row past the page
-    val rows = readPage[(AssetRow[Sc], Int)](statement, isFirstPage)
+    val statement = SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
+    // Each row is the asset, its day and two sort keys, then the count of the candidates, which are one row past the page
+    val page = readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int)](statement, isFirstPage)
     // A first page carries the overall count on every row; an empty first page has no rows because nothing matches
-    val total = Option.when(isFirstPage)(rows.headOption.flatMap(_._2).getOrElse(0))
-    val hasMore = rows.headOption.exists(_._1._2 > searchQuery.rpp)
+    val total = Option.when(isFirstPage)(page.headOption.flatMap(_._2).getOrElse(0))
+    val hasMore = page.headOption.exists(_._1._5 > query.rpp)
+    logPage(page.length, total, hasMore)
 
-    logPage(rows.length, total, hasMore)
-
-    SearchResult(
-      records = rows.map { case ((asset, _), _) => toModel(asset) }.toList,
+    SearchPage(
+      rows = page.map {
+        case ((asset, day, sortValue, secondSortValue, _), _) =>
+          SearchRow(toModel(asset), day, sortValue, secondSortValue)
+      }.toList,
       total = total,
-      hasMore = hasMore,
-      rpp = searchQuery.rpp,
-      page = searchQuery.page,
-      sort = searchQuery.searchSort
+      hasMore = hasMore
     )
 
   override def count(query: SearchQuery): Int =
@@ -104,6 +97,12 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val count = Db.read(dialect)(_.runSql[Int](statement)).head
     logger.trace(s"Counted $count records")
     count
+
+  override def countByFolder(): Map[String, Int] =
+
+    val counts = Db.read(dialect)(_.run(SearchQueries.folderCounts(searchDialect, RequestContext.getRepository.persistedId)))
+    logger.trace(s"Counted the assets of ${counts.length} folders")
+    counts.toMap
 
   override def cappedCount(query: SearchQuery): Int =
     import dialect.*
@@ -189,13 +188,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val repository = RequestContext.getRepository
     val repositoryId = repository.persistedId
 
-    val people = PersonRow.select
-      .filter {
-        person =>
-          (person.repositoryId `=` repositoryId) && (person.isNamed `=` true) && (person.isHidden `=` false) &&
-          (person.isDeleted `=` false) && (person.isBadMatch `=` false)
-      }
-      .map(person => (person.id, person.name))
+    val people = SearchQueries.searchablePeople(searchDialect, repositoryId)
     val locations = LocationRow.select
       .filter(location => location.repositoryId `=` repositoryId)
       .map(location => (location.id, location.name, location.kind, location.categoryId))

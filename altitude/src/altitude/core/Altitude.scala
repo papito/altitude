@@ -178,12 +178,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
-    val userToken: dao.UserTokenDao = dataSourceType match {
-      case Const.DbEngineName.POSTGRES => new dao.jdbc.UserTokenDao(app.config) with dao.postgres.PostgresOverrides
-      case Const.DbEngineName.SQLITE => new dao.jdbc.UserTokenDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
-    }
-
     val repository: dao.RepositoryDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.postgres.RepositoryDao(app.config)
       case Const.DbEngineName.SQLITE => new dao.jdbc.RepositoryDao(app.config) with dao.sqlite.SqliteOverrides

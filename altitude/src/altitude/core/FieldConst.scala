@@ -28,11 +28,6 @@ object FieldConst:
     val ACCOUNT_TYPE = "account_type"
     val LAST_ACTIVE_REPO_ID = "last_active_repo_id"
 
-  object UserToken:
-    val ACCOUNT_ID = "account_id"
-    val TOKEN = "token"
-    val EXPIRES_AT = "expires_at"
-
   object Face:
     val X1 = "x1"
     val Y1 = "y1"

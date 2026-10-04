@@ -189,6 +189,39 @@ import altitude.core.util.Query
     testApp.service.person.getById(person.persistedId).numOfFaces shouldBe 0
   }
 
+  test("A selection larger than a statement's parameter limit is recycled and moved back") {
+
+    /**
+     * Setup:
+     *
+     * A Person with a Face on each of two assets, and a selection of the two among 70,000 unknown IDs, more than a PostgreSQL
+     * statement takes parameters for. The selection is recycled, then moved into a new folder; the person's face counts are then
+     * recycled and restored for the selection directly.
+     *
+     * Assertions:
+     *
+     * Recycling takes both Faces from the person and the move gives them back; the direct recycle and restore of the face counts
+     * do the same.
+     */
+    val person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, assetCount = 2)
+    val selection = amongManyUnknownIds(testApp.service.asset.query(new Query()).records.map(_.persistedId).toSet)
+    val folder: Folder = testApp.service.folder.add("folder1")
+    def numOfFaces: Int = testApp.service.person.getById(person.persistedId).numOfFaces
+
+    testApp.service.library.recycleAssets(selection)
+    numOfFaces shouldBe 0
+
+    testApp.service.library.moveAssetsToFolder(selection, folder.persistedId)
+    numOfFaces shouldBe 2
+
+    testApp.service.person.recycleFacesForAssets(selection)
+    numOfFaces shouldBe 0
+
+    testApp.service.person.restoreFacesForAssets(selection)
+    numOfFaces shouldBe 2
+  }
+
   test("Moving recycled and live assets together into a folder restores the recycled ones' face counts") {
 
     /**

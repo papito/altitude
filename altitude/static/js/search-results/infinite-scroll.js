@@ -5,11 +5,11 @@ import { runSearch } from "./search.js"
 /**
  * INFINITE SCROLL
  *
- * The last cell of a page carries how the next page is reached: its number (`data-app-search-next-page`,
- * an ungrouped grid) or the cursor to continue from (`data-app-search-after`, a grouped grid). When
- * it comes into view we request that page through the search funnel, which supplies the rest of the
- * current search, and append the result after the cell. Each cell loads its page once: it loses the
- * attribute as it does, so scrolling back up over it loads nothing again.
+ * The last cell of a page carries the cursor the next page continues from (`data-app-search-after`),
+ * in a grouped grid and an ungrouped one alike. When it comes into view we request that page through
+ * the search funnel, which supplies the rest of the current search, and append the result after the
+ * cell. Each cell loads its page once: it loses the attribute as it does, so scrolling back up over
+ * it loads nothing again.
  *
  * The detail modal loads pages the same way, through `loadNextPage`, when it steps past the last
  * loaded cell (js/search-results/detail-navigator.js).
@@ -23,8 +23,7 @@ import { runSearch } from "./search.js"
 
 // A cell that has already loaded its page keeps the class but loses the attribute, so only the one
 // page still to be loaded is ever picked up
-const CONTINUATION_SELECTOR =
-    ".last-cell[data-app-search-next-page], .last-cell[data-app-search-after]"
+const CONTINUATION_SELECTOR = ".last-cell[data-app-search-after]"
 
 // The page request in flight per last cell: a second caller while it is in flight - the modal
 // stepping past the cell the scroll is already loading, or the reverse - shares it
@@ -43,25 +42,21 @@ export function loadNextPage(lastCellEl) {
         return pending
     }
 
-    const continuation = continuationOf(lastCellEl)
-    if (!continuation) {
+    const after = lastCellEl.dataset.appSearchAfter
+    if (!after) {
         return Promise.resolve()
     }
 
     // One request per cell, whatever the scroll does afterwards
     nextPageObserver?.unobserve(lastCellEl)
-    delete lastCellEl.dataset.appSearchNextPage
     delete lastCellEl.dataset.appSearchAfter
 
-    console.debug("Loading more: %o", continuation)
+    console.debug("Loading more after: %s", after)
 
-    // `p: null` keeps the store's page out of a cursor continuation; the store's own value is
-    // never right for a continuation anyway
     const request = runSearch({
         transient: {
             ...renderedGridParamsOf(lastCellEl),
-            ...continuation,
-            p: continuation.p ?? null,
+            after,
             isContinuousScroll: true,
         },
         target: lastCellEl,
@@ -88,21 +83,6 @@ function renderedGridParamsOf(cellEl) {
         groupBy: resultsGroupBy || null,
         groupDirection: resultsGroupDirection || null,
     }
-}
-
-/** `{ after }` or `{ p }`, whichever the cell carries; `null` when it carries neither */
-function continuationOf(lastCellEl) {
-    const { appSearchAfter, appSearchNextPage } = lastCellEl.dataset
-
-    if (appSearchAfter) {
-        return { after: appSearchAfter }
-    }
-
-    if (appSearchNextPage) {
-        return { p: Number(appSearchNextPage) }
-    }
-
-    return null
 }
 
 /**

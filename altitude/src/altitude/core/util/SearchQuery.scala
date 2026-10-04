@@ -29,7 +29,6 @@ class SearchQuery(
     val locationIds: Set[String] = Set(),
     val bbox: Option[BoundingBox] = None,
     rpp: Int = 0,
-    page: Int = 1,
     val searchSort: List[SearchSort] = List(),
     val grouping: Option[SearchGrouping] = None,
     val cursor: Option[SearchCursor] = None,
@@ -39,7 +38,7 @@ class SearchQuery(
     val totalCap: Int = Const.Search.TOTAL_CAP,
     // How many hits a group of the Search text may have and still be answered from them (SearchService.resolveText)
     val textProbeLimit: Int = Const.Search.TEXT_PROBE_LIMIT)
-  extends Query(params = metadataFilters, rpp = rpp, page = page):
+  extends Query(params = metadataFilters, rpp = rpp):
 
   if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
 
@@ -48,10 +47,6 @@ class SearchQuery(
   // A grouped page is a bounded, fully ordered slice: its group, then the sort, then the ID
   if grouping.isDefined && searchSort.isEmpty then throw IllegalArgumentException("A grouped search requires a sort")
   if grouping.isDefined && rpp < 1 then throw IllegalArgumentException("A grouped search requires a page size")
-
-  // A grouped search starts at its first page and is continued from a position, never by page number
-  if grouping.isDefined && page != 1 then throw IllegalArgumentException("A grouped search is continued by cursor, not by page")
-  if cursor.isDefined && grouping.isEmpty then throw IllegalArgumentException("A cursor requires a grouped search")
 
   val hasMetadataFilters: Boolean = metadataFilters.nonEmpty
 
@@ -78,7 +73,7 @@ class SearchQuery(
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
-    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, locationIds=$locationIds, bbox=$bbox, rpp=$rpp, page=$page)"
+    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, locationIds=$locationIds, bbox=$bbox, rpp=$rpp)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
     copyWith(metadataFilters = metadataFilters ++ _filters)
@@ -112,7 +107,6 @@ class SearchQuery(
       locationIds = locationIds,
       bbox = bbox,
       rpp = rpp,
-      page = page,
       searchSort = searchSort,
       grouping = grouping,
       cursor = cursor,

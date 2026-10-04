@@ -117,10 +117,9 @@ class LibraryService(val app: Altitude):
       app.service.asset.query(_query)
     }
 
+  /** A flat page with its assets, continued by cursor as a grouped page is ([[continued]]) */
   def search(query: SearchQuery): SearchResult =
-    txManager.asReadOnly {
-      app.service.search.search(withResolvedScope(query))
-    }
+    continued(query)(app.service.search.search)
 
   /** How many assets a search matches, exactly, scoped like `search`: what merging people recounts a person's assets by */
   def count(query: SearchQuery): Int =
@@ -149,16 +148,20 @@ class LibraryService(val app: Altitude):
       app.service.search.mapBounds(withResolvedScope(query))
     }
 
-  /**
-   * A grouped page with its assets, for the grouped grid. A cursor is accepted only for the search it was issued for,
-   * fingerprinted as requested: a folder filter by the folder given and the Search text as typed, since a folder's descendants
-   * and the names the text matches are resolved afresh on every page.
-   */
+  /** A grouped page with its assets, for the grouped grid, continued by cursor ([[continued]]) */
   def searchGrouped(query: SearchQuery): GroupedSearchResult =
+    continued(query)(app.service.search.searchGrouped)
+
+  /**
+   * Runs a page of a search that a cursor may continue. A cursor is accepted only for the search it was issued for, fingerprinted
+   * as requested: a folder filter by the folder given and the Search text as typed, since a folder's descendants and the names
+   * the text matches are resolved afresh on every page.
+   */
+  private def continued[T](query: SearchQuery)(page: (SearchQuery, String) => T): T =
     txManager.asReadOnly {
       val scope = SearchCursor.scopeFingerprint(query, RequestContext.getRepository.persistedId, app.dataSourceType)
       query.cursor.foreach(_.requireScope(scope))
-      app.service.search.searchGrouped(withResolvedScope(query), scope)
+      page(withResolvedScope(query), scope)
     }
 
   /** What every search resolves against the repository as it is now, in the caller's transaction, before it reaches the DAO */

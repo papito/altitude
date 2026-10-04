@@ -53,8 +53,6 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(albumId: String, assetIds: Set[String]): Int =
-    val placeholders = List.fill(assetIds.size)("?").mkString(", ")
-
     // Rows are selected from the asset table so that unknown, foreign, and recycled ids are dropped, and assets already in
     // the album are skipped rather than tripping the unique index
     val sql = s"""
@@ -62,7 +60,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
         FROM asset
        WHERE asset.${FieldConst.REPO_ID} = ?
-         AND asset.${FieldConst.ID} IN ($placeholders)
+         AND asset.${FieldConst.ID} $inIdSet
          AND asset.${FieldConst.Asset.IS_RECYCLED} = ?
          AND NOT EXISTS (
            SELECT 1
@@ -72,31 +70,27 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     """
 
     val values: List[Any] =
-      List(albumId, RequestContext.getRepository.persistedId) ++ assetIds.toList ++ List(nativeBool(false), albumId)
+      List(albumId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false), albumId)
 
     updateByBySql(sql, values)
 
   override def removeAssets(albumId: String, assetIds: Set[String]): Int =
-    val placeholders = List.fill(assetIds.size)("?").mkString(", ")
-
     val sql = s"""
       DELETE FROM $membershipTable
        WHERE ${FieldConst.Album.ALBUM_ID} = ?
-         AND ${FieldConst.Album.ASSET_ID} IN ($placeholders)
+         AND ${FieldConst.Album.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, albumId :: assetIds.toList)
+    updateByBySql(sql, List(albumId, idSet(assetIds)))
 
   override def removeAssetsFromAllAlbums(assetIds: Set[String]): Int =
-    val placeholders = List.fill(assetIds.size)("?").mkString(", ")
-
     val sql = s"""
       DELETE FROM $membershipTable
        WHERE ${FieldConst.REPO_ID} = ?
-         AND ${FieldConst.Album.ASSET_ID} IN ($placeholders)
+         AND ${FieldConst.Album.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, RequestContext.getRepository.persistedId :: assetIds.toList)
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
 
   override def getAssetIds(albumId: String): Set[String] =
     val sql = s"""

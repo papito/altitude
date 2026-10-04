@@ -42,6 +42,7 @@ Sources: [UserService](../altitude/src/altitude/core/service/UserService.scala).
 - [ ] Verify both unknown-user and wrong-password paths perform a password check; use deterministic observation rather than a fragile wall-clock timing assertion. [MEDIUM]
 - [ ] Cover `getDevUser` with complete valid credentials, invalid credentials, and either configuration value absent. [MINOR]
 - [ ] Verify adding a user through the passwordless overload is rejected without persistence. [EDGE]
+- ✅ An email address names one account whatever its case: a second account whose email differs only in case is a `DuplicateException`, and login succeeds with the email in any case.
 
 ## Session token creation and validation
 
@@ -158,6 +159,7 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 - [ ] Run concurrent insertion of the same membership and verify idempotency and accurate counts under the unique constraint. [MEDIUM]
 - [ ] Verify album operations preserve the complete asset state, binary files, statistics, and people counts, including deleting the last album membership. Current assertions cover only selected asset fields. [MEDIUM]
 - [ ] Verify empty ID sets return zero without writes, removing an absent membership is a no-op, and triaged assets can be album members. [EDGE]
+- ✅ A selection of 70,000 IDs, more than a PostgreSQL statement takes parameters for, is added to and removed from an album and from every album, counting only the real asset.
 
 ## Locations, categories and membership
 
@@ -174,6 +176,7 @@ Sources: [LocationService](../altitude/src/altitude/core/service/LocationService
 - ✅ Repository isolation: same names in another repository, no listing or count leakage, and every read and mutation by a foreign Location or category ID is `NotFoundException` and changes nothing; a foreign asset in a local batch is dropped.
 - ✅ HTTP: camelCase list shape/path order/counts, persisted add/remove membership counts, all dialogs and mutation routes, duplicate/decimal/category validation with form replacement (a missing pin is one `PIN_REQUIRED` error with the name kept), the Add dialog's hidden coordinate inputs, readout and map host, the dialog membership's `App-Success-Detail` added count (zero on a repeat), authentication, invalid hidden IDs and foreign Location IDs.
 - [ ] Verify a failure after `moveChildrenToRoot` inside a category delete rolls the re-categorying back. [MEDIUM]
+- ✅ A selection of 70,000 IDs is added to and removed from a Location and from every Location, counting only the real asset.
 
 ## Moving and recycling library assets
 
@@ -191,6 +194,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Reject null, nonexistent, or otherwise invalid destination folders without altering assets or statistics; cover an invalid ID mixed with valid asset IDs. [MEDIUM]
 - [ ] Move assets to their current folder repeatedly and verify no count or face drift; cover an empty selection. [EDGE]
 - [ ] Verify a failure during recycling rolls back asset flags, album removals, statistics, and person counts together. [CRITICAL]
+- ✅ A selection of 70,000 IDs is recycled and moved back, and a person's face counts are recycled and restored for it.
 
 ## Restoring recycled assets
 
@@ -206,6 +210,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Restore multiple assets where one conflicts or fails; assert the intended partial-success/atomicity contract and counter consistency. Each asset currently has its own transaction. [MEDIUM]
 - [ ] Race restoration against queued purge, and verify an asset marked for permanent deletion cannot become visible again while its files/row are removed. [CRITICAL]
 - [ ] Cover restoration into an ancestor path whose name now conflicts with a live folder, including rollback of already restored ancestors. [MEDIUM]
+- ✅ The recycle bin holds every recycled copy of the same content; restoring two copies together brings one back and reports the other as a duplicate, and importing the content while a copy is live is refused.
 
 ## Permanent deletion and purge queue
 
@@ -235,6 +240,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Assert `forEachRepository` visits every repository once and restores the caller's repository for an initially empty context and a callback that throws; the pruning test relies on the restore only in the ordinary case. [MEDIUM]
 - [ ] Define/test cleanup of original/preview/face files and people counts left by partially completed imports; the existing pruning test checks rows, search visibility, and search documents only. [MEDIUM]
 - [ ] Race pruning against an in-flight import and verify the lifecycle boundary prevents removal of work that is still progressing. [CRITICAL]
+- ✅ Pruning one repository's unfinished imports leaves another repository's alone.
 
 ## Global statistics
 
@@ -294,13 +300,13 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ Filter by bounding box: an asset's own point, its Locations' pins when it has none (never the pin when it has a point), a box across the antimeridian versus the same edges the other way round, the world box; `BoundingBox.parse` arity, ranges and NaN.
 - ✅ Unit tests check the Location and bounding-box filters are bound semi-joins, that `count` renders one `COUNT` over the matching relation with no ordering or page, and that `cappedCount` stops one past its cap.
 - ✅ Include descendant folders, treat root search as unrestricted folder scope including triage, filter by one/multiple people, and filter by album.
-- ✅ Paginate results: a first page carries the total and later pages none, `hasMore` says whether a page follows, an oversized page holds every match and a page beyond the end is empty; a flat search without a page size is refused.
+- ✅ Paginate results: a first page carries the total and later pages none, every page but the last carries the cursor of the next, an oversized page holds every match and the pages together hold every match once; a flat search without a page size is refused.
 - ✅ A total counts up to its cap and reads one past it when there are more, on a flat first page, a grouped first page and `cappedCount`; within the cap it is exact, and `count` never stops (the merge recount tests use it).
-- ✅ Unit tests pin the flat page's shell on both dialects: a narrow materialized slice ordered by its own select list, one row past the page at its offset, joined back to `asset` for the page alone, no window count, and a capped total on a first page only.
-- ✅ HTTP: an ungrouped first page carries `data-results-total` and `data-results-total-capped`, its last cell the next page number until the last page, and a continuation past the last page is a 204.
+- ✅ Unit tests pin the flat page's shell on both dialects: a narrow materialized slice of candidates after the cursor's anchor, ordered by the sort and then the ID, one row past the page and with no offset, joined back to `asset` for the page alone, no window count, and a capped total on a first page only.
+- ✅ HTTP: an ungrouped first page carries `data-results-total` and `data-results-total-capped`, its last cell the cursor of the next page until the last page; a cursor without `isContinuousScroll`, a malformed one and one sent with another sort are 400s, and a continuation whose remaining assets left the results is a 204.
 - [ ] A capped total in HTML (`data-results-total-capped="true"`, "10000+" in the toolbar and the map panel) needs more than 10,000 matches, so it is verified at the service level with a small cap and in the browser only. [MINOR]
-- ✅ HTTP: an ungrouped page is bounded like a grouped one: `rpp` outside 1 to 500 (no page size included) is a plain-text 400 on a first page and a continuation; `p` below 1 or past the last page whose rows an `Int` numbers (where the offset would wrap) is a plain-text 400 on both, the last page itself is served, at the default page size and at one asset a page; `rpp=1` limits the page to one of two matches and `rpp=500` serves both.
-- [ ] The `searchParams` store dropping an out-of-range `rpp` or `p` from a hand-edited URL is verified in the browser only; there is no JS test harness. [MINOR]
+- ✅ HTTP: an ungrouped page is bounded like a grouped one: `rpp` outside 1 to 500 (no page size included) is a plain-text 400 on a first page and a continuation; `rpp=1` limits the page to one of two matches and `rpp=500` returns both.
+- [ ] The `searchParams` store dropping an out-of-range `rpp` from a hand-edited URL is verified in the browser only; there is no JS test harness. [MINOR]
 - ✅ Return sort metadata (none for an unsorted search) and hide unfinished imports from search.
 - ✅ Unit tests check generated SQL for text, metadata, folder, and sort predicates on the engine-specific builders.
 - ✅ Ascending and descending import-time sorts return the assets in exactly their import order and its reverse.
@@ -311,7 +317,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ Relevance: the best source a term matched, terms summed, alternatives as the best of them, exclusions scoring nothing; ties by newest capture, undated last, then ID, page after page; the sort is refused without usable text.
 - ✅ Both text paths: every text search of `SearchServiceTests`, `SearchCursorTests` and `SearchGroupingTests` runs under a probe limit of 0 (always broad) and of 1,000,000 (always selective), which must agree on the assets, their order, the groups, the totals and the cursors (`TextSearchPaths`); a positive group with no hit makes empty candidates and an empty result, and an exclusion alone is not probed.
 - ✅ Unit tests cover `SearchWords` with its readings of a camelCase hump, `SearchText` parsing and in-memory matching over those readings, and pin the text SQL on both dialects: each source a CTE built once at the head of the statement, memberships OR-ed per term and AND-ed per group, the engine's query string (a term with two readings as their OR), ID sets bound whole, a group of one excluded term an anti-join per source (`NOT EXISTS` on PostgreSQL, `NOT IN` on SQLite), the person filter without a join of `person`, no repository predicate on the document source, unresolved text refused, the probe (a branch per positive group, one row past the limit, every source scoped to the repository), the selective shape (the candidate set and correlated probes, no CTE), and Relevance rendered only under its sort, once: in a flat page's select list, and in a grouped statement's `scored` CTE, which the cursor comparison reads.
-- ✅ Plans, over a seeded and analyzed library rolled back afterwards (`SearchPlans`): folder browsing reads `asset_folder`, a Date Imported page `asset_search_created`, a selective search the asset's primary key, and an exclusion is an anti-join on PostgreSQL; an asset's faces, document and metadata parameters are found by `face_01`, `search_document_01` and `metadata_parameter_01`.
+- ✅ Plans, over a seeded and analyzed library rolled back afterwards (`SearchPlans`): folder browsing reads `asset_folder`; a Date Imported page reads `asset_search_created` alone and its continuation seeks to the cursor; an ungrouped Date Taken page reads `asset_search_date_taken` in order; the triage view reads the partial triage indexes; the folder counts read `asset_search_date_taken` alone; the name sources of a text probe and the selective path's membership probes read their indexes alone; the searchable people and the live copy of a checksum are found through partial indexes; a selective search reads the asset's primary key, and an exclusion is an anti-join on PostgreSQL; an asset's faces, document and metadata parameters are found by `face_01`, `search_document_01` and `metadata_parameter_01`.
 - [ ] Verify multiple-folder input is rejected by both library search paths; define/test nonexistent and recycled folder scopes. [MEDIUM]
 - [ ] Test punctuation, quotes, Unicode, and SQL-like text as literal user queries on both engines, including combinations with metadata filters. [MEDIUM]
 - [ ] Cover multiple album IDs and combined album/person/folder filters with overlapping membership, asserting deduplication and totals. [MEDIUM]
@@ -342,6 +348,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - [ ] Check remaining-day counts after inserts/deletes and test mutations to an anchor's sort/day value; define the expected live-result semantics explicitly. [MEDIUM]
 - [ ] Reject malformed cursor field types, invalid dates, oversized tokens, and mismatched sort-value types with a domain error rather than leaking an internal exception. [EDGE]
 - ✅ Repository access: an authenticated grouped request for another user's repository, or for one that does not exist, is a 404 that shows none of its assets, and recycling another user's asset through its repository's API path is a JSON 404 that leaves the asset live.
+- ✅ A flat search walked by cursor reproduces the complete order for every sort field and direction, five and one asset a page, through the undated assets and every tie; under the Relevance sort it matches the unpaged order; on SQLite it continues through a legacy NULL import time. A flat cursor is refused under another sort, with Search text and by a grouped search, and a grouped cursor by a flat one.
 
 ## Map cells, bounds and the geocoder
 
@@ -353,11 +360,11 @@ Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQuer
 - ✅ Cells and Locations are clipped to the viewport, including a box across the antimeridian.
 - ✅ Bounds cover both point sources, count plotted points, follow the search's filters, and are absent when nothing is plotted.
 - ✅ The map reads the same matching set as the grid: recycled assets only in the trash view, a folder scope narrows cells, Location counts and bounds, the root folder is the whole repository, another repository's geotagged asset is invisible.
-- ✅ The cells and bounds statements render on both dialects with every placeholder bound and both point sources carrying the search's filters; the Locations statement reads the matches once into `matched`, then the repository's Locations of the Location kind in the box (antimeridian-aware) joined to their members there, grouped.
+- ✅ The cells and bounds statements render on both dialects with every placeholder bound and both point sources carrying the search's filters; the Locations statement reads the matches among the members of the Locations in the box once into `matched`, then the repository's Locations of the Location kind in the box (antimeridian-aware) joined to their members there, grouped.
 - ✅ Geocoder: disabled by config refuses with `IllegalOperationException` and sends nothing; enabled, against a local stub, it sends `format=json`, `limit=5`, the URL-encoded query and an identifying `User-Agent`, maps the places, skips one without coordinates, asks nothing for blank text, and turns a non-200 answer or a non-list body into `GeocoderException`.
 - ✅ HTTP: cells/bounds JSON shapes, plotted-point counts, Location/text/bbox/trash scope, Location membership counts preserved across pans, ignored toolbar sort, empty bounds, invalid bbox/zoom JSON 400s, disabled-geocoder JSON 404, and authentication. HTML search covers Location grouping/cursor continuation, Location/bbox filters, a map shell without `#assets`, disabled Group, totals and replacement URL scope; the pressed layout toggle button and `data-results-layout` in each layout, the hidden `#mapPanel` in map layout, and the `#bboxScope` chip present with a `bbox` and absent without one.
 - [ ] Enabled geocoder success and upstream failure are covered at the service level against a local stub; HTTP serialization and the 502 mapping still need an enabled-config controller fixture. [MINOR]
-- ✅ A cells query reads the geotagged assets through the partial `asset_geo` index on both engines (`EXPLAIN QUERY PLAN` on SQLite; `EXPLAIN` on Postgres over a few thousand analyzed rows, where its costing no longer ties every index).
+- ✅ Over a few thousand seeded and analyzed rows on both engines, a cells query reads its own points from the partial `asset_geo` index alone, the grid scoped to a box is bounded by it, and the Locations of a viewport are counted from their own members' assets by primary key.
 - [ ] Bounds for a result whose points straddle the antimeridian could be the narrower box across it rather than the whole longitude range. [EDGE]
 
 ## People, face ownership, and merges
@@ -376,7 +383,7 @@ Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.sca
 - [ ] Merge a named source into an unnamed target and assert `isNamed`, sort name, cover selection, and list placement as well as the inherited display name. [MEDIUM]
 - [ ] Verify source deletion/exclusion explicitly after merge, including attempts to merge the same source again. [MEDIUM]
 - [ ] Cover `markAsBadMatch`, unhide, and every bulk-list variant with named/unnamed, hidden, deleted, bad-match, zero-face, and threshold-boundary people. [MEDIUM]
-- [ ] Verify `getPersonFaces` detection-score ordering and limits with more than a default query page; the current fixtures remain below the normal 50-row limit. [MEDIUM]
+- ✅ `getPersonFaces` returns a person's faces by descending detection score and keeps the best of them under a limit smaller than the person's face count.
 - [ ] Recycle/restore an asset containing multiple faces for a person after a merge; assert the intended distinct-asset versus raw-face count contract remains consistent. [MEDIUM]
 - [ ] Reject assigning a cover face belonging to another person/repository or a nonexistent face; preserve the previous cover. [MEDIUM]
 - [ ] Test unsaved-person/asset guards in `addFace` and the multi-face guard in `addPerson`; assert failed operations create no rows or count changes. [EDGE]
@@ -409,6 +416,7 @@ Sources: [FaceRecognitionService](../altitude/src/altitude/core/service/FaceReco
 - [ ] Verify matching never selects a face from another repository and define/test eligibility of recycled and merged people. [CRITICAL]
 - [ ] Reject already persisted or already associated face objects without adding a new person/face. [EDGE]
 - [ ] Fail persistence of a later face or its binary variants and verify the transaction/recovery contract for all faces and people created by that asset. [CRITICAL]
+- ✅ A Face of another repository is not a match candidate. On PostgreSQL the nearest-Faces statement is planned through `face_03`, the partial HNSW index of the enrolled Faces.
 
 ## File-system storage
 

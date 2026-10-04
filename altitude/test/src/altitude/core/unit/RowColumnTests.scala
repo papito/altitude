@@ -43,8 +43,7 @@ import altitude.core.dao.sql.tables._
       RepositoryRow -> DbApi.renderSql(RepositoryRow.select, Db.config, dialect),
       SearchDocumentRow -> DbApi.renderSql(SearchDocumentRow.select, Db.config, dialect),
       StatRow -> DbApi.renderSql(StatRow.select, Db.config, dialect),
-      SystemRow -> DbApi.renderSql(SystemRow.select, Db.config, dialect),
-      UserTokenRow -> DbApi.renderSql(UserTokenRow.select, Db.config, dialect)
+      SystemRow -> DbApi.renderSql(SystemRow.select, Db.config, dialect)
     )
   }
 

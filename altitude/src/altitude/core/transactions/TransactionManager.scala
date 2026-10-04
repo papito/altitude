@@ -43,7 +43,7 @@ class TransactionManager(val config: Config):
 
   private val engine: String = config.getString(Const.Conf.DB_ENGINE)
 
-  // Whether an enclosing `withFaceVector` of this thread has registered the face vectors with the transaction's connection
+  // Whether an enclosing `withFaceVector` of this thread has set the transaction's connection up for searching face vectors
   private val isFaceVectorRegistered = new ThreadVariable(false)
 
   // Whether the pools were opened, so that a manager that never ran a transaction has nothing to close
@@ -97,19 +97,33 @@ class TransactionManager(val config: Config):
     if isInTransaction then f else transaction(readOnly = false)(f)
 
   /**
-   * A write transaction that can search face vectors: on SQLite the `face.features` column is registered with the vector
-   * extension, which every connection loads when it is opened, once for the outermost call. Registering needs the `face` table,
-   * which a database being created does not have yet when its first connections are opened.
+   * A write transaction that can search face vectors: what the engine needs for it ([[faceVectorSetup]]) is run once, for the
+   * outermost call. On SQLite that registers the `face.features` column with the vector extension, which every connection loads
+   * when it is opened; registering needs the `face` table, which a database being created does not have yet when its first
+   * connections are opened.
    */
   def withFaceVector[A](f: => A): A =
     withTransaction {
-      if engine != Const.DbEngineName.SQLITE || isFaceVectorRegistered.value then f
+      if isFaceVectorRegistered.value then f
       else
         val statement = RequestContext.getConn.createStatement()
-        try statement.execute("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
+        try faceVectorSetup.foreach(statement.execute)
         finally statement.close()
         isFaceVectorRegistered.withValue(true)(f)
     }
+
+  /**
+   * What a transaction runs before it searches the face vectors. SQLite registers the column with the vector extension.
+   * PostgreSQL sets, for the transaction, how its vector index is searched: the candidates it keeps, and that a scan goes on past
+   * them until the statement's limit is met, since the repository and the bad matches are filtered after the index is read.
+   */
+  private lazy val faceVectorSetup: List[String] = engine match
+    case Const.DbEngineName.SQLITE =>
+      List("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
+    case Const.DbEngineName.POSTGRES =>
+      List(
+        s"SET LOCAL hnsw.ef_search = ${config.getInt(Const.Conf.FACE_RECOGNITION_HNSW_EF_SEARCH)}",
+        "SET LOCAL hnsw.iterative_scan = relaxed_order")
 
   def asReadOnly[A](f: => A): A =
     if isInTransaction then f else transaction(readOnly = true)(f)

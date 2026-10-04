@@ -11,15 +11,46 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
+import altitude.core.service.FaceDetectionService
 
-class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with PostgresOverrides:
+object FaceDao:
+
+  /** A Float array as a pgvector literal, e.g. "[0.1,0.2,...]", which pgvector accepts when cast with `?::vector` or `?::halfvec` */
+  def vectorLiteral(values: Array[Float]): String = values.mkString("[", ",", "]")
 
   /**
-   * Format a Scala Float array as a pgvector-compatible string literal, e.g. "[0.1, 0.2, ...]". pgvector accepts this format when
-   * cast with `?::vector`.
+   * How many of the nearest Faces the vector index is asked for, as a multiple of the matches wanted: the index is approximate
+   * and orders by half-precision vectors, so the exact distances are taken over a few more than the answer needs
    */
-  private def toVectorString(values: Array[Float]): String =
-    values.mkString("[", ",", "]")
+  private val CANDIDATES_PER_MATCH = 4
+
+  /**
+   * The stored Faces nearest a query vector, nearest first, with their exact cosine distance, no further than a threshold.
+   *
+   * The candidates come from `face_03`, the HNSW index over the enrolled Faces' vectors at half precision, which the inner order
+   * and `is_enrolled = TRUE` are written to match. The repository and the bad matches are filtered as the index is read
+   * (`TransactionManager.withFaceVector` has the scan go on until the limit is met). The threshold is applied outside, on the
+   * full-precision distance: inside, a query with nothing near enough would send the index looking for rows that are not there.
+   *
+   * Binds: the vector, the repository, the vector, the number of candidates, the vector, the threshold, the number of matches.
+   * `nearest.*` rather than `*`: the join would put the person's ID and dates into the row map under the same keys.
+   */
+  val CLOSEST_MATCHES_SQL: String =
+    s"""
+      SELECT nearest.*, nearest.features <=> ?::vector AS distance
+        FROM (SELECT face.*
+                FROM face JOIN person ON person.id = face.person_id
+               WHERE face.repository_id = ?
+                 AND face.is_enrolled = TRUE
+                 AND person.is_bad_match = FALSE
+               ORDER BY face.features::halfvec(${FaceDetectionService.EMBEDDING_DIMENSIONS}) <=> ?::halfvec(${FaceDetectionService.EMBEDDING_DIMENSIONS})
+               LIMIT ?) AS nearest
+       WHERE nearest.features <=> ?::vector < ?
+       ORDER BY distance
+       LIMIT ?
+    """
+
+class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with PostgresOverrides:
 
   override def add(face: Face, asset: Asset, person: Person): Face =
     val id = BaseDao.genId
@@ -45,7 +76,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     preparedStatement.setString(7, asset.persistedId)
     preparedStatement.setString(8, person.persistedId)
     preparedStatement.setDouble(9, face.detectionScore)
-    preparedStatement.setString(10, toVectorString(face.features))
+    preparedStatement.setString(10, FaceDao.vectorLiteral(face.features))
     preparedStatement.setInt(11, face.checksum)
     face.frameTimeMs match
       case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
@@ -59,28 +90,21 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     face.copy(id = Some(id), assetId = asset.id, personId = person.id)
 
   def searchClosestFaceMatches(features: Array[Float]): List[Face] =
-    val featuresStr = toVectorString(features)
-
-    // face.* rather than *: the join would put the person's id and dates into the row map under the same keys
-    val sql =
-      """
-        SELECT face.*,
-               face.features <=> ?::vector AS distance
-        FROM face JOIN person ON person.id = face.person_id
-        WHERE face.repository_id = ?
-          AND face.is_enrolled = TRUE
-          AND person.is_bad_match = FALSE
-          AND face.features <=> ?::vector < ?
-        ORDER BY face.features <=> ?::vector
-        LIMIT ?;
-        """
-
+    val vector = FaceDao.vectorLiteral(features)
     val matchCount = config.getInt(Const.Conf.FACE_RECOGNITION_MATCH_COUNT)
     val threshold = config.getDouble(Const.Conf.FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD)
 
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(
-        sql,
-        List(featuresStr, RequestContext.getRepository.persistedId, featuresStr, threshold, featuresStr, matchCount))
+        FaceDao.CLOSEST_MATCHES_SQL,
+        List(
+          vector,
+          RequestContext.getRepository.persistedId,
+          vector,
+          matchCount * FaceDao.CANDIDATES_PER_MATCH,
+          vector,
+          threshold,
+          matchCount)
+      )
 
     recs.map(makeModel)

@@ -219,6 +219,28 @@ import altitude.core.util.SearchQuery
     testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(asset.persistedId)
   }
 
+  test("A selection larger than a statement's parameter limit is added to and removed from an album") {
+
+    /**
+     * Setup:
+     *
+     * An album, one imported asset, and a selection of that asset among 70,000 unknown IDs, more than a PostgreSQL statement
+     * takes parameters for. The selection is added to the album, removed from it, added again and removed from every album.
+     *
+     * Assertions:
+     *
+     * Each statement runs and counts the one asset.
+     */
+    val album: Album = testApp.service.album.add("album")
+    val asset: Asset = testContext.persistAsset()
+    val selection = amongManyUnknownIds(Set(asset.persistedId))
+
+    testApp.service.album.addAssets(album.persistedId, selection) shouldEqual 1
+    testApp.service.album.removeAssets(album.persistedId, selection) shouldEqual 1
+    testApp.service.album.addAssets(album.persistedId, selection) shouldEqual 1
+    testApp.service.album.removeAssetsFromAllAlbums(selection) shouldEqual 1
+  }
+
   test("Removing assets from an album leaves the assets alone") {
 
     /**

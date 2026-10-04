@@ -27,7 +27,6 @@ object SearchRequestParser:
       bbox: Option[BoundingBox]):
     def query(
         rpp: Int = 0,
-        page: Int = 1,
         searchSort: List[SearchSort] = Nil,
         grouping: Option[SearchGrouping] = None,
         cursor: Option[SearchCursor] = None): SearchQuery =
@@ -40,7 +39,6 @@ object SearchRequestParser:
         locationIds = locationIds,
         bbox = bbox,
         rpp = rpp,
-        page = page,
         searchSort = searchSort,
         grouping = grouping,
         cursor = cursor

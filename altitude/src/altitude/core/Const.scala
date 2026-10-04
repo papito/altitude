@@ -26,6 +26,7 @@ object Const:
     val FACE_DETECTION_MIN_FACE_SIZE = "face.detection.min_face_size"
     val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
+    val FACE_RECOGNITION_HNSW_EF_SEARCH = "face.recognition.hnsw_ef_search"
     // The two tiers of Face quality, see reference.conf
     val FACE_QUALITY_ENROLL_THRESHOLD = "face.quality.enroll_threshold"
     val FACE_QUALITY_KEEP_THRESHOLD = "face.quality.keep_threshold"

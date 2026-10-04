@@ -72,6 +72,20 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
+   * The plan of a statement an index alone should answer, read inside [[atScale]] once the tables are analyzed. PostgreSQL is
+   * told that every page of each table is all-visible, as vacuuming would leave it (seeded rows are never vacuumed, and an
+   * index-only scan of them would be costed as a read of the table too), and to scan or bitmap the table only when nothing else
+   * answers: over narrow seeded rows it would otherwise read the whole table for less. SQLite names a covering index by itself.
+   */
+  protected def indexOnlyPlanOf(statement: SqlStr, tables: String*): String = {
+    if (isPostgres) {
+      tables.foreach(table => update("UPDATE pg_class SET relallvisible = relpages WHERE relname = ?", table))
+      List("seqscan", "bitmapscan").foreach(path => update(s"SET LOCAL enable_$path = off"))
+    }
+    planOf(statement)
+  }
+
+  /**
    * The plan of a lookup that only an index can serve, so that the index named is the one the engine reads at any scale. SQLite
    * has no statistics to weigh a scan against; PostgreSQL is told to scan only when nothing else answers.
    */

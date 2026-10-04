@@ -1,12 +1,14 @@
 package altitude.core.integration
 
 import altitude.core
+import altitude.test.TestContext
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.empty
 import org.scalatest.matchers.should.Matchers.should
+import org.scalatest.matchers.should.Matchers.shouldBe
 import org.scalatest.matchers.should.Matchers.shouldEqual
 
 import scala.concurrent.Await
@@ -16,6 +18,7 @@ import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.DuplicateException
 import altitude.core.models.AccountType
 import altitude.core.models.User
 import altitude.core.util.Util
@@ -86,6 +89,30 @@ import altitude.core.util.Util
         token should not be empty
       case None =>
         fail("Login failed: user or token is None")
+    }
+  }
+
+  test("An email address names one account, whatever its case") {
+
+    /**
+     * Setup:
+     *
+     * A user whose email has upper-case letters, and a second user with the same email in lower case.
+     *
+     * Assertions:
+     *
+     * The second user is refused as a duplicate, and the first logs in with the email in either case.
+     */
+    val email = s"Mixed.Case.${Util.randomStr(8)}@Example.com"
+    val user: User = testContext.persistUser(Some(testContext.makeUser().copy(email = email)))
+
+    intercept[DuplicateException] {
+      testApp.service.user.add(testContext.makeUser().copy(email = email.toLowerCase), password = TestContext.USER_PASSWORD)
+    }
+
+    for (spelling <- List(email, email.toLowerCase, email.toUpperCase)) withClue(spelling) {
+      testApp.service.user.loginAndSetUser(spelling, TestContext.USER_PASSWORD).map(_._1.persistedId) shouldBe
+        Some(user.persistedId)
     }
   }
 

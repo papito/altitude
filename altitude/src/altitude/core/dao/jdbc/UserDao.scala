@@ -3,8 +3,9 @@ package altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import scalasql.Sc
 import scalasql.Table
+import scalasql.core.Expr
+import scalasql.core.SqlStr.SqlStringSyntax
 
-import altitude.core.ConstraintException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.dao.sql.Db
@@ -34,13 +35,19 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
   override def getPasswordHashByEmail(email: String): String =
     import dialect.*
 
-    val hashes = Db.read(dialect)(_.run(AccountRow.select.filter(_.email === email).map(_.passwordHash)))
+    Db.read(dialect)(_.run(AccountRow.select.filter(hasEmail(_, email)).map(_.passwordHash))).headOption.getOrElse(noAccount)
 
-    if hashes.isEmpty then throw NotFoundException("No account with that email address")
+  override def getByEmail(email: String): User =
+    import dialect.*
 
-    if hashes.length > 1 then throw ConstraintException("More than one account with the same email address")
+    Db.read(dialect)(_.run(AccountRow.select.filter(hasEmail(_, email)))).headOption.map(toModel).getOrElse(noAccount)
 
-    hashes.head
+  /** An email address names an account whatever its case: the comparison the unique index `account_01` is declared on */
+  private def hasEmail(account: AccountRow[Expr], email: String): Expr[Boolean] =
+    import dialect.*
+    Expr[Boolean](implicit ctx => sql"lower(${account.email}) = lower($email)")
+
+  private def noAccount: Nothing = throw NotFoundException("No account with that email address")
 
   override protected def makeModel(rec: Map[String, AnyRef]): User =
     User(

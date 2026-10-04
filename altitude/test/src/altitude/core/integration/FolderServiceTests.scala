@@ -2,7 +2,7 @@ package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldEqual, shouldNot }
+import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual, shouldNot }
 
 import scala.language.reflectiveCalls
 
@@ -13,11 +13,13 @@ import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
+import altitude.core.dao.sql.Db
+import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Repository
 
-@DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
   /** Standard set of folders to start with, can be used by many tests here */
   def folderHierarchyFixture: Object {
@@ -760,6 +762,34 @@ import altitude.core.models.Repository
     val counts = treeCounts
     counts(f.folder1.persistedId) shouldEqual 0
     counts(rootFolderId) shouldEqual 0
+  }
+
+  test("Folder counts are read from the capture-day index alone") {
+
+    /**
+     * Setup:
+     *
+     * An asset in a folder seeded into 5,000 copies over 500 folders for the planner, which are rolled back after the plan is
+     * read, and the statement that counts the repository's assets by folder.
+     *
+     * Assertions:
+     *
+     * The plan reads `asset_search_date_taken`, which carries the folder, and never the table: an index-only scan on PostgreSQL,
+     * a covering index on SQLite.
+     */
+    val folder: Folder = testApp.service.folder.add("Trips")
+    val template = testContext.persistAsset(folder = Some(folder))
+    val engine = searchDialect
+    val counts =
+      Db.render(SearchQueries.folderCounts(engine, RequestContext.getRepository.persistedId), engine.dialect)
+        .withCompleteQuery(false)
+
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(indexOnlyPlanOf(counts, "asset"))
+
+    withClue(plan) {
+      if (isPostgres) plan should include("Index Only Scan using asset_search_date_taken")
+      else plan should include("USING COVERING INDEX asset_search_date_taken")
+    }
   }
 
   test("Folder counts are scoped to the context repository") {

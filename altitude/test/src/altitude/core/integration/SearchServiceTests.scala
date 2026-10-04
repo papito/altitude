@@ -19,6 +19,7 @@ import altitude.core.Altitude
 import altitude.core.Api
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.*
 import altitude.core.pipeline.PipelineTypes.PipelineContext
@@ -220,51 +221,47 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * Six assets, searched without text in pages of two, six and twenty.
+     * Six assets, searched without text or sort in pages of two, six and twenty, each page past the first continued by the cursor
+     * of the one before it.
      *
      * Assertions:
      *
-     * A page holds at most its page size, only a first page carries the total, and every page says whether another follows it.
+     * A page holds at most its page size, only a first page carries the total, every page but the last carries the cursor of the
+     * next, and the pages together hold every asset once.
      *
      * Edge cases:
      *
-     * A page past the last one is empty, a page size equal to or larger than the match count fits everything on the first page,
-     * and a query without a page size is refused, as every flat page is bounded.
+     * A page size equal to or larger than the match count fits everything on the first page, and a query without a page size is
+     * refused, as every flat page is bounded.
      */
     (1 to 6).foreach(n => testContext.persistAsset())
 
-    // A first page counts the matches; a page reached by scrolling does not, and says whether another follows it
-    val results = search(new SearchQuery(rpp = 2, page = 1))
+    // A first page counts the matches; a page reached by scrolling does not, and says where the next one continues
+    val results = search(new SearchQuery(rpp = 2))
     results.total shouldBe Some(6)
     results.records.length shouldBe 2
     results.nonEmpty shouldBe true
-    results.hasMore shouldBe true
 
-    val results2 = search(new SearchQuery(rpp = 2, page = 2))
+    val results2 = search(new SearchQuery(rpp = 2, cursor = results.nextCursor))
     results2.total shouldBe None
     results2.records.length shouldBe 2
-    results2.hasMore shouldBe true
 
-    val results3 = search(new SearchQuery(rpp = 2, page = 3))
+    val results3 = search(new SearchQuery(rpp = 2, cursor = results2.nextCursor))
     results3.total shouldBe None
     results3.records.length shouldBe 2
-    results3.hasMore shouldBe false
+    results3.nextCursor shouldBe None
 
-    // page too far
-    val results4 = search(new SearchQuery(rpp = 2, page = 4))
-    results4.total shouldBe None
-    results4.records.length shouldBe 0
-    results4.hasMore shouldBe false
+    List(results, results2, results3).flatMap(_.records.map(_.persistedId)).distinct.length shouldBe 6
 
-    val results5 = search(new SearchQuery(rpp = 6, page = 1))
+    val results5 = search(new SearchQuery(rpp = 6))
     results5.total shouldBe Some(6)
     results5.records.length shouldBe 6
-    results5.hasMore shouldBe false
+    results5.nextCursor shouldBe None
 
-    val results6 = search(new SearchQuery(rpp = 20, page = 1))
+    val results6 = search(new SearchQuery(rpp = 20))
     results6.total shouldBe Some(6)
     results6.records.length shouldBe 6
-    results6.hasMore shouldBe false
+    results6.nextCursor shouldBe None
 
     // Every flat page is bounded
     intercept[IllegalArgumentException](search(new SearchQuery()))
@@ -590,7 +587,7 @@ import altitude.core.util.*
     )
     testApp.service.asset.updateByQuery(assetQuery, updateData)
 
-    val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
+    val assetSearchQuery = new SearchQuery(rpp = 3)
     search(assetSearchQuery).total shouldBe Some(0)
   }
 
@@ -877,23 +874,104 @@ import altitude.core.util.*
     withClue(plan)(plan should include("asset_folder"))
   }
 
-  test("A Date Imported page reads the import-time index") {
+  test("A Date Imported page reads the import-time index alone") {
 
     /**
      * Setup:
      *
-     * An asset seeded into 5,000 copies over 500 folders for the planner, and an unscoped page of 50 sorted by import time.
+     * Two assets, one of them seeded into 5,000 copies over 500 folders for the planner, and an unscoped page of 50 sorted by
+     * import time, as a first page and as the page that continues from a cursor.
      *
      * Assertions:
      *
-     * The engine's plan for the page reads the `asset_search_created` index.
+     * The engine's plan for each page slice reads the `asset_search_created` index, which carries the ID, and not the table: an
+     * index-only scan on PostgreSQL, a covering index on SQLite. The continuation seeks to its cursor's import time.
      */
     val template = testContext.persistAsset()
-    val query = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport)
+    // A second asset, so that a page of one has a cursor
+    testContext.persistAsset()
+    val first = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport)
+    val cursor = search(new SearchQuery(params = browsingView, rpp = 1, searchSort = byImport)).nextCursor
+    val continued = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport, cursor = cursor)
+    // The page slice is the ordered read, newest first
+    val covering =
+      if (isPostgres) "Index Only Scan Backward using asset_search_created" else "USING COVERING INDEX asset_search_created"
+    // A continuation seeks to its cursor's import time rather than reading the pages before it
+    val seek = if (isPostgres) "Index Cond: .*created_at <= " else "asset_search_created \\(.*created_at<\\?\\)"
+
+    val (firstPlan, continuedPlan) = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500)) {
+      (indexOnlyPlanOf(flatPage(first), "asset"), indexOnlyPlanOf(flatPage(continued), "asset"))
+    }
+
+    withClue(firstPlan)(firstPlan should include(covering))
+    withClue(continuedPlan) {
+      continuedPlan should include(covering)
+      seek.r.findFirstIn(continuedPlan).isDefined shouldBe true
+    }
+  }
+
+  test("A Date Taken page reads the capture-day index in order") {
+
+    /**
+     * Setup:
+     *
+     * An asset seeded into 5,000 copies over 500 folders for the planner, and an unscoped, ungrouped page of 50 sorted by capture
+     * time, newest first.
+     *
+     * Assertions:
+     *
+     * The engine's plan for the page reads `asset_search_date_taken` and does not sort the matches: PostgreSQL sorts only the
+     * ties the index leaves, incrementally, and SQLite only the last term of the order.
+     */
+    val template = testContext.persistAsset()
+    val byCapture = List(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC))
+    val query = new SearchQuery(params = browsingView, rpp = 50, searchSort = byCapture)
 
     val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(flatPage(query)))
 
-    withClue(plan)(plan should include("asset_search_created"))
+    withClue(plan) {
+      plan should include("asset_search_date_taken")
+      if (isPostgres) plan should include("Incremental Sort")
+      else plan should include("USE TEMP B-TREE FOR LAST TERM OF ORDER BY")
+    }
+  }
+
+  test("The triage view reads the indexes of the triaged assets alone") {
+
+    /**
+     * Setup:
+     *
+     * A sorted asset seeded into 5,000 copies for the planner, which are rolled back after the plans are read, and three triaged
+     * assets beside them: a small triage set in a large library. The triage view's statements: a flat page by import time, its
+     * capped count, and a page grouped by capture day.
+     *
+     * Assertions:
+     *
+     * The flat page and the count read `asset_triage_created` and the grouped page reads `asset_triage_date_taken`, the partial
+     * indexes that hold only the triaged assets, so none of them passes over the library.
+     */
+    val template = testContext.persistAsset()
+    for (_ <- 1 to 3) testContext.persistAsset(isTriaged = true)
+    val triageView = Map[String, Any](FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
+    val flat = new SearchQuery(params = triageView, rpp = 50, searchSort = byImport)
+    val grouped = new SearchQuery(
+      params = triageView,
+      rpp = 50,
+      searchSort = List(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC)),
+      grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
+    )
+    val repositoryId = RequestContext.getRepository.persistedId
+
+    val (pagePlan, countPlan, groupedPlan) = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500)) {
+      (
+        planOf(flatPage(flat)),
+        planOf(SearchQueries.cappedCount(searchDialect, flat, repositoryId)),
+        planOf(SearchQueries.grouped(searchDialect, grouped, repositoryId)))
+    }
+
+    withClue(pagePlan)(pagePlan should include("asset_triage_created"))
+    withClue(countPlan)(countPlan should include("asset_triage_"))
+    withClue(groupedPlan)(groupedPlan should include("asset_triage_date_taken"))
   }
 
   test("An asset's faces, Search document and metadata parameters are found by the index that leads with the asset") {
@@ -926,6 +1004,50 @@ import altitude.core.util.*
 
       withClue(plan)(seek.r.findFirstIn(plan).isDefined shouldBe true)
     }
+  }
+
+  test("The people a Search text resolves against are read through a partial index of the live people") {
+
+    /**
+     * Setup:
+     *
+     * The statement that reads the repository's searchable people: named, visible, live, not a bad match.
+     *
+     * Assertions:
+     *
+     * Its plan reads `person_01` or `person_03`, the partial indexes of the live people that lead with the repository. SQLite
+     * matches a partial index to a bound flag by its value, which holds for a flag bound as a number and not for one bound as
+     * text.
+     */
+    val engine = searchDialect
+    val statement = Db.render(SearchQueries.searchablePeople(engine, RequestContext.getRepository.persistedId), engine.dialect)
+
+    val plan = lookupPlanOf(statement.withCompleteQuery(false))
+
+    withClue(plan)("person_0[13]".r.findFirstIn(plan).isDefined shouldBe true)
+  }
+
+  test("The live copy of a content is looked up through the index of the live assets") {
+
+    /**
+     * Setup:
+     *
+     * One imported asset, and a lookup of the repository's live asset with its checksum, the flag bound as the DAOs bind it.
+     *
+     * Assertions:
+     *
+     * The plan seeks `asset_01`, the partial unique index of the live assets, on both engines: a flag bound as a number proves
+     * the index's predicate.
+     */
+    val engine = searchDialect
+    import engine.dialect.*
+    val asset = importAsset("beach.jpg")
+    val repositoryId = RequestContext.getRepository.persistedId
+
+    val plan = lookupPlanOf(
+      sql"SELECT id FROM asset WHERE repository_id = $repositoryId AND checksum = ${asset.checksum} AND is_recycled = ${false}")
+
+    withClue(plan)(plan should include("asset_01"))
   }
 
   if (isPostgres) test("An excluded term is an anti-join on PostgreSQL") {
@@ -997,6 +1119,57 @@ import altitude.core.util.*
     }
 
     withClue(plan)(plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1"))
+  }
+
+  test("The name sources of a Search text are read from their indexes alone") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, "beach.jpg" and another, both with a Face of Alice, both in the Location Rome and in the album Trip. The text
+     * "beach alice rome trip" is resolved with a probe limit of one hit, so "beach" is complete with its one hit, which is the
+     * search's one candidate, and the other three terms are tested on that candidate's own row.
+     *
+     * Assertions:
+     *
+     * The probe reads the person's, the Location's and the album's assets from the index that leads with each, and the search
+     * tests the candidate's memberships and faces through an index that leads with the asset, none of them reading its table:
+     * index-only scans on PostgreSQL, covering indexes on SQLite, whose `face_01` cannot carry the person.
+     */
+    val alice = addPerson("Alice")
+    val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
+    val trip = testApp.service.album.add("Trip")
+    val assets = List(importAsset("beach.jpg"), importAsset("lake.jpg"))
+    assets.foreach(addFace(alice, _))
+    testApp.service.location.addAssets(rome.persistedId, assets.map(_.persistedId).toSet)
+    testApp.service.album.addAssets(trip.persistedId, assets.map(_.persistedId).toSet)
+    val query = new SearchQuery(text = Some("beach alice rome trip"), params = browsingView)
+    val repositoryId = RequestContext.getRepository.persistedId
+    val tables = List("face", "location_asset", "album_asset")
+
+    def plans: (String, String) = {
+      val text = testApp.service.search.resolveText(query.textExpression.value, probeLimit = 1)
+      text.candidates shouldBe Some(Set(assets.head.persistedId))
+      (
+        indexOnlyPlanOf(SearchQueries.textProbe(searchDialect, text, repositoryId, limit = 1).value, tables*),
+        indexOnlyPlanOf(SearchQueries.cappedCount(searchDialect, query.withResolvedText(text), repositoryId), tables*))
+    }
+    // PostgreSQL needs the tables analyzed to be told they are vacuumed. SQLite, told that they hold two rows, would scan them
+    // rather than seek, and without statistics it plans as it does for a library.
+    val (probePlan, searchPlan) = if (isPostgres) atScale(())(plans) else plans
+
+    // Over tables of two rows PostgreSQL may read either index of a membership table; what matters is that it reads no table
+    def covering(table: String, index: String): String =
+      if (isPostgres) s"Index Only Scan using \\w+ on $table " else s"USING COVERING INDEX $index "
+    def reads(plan: String, table: String, index: String): Unit =
+      withClue(s"$table in $plan: ")(covering(table, index).r.findFirstIn(plan).isDefined shouldBe true)
+
+    reads(probePlan, "face", "face_02")
+    reads(probePlan, "location_asset", "location_asset_01")
+    reads(probePlan, "album_asset", "album_asset_01")
+    reads(searchPlan, "location_asset", "location_asset_02")
+    reads(searchPlan, "album_asset", "album_asset_02")
+    if (isPostgres) reads(searchPlan, "face", "face_01")
   }
 
   /** Three assets whose file names and "place" metadata values share words in different orders */
@@ -1744,8 +1917,8 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * Equal matches read newest capture first, undated ones last, and by ID within a tie, and offset pages of two and of five cut
-     * the same order.
+     * Equal matches read newest capture first, undated ones last, and by ID within a tie, and pages of two and of five walked by
+     * cursor cut the same order.
      */
     val assets = (1 to 6).map(n => importAsset(s"beach-$n.jpg").persistedId).toList
     val List(older, newest, twinA, twinB, undatedA, undatedB) = assets: @unchecked
@@ -1757,15 +1930,20 @@ import altitude.core.util.*
 
     val expected = newest :: List(twinA, twinB).sorted ::: older :: List(undatedA, undatedB).sorted
     ranked("beach") shouldBe expected
-    // Offset pages of the flat grid cut the same order
-    (1 to 3).toList.flatMap(page => ranked("beach", rpp = 2, page = page)) shouldBe expected
-    (1 to 2).toList.flatMap(page => ranked("beach", rpp = 5, page = page)) shouldBe expected
+    // The pages of the flat grid cut the same order
+    ranked("beach", rpp = 2) shouldBe expected
+    ranked("beach", rpp = 5) shouldBe expected
   }
 
-  /** The IDs of the assets a Search text matches, most relevant first */
-  private def ranked(text: String, rpp: Int = PAGE_SIZE, page: Int = 1): List[String] =
-    search(new SearchQuery(text = Some(text), rpp = rpp, page = page, searchSort = List(SearchSort.Relevance))).records
-      .map(_.persistedId)
+  /** The IDs of the assets a Search text matches, most relevant first: every page of the search, walked by cursor */
+  private def ranked(text: String, rpp: Int = PAGE_SIZE): List[String] = {
+    def page(cursor: Option[SearchCursor]): SearchResult =
+      search(new SearchQuery(text = Some(text), rpp = rpp, searchSort = List(SearchSort.Relevance), cursor = cursor))
+
+    List
+      .unfold(Option(page(None)))(_.map(current => (current, current.nextCursor.map(cursor => page(Some(cursor))))))
+      .flatMap(_.records.map(_.persistedId))
+  }
 
   /** Gives the asset a capture time, the tiebreaker of equally relevant matches */
   private def takenAt(asset: Asset, taken: String): Unit =
@@ -1871,7 +2049,7 @@ import altitude.core.util.*
     testContext.setAssetCoordinates(asset.persistedId, latitude = 10, longitude = 20)
     val q = new SearchQuery(rpp = PAGE_SIZE)
 
-    testApp.service.search.search(q).records.map(_.persistedId) shouldBe List(asset.persistedId)
+    testApp.service.search.search(q, scopeFingerprint = "test").records.map(_.persistedId) shouldBe List(asset.persistedId)
     testApp.service.search.count(q) shouldBe 1
     testApp.service.search.cappedCount(q) shouldBe 1
     testApp.service.search.mapCells(q, BoundingBox(-90, -180, 90, 180), zoom = 0).cells.map(_.count).sum shouldBe 1

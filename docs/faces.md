@@ -66,10 +66,19 @@ one's own files.
 `FaceRecognitionService.recognizeFace(face): Option[Person]` finds the Person for an unsaved Face:
 
 1. `FaceDao.searchClosestFaceMatches` returns the `face.recognition.match_count` (5) nearest stored Faces within
-   `face.recognition.cosine_distance_threshold` (0.55), in distance order. The SQL is hand-written per engine
-   (pgvector `<=>`, or `vector_full_scan` on SQLite; neither has a vector index, so it is an exact scan of the
-   repository) and sees only **enrolled** Faces of people who are **not a bad match**. Hidden people stay matchable:
-   hiding is a display preference.
+   `face.recognition.cosine_distance_threshold` (0.55), in distance order. The SQL is hand-written per engine and sees
+   only **enrolled** Faces of people who are **not a bad match**, in the context repository. Hidden people stay
+   matchable: hiding is a display preference.
+   - **PostgreSQL** (`postgres.FaceDao.CLOSEST_MATCHES_SQL`): the candidates come from `face_03`, a partial HNSW index
+     over the enrolled Faces' vectors at half precision (`features::halfvec(512)`, `WHERE is_enrolled`). The statement
+     asks it for four times `match_count` Faces, ordered by the same cast, then takes their exact `<=>` distances at
+     full precision, applies the threshold and keeps the nearest. `withFaceVector` sets `hnsw.ef_search`
+     (`face.recognition.hnsw_ef_search`, 100) and `hnsw.iterative_scan = relaxed_order` for the transaction, so the
+     index scan goes on until its limit is met by Faces that pass the repository and bad-match filters. The search is
+     approximate; over a handful of Faces it is exhaustive.
+   - **SQLite**: `vector_full_scan` is an exact scan of the `face` table, every repository's rows, filtered
+     afterwards. sqlite-vector's quantized scan reads only the rows present when the table was last quantized, so it
+     would miss a Face saved a moment ago, such as the first of two Faces of one image.
 2. The matches vote by Person; most votes win and a tie goes to the closest Face.
 3. With no match, an **enrolled** Face starts a new Person (`PersonService.addPerson`, named "Unknown N" from the
    `person_label` sequence, with a zero-padded sort name). A **match-only** Face is nobody's: `None`, and the caller drops it.

@@ -21,7 +21,6 @@ const DEFAULTS = {
     groupBy: null,
     groupDirection: null,
     rpp: null,
-    p: 1,
 }
 
 /**
@@ -59,21 +58,16 @@ const CLEARS = {
     q: ["view", ...PLACES, "bbox"],
 }
 
-/**
- * The numbers the server reads, each held to the whole values it accepts: a page size up to its
- * bound, and a page number an `Int` holds. How far a page may go also depends on the page size, and
- * the server's default for it, so that bound stays the server's.
- */
+/** The numbers the server reads, each held to the whole values it accepts: a page size up to its bound */
 const NUMBER_RANGES = {
     rpp: { min: 1, max: Const.search.maxRpp },
-    p: { min: 1, max: 2 ** 31 - 1 },
 }
 
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
  * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
- * is a page size or page number the server would refuse (`normalize`). The layout is the one
+ * is a page size the server would refuse (`normalize`). The layout is the one
  * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
  * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
@@ -117,8 +111,8 @@ function rememberedLayout() {
 }
 
 /**
- * `current` with `changes` applied under the scope rules above. Any change other than paging itself
- * returns to the first page - a new sort or a new folder has no page 3 to stay on.
+ * `current` with `changes` applied under the scope rules above. The store holds no position: a
+ * search starts at its first page, and a later page is one request's `after` cursor.
  */
 export function applySearchParamChanges(current, changes) {
     const changed = Object.keys(changes).filter((name) =>
@@ -138,10 +132,6 @@ export function applySearchParamChanges(current, changes) {
         })
     })
 
-    if (!changed.includes("p")) {
-        next.p = DEFAULTS.p
-    }
-
     return withoutRefusedCombinations(next)
 }
 
@@ -152,21 +142,16 @@ export function applySearchParamChanges(current, changes) {
  * An override that is not a search parameter (`isContinuousScroll`, the `after` cursor) is appended
  * as-is: those are per-request flags that must never end up in the store.
  *
- * A grouped search has no page number - it is continued by cursor - so `p` is left out whenever
- * `groupBy` is set: the server rejects the pair, and a `p` seeded from a hand-edited URL would
- * otherwise turn the whole search into a 400. A `p` or `rpp` that is not a whole number in range
- * never gets this far (`normalize`).
+ * An `rpp` that is not a whole number in range never gets this far (`normalize`).
  */
 export function serializeSearchParams(params, overrides = {}) {
     const query = new URLSearchParams()
     const effective = (name) =>
         name in overrides ? overrides[name] : params[name]
-    const isGrouped = !isOmitted("groupBy", effective("groupBy"))
-
     PARAM_NAMES.forEach((name) => {
         const value = effective(name)
 
-        if (isOmitted(name, value) || (name === "p" && isGrouped)) {
+        if (isOmitted(name, value)) {
             return
         }
 

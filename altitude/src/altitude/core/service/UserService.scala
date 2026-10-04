@@ -1,5 +1,7 @@
 package altitude.core.service
 
+import java.sql.SQLException
+
 import altitude.core._
 import altitude.core.dao.UserDao
 import altitude.core.models.User
@@ -7,6 +9,7 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.Util
+import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 class UserService(val app: Altitude) extends BaseService[User]:
   protected val dao: UserDao = app.DAO.user
@@ -39,7 +42,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
       // Only return user if both password is valid AND user exists
       if passwordValid && passwordHashOpt.isDefined then
-        val user: User = getByEmail(email)
+        val user: User = dao.getByEmail(email)
 
         // Create PASETO token with embedded user data
         val token = app.service.paseto.createToken(user)
@@ -79,7 +82,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
     txManager.withTransaction {
       logger.debug(s"Adding user [${objIn.email}]")
       val passwordHash = Util.hashPassword(password)
-      dao.addUser(objIn, passwordHash)
+      // An email address names one account, whatever its case
+      try dao.addUser(objIn, passwordHash)
+      catch case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
     }
 
   private def getPasswordHashByEmailSafe(email: String): Option[String] =
@@ -95,10 +100,6 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   def getByToken(token: String): Option[User] =
     getUserFromToken(token)
-
-  private def getByEmail(email: String): User =
-    val query = new Query(params = Map(FieldConst.User.EMAIL -> email))
-    dao.getOneByQuery(query)
 
   def setLastActiveRepoId(user: User, repoId: String): Unit =
     txManager.withTransaction {

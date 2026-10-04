@@ -288,6 +288,28 @@ import altitude.core.models.Repository
     testApp.service.location.getAssetIds(paris.persistedId) shouldEqual Set(asset.persistedId)
   }
 
+  test("A selection larger than a statement's parameter limit is added to and removed from a Location") {
+
+    /**
+     * Setup:
+     *
+     * A Location, one imported asset, and a selection of that asset among 70,000 unknown IDs, more than a PostgreSQL statement
+     * takes parameters for. The selection is added to the Location, removed from it, added again and removed from every Location.
+     *
+     * Assertions:
+     *
+     * Each statement runs and counts the one asset.
+     */
+    val location: Location = addLocation("Paris")
+    val asset: Asset = testContext.persistAsset()
+    val selection = amongManyUnknownIds(Set(asset.persistedId))
+
+    testApp.service.location.addAssets(location.persistedId, selection) shouldEqual 1
+    testApp.service.location.removeAssets(location.persistedId, selection) shouldEqual 1
+    testApp.service.location.addAssets(location.persistedId, selection) shouldEqual 1
+    testApp.service.location.removeAssetsFromAllLocations(selection) shouldEqual 1
+  }
+
   test("Deleting a Location removes its memberships and leaves the assets alone") {
 
     /**

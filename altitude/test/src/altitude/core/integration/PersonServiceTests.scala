@@ -300,6 +300,28 @@ import altitude.core.util.Util
     faces.count(_.personId.get == mergedB.persistedId) should be(NEW_FACES_TOTAL)
   }
 
+  test("A person's top faces are the best detections, best first") {
+
+    /**
+     * Setup:
+     *
+     * A person with eight faces of random detection scores, read with a limit of three and with no limit to speak of.
+     *
+     * Assertions:
+     *
+     * The three returned are the three highest-scoring of the eight, in descending score order.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, 8)
+
+    val all = testApp.service.person.getPersonFaces(person.persistedId)
+    val top = testApp.service.person.getPersonFaces(person.persistedId, limit = 3)
+
+    all.size should be(8)
+    all.map(_.detectionScore) should be(all.map(_.detectionScore).sorted.reverse)
+    top.map(_.persistedId) should be(all.take(3).map(_.persistedId))
+  }
+
   test("Person merge B -> A") {
 
     /**

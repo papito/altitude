@@ -232,50 +232,80 @@ import altitude.core.util.SearchQuery
     cellsOf(BoundingBox.parse("-1,-179,1,179")).cells shouldBe Nil
   }
 
-  test("A cells query reads the geotagged assets through the asset_geo partial index") {
+  /** A library for the planner: 5,000 copies of the asset, one in ten of them geotagged somewhere on the globe */
+  private def seedGeotagged(template: Asset): Unit = {
+    seedCopies(template.persistedId, copies = 5000, folders = 500)
+    update("""UPDATE asset SET latitude = -80 + (checksum % 160), longitude = -180 + (checksum % 360)
+             | WHERE checksum >= 1000000 AND checksum % 10 = 0""".stripMargin)
+  }
+
+  test("The viewport statements read the geotagged assets through the asset_geo partial index alone") {
 
     /**
      * Setup:
      *
-     * Two assets in Paris and one without a point; on PostgreSQL also 5,000 copies of an asset, one in ten geotagged, analyzed
-     * and rolled back once the plan is read.
+     * Two assets in Paris and one without a point, the last seeded into 5,000 copies of which one in ten is geotagged, analyzed
+     * and rolled back once the plans are read. The cells statement over a Paris viewport, and the capped count of the grid scoped
+     * to the same box, which is what the crowded-pin panel shows.
      *
      * Assertions:
      *
-     * The engine's plan for the cells statement over a Paris viewport reads the asset_geo partial index.
+     * The cells statement reads its assets' own points from `asset_geo` and nothing else of the asset: the index carries the ID
+     * and the capture time a cell is ranked by, so the read is index-only on PostgreSQL and covering on SQLite. The grid scoped
+     * to the box bounds its assets by `asset_geo` as well.
      */
-    val inParis = persistAt(paris._1, paris._2)
+    persistAt(paris._1, paris._2)
     persistAt(48.8606, 2.3376)
-    testContext.persistAsset()
+    val template = testContext.persistAsset()
+    val box = BoundingBox.parse("48,2,49,3")
+    val repositoryId = RequestContext.getRepository.persistedId
 
-    val cells = SearchQueries.mapCells(
-      searchDialect,
-      searchQuery(),
-      RequestContext.getRepository.persistedId,
-      BoundingBox.parse("48,2,49,3"),
-      SearchService.cellDegrees(12))
+    val cells = SearchQueries.mapCells(searchDialect, searchQuery(), repositoryId, box, SearchService.cellDegrees(12))
+    val inBox = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false), bbox = Some(box))
+    val grid = SearchQueries.cappedCount(searchDialect, inBox, repositoryId)
 
-    // Postgres costs a plan by the table's statistics, and over a handful of rows every index on the repository costs the same,
-    // so its choice would be a tie. At a library's scale - thousands of assets, most without a point, analyzed - it is not.
-    // SQLite has no statistics before ANALYZE and prefers the index that constrains the most columns.
-    val plan =
-      if (isPostgres)
-        atScale {
-          update(
-            """INSERT INTO asset
-              |SELECT (jsonb_populate_record(a, jsonb_build_object(
-              |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
-              |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
-              |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
-              |  FROM asset a, generate_series(1, 5000) g
-              | WHERE a.id = ?""".stripMargin,
-            inParis.persistedId
-          )
-        }(planOf(cells))
-      else planOf(cells)
+    val (cellsPlan, gridPlan) = atScale(seedGeotagged(template)) {
+      (indexOnlyPlanOf(cells, "asset"), planOf(grid))
+    }
+
+    withClue(cellsPlan) {
+      if (isPostgres) cellsPlan should include("Index Only Scan using asset_geo")
+      else cellsPlan should include("USING COVERING INDEX asset_geo")
+    }
+    withClue(gridPlan)(gridPlan should include("asset_geo"))
+  }
+
+  test("The Locations of a viewport are counted from their own members, not from every match") {
+
+    /**
+     * Setup:
+     *
+     * A Location pinned in Paris holding one asset, in a library of 5,000 other assets, analyzed and rolled back once the plan is
+     * read, and the statement that counts the matching assets of the Locations in a Paris viewport.
+     *
+     * Assertions:
+     *
+     * The plan finds the matching assets by their ID, from the memberships of the Locations in the box, and never passes over an
+     * index of the repository's assets.
+     */
+    val location = addLocation("Paris")
+    val member = testContext.persistAsset()
+    testApp.service.location.addAssets(location.persistedId, Set(member.persistedId))
+    val template = testContext.persistAsset()
+
+    val locations =
+      SearchQueries.mapLocations(
+        searchDialect,
+        searchQuery(),
+        RequestContext.getRepository.persistedId,
+        BoundingBox.parse("48,2,49,3"))
+
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(locations))
 
     withClue(plan) {
-      plan should include("asset_geo")
+      plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1")
+      (plan should not).include("asset_search_")
+      (plan should not).include(if (isPostgres) "Seq Scan on asset" else "SCAN asset")
     }
   }
 

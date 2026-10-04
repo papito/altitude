@@ -19,11 +19,8 @@ CREATE TABLE account (
   updated_at DATETIME DEFAULT NULL
 );
 
-CREATE TABLE user_token (
-  account_id CHAR(36) REFERENCES account (id) ON DELETE CASCADE,
-  token TEXT NOT NULL,
-  expires_at DATETIME
-);
+-- One account per email address, whatever its case, and the login lookup, which compares lower(email) too
+CREATE UNIQUE INDEX account_01 ON account (lower(email));
 
 CREATE TABLE repository (
   id CHAR(36) PRIMARY KEY,
@@ -44,8 +41,7 @@ CREATE TABLE stats (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
-CREATE INDEX stats_01 ON stats (repository_id);
-CREATE UNIQUE INDEX stats_02 ON stats (repository_id, dimension);
+CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);
 
 CREATE TABLE asset (
   id CHAR(36) PRIMARY KEY,
@@ -85,7 +81,9 @@ CREATE TABLE asset (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
+-- One live asset per content in a repository; the recycle bin may hold any number of copies of it. A statement that binds the
+-- flag as a number matches the predicate; one that binds it as text does not.
+CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum) WHERE is_recycled = FALSE;
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
 -- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
 -- It carries the ID and the folder, so a pass over the library that tests text membership, a folder or a day reads the index
@@ -93,12 +91,21 @@ CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
 );
--- The default flat sort, Date Imported, as an ordered read
-CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at);
+-- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries the ID
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id);
+-- The triage view: only the triaged assets, in Date Imported order and by capture day, so a small triage set in a large library
+-- is read without passing over the library. They shrink as triage is sorted. A statement that binds the flag as a number
+-- matches the predicate; one that binds it as text does not.
+CREATE INDEX asset_triage_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id)
+  WHERE is_triaged = TRUE;
+CREATE INDEX asset_triage_date_taken ON asset (
+  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
+) WHERE is_triaged = TRUE;
 -- Folder browsing and the folder source of Search text; it also lets an OR of text sources be planned as a multi-index OR
 CREATE INDEX asset_folder ON asset (folder_id);
--- Map viewport queries: a bounding-box range over the located assets of a repository only.
-CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
+-- Map viewport queries: a bounding-box range over the located assets of a repository only. It carries the ID and the capture
+-- time a map cell is ranked by, so a viewport's own points are read from the index alone.
+CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude, id, original_created_at)
   WHERE latitude IS NOT NULL;
 
 CREATE TABLE person_label (
@@ -176,7 +183,6 @@ CREATE TABLE metadata_field (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
-CREATE INDEX metadata_field_01 ON metadata_field (repository_id);
 CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_lc);
 
 CREATE TABLE folder (
@@ -191,9 +197,10 @@ CREATE TABLE folder (
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
-CREATE INDEX folder_01 ON folder (repository_id, parent_id);
+-- A folder's name is unique among its siblings; it also lists a repository's folders
 CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_lc);
-CREATE INDEX folder_03 ON folder (is_recycled, parent_id);
+-- A folder's children, live or recycled
+CREATE INDEX folder_03 ON folder (parent_id, is_recycled);
 
 CREATE TABLE album (
   id CHAR(36) PRIMARY KEY,
@@ -218,7 +225,8 @@ CREATE TABLE album_asset (
 );
 
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
-CREATE INDEX album_asset_02 ON album_asset (asset_id);
+-- An asset's albums, read from the index alone: the purge cascade and the per-asset probes of Search text
+CREATE INDEX album_asset_02 ON album_asset (asset_id, album_id);
 
 -- A user-defined place. Categories (kind 'category') are pure containers, one level deep; Locations (kind 'location') are a pin
 -- and hold assets through location_asset. Both kinds share one name pool per repository.
@@ -244,7 +252,8 @@ CREATE TABLE location (
 );
 
 CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
-CREATE INDEX location_02 ON location (repository_id, category_id);
+-- A category's Locations: moving them to the top level, and the check that keeps a deleted category from orphaning one
+CREATE INDEX location_02 ON location (category_id, repository_id);
 
 CREATE TABLE location_asset (
   repository_id CHAR(36) NOT NULL,
@@ -257,7 +266,8 @@ CREATE TABLE location_asset (
 );
 
 CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
-CREATE INDEX location_asset_02 ON location_asset (asset_id);
+-- An asset's Locations, read from the index alone: the purge cascade and the per-asset probes of Search text
+CREATE INDEX location_asset_02 ON location_asset (asset_id, location_id);
 
 CREATE TABLE metadata_parameter (
   repository_id CHAR(36) NOT NULL,

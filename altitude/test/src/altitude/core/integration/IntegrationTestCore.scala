@@ -66,6 +66,13 @@ abstract class IntegrationTestCore
     IntegrationTestUtil.createFileStoreDir(testApp)
   }
 
+  /**
+   * The IDs among more unknown ones than a PostgreSQL statement takes parameters for (65,535): a selection that only a statement
+   * binding its ID set as one value can run
+   */
+  def amongManyUnknownIds(ids: Set[String]): Set[String] =
+    ids ++ (1 to 70000).map(n => f"unknown-$n%028d")
+
   def switchContextUser(user: User): Unit = {
     testApp.service.user.switchContextToUser(user)
   }

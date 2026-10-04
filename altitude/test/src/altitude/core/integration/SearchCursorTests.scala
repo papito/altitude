@@ -11,7 +11,7 @@ import altitude.core.models.{ Asset, Person }
 import altitude.core.service.FaceDetectionService
 import altitude.core.util.*
 
-/** Cursor continuation of a grouped search: every supported ordering, live changes around the anchor, and scope checks */
+/** Cursor continuation of a flat and of a grouped search: every supported ordering, live changes around the anchor, scope checks */
 @DoNotDiscover class SearchCursorTests(override val testApp: Altitude) extends IntegrationTestCore with TextSearchPaths {
 
   /** What a fixture asset was given, so the expected order can be computed independently of SQL */
@@ -187,6 +187,128 @@ import altitude.core.util.*
     }
   }
 
+  private def flatPage(
+      sort: SearchSort,
+      rpp: Int,
+      cursor: Option[SearchCursor] = None,
+      text: Option[String] = None): SearchResult =
+    search(
+      new SearchQuery(
+        text = text,
+        params = Map(FieldConst.Asset.IS_RECYCLED -> false),
+        rpp = rpp,
+        searchSort = List(sort),
+        cursor = cursor))
+
+  /** Walks every page of a flat search through encoded cursors, as a client would, and returns the IDs in order */
+  private def traverseFlat(sort: SearchSort, rpp: Int, text: Option[String] = None): List[String] = {
+    val pages = List.unfold(Option(flatPage(sort, rpp, text = text))) {
+      _.map {
+        page =>
+          page.nextCursor.foreach(cursor => SearchCursor.decode(cursor.encode) shouldEqual cursor)
+          (page, page.nextCursor.map(cursor => flatPage(sort, rpp, Some(cursor), text)))
+      }
+    }
+    pages.size should be < 100
+    // Only a first page counts the matches, and only a last page may be short
+    pages.map(_.total.isDefined) shouldEqual (true :: List.fill(pages.size - 1)(false))
+    pages.init.foreach(_.records.size shouldBe rpp)
+    pages.flatMap(_.records.map(_.persistedId))
+  }
+
+  test("A flat search walked by cursor matches the complete order for every sort field and direction") {
+
+    /**
+     * Setup:
+     *
+     * The fixture: 12 assets captured over four days, three a day and each imported an hour after capture, with repeated capture
+     * times and file names, plus 4 undated assets sharing one import time. It is walked ungrouped, page by page through encoded
+     * cursors, five assets a page and then one.
+     *
+     * Assertions:
+     *
+     * For every sort field (capture time, import time, file name, size, area) and both directions the walk reproduces the
+     * complete order computed independently of SQL: the sort with nulls where the engine puts them, then the ID. Every cursor
+     * survives encoding, only the first page carries the total, and every page but the last is full.
+     *
+     * Edge cases:
+     *
+     * Ties on every sort key leave the order to the ID, and size and area tie for every asset. Walking one asset a page makes
+     * every position an anchor, including the step from the dated assets into the undated ones and each tie among those.
+     */
+    val assets = fixture()
+
+    for (field <- sortFields; direction <- SortDirection.values.toList; rpp <- List(5, 1)) {
+      val sort = SearchSort(field, direction)
+      withClue(s"$sort, $rpp a page: ") {
+        traverseFlat(sort, rpp) shouldEqual assets.sorted(sortThenId(sort)).map(_.id)
+      }
+    }
+  }
+
+  test("A flat search under the Relevance sort continues by cursor in the order of the unpaged search") {
+
+    /**
+     * Setup:
+     *
+     * Assets named with "beach" on two days and one undated, two assets whose names do not match but whose album "Beach days"
+     * does, and an unrelated asset, searched ungrouped for "beach" under the Relevance sort.
+     *
+     * Assertions:
+     *
+     * The unpaged search puts the album matches first and then the file-name matches, each newest capture first with the undated
+     * one last. Walked two and one a page by cursor, the search returns the same assets in the same order.
+     */
+    val album = testApp.service.album.add("Beach days")
+    val a1 = persistDated("2026-09-06T10:00:00", "beach-1.jpg").id
+    val a2 = persistDated("2026-09-06T09:00:00", "two.jpg").id
+    val a3 = persistDated("2026-09-06T11:00:00", "beach-3.jpg").id
+    val b1 = persistDated("2026-09-05T08:00:00", "beach-4.jpg").id
+    val b2 = persistDated("2026-09-05T07:00:00", "five.jpg").id
+    val undated = persistUndated("beach-6.jpg").id
+    persistDated("2026-09-06T12:00:00", "unrelated.jpg")
+    testApp.service.album.addAssets(album.persistedId, Set(a2, b2))
+    val beach = Some("beach")
+
+    val unpaged = flatPage(SearchSort.Relevance, rpp = 50, text = beach)
+    unpaged.records.map(_.persistedId) shouldEqual List(a2, b2, a3, a1, b1, undated)
+    unpaged.nextCursor shouldBe None
+
+    for (rpp <- List(2, 1)) withClue(s"$rpp a page: ") {
+      traverseFlat(SearchSort.Relevance, rpp, beach) shouldEqual unpaged.records.map(_.persistedId)
+    }
+  }
+
+  test("A flat cursor continues only the flat search it was issued for") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture. A flat search sorted by file name gives a cursor from its first page of five; the same search grouped
+     * by Date Taken gives another.
+     *
+     * Assertions:
+     *
+     * The flat cursor names the last asset of its page and continues the same search, at another page size too. It is refused
+     * under another sort or direction, with Search text, and by the grouped search; the grouped search's cursor is refused by the
+     * flat one.
+     */
+    val assets = fixture()
+    val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
+    val expected = assets.sorted(sortThenId(sort)).map(_.id)
+    val grouping = SearchGrouping(GroupBy.DateTaken)
+
+    val cursor = flatPage(sort, rpp = 5).nextCursor.get
+    cursor.id shouldBe expected(4)
+    flatPage(sort, rpp = 6, Some(cursor)).records.map(_.persistedId) shouldEqual expected.slice(5, 11)
+
+    intercept[SearchCursorException](flatPage(SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC), 5, Some(cursor)))
+    intercept[SearchCursorException](flatPage(SearchSort(FieldConst.CREATED_AT, SortDirection.ASC), 5, Some(cursor)))
+    intercept[SearchCursorException](flatPage(sort, 5, Some(cursor), text = Some("beach")))
+    intercept[SearchCursorException](continue(cursor, grouping, sort, rpp = 5))
+    intercept[SearchCursorException](flatPage(sort, 5, firstPage(grouping, sort, rpp = 5).nextCursor))
+  }
+
   test("The cursor points at the last returned image and ends with the results") {
 
     /**
@@ -325,7 +447,7 @@ import altitude.core.util.*
     SearchCursor.decode(nullCursor.encode) shouldBe nullCursor
     val oldJson =
       ujson.read(new String(java.util.Base64.getUrlDecoder.decode(cursor.encode), java.nio.charset.StandardCharsets.UTF_8))
-    oldJson("v") = 4
+    oldJson("v") = 5
     val oldToken = java.util.Base64.getUrlEncoder.withoutPadding
       .encodeToString(ujson.write(oldJson).getBytes(java.nio.charset.StandardCharsets.UTF_8))
     intercept[SearchCursorException](SearchCursor.decode(oldToken)).getMessage shouldBe "Unsupported cursor version"
@@ -350,7 +472,8 @@ import altitude.core.util.*
        * Assertions:
        *
        * Grouped by capture day and sorted by import time in either direction, walking one and two assets a page keeps that asset
-       * in its day, first or last in it as SQLite puts nulls for the direction.
+       * in its day, first or last in it as SQLite puts nulls for the direction. Ungrouped, the same walks put it first of all
+       * ascending and last of all descending.
        */
       val assets = fixture(includeUndated = false)
       val undated = assets(2)
@@ -369,9 +492,14 @@ import altitude.core.util.*
           val rest =
             expectedOrder(assets.filterNot(a => a.taken.map(_.toLocalDate) == undated.taken.map(_.toLocalDate)), grouping, sort)
 
+          val flat = assets.filterNot(_.id == undated.id).sorted(sortThenId(sort)).map(_.id)
+          val expectedFlat = if (direction == SortDirection.ASC) undated.id :: flat else flat :+ undated.id
+
           withClue(s"$sort: ") {
             traverse(grouping, sort, rpp = 1) shouldEqual expectedDay ++ rest
             traverse(grouping, sort, rpp = 2) shouldEqual expectedDay ++ rest
+            traverseFlat(sort, rpp = 1) shouldEqual expectedFlat
+            traverseFlat(sort, rpp = 2) shouldEqual expectedFlat
           }
       }
     }

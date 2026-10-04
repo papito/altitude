@@ -65,48 +65,54 @@ import altitude.core.util.SortValue
     }
   }
 
-  test("A flat page picks its rows over narrow ones, one past the page, then reads the page in full") {
+  test("A flat page is a slice of narrow rows after its cursor, joined back to its assets") {
 
     /**
      * Setup:
      *
-     * A query of 25 rows a page sorted by file name descending, rendered as its first and third flat page on both engines.
+     * A query of 25 rows a page sorted by file name descending, rendered on both engines as its first flat page and as the page
+     * that continues from a cursor.
      *
      * Assertions:
      *
-     * The page is a materialized slice of IDs and sort values, ordered by its own columns and limited to one row past the page at
-     * the page's offset; only those rows are joined back to the asset table in full, in the same order, with no window count and
-     * no explicit null ordering. Only the first page carries the overall count, capped one past 10,000, and every placeholder has
-     * a bound value.
+     * The candidates are a materialized slice of IDs and sort values, ordered by the sort and then the ID and limited to one row
+     * past the page; only the page's rows are joined back to the asset table in full, in the same order, with no window count, no
+     * offset and no explicit null ordering. A continuation starts after its cursor's anchor: a later sort value, or the anchor's
+     * own and a greater ID, under an inclusive bound on the sort value that an index can seek to. Only the first page carries the
+     * overall count, capped one past 10,000, and every placeholder has a bound value.
      *
      * Edge cases:
      *
      * A query without a page size is refused, so no flat page is unbounded.
      */
     for ((engine, dialect) <- engines) withClue(engine) {
-      def page(number: Int): SqlStr = SearchQueries.flat(
+      def page(cursor: Option[SearchCursor]): SqlStr = SearchQueries.flat(
         dialect,
-        new SearchQuery(rpp = 25, page = number, searchSort = List(SearchSort("filename", SortDirection.DESC))),
+        new SearchQuery(rpp = 25, searchSort = List(SearchSort("filename", SortDirection.DESC)), cursor = cursor),
         "repo-1")
-      val third = page(3)
-      val text = third.toString.replaceAll("\\s+", " ").trim
+      val continued = page(Some(SearchCursor(None, None, SortValue.Text("m.jpg"), "asset-1", "scope")))
+      val text = continued.toString.replaceAll("\\s+", " ").trim
 
       withClue(text) {
-        text.contains("WITH page (id, sort_value, second_sort_value) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
-        // Narrow rows, ordered by the slice's own columns, one past the page at the page's offset
-        "ORDER BY \\w+ DESC, \\w+ ASC LIMIT \\? OFFSET \\?\\)".r.findFirstIn(text).isDefined shouldBe true
-        bound(third).takeRight(2) shouldBe List(26, 50)
+        text.contains(
+          "WITH candidates (id, day, sort_value, second_sort_value) AS MATERIALIZED (SELECT asset0.id AS ") shouldBe true
+        // After the anchor, in the sort's order and then the ID's, one row past the page
+        text.contains("asset0.filename <= ? AND (asset0.filename < ? OR (asset0.filename = ? AND asset0.id > ?))") shouldBe true
+        text.contains("ORDER BY asset0.filename DESC, asset0.id ASC LIMIT 26)") shouldBe true
+        bound(continued).takeRight(4) shouldBe List.fill(3)(SortValue.Text("m.jpg")) :+ "asset-1"
+        text.contains("OFFSET") shouldBe false
         text.contains("COUNT(1) OVER") shouldBe false
         // Only the page's own rows are read in full, in the same order
+        text.contains("FROM candidates ORDER BY sort_value DESC, id ASC LIMIT 25") shouldBe true
         text.contains("FROM page AS p JOIN asset ON asset.id = p.id") shouldBe true
-        text.contains("(SELECT count(*) FROM page) AS page_count") shouldBe true
-        text.contains("ORDER BY p.sort_value DESC, p.id ASC LIMIT 25") shouldBe true
+        text.contains("(SELECT count(*) FROM candidates) AS candidate_count") shouldBe true
+        text.trim.endsWith("ORDER BY p.sort_value DESC, p.id ASC") shouldBe true
         text.contains("NULLS FIRST") shouldBe false
         text.contains("NULLS LAST") shouldBe false
         // Only a first page counts the matches, up to one past the cap
         text.contains("total AS MATERIALIZED") shouldBe false
-        page(1).toString.replaceAll("\\s+", " ") should include("LIMIT 10001) AS m)")
-        text.count(_ == '?') shouldBe binds(third)
+        page(None).toString.replaceAll("\\s+", " ") should include("LIMIT 10001) AS m)")
+        text.count(_ == '?') shouldBe binds(continued)
       }
 
       // Every flat page is bounded
@@ -301,7 +307,7 @@ import altitude.core.util.SortValue
     }
   }
 
-  test("The probe is one statement: a branch per positive group, one row past the limit, every source scoped to its repository") {
+  test("The probe is one statement: a branch per positive group, one row past the limit, every source within its repository") {
 
     /**
      * Setup:
@@ -310,8 +316,9 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The probe has one branch per positive group, each read to one row past the limit, every person and document source of
-     * alice, bob and beach is scoped to the repository, and every placeholder has a bound value.
+     * The probe has one branch per positive group, each read to one row past the limit. Every document source of alice, bob and
+     * beach is scoped to the repository; a person source is not, since its person was resolved from the repository's names, and
+     * reads nothing but the person and the asset. Every placeholder has a bound value.
      *
      * Edge cases:
      *
@@ -328,8 +335,9 @@ import altitude.core.util.SortValue
         "SELECT \\d+ AS grp, hits\\.\\* FROM \\(".r.findAllIn(sql).toList shouldBe
           List("SELECT 0 AS grp, hits.* FROM (", "SELECT 1 AS grp, hits.* FROM (")
         "LIMIT 11\\) AS hits".r.findAllIn(sql).size shouldBe 2
-        // alice, bob and beach, each through its person and its document, every one scoped to the repository
-        "face\\d+\\.repository_id = \\?".r.findAllIn(sql).size shouldBe 3
+        // alice, bob and beach, each through its person and its document; only the document names the repository
+        "FROM face face\\d+ WHERE face\\d+\\.person_id".r.findAllIn(sql).size shouldBe 3
+        sql.contains("face0.repository_id") shouldBe false
         "search_document\\d+\\.repository_id = \\?".r.findAllIn(sql).size shouldBe 3
         sql.count(_ == '?') shouldBe binds(statement)
       }
@@ -491,8 +499,9 @@ import altitude.core.util.SortValue
      *
      * Assertions:
      *
-     * The Location filter is a semi-join over the memberships with its ID set bound as one parameter. The box matches an asset's
-     * own point or, when it has none, the pin of a Location it is in, every edge bound.
+     * The Location filter is a semi-join over the memberships with its ID set bound as one parameter. The box is one semi-join
+     * over the union of two ID sets, every edge bound: the repository's assets with a point of their own in the box, and the
+     * members without one of the Locations pinned in it.
      *
      * Edge cases:
      *
@@ -508,15 +517,21 @@ import altitude.core.util.SortValue
     }
 
     // An asset's own point, or - with no point of its own - the pin of a Location it is in
-    val box = matchingSql(PostgresSearchDialect, new SearchQuery(bbox = Some(BoundingBox(48.0, 2.0, 49.0, 3.0))))
+    val inView = new SearchQuery(params = Map("is_recycled" -> false), bbox = Some(BoundingBox(48.0, 2.0, 49.0, 3.0)))
+    val box = matchingSql(PostgresSearchDialect, inView)
     withClue(box) {
-      box.contains("asset0.latitude BETWEEN ? AND ? AND asset0.longitude BETWEEN ? AND ?") shouldBe true
-      box.contains("(asset0.latitude IS NULL) AND (asset0.id IN (SELECT") shouldBe true
-      box.contains("FROM location_asset location_asset1") shouldBe true
-      box.contains("JOIN location location2 ON") shouldBe true
-      box.contains("location2.latitude BETWEEN ? AND ? AND location2.longitude BETWEEN ? AND ?") shouldBe true
-      // repository, pipeline flag, four edges for the asset and four for the Location pin
-      placeholders(box) shouldBe 10
+      // The located branch repeats the repository and the view's flags, which lead the index of the located assets
+      box.contains(
+        "(asset0.id IN (SELECT asset0.id AS res FROM asset asset0 WHERE ((asset0.repository_id = ?) AND " +
+          "(asset0.is_pipeline_processed = ?)) AND asset0.is_recycled = ? AND " +
+          "(asset0.latitude BETWEEN ? AND ? AND asset0.longitude BETWEEN ? AND ?) UNION ALL SELECT") shouldBe true
+      box.contains("FROM location_asset location_asset0 JOIN location location1 ON") shouldBe true
+      box.contains(
+        "(location1.latitude BETWEEN ? AND ? AND location1.longitude BETWEEN ? AND ?) AND (asset2.latitude IS NULL)") shouldBe
+        true
+      box.contains(" OR ") shouldBe false
+      // repository, pipeline flag and recycled flag, twice; four edges for the asset and four for the Location pin
+      placeholders(box) shouldBe 14
     }
 
     // Across the antimeridian the longitude range is two open-ended halves
@@ -912,8 +927,8 @@ import altitude.core.util.SortValue
      * Assertions:
      *
      * Under the Relevance sort each scoring group is one `CASE` - the alternatives share it and the exclusion has none - testing
-     * its best-scoring source first. The slice orders by the Relevance and capture time it selected rather than computing them
-     * again, and the page orders by the columns the slice carries.
+     * its best-scoring source first. The matches are scored once, in `scored`; the candidates read it and order by the Relevance
+     * and capture time it carries rather than computing them again, and so does the page.
      *
      * Edge cases:
      *
@@ -929,12 +944,14 @@ import altitude.core.util.SortValue
         // The alternatives share one CASE, so their group scores once, as its best match; the exclusion scores nothing
         "CASE WHEN".r.findAllIn(sql).size shouldBe 2
         "THEN (\\d)".r.findAllMatchIn(sql).map(_.group(1)).mkString shouldBe "552211521"
-        // The slice orders by what it selected, so the Relevance is not computed again for the order
-        "\\(CASE WHEN .* ELSE 0 END \\+ CASE WHEN .* ELSE 0 END\\) AS \\w+, asset0\\.original_created_at AS".r
+        // The candidates order by what `scored` carries, so the Relevance is not computed again for the order
+        "scored \\(id, day, sort_value, second_sort_value\\) AS MATERIALIZED \\(SELECT .*\\(CASE WHEN .* ELSE 0 END \\+ CASE WHEN .* ELSE 0 END\\) AS \\w+, asset0\\.original_created_at AS".r
           .findFirstIn(sql)
           .isDefined shouldBe true
-        "ORDER BY \\w+ DESC, \\w+ DESC NULLS LAST, \\w+ ASC LIMIT".r.findFirstIn(sql).isDefined shouldBe true
-        sql.contains("ORDER BY p.sort_value DESC, p.second_sort_value DESC NULLS LAST, p.id ASC LIMIT 50") shouldBe true
+        sql.contains(
+          "FROM scored scored0 ORDER BY scored0.sort_value DESC, scored0.second_sort_value DESC NULLS LAST, scored0.id ASC LIMIT 51") shouldBe true
+        sql.contains("FROM candidates ORDER BY sort_value DESC, second_sort_value DESC NULLS LAST, id ASC LIMIT 50") shouldBe true
+        sql.trim.endsWith("ORDER BY p.sort_value DESC, p.second_sort_value DESC NULLS LAST, p.id ASC") shouldBe true
       }
 
       val byFilename = List(SearchSort("filename", SortDirection.ASC))

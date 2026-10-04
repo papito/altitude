@@ -9,12 +9,13 @@ import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchName
+import altitude.core.util.SearchPage
 import altitude.core.util.SearchQuery
-import altitude.core.util.SearchResult
 import altitude.core.util.SearchSource
 
 trait SearchDao:
-  def search(query: SearchQuery): SearchResult
+  /** One ordered page of a flat search: its assets, each with where it stands in the order */
+  def search(query: SearchQuery): SearchPage
 
   /** One ordered page of a grouped search: its assets with their group and count data */
   def searchGrouped(query: SearchQuery): GroupedSearchPage
@@ -24,6 +25,9 @@ trait SearchDao:
 
   /** The number of assets a search matches up to the query's cap; one past the cap means more than it */
   def cappedCount(query: SearchQuery): Int
+
+  /** How many assets of the default view each folder holds itself, by folder ID; a folder with none is absent */
+  def countByFolder(): Map[String, Int]
 
   /** The map's cells for a viewport: the plotted points in the box, aggregated into square cells of the given size in degrees */
   def mapCells(query: SearchQuery, bbox: BoundingBox, cellDegrees: Double): List[MapCell]

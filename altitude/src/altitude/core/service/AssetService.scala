@@ -69,10 +69,9 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       dao.queryAll(q)
     }
 
+  /** Deletes the context repository's assets that an import never finished */
   def pruneDanglingAssets(): Unit =
-    txManager.withTransaction {
-      dao.deleteByQuery(new Query(Map(FieldConst.Asset.IS_PIPELINE_PROCESSED -> false)))
-    }
+    deleteByQuery(new Query(Map(FieldConst.Asset.IS_PIPELINE_PROCESSED -> false)))
 
   def getDanglingAssets: List[Asset] =
     txManager.asReadOnly {
@@ -152,9 +151,4 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
     txManager.asReadOnly {
       dao.getAssetsToMove(assetIds, folderId)
-    }
-
-  def countByFolder(): Map[String, Int] =
-    txManager.asReadOnly {
-      dao.countByFolder()
     }

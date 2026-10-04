@@ -50,7 +50,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       val childrenByParentId = folders.filter(f => f.persistedId != f.parentId).groupBy(_.parentId)
 
       // Assets in recycled folders never surface here: deleting a folder recycles its assets in the same transaction
-      val directCounts = app.service.asset.countByFolder()
+      val directCounts = app.service.search.countByFolder()
 
       assembleTree(rootFolder, childrenByParentId, directCounts)
     }

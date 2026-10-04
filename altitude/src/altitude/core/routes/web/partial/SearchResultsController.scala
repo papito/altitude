@@ -41,9 +41,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
-   * Without `groupBy`, the page is the `p`-th of `rpp` assets (`parsePage`). With it, a header opens each date or Location, and
-   * the page is continued by the `after` cursor the last cell carries (`data-app-search-after`), never by page number
-   * (`parseGroupedQuery`). Either way `rpp` is 1 to `Const.Search.MAX_RPP`.
+   * With `groupBy`, a header opens each date or Location (`parseGroupedQuery`). Grouped or not, a page is `rpp` assets, 1 to
+   * `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries (`data-app-search-after`), never by page
+   * number (`parseCursor`).
    *
    * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
    * them (`bbox` scopes the panel and the grid, and stays in the URL).
@@ -60,7 +60,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       repoId: String,
       view: String = Const.Search.View.DEFAULT,
       rpp: Int = Const.Search.DEFAULT_RPP,
-      p: Option[Int] = None,
       q: Option[String] = None,
       sort: Option[String] = None,
       folderId: Option[String] = None,
@@ -154,9 +153,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     if rpp < 1 || rpp > Const.Search.MAX_RPP then
       return badRequest(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}")
 
-    if groupBy.isDefined || groupDirection.isDefined || after.isDefined then
+    val cursor = parseCursor(after, isContinuousScroll) match
+      case Left(message) => return badRequest(message)
+      case Right(cursor) => cursor
+
+    if groupBy.isDefined || groupDirection.isDefined then
       val searchQuery =
-        parseGroupedQuery(scope, rpp, p, searchSort, groupBy, groupDirection, after, isContinuousScroll) match
+        parseGroupedQuery(scope, rpp, searchSort, groupBy, groupDirection, cursor) match
           case Left(message) => return badRequest(message)
           case Right(query) => query
 
@@ -192,24 +195,22 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    val page = parsePage(p, rpp) match
-      case Left(message) => return badRequest(message)
-      case Right(page) => page
-
-    val searchQuery = scope.query(rpp = rpp, page = page, searchSort = List(searchSort))
+    val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), cursor = cursor)
 
     logger.trace(s"QUERY: ${searchQuery.toString}")
 
     val results =
       try App.altitude.service.library.search(searchQuery)
-      catch case _: QueryTimeoutException => return timedOut
+      catch
+        case ex: SearchCursorException => return badRequest(ex.getMessage)
+        case _: QueryTimeoutException => return timedOut
 
     if isContinuousScroll then
-      // The continuation ran dry: results are live, and the page past the last has no rows
+      // The continuation ran dry: results are live, and the images past the cursor may be gone by now
       if results.isEmpty then return noContent
 
       /** This is a request for another page of search results for continuous scroll. */
-      return html(htmx.html.results_grid(results = results, p = page, isContinuousScroll = true))
+      return html(htmx.html.results_grid(results = results, isContinuousScroll = true))
 
     /**
      * This is a new request (first page) for search results.
@@ -222,7 +223,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         totalCap = searchQuery.totalCap,
         sort = searchSort,
         grouping = None,
-        grid = htmx.html.results_grid(isContinuousScroll = false, p = page, results = results),
+        grid = htmx.html.results_grid(isContinuousScroll = false, results = results),
         person = personOf(personId),
         view = view,
         folderId = folderId,
@@ -237,19 +238,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /**
    * A grouped request, validated up front. A problem is the message of a 400:
    *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
-   *     and is refused with `location`, whose order is fixed; `after` needs `groupBy`
-   *   - `sort` was parsed by the caller (`parseSort`), and `rpp` checked by it
-   *   - `after` is the cursor of the previous page, sent with `isContinuousScroll`; `p` has no meaning in a grouped search
+   *     and is refused with `location`, whose order is fixed
+   *   - `sort` was parsed by the caller (`parseSort`), `rpp` checked by it and the cursor decoded by it (`parseCursor`)
    */
   private def parseGroupedQuery(
       scope: SearchRequestParser.Scope,
       rpp: Int,
-      p: Option[Int],
       searchSort: SearchSort,
       groupBy: Option[String],
       groupDirection: Option[String],
-      after: Option[String],
-      isContinuousScroll: Boolean): Either[String, SearchQuery] =
+      cursor: Option[SearchCursor]): Either[String, SearchQuery] =
 
     val by: GroupBy = groupBy.map(GroupBy.fromApiValue) match
       case None => return Left(s"${Api.Field.Search.GROUP_BY} is required")
@@ -263,16 +261,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
-    if p.isDefined then
-      return Left(s"${Api.Field.Search.PAGE} is not used by a grouped search, which is continued with ${Api.Field.Search.AFTER}")
-
-    val cursor: Option[SearchCursor] =
-      try after.map(SearchCursor.decode)
-      catch case ex: SearchCursorException => return Left(ex.getMessage)
-
-    if cursor.isDefined && !isContinuousScroll then
-      return Left(s"${Api.Field.Search.AFTER} continues the results: send it with ${Api.Field.Search.IS_CONTINUOUS_SCROLL}")
-
     Right(
       scope.query(
         rpp = rpp,
@@ -282,14 +270,18 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       ))
 
   /**
-   * The page number of an ungrouped request of `rpp` assets a page, or the message of a 400. The page is an offset of
-   * `(p - 1) * rpp` rows, which the query takes as an `Int`, so the last page is the last one whose every row an `Int` can number
-   * (`p * rpp`).
+   * The cursor of the previous page, which `after` carries and which is sent with `isContinuousScroll`, or the message of a 400.
+   * Without `after` the request is for a first page.
    */
-  private def parsePage(p: Option[Int], rpp: Int): Either[String, Int] =
-    val lastPage = Int.MaxValue / rpp
-    val page = p.getOrElse(1)
-    Either.cond(page >= 1 && page <= lastPage, page, s"${Api.Field.Search.PAGE} must be between 1 and $lastPage")
+  private def parseCursor(after: Option[String], isContinuousScroll: Boolean): Either[String, Option[SearchCursor]] =
+    val cursor: Option[SearchCursor] =
+      try after.map(SearchCursor.decode)
+      catch case ex: SearchCursorException => return Left(ex.getMessage)
+
+    Either.cond(
+      cursor.isEmpty || isContinuousScroll,
+      cursor,
+      s"${Api.Field.Search.AFTER} continues the results: send it with ${Api.Field.Search.IS_CONTINUOUS_SCROLL}")
 
   private def parseDirection(value: String): Option[SortDirection] =
     SortDirection.values.find(_.toString.equalsIgnoreCase(value))
@@ -324,8 +316,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
-   * order, so the same search always yields the same URL. `p`, `rpp` and `after` are left out on purpose - a shared link opens at
-   * the first page.
+   * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
+   * first page.
    */
   private def browserViewUrl(
       view: String,

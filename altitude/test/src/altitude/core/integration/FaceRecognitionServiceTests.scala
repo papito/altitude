@@ -20,6 +20,7 @@ import scala.util.Random
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.dao.postgres.FaceDao as PostgresFaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.Face
@@ -95,6 +96,62 @@ import altitude.core.service.FaceRecognitionService
       .value
       .persistedId shouldBe enrolled.persistedId
   }
+
+  test("A Face of another repository is not a match candidate") {
+
+    /**
+     * Setup:
+     *
+     * A second repository with a Person whose enrolled Face is at a synthetic embedding, and a query at the same embedding in the
+     * first repository, which has no Face of its own.
+     *
+     * Assertions:
+     *
+     * The query matches nobody of the other repository: it starts a Person in its own.
+     */
+    val vector = unitVector(1)
+    val firstRepo = testContext.repository
+    val secondRepo = testContext.persistRepository()
+    switchContextRepo(secondRepo)
+    val elsewhere = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(elsewhere, testContext.persistAsset(repository = Some(secondRepo)), vector)
+
+    switchContextRepo(firstRepo)
+    val recognized = testApp.service.faceRecognition.recognizeFace(query(vector, isEnrolled = true)).value
+
+    recognized.persistedId should not be elsewhere.persistedId
+  }
+
+  if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+    test("On PostgreSQL the nearest Faces are found through the vector index of the enrolled Faces") {
+
+      /**
+       * Setup:
+       *
+       * PostgreSQL only: the statement that finds the nearest stored Faces of a query embedding, planned with the table scan and
+       * the sort ruled out, since over a handful of Faces the planner would read and sort them all rather than read an index.
+       *
+       * Assertions:
+       *
+       * The plan reads `face_03`, the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order
+       * and predicates are the ones the index is declared with.
+       */
+      val vector = PostgresFaceDao.vectorLiteral(unitVector(1))
+      val plan = testApp.txManager.withTransaction {
+        List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
+        query(
+          s"EXPLAIN ${PostgresFaceDao.CLOSEST_MATCHES_SQL}",
+          vector,
+          testContext.repository.persistedId,
+          vector,
+          20,
+          vector,
+          0.55,
+          5).map(_.values.head.toString).mkString("\n")
+      }
+
+      withClue(plan)(plan should include("Index Scan using face_03"))
+    }
 
   test("With no candidate, an enrolled Face starts a Person and a match-only Face is nobody's") {
 

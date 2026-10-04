@@ -94,6 +94,40 @@ import altitude.core.util.Query
     (testApp.service.asset.getById(persistedAsset.persistedId): Asset).isRecycled shouldBe true
   }
 
+  test("The trash holds every recycled copy of the same content, and only one of them comes back") {
+
+    /**
+     * Setup:
+     *
+     * An asset imported and recycled, after which a second copy of the same content is imported and recycled too. Both copies are
+     * then restored together, and a third copy of the content is imported.
+     *
+     * Assertions:
+     *
+     * Both copies are in the recycle bin. Restoring them brings one back and reports the other as a duplicate, which stays in the
+     * recycle bin, and importing the content while a copy of it is live is refused as a duplicate.
+     */
+    val dataAsset = testContext.makeAssetWithData()
+    // The pipeline consumes a staged file, so each further import needs its own copy
+    val secondCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
+    val thirdCopy = dataAsset.copy(path = testApp.service.staging.stageCopy(dataAsset.path))
+
+    val first: Asset = testApp.service.library.addAsset(dataAsset)
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    val second: Asset = testApp.service.library.addAsset(secondCopy)
+    testApp.service.library.recycleAssets(Set(second.persistedId))
+
+    val copies = Set(first.persistedId, second.persistedId)
+    copies.foreach(id => (testApp.service.asset.getById(id): Asset).isRecycled shouldBe true)
+
+    val result = testApp.service.library.restoreRecycledAssets(copies)
+    result.restored.size shouldBe 1
+    result.duplicates shouldBe copies -- result.restored
+    result.duplicates.foreach(id => (testApp.service.asset.getById(id): Asset).isRecycled shouldBe true)
+
+    intercept[DuplicateException](testApp.service.library.addAsset(thirdCopy))
+  }
+
   test("Restore skips an asset whose content is live again and restores the rest") {
 
     /**

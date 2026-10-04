@@ -30,11 +30,8 @@ CREATE TABLE account (
   last_active_repo_id CHAR(36) COLLATE "C"
 ) INHERITS (_core);
 
-CREATE TABLE user_token (
-  account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
-  token TEXT NOT NULL,
-  expires_at TIMESTAMP WITH TIME ZONE
-);
+-- One account per email address, whatever its case, and the login lookup, which compares lower(email) too
+CREATE UNIQUE INDEX account_01 ON account (lower(email));
 
 CREATE TABLE repository (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
@@ -59,7 +56,7 @@ CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);
 CREATE TABLE asset (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  user_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
+  user_id CHAR(36) COLLATE "C",
   checksum INT NOT NULL,
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
@@ -89,20 +86,29 @@ CREATE TABLE asset (
   duration_ms BIGINT
 ) INHERITS (_core) WITH (toast_tuple_target = 128);
 
-CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum, is_recycled);
+-- One live asset per content in a repository; the recycle bin may hold any number of copies of it
+CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum) WHERE NOT is_recycled;
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
 -- day-count probe seeks directly and a grouped, date-sorted page reads in index order. It carries the ID and the folder, so a
 -- pass over the library that tests text membership, a folder or a day reads the index and not the table.
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
 ) INCLUDE (id, folder_id);
--- The default flat sort, Date Imported, as an ordered read
-CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at);
+-- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries the ID
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at) INCLUDE (id);
+-- The triage view: only the triaged assets, in Date Imported order and by capture day, so a small triage set in a large library
+-- is read without passing over the library. They shrink as triage is sorted.
+CREATE INDEX asset_triage_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at) INCLUDE (id)
+  WHERE is_triaged;
+CREATE INDEX asset_triage_date_taken ON asset (
+  repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
+) INCLUDE (id, folder_id) WHERE is_triaged;
 -- Folder browsing and the folder source of Search text
 CREATE INDEX asset_folder ON asset (folder_id);
--- Map viewport queries: a bounding-box range over the located assets of a repository only.
+-- Map viewport queries: a bounding-box range over the located assets of a repository only. It carries the ID and the capture
+-- time a map cell is ranked by, so a viewport's own points are read from the index alone.
 CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
-  WHERE latitude IS NOT NULL;
+  INCLUDE (id, original_created_at) WHERE latitude IS NOT NULL;
 
 CREATE SEQUENCE person_label;
 
@@ -141,7 +147,8 @@ CREATE TABLE face (
   width INT NOT NULL,
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
-  features vector NOT NULL,
+  -- The L2-normalized ArcFace embedding (FaceDetectionService.EMBEDDING_DIMENSIONS)
+  features vector(512) NOT NULL,
   checksum INT NOT NULL,
   -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
   frame_time_ms BIGINT,
@@ -152,10 +159,13 @@ CREATE TABLE face (
 ) INHERITS (_core);
 
 -- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
--- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text.
-CREATE UNIQUE INDEX face_01 ON face (asset_id, repository_id, checksum);
+-- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text, which read the person from it.
+CREATE UNIQUE INDEX face_01 ON face (asset_id, repository_id, checksum) INCLUDE (person_id);
 -- A person's faces, best first; the asset rides along, so the person source of Search text reads the index alone
 CREATE INDEX face_02 ON face (person_id, detection_score) INCLUDE (asset_id);
+-- The nearest enrolled Faces of a vector, for recognition; a match-only Face is never a candidate. The index holds the vectors
+-- at half precision, which halves it, and the statement that reads it (FaceDao.CLOSEST_MATCHES_SQL) writes the same cast.
+CREATE INDEX face_03 ON face USING hnsw ((features::halfvec(512)) halfvec_cosine_ops) WHERE is_enrolled;
 
 CREATE TABLE metadata_field (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
@@ -165,7 +175,6 @@ CREATE TABLE metadata_field (
   field_type VARCHAR(255) NOT NULL
 ) INHERITS (_core);
 
-CREATE INDEX metadata_field_01 ON metadata_field (repository_id);
 CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_lc);
 
 CREATE TABLE folder (
@@ -177,9 +186,10 @@ CREATE TABLE folder (
   is_recycled BOOLEAN NOT NULL DEFAULT FALSE
 ) INHERITS (_core);
 
-CREATE INDEX folder_01 ON folder (repository_id, parent_id);
+-- A folder's name is unique among its siblings; it also lists a repository's folders
 CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_lc);
-CREATE INDEX folder_03 ON folder (is_recycled, parent_id);
+-- A folder's children, live or recycled
+CREATE INDEX folder_03 ON folder (parent_id, is_recycled);
 
 CREATE TABLE album (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
@@ -197,7 +207,8 @@ CREATE TABLE album_asset (
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
-CREATE INDEX album_asset_02 ON album_asset (asset_id);
+-- An asset's albums, read from the index alone: the purge cascade and the per-asset probes of Search text
+CREATE INDEX album_asset_02 ON album_asset (asset_id, album_id);
 
 -- A user-defined place. Categories (kind 'category') are pure containers, one level deep; Locations (kind 'location') are a pin
 -- and hold assets through location_asset. Both kinds share one name pool per repository.
@@ -219,7 +230,8 @@ CREATE TABLE location (
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
-CREATE INDEX location_02 ON location (repository_id, category_id);
+-- A category's Locations: moving them to the top level, and the check that keeps a deleted category from orphaning one
+CREATE INDEX location_02 ON location (category_id, repository_id);
 
 CREATE TABLE location_asset (
   repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
@@ -228,10 +240,11 @@ CREATE TABLE location_asset (
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
-CREATE INDEX location_asset_02 ON location_asset (asset_id);
+-- An asset's Locations, read from the index alone: the purge cascade and the per-asset probes of Search text
+CREATE INDEX location_asset_02 ON location_asset (asset_id, location_id);
 
 CREATE TABLE metadata_parameter (
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id),
+  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   asset_id CHAR(36) COLLATE "C" REFERENCES asset (id) ON DELETE CASCADE,
   field_id CHAR(36) COLLATE "C" REFERENCES metadata_field (id) ON DELETE CASCADE,
   field_value_kw TEXT NULL,

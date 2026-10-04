@@ -121,7 +121,6 @@ object Api:
       val QUERY_TEXT = "q"
       val RESULTS_PER_PAGE = "rpp"
       val RESULTS = "results"
-      val PAGE = "p"
       val FOLDER_ID = "folderId"
       val PERSON_ID = "personId"
       val ALBUM_ID = "albumId"

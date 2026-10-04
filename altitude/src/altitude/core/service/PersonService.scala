@@ -13,8 +13,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SearchQuery
-import altitude.core.util.Sort
-import altitude.core.util.SortDirection
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 object PersonService:
@@ -126,12 +124,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   def getPersonFaces(personId: String, limit: Int = 50): List[Face] =
     txManager.asReadOnly {
-      val sort: Sort = Sort(FieldConst.Face.DETECTION_SCORE, SortDirection.DESC)
-
-      val q = new Query(params = Map(FieldConst.Face.PERSON_ID -> personId), sort = List(sort))
-
-      val qRes: QueryResult[Face] = faceDao.query(q)
-      qRes.records.take(limit)
+      faceDao.getTopFaces(personId, limit)
     }
 
   /**

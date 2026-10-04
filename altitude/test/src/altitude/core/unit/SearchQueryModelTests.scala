@@ -26,29 +26,6 @@ import altitude.core.util.SearchSort
     }
   }
 
-  test("Invalid page") {
-
-    /**
-     * Setup:
-     *
-     * Search queries asked for page 0 and page -1.
-     *
-     * Assertions:
-     *
-     * Both are refused, as pages are numbered from 1.
-     *
-     * Edge cases:
-     *
-     * Page 0, just below the first page.
-     */
-    intercept[IllegalArgumentException] {
-      new SearchQuery(page = 0)
-    }
-    intercept[IllegalArgumentException] {
-      new SearchQuery(page = -1)
-    }
-  }
-
   test("The Relevance sort needs Search text with a usable term") {
 
     /**
