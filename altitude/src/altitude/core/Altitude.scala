@@ -324,8 +324,9 @@ class Altitude(val dbEngineOverride: Option[String] = None):
 
   def cleanup(): Unit =
     logger.debug("Cleaning up resources")
+    // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
-    logger.debug("Pipeline system terminated")
+    service.purgePipeline.shutdown()
 
     sqliteOptimizing.foreach(_.cancel())
     txManager.optimize()

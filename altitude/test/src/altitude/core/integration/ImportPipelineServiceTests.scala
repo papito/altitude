@@ -40,6 +40,7 @@ import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
+import altitude.core.service.ImportPipelineService
 import altitude.core.util.Query
 
 @DoNotDiscover class ImportPipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -191,6 +192,29 @@ import altitude.core.util.Query
     eventually {
       importedCount() shouldBe batchSize
     }
+  }
+
+  test("Shutdown waits for the assets the queue has accepted") {
+
+    /**
+     * Setup:
+     *
+     * An import queue of the test's own (a new `ImportPipelineService`), six assets over staged random images offered to it,
+     * every offer accepted, then the queue shut down.
+     *
+     * Assertions:
+     *
+     * By the time shutdown returns, without any further waiting, all six are pipeline-processed.
+     */
+    val batchSize = 6
+    val pipeline = ImportPipelineService(testApp)
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+
+    val offers = (1 to batchSize).map(_ => pipeline.addToQueue((testContext.makeAssetWithData(), pipelineContext)))
+    Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
+
+    pipeline.shutdown()
+    importedCount() shouldBe batchSize
   }
 
   test("An image that cannot be decoded is dropped, and the asset behind it is imported") {

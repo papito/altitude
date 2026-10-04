@@ -44,6 +44,9 @@ object Const:
     val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
     val MAP_GEOCODER_URL = "map.geocoder.url"
 
+    // How long each queue (import, purge) is given at shutdown to finish what it has accepted, see reference.conf
+    val PIPELINE_SHUTDOWN_TIMEOUT = "pipeline.shutdown_timeout"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"

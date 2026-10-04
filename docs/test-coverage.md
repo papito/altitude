@@ -99,7 +99,8 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Exercise a duplicate/error during recognition and assert it reaches the caller as the intended invalid result (`SamePersonDetectedTwiceException` for a duplicate crop) with the asset's faces rolled back. Both engines now share the recognition flow. [MEDIUM]
 - [ ] Feed one stream interleaved assets from two repositories/accounts; assert every database row, file, index entry, statistic, and notification belongs to its supplied pipeline context. [CRITICAL]
 - ✅ Assets offered to the queue at once (`addToQueue`, as concurrent uploads offer them) are all imported, on both engines, through the one pipeline.
-- [ ] Exercise `addToQueue` backpressure past the queue's size, queue closure/failure, and shutdown with pending work. [MEDIUM]
+- ✅ Shutting down an import queue of the test's own waits for the assets it has accepted: all are pipeline-processed when `shutdown()` returns.
+- [ ] Exercise `addToQueue` backpressure past the queue's size, and queue closure/failure. [MEDIUM]
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
 - ✅ An input the pipeline cannot use is dropped and the asset behind it in the same stream is imported, its staged file deleted: bytes no image reader takes under a JPEG type (`ImageException` in the metadata stage, through `run` and through the queue), an asset of a repository whose `files` directory is a plain file (`StorageException` in the file store stage, the next asset in another repository), and a video no frame of which decodes (`VideoException` in the preview stage).
 - [ ] Verify user-scoped success/error notifications identify the correct asset and recipient and are not duplicated. [MEDIUM]

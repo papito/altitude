@@ -11,9 +11,11 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.jdk.DurationConverters.*
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
+import altitude.core.Const
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import altitude.core.pipeline.QueuedPipeline
 import altitude.core.pipeline.flows._
@@ -40,7 +42,9 @@ class PurgePipelineService(app: Altitude):
     "purge",
     combinedFlow,
     bufferSize = app.parallelism * 2,
-    maxConcurrentOffers = app.parallelism)
+    maxConcurrentOffers = app.parallelism,
+    shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala
+  )
 
   def run(
       source: Source[TAssetWithContext, NotUsed],
