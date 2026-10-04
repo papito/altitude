@@ -159,12 +159,47 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       peopleOf(getAssetFaces(assetId))
     }
 
-  /** An asset's faces, each with its person, read in one snapshot so a merge cannot come between the two */
+  /**
+   * Every face of an asset, each with its person, whoever that is (hidden and bad-match people included), read in one snapshot so
+   * a merge cannot come between the two: what deleting the asset's faces takes with it
+   */
   def getAssetFacesWithPeople(assetId: String): List[(Face, Person)] =
     txManager.asReadOnly {
-      val faces = getAssetFaces(assetId)
+      val faces = faceDao.getAllAssetFaces(assetId)
       val peopleById = peopleOf(faces).map(person => person.persistedId -> person).toMap
       faces.map(face => face -> peopleById(face.personId.get))
+    }
+
+  /**
+   * Locks the people of an asset's faces for the caller's transaction, so that a face another import gives one of them meanwhile
+   * waits for it to end
+   */
+  def lockAssetPeople(assetId: String): Unit =
+    txManager.withTransaction {
+      dao.lockAssetPeople(assetId)
+    }
+
+  /**
+   * Deletes those of the people who have no face left, and gives back their IDs. Recognition matches face rows, so only an import
+   * that started a person can leave it without any.
+   */
+  def deletePeopleWithoutFaces(personIds: Set[String]): Set[String] =
+    txManager.withTransaction {
+      val deleted = dao.deleteFaceless(personIds)
+      if deleted.nonEmpty then logger.debug(s"Deleted people left without faces [${deleted.mkString(",")}]")
+      deleted
+    }
+
+  /**
+   * Deletes the files of faces whose rows are gone. The cover face of a person who stays keeps its files, which the People tab
+   * still shows; the faces of a deleted person keep none.
+   */
+  def purgeFaceFiles(facesWithPeople: List[(Face, Person)], deletedPeople: Set[String] = Set.empty): Unit =
+    facesWithPeople.foreach {
+      case (face, person) =>
+        if deletedPeople.contains(person.persistedId) || !person.coverFaceId.contains(face.persistedId) then
+          logger.trace(s"Removing the files of face [${face.persistedId}]")
+          app.service.fileStore.purgeFaceById(face.persistedId)
     }
 
   /** The people the faces belong to; to be called in the transaction the faces were read in */

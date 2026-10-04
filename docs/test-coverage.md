@@ -93,7 +93,9 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ An in-batch duplicate is returned as one `InvalidAsset` with `DuplicateException` while the other batch assets complete.
 - ✅ An unsupported media type returns an `InvalidAsset` with `UnsupportedMediaTypeException`.
 - ✅ Synchronous import rejects a duplicate, produces a triaged image, and persists extracted/public metadata, checksum, size, dimensions, and preview data.
-- [ ] Inject failures in indexing, recognition, preview storage, and final completion, as the tests above do for metadata extraction and original-file storage; assert failure results, persisted state, files, and statistics rather than allowing a silently partial import. [CRITICAL]
+- ✅ An import dropped after face recognition (the file store stage failing) leaves no asset, face, person or Search document row, no face file and no staged file; one that added a face to a known, hidden Person gives the face back, and the Person keeps its count, its cover and its cover's files; a video dropped in the preview stage leaves no row, stored file or preview.
+- ✅ A file dropped for a reason that has passed imports when it is uploaded again; a dropped duplicate leaves the asset it duplicates, its file, preview, faces and their files untouched.
+- [ ] Inject failures in indexing, recognition, preview storage, and final completion, as the tests above do for metadata extraction, original-file storage and the preview of an undecodable video; assert the failure results and statistics. [CRITICAL]
 - [ ] Exercise a duplicate/error during recognition and assert it reaches the caller as the intended invalid result (`SamePersonDetectedTwiceException` for a duplicate crop) with the asset's faces rolled back. Both engines now share the recognition flow. [MEDIUM]
 - [ ] Feed one stream interleaved assets from two repositories/accounts; assert every database row, file, index entry, statistic, and notification belongs to its supplied pipeline context. [CRITICAL]
 - ✅ Assets offered to the queue at once (`addToQueue`, as concurrent uploads offer them) are all imported, on both engines, through the one pipeline.
@@ -240,14 +242,14 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 
 ## Pruning unfinished imports and iterating repositories
 
-Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala), [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [LibraryServicePruneTests](../altitude/test/src/altitude/core/integration/LibraryServicePruneTests.scala).
+Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala), [AssetService](../altitude/src/altitude/core/service/AssetService.scala), [PersonService](../altitude/src/altitude/core/service/PersonService.scala). Evidence: [LibraryServicePruneTests](../altitude/test/src/altitude/core/integration/LibraryServicePruneTests.scala).
 
 - ✅ Mark imported assets unfinished, prune them, and assert their rows, discoverable search results, and search documents disappear.
 - [ ] Prune multiple populated repositories and assert completed assets survive in every repository. The current fixture only verifies unfinished assets in one repository. [CRITICAL]
 - [ ] Assert `forEachRepository` visits every repository once and restores the caller's repository for an initially empty context and a callback that throws; the pruning test relies on the restore only in the ordinary case. [MEDIUM]
-- [ ] Define/test cleanup of original/preview/face files and people counts left by partially completed imports; the existing pruning test checks rows, search visibility, and search documents only. [MEDIUM]
+- ✅ Pruning discards imports cut off after they stored their file, preview and faces: their rows, files, previews, faces and face files go, the face count added to a known Person is given back while its cover face's files stay, a Person the cut-off import started is deleted, and the stats are unchanged.
 - [ ] Race pruning against an in-flight import and verify the lifecycle boundary prevents removal of work that is still progressing. [CRITICAL]
-- ✅ Pruning one repository's unfinished imports leaves another repository's alone.
+- ✅ Discarding an import in one repository's context leaves another repository's unfinished import, and its file, alone.
 
 ## Global statistics
 

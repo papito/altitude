@@ -20,15 +20,7 @@ object DeletePersonFilesFlow:
           debugInfo(s"\tRemoving PERSON files for asset ${asset.persistedId}")
 
           try {
-            app.service.person
-              .getAssetFacesWithPeople(asset.persistedId)
-              .foreach {
-                case (face, person) =>
-                  if !person.coverFaceId.contains(face.persistedId) then {
-                    debugInfo(s"\t\tRemoving FACE files for ${face.persistedId}")
-                    app.service.fileStore.purgeFaceById(face.persistedId)
-                  }
-              }
+            app.service.person.purgeFaceFiles(app.service.person.getAssetFacesWithPeople(asset.persistedId))
           } catch {
             case ex: Exception =>
               logger.error(s"Error purging PERSON file data for asset ${asset.persistedId}", ex)

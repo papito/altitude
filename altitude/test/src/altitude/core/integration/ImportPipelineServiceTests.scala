@@ -10,9 +10,7 @@ import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
-import org.scalatest.matchers.must.Matchers.a
-import org.scalatest.matchers.must.Matchers.have
-import org.scalatest.matchers.should.Matchers.{ be, convertNumericToPlusOrMinusWrapper, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -21,23 +19,28 @@ import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters.*
 
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.FieldConst
 import altitude.core.ImageException
-import altitude.core.RequestContext
+import altitude.core.NotFoundException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
+import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
+import altitude.core.util.Query
 
 @DoNotDiscover class ImportPipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -69,9 +72,46 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     Files.createDirectories(files.getParent)
     Files.createFile(files)
 
+  /** Puts the repository's `files` directory back after [[breakFileStore]] */
+  private def restoreFileStore(repository: Repository): Unit =
+    Files.delete(Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES))
+
   /** The pipeline's result for the asset of a file name, imported or dropped */
   private def resultFor(results: Seq[TAssetOrInvalidWithContext], fileName: String): TAssetOrInvalidWithContext =
     results.find(_._1.fold(_.fileName, _.payload.fileName) == fileName).get
+
+  /** How many rows of the table belong to the test's repository */
+  private def rowCount(table: String): Int = testApp.txManager.asReadOnly {
+    query(s"SELECT count(*) AS n FROM $table WHERE repository_id = ?", testContext.repository.persistedId)
+      .head("n")
+      .toString
+      .toInt
+  }
+
+  /** Every face file of the test's repository */
+  private def faceFiles: List[Path] =
+    val facesDir =
+      Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, testContext.repository.persistedId, Const.DataStore.FACES)
+    if !Files.exists(facesDir) then Nil
+    else Files.walk(facesDir).iterator.asScala.filter(Files.isRegularFile(_)).toList
+
+  /** A staged copy of an import fixture, its checksum the file's own, in the test's context */
+  private def staged(relPath: String): (AssetWithData, PipelineContext) =
+    (
+      testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset(relPath)),
+      PipelineContext(testContext.repository, testContext.user))
+
+  /** The asset a single run imported, or the test fails with the cause it was dropped for */
+  private def imported(results: Seq[TAssetOrInvalidWithContext]): Asset = results match {
+    case Seq((Left(asset), _)) => asset
+    case other => fail(s"Expected one imported asset: $other")
+  }
+
+  /** The asset a single run dropped */
+  private def dropped(results: Seq[TAssetOrInvalidWithContext]): InvalidAsset = results match {
+    case Seq((Right(invalid), _)) => invalid
+    case other => fail(s"Expected one dropped asset: $other")
+  }
 
   test("Void pipeline sink should produce no results") {
 
@@ -336,8 +376,8 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * The pipeline completes with the clip dropped with `VideoException` and its staged file deleted, and the photo behind it is
-     * imported.
+     * The pipeline completes with the clip dropped with `VideoException` from the preview stage; its staged file, its row and its
+     * stored file are deleted, and it has no preview. The photo behind it is imported.
      */
     val clip =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.undecodable.toFile))
@@ -353,11 +393,18 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     pipelineRes should have size 2
 
     // The Preview has no frame to take, which drops the clip rather than failing the pipeline
-    pipelineRes.head match {
-      case (Right(invalid), _) => invalid.cause.get shouldBe a[VideoException]
+    val droppedClip = pipelineRes.head match {
+      case (Right(invalid), _) =>
+        invalid.cause.get shouldBe a[VideoException]
+        invalid.payload
       case _ => fail("Expected the clip to be dropped")
     }
     Files.exists(clip.path) shouldBe false
+
+    // The clip was persisted and stored before its preview failed; its discard takes the row and the stored file
+    testApp.service.asset.queryAll(new Query(Map(FieldConst.ID -> droppedClip.persistedId))).total shouldBe 0
+    Files.exists(testApp.service.fileStore.assetFile(droppedClip.persistedId)) shouldBe false
+    intercept[NotFoundException](testApp.service.asset.getPreview(droppedClip.persistedId))
 
     pipelineRes(1) match {
       case (Left(asset), _) => testApp.service.asset.getById(asset.persistedId).isPipelineProcessed shouldBe true
@@ -392,5 +439,112 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     persisted.latitude.get should be(33.857 +- 1e-4)
     persisted.longitude.get should be(151.2152 +- 1e-4)
     persisted.extractedMetadata.getFieldValues("GPS").get("GPS Latitude Ref") shouldBe Some("N")
+  }
+
+  test("A dropped import leaves no row, face or file behind, and the person it started is gone") {
+
+    /**
+     * Setup:
+     *
+     * The repository's `files` directory replaced by a plain file, then `people/affleck.jpg` imported, so the import stores the
+     * face it recognizes, which starts a Person, before the file store stage fails.
+     *
+     * Assertions:
+     *
+     * The asset is dropped with `StorageException`. Afterwards the repository has no asset, face, person or Search document row
+     * and no face file, and the staged file is gone.
+     */
+    breakFileStore(testContext.repository)
+    val photo = staged("people/affleck.jpg")
+
+    dropped(runPipeline(photo)).cause.get shouldBe a[StorageException]
+
+    rowCount("asset") shouldBe 0
+    rowCount("face") shouldBe 0
+    rowCount("person") shouldBe 0
+    rowCount("search_document") shouldBe 0
+    faceFiles shouldBe empty
+    Files.exists(photo._1.path) shouldBe false
+  }
+
+  test("A dropped import gives back the face it added to a known person, hidden or not") {
+
+    /**
+     * Setup:
+     *
+     * `people/meme-ben2.png` imported, which starts a Person with one Face, and the Person hidden (hidden people stay matchable).
+     * Then the repository's `files` directory replaced by a plain file, and `people/meme-ben3.png`, the same person, imported, so
+     * the import adds a second Face to the Person before the file store stage fails.
+     *
+     * Assertions:
+     *
+     * The second import is dropped with `StorageException`. The Person stays with one Face, the first import's, which is still
+     * its cover, and that Face's files are the only face files left.
+     */
+    val first = imported(runPipeline(staged("people/meme-ben2.png")))
+    val (face, person) = testApp.service.person.getAssetFacesWithPeople(first.persistedId).head
+    testApp.service.person.setVisibility(person, isHidden = true)
+    val filesOfFirstFace = faceFiles
+
+    breakFileStore(testContext.repository)
+    dropped(runPipeline(staged("people/meme-ben3.png"))).cause.get shouldBe a[StorageException]
+
+    val after: Person = testApp.service.person.getPersonById(person.persistedId)
+    after.numOfFaces shouldBe 1
+    after.coverFaceId shouldBe Some(face.persistedId)
+    rowCount("face") shouldBe 1
+    faceFiles should contain theSameElementsAs filesOfFirstFace
+  }
+
+  test("A file dropped for a reason that has passed imports when it is uploaded again") {
+
+    /**
+     * Setup:
+     *
+     * One random image staged twice from the same bytes, so both copies have its checksum. The first copy imported while the
+     * repository's `files` directory is a plain file; the directory put back; the second copy imported.
+     *
+     * Assertions:
+     *
+     * The first copy is dropped with `StorageException`; the second is imported rather than rejected as a duplicate of it.
+     */
+    val bytes = IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150)
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    def upload(): (AssetWithData, PipelineContext) =
+      (testApp.service.library.stagedFileToAsset("upload.png", testApp.service.staging.stage(bytes)), pipelineContext)
+
+    breakFileStore(testContext.repository)
+    dropped(runPipeline(upload())).cause.get shouldBe a[StorageException]
+
+    restoreFileStore(testContext.repository)
+    val asset = imported(runPipeline(upload()))
+    testApp.service.asset.getById(asset.persistedId).isPipelineProcessed shouldBe true
+  }
+
+  test("A dropped duplicate leaves the asset it duplicates untouched") {
+
+    /**
+     * Setup:
+     *
+     * `people/affleck.jpg` imported, which stores its file, its preview and a Face of a new Person; then the same file imported
+     * again.
+     *
+     * Assertions:
+     *
+     * The second import is dropped with `DuplicateException`. The first asset keeps its row, its file, its preview, its Face and
+     * the Face's files, and its Person keeps one Face.
+     */
+    val original = imported(runPipeline(staged("people/affleck.jpg")))
+    val (face, person) = testApp.service.person.getAssetFacesWithPeople(original.persistedId).head
+    val filesOfOriginal = faceFiles
+
+    dropped(runPipeline(staged("people/affleck.jpg"))).cause.get shouldBe a[DuplicateException]
+
+    testApp.service.asset.getById(original.persistedId).isPipelineProcessed shouldBe true
+    Files.exists(testApp.service.fileStore.assetFile(original.persistedId)) shouldBe true
+    testApp.service.asset.getPreview(original.persistedId).data should not be empty
+    testApp.service.person.getAssetFacesWithPeople(original.persistedId).map(_._1.persistedId) shouldBe List(face.persistedId)
+    testApp.service.person.getPersonById(person.persistedId).numOfFaces shouldBe 1
+    faceFiles should contain theSameElementsAs filesOfOriginal
   }
 }

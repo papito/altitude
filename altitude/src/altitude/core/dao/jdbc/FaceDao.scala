@@ -61,6 +61,14 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
     val top = FaceRow.select.filter(_.personId `=` personId).sortBy(_.id).asc.sortBy(_.detectionScore).desc.take(limit)
     Db.read(dialect)(_.run(top)).map(toModel).toList
 
+  // Reads `face_01`, which leads with the asset
+  override def getAllAssetFaces(assetId: String): List[Face] =
+    import dialect.*
+
+    val repositoryId = RequestContext.getRepository.persistedId
+    val faces = FaceRow.select.filter(face => face.assetId `=` assetId && face.repositoryId `=` repositoryId)
+    Db.read(dialect)(_.run(faces)).map(toModel).toList
+
   def getAssetFaces(assetId: String): List[Face] =
     val sql = """
         SELECT face.*

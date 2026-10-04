@@ -28,6 +28,7 @@ import altitude.core.pipeline.flows.AddPreviewFlow
 import altitude.core.pipeline.flows.AssignIdFlow
 import altitude.core.pipeline.flows.CheckDuplicateFlow
 import altitude.core.pipeline.flows.CheckMediaTypeFlow
+import altitude.core.pipeline.flows.DiscardDroppedFlow
 import altitude.core.pipeline.flows.ExtractMetadataFlow
 import altitude.core.pipeline.flows.FacialRecognitionFlow
 import altitude.core.pipeline.flows.FileStoreFlow
@@ -50,8 +51,9 @@ class ImportPipelineService(app: Altitude):
   private val fileStoreFlow = FileStoreFlow(app)
   private val addPreviewFlow = AddPreviewFlow(app)
   private val checkDuplicateFlow = CheckDuplicateFlow(app)
-  private val stripBinaryDataFlow = StripBinaryDataFlow(app)
+  private val stripBinaryDataFlow = StripBinaryDataFlow()
   private val markAsCompleteFlow = MarkAsCompleteFlow(app)
+  private val discardDroppedFlow = DiscardDroppedFlow(app)
   private val wsNotificationSink = WsAssetProcessedNotificationSink(app)
   private val errorLoggingSink = AssetErrorLoggingSink()
 
@@ -77,6 +79,7 @@ class ImportPipelineService(app: Altitude):
     .via(addPreviewFlow)
     .via(stripBinaryDataFlow)
     .via(markAsCompleteFlow)
+    .via(discardDroppedFlow)
     .mergeSubstreams
     .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)

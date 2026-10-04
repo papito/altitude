@@ -135,7 +135,9 @@ A `person` row carries `name`, `is_named`, `num_of_faces`, `cover_face_id`, `is_
 `PersonService.addFace` inserts the Face, increments `num_of_faces` and sets the cover face when it is the first.
 Recycling an asset decrements the counts of its people and restoring increments them, whether it is restored or moved out
 of the trash into a folder; only the assets a call actually recycles or takes out of the trash are counted. The faces
-themselves go with the asset on purge. Moving a live asset between folders or out of triage does not touch the counts.
+themselves go with the asset on purge, and their files with them, except the cover face of its person. An import the
+pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the counts it
+added are given back, its faces and their files go, and a person it started, left with no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
 
 The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilter`: complete (at least
 `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named), incomplete, hidden. Its actions:

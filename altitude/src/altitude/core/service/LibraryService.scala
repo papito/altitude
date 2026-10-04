@@ -102,6 +102,40 @@ class LibraryService(val app: Altitude):
       completed
     }
 
+  /**
+   * Undoes what the import of an asset wrote, for an asset the pipeline dropped or an import a crash cut off. Nothing to undo for
+   * an asset that was never persisted (dropped before the index stage, or a duplicate it refused) or that completed. In one
+   * transaction: the people of its faces are locked, so a face another import gives one of them meanwhile keeps that person; the
+   * face counts it added are given back; its row goes, with its faces, its Search document and its metadata; and a person left
+   * with no face, which only this import can have started, goes too. Once that commits, its files go: its faces' (a cover face of
+   * a person who stays keeps them, as on purge), its stored file and its preview. Its stats need nothing: an asset counts once
+   * its import completes.
+   */
+  def discardImport(asset: Asset): Unit =
+    asset.id.foreach {
+      assetId =>
+        val unfinished = new Query(Map(FieldConst.ID -> assetId, FieldConst.Asset.IS_PIPELINE_PROCESSED -> false))
+
+        val discarded = txManager.withTransaction {
+          Option.when(app.service.asset.queryAll(unfinished).nonEmpty) {
+            app.service.person.lockAssetPeople(assetId)
+            val facesWithPeople = app.service.person.getAssetFacesWithPeople(assetId)
+            app.service.person.recycleFacesForAssets(Set(assetId))
+            app.service.asset.deleteByQuery(unfinished)
+            val deletedPeople = app.service.person.deletePeopleWithoutFaces(facesWithPeople.map(_._2.persistedId).toSet)
+            (facesWithPeople, deletedPeople)
+          }
+        }
+
+        discarded.foreach {
+          case (facesWithPeople, deletedPeople) =>
+            app.service.person.purgeFaceFiles(facesWithPeople, deletedPeople)
+            app.service.fileStore.purgeAssetById(assetId)
+            logger.debug(
+              s"Discarded the import of asset [$assetId]: ${facesWithPeople.size} faces, ${deletedPeople.size} people it started")
+        }
+    }
+
   def query(query: Query): QueryResult[Asset] =
     txManager.asReadOnly {
       val folderId = query.params.get(FieldConst.Asset.FOLDER_ID).asInstanceOf[Option[String]]
@@ -368,30 +402,26 @@ class LibraryService(val app: Altitude):
   def reconcileStats(): Unit =
     forEachRepository(_ => app.service.stats.reconcile(): Unit)
 
+  /** Discards, in every repository, the imports a crash or a shutdown cut off before they completed ([[discardImport]]) */
   def pruneDanglingAssets(): Unit =
     forEachRepository {
       repository =>
         logger.debug(s"Pruning dangling assets. Repo: ${repository.name}")
         val danglingAssets = app.service.asset.getDanglingAssets
 
-        if danglingAssets.nonEmpty then
-          logger.warn(s"Found ${danglingAssets.size} dangling assets")
-          danglingAssets.foreach(asset => logger.warn(s"Will prune: ${asset.persistedId} - ${asset.fileName}"))
-        app.service.asset.pruneDanglingAssets()
+        if danglingAssets.nonEmpty then logger.warn(s"Found ${danglingAssets.size} dangling assets")
+        danglingAssets.foreach {
+          asset =>
+            logger.warn(s"Will prune: ${asset.persistedId} - ${asset.fileName}")
+            discardImport(asset)
+        }
     }
 
-  /** Runs the operation in every repository's context, then restores the caller's own repository context */
+  /**
+   * Runs the operation in every repository's context, then restores the caller's own repository context. The operation opens its
+   * own transactions, so what it does after one commits, such as deleting files, happens after that commit.
+   */
   def forEachRepository(operation: Repository => Unit): Unit =
-    val callerRepository = RequestContext.repository.value
-
-    txManager.withTransaction {
-      val repositories = app.service.repository.getAll
-
-      try
-        repositories.foreach {
-          repository =>
-            RequestContext.repository.value = Some(repository)
-            operation(repository)
-        }
-      finally RequestContext.repository.value = callerRepository
+    app.service.repository.getAll.foreach {
+      repository => RequestContext.repository.withValue(Some(repository))(operation(repository))
     }

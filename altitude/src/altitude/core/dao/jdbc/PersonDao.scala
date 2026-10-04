@@ -184,3 +184,31 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
        WHERE id IN (SELECT person_id FROM face WHERE asset_id $inIdSet)
     """
     updateByBySql(sql, List(idSet(assetIds), idSet(assetIds)))
+
+  // On PostgreSQL; SQLite's one write connection serializes the writers
+  override def lockAssetPeople(assetId: String): Unit =
+    val sql = s"""
+      SELECT id
+        FROM person
+       WHERE repository_id = ?
+         AND id IN (SELECT person_id FROM face WHERE asset_id = ?)
+      $forUpdate
+    """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
+
+  override def deleteFaceless(personIds: Set[String]): Set[String] =
+    if personIds.isEmpty then return Set.empty
+
+    val sql = s"""
+      SELECT id
+        FROM person
+       WHERE repository_id = ?
+         AND id $inIdSet
+         AND NOT EXISTS (SELECT 1 FROM face WHERE face.person_id = person.id)
+    """
+    val faceless = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(personIds)))
+      .map(_(FieldConst.ID).asInstanceOf[String])
+      .toSet
+
+    if faceless.nonEmpty then updateByBySql(s"DELETE FROM person WHERE id $inIdSet", List(idSet(faceless)))
+    faceless
