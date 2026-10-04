@@ -1,6 +1,7 @@
 package altitude.core.service
 
 import com.drew.imaging.ImageMetadataReader
+import com.drew.imaging.ImageProcessingException
 import com.drew.lang.KeyValuePair
 import com.drew.metadata.Directory
 import com.drew.metadata.png.PngDirectory
@@ -52,6 +53,11 @@ class MetadataExtractionService:
           s"in ${extractedMetadata.data.size} directories from $path")
       extractedMetadata
     catch
+      // A format the reader does not know, or a file it cannot parse: the asset goes on without metadata, and the decoder that
+      // reads its dimensions decides whether the file is usable
+      case e: ImageProcessingException =>
+        logger.debug(s"No metadata extracted from $path: ${e.getMessage}")
+        ExtractedMetadata()
       case e: Exception =>
         logger.error("Error extracting metadata", e)
         ExtractedMetadata()

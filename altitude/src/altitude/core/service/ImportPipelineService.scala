@@ -2,8 +2,10 @@ package altitude.core.service
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.stream.ActorAttributes
 import org.apache.pekko.stream.OverflowStrategy
 import org.apache.pekko.stream.QueueOfferResult
+import org.apache.pekko.stream.Supervision
 import org.apache.pekko.stream.scaladsl.Flow
 import org.apache.pekko.stream.scaladsl.Keep
 import org.apache.pekko.stream.scaladsl.Sink
@@ -79,6 +81,16 @@ class ImportPipelineService(app: Altitude):
     .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)
 
+  /**
+   * The last resort for a failure outside a stage's work, which `PipelineUtils.guarded` does not see: the element is dropped and
+   * the queue goes on. It reaches no sink, so it is neither reported nor discarded; the stages never rely on this.
+   */
+  private val resumeOnFailure: Supervision.Decider = {
+    ex =>
+      logger.error("An element failed outside a stage of the import queue and was dropped", ex)
+      Supervision.Resume
+  }
+
   private val queueImportPipeline = runAsQueue()
 
   def run(
@@ -103,6 +115,7 @@ class ImportPipelineService(app: Altitude):
       .merge(Source.never) // Keep the queue open and never complete
       .via(combinedFlow)
       .toMat(Sink.foreach(_ => ()))(Keep.right)
+      .withAttributes(ActorAttributes.supervisionStrategy(resumeOnFailure))
       .run()
 
     res.onComplete {

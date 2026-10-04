@@ -3,6 +3,9 @@ package altitude.core.integration
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import org.apache.commons.io.FileUtils
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
@@ -20,18 +23,55 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.ImageException
 import altitude.core.RequestContext
+import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
+import altitude.core.VideoException
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
+import altitude.core.models.Repository
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
 
 @DoNotDiscover class ImportPipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+
+  private def eventually[T](f: => T): T =
+    Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(200, Millis)))(f)
+
+  /** How many assets of the repository have finished importing */
+  private def importedCount(repositoryId: String = testContext.repository.persistedId): Int = testApp.txManager.asReadOnly {
+    query("SELECT count(*) AS n FROM asset WHERE repository_id = ? AND is_pipeline_processed = ?", repositoryId, true)
+      .head("n")
+      .toString
+      .toInt
+  }
+
+  /** Runs the assets through the import pipeline, each in its own context, and hands back every result */
+  private def runPipeline(assets: (AssetWithData, PipelineContext)*): Seq[TAssetOrInvalidWithContext] =
+    Await.result(testApp.service.importPipeline.run(Source(assets.toList), AssetSeqOutputSink()), Duration.Inf)
+
+  /** Bytes no image reader takes, staged under a JPEG asset, as an upload with a misleading type would arrive */
+  private def notAnImage(): AssetWithData =
+    AssetWithData(
+      testContext.makeAsset().copy(assetType = AssetType("image", "jpeg", "image/jpeg")),
+      testApp.service.staging.stage("not an image".getBytes))
+
+  /** Replaces the repository's `files` directory with a plain file, so storing any asset of the repository fails */
+  private def breakFileStore(repository: Repository): Unit =
+    val files = Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES)
+    FileUtils.deleteDirectory(files.toFile)
+    Files.createDirectories(files.getParent)
+    Files.createFile(files)
+
+  /** The pipeline's result for the asset of a file name, imported or dropped */
+  private def resultFor(results: Seq[TAssetOrInvalidWithContext], fileName: String): TAssetOrInvalidWithContext =
+    results.find(_._1.fold(_.fileName, _.payload.fileName) == fileName).get
 
   test("Void pipeline sink should produce no results") {
 
@@ -102,22 +142,108 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      */
     val batchSize = 6
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
-    val repositoryId = RequestContext.getRepository.persistedId
 
     // Every offer is made before any is awaited
     val offers =
       (1 to batchSize).map(_ => testApp.service.importPipeline.addToQueue((testContext.makeAssetWithData(), pipelineContext)))
     Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
 
-    def imported: Int = testApp.txManager.asReadOnly {
-      query("SELECT count(*) AS n FROM asset WHERE repository_id = ? AND is_pipeline_processed = ?", repositoryId, true)
-        .head("n")
-        .toString
-        .toInt
+    eventually {
+      importedCount() shouldBe batchSize
     }
+  }
 
-    Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(200, Millis))) {
-      imported shouldBe batchSize
+  test("An image that cannot be decoded is dropped, and the asset behind it is imported") {
+
+    /**
+     * Setup:
+     *
+     * Bytes no image reader takes, staged under a JPEG asset, followed by an asset over a staged random image, in one stream.
+     *
+     * Assertions:
+     *
+     * The first comes out dropped with `ImageException` from the metadata stage and its staged file is deleted; the photo behind
+     * it is imported.
+     */
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val undecodable = notAnImage()
+    val photo = testContext.makeAssetWithData()
+
+    val pipelineRes = runPipeline((undecodable, pipelineContext), (photo, pipelineContext))
+    pipelineRes should have size 2
+
+    pipelineRes.head match {
+      case (Right(invalid), _) => invalid.cause.get shouldBe a[ImageException]
+      case _ => fail("Expected the undecodable image to be dropped")
+    }
+    Files.exists(undecodable.path) shouldBe false
+
+    pipelineRes(1) match {
+      case (Left(asset), _) => testApp.service.asset.getById(asset.persistedId).isPipelineProcessed shouldBe true
+      case (Right(invalid), _) => fail(s"Expected the photo to be imported: ${invalid.cause}")
+    }
+  }
+
+  test("A queued image that cannot be decoded is dropped, and the queue imports the asset behind it") {
+
+    /**
+     * Setup:
+     *
+     * Bytes no image reader takes, staged under a JPEG asset, offered to the long-running import queue, then an asset over a
+     * staged random image.
+     *
+     * Assertions:
+     *
+     * The photo ends up pipeline-processed, polled for up to a minute, so the queue outlived the undecodable image, whose staged
+     * file is deleted.
+     */
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val undecodable = notAnImage()
+
+    Await.result(testApp.service.importPipeline.addToQueue((undecodable, pipelineContext)), 30.seconds)
+    Await.result(testApp.service.importPipeline.addToQueue((testContext.makeAssetWithData(), pipelineContext)), 30.seconds)
+
+    eventually {
+      importedCount() shouldBe 1
+      Files.exists(undecodable.path) shouldBe false
+    }
+  }
+
+  test("An asset whose file cannot be stored is dropped, and the stream goes on importing") {
+
+    /**
+     * Setup:
+     *
+     * A second repository whose `files` directory is a plain file, so storing any of its assets fails. An asset over a staged
+     * random image for it, followed in the same stream by one for the test's own repository.
+     *
+     * Assertions:
+     *
+     * The first comes out dropped with `StorageException` from the file store stage and its staged file is deleted; the second is
+     * imported.
+     */
+    val repository = testContext.repository
+    val brokenRepository = testContext.persistRepository()
+    breakFileStore(brokenRepository)
+
+    val unstorable = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(brokenRepository))))
+    val photo = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(repository))))
+
+    val pipelineRes = runPipeline(
+      (unstorable, PipelineContext(brokenRepository, testContext.user)),
+      (photo, PipelineContext(repository, testContext.user)))
+    pipelineRes should have size 2
+
+    // Each repository has its own substream, so the results come in either order
+    resultFor(pipelineRes, unstorable.asset.fileName) match {
+      case (Right(invalid), _) => invalid.cause.get shouldBe a[StorageException]
+      case _ => fail("Expected the asset of the broken repository to be dropped")
+    }
+    Files.exists(unstorable.path) shouldBe false
+
+    resultFor(pipelineRes, photo.asset.fileName) match {
+      case (Left(asset), _) => testApp.service.asset.getById(asset.persistedId).isPipelineProcessed shouldBe true
+      case (Right(invalid), _) => fail(s"Expected the photo to be imported: ${invalid.cause}")
     }
   }
 
@@ -210,7 +336,8 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * The pipeline completes with the clip dropped and its staged file deleted, and the photo behind it is imported.
+     * The pipeline completes with the clip dropped with `VideoException` and its staged file deleted, and the photo behind it is
+     * imported.
      */
     val clip =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.undecodable.toFile))
@@ -227,7 +354,7 @@ import altitude.core.pipeline.sinks.VoidAssetSink
 
     // The Preview has no frame to take, which drops the clip rather than failing the pipeline
     pipelineRes.head match {
-      case (Right(invalid), _) => invalid.cause.get shouldBe a[RuntimeException]
+      case (Right(invalid), _) => invalid.cause.get shouldBe a[VideoException]
       case _ => fail("Expected the clip to be dropped")
     }
     Files.exists(clip.path) shouldBe false

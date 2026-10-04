@@ -122,7 +122,7 @@ class VideoService(config: Config):
   /**
    * The Video's Preview: the first Sampled frame whose mean brightness clears the floor (`video.preview.min_luminance`), which
    * skips a black leader, or the frame at a tenth of the duration when none does. The duration is the asset's, so the Video is
-   * opened once.
+   * opened once. A Video no frame of which decodes is a [[VideoException]].
    */
   def previewFrame(path: Path, durationMs: Long): VideoService.SampledFrame = withFrames(path) {
     decode =>
@@ -140,7 +140,7 @@ class VideoService(config: Config):
           s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
         decode(Seq(durationMs / 10))
           .nextOption()
-          .getOrElse(throw RuntimeException(s"No frame could be decoded from $path"))
+          .getOrElse(throw VideoException(s"No frame could be decoded from $path"))
       }
   }
 

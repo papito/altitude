@@ -20,7 +20,8 @@ case class DuplicateException(message: Option[String] = None) extends Exception
 
 case class ConstraintException(msg: String) extends Exception(msg)
 
-case class UnsupportedMediaTypeException(asset: Asset) extends Exception()
+case class UnsupportedMediaTypeException(asset: Asset)
+  extends Exception(s"Unsupported media type \"${asset.assetType.mediaType}\"")
 
 case class IllegalOperationException(msg: String) extends IllegalArgumentException(msg)
 
@@ -41,5 +42,8 @@ case class GeocoderException(msg: String) extends Exception(msg)
 
 case class SamePersonDetectedTwiceException(msg: String) extends Exception(msg)
 
-/** A Video FFmpeg could not open, or a file it opened that has no video stream */
+/** A Video FFmpeg could not open, a file it opened that has no video stream, or one no frame of which decodes */
 case class VideoException(msg: String) extends Exception(msg)
+
+/** An image no image reader can decode */
+case class ImageException(msg: String) extends Exception(msg)

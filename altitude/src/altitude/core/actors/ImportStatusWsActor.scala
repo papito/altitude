@@ -8,8 +8,10 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 
 import altitude.core.AltitudeActorSystem
 import altitude.core.DuplicateException
+import altitude.core.ImageException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
+import altitude.core.VideoException
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalid
 
 object ImportStatusWsActor:
@@ -55,17 +57,23 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
                     successStatusTickerTemplate.format(s"Imported ${asset.fileName}")
 
                   case Right(invalid) =>
-                    val errorMessage = invalid.cause.get match {
-                      case _: DuplicateException =>
-                        warningStatusTickerTemplate.format(s"Error importing ${invalid.payload.fileName}: Duplicate asset")
-                      case _: UnsupportedMediaTypeException =>
-                        errorStatusTickerTemplate.format(s"Error importing ${invalid.payload.fileName}: Unsupported media type")
-                      case _: StorageException =>
-                        errorStatusTickerTemplate.format(s"Error importing ${invalid.payload.fileName}: Storage error")
-                      case _ =>
-                        errorStatusTickerTemplate.format(s"Unknown error importing ${invalid.payload.fileName}")
+                    val fileName = invalid.payload.fileName
+                    invalid.cause match {
+                      case Some(_: DuplicateException) =>
+                        warningStatusTickerTemplate.format(s"Error importing $fileName: Duplicate asset")
+                      case Some(_: UnsupportedMediaTypeException) =>
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: Unsupported media type")
+                      case Some(_: ImageException) =>
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: Cannot decode image")
+                      case Some(_: VideoException) =>
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: Cannot decode video")
+                      case Some(_: StorageException) =>
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: Storage error")
+                      // An exception's message may carry paths or SQL, so a cause not named above is shown by its class alone
+                      case cause =>
+                        val name = cause.fold("Unknown error")(_.getClass.getSimpleName)
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: $name")
                     }
-                    errorMessage
                 }
 
                 client.send(cask.Ws.Text(wsContent))

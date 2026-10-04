@@ -93,13 +93,13 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ An in-batch duplicate is returned as one `InvalidAsset` with `DuplicateException` while the other batch assets complete.
 - ✅ An unsupported media type returns an `InvalidAsset` with `UnsupportedMediaTypeException`.
 - ✅ Synchronous import rejects a duplicate, produces a triaged image, and persists extracted/public metadata, checksum, size, dimensions, and preview data.
-- [ ] Inject failures in metadata/dimension extraction, indexing, recognition, original-file storage, preview storage, and final completion; assert failure results, persisted state, files, and statistics rather than allowing a silently partial import. [CRITICAL]
+- [ ] Inject failures in indexing, recognition, preview storage, and final completion, as the tests above do for metadata extraction and original-file storage; assert failure results, persisted state, files, and statistics rather than allowing a silently partial import. [CRITICAL]
 - [ ] Exercise a duplicate/error during recognition and assert it reaches the caller as the intended invalid result (`SamePersonDetectedTwiceException` for a duplicate crop) with the asset's faces rolled back. Both engines now share the recognition flow. [MEDIUM]
 - [ ] Feed one stream interleaved assets from two repositories/accounts; assert every database row, file, index entry, statistic, and notification belongs to its supplied pipeline context. [CRITICAL]
 - ✅ Assets offered to the queue at once (`addToQueue`, as concurrent uploads offer them) are all imported, on both engines, through the one pipeline.
 - [ ] Exercise `addToQueue` backpressure past the queue's size, queue closure/failure, and shutdown with pending work. [MEDIUM]
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
-- [ ] Mix unsupported/corrupt inputs with valid inputs and assert the documented continuation policy; the unsupported-type test contains only one invalid input. [MEDIUM]
+- ✅ An input the pipeline cannot use is dropped and the asset behind it in the same stream is imported, its staged file deleted: bytes no image reader takes under a JPEG type (`ImageException` in the metadata stage, through `run` and through the queue), an asset of a repository whose `files` directory is a plain file (`StorageException` in the file store stage, the next asset in another repository), and a video no frame of which decodes (`VideoException` in the preview stage).
 - [ ] Verify user-scoped success/error notifications identify the correct asset and recipient and are not duplicated. [MEDIUM]
 - [ ] Assert the mapping from `ImportAsset` to `AssetWithData`, including supplied user metadata, user identity, filename, exact checksum/size, and detected type. Existing metadata fixtures mainly enter through `addAsset`. [MEDIUM]
 - [ ] Verify an empty finite source completes cleanly with no rows, files, statistics changes, or notifications. [EDGE]

@@ -8,16 +8,15 @@ import scala.concurrent.Future
 import altitude.core.Altitude
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
-import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+import altitude.core.pipeline.PipelineUtils.guarded
 
 object MarkAsCompleteFlow:
   def apply(app: Altitude): Flow[TAssetOrInvalidWithContext, TAssetOrInvalidWithContext, NotUsed] =
     Flow[TAssetOrInvalidWithContext].mapAsync(app.parallelism) {
       case (Left(asset), ctx) =>
-        setThreadLocalRequestContext(ctx)
-
-        debugInfo(s"\tMarking asset as pipeline-complete ${asset.fileName}")
-        Future.successful((Left(app.service.library.completeImport(asset)), ctx))
-      case (Right(invalid), ctx) =>
-        Future.successful((Right(invalid), ctx))
+        Future.successful(guarded("Import completion", asset, ctx) {
+          debugInfo(s"\tMarking asset as pipeline-complete ${asset.fileName}")
+          Left(app.service.library.completeImport(asset))
+        })
+      case dropped => Future.successful(dropped)
     }
