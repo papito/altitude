@@ -10,7 +10,7 @@ import altitude.core.Const
 import altitude.core.Environment
 
 @main def clearDb(): Unit =
-  if Environment.CURRENT != Environment.Name.DEV then
+  if !Environment.isDev then
     System.err.println(
       s"ERROR: clear-db is only allowed in DEV (current ENV=${Environment.CURRENT}). Aborting."
     )

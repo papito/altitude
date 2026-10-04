@@ -18,6 +18,7 @@ import altitude.core.routes.web.IndexController
 import altitude.core.routes.web.SessionController
 import altitude.core.routes.web.SetupController
 import altitude.core.routes.web.StaticController
+import altitude.core.routes.web.StyleGuideController
 import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.FolderActionController
@@ -60,7 +61,16 @@ object App extends cask.Main:
   override def mainDecorators: Seq[Decorator[?, ?, ?, ?]] =
     Seq(decorators.compress(), decorators.requestResponseLogger(), decorators.repoContext())
 
-  override def allRoutes: Seq[cask.Routes] = Seq(
+  override def allRoutes: Seq[cask.Routes] = appRoutes ++ devRoutes
+
+  /** Routes that exist only in dev; anywhere else their paths answer 404 */
+  private def devRoutes: Seq[cask.Routes] =
+    if Environment.isDev then
+      logger.info("Style guide enabled at /style-guide/r/<repoId>")
+      Seq(new StyleGuideController)
+    else Seq.empty
+
+  private def appRoutes: Seq[cask.Routes] = Seq(
     new HealthController,
     new AlbumController,
     new LocationController,

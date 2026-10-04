@@ -1,0 +1,396 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Stats
+
+@* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan) that
+   js/style-guide.js renders the tokens, the icons and the token audit from; the specimens below are static markup
+   using the real classes of core.css and tabs.css. *@
+@(stats: Stats, scanJson: String)
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <title>ALTITUDE - Style Guide</title>
+
+    @includes.html.header_common()
+    @* The app start binds drag and drop through `interact`, and the sample dialog posts JSON *@
+    <script src="/static/js/lib/interact.min.js"></script>
+    <script src="/static/js/lib/json-enc.js"></script>
+
+    <style>
+      main {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: var(--section-vertical-space);
+        align-items: start;
+        padding: var(--section-vertical-space) var(--control-horizontal-space);
+      }
+
+      #styleGuideToc {
+        position: sticky;
+        top: var(--section-vertical-space);
+        display: grid;
+        row-gap: var(--control-vertical-space);
+      }
+
+      #styleGuideToc a {
+        color: var(--font-color-dim);
+        text-decoration: none;
+      }
+
+      main section {
+        display: grid;
+        row-gap: var(--control-vertical-space);
+        padding-bottom: var(--section-vertical-space);
+        margin-bottom: var(--section-vertical-space);
+        border-bottom: 1px solid var(--panel-border-color);
+        /* A deep link lands the heading below the top edge, not against it */
+        scroll-margin-top: var(--section-vertical-space);
+      }
+
+      main section h2, main section h3, main section p {
+        margin: 0;
+      }
+
+      /* Usage notes */
+      main section p {
+        color: var(--font-color-dim);
+      }
+
+      /* A row of specimens */
+      .sg-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--control-vertical-space) var(--control-horizontal-space);
+      }
+
+      .sg-tokens {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(calc(var(--modal-content-width) * 0.7), 1fr));
+        gap: var(--control-vertical-space);
+      }
+
+      /* A token card is a button: clicking it copies the token's var() reference */
+      .sg-token {
+        display: grid;
+        row-gap: calc(var(--control-vertical-space) / 3);
+        align-content: start;
+        padding: var(--panel-padding);
+        border: 1px solid var(--panel-border-color);
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        overflow-wrap: anywhere;
+      }
+
+      .sg-sample {
+        height: var(--section-vertical-space);
+      }
+
+      .sg-sample.color, .sg-sample.shadow {
+        border: 1px solid var(--panel-border-color);
+      }
+
+      .sg-sample.length {
+        background-color: var(--dnd-drop-target-color);
+        max-width: 100%;
+      }
+
+      .sg-sample.shadow {
+        display: grid;
+        align-items: center;
+        padding: 0 var(--panel-padding);
+      }
+
+      /* A line of text, as tall as the font stack makes it */
+      .sg-sample.font {
+        height: auto;
+      }
+
+      .sg-dim {
+        color: var(--font-color-dim);
+      }
+
+      .sg-flag {
+        color: var(--warning-font-color);
+      }
+
+      .sg-icons {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(calc(var(--modal-content-width) * 0.4), 1fr));
+        gap: var(--control-vertical-space);
+      }
+
+      .sg-icons > div {
+        display: grid;
+        grid-template-columns: var(--control-horizontal-space) 1fr;
+        align-items: center;
+      }
+
+      main table {
+        border-collapse: collapse;
+      }
+
+      main th, main td {
+        padding: calc(var(--control-vertical-space) / 3) var(--panel-padding);
+        border-bottom: 1px solid var(--panel-border-color);
+        text-align: left;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+
+      .sg-swatch {
+        display: inline-block;
+        width: var(--control-horizontal-space);
+        height: var(--control-vertical-space);
+        border: 1px solid var(--panel-border-color);
+      }
+
+      .sg-panel {
+        border: 1px solid var(--panel-border-color);
+        box-shadow: var(--box-shadow);
+        text-shadow: var(--navbar-text-shadow);
+        padding: var(--panel-padding);
+      }
+
+      /* The spacing rhythm: each bar is as long as the token it names */
+      .sg-space {
+        height: var(--control-vertical-space);
+        background-color: var(--dnd-drop-target-color);
+      }
+
+      /* The drag count badge positions itself absolutely over the dragged thumbnail */
+      .sg-badge-host {
+        position: relative;
+        width: var(--section-vertical-space);
+        height: var(--section-vertical-space);
+        border: var(--dnd-draggable-border);
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav>
+      @includes.html.nav(stats = stats)
+    </nav>
+
+    <main>
+      @includes.html.html_common()
+
+      <div id="styleGuideToc">
+        <a href="#colors">Colors</a>
+        <a href="#typography">Typography</a>
+        <a href="#spacing">Spacing &amp; sizing</a>
+        <a href="#borders-shadows">Borders &amp; shadows</a>
+        <a href="#panels-layout">Panels &amp; layout</a>
+        <a href="#icons">Icons</a>
+        <a href="#buttons">Buttons</a>
+        <a href="#forms">Forms</a>
+        <a href="#navigation-tabs">Navigation &amp; tabs</a>
+        <a href="#menus-dialogs">Menus &amp; dialogs</a>
+        <a href="#feedback">Feedback</a>
+        <a href="#badges-states">Badges &amp; states</a>
+        <a href="#token-audit">Token audit</a>
+      </div>
+
+      <div>
+        <section id="colors">
+          <h2>Colors</h2>
+          <p>Every color token of <code>:root</code> in <code>core.css</code>. Click a token to copy its
+             <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
+             under Token audit.</p>
+          <div class="sg-tokens" data-token-kind="color"></div>
+        </section>
+
+        <section id="typography">
+          <h2>Typography</h2>
+          <p>One font stack, <code>--font</code>, at a 14px base on <code>body</code>. Other sizes are relative to it and
+             belong to a component, shown here on the real ones.</p>
+          <div class="sg-tokens" data-token-kind="font"></div>
+
+          <h3>Sizes</h3>
+          <div class="sg-row">
+            <span>Body text, 14px</span>
+            <button type="button" class="action-button small">Small button, 0.8em</button>
+            <span class="asset-count">Asset count, 0.9em</span>
+            <input type="text" value="Input, 1.2em" aria-label="Input size specimen">
+            <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, 1.3em</span>
+          </div>
+
+          <h3>Text colors</h3>
+          <div class="sg-row">
+            <span>Default</span>
+            <span style="color: var(--font-color-dim)">--font-color-dim</span>
+            <span style="color: var(--faded-font-color)">--faded-font-color</span>
+            <span style="color: var(--success-font-color)">--success-font-color</span>
+            <span style="color: var(--warning-font-color)">--warning-font-color</span>
+            <span style="color: var(--error-font-color)">--error-font-color</span>
+            <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
+          </div>
+        </section>
+
+        <section id="spacing">
+          <h2>Spacing &amp; sizing</h2>
+          <p>Use the section space between large areas, such as panels and page paddings, and the control spaces between
+             individual elements and list rows.</p>
+          <div class="sg-tokens" data-token-kind="length"></div>
+        </section>
+
+        <section id="borders-shadows">
+          <h2>Borders &amp; shadows</h2>
+          <p>A border token carries width, style and color together; use it whole rather than restating its parts.</p>
+          <div class="sg-tokens" data-token-kind="border"></div>
+          <div class="sg-tokens" data-token-kind="shadow"></div>
+        </section>
+
+        <section id="panels-layout">
+          <h2>Panels &amp; layout</h2>
+          <p>A panel is edged with <code>--panel-border-color</code>, lit by <code>--box-shadow</code> and padded by
+             <code>--panel-padding</code>; its text carries the navbar's text shadow. Lay pages out with CSS Grid and
+             Flexbox.</p>
+          <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
+
+          <h3>Spacing rhythm</h3>
+          <div class="sg-space" style="width: var(--section-vertical-space)"></div>
+          <span class="sg-dim">--section-vertical-space</span>
+          <div class="sg-space" style="width: var(--control-vertical-space)"></div>
+          <span class="sg-dim">--control-vertical-space</span>
+          <div class="sg-space" style="width: var(--control-horizontal-space)"></div>
+          <span class="sg-dim">--control-horizontal-space</span>
+        </section>
+
+        <section id="icons">
+          <h2>Icons</h2>
+          <p>Font Awesome 5, solid style (<code>fas</code>). These are the icons in use in the templates and scripts,
+             each with the number of places it appears; reuse one before adding another.</p>
+          <div class="sg-icons" id="styleGuideIcons"></div>
+        </section>
+
+        <section id="buttons">
+          <h2>Buttons</h2>
+          <p>Success, warning and error buttons signal an outcome, not emphasis. Hover and keyboard focus share one look,
+             through <code>:focus-visible</code> and not <code>:focus</code>, so a button a dialog returns focus to is
+             not left glowing after a mouse click.</p>
+          <div class="sg-row">
+            <button type="button" class="action-button">.action-button</button>
+            <button type="button" class="action-button success">.success</button>
+            <button type="button" class="action-button warning">.warning</button>
+            <button type="button" class="action-button error">.error</button>
+            <button type="button" class="action-button small"><i class="fas fa-plus" aria-hidden="true"></i><span>.small</span></button>
+          </div>
+        </section>
+
+        <section id="forms">
+          <h2>Forms</h2>
+          <p>A field in error takes the <code>error</code> class, with the message in a <code>div.error</code> above it
+             inside the form. Mark a field that cannot be edited with <code>readonly</code>.</p>
+          <div class="sg-row">
+            <input type="text" placeholder="input" aria-label="Input specimen">
+            <input type="text" class="readonly" value="input.readonly" readonly aria-label="Read-only input specimen">
+            <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
+          </div>
+          <form action="#" id="styleGuideErrorForm">
+            <div class="error">This field is required</div>
+            <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
+          </form>
+        </section>
+
+        <section id="navigation-tabs">
+          <h2>Navigation &amp; tabs</h2>
+          <p>The nav above is the live one. A nav entry is <code>.menu</code>; the page marks its own entry
+             <code>active</code>, and an entry with nothing behind it is <code>empty</code> and not a link. A tab is the
+             link itself, selected through <code>aria-selected</code>.</p>
+          <nav aria-label="Navigation specimen">
+            <div class="brand"><a href="#navigation-tabs">Altitude</a></div>
+            <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
+            <div class="menu active"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu.active</span></a></div>
+            <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
+          </nav>
+
+          <div role="tablist">
+            <a role="tab" aria-selected="true" href="#navigation-tabs"><i class="fas fa-folder"></i> Selected</a>
+            <a role="tab" aria-selected="false" href="#navigation-tabs"><i class="fas fa-images"></i> Tab</a>
+          </div>
+          <div role="tabpanel">A tab panel.</div>
+        </section>
+
+        <section id="menus-dialogs">
+          <h2>Menus &amp; dialogs</h2>
+          <p>Both controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
+             like an Add button, opens a separate modal anchored below its control. Submit the dialog blank to see the
+             validation state, or with a name to see a completed operation.</p>
+          @* js/style-guide.js builds both controls here, the way the explorer lists build theirs *@
+          <div class="sg-row" id="styleGuideMenuSpecimens"></div>
+        </section>
+
+        <section id="feedback">
+          <h2>Feedback</h2>
+          <p>The outcome of an action is reported in the snackbar: success for a completed one, warning for one that
+             partly applied, error for a failure. A failure to load a page area is a server error message in place.</p>
+          <div class="sg-row">
+            <button type="button" class="action-button success" data-style-guide-snackbar="success">Success snackbar</button>
+            <button type="button" class="action-button warning" data-style-guide-snackbar="warning">Warning snackbar</button>
+            <button type="button" class="action-button error" data-style-guide-snackbar="error">Error snackbar</button>
+          </div>
+          <div id="serverError">#serverError: something went wrong on the server.</div>
+          <div class="sg-row">
+            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <span>Loading indicator: <code>fa-spinner fa-spin</code></span>
+          </div>
+        </section>
+
+        <section id="badges-states">
+          <h2>Badges &amp; states</h2>
+          <p>A count follows its row's name, dimmed. The drag and drop states are set by the drag and drop modules, never
+             by hand.</p>
+          <div class="sg-row">
+            <span>Row name <span class="asset-count">(12)</span></span>
+            <span class="draggable">.draggable</span>
+            <span class="dragging">.dragging</span>
+            <span class="drop-target">.drop-target</span>
+            <div class="sg-badge-host"><span class="drag-count-badge">3</span></div>
+            <span>.drag-count-badge</span>
+          </div>
+        </section>
+
+        <section id="token-audit">
+          <h2>Token audit</h2>
+          <p>What the source tree holds beyond the <code>:root</code> tokens. Scoped and runtime tokens belong to one
+             component; an override replaces a <code>:root</code> value for that component.</p>
+
+          <h3>Other tokens</h3>
+          <div class="sg-tokens" data-token-kind="other"></div>
+
+          <h3>Scoped and runtime tokens</h3>
+          <table id="styleGuideScopedTokens"></table>
+
+          <h3>Color literals</h3>
+          <p>Colors written as literals instead of tokens, grouped by the color they resolve to. A literal equal to a
+             token should use it.</p>
+          <table id="styleGuideLiterals"></table>
+        </section>
+      </div>
+    </main>
+
+    <footer></footer>
+
+    <script type="application/json" id="styleGuideScan">@Html(scanJson)</script>
+
+    <script type="module">
+      import { initApp } from "/static/js/app.js"
+      import { highlightNav } from "/static/js/common/navigation.js"
+      import { initStyleGuide } from "/static/js/style-guide.js"
+
+      initApp()
+
+      // Set once: the repository cannot change without a full page load
+      window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+
+      highlightNav("style-guide")
+      initStyleGuide()
+    </script>
+  </body>
+</html>

@@ -266,6 +266,8 @@ The map never receives a result set: a repository can hold millions of assets, s
 
 To skip login during frontend dev work, set `dev.user` and `dev.password` in `application-dev.conf`. To log the plan of each new query to `sql-debug.log`, set `dev.sql_explain=true` there (see "SQL explain log"). To have a pipeline queue whose stream fails restart it, set `dev.restart_pipeline=true` (see **Import Pipeline**). Both are read through `Environment.devSwitch`, the one rule for a development-only key: on only when it is `true` and `ENV=dev`, and off, with a WARN, when it is set in any other environment.
 
+`Environment.isDev` is the check for anything that exists in dev only (an unset `ENV` is prod; an unrecognised value is dev). The **style guide** is such a thing: `App.allRoutes` registers `StyleGuideController` (`routes/web/`) only in dev, so its routes are 404s anywhere else, and `includes/nav.scala.html` renders its button under the same check. The page (`/style-guide/r/:repoId`) scans the source tree on every request with `StyleGuideScan.scan` (`core/util`), a pure function over `altitude/static/css`, `altitude/static/js` and `altitude/views` that finds the design tokens (`:root`, scoped, and set at runtime), their reference counts, the color literals written past them and the icons in use; the result is embedded in the page as JSON. The controller's other two routes serve a sample dialog that validates like a real one and persists nothing. Controller tests reach the routes through a test-only `cask.Main` (`DevApp` in `StyleGuideControllerTests`). The page itself is described under **Style guide** in `views/AGENTS.md`.
+
 ## Build & Test Commands
 
 ```sh

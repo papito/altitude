@@ -13,7 +13,7 @@
 
 ```
 views/
-  *.scala.html          ← full pages (index, login, setup, pipeline)
+  *.scala.html          ← full pages (index, login, setup, pipeline, style_guide)
   includes/             ← reusable layout fragments (nav, header, batch ops, search results)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
@@ -735,6 +735,29 @@ Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules ca
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 
+**Style guide** — `views/style_guide.scala.html` is a dev-only page (`StyleGuideController`; the nav shows its
+button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
+and per shared primitive of `core.css` and `tabs.css` (buttons, forms, navigation and tabs, menus and dialogs,
+feedback, badges and states), plus a token audit. It is the main page's chrome without the explorer and the grid, and
+starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/json-enc.js` itself.
+
+- **Discovered, nothing to maintain:** the tokens and the icons. The server's source scan is embedded as JSON
+  (`#styleGuideScan`) and `js/style-guide.js` renders it: each `:root` token resolved against the loaded stylesheets
+  and placed by the kind of its value (`[data-token-kind]`), with its note (the comment directly above its
+  declaration), reference count, an "Unused" flag, and the tokens sharing its value; a click copies its `var()`
+  reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
+  replaces), the ones only set from JavaScript, and the color literals grouped by resolved color, each naming the
+  token that already holds that color.
+- **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
+  class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
+  use the real classes; the page's own styles (`sg-` classes) only lay the page out, from the `:root` variables.
+- **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`, both
+  opening `htmx/style_guide_sample_dialog.scala.html` in the modal host. A blank name returns the validation
+  replacement; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
+  a snackbar. Nothing is persisted.
+
+The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates.
+
 ## Key Files
 
 | File | Purpose |
@@ -776,6 +799,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
+| `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the hosts `js/style-guide.js` fills |
+| `static/js/style-guide.js` | the style guide's rendering of the source scan (tokens, icons, token audit), its live menu and dialog specimens, and its snackbar demo |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |

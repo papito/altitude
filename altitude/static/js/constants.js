@@ -47,6 +47,7 @@ export const Const = {
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
+        styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
     },
 
     /**
