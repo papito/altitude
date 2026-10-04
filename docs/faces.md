@@ -17,9 +17,10 @@ Faces are two stages of the import pipeline (`service/ImportPipelineService.scal
 indexed, on both engines, their work on the import dispatcher's threads (`import.parallelism`):
 
 - `DetectFacesFlow` calls `FaceRecognitionService.detect`, which finds the faces without touching the database: an
-  image's every detection (`extractFaces`), or a Video's clusters (see **Videos**). It works on up to
-  `import.parallelism` assets of a repository at once. The detections, a `DetectedFaces` of each Face with its crops,
-  ride on the pipeline element (`AssetWithData.detectedFaces`) to the next stage.
+  image's every detection (`extractFaces`), or a Video's clusters (see **Videos**). An animated image (an image with a
+  duration, an animated GIF) is not searched for faces. The stage works on up to `import.parallelism` assets of a
+  repository at once. The detections, a `DetectedFaces` of each Face with its crops, ride on the pipeline element
+  (`AssetWithData.detectedFaces`) to the next stage.
 - `RecognizeFacesFlow` calls `recognizeAndStore`, which matches and stores them in a short `withFaceVector`
   transaction, so the detection never holds SQLite's one write connection. It works on one asset of a repository at a
   time, in upload order, so a face can join the Person an earlier photo of the same upload started.

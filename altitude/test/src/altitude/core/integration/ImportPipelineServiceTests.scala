@@ -5,6 +5,8 @@ import altitude.test.TestVideos
 import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
+import java.awt.image.IndexColorModel
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -13,7 +15,10 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.zip.CRC32
+import javax.imageio.IIOImage
 import javax.imageio.ImageIO
+import javax.imageio.ImageTypeSpecifier
+import javax.imageio.metadata.IIOMetadataNode
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.ActorAttributes
@@ -756,21 +761,12 @@ import altitude.core.util.Query
      * upload order, the first starting the Person and every other joining it.
      */
     val count = testApp.importParallelism + 2
-    val portrait = ImageIO.read(IntegrationTestUtil.getImportAsset("people/affleck.jpg").path.toFile)
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
 
     val photos = (0 until count).map {
       i =>
-        val canvas = new BufferedImage(640 + i, 893, BufferedImage.TYPE_3BYTE_BGR)
-        val drawing = canvas.createGraphics()
-        drawing.setColor(Color.WHITE)
-        drawing.fillRect(0, 0, canvas.getWidth, canvas.getHeight)
-        drawing.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-        drawing.drawImage(portrait, 0, 0, 640, 893, null)
-        drawing.dispose()
-
         val png = new ByteArrayOutputStream()
-        ImageIO.write(canvas, "png", png)
+        ImageIO.write(portraitFrame(extraWidth = i), "png", png)
         (
           testApp.service.library.stagedFileToAsset(s"affleck-$i.png", testApp.service.staging.stage(png.toByteArray)),
           pipelineContext)
@@ -833,4 +829,122 @@ import altitude.core.util.Query
     crc.update(bytes, idat, 4 + length)
     ByteBuffer.wrap(bytes, idat + 4 + length, 4).putInt(crc.getValue.toInt)
     bytes
+
+  test("A still GIF imports with its dimensions and a preview, and no duration") {
+
+    /**
+     * Setup:
+     *
+     * A 64-pixel still GIF (`images/2.gif`), a format the bundled OpenCV has no codec for, imported.
+     *
+     * Assertions:
+     *
+     * It is imported at 64 by 64 with no duration, and its preview decodes as an image filling the square preview box.
+     */
+    val asset = testApp.service.asset.getById(imported(runPipeline(staged("images/2.gif"))).persistedId)
+    (asset.width, asset.height) shouldBe (64, 64)
+    asset.durationMs shouldBe None
+
+    val preview = ImageIO.read(new ByteArrayInputStream(testApp.service.asset.getPreview(asset.persistedId).data))
+    (preview.getWidth, preview.getHeight) shouldBe (Const.AssetView.PREVIEW_BOX_PIXELS, Const.AssetView.PREVIEW_BOX_PIXELS)
+  }
+
+  test("An animated GIF imports with its playing time as its duration and a preview, and no face is looked for in it") {
+
+    /**
+     * Setup:
+     *
+     * A frame of `people/affleck.jpg` saved as a still GIF and imported, which starts a Person. Then an animated GIF of three
+     * frames of the same face, shown for 0, 20 and 30 hundredths of a second, imported.
+     *
+     * Assertions:
+     *
+     * The still GIF has a Face, so the frames hold a face that is found and recognized. The animated GIF is imported with a
+     * duration of 600 ms (a frame without a delay plays for 100 ms, as browsers show it) and a preview, and has no Face: its
+     * frames are not searched, and the Person keeps one Face.
+     */
+    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    def gif(name: String, frames: Seq[BufferedImage], delaysCs: Seq[Int]): (AssetWithData, PipelineContext) =
+      (
+        testApp.service.library.stagedFileToAsset(name, testApp.service.staging.stage(gifBytes(frames, delaysCs))),
+        pipelineContext)
+
+    val still = imported(runPipeline(gif("still.gif", Seq(portraitFrame()), Seq(0))))
+    testApp.service.person.getAssetFacesWithPeople(still.persistedId) should have size 1
+
+    val animated = testApp.service.asset.getById(
+      imported(
+        runPipeline(gif("animated.gif", Seq(portraitFrame(), portraitFrame(1), portraitFrame(2)), Seq(0, 20, 30)))).persistedId)
+    animated.durationMs shouldBe Some(600L)
+    testApp.service.asset.getPreview(animated.persistedId).data should not be empty
+    testApp.service.person.getAssetFacesWithPeople(animated.persistedId) shouldBe empty
+    testApp.service.person.getAll.map(_.numOfFaces) shouldBe List(1)
+  }
+
+  test("A GIF's transparency carries into its preview") {
+
+    /**
+     * Setup:
+     *
+     * A 100-pixel square GIF whose left half is opaque red and whose right half is the palette's transparent color, imported.
+     *
+     * Assertions:
+     *
+     * Its preview, which fills the 200-pixel box, is opaque red on the left and transparent on the right.
+     */
+    val palette = new IndexColorModel(8, 2, Array[Byte](0xff.toByte, 0), Array[Byte](0, 0), Array[Byte](0, 0), 1)
+    val image = new BufferedImage(100, 100, BufferedImage.TYPE_BYTE_INDEXED, palette)
+    for x <- 0 until 100; y <- 0 until 100 do image.getRaster.setSample(x, y, 0, if x < 50 then 0 else 1)
+    val gif = new ByteArrayOutputStream()
+    ImageIO.write(image, "gif", gif)
+
+    val upload = testApp.service.library.stagedFileToAsset("half.gif", testApp.service.staging.stage(gif.toByteArray))
+    val asset = imported(runPipeline((upload, PipelineContext(testContext.repository, testContext.user))))
+
+    val preview = ImageIO.read(new ByteArrayInputStream(testApp.service.asset.getPreview(asset.persistedId).data))
+    val left = new Color(preview.getRGB(50, 100), true)
+    (left.getAlpha, left.getRed, left.getGreen, left.getBlue) shouldBe (255, 255, 0, 0)
+    new Color(preview.getRGB(150, 100), true).getAlpha shouldBe 0
+  }
+
+  /** `people/affleck.jpg` scaled to 640 by 893 on a white canvas `extraWidth` pixels wider, so frames of one face differ */
+  private def portraitFrame(extraWidth: Int = 0): BufferedImage =
+    val portrait = ImageIO.read(IntegrationTestUtil.getImportAsset("people/affleck.jpg").path.toFile)
+    val canvas = new BufferedImage(640 + extraWidth, 893, BufferedImage.TYPE_3BYTE_BGR)
+    val drawing = canvas.createGraphics()
+    drawing.setColor(Color.WHITE)
+    drawing.fillRect(0, 0, canvas.getWidth, canvas.getHeight)
+    drawing.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+    drawing.drawImage(portrait, 0, 0, 640, 893, null)
+    drawing.dispose()
+    canvas
+
+  /** A GIF of the frames, each shown for its delay in hundredths of a second; one frame makes a still GIF */
+  private def gifBytes(frames: Seq[BufferedImage], delaysCs: Seq[Int]): Array[Byte] =
+    val writer = ImageIO.getImageWritersByFormatName("gif").next()
+    val out = new ByteArrayOutputStream()
+    val stream = ImageIO.createImageOutputStream(out)
+    writer.setOutput(stream)
+    writer.prepareWriteSequence(null)
+
+    frames.zip(delaysCs).foreach {
+      case (frame, delayCs) =>
+        val metadata = writer.getDefaultImageMetadata(ImageTypeSpecifier.createFromRenderedImage(frame), null)
+        val format = metadata.getNativeMetadataFormatName
+        val root = metadata.getAsTree(format).asInstanceOf[IIOMetadataNode]
+        val control = new IIOMetadataNode("GraphicControlExtension")
+        control.setAttribute("disposalMethod", "none")
+        control.setAttribute("userInputFlag", "FALSE")
+        control.setAttribute("transparentColorFlag", "FALSE")
+        control.setAttribute("delayTime", delayCs.toString)
+        control.setAttribute("transparentColorIndex", "0")
+        root.appendChild(control)
+        metadata.setFromTree(format, root)
+        writer.writeToSequence(new IIOImage(frame, null, metadata), null)
+    }
+
+    writer.endWriteSequence()
+    stream.close()
+    writer.dispose()
+    out.toByteArray
 }

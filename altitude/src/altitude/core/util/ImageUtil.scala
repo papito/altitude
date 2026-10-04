@@ -9,11 +9,18 @@ import java.awt.Graphics2D
 import java.awt.geom.AffineTransform
 import java.awt.image.AffineTransformOp
 import java.awt.image.BufferedImage
+import java.awt.image.DataBufferByte
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import javax.imageio.ImageIO
+import javax.imageio.ImageReader
+import javax.imageio.metadata.IIOMetadataNode
+import org.opencv.core.Core
+import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfByte
+import org.opencv.core.MatOfInt
 import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
@@ -23,16 +30,62 @@ import altitude.core.ImageException
 object ImageUtil:
 
   // Get OPENCV image Mat from a byte array
-  def matFromBytes(data: Array[Byte]): Mat = decode(data, Imgcodecs.IMREAD_ANYCOLOR)
+  def matFromBytes(data: Array[Byte]): Mat = decode(data, Imgcodecs.IMREAD_ANYCOLOR, keepAlpha = false)
 
   /**
-   * Decodes an image with OpenCV. Data no codec decodes is an [[ImageException]]: the size is read from the header alone, so a
-   * file whose data is corrupt, or a format OpenCV has no codec for, is found here.
+   * Decodes an image with OpenCV or, for a format the bundled OpenCV has no codec for (GIF among them), with ImageIO, which gives
+   * an animated image's first frame. `keepAlpha` is what the flags ask of OpenCV, for the fallback to do the same. Data neither
+   * decodes is an [[ImageException]]: the size is read from the header alone, so a file whose data is corrupt is found here.
    */
-  private def decode(data: Array[Byte], flags: Int): Mat =
+  private def decode(data: Array[Byte], flags: Int, keepAlpha: Boolean): Mat =
     val image = Imgcodecs.imdecode(new MatOfByte(data*), flags)
-    if image.empty() then throw ImageException("OpenCV cannot decode the image")
-    image
+    if !image.empty() then return image
+
+    val decoded =
+      try Option(ImageIO.read(new ByteArrayInputStream(data)))
+      catch case ex: IOException => throw ImageException(s"Cannot decode the image: ${ex.getMessage}")
+    matFromImage(decoded.getOrElse(throw ImageException("Neither OpenCV nor ImageIO can decode the image")), keepAlpha)
+
+  /** An image ImageIO decoded, laid out as OpenCV decodes one: BGR, or BGRA when asked to keep an alpha channel it has */
+  private def matFromImage(image: BufferedImage, keepAlpha: Boolean): Mat =
+    val withAlpha = keepAlpha && image.getColorModel.hasAlpha
+    val (imageType, matType) =
+      if withAlpha then (BufferedImage.TYPE_4BYTE_ABGR, CvType.CV_8UC4) else (BufferedImage.TYPE_3BYTE_BGR, CvType.CV_8UC3)
+
+    val converted = new BufferedImage(image.getWidth, image.getHeight, imageType)
+    val drawing = converted.createGraphics()
+    drawing.drawImage(image, 0, 0, null)
+    drawing.dispose()
+
+    // The raster holds the bytes of each pixel in the order its type names: B, G, R or A, B, G, R
+    val mat = new Mat(image.getHeight, image.getWidth, matType)
+    mat.put(0, 0, converted.getRaster.getDataBuffer.asInstanceOf[DataBufferByte].getData)
+    if !withAlpha then return mat
+
+    val bgra = new Mat(image.getHeight, image.getWidth, CvType.CV_8UC4)
+    Core.mixChannels(java.util.List.of(mat), java.util.List.of(bgra), new MatOfInt(0, 3, 1, 0, 2, 1, 3, 2))
+    mat.release()
+    bgra
+
+  /**
+   * An animated GIF's playing time, the sum of its frames' delays, from the header, without decoding a frame; `None` for a still
+   * one. A frame without a delay, or one of 10 ms or less, plays for 100 ms, as browsers show it. The reader's input is set with
+   * its metadata and able to seek back (`reader.setInput(input)`), for the frames to be counted and read.
+   */
+  def gifPlayingTimeMs(reader: ImageReader): Option[Long] =
+    val frames = reader.getNumImages(true)
+    Option.when(frames > 1) {
+      (0 until frames).map {
+        frame =>
+          val metadata = reader.getImageMetadata(frame)
+          val control = metadata
+            .getAsTree(metadata.getNativeMetadataFormatName)
+            .asInstanceOf[IIOMetadataNode]
+            .getElementsByTagName("GraphicControlExtension")
+          val delayCs = Option(control.item(0)).map(_.asInstanceOf[IIOMetadataNode].getAttribute("delayTime").toInt).getOrElse(0)
+          if delayCs <= 1 then 100L else delayCs * 10L
+      }.sum
+    }
 
   def determineImageScale(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): Double =
     val scaleX = targetWidth.toDouble / sourceWidth
@@ -54,7 +107,7 @@ object ImageUtil:
      * https://sirv.com/help/articles/rotate-photos-to-be-upright/
      * https://stackoverflow.com/questions/5905868/how-to-rotate-jpeg-images-based-on-the-orientation-metadata
      */
-    val imageMat = decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION)
+    val imageMat = decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION, keepAlpha = true)
     val scaleFactor = determineImageScale(imageMat.width(), imageMat.height(), previewBoxSize, previewBoxSize)
 
     val resizedMat = new Mat()

@@ -73,10 +73,16 @@ class FaceRecognitionService(val app: Altitude):
   /** A face seen in fewer Sampled frames of a Video is match-only there */
   private val minClusterFrames: Int = app.config.getInt(Const.Conf.VIDEO_FACES_MIN_CLUSTER_FRAMES)
 
-  /** The faces of an asset, found without touching the database; [[recognizeAndStore]] matches and stores them */
+  /**
+   * The faces of an asset, found without touching the database; [[recognizeAndStore]] matches and stores them. An animated image,
+   * an image with a duration, is not searched for faces.
+   */
   def detect(dataAsset: AssetWithData): DetectedFaces =
     dataAsset.asset.assetType.mediaType match
       case "video" => detectInVideo(dataAsset)
+      case _ if dataAsset.asset.durationMs.isDefined =>
+        logger.debug(s"Not detecting faces in animated ${dataAsset.asset}")
+        DetectedFaces(Nil)
       case _ => detectInImage(dataAsset)
 
   /**

@@ -82,7 +82,7 @@ CREATE TABLE asset (
   -- WGS84 decimal degrees, parsed from the file's GPS metadata on import only (GeoLocationResolver). NULL when it carried none.
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
-  -- A Video's length; NULL for an image.
+  -- How long a Video or an animated GIF plays; NULL for a still image.
   duration_ms BIGINT
 ) INHERITS (_core) WITH (toast_tuple_target = 128);
 

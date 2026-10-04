@@ -8,8 +8,9 @@
    cursor of the page. Every other cell carries none.
    `alt-has-no-date` keeps its name: the controller tests assert on it. The cell's `id` is `asset-<id>` unless the grid
    holds the asset more than once (a Location grouping passes `asset-<id>-in-<locationId>`); `data-asset-id` on the
-   thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; a Video's cell
-   wears a play badge over its Preview and shows its duration among the metadata. *@
+   thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; the cell of an
+   asset that plays, a Video or an animated GIF, wears a play badge over its Preview and shows its duration among the
+   metadata. *@
 @(asset: Asset, isContinuousScroll: Boolean, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
 @defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>

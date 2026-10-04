@@ -14,6 +14,7 @@ import altitude.core.dao.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.MimedPreviewData
+import altitude.core.util.ImageUtil
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
@@ -102,10 +103,10 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       case _ => new Array[Byte](0)
 
   /**
-   * The display size and, for a Video, the length. An image's size is read from its header, without decoding it, which face
-   * detection and the preview each do; a Video's has the container's rotation applied, so a portrait phone recording is portrait.
-   * An image no reader takes, or whose header it cannot read, is an [[ImageException]], a Video FFmpeg cannot open a
-   * [[altitude.core.VideoException]].
+   * The display size and, for a Video or an animated GIF, the length. An image's size is read from its header, without decoding
+   * it, which face detection and the preview each do, and so is an animated GIF's playing time; a Video's size has the
+   * container's rotation applied, so a portrait phone recording is portrait. An image no reader takes, or whose header it cannot
+   * read, is an [[ImageException]], a Video FFmpeg cannot open a [[altitude.core.VideoException]].
    */
   def getDimensionsAndDuration(dataAsset: AssetWithData): (Int, Int, Option[Long]) /* width, height, duration */ =
     dataAsset.asset.assetType.mediaType match
@@ -116,8 +117,11 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
           if !readers.hasNext then throw ImageException(s"No image reader takes ${dataAsset.path}")
           val reader = readers.next()
           try
-            reader.setInput(input, true, true)
-            (reader.getWidth(0), reader.getHeight(0), None)
+            // Seekable and with its metadata, so a GIF's frames can be counted and their delays read
+            reader.setInput(input)
+            // GIF alone: a multi-page TIFF also holds several images, and is no animation
+            val durationMs = if reader.getFormatName == "gif" then ImageUtil.gifPlayingTimeMs(reader) else None
+            (reader.getWidth(0), reader.getHeight(0), durationMs)
           catch case ex: IOException => throw ImageException(s"Cannot read the header of ${dataAsset.path}: ${ex.getMessage}")
           finally reader.dispose()
         finally input.close()
