@@ -18,7 +18,8 @@ import altitude.core.RequestContext
 import altitude.core.ThreadVariable
 
 object TransactionManager:
-  def apply(config: Config): TransactionManager = new TransactionManager(config)
+  def apply(config: Config, explainer: Option[SqlExplainer] = None): TransactionManager =
+    new TransactionManager(config, explainer)
 
 /**
  * Connections and the transactions on them. Every transaction runs on a connection borrowed from a HikariCP pool and carried by
@@ -36,8 +37,11 @@ object TransactionManager:
  *
  * Both engines end a read transaction with a rollback: it has nothing to keep. A rollback that fails is logged, so a failed
  * transaction always fails with its own exception.
+ *
+ * A manager given an `explainer` (development only) hands out each connection wrapped in an [[ExplainingConnection]], which
+ * offers the explainer every DML statement prepared on it. Without one, a transaction runs on the pooled connection itself.
  */
-class TransactionManager(val config: Config):
+class TransactionManager(val config: Config, explainer: Option[SqlExplainer] = None):
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -78,7 +82,7 @@ class TransactionManager(val config: Config):
       // On SQLite this begins the transaction, IMMEDIATE on the write connection
       conn.setAutoCommit(false)
       if readOnly && engine == Const.DbEngineName.POSTGRES then beginPostgresRead(conn)
-      conn
+      explainer.fold(conn)(ExplainingConnection(conn, _))
     catch
       case ex: Exception =>
         conn.close()

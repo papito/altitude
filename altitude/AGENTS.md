@@ -210,6 +210,12 @@ The map never receives a result set: a repository can hold millions of assets, s
 
 `MapController` exposes `/api/map/r/:repoId/cells?viewport=s,w,n,e&zoom=n` (`cells`, `locations`, `countsPlottedPoints: true`), `/bounds` (the four bounds and plotted count, or `{count: 0}`), and `/geocode?q=` (camelCase `{label, latitude, longitude}` entries). Cells and bounds take the shared scope and, through `cask.QueryParams`, accept the client's search parameters verbatim: the ones that only shape a grid (`sort`, `layout`, grouping, paging) and the `bbox` filter are ignored, so the map behind an open panel plots the whole search. A scope the parser refuses (Search text with the trash view) is a JSON 400 carrying its message. `viewport` (`Api.Field.Map`) is the map's own clipping box, passed separately to the service and never an asset filter: a visible Location counts every member of the search even when its own GPS point is outside the viewport. A missing or malformed `viewport` and a non-integer `zoom` are JSON 400s naming the parameter; out-of-range integer zooms use the service's 0..20 clamp. JSON routes build their responses with `BaseController.jsonResponse` / `jsonError`. The geocoder is a JSON 404 when disabled and a JSON 502 on an upstream `GeocoderException`. All Location and Map routes require login.
 
+**SQL explain log** (`transactions/SqlExplainer.scala`, `transactions/ExplainingConnection.scala`). A development aid, off by default: with `dev.sql_explain=true` in `application-dev.conf` and `ENV=dev` (any other environment ignores the key with a WARN), `Altitude` gives its `TransactionManager` a `SqlExplainer`, and `connection(readOnly)` then hands out each connection wrapped in a `java.lang.reflect.Proxy`. The proxy forwards everything and offers the explainer every prepared statement whose first keyword is `SELECT`, `WITH`, `INSERT`, `UPDATE` or `DELETE`, with its recorded binds, just before it first runs or is added to a batch; statements run through `createStatement` are never explained: transaction housekeeping, DDL, and also a statement with no bind values, which both ScalaSql (an update) and commons-dbutils' `QueryRunner` send that way (`SELECT nextval(...)`, an unfiltered count). No DAO knows about it, and with the switch off a transaction runs on the pooled connection itself.
+
+- A query is explained the first time its shape is seen in the process: the SQL with whitespace collapsed, a placeholder list reduced to one placeholder and numeric literals replaced by a marker, so the permutations of one query log once.
+- The explain runs on the statement's own connection with the same binds. PostgreSQL: `EXPLAIN (ANALYZE, BUFFERS, SETTINGS)` for a read, which runs the read one extra time, and `EXPLAIN (SETTINGS)` for anything containing the word `INSERT`, `UPDATE` or `DELETE`, which is never executed; both inside a savepoint that is rolled back, so a refused or timed-out explain does not abort the transaction. SQLite: `EXPLAIN QUERY PLAN`. A failed explain is logged in place of the plan and never reaches the request. `RequestContext` query counts do not change.
+- Entries go to `sql-debug.log` in `Environment.ROOT_PATH` (git-ignored), emptied when the server starts: a numbered header (`READ`/`WRITE`, time), `Origin` (the innermost `altitude.*` frame, the DAO line) and, for a DAO statement, `Called from` (the first frame above it outside `altitude.core.dao`), the SQL as prepared, a `Runnable` form with the first-seen values as literals, and the engine's plan verbatim.
+
 ## Schema migrations
 
 `schemaVersion` in `Altitude.scala` is the current version. A fresh database (version 0) runs `migrations/<engine>/all.sql` once and is stamped with the current version. `MigrationService` can still run `migrations/<engine>/<version>.sql` for each version an existing database is behind, but no such files exist: the rule in force (root `AGENTS.md`) is that every schema change goes into both `all.sql` files as original definitions, `schemaVersion` stays 2, and a database is recreated from scratch.
@@ -221,7 +227,7 @@ The map never receives a result set: a repository can hold millions of assets, s
 - **prod**: `application.conf` → `reference.conf`
 - **test**: system env overrides → the `reference.conf` files on the test classpath, merged with the main one first, so a key both files set keeps the main value (the test file's `db.engine` among them: controller tests run on SQLite). Test values that must differ are set in `Altitude`'s test branch: the test database URL and credentials, and a 2 s `db.postgres.read_statement_timeout`.
 
-To skip login during frontend dev work, set `dev.user` and `dev.password` in `application-dev.conf`.
+To skip login during frontend dev work, set `dev.user` and `dev.password` in `application-dev.conf`. To log the plan of each new query to `sql-debug.log`, set `dev.sql_explain=true` there (see "SQL explain log").
 
 ## Build & Test Commands
 
@@ -257,6 +263,7 @@ Integration tests extend `IntegrationTestCore`. `beforeEach` auto-creates a fres
 | `altitude/src/altitude/core/RequestContext.scala` | Thread-local connection/user/repo |
 | `altitude/src/altitude/core/routes/decorators.scala` | Auth + repo-context decorators |
 | `altitude/src/altitude/core/transactions/TransactionManager.scala` | Connection pools, read and write transactions, SQLite PRAGMAs, PostgreSQL read time limit |
+| `altitude/src/altitude/core/transactions/SqlExplainer.scala` | Dev-only SQL explain log (`dev.sql_explain`) |
 | `altitude/src/altitude/core/dao/jdbc/BaseDao.scala` | DAO base + query runner |
 | `altitude/src/altitude/core/service/BaseService.scala` | Service base + tx wrapping |
 | `altitude/src/altitude/core/service/ImportPipelineService.scala` | Pekko import pipeline |

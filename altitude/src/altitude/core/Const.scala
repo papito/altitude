@@ -47,6 +47,8 @@ object Const:
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"
+    // DEV-only: explain each new query once, into sql-debug.log
+    val DEV_SQL_EXPLAIN = "dev.sql_explain"
 
   object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3

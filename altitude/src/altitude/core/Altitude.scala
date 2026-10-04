@@ -41,6 +41,7 @@ import altitude.core.service.UserService
 import altitude.core.service.VideoService
 import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
+import altitude.core.transactions.SqlExplainer
 import altitude.core.transactions.TransactionManager
 
 class Altitude(val dbEngineOverride: Option[String] = None):
@@ -155,7 +156,18 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
   logger.debug(s"File store type: $fileStoreType")
 
-  final val txManager: TransactionManager = TransactionManager(app.config)
+  // The SQL explain log, for development only: any other environment ignores the switch
+  private val sqlExplainer: Option[SqlExplainer] =
+    if !config.getBoolean(Const.Conf.DEV_SQL_EXPLAIN) then None
+    else if Environment.CURRENT != Environment.Name.DEV then
+      logger.warn(s"${Const.Conf.DEV_SQL_EXPLAIN} is for the dev environment only: ignored")
+      None
+    else
+      val file = new File(Environment.ROOT_PATH, SqlExplainer.FILE_NAME)
+      logger.info(s"The SQL explain log is on: each new query is explained once, into $file")
+      Some(new SqlExplainer(dataSourceType, file))
+
+  final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer)
 
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
@@ -318,6 +330,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     sqliteOptimizing.foreach(_.cancel())
     txManager.optimize()
     txManager.shutdown()
+    sqlExplainer.foreach(_.close())
 
     // This is already done by default and will cause a warning
     // actorSystem.terminate()

@@ -22,6 +22,7 @@ import altitude.core.unit.SearchTextTests
 import altitude.core.unit.SearchWordsTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.SqlDialectTests
+import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
 import altitude.core.unit.UtilTests
@@ -52,5 +53,6 @@ abstract class AllUnitTestSuites
     new MurmurHashTests,
     new VideoServiceTests,
     new RangeStreamingTests,
-    new TransactionBoundaryTests
+    new TransactionBoundaryTests,
+    new SqlExplainerTests
   )

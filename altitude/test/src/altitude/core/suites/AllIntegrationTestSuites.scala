@@ -9,6 +9,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
   extends Suites(
     new SystemServiceTests(testApp),
     new TransactionManagerTests(testApp),
+    new SqlExplainLogTests(testApp),
     new AssetQueryTests(testApp),
     new AssetServiceTests(testApp),
     new AssetDateStorageTests(testApp),
