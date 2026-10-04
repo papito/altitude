@@ -27,6 +27,7 @@ import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.ImageException
 import altitude.core.NotFoundException
+import altitude.core.QueueRefusedException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
@@ -215,6 +216,27 @@ import altitude.core.util.Query
 
     pipeline.shutdown()
     importedCount() shouldBe batchSize
+  }
+
+  test("An offer to a shut-down import queue fails, and the upload's staged file is deleted") {
+
+    /**
+     * Setup:
+     *
+     * An import queue of the test's own, shut down, then an asset over a staged random image offered to it.
+     *
+     * Assertions:
+     *
+     * The offer fails with `QueueRefusedException`, and the staged file is gone.
+     */
+    val pipeline = ImportPipelineService(testApp)
+    pipeline.shutdown()
+
+    val upload = testContext.makeAssetWithData()
+    intercept[QueueRefusedException] {
+      Await.result(pipeline.addToQueue((upload, PipelineContext(testContext.repository, testContext.user))), 30.seconds)
+    }
+    Files.exists(upload.path) shouldBe false
   }
 
   test("An image that cannot be decoded is dropped, and the asset behind it is imported") {

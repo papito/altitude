@@ -77,6 +77,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
         val assetWithData = App.altitude.service.library.stagedFileToAsset(fileName, staged)
 
         logger.debug(s"Adding file to import queue: $fileName")
+        // Waits while the queue is full. A file the queue refuses fails the request, and the rest of the upload with it.
         val fut = App.altitude.service.importPipeline.addToQueue((assetWithData, pipelineContext))
         Await.result(fut, Duration.Inf)
 

@@ -2,7 +2,6 @@ package altitude.core.service
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
-import org.apache.pekko.stream.QueueOfferResult
 import org.apache.pekko.stream.scaladsl.Flow
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
@@ -41,6 +40,7 @@ class PurgePipelineService(app: Altitude):
   private val queue = QueuedPipeline[TAssetWithContext](
     "purge",
     combinedFlow,
+    describe = asset => s"asset [${asset._1.persistedId}]",
     bufferSize = app.parallelism * 2,
     maxConcurrentOffers = app.parallelism,
     shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala
@@ -67,10 +67,7 @@ class PurgePipelineService(app: Altitude):
           val assetId = asset._1.persistedId
           queue
             .offer(asset)
-            .map {
-              case QueueOfferResult.Enqueued => logger.trace(s"Asset [$assetId] queued for purging")
-              case result => logger.error(s"Asset [$assetId] not queued for purging: $result")
-            }
+            .map(_ => logger.trace(s"Asset [$assetId] queued for purging"))
             .recover { case ex => logger.error(s"Asset [$assetId] not queued for purging", ex) }
       }
       .run()

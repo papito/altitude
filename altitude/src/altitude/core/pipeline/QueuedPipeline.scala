@@ -20,15 +20,19 @@ import scala.concurrent.TimeoutException
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
+import scala.util.control.NonFatal
+
+import altitude.core.QueueRefusedException
 
 /**
  * A pipeline's flow run once, for the life of the app, behind a queue that elements are offered to: the import and the purge
  * queues. The queue buffers `bufferSize` elements and admits `maxConcurrentOffers` offers at once, and backpressures beyond that.
- * The stream runs until [[shutdown]] completes the queue.
+ * The stream runs until [[shutdown]] completes the queue. `describe` names an element in the log.
  */
 class QueuedPipeline[In](
     name: String,
     flow: Flow[In, ?, NotUsed],
+    describe: In => String,
     bufferSize: Int,
     maxConcurrentOffers: Int,
     shutdownTimeout: FiniteDuration)(using system: ActorSystem[?]):
@@ -70,7 +74,27 @@ class QueuedPipeline[In](
     (queue, done)
   }
 
-  def offer(element: In): Future[QueueOfferResult] = queue.offer(element)
+  /**
+   * Offers an element to the queue, waiting while the queue is full. The future fails with [[QueueRefusedException]] when the
+   * queue does not take the element: it dropped it, it is closed, or its stream has stopped.
+   */
+  def offer(element: In): Future[Unit] =
+    val offered =
+      try queue.offer(element)
+      catch case NonFatal(e) => Future.failed(e)
+
+    offered.transform {
+      case Success(QueueOfferResult.Enqueued) => Success(())
+      case Success(QueueOfferResult.Failure(cause)) => Failure(refused(element, cause.toString, cause))
+      case Success(result) => Failure(refused(element, result.toString, null))
+      case Failure(cause) => Failure(refused(element, cause.toString, cause))
+    }
+
+  private def refused(element: In, reason: String, cause: Throwable | Null): QueueRefusedException =
+    val refusal = QueueRefusedException(s"The $name queue refused ${describe(element)}: $reason")
+    refusal.initCause(cause)
+    logger.warn(refusal.getMessage)
+    refusal
 
   /**
    * Takes no more elements and waits, up to the timeout, for the stream to finish those it has accepted, so they are not cut off

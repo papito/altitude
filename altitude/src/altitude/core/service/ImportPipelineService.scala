@@ -2,7 +2,6 @@ package altitude.core.service
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
-import org.apache.pekko.stream.QueueOfferResult
 import org.apache.pekko.stream.scaladsl.Flow
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
@@ -11,6 +10,8 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 import scala.jdk.DurationConverters.*
+import scala.util.Failure
+import scala.util.Success
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
@@ -81,6 +82,7 @@ class ImportPipelineService(app: Altitude):
   private val queue = QueuedPipeline[TDataAssetWithContext](
     "import",
     combinedFlow,
+    describe = _._1.asset.fileName,
     bufferSize = app.parallelism * 2,
     maxConcurrentOffers = app.parallelism,
     shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala
@@ -94,18 +96,17 @@ class ImportPipelineService(app: Altitude):
       .via(combinedFlow)
       .runWith(outputSink)
 
+  /**
+   * Offers a staged upload to the import queue. One the queue refuses has its staged file deleted, since nothing else would
+   * before the next startup, and fails with `QueueRefusedException`.
+   */
   def addToQueue(asset: TDataAssetWithContext): Future[Unit] =
+    val (dataAsset, _) = asset
     queue
       .offer(asset)
-      .map {
-        case QueueOfferResult.Enqueued =>
-          logger.debug(s"Added asset to the import queue: ${asset._1.asset.fileName}")
-        case QueueOfferResult.Dropped =>
-          logger.warn(s"Asset dropped from the import queue: ${asset._1.asset.fileName}")
-        case QueueOfferResult.Failure(ex) =>
-          logger.error(s"Failed to add asset to the import queue: ${asset._1.asset.fileName}", ex)
-        case QueueOfferResult.QueueClosed =>
-          logger.warn(s"Import queue closed, asset dropped: ${asset._1.asset.fileName}")
+      .andThen {
+        case Success(_) => logger.debug(s"Added asset to the import queue: ${dataAsset.asset.fileName}")
+        case Failure(_) => app.service.staging.discard(dataAsset.path)
       }(system.executionContext)
 
   def shutdown(): Unit = queue.shutdown()
