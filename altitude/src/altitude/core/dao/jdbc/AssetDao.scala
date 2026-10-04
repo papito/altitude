@@ -180,38 +180,43 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     runner.update(RequestContext.getConn, sql, updateValues*)
 
   override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
-    getAssetsByIdAndRecycledFlag(assetIds, isRecycled = false)
+    lockForTransition(Some(assetIds), isRecycled = Some(false))
 
-  override def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
-    if assetIds.isEmpty then return List.empty[Asset]
+  override def getAssetsToMove(assetIds: Set[String]): List[Asset] =
+    lockForTransition(Some(assetIds), isRecycled = None)
+
+  override def getAssetsToRestore(assetIds: Set[String]): List[Asset] =
+    lockForTransition(Some(assetIds), isRecycled = Some(true))
+
+  override def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
+    lockForTransition(assetIds, isRecycled = Some(true))
+
+  /**
+   * The context repository's completed assets that are not marked for purging, among the IDs when given, recycled or live when
+   * asked, locked until the transaction ends. The flags are literals, which each engine reads as its own boolean, so no bind
+   * value differs by engine.
+   */
+  private def lockForTransition(assetIds: Option[Set[String]], isRecycled: Option[Boolean]): List[Asset] =
+    if assetIds.exists(_.isEmpty) then return List.empty[Asset]
+
+    val idFilter = assetIds.fold("")(_ => s"AND id $inIdSet")
+    val recycledFilter = isRecycled.fold("")(flag => s"AND ${FieldConst.Asset.IS_RECYCLED} = ${if flag then "TRUE" else "FALSE"}")
 
     val sql = s"""
       SELECT asset.*,
              NULL AS ${FieldConst.Asset.USER_METADATA},
              NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
         FROM asset
-       WHERE id $inIdSet
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+         $idFilter
+         $recycledFilter
          $forUpdate
     """
 
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(idSet(assetIds)))
-    res.map(makeModel)
-
-  private def getAssetsByIdAndRecycledFlag(assetIds: Set[String], isRecycled: Boolean): List[Asset] =
-    if assetIds.isEmpty then return List.empty[Asset]
-
-    val sql = s"""
-      SELECT asset.*,
-             NULL AS ${FieldConst.Asset.USER_METADATA},
-             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
-        FROM asset
-       WHERE id $inIdSet
-         AND is_recycled = ?
-         $forUpdate
-    """
-
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(idSet(assetIds), nativeBool(isRecycled)))
-    res.map(makeModel)
+    val values = RequestContext.getRepository.persistedId :: assetIds.map(idSet).toList
+    manyBySqlQuery(sql, values).map(makeModel)
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
     val existingMetadata = getUserMetadata(assetId) match

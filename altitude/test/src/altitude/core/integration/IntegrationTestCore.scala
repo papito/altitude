@@ -80,4 +80,11 @@ abstract class IntegrationTestCore
   def switchContextRepo(repository: Repository): Unit = {
     testApp.service.repository.switchContextToRepository(repository)
   }
+
+  /** The context repository's six stored stats by dimension, without the totals, which are summed on read */
+  def storedStats: Map[String, Long] =
+    testApp.service.stats.getStats.stats
+      .filterNot(stat => stat.dimension == Stats.TOTAL_ASSETS || stat.dimension == Stats.TOTAL_BYTES)
+      .map(stat => stat.dimension -> stat.dimVal)
+      .toMap
 }

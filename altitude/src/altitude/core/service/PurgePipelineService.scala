@@ -76,19 +76,27 @@ class PurgePipelineService(app: Altitude):
 
     queue
 
-  def addToQueue(asset: TAssetWithContext): Future[Unit] =
-    queuePurgePipeline
-      .offer(asset)
-      .map {
-        case QueueOfferResult.Enqueued =>
-          logger.debug(s"Added asset to the purge queue: ${asset._1.fileName}")
-        case QueueOfferResult.Dropped =>
-          logger.warn(s"Asset dropped from the purge queue: ${asset._1.fileName}}")
-        case QueueOfferResult.Failure(ex) =>
-          logger.error(s"Failed to add asset to the purge queue: ${asset._1.fileName}", ex)
-        case QueueOfferResult.QueueClosed =>
-          logger.warn(s"Purge queue closed, asset dropped: ${asset._1.fileName}")
-      }(ExecutionContext.global)
+  /**
+   * Queues the assets for purging one at a time, offering each once the queue has taken the one before, so a recycle bin of any
+   * size is queued under the queue's backpressure while the caller goes on. An asset the queue does not take stays marked for
+   * purging, for the startup job to queue again.
+   */
+  def enqueue(assets: Seq[TAssetWithContext]): Unit =
+    given ExecutionContext = system.executionContext
+
+    Source(assets)
+      .mapAsync(1) {
+        asset =>
+          val assetId = asset._1.persistedId
+          queuePurgePipeline
+            .offer(asset)
+            .map {
+              case QueueOfferResult.Enqueued => logger.trace(s"Asset [$assetId] queued for purging")
+              case result => logger.error(s"Asset [$assetId] not queued for purging: $result")
+            }
+            .recover { case ex => logger.error(s"Asset [$assetId] not queued for purging", ex) }
+      }
+      .run()
 
   def shutdown(): Unit =
     queuePurgePipeline.complete()

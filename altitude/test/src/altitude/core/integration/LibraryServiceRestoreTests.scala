@@ -168,17 +168,16 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * One recycled asset in a folder, restored together with an unknown asset ID that is looked up after it.
+     * One recycled asset in a folder, restored together with an unknown asset ID.
      *
      * Assertions:
      *
-     * The restore fails on the unknown ID and is rolled back as a whole: the asset stays recycled and the stats are unchanged.
+     * The restore fails on the unknown ID and restores nothing: the asset stays recycled and the stats are unchanged.
      */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
     testApp.service.library.recycleAssets(Set(asset.persistedId))
 
-    // A two-element set keeps its insertion order: the asset is restored before the unknown ID fails
     intercept[NotFoundException] {
       testApp.service.library.restoreRecycledAssets(Set(asset.persistedId, "00000000-0000-0000-0000-000000000000"))
     }
@@ -187,6 +186,34 @@ import altitude.core.util.Query
     val stats = testApp.service.stats.getStats
     stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 1
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
+  }
+
+  test("Restoring an asset marked for purging restores nothing") {
+
+    /**
+     * Setup:
+     *
+     * One asset in a folder, recycled; then, in one transaction, so the purge queue cannot delete its row in between, it is
+     * purged and restored.
+     *
+     * Assertions:
+     *
+     * The restore reports nothing restored and no duplicate, the row stays recycled, and the stats only lose the purged asset:
+     * nothing is sorted and nothing recycled.
+     */
+    val folder1: Folder = testApp.service.folder.add("folder1")
+    val asset: Asset = testContext.persistAsset(folder = Some(folder1))
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+
+    testApp.txManager.withTransaction {
+      testApp.service.library.purgeSelectedAssets(Set(asset.persistedId))
+      val result = testApp.service.library.restoreRecycledAssets(Set(asset.persistedId))
+
+      result shouldBe RestoreResult(restored = Set.empty, duplicates = Set.empty)
+      (testApp.service.asset.getById(asset.persistedId): Asset).isRecycled shouldBe true
+    }
+
+    storedStats.values.toSet shouldBe Set(0L)
   }
 
   test("Restoring an asset into a recycled folder should restore the folder") {

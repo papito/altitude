@@ -44,9 +44,9 @@ CREATE TABLE repository (
 ) INHERITS (_core);
 
 CREATE TABLE stats (
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  dimension VARCHAR(60),
-  dim_val BIGINT NOT NULL DEFAULT 0
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  dimension VARCHAR(60) NOT NULL,
+  dim_val BIGINT NOT NULL DEFAULT 0 CHECK (dim_val >= 0)
 );
 
 CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);

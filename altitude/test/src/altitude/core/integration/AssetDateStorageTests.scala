@@ -128,7 +128,7 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * Two assets written through the DAO: one at -33.857, 151.2152 and one with no coordinates.
+     * Two assets written through the DAO and marked complete: one at -33.857, 151.2152 and one with no coordinates.
      *
      * Assertions:
      *
@@ -137,8 +137,9 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
      */
     val located = testContext.makeAsset().copy(latitude = Some(-33.857), longitude = Some(151.2152))
     val unlocated = testContext.makeAsset()
+    // Completed as an import completes them, since the locking read skips an unfinished import
     val ids = testApp.txManager.withTransaction {
-      List(located, unlocated).map(asset => testApp.DAO.asset.add(asset).persistedId)
+      List(located, unlocated).map(asset => testApp.service.asset.markAsCompleted(testApp.DAO.asset.add(asset)).persistedId)
     }
     val reread = ids.map(testApp.service.asset.getById)
     reread.head.latitude shouldBe Some(-33.857)

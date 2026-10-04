@@ -195,10 +195,13 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Move assets to their current folder repeatedly and verify no count or face drift; cover an empty selection. [EDGE]
 - [ ] Verify a failure during recycling rolls back asset flags, album removals, statistics, and person counts together. [CRITICAL]
 - ✅ A selection of 70,000 IDs is recycled and moved back, and a person's face counts are recycled and restored for it.
+- ✅ Moving an asset marked for purging into a folder changes neither its row nor any statistic.
+- ✅ Recycling and moving assets whose import never completed changes neither their rows nor any statistic.
+- ✅ Recycling, moving and restoring another repository's assets by ID changes neither repository's rows or statistics; the restore fails as for an unknown ID.
 
 ## Restoring recycled assets
 
-Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [LibraryServiceRestoreTests](../altitude/test/src/altitude/core/integration/LibraryServiceRestoreTests.scala), [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala).
+Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [LibraryServiceRestoreTests](../altitude/test/src/altitude/core/integration/LibraryServiceRestoreTests.scala), [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala).
 
 - ✅ Restore a recycled asset directly or by moving it to a folder.
 - ✅ Reject direct restoration when an active duplicate was imported after recycling.
@@ -206,9 +209,10 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ Restore triage-origin assets to triage with no folder; restore sorted assets to sorted state and update the appropriate asset-count statistics.
 - ✅ Restore person face counts and leave former album memberships absent.
 - [ ] Test the duplicate-content safeguard on restoration by move as well as direct restore; verify assets/counters remain unchanged on conflict. [MEDIUM]
-- [ ] Define/test repeated restoration and attempts to restore an already active or unknown ID. The checksum check precedes the recycled-state guard. [MEDIUM]
-- [ ] Restore multiple assets where one conflicts or fails; assert the intended partial-success/atomicity contract and counter consistency. Each asset currently has its own transaction. [MEDIUM]
-- [ ] Race restoration against queued purge, and verify an asset marked for permanent deletion cannot become visible again while its files/row are removed. [CRITICAL]
+- ✅ Restoring together with an unknown ID fails and restores nothing; a restore that skips a duplicate restores the rest and counts them.
+- ✅ Restoring an asset marked for purging restores nothing and changes no statistic.
+- ✅ Two requests restoring the same asset at once, the first holding its transaction until the second waits for it, restore it once and move the statistics once.
+- [ ] Restore an already active asset together with a recycled one and verify the active one is ignored. [MEDIUM]
 - [ ] Cover restoration into an ancestor path whose name now conflicts with a live folder, including rollback of already restored ancestors. [MEDIUM]
 - ✅ The recycle bin holds every recycled copy of the same content; restoring two copies together brings one back and reports the other as a duplicate, and importing the content while a copy is live is refused.
 
@@ -222,14 +226,17 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ `purgeRecycleBin` synchronously zeros recycled statistics; once its queued purge has deleted the recycled assets' records, the asset that was not recycled keeps its record, preview, file, faces and every face image.
 - ✅ Calling `purgeSelectedAssets` for one recycled asset leaves folder counts unchanged; this does not assert eventual deletion or recycle-bin accounting.
 - [ ] Await actual completion of `purgeSelectedAssets`, then assert selected rows/files/faces are gone and every unselected asset survives; after `purgeRecycleBin`, assert the recycled assets' files and faces are gone as well as their records. Most deletion assertions bypass the production queue via `run`. [CRITICAL]
-- [ ] Select only part of the recycle bin and verify exact remaining asset/byte statistics; include active, unknown, empty, and already queued IDs. [MEDIUM]
-- [ ] Repeat a purge request before the first queued purge finishes and verify no double decrement, negative counts, or duplicate destructive side effects. [MEDIUM]
-- [ ] Inject file deletion failure and database deletion failure at each stage; verify retained state supports the documented retry/recovery policy instead of reporting success with orphaned files or missing originals. [CRITICAL]
+- ✅ Purging one of two recycled assets, then emptying the trash, succeeds and leaves the recycled statistics at zero; two requests purging the same asset at once leave exactly the other asset in the recycled statistics.
+- ✅ Purging an asset that is already marked for purging takes it out of the recycled statistics only once.
+- [ ] Purge a selection holding active, unknown and no IDs, and verify the exact remaining statistics. [MEDIUM]
+- ✅ A recycle bin four times larger than the purge queue's buffer and concurrent offers is emptied completely.
+- ✅ A row whose database delete fails stays marked for purging and the queue goes on to purge the next asset.
+- [ ] Inject file deletion failures at each stage; verify retained state supports a retry instead of reporting success with orphaned files or missing originals. [CRITICAL]
 - [ ] Reject or otherwise safely handle non-recycled assets submitted to the purge service boundary; explicitly test the prerequisite contract for direct `run`/queue callers. [CRITICAL]
 - [ ] Purge assets containing hidden/bad-match people and people with multiple faces per asset; verify non-cover files are removed and cover files survive even when normal people queries filter those people out. [MEDIUM]
 - [ ] Interleave repositories in the purge queue and verify only the supplied context's files/rows are affected. [CRITICAL]
-- [ ] Test queue closure/failure, pending work at shutdown, and recovery of marked-but-not-deleted assets after an interrupted process. [CRITICAL]
-- [ ] Force a recycle-stat mismatch during purge marking and assert the transaction leaves flags/statistics unchanged on failure. [MEDIUM]
+- ✅ An asset left marked for purging is purged, row, file and preview, once `requeuePurgePending` queues it again.
+- [ ] Test queue closure and pending work at shutdown. [CRITICAL]
 
 ## Pruning unfinished imports and iterating repositories
 
@@ -244,7 +251,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 
 ## Global statistics
 
-Sources: [StatsService](../altitude/src/altitude/core/service/StatsService.scala). Evidence: [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [LibraryServiceRestoreTests](../altitude/test/src/altitude/core/integration/LibraryServiceRestoreTests.scala).
+Sources: [StatsService](../altitude/src/altitude/core/service/StatsService.scala), [StatDao](../altitude/src/altitude/core/dao/jdbc/StatDao.scala). Evidence: [StatsServiceTests](../altitude/test/src/altitude/core/integration/StatsServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [LibraryServiceRestoreTests](../altitude/test/src/altitude/core/integration/LibraryServiceRestoreTests.scala).
 
 - ✅ Assemble totals from sorted, triaged, and recycled dimensions and verify byte totals before and after moving the triaged asset into a folder.
 - ✅ Update counts/bytes for sorted-asset recycling and folder recycling; an entirely repeated recycle selection changes nothing, and a selection that includes an already recycled asset counts only the newly recycled one.
@@ -252,9 +259,11 @@ Sources: [StatsService](../altitude/src/altitude/core/service/StatsService.scala
 - ✅ Read zero total assets/bytes from a new repository while the previous repository has data.
 - [ ] Re-read and assert byte counters after every move/restore using assets of different sizes; every `Test totals` fixture has the same size. [MEDIUM]
 - [ ] Verify all six dimensions in both populated repositories after mutations; the second repository in `Test totals` is empty. [MEDIUM]
-- [ ] Directly exercise public `moveAsset` and `recycleAsset` branches, including recycled-triage assets and ordinary moves. Library bulk operations perform their own accounting and do not test these methods. [MEDIUM]
-- [ ] Verify rollback and concurrent increments/decrements preserve totals with no lost updates. [MEDIUM]
-- [ ] Cover byte totals above `Int.MaxValue`, zero-sized assets, missing statistics dimensions, and invalid decrements according to the chosen contract. [EDGE]
+- ✅ Stat writes outside a transaction open their own; a recycled asset is counted as recycled and `transition` moves it back to triage.
+- ✅ A write to a dimension with no stat row fails; a write that would take a stat below zero fails and leaves every dimension it wrote unchanged.
+- ✅ Reconciling sets all six statistics to the assets that count (purge-pending and unfinished assets excluded, an asset recycled from triage counted as recycled) and reports the wrong ones with their old values; correct statistics are left alone and nothing is reported; a repository with no assets reconciles to zeros.
+- [ ] Run two operations that write overlapping statistics concurrently on PostgreSQL and verify neither deadlocks. [MEDIUM]
+- [ ] Cover byte totals above `Int.MaxValue` and zero-sized assets. [EDGE]
 
 ## Metadata field definitions and value editing
 

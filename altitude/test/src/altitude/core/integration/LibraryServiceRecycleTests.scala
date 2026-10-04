@@ -275,4 +275,99 @@ import altitude.core.util.Query
     stats.getStatValue(Stats.SORTED_ASSETS) shouldBe 1
     stats.getStatValue(Stats.SORTED_BYTES) shouldBe asset.sizeBytes
   }
+
+  test("Moving an asset marked for purging into a folder changes no stat and no row") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the root folder, recycled; then, in one transaction, so the purge queue cannot delete its row in between, it
+     * is purged and moved into a new folder.
+     *
+     * Assertions:
+     *
+     * The move leaves the row as the purge marked it, still recycled in the root folder, and the stats only lose the purged
+     * asset: nothing is sorted and nothing recycled.
+     */
+    val asset = testContext.persistAsset()
+    val folder: Folder = testApp.service.folder.add("folder1")
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+
+    testApp.txManager.withTransaction {
+      testApp.service.library.purgeSelectedAssets(Set(asset.persistedId))
+      testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), folder.persistedId)
+
+      val unmoved: Asset = testApp.service.asset.getById(asset.persistedId)
+      unmoved.isRecycled shouldBe true
+      unmoved.folderId shouldBe testContext.repository.rootFolderId
+    }
+
+    storedStats.values.toSet shouldBe Set(0L)
+  }
+
+  test("Recycling and moving assets whose import has not finished changes no stat and no row") {
+
+    /**
+     * Setup:
+     *
+     * Two assets persisted by the import's index stage and never completed, so never counted: one in the root folder and one in
+     * triage. The first is recycled and the second moved into a new folder.
+     *
+     * Assertions:
+     *
+     * Neither row changes, the first still live and the second still in triage with no folder, and every stat stays at zero.
+     */
+    val unfinished = testApp.service.library.persistAndIndex(testContext.makeAsset())
+    val unfinishedTriaged = testApp.service.library.persistAndIndex(testContext.makeAsset(isTriaged = true))
+    val folder: Folder = testApp.service.folder.add("folder1")
+
+    testApp.service.library.recycleAssets(Set(unfinished.persistedId))
+    testApp.service.library.moveAssetsToFolder(Set(unfinishedTriaged.persistedId), folder.persistedId)
+
+    (testApp.service.asset.getById(unfinished.persistedId): Asset).isRecycled shouldBe false
+    val unmoved: Asset = testApp.service.asset.getById(unfinishedTriaged.persistedId)
+    unmoved.isTriaged shouldBe true
+    unmoved.folderId shouldBe ""
+    storedStats.values.toSet shouldBe Set(0L)
+  }
+
+  test("Recycling, moving and restoring another repository's assets changes neither repository") {
+
+    /**
+     * Setup:
+     *
+     * A folder in the first repository; a live and a recycled asset in a second one. In the first repository's context, the live
+     * asset is recycled, the recycled one moved into the folder, then restored.
+     *
+     * Assertions:
+     *
+     * Recycling and moving skip the foreign IDs and restoring fails as for an unknown ID. Neither repository's stats change, the
+     * live asset stays live and the recycled one stays recycled where it was.
+     */
+    val firstRepo: Repository = testContext.repository
+    val folder: Folder = testApp.service.folder.add("folder1")
+    val firstStats = storedStats
+
+    val secondRepo: Repository = testContext.persistRepository()
+    switchContextRepo(secondRepo)
+    val live = testContext.persistAsset(repository = Some(secondRepo))
+    val recycled = testContext.persistAsset(repository = Some(secondRepo))
+    testApp.service.library.recycleAssets(Set(recycled.persistedId))
+    val secondStats = storedStats
+
+    switchContextRepo(firstRepo)
+    testApp.service.library.recycleAssets(Set(live.persistedId))
+    testApp.service.library.moveAssetsToFolder(Set(recycled.persistedId), folder.persistedId)
+    intercept[NotFoundException] {
+      testApp.service.library.restoreRecycledAssets(Set(recycled.persistedId))
+    }
+    storedStats shouldBe firstStats
+
+    switchContextRepo(secondRepo)
+    storedStats shouldBe secondStats
+    (testApp.service.asset.getById(live.persistedId): Asset).isRecycled shouldBe false
+    val stillRecycled: Asset = testApp.service.asset.getById(recycled.persistedId)
+    stillRecycled.isRecycled shouldBe true
+    stillRecycled.folderId shouldBe secondRepo.rootFolderId
+  }
 }

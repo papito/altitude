@@ -143,12 +143,24 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   def getPreview(assetId: String): MimedPreviewData =
     app.service.fileStore.getPreviewById(assetId)
 
+  // The rows a library operation may change, locked for the caller's transaction, so each is a write: see `AssetDao`
+
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
-    txManager.asReadOnly {
+    txManager.withTransaction {
       dao.getAssetsToRecycle(assetIds)
     }
 
-  def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
-    txManager.asReadOnly {
-      dao.getAssetsToMove(assetIds, folderId)
+  def getAssetsToMove(assetIds: Set[String]): List[Asset] =
+    txManager.withTransaction {
+      dao.getAssetsToMove(assetIds)
+    }
+
+  def getAssetsToRestore(assetIds: Set[String]): List[Asset] =
+    txManager.withTransaction {
+      dao.getAssetsToRestore(assetIds)
+    }
+
+  def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
+    txManager.withTransaction {
+      dao.getAssetsToPurge(assetIds)
     }

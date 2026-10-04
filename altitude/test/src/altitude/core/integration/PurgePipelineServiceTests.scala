@@ -14,6 +14,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.models.Asset
 import altitude.core.models.Face
@@ -24,6 +26,33 @@ import altitude.core.pipeline.sinks.VoidAssetSink
 import altitude.core.util.Query
 
 @DoNotDiscover class PurgePipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+
+  private def eventually[T](f: => T): T =
+    Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(100, Millis)))(f)
+
+  /** Has the database refuse to delete the asset's row, as a failing statement would, until the returned cleanup runs */
+  private def refuseDeleting(assetId: String): () => Unit = {
+    val (create, drop) = testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES =>
+        (
+          List(
+            "CREATE FUNCTION refuse_asset_delete() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
+              "LANGUAGE plpgsql",
+            s"CREATE TRIGGER refuse_asset_delete BEFORE DELETE ON asset FOR EACH ROW WHEN (OLD.id = '$assetId') " +
+              "EXECUTE FUNCTION refuse_asset_delete()"
+          ),
+          List("DROP TRIGGER refuse_asset_delete ON asset", "DROP FUNCTION refuse_asset_delete()"))
+      case _ =>
+        (
+          List(
+            s"CREATE TRIGGER refuse_asset_delete BEFORE DELETE ON asset WHEN OLD.id = '$assetId' " +
+              "BEGIN SELECT RAISE(ABORT, 'Refused by the test'); END"),
+          List("DROP TRIGGER refuse_asset_delete"))
+    }
+
+    testApp.txManager.withTransaction(create.foreach(update(_)))
+    () => testApp.txManager.withTransaction(drop.foreach(update(_)))
+  }
 
   test("Purging assets should remove asset data from DB and file store") {
 
@@ -302,5 +331,93 @@ import altitude.core.util.Query
         testApp.service.fileStore.getDetectedFaceById(face.persistedId)
       }
     }
+  }
+
+  test("A recycle bin larger than the purge queue admits at once is emptied completely") {
+
+    /**
+     * Setup:
+     *
+     * Four times as many recycled assets as the purge queue buffers and accepts offers for (`parallelism` times two, and
+     * `parallelism`), persisted and completed without files, and the recycle bin emptied.
+     *
+     * Assertions:
+     *
+     * The purge queue deletes every one of them.
+     */
+    val binSize = testApp.parallelism * 4
+    // Distinct checksums, since only one live asset of a content is allowed
+    val ids = (1 to binSize).map {
+      checksum =>
+        val asset = testApp.service.library.persistAndIndex(testContext.makeAsset().copy(checksum = checksum))
+        testApp.service.library.completeImport(asset).persistedId
+    }.toSet
+    testApp.service.library.recycleAssets(ids)
+
+    testApp.service.library.purgeRecycleBin()
+
+    eventually {
+      testApp.service.asset.queryAll(new Query()).total shouldBe 0
+    }
+  }
+
+  test("An asset whose row cannot be deleted does not stop the purge queue") {
+
+    /**
+     * Setup:
+     *
+     * Two recycled assets, the database refusing to delete the first one's row. The first is purged and, once the queue has
+     * deleted its files, so it is ahead of the second, the second is purged.
+     *
+     * Assertions:
+     *
+     * The queue goes on to delete the second asset's row and file. The first asset's row stays, still marked for purging, for the
+     * startup job to queue again.
+     */
+    val refused = testContext.persistAsset()
+    val next = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(refused.persistedId, next.persistedId))
+
+    val allowDeleting = refuseDeleting(refused.persistedId)
+    try {
+      testApp.service.library.purgeSelectedAssets(Set(refused.persistedId))
+      eventually {
+        intercept[NotFoundException](testApp.service.fileStore.getAssetById(refused.persistedId))
+      }
+
+      testApp.service.library.purgeSelectedAssets(Set(next.persistedId))
+      eventually {
+        intercept[NotFoundException](testApp.service.asset.getById(next.persistedId))
+      }
+    } finally allowDeleting()
+
+    intercept[NotFoundException](testApp.service.fileStore.getAssetById(next.persistedId))
+    val left = testApp.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true)).records
+    left.map(_.persistedId) shouldBe List(refused.persistedId)
+  }
+
+  test("An asset left marked for purging is purged once the startup job queues it again") {
+
+    /**
+     * Setup:
+     *
+     * A recycled asset marked for purging directly, as a purge leaves it when the app stops before the queue deletes it; then the
+     * startup job that queues such assets again.
+     *
+     * Assertions:
+     *
+     * The asset's row, file and preview are deleted.
+     */
+    val asset = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+    testApp.service.asset.updateById(asset.persistedId, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    testApp.service.library.requeuePurgePending()
+
+    eventually {
+      intercept[NotFoundException](testApp.service.asset.getById(asset.persistedId))
+    }
+    intercept[NotFoundException](testApp.service.fileStore.getAssetById(asset.persistedId))
+    intercept[NotFoundException](testApp.service.fileStore.getPreviewById(asset.persistedId))
   }
 }

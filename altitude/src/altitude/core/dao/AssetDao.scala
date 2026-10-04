@@ -20,8 +20,21 @@ trait AssetDao extends BaseDao[Asset]:
   override def query(q: Query): QueryResult[Asset] =
     throw NotImplementedError("Can only directly query recycled and not recycled data sets")
 
-  def getAssetsToRecycle(assetIds: Set[String]): List[Asset] = throw NotImplementedError("")
+  /*
+   * The rows a library operation may change, read and locked in one select: the context repository's assets whose import is
+   * complete and that are not marked for purging. An operation counts its stat changes from these rows and updates exactly them.
+   */
 
-  def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] = throw NotImplementedError("")
+  /** The live assets among the IDs */
+  def getAssetsToRecycle(assetIds: Set[String]): List[Asset]
+
+  /** The live and recycled assets among the IDs */
+  def getAssetsToMove(assetIds: Set[String]): List[Asset]
+
+  /** The recycled assets among the IDs */
+  def getAssetsToRestore(assetIds: Set[String]): List[Asset]
+
+  /** The recycled assets among the IDs, or the whole recycle bin */
+  def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset]
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit

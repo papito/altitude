@@ -1,15 +1,27 @@
 package altitude.core.integration
 
 import altitude.test.TestContext
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
+import org.scalatest.concurrent.Eventually
+import org.scalatest.matchers.should.Matchers.empty
 import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.ConstraintException
+import altitude.core.FieldConst
+import altitude.core.NotFoundException
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Stats
@@ -19,6 +31,91 @@ import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.util.Query
 
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+
+  private val sixStats = List(
+    Stats.SORTED_ASSETS,
+    Stats.SORTED_BYTES,
+    Stats.TRIAGE_ASSETS,
+    Stats.TRIAGE_BYTES,
+    Stats.RECYCLED_ASSETS,
+    Stats.RECYCLED_BYTES)
+
+  /** Sets every stored stat of the context repository to the value, behind the services' back */
+  private def setEveryStat(value: Long): Unit =
+    testApp.txManager.withTransaction {
+      update("UPDATE stats SET dim_val = ? WHERE repository_id = ?", value, testContext.repository.persistedId)
+    }
+
+  /** An asset of the size, persisted and counted as an import does, without its file */
+  private def importedAsset(sizeBytes: Long, isTriaged: Boolean = false): Asset = {
+    val asset = testContext.makeAsset(isTriaged = isTriaged).copy(sizeBytes = sizeBytes)
+    testApp.service.library.completeImport(testApp.service.library.persistAndIndex(asset))
+  }
+
+  /** Runs `f` on a thread of its own, which inherits the test's repository and account but not its transaction */
+  private def onAnotherThread(f: => Unit): (Thread, AtomicReference[Option[Throwable]]) = {
+    val failure = new AtomicReference[Option[Throwable]](None)
+    val thread = new Thread(
+      () =>
+        try f
+        catch { case ex: Throwable => failure.set(Some(ex)) })
+    thread.start()
+    (thread, failure)
+  }
+
+  /**
+   * Runs `first` and `second` on threads of their own, each in its transaction, `first` holding its transaction open until
+   * `second` waits for it: for a row lock on PostgreSQL, whose backend is identified by its process ID, and for the one write
+   * connection on SQLite, whose waiter is the thread parked in the pool.
+   */
+  private def contend(first: => Unit, second: => Unit): Unit = {
+    val holding = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    val secondBackend = new AtomicReference[Option[AnyRef]](None)
+
+    val (firstThread, firstFailure) = onAnotherThread {
+      testApp.txManager.withTransaction {
+        first
+        holding.countDown()
+        release.await(30, TimeUnit.SECONDS): Unit
+      }
+    }
+
+    try {
+      holding.await(30, TimeUnit.SECONDS) shouldBe true
+
+      val (secondThread, secondFailure) = onAnotherThread {
+        testApp.txManager.withTransaction {
+          if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
+            secondBackend.set(Some(query("SELECT pg_backend_pid() AS pid").head("pid")))
+          }
+          second
+        }
+      }
+
+      // pg_stat_activity is read once per transaction, so every poll is a transaction of its own
+      def secondIsWaiting: Boolean = testApp.dataSourceType match {
+        case Const.DbEngineName.POSTGRES =>
+          secondBackend.get.exists(
+            pid =>
+              testApp.txManager.asReadOnly {
+                query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
+              })
+        case _ => secondThread.getState == Thread.State.TIMED_WAITING || secondThread.getState == Thread.State.WAITING
+      }
+
+      Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
+        secondIsWaiting shouldBe true
+      }
+      release.countDown()
+      secondThread.join()
+      secondFailure.get.foreach(throw _)
+    } finally {
+      release.countDown()
+      firstThread.join()
+    }
+    firstFailure.get.foreach(throw _)
+  }
 
   test("Test totals") {
 
@@ -327,22 +424,242 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Stat writes made outside any transaction: the triage count incremented by three and decremented by one, then the stats of a
-     * restore applied for a triaged, recycled asset that was never persisted.
+     * Stat writes made outside any transaction: the triage count incremented by three and decremented by one, then a triaged,
+     * recycled asset that was never persisted counted, and its restore applied.
      *
      * Assertions:
      *
-     * Each write takes effect and is visible to the next read. The restore moves the asset from recycled back to triage, which
-     * takes the recycled count below zero, since nothing was recycled before.
+     * Each write takes effect and is visible to the next read. The asset is counted as recycled, and the restore moves it back to
+     * triage.
      */
     testApp.service.stats.incrementStat(Stats.TRIAGE_ASSETS, 3)
     testApp.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
     testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2
 
     val recycled = testContext.makeAsset(isTriaged = true, isRecycled = true)
-    testApp.service.stats.restoreAsset(recycled)
-    val stats = testApp.service.stats.getStats
-    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 3
-    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe -1
+    testApp.service.stats.addAsset(recycled)
+    storedStats(Stats.RECYCLED_ASSETS) shouldBe 1
+
+    testApp.service.stats.transition(before = List(recycled), after = List(recycled.copy(isRecycled = false)))
+    storedStats(Stats.TRIAGE_ASSETS) shouldBe 3
+    storedStats(Stats.RECYCLED_ASSETS) shouldBe 0
+  }
+
+  test("A write to a stat that has no row fails") {
+
+    /**
+     * Setup:
+     *
+     * A write to a dimension the repository has no stat row for.
+     *
+     * Assertions:
+     *
+     * The write fails rather than changing nothing.
+     */
+    intercept[ConstraintException] {
+      testApp.service.stats.incrementStat("no_such_dimension")
+    }
+  }
+
+  test("A write that would take a stat below zero fails and changes no stat") {
+
+    /**
+     * Setup:
+     *
+     * A triage count of one; then one write that adds a sorted asset and takes two triaged assets out.
+     *
+     * Assertions:
+     *
+     * The write fails as a whole: the triage count stays at one and the sorted count, written before it in dimension order, at
+     * zero.
+     */
+    testApp.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
+
+    intercept[ConstraintException] {
+      testApp.service.stats.adjust(Map(Stats.SORTED_ASSETS -> 1L, Stats.TRIAGE_ASSETS -> -2L))
+    }
+
+    storedStats(Stats.TRIAGE_ASSETS) shouldBe 1
+    storedStats(Stats.SORTED_ASSETS) shouldBe 0
+  }
+
+  test("Purging the same recycled asset twice takes it out of the recycled stats once") {
+
+    /**
+     * Setup:
+     *
+     * One recycled asset, purged twice in one transaction, so the purge queue cannot delete its row in between: the second purge
+     * finds the asset marked for purging.
+     *
+     * Assertions:
+     *
+     * The recycled count and bytes are back to zero, not below it.
+     */
+    val asset = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+
+    testApp.txManager.withTransaction {
+      testApp.service.library.purgeSelectedAssets(Set(asset.persistedId))
+      testApp.service.library.purgeSelectedAssets(Set(asset.persistedId))
+    }
+
+    storedStats(Stats.RECYCLED_ASSETS) shouldBe 0
+    storedStats(Stats.RECYCLED_BYTES) shouldBe 0
+  }
+
+  test("Emptying the trash after purging part of it leaves the recycled stats at zero") {
+
+    /**
+     * Setup:
+     *
+     * Two recycled assets; the first is purged, then the trash is emptied, in one transaction, so the first is still marked for
+     * purging when the trash is emptied.
+     *
+     * Assertions:
+     *
+     * Emptying the trash succeeds and counts only the second asset out: the recycled count and bytes are zero.
+     */
+    val assets = (1 to 2).map(_ => testContext.persistAsset())
+    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
+
+    testApp.txManager.withTransaction {
+      testApp.service.library.purgeSelectedAssets(Set(assets.head.persistedId))
+      testApp.service.library.purgeRecycleBin()
+    }
+
+    storedStats(Stats.RECYCLED_ASSETS) shouldBe 0
+    storedStats(Stats.RECYCLED_BYTES) shouldBe 0
+  }
+
+  test("Two requests restoring the same asset at once restore it once") {
+
+    /**
+     * Setup:
+     *
+     * One asset in a folder, recycled. Two threads restore it, the first holding its transaction open until the second waits for
+     * it.
+     *
+     * Assertions:
+     *
+     * The asset is live and the stats moved once: one sorted asset and its bytes, nothing recycled.
+     */
+    val folder: Folder = testApp.service.folder.add("folder1")
+    val asset = testContext.persistAsset(folder = Some(folder))
+    testApp.service.library.recycleAssets(Set(asset.persistedId))
+
+    contend(
+      testApp.service.library.restoreRecycledAssets(Set(asset.persistedId)),
+      testApp.service.library.restoreRecycledAssets(Set(asset.persistedId)))
+
+    (testApp.service.asset.getById(asset.persistedId): Asset).isRecycled shouldBe false
+    storedStats shouldBe Map(
+      Stats.SORTED_ASSETS -> 1L,
+      Stats.SORTED_BYTES -> asset.sizeBytes,
+      Stats.TRIAGE_ASSETS -> 0L,
+      Stats.TRIAGE_BYTES -> 0L,
+      Stats.RECYCLED_ASSETS -> 0L,
+      Stats.RECYCLED_BYTES -> 0L
+    )
+  }
+
+  test("Two requests purging the same asset at once purge it once") {
+
+    /**
+     * Setup:
+     *
+     * Two recycled assets. Two threads purge the first, the first thread holding its transaction open until the second waits for
+     * it.
+     *
+     * Assertions:
+     *
+     * The recycled stats moved once and hold the second asset only, and the purge queue deletes the first asset's row.
+     */
+    val assets = (1 to 2).map(_ => testContext.persistAsset())
+    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
+    val purged = assets.head
+
+    contend(
+      testApp.service.library.purgeSelectedAssets(Set(purged.persistedId)),
+      testApp.service.library.purgeSelectedAssets(Set(purged.persistedId)))
+
+    storedStats(Stats.RECYCLED_ASSETS) shouldBe 1
+    storedStats(Stats.RECYCLED_BYTES) shouldBe assets.last.sizeBytes
+    Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(100, Millis))) {
+      intercept[NotFoundException](testApp.service.asset.getById(purged.persistedId))
+    }
+  }
+
+  test("Reconciling sets every stat to what the assets are and reports the wrong ones") {
+
+    /**
+     * Setup:
+     *
+     * Assets of distinct sizes in every state: two sorted (100 and 200 bytes), one triaged (20), two recycled, one from a folder
+     * (3) and one from triage (4), one recycled and marked for purging (5,000), and one whose import never completed (70,000).
+     * Every stored stat is then set to 999 directly.
+     *
+     * Assertions:
+     *
+     * Reconciling reports all six stats with their old value, 999, and sets them to the assets that count: the purge-pending and
+     * the unfinished asset count nowhere, and an asset recycled from triage counts as recycled.
+     */
+    importedAsset(sizeBytes = 100)
+    importedAsset(sizeBytes = 200)
+    importedAsset(sizeBytes = 20, isTriaged = true)
+    val recycled = List(importedAsset(sizeBytes = 3), importedAsset(sizeBytes = 4, isTriaged = true))
+    val purgePending = importedAsset(sizeBytes = 5000)
+    testApp.service.library.recycleAssets((purgePending :: recycled).map(_.persistedId).toSet)
+    testApp.service.asset.updateById(purgePending.persistedId, Map(FieldConst.Asset.IS_PURGED -> true))
+    testApp.service.library.persistAndIndex(testContext.makeAsset().copy(sizeBytes = 70000))
+    setEveryStat(999)
+
+    testApp.service.stats.reconcile() shouldBe sixStats.map(_ -> 999L).toMap
+
+    storedStats shouldBe Map(
+      Stats.SORTED_ASSETS -> 2L,
+      Stats.SORTED_BYTES -> 300L,
+      Stats.TRIAGE_ASSETS -> 1L,
+      Stats.TRIAGE_BYTES -> 20L,
+      Stats.RECYCLED_ASSETS -> 2L,
+      Stats.RECYCLED_BYTES -> 7L)
+  }
+
+  test("Reconciling correct stats changes and reports nothing") {
+
+    /**
+     * Setup:
+     *
+     * A sorted, a triaged and a recycled asset, counted by the library operations themselves.
+     *
+     * Assertions:
+     *
+     * Reconciling reports nothing and leaves the stats as they were.
+     */
+    importedAsset(sizeBytes = 100)
+    importedAsset(sizeBytes = 20, isTriaged = true)
+    testApp.service.library.recycleAssets(Set(importedAsset(sizeBytes = 3).persistedId))
+    val before = storedStats
+
+    testApp.service.stats.reconcile() shouldBe empty
+
+    storedStats shouldBe before
+  }
+
+  test("Reconciling a repository with no assets sets every stat to zero") {
+
+    /**
+     * Setup:
+     *
+     * A repository with no assets, its every stored stat set to 7 directly.
+     *
+     * Assertions:
+     *
+     * Reconciling reports all six stats and sets each to zero.
+     */
+    setEveryStat(7)
+
+    testApp.service.stats.reconcile().keySet shouldBe sixStats.toSet
+
+    storedStats.values.toSet shouldBe Set(0L)
   }
 }

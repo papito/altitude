@@ -36,8 +36,8 @@ CREATE TABLE repository (
 
 CREATE TABLE stats (
   repository_id CHAR(36) NOT NULL,
-  dimension VARCHAR(60),
-  dim_val BIGINT NOT NULL DEFAULT 0,
+  dimension VARCHAR(60) NOT NULL,
+  dim_val BIGINT NOT NULL DEFAULT 0 CHECK (dim_val >= 0),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
