@@ -15,7 +15,6 @@ import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
 import altitude.core.Const
-import altitude.core.RequestContext
 import altitude.core.models.AccountType
 import altitude.core.models.User
 import altitude.core.util.Util
@@ -93,15 +92,15 @@ import altitude.core.util.Util
       // A write transaction on a thread of its own holds the one write connection until released
       val writer = new Thread(
         () =>
-          RequestContext.conn.withValue(None)(testApp.txManager.withTransaction {
+          testApp.txManager.withTransaction {
             writing.countDown()
             release.await(30, TimeUnit.SECONDS): Unit
-          }))
+          })
       writer.start()
 
       try {
         writing.await(5, TimeUnit.SECONDS) shouldEqual true
-        val login = Future(RequestContext.conn.withValue(None)(testApp.service.user.loginAndSetUser(userModel.email, password)))
+        val login = Future(testApp.service.user.loginAndSetUser(userModel.email, password))
         Await.result(login, 5.seconds) should not be None
       } finally {
         release.countDown()

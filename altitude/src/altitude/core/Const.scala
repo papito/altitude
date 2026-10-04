@@ -18,6 +18,7 @@ object Const:
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
     val SQLITE_READ_POOL_SIZE = "db.sqlite.read_pool_size"
+    val DB_POOL_LEAK_DETECTION_THRESHOLD = "db.pool.leak_detection_threshold"
 
     val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
     val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"

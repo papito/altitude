@@ -136,7 +136,8 @@ class VideoService(config: Config):
 
       bright.foreach(frame => logger.trace(s"The Preview of $path is the frame at ${frame.timeMs}ms"))
       bright.getOrElse {
-        logger.debug(s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
+        logger.debug(
+          s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
         decode(Seq(durationMs / 10))
           .nextOption()
           .getOrElse(throw RuntimeException(s"No frame could be decoded from $path"))

@@ -86,6 +86,18 @@ import altitude.core.models.MimedPreviewData
     if Files.exists(dir) then Files.list(dir).toList.asScala.toList else Nil
 
   test("Imported image with extracted metadata should successfully import") {
+
+    /**
+     * Setup:
+     *
+     * A single JPEG carrying full camera EXIF (people/bullock.jpg), run through the whole import pipeline.
+     *
+     * Assertions:
+     *
+     * The asset is stored with its type, checksum and size intact when read back from the repository. Metadata extraction ran:
+     * the raw extracted metadata has the JPEG directory, and every camera field of the public metadata derived from the EXIF
+     * directories is filled in - device model, exposure settings and the original capture time.
+     */
     val importAsset = IntegrationTestUtil.getImportAsset("people/bullock.jpg")
 
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)

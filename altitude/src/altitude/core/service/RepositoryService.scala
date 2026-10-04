@@ -97,5 +97,4 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       try
         val repo: Repository = getById(repoId.get)
         RequestContext.repository.value = Some(repo)
-      catch
-        case _: NotFoundException => logger.debug(s"Repository [${repoId.get}] from the request not found; no context set")
+      catch case _: NotFoundException => logger.debug(s"Repository [${repoId.get}] from the request not found; no context set")

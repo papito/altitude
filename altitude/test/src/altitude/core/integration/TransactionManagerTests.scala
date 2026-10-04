@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 import org.scalatest.DoNotDiscover
@@ -27,12 +28,10 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
   /** Runs `f` on a thread of its own, outside the caller's transaction, and waits for it to finish */
   private def onAnotherThread(f: => Unit): Unit = {
     var failure: Option[Throwable] = None
-    // The request context is inherited by a new thread: the other thread starts without the caller's connection
     val thread = new Thread(
       () =>
-        RequestContext.conn.withValue(None)(
-          try f
-          catch { case ex: Throwable => failure = Some(ex) }))
+        try f
+        catch { case ex: Throwable => failure = Some(ex) })
     thread.start()
     thread.join()
     failure.foreach(throw _)
@@ -49,6 +48,39 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 
     after shouldBe before
     testApp.txManager.asReadOnly(countAssets) shouldBe before + 1
+  }
+
+  test("A transaction that cannot roll back fails with its own failure, and the next one runs") {
+    intercept[IllegalStateException] {
+      testApp.txManager.withTransaction {
+        // The rollback of a closed connection fails
+        RequestContext.getConn.close()
+        throw IllegalStateException("The failure of the transaction")
+      }
+    }
+
+    RequestContext.conn.value shouldBe None
+    testApp.txManager.withTransaction(countAssets)
+  }
+
+  test("A thread started inside a transaction is outside of it") {
+    var inherited: Option[Connection] = None
+
+    testApp.txManager.asReadOnly {
+      val thread = new Thread(() => inherited = RequestContext.conn.value)
+      thread.start()
+      thread.join()
+    }
+
+    inherited shouldBe None
+  }
+
+  test("A transaction leaves no connection behind, committed or failed") {
+    testApp.txManager.withTransaction(countAssets)
+    RequestContext.conn.value shouldBe None
+
+    intercept[IllegalStateException](testApp.txManager.asReadOnly(throw IllegalStateException()))
+    RequestContext.conn.value shouldBe None
   }
 
   if (isSqlite) {
