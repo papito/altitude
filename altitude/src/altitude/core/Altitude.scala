@@ -8,9 +8,11 @@ import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.Cancellable
 import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.actor.typed.DispatcherSelector
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.DurationInt
 
 import altitude.core.dao.jdbc.PersonDao
@@ -171,8 +173,35 @@ class Altitude(val dbEngineOverride: Option[String] = None):
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer)
 
+  /**
+   * How many threads do the import's work (`import.parallelism`, see reference.conf): left unset, half the cores and never fewer
+   * than 2. Every one of them holds its own face detection and recognition networks.
+   */
+  final val importParallelism: Int =
+    if config.hasPath(Const.Conf.IMPORT_PARALLELISM) then config.getInt(Const.Conf.IMPORT_PARALLELISM)
+    else math.max(2, Runtime.getRuntime.availableProcessors / 2)
+  logger.info(s"Import parallelism: $importParallelism threads")
+
+  // The app's config, with the dispatcher the import's work runs on
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
-    ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
+    val importDispatcherConfig = ConfigFactory.parseString(s"""
+      altitude.import-dispatcher {
+        type = Dispatcher
+        executor = "thread-pool-executor"
+        thread-pool-executor.fixed-pool-size = $importParallelism
+      }
+    """)
+    ActorSystem[AltitudeActorSystem.Command](
+      AltitudeActorSystem(),
+      "altitude-actor-system",
+      importDispatcherConfig.withFallback(config))
+
+  /**
+   * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
+   * dispatcher, which the status ticker and the SQLite optimize schedule share, only route
+   */
+  final val importDispatcher: ExecutionContextExecutor =
+    actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
 
   // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
   private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
@@ -305,8 +334,8 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     }
   }
 
-  // How many assets the import and purge queues buffer and admit at once, on both engines: a pipeline stage does its work before
-  // it hands an asset on, so this does not multiply the concurrent work, which the pipeline's asynchronous boundaries decide
+  // How many assets the import and purge queues buffer and admit at once, on both engines. It does not decide the concurrent work
+  // of an import, which the import dispatcher's threads (`importParallelism`) bound.
   val parallelism: Int = Runtime.getRuntime.availableProcessors()
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the

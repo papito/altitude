@@ -44,6 +44,8 @@ object Const:
     val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
     val MAP_GEOCODER_URL = "map.geocoder.url"
 
+    // How many threads do the import's work, see reference.conf
+    val IMPORT_PARALLELISM = "import.parallelism"
     // How long each queue (import, purge) is given at shutdown to finish what it has accepted, see reference.conf
     val PIPELINE_SHUTDOWN_TIMEOUT = "pipeline.shutdown_timeout"
 

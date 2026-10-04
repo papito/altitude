@@ -3,6 +3,8 @@ package altitude.core.pipeline.flows
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
+import scala.concurrent.ExecutionContext
+
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
@@ -12,7 +14,8 @@ import altitude.core.pipeline.PipelineUtils.stage
 
 object CheckDuplicateFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
-    stage("Duplicate check", app.parallelism) {
+    given ExecutionContext = app.importDispatcher
+    stage("Duplicate check", parallelism = 1) {
       dataAsset =>
         debugInfo(s"\tChecking for duplicate for ${dataAsset.asset.fileName}")
 

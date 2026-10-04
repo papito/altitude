@@ -5,6 +5,7 @@ import org.apache.pekko.stream.scaladsl.Flow
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 
@@ -62,11 +63,24 @@ object PipelineUtils:
       (result, ctx)
     }
 
-  /** A stage over the assets still in the pipeline: each is worked on under [[guarded]], and a dropped asset is passed on */
-  def stage(name: String, parallelism: Int)(
-      work: AssetWithData => TDataAssetOrInvalid): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
+  /** [[guarded]] run on the dispatcher, the import dispatcher, off the stream's actor, which only routes the elements */
+  def guardedAsync(stage: String, dataAsset: AssetWithData, ctx: PipelineContext)(work: => TDataAssetOrInvalid)(using
+      dispatcher: ExecutionContext): Future[TDataAssetOrInvalidWithContext] =
+    Future(guarded(stage, dataAsset, ctx)(work))
+
+  /** [[guarded]] for an `Asset`, run on the dispatcher, as [[guardedAsync]] */
+  def guardedAsync(stage: String, asset: Asset, ctx: PipelineContext)(work: => TAssetOrInvalid)(using
+      dispatcher: ExecutionContext): Future[TAssetOrInvalidWithContext] =
+    Future(guarded(stage, asset, ctx)(work))
+
+  /**
+   * A stage over the assets still in the pipeline: each is worked on under [[guardedAsync]], at most `parallelism` at once, and a
+   * dropped asset is passed on. The stage hands its assets on in the order they came, whatever order their work finishes in.
+   */
+  def stage(name: String, parallelism: Int)(work: AssetWithData => TDataAssetOrInvalid)(using
+      dispatcher: ExecutionContext): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     Flow[TDataAssetOrInvalidWithContext].mapAsync(parallelism) {
-      case (Left(dataAsset), ctx) => Future.successful(guarded(name, dataAsset, ctx)(work(dataAsset)))
+      case (Left(dataAsset), ctx) => guardedAsync(name, dataAsset, ctx)(work(dataAsset))
       case dropped => Future.successful(dropped)
     }
 

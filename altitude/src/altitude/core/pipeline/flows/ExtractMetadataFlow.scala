@@ -5,6 +5,8 @@ import java.time.ZoneOffset
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
+import scala.concurrent.ExecutionContext
+
 import altitude.core.Altitude
 import altitude.core.models.Asset
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
@@ -16,7 +18,8 @@ import altitude.core.util.GeoLocationResolver
 
 object ExtractMetadataFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
-    stage("Metadata extraction", app.parallelism) {
+    given ExecutionContext = app.importDispatcher
+    stage("Metadata extraction", parallelism = 1) {
       dataAsset =>
         debugInfo(s"\tExtracting metadata for asset: ${dataAsset.asset.fileName}")
         // Merge upstream synthetic metadata so every resolver input remains available for a later replay.

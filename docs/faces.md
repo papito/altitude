@@ -14,8 +14,9 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 ## Where it runs
 
 Face recognition is a stage of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists
-and is indexed: `FacialRecognitionFlow`, its own async stage on both engines. It calls
-`FaceRecognitionService.processAsset`, which dispatches on the asset's media type: `processImage` or `processVideo`.
+and is indexed: `FacialRecognitionFlow`, its own stage on both engines, its work on the import dispatcher's threads
+(`import.parallelism`). It calls `FaceRecognitionService.processAsset`, which dispatches on the asset's media type:
+`processImage` or `processVideo`.
 Both detect the faces first, outside any transaction, and then match and store them in a short `withFaceVector`
 transaction, so the detection never holds SQLite's one write connection.
 Whatever the stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)

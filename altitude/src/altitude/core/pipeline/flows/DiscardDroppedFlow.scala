@@ -5,6 +5,7 @@ import org.apache.pekko.stream.scaladsl.Flow
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 
@@ -21,17 +22,21 @@ object DiscardDroppedFlow:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def apply(app: Altitude): Flow[TAssetOrInvalidWithContext, TAssetOrInvalidWithContext, NotUsed] =
-    Flow[TAssetOrInvalidWithContext].mapAsync(app.parallelism) {
+    given ExecutionContext = app.importDispatcher
+    Flow[TAssetOrInvalidWithContext].mapAsync(1) {
+      // Not under the guard, which would report the discard's failure in place of the drop's cause
       case dropped @ (Right(invalid), ctx) =>
-        withContext(ctx) {
-          debugInfo(s"\tDiscarding dropped asset ${invalid.payload.fileName}")
-          try
-            invalid.stagedFile.foreach(app.service.staging.discard)
-            app.service.library.discardImport(invalid.payload)
-          catch
-            // The drop is still reported with its own cause, and the next startup's prune discards what is left
-            case NonFatal(e) => logger.error(s"Discarding the dropped import of ${invalid.payload.fileName} failed", e)
+        Future {
+          withContext(ctx) {
+            debugInfo(s"\tDiscarding dropped asset ${invalid.payload.fileName}")
+            try
+              invalid.stagedFile.foreach(app.service.staging.discard)
+              app.service.library.discardImport(invalid.payload)
+            catch
+              // The drop is still reported with its own cause, and the next startup's prune discards what is left
+              case NonFatal(e) => logger.error(s"Discarding the dropped import of ${invalid.payload.fileName} failed", e)
+          }
+          dropped
         }
-        Future.successful(dropped)
       case imported => Future.successful(imported)
     }

@@ -222,7 +222,8 @@ class FaceDetectionService(app: Altitude):
    * ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings.
    *
    * One Net instance per thread: OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe. ThreadLocal
-   * ensures each Pekko dispatcher thread gets its own exclusive copy with zero contention.
+   * gives each thread that detects faces, chiefly the import dispatcher's `import.parallelism` threads, its own exclusive copy
+   * with zero contention, so that setting also bounds the native memory the networks take (the ArcFace model alone is 174 MB).
    */
   private val arcFaceNetLocal: ThreadLocal[Net] =
     ThreadLocal.withInitial(() => readNetFromONNX(ARCFACE_MODEL_PATH))

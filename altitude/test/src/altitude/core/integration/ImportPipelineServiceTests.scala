@@ -9,8 +9,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.ActorAttributes
+import org.apache.pekko.stream.Materializer.matFromSystem
 import org.apache.pekko.stream.Supervision
 import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
@@ -34,6 +36,7 @@ import altitude.core.FieldConst
 import altitude.core.ImageException
 import altitude.core.NotFoundException
 import altitude.core.QueueRefusedException
+import altitude.core.RequestContext
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
@@ -45,6 +48,8 @@ import altitude.core.models.Repository
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineUtils
 import altitude.core.pipeline.QueuedPipeline
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
@@ -339,6 +344,39 @@ import altitude.core.util.Query
     val started = System.nanoTime()
     pipeline.shutdown()
     (System.nanoTime() - started).nanos should be < 5.seconds
+  }
+
+  test("A stage does its work on the import dispatcher, in the context of the asset's repository") {
+
+    /**
+     * Setup:
+     *
+     * A stage built with `PipelineUtils.stage` whose work records the thread it runs on and the repository in the request
+     * context, run over one asset of a second repository while the test's context is its own repository.
+     *
+     * Assertions:
+     *
+     * The work ran on a thread of the import dispatcher, with the second repository as the context repository.
+     */
+    val otherRepository = testContext.persistRepository()
+    val dataAsset = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(otherRepository))))
+
+    var thread = ""
+    var repositoryId = ""
+    val recording = PipelineUtils.stage("Recording", parallelism = 1) {
+      dataAsset =>
+        thread = Thread.currentThread.getName
+        repositoryId = RequestContext.getRepository.persistedId
+        Left(dataAsset)
+    }(using testApp.importDispatcher)
+
+    val element: TDataAssetOrInvalidWithContext = (Left(dataAsset), PipelineContext(otherRepository, testContext.user))
+    Await.result(
+      Source.single(element).via(recording).runWith(Sink.seq)(using matFromSystem(using testApp.actorSystem)),
+      30.seconds)
+
+    thread should include("import-dispatcher")
+    repositoryId shouldBe otherRepository.persistedId
   }
 
   test("An image that cannot be decoded is dropped, and the asset behind it is imported") {

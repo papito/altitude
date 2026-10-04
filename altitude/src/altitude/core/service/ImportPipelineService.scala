@@ -53,10 +53,11 @@ class ImportPipelineService(app: Altitude):
   private val errorLoggingSink = AssetErrorLoggingSink()
 
   /**
-   * One pipeline for both engines. Every stage does its work before it hands the asset on, so a stage holds one asset at a time;
-   * the asynchronous boundaries let up to four of them work on different assets at once. Each stage's writes are a short
-   * transaction of its own (faces are detected before theirs opens), which SQLite's single write connection runs one after
-   * another, and each stage commits before the next one reads the asset.
+   * One pipeline for both engines. A stage's work runs on the import dispatcher (`Altitude.importDispatcher`), whose
+   * `import.parallelism` threads bound the work of every import at once; the stream's actor only routes, so the stages of every
+   * repository work on different assets at the same time. Each stage holds one asset at a time and hands them on in upload order.
+   * Each stage's writes are a short transaction of its own (faces are detected before theirs opens), which SQLite's single write
+   * connection runs one after another, and each stage commits before the next one reads the asset.
    */
   private val combinedFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
     // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
@@ -66,11 +67,8 @@ class ImportPipelineService(app: Altitude):
     .via(assignIdFlow)
     .via(extractMetadataFlow)
     .via(indexFlow)
-    .async
     .via(facialRecognitionFlow)
-    .async
     .via(fileStoreFlow)
-    .async
     .via(addPreviewFlow)
     .via(stripBinaryDataFlow)
     .via(markAsCompleteFlow)

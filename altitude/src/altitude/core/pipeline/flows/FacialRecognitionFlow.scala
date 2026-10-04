@@ -3,6 +3,8 @@ package altitude.core.pipeline.flows
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
+import scala.concurrent.ExecutionContext
+
 import altitude.core.Altitude
 import altitude.core.DuplicateException
 import altitude.core.SamePersonDetectedTwiceException
@@ -13,7 +15,8 @@ import altitude.core.pipeline.PipelineUtils.stage
 
 object FacialRecognitionFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
-    stage("Facial recognition", app.parallelism) {
+    given ExecutionContext = app.importDispatcher
+    stage("Facial recognition", parallelism = 1) {
       dataAsset =>
         debugInfo(s"\tRunning facial recognition ${dataAsset.asset.fileName}")
         try
