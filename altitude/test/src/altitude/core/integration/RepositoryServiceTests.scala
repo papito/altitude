@@ -14,6 +14,16 @@ import altitude.core.util.Util
 @DoNotDiscover class RepositoryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("create repository") {
+
+    /**
+     * Setup:
+     *
+     * A second repository with a random name on the file-system store, owned by the common setup's user.
+     *
+     * Assertions:
+     *
+     * The repository reads back with its name and a creation time, and no update time yet.
+     */
     val repo: Repository = testApp.service.repository.addRepository(
       name = Util.randomStr(),
       fileStoreType = C.StorageEngineName.FS,

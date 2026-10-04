@@ -10,6 +10,16 @@ import altitude.core.NotFoundException
 @DoNotDiscover class FileStoreServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Imported asset has binary preview and data stored on the file system") {
+
+    /**
+     * Setup:
+     *
+     * One asset over a random image, imported through the pipeline.
+     *
+     * Assertions:
+     *
+     * The file store holds a non-empty preview and a non-empty file for it.
+     */
     val asset = testContext.persistAsset()
 
     val assetPreview = testApp.service.fileStore.getPreviewById(asset.persistedId)
@@ -20,6 +30,16 @@ import altitude.core.NotFoundException
   }
 
   test("Purging an asset removes preview and file from file store") {
+
+    /**
+     * Setup:
+     *
+     * One imported asset whose files are then purged from the file store directly.
+     *
+     * Assertions:
+     *
+     * Its preview and its file are both gone.
+     */
     val asset = testContext.persistAsset()
 
     testApp.service.fileStore.purgeAssetById(asset.persistedId)

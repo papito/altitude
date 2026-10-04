@@ -8,6 +8,7 @@ import altitude.core.Const
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
+import altitude.core.models.DetectedFaces
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
 import altitude.core.models.Person
@@ -72,35 +73,41 @@ class FaceRecognitionService(val app: Altitude):
   /** A face seen in fewer Sampled frames of a Video is match-only there */
   private val minClusterFrames: Int = app.config.getInt(Const.Conf.VIDEO_FACES_MIN_CLUSTER_FRAMES)
 
-  def processAsset(dataAsset: AssetWithData): Unit =
+  /**
+   * The faces of an asset, found without touching the database; [[recognizeAndStore]] matches and stores them. An animated image,
+   * an image with a duration, is not searched for faces.
+   */
+  def detect(dataAsset: AssetWithData): DetectedFaces =
     dataAsset.asset.assetType.mediaType match
-      case "video" => processVideo(dataAsset)
-      case _ => processImage(dataAsset)
+      case "video" => detectInVideo(dataAsset)
+      case _ if dataAsset.asset.durationMs.isDefined =>
+        logger.debug(s"Not detecting faces in animated ${dataAsset.asset}")
+        DetectedFaces(Nil)
+      case _ => detectInImage(dataAsset)
 
-  private def processImage(dataAsset: AssetWithData): Unit =
+  /**
+   * Matches each of the asset's detected faces to a person and stores it, in one transaction (see [[withFaceFiles]]). Every face
+   * of an image is stored; a Video's are one per person.
+   */
+  def recognizeAndStore(asset: Asset, detected: DetectedFaces): Unit =
+    asset.assetType.mediaType match
+      case "video" => storeVideoFaces(asset, detected)
+      case _ => storeImageFaces(asset, detected)
+    logger.trace(s"Face rec DONE: $asset")
+
+  private def detectInImage(dataAsset: AssetWithData): DetectedFaces =
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.bytes, Some(dataAsset.asset.fileName))
-    logger.info(s"Detected ${faceWithImages.size} faces")
-
-    logger.info(s"Face rec on asset ${dataAsset.asset}")
-    txManager.withFaceVector {
-      faceWithImages.foreach {
-        case (detectedFace: Face, faceImages: FaceImages) =>
-          recognizeFace(detectedFace) match
-            case Some(person) => store(detectedFace, faceImages, dataAsset.asset, person)
-            case None => logger.info(s"Match-only $detectedFace matches nobody; dropped")
-      }
-    }
-    logger.info(s"Face rec DONE: ${dataAsset.asset}")
+    logger.debug(s"Detected ${faceWithImages.size} faces")
+    DetectedFaces(faceWithImages)
 
   /**
    * Faces in a Video: every Sampled frame is detected, and the detections of the whole video are clustered by embedding
    * ([[FaceRecognitionService.cluster]], then [[FaceRecognitionService.mergeClusters]]). Each cluster becomes one Face: the crop,
    * box, Frame time and quality of its best-quality detection, but the normalized centroid of all its members as the vector,
    * which is steadier than any single frame. A cluster seen in fewer than `video.faces.min_cluster_frames` frames is match-only,
-   * so a passer-by in one frame cannot start a Person. A Person gets one Face per Video: when two clusters resolve to the same
-   * Person, the lower-quality one is dropped, so a pose change that splits a person in two does not fail the import.
+   * so a passer-by in one frame cannot start a Person.
    */
-  private def processVideo(dataAsset: AssetWithData): Unit =
+  private def detectInVideo(dataAsset: AssetWithData): DetectedFaces =
     val times = app.service.video.sampleTimes(app.service.asset.videoDuration(dataAsset))
 
     val detections: List[(Face, FaceImages)] = app.service.video.sampledFrames(dataAsset.path, times) {
@@ -113,40 +120,80 @@ class FaceRecognitionService(val app: Altitude):
             faces.map { case (face, images) => (face.copy(frameTimeMs = Some(frame.timeMs)), images) }
         }.toList
     }
-    logger.info(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
+    logger.debug(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
 
     val features = (detection: (Face, FaceImages)) => detection._1.features
     val clusters =
       mergeClusters(cluster(detections, features, _._1.quality, cosineDistanceThreshold), features, cosineDistanceThreshold)
-    logger.info(s"${clusters.size} distinct faces in ${dataAsset.asset}")
+    logger.trace(s"${clusters.size} distinct faces in ${dataAsset.asset}")
 
-    txManager.withFaceVector {
-      clusters.foldLeft(Set.empty[String]) {
-        case (peopleWithAFace, cluster) =>
-          val (best, faceImages) = cluster.best
-          val support = cluster.members.map(_._1.frameTimeMs).distinct.size
-          val face = best.copy(
-            features = meanNormalized(cluster.members.map(features)),
-            isEnrolled = best.isEnrolled && support >= minClusterFrames)
-          logger.debug(s"Cluster of ${cluster.members.size} detections in $support frames: $face")
+    DetectedFaces(clusters.map {
+      cluster =>
+        val (best, faceImages) = cluster.best
+        val support = cluster.members.map(_._1.frameTimeMs).distinct.size
+        val face = best.copy(
+          features = meanNormalized(cluster.members.map(features)),
+          isEnrolled = best.isEnrolled && support >= minClusterFrames)
+        logger.trace(s"Cluster of ${cluster.members.size} detections in $support frames: $face")
+        (face, faceImages)
+    })
 
-          recognizeFace(face) match
-            case Some(person) if peopleWithAFace.contains(person.persistedId) =>
-              logger.info(s"Person ${person.persistedId} already has a Face in ${dataAsset.asset}; dropping $face")
-              peopleWithAFace
-            case Some(person) =>
-              store(face, faceImages, dataAsset.asset, person)
-              peopleWithAFace + person.persistedId
-            case None =>
-              logger.info(s"Match-only $face matches nobody in ${dataAsset.asset}; dropped")
-              peopleWithAFace
-      }
+  private def storeImageFaces(asset: Asset, detected: DetectedFaces): Unit =
+    logger.trace(s"Face rec on asset $asset")
+    withFaceFiles {
+      store =>
+        detected.faces.foreach {
+          case (detectedFace: Face, faceImages: FaceImages) =>
+            recognizeFace(detectedFace) match
+              case Some(person) => store(detectedFace, faceImages, asset, person)
+              case None => logger.trace(s"Match-only $detectedFace matches nobody; dropped")
+        }
     }
-    logger.info(s"Face rec DONE: ${dataAsset.asset}")
 
-  private def store(face: Face, faceImages: FaceImages, asset: Asset, person: Person): Unit =
-    val persistedFace = app.service.person.addFace(face, asset, person)
-    app.service.fileStore.addFace(persistedFace, faceImages)
+  /**
+   * A Person gets one Face per Video: when two of its faces resolve to the same Person, the later, lower-quality one is dropped,
+   * so a pose change that splits a person in two does not fail the import.
+   */
+  private def storeVideoFaces(asset: Asset, detected: DetectedFaces): Unit =
+    withFaceFiles {
+      store =>
+        detected.faces.foldLeft(Set.empty[String]) {
+          case (peopleWithAFace, (face, faceImages)) =>
+            recognizeFace(face) match
+              case Some(person) if peopleWithAFace.contains(person.persistedId) =>
+                logger.trace(s"Person ${person.persistedId} already has a Face in $asset; dropping $face")
+                peopleWithAFace
+              case Some(person) =>
+                store(face, faceImages, asset, person)
+                peopleWithAFace + person.persistedId
+              case None =>
+                logger.trace(s"Match-only $face matches nobody in $asset; dropped")
+                peopleWithAFace
+        }
+    }
+
+  /** Persists a recognized Face and writes its files */
+  private type StoreFace = (Face, FaceImages, Asset, Person) => Unit
+
+  /**
+   * Runs the storing of an asset's Faces in one transaction, the files of each Face written as it is stored. When the transaction
+   * rolls back, the files already written are deleted: a Face in the database always has its files, and one that is not leaves
+   * none behind.
+   */
+  private def withFaceFiles[A](f: StoreFace => A): A =
+    val written = scala.collection.mutable.ListBuffer.empty[String]
+
+    val store: StoreFace = (face, faceImages, asset, person) =>
+      val persistedFace = app.service.person.addFace(face, asset, person)
+      written += persistedFace.persistedId
+      app.service.fileStore.addFace(persistedFace, faceImages)
+
+    try txManager.withFaceVector(f(store))
+    catch
+      case ex: Exception =>
+        logger.trace(s"Face rec rolled back; deleting the files of ${written.size} faces")
+        written.foreach(app.service.fileStore.purgeFaceById)
+        throw ex
 
   /**
    * The Person for a Face, already persisted: the top-K nearest enrolled Faces within the distance threshold vote, the Person
@@ -165,13 +212,13 @@ class FaceRecognitionService(val app: Altitude):
         val personVotes = faceMatches.zipWithIndex.groupBy(_._1.personId.get)
         val (bestPersonId, votes) = personVotes.maxBy { case (_, votes) => (votes.size, -votes.head._2) }
 
-        logger.debug(
+        logger.trace(
           s"Face match: ${votes.size}/$matchCount votes for person $bestPersonId " +
             s"(${personVotes.size} distinct person(s) in top-${faceMatches.size})")
 
         Some(app.service.person.getPersonById(bestPersonId))
       else if detectedFace.isEnrolled then
-        logger.info("No match. Adding new person")
+        logger.debug("No match. Adding new person")
         Some(app.service.person.addPerson(Person()))
       else None
     }

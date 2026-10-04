@@ -7,6 +7,23 @@ import altitude.core.App
 
 @DoNotDiscover class LocationControllerTests extends ControllerTestCore {
   test("Location list has camelCase fields, path order, category names and persisted counts") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the category "Italy", its Location "Alba" holding one imported asset, and the top-level
+     * Location "Beach".
+     *
+     * Assertions:
+     *
+     * The Location list API answers flat camelCase JSON rows in path order, all with the same fields: a categorized Location
+     * carries its category's ID and name, its pin and its asset count, a category has no pin, and a top-level Location has no
+     * category.
+     *
+     * Edge cases:
+     *
+     * "Alba" is listed after its category "Italy", although it sorts first by name.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -44,6 +61,21 @@ import altitude.core.App
   }
 
   test("Location membership endpoints persist idempotent additions and removals") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the Location "Beach" and two imported assets.
+     *
+     * Assertions:
+     *
+     * The membership API adds both assets, then removes one, reporting the count it applied each time, and the Location's
+     * membership follows.
+     *
+     * Edge cases:
+     *
+     * Adding the same assets again adds none.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -81,6 +113,18 @@ import altitude.core.App
   }
 
   test("Invalid membership payloads and category targets are JSON 400s; foreign Locations are 404s") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the category "Category", the Location "Here" and one imported asset, and a second
+     * repository holding the Location "Elsewhere".
+     *
+     * Assertions:
+     *
+     * An empty payload, asset IDs that are not an array and a category as the target are JSON 400s, the other repository's
+     * Location is a JSON 404, and none of them adds anything.
+     */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
     login()
@@ -125,6 +169,16 @@ import altitude.core.App
   }
 
   test("Every Location API route requires authentication") {
+
+    /**
+     * Setup:
+     *
+     * A repository, and a client that has not logged in.
+     *
+     * Assertions:
+     *
+     * The list route and both membership routes answer 401.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     withServer(App) {

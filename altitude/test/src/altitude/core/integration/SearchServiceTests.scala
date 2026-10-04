@@ -13,13 +13,13 @@ import scalasql.core.SqlStr.SqlStringSyntax
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.language.reflectiveCalls
-import scala.math.Ordered.orderingToOrdered
 import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Api
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.*
 import altitude.core.pipeline.PipelineTypes.PipelineContext
@@ -34,6 +34,21 @@ import altitude.core.util.*
   with TextSearchPaths {
 
   test("Index and search by term") {
+
+    /**
+     * Setup:
+     *
+     * Two assets with user metadata in three fields - the KEYWORD "keywords", the TEXT "quotes" holding long movie quotes and the
+     * KEYWORD "cast" holding actor names - where only "Teri Hatcher" is in both casts.
+     *
+     * Assertions:
+     *
+     * Search text finds an asset through its metadata values: a name in one cast finds one asset, the shared name finds both.
+     *
+     * Edge cases:
+     *
+     * A term typed in upper case ("TERI").
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = "quotes", fieldType = FieldType.TEXT))
@@ -90,6 +105,17 @@ import altitude.core.util.*
   }
 
   test("Filter by folder") {
+
+    /**
+     * Setup:
+     *
+     * A folder with a subfolder, and three assets in each with the same keyword metadata.
+     *
+     * Assertions:
+     *
+     * A text search scoped to the subfolder counts its three assets, one scoped to the parent folder counts the subfolder's too,
+     * and a search with neither a folder nor text counts all six.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
 
     val data = Map[String, Set[String]](
@@ -120,6 +146,16 @@ import altitude.core.util.*
   }
 
   test("Searching with root folder ID includes triaged assets") {
+
+    /**
+     * Setup:
+     *
+     * Two assets in a folder and one triaged asset, which has no folder.
+     *
+     * Assertions:
+     *
+     * A search scoped to the root folder counts all three, the triaged asset included.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     // 2 sorted assets in a sub-folder
@@ -147,6 +183,16 @@ import altitude.core.util.*
   }
 
   test("Filter by one person") {
+
+    /**
+     * Setup:
+     *
+     * Three people, each with a Face in three assets of their own (`fixtureForPersonFilter`).
+     *
+     * Assertions:
+     *
+     * Filtering by one person counts that person's three assets only.
+     */
     val f = fixtureForPersonFilter
     val q = new SearchQuery(rpp = PAGE_SIZE, personIds = Set(f.people.head.persistedId))
     val results = search(q)
@@ -154,6 +200,16 @@ import altitude.core.util.*
   }
 
   test("Filter by more than one person") {
+
+    /**
+     * Setup:
+     *
+     * Three people, each with a Face in three assets of their own (`fixtureForPersonFilter`).
+     *
+     * Assertions:
+     *
+     * Filtering by all three people counts all of their nine assets.
+     */
     val f = fixtureForPersonFilter
     val q = new SearchQuery(rpp = PAGE_SIZE, personIds = f.people.map(_.persistedId).toSet)
     val results = search(q)
@@ -161,46 +217,68 @@ import altitude.core.util.*
   }
 
   test("Pagination") {
+
+    /**
+     * Setup:
+     *
+     * Six assets, searched without text or sort in pages of two, six and twenty, each page past the first continued by the cursor
+     * of the one before it.
+     *
+     * Assertions:
+     *
+     * A page holds at most its page size, only a first page carries the total, every page but the last carries the cursor of the
+     * next, and the pages together hold every asset once.
+     *
+     * Edge cases:
+     *
+     * A page size equal to or larger than the match count fits everything on the first page, and a query without a page size is
+     * refused, as every flat page is bounded.
+     */
     (1 to 6).foreach(n => testContext.persistAsset())
 
-    // A first page counts the matches; a page reached by scrolling does not, and says whether another follows it
-    val results = search(new SearchQuery(rpp = 2, page = 1))
+    // A first page counts the matches; a page reached by scrolling does not, and says where the next one continues
+    val results = search(new SearchQuery(rpp = 2))
     results.total shouldBe Some(6)
     results.records.length shouldBe 2
     results.nonEmpty shouldBe true
-    results.hasMore shouldBe true
 
-    val results2 = search(new SearchQuery(rpp = 2, page = 2))
+    val results2 = search(new SearchQuery(rpp = 2, cursor = results.nextCursor))
     results2.total shouldBe None
     results2.records.length shouldBe 2
-    results2.hasMore shouldBe true
 
-    val results3 = search(new SearchQuery(rpp = 2, page = 3))
+    val results3 = search(new SearchQuery(rpp = 2, cursor = results2.nextCursor))
     results3.total shouldBe None
     results3.records.length shouldBe 2
-    results3.hasMore shouldBe false
+    results3.nextCursor shouldBe None
 
-    // page too far
-    val results4 = search(new SearchQuery(rpp = 2, page = 4))
-    results4.total shouldBe None
-    results4.records.length shouldBe 0
-    results4.hasMore shouldBe false
+    List(results, results2, results3).flatMap(_.records.map(_.persistedId)).distinct.length shouldBe 6
 
-    val results5 = search(new SearchQuery(rpp = 6, page = 1))
+    val results5 = search(new SearchQuery(rpp = 6))
     results5.total shouldBe Some(6)
     results5.records.length shouldBe 6
-    results5.hasMore shouldBe false
+    results5.nextCursor shouldBe None
 
-    val results6 = search(new SearchQuery(rpp = 20, page = 1))
+    val results6 = search(new SearchQuery(rpp = 20))
     results6.total shouldBe Some(6)
     results6.records.length shouldBe 6
-    results6.hasMore shouldBe false
+    results6.nextCursor shouldBe None
 
     // Every flat page is bounded
     intercept[IllegalArgumentException](search(new SearchQuery()))
   }
 
   test("A total counts up to its cap and reads one past it when there are more; an exact count does not stop") {
+
+    /**
+     * Setup:
+     *
+     * Four assets, counted under a total cap of 2 and of 4.
+     *
+     * Assertions:
+     *
+     * Under a cap below the match count, the flat page's total, the grouped page's total and the capped count all read one past
+     * the cap; within the cap the total is exact, and a plain count ignores the cap.
+     */
     (1 to 4).foreach(_ => testContext.persistAsset())
     val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false)
     val byName = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
@@ -223,6 +301,21 @@ import altitude.core.util.*
   }
 
   test("Create assets and search by metadata") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD, a NUMBER and a BOOL field, and two assets with several values in each; both assets hold the number 1 and the
+     * flag set.
+     *
+     * Assertions:
+     *
+     * Search text finds the one asset with a keyword value, and metadata filters on the flag and the number match both assets.
+     *
+     * Edge cases:
+     *
+     * A filter value that is one of several values the field holds on an asset.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "field 1", fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = "field 2", fieldType = FieldType.NUMBER))
@@ -253,8 +346,21 @@ import altitude.core.util.*
     results.total shouldBe Some(2)
   }
 
-  /** What happens if we have a number field and search by integer? */
   test("Search by wrong field type") {
+
+    /**
+     * Setup:
+     *
+     * A single asset with "one" in a KEYWORD field and "1" in a NUMBER field.
+     *
+     * Assertions:
+     *
+     * A metadata filter comparing the KEYWORD field to the integer 1 matches nothing rather than failing.
+     *
+     * Edge cases:
+     *
+     * A filter value of the wrong type for its field.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "field 1", fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = "field 2", fieldType = FieldType.NUMBER))
@@ -271,7 +377,17 @@ import altitude.core.util.*
     results.total shouldBe Some(0)
   }
 
-  test("Parametarized search") {
+  test("Parameterized search") {
+
+    /**
+     * Setup:
+     *
+     * Three assets given values after import in a KEYWORD field ("one", "one", "two") and a NUMBER field (1, 1, 2).
+     *
+     * Assertions:
+     *
+     * Metadata filters on both fields match only the two assets that hold both values.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "field 1", fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = "field 2", fieldType = FieldType.NUMBER))
@@ -301,6 +417,17 @@ import altitude.core.util.*
   }
 
   test("Updating and removing metadata values updates search index") {
+
+    /**
+     * Setup:
+     *
+     * An asset with the KEYWORD value "one" and the NUMBER value 3.
+     *
+     * Assertions:
+     *
+     * Search text and metadata filters follow the keyword value as it is added and then updated to "newone", and the asset is no
+     * longer found once the value is removed.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = "field 1", fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = "field 2", fieldType = FieldType.NUMBER))
@@ -318,7 +445,7 @@ import altitude.core.util.*
     var results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
     results.total shouldBe Some(1)
 
-    // parametarized search
+    // parameterized search
     results = search(
       new SearchQuery(
         rpp = PAGE_SIZE,
@@ -336,7 +463,7 @@ import altitude.core.util.*
     results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("newone")))
     results.total shouldBe Some(1)
 
-    // parametarized search
+    // parameterized search
     results = search(
       new SearchQuery(
         rpp = PAGE_SIZE,
@@ -352,11 +479,21 @@ import altitude.core.util.*
     // remove the value and search again
     testApp.service.metadata.deleteMetadataValue(assetId = asset1.persistedId, valueId = mdVal.persistedId)
 
-    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("one")))
+    results = search(new SearchQuery(rpp = PAGE_SIZE, text = Some("newone")))
     results.isEmpty shouldBe true
   }
 
   test("Can sort in ASC order by created at date") {
+
+    /**
+     * Setup:
+     *
+     * Four assets whose import times are rewritten to one to four hours in the future, an hour apart.
+     *
+     * Assertions:
+     *
+     * A search sorted by import time ascending returns them in import order.
+     */
     val assets = List.fill(4)(testContext.persistAsset())
 
     testApp.txManager.withTransaction {
@@ -368,13 +505,22 @@ import altitude.core.util.*
     }
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
-    val resultsAsc = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
-    val sortedAssetsAsc: List[Asset] = resultsAsc.records
+    val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
 
-    sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get >= assets.last.createdAt.get)
+    results.records.map(_.persistedId) shouldBe assets.map(_.persistedId)
   }
 
   test("Can sort in DESC order by created at date") {
+
+    /**
+     * Setup:
+     *
+     * Four assets whose import times are rewritten to one to four hours in the future, an hour apart.
+     *
+     * Assertions:
+     *
+     * A search sorted by import time descending returns them newest first.
+     */
     val assets = List.fill(4)(testContext.persistAsset())
 
     testApp.txManager.withTransaction {
@@ -386,19 +532,30 @@ import altitude.core.util.*
     }
 
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.DESC)
-    val resultsAsc = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
-    val sortedAssetsAsc: List[Asset] = resultsAsc.records
+    val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
 
-    sortedAssetsAsc.sliding(2).forall(assets => assets.head.createdAt.get <= assets.last.createdAt.get)
+    results.records.map(_.persistedId) shouldBe assets.reverse.map(_.persistedId)
   }
 
   test("Sort info should be returned with query results") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, searched first with no sort and then with an ascending import-time sort.
+     *
+     * Assertions:
+     *
+     * A search with no sort reports none, and a sorted one carries the sort it was read with, its field and its direction.
+     */
     (1 to 2).foreach {
       idx =>
         val asset: Asset = testContext.persistAsset()
     }
 
     // try with no sort info at all
+    search(new SearchQuery(rpp = PAGE_SIZE)).sort shouldBe Nil
+
     val sort = SearchSort(field = Api.Field.SearchSort.BY_ASSET_CREATED_AT, direction = SortDirection.ASC)
     val results = search(new SearchQuery(rpp = PAGE_SIZE, searchSort = List(sort)))
     results.sort shouldNot be(empty)
@@ -407,6 +564,16 @@ import altitude.core.util.*
   }
 
   test("Dangling assets should not be searchable") {
+
+    /**
+     * Setup:
+     *
+     * Three assets, then marked as not processed by the import pipeline, the state an interrupted import leaves behind.
+     *
+     * Assertions:
+     *
+     * A plain asset query still sees them, but a search finds none of them.
+     */
     val assetCount = 3
     for (_ <- 1 to assetCount)
       testContext.persistAsset()
@@ -420,11 +587,21 @@ import altitude.core.util.*
     )
     testApp.service.asset.updateByQuery(assetQuery, updateData)
 
-    val assetSearchQuery = new SearchQuery(rpp = 3, page = 1)
+    val assetSearchQuery = new SearchQuery(rpp = 3)
     search(assetSearchQuery).total shouldBe Some(0)
   }
 
   test("An imported asset has a Search document of its file name words") {
+
+    /**
+     * Setup:
+     *
+     * An asset imported as "IMG_1234-beach.final.jpg".
+     *
+     * Assertions:
+     *
+     * Its Search document body is the file name's words, and a search for one of them finds it.
+     */
     val asset = importAsset("IMG_1234-beach.final.jpg")
 
     documentBody(asset) shouldBe Some("img 1234 beach final jpg")
@@ -432,12 +609,33 @@ import altitude.core.util.*
   }
 
   test("A Search document holds both readings of a value with a camelCase hump, with and without it") {
+
+    /**
+     * Setup:
+     *
+     * An asset imported as "IMG_1234-beachSunset.final.jpg".
+     *
+     * Assertions:
+     *
+     * The document body holds the file name split at the hump, followed by its words with the hump joined.
+     */
     val asset = importAsset("IMG_1234-beachSunset.final.jpg")
 
     documentBody(asset) shouldBe Some("img 1234 beach sunset final jpg img 1234 beachsunset final jpg")
   }
 
   test("Search text: a word with a camelCase hump is found by the word in one case, a prefix of it, and its parts") {
+
+    /**
+     * Setup:
+     *
+     * Assets imported as "McDonald_beachSunset.jpg" and, as a decoy, "donut.jpg".
+     *
+     * Assertions:
+     *
+     * Only the humped asset is found, by the whole word in any case, by a prefix of it, by the part after the hump, and by the
+     * joined reading of beachSunset.
+     */
     val humped = importAsset("McDonald_beachSunset.jpg").persistedId
     importAsset("donut.jpg")
 
@@ -447,6 +645,20 @@ import altitude.core.util.*
   }
 
   test("Search text: a word typed with a camelCase hump finds the word written in one case") {
+
+    /**
+     * Setup:
+     *
+     * Assets imported as "Mcdonald.jpg", "MCDONALD.jpg" and "Mc Donald.jpg", and a decoy "donald.jpg".
+     *
+     * Assertions:
+     *
+     * "McDonald", bare or as a phrase, finds the three spellings but not the decoy.
+     *
+     * Edge cases:
+     *
+     * The spelling with a space, which the reading split at the typed hump matches.
+     */
     val capitalized = importAsset("Mcdonald.jpg").persistedId
     val upperCase = importAsset("MCDONALD.jpg").persistedId
     val spaced = importAsset("Mc Donald.jpg").persistedId
@@ -457,6 +669,17 @@ import altitude.core.util.*
   }
 
   test("Renaming an asset rewrites its Search document") {
+
+    /**
+     * Setup:
+     *
+     * An asset imported as "beachSunset.jpg", then renamed to "mountain-lake.jpg".
+     *
+     * Assertions:
+     *
+     * The document body becomes the new name's words, and the full-text index follows: the old word no longer finds the asset and
+     * the new one does.
+     */
     val asset = importAsset("beachSunset.jpg")
 
     testApp.service.asset.rename(asset.persistedId, "mountain-lake.jpg")
@@ -468,6 +691,17 @@ import altitude.core.util.*
   }
 
   test("Editing metadata rewrites the Search document") {
+
+    /**
+     * Setup:
+     *
+     * An asset "beach.jpg" and a KEYWORD field "place" whose value is added, updated and deleted.
+     *
+     * Assertions:
+     *
+     * After each edit the document body is the file name's words followed by the current value's words, or the file name's alone
+     * once the value is gone.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = "place", fieldType = FieldType.KEYWORD))
     val asset = importAsset("beach.jpg")
 
@@ -483,6 +717,16 @@ import altitude.core.util.*
   }
 
   test("A TEXT value added to an asset is found by the next search") {
+
+    /**
+     * Setup:
+     *
+     * Two assets and a TEXT field "notes"; one asset gets the value "The tide comes in" after import.
+     *
+     * Assertions:
+     *
+     * The next search finds that asset by a word of the value, and the TEXT value writes no metadata parameter.
+     */
     val notes = testApp.service.metadata.addField(UserMetadataField(name = "notes", fieldType = FieldType.TEXT))
     val asset = importAsset("one.jpg")
     importAsset("two.jpg")
@@ -494,6 +738,19 @@ import altitude.core.util.*
   }
 
   test("An imported or reindexed asset has metadata parameters for its faceted values only, and is found by all of them") {
+
+    /**
+     * Setup:
+     *
+     * An asset imported with values in KEYWORD (two values), NUMBER, BOOL, TEXT and DATETIME fields, a second asset without
+     * metadata, and then a rename of the first.
+     *
+     * Assertions:
+     *
+     * Only the KEYWORD, NUMBER and BOOL values get metadata parameter rows, one per value, yet every value finds the asset: the
+     * TEXT and DATETIME ones through Search text, the faceted ones through metadata filters. The same holds after the rename
+     * reindexes the asset.
+     */
     def addField(name: String, fieldType: FieldType): String =
       testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = fieldType)).persistedId
 
@@ -528,6 +785,16 @@ import altitude.core.util.*
   }
 
   test("Recycling an asset keeps its Search document") {
+
+    /**
+     * Setup:
+     *
+     * An asset "beach.jpg" moved to the trash.
+     *
+     * Assertions:
+     *
+     * Its Search document is still there, unchanged.
+     */
     val asset = importAsset("beach.jpg")
 
     testApp.service.library.recycleAssets(Set(asset.persistedId))
@@ -536,6 +803,21 @@ import altitude.core.util.*
   }
 
   test("Purging an asset removes its Search document") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, one of which is run through the purge pipeline, then a third asset imported after the purge.
+     *
+     * Assertions:
+     *
+     * The purged asset's document is gone and the other one's is untouched, and the full-text index has forgotten the purged
+     * words: they find nothing once a new document is written, while the other assets are still found.
+     *
+     * Edge cases:
+     *
+     * A document written after the purge, which may take the purged document's place in the table.
+     */
     val kept = importAsset("lake.jpg")
     val purged = importAsset("beach.jpg")
 
@@ -554,6 +836,16 @@ import altitude.core.util.*
   }
 
   test("Rewriting an unchanged Search document updates no row") {
+
+    /**
+     * Setup:
+     *
+     * An imported asset "beach.jpg", reindexed as it is and then with a new file name.
+     *
+     * Assertions:
+     *
+     * Reindexing the unchanged asset writes no row of `search_document`, while the new name writes one and updates the body.
+     */
     val asset: Asset = testApp.service.asset.getById(importAsset("beach.jpg").persistedId)
 
     documentRowsWrittenBy(testApp.service.search.reindexAsset(asset)) shouldBe 0
@@ -562,6 +854,17 @@ import altitude.core.util.*
   }
 
   test("Folder browsing reads the folder index") {
+
+    /**
+     * Setup:
+     *
+     * An asset in the folder "Trips" seeded into 5,000 copies over 500 folders for the planner, which are rolled back after the
+     * plan is read, and a page of 50 of the folder sorted by import time.
+     *
+     * Assertions:
+     *
+     * The engine's plan for the page reads the `asset_folder` index.
+     */
     val folder: Folder = testApp.service.folder.add("Trips")
     val template = testContext.persistAsset(folder = Some(folder))
     val query = new SearchQuery(params = browsingView, folderIds = Set(folder.persistedId), rpp = 50, searchSort = byImport)
@@ -571,16 +874,118 @@ import altitude.core.util.*
     withClue(plan)(plan should include("asset_folder"))
   }
 
-  test("A Date Imported page reads the import-time index") {
+  test("A Date Imported page reads the import-time index alone") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, one of them seeded into 5,000 copies over 500 folders for the planner, and an unscoped page of 50 sorted by
+     * import time, as a first page and as the page that continues from a cursor.
+     *
+     * Assertions:
+     *
+     * The engine's plan for each page slice reads the `asset_search_created` index, which carries the ID, and not the table: an
+     * index-only scan on PostgreSQL, a covering index on SQLite. The continuation seeks to its cursor's import time.
+     */
     val template = testContext.persistAsset()
-    val query = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport)
+    // A second asset, so that a page of one has a cursor
+    testContext.persistAsset()
+    val first = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport)
+    val cursor = search(new SearchQuery(params = browsingView, rpp = 1, searchSort = byImport)).nextCursor
+    val continued = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport, cursor = cursor)
+    // The page slice is the ordered read, newest first
+    val covering =
+      if (isPostgres) "Index Only Scan Backward using asset_search_created" else "USING COVERING INDEX asset_search_created"
+    // A continuation seeks to its cursor's import time rather than reading the pages before it
+    val seek = if (isPostgres) "Index Cond: .*created_at <= " else "asset_search_created \\(.*created_at<\\?\\)"
+
+    val (firstPlan, continuedPlan) = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500)) {
+      (indexOnlyPlanOf(flatPage(first), "asset"), indexOnlyPlanOf(flatPage(continued), "asset"))
+    }
+
+    withClue(firstPlan)(firstPlan should include(covering))
+    withClue(continuedPlan) {
+      continuedPlan should include(covering)
+      seek.r.findFirstIn(continuedPlan).isDefined shouldBe true
+    }
+  }
+
+  test("A Date Taken page reads the capture-day index in order") {
+
+    /**
+     * Setup:
+     *
+     * An asset seeded into 5,000 copies over 500 folders for the planner, and an unscoped, ungrouped page of 50 sorted by capture
+     * time, newest first.
+     *
+     * Assertions:
+     *
+     * The engine's plan for the page reads `asset_search_date_taken` and does not sort the matches: PostgreSQL sorts only the
+     * ties the index leaves, incrementally, and SQLite only the last term of the order.
+     */
+    val template = testContext.persistAsset()
+    val byCapture = List(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC))
+    val query = new SearchQuery(params = browsingView, rpp = 50, searchSort = byCapture)
 
     val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(flatPage(query)))
 
-    withClue(plan)(plan should include("asset_search_created"))
+    withClue(plan) {
+      plan should include("asset_search_date_taken")
+      if (isPostgres) plan should include("Incremental Sort")
+      else plan should include("USE TEMP B-TREE FOR LAST TERM OF ORDER BY")
+    }
+  }
+
+  test("The triage view reads the indexes of the triaged assets alone") {
+
+    /**
+     * Setup:
+     *
+     * A sorted asset seeded into 5,000 copies for the planner, which are rolled back after the plans are read, and three triaged
+     * assets beside them: a small triage set in a large library. The triage view's statements: a flat page by import time, its
+     * capped count, and a page grouped by capture day.
+     *
+     * Assertions:
+     *
+     * The flat page and the count read `asset_triage_created` and the grouped page reads `asset_triage_date_taken`, the partial
+     * indexes that hold only the triaged assets, so none of them passes over the library.
+     */
+    val template = testContext.persistAsset()
+    for (_ <- 1 to 3) testContext.persistAsset(isTriaged = true)
+    val triageView = Map[String, Any](FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
+    val flat = new SearchQuery(params = triageView, rpp = 50, searchSort = byImport)
+    val grouped = new SearchQuery(
+      params = triageView,
+      rpp = 50,
+      searchSort = List(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC)),
+      grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
+    )
+    val repositoryId = RequestContext.getRepository.persistedId
+
+    val (pagePlan, countPlan, groupedPlan) = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500)) {
+      (
+        planOf(flatPage(flat)),
+        planOf(SearchQueries.cappedCount(searchDialect, flat, repositoryId)),
+        planOf(SearchQueries.grouped(searchDialect, grouped, repositoryId)))
+    }
+
+    withClue(pagePlan)(pagePlan should include("asset_triage_created"))
+    withClue(countPlan)(countPlan should include("asset_triage_"))
+    withClue(groupedPlan)(groupedPlan should include("asset_triage_date_taken"))
   }
 
   test("An asset's faces, Search document and metadata parameters are found by the index that leads with the asset") {
+
+    /**
+     * Setup:
+     *
+     * One imported asset, and a lookup by its ID in each of `face`, `search_document` and `metadata_parameter`.
+     *
+     * Assertions:
+     *
+     * Each lookup's plan is a seek on the table's `_01` index by `asset_id`, not a pass over an index that happens to hold the
+     * column.
+     */
     val engine = searchDialect
     import engine.dialect.*
     val asset = importAsset("beach.jpg")
@@ -601,8 +1006,63 @@ import altitude.core.util.*
     }
   }
 
-  // PostgreSQL plans `NOT IN` over a subquery as a SubPlan probed per asset; NOT EXISTS over the source's CTE is a hash anti-join
+  test("The people a Search text resolves against are read through a partial index of the live people") {
+
+    /**
+     * Setup:
+     *
+     * The statement that reads the repository's searchable people: named, visible, live, not a bad match.
+     *
+     * Assertions:
+     *
+     * Its plan reads `person_01` or `person_03`, the partial indexes of the live people that lead with the repository. SQLite
+     * matches a partial index to a bound flag by its value, which holds for a flag bound as a number and not for one bound as
+     * text.
+     */
+    val engine = searchDialect
+    val statement = Db.render(SearchQueries.searchablePeople(engine, RequestContext.getRepository.persistedId), engine.dialect)
+
+    val plan = lookupPlanOf(statement.withCompleteQuery(false))
+
+    withClue(plan)("person_0[13]".r.findFirstIn(plan).isDefined shouldBe true)
+  }
+
+  test("The live copy of a content is looked up through the index of the live assets") {
+
+    /**
+     * Setup:
+     *
+     * One imported asset, and a lookup of the repository's live asset with its checksum, the flag bound as the DAOs bind it.
+     *
+     * Assertions:
+     *
+     * The plan seeks `asset_01`, the partial unique index of the live assets, on both engines: a flag bound as a number proves
+     * the index's predicate.
+     */
+    val engine = searchDialect
+    import engine.dialect.*
+    val asset = importAsset("beach.jpg")
+    val repositoryId = RequestContext.getRepository.persistedId
+
+    val plan = lookupPlanOf(
+      sql"SELECT id FROM asset WHERE repository_id = $repositoryId AND checksum = ${asset.checksum} AND is_recycled = ${false}")
+
+    withClue(plan)(plan should include("asset_01"))
+  }
+
   if (isPostgres) test("An excluded term is an anti-join on PostgreSQL") {
+
+    /**
+     * Setup:
+     *
+     * PostgreSQL only: assets "beach.jpg" and "lake.jpg", and the capped count statement of the text "-beach" resolved against
+     * the repository.
+     *
+     * Assertions:
+     *
+     * The plan excludes through an Anti Join. PostgreSQL plans `NOT IN` over a subquery as a SubPlan probed per asset, while
+     * `NOT EXISTS` over the source's CTE is a hash anti-join.
+     */
     importAsset("beach.jpg")
     importAsset("lake.jpg")
     val query = new SearchQuery(text = Some("-beach"), params = browsingView)
@@ -614,6 +1074,17 @@ import altitude.core.util.*
   }
 
   test("Text with a positive group that has no hit matches nothing, and an exclusion alone is matched over the library") {
+
+    /**
+     * Setup:
+     *
+     * One asset, "beach.jpg".
+     *
+     * Assertions:
+     *
+     * A positive group with no hit ("zzz OR qqq") resolves to an empty candidate set, so the text matches nothing; text made only
+     * of an exclusion has no hits to read and is matched over the whole library.
+     */
     val beach = importAsset("beach.jpg").persistedId
 
     testApp.service.search.resolveText(SearchText.parse("zzz OR qqq beach").value).candidates shouldBe Some(Set())
@@ -626,6 +1097,17 @@ import altitude.core.util.*
   }
 
   test("A selective search reads the assets by their primary key") {
+
+    /**
+     * Setup:
+     *
+     * An asset "beach.jpg" seeded into 5,000 copies for the planner; the copies have no Search document, so the text "beach" has
+     * the original as its one candidate.
+     *
+     * Assertions:
+     *
+     * The capped count's plan reads the asset through its primary key index.
+     */
     val template = importAsset("beach.jpg")
     val query = new SearchQuery(text = Some("beach"), params = browsingView)
 
@@ -637,6 +1119,57 @@ import altitude.core.util.*
     }
 
     withClue(plan)(plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1"))
+  }
+
+  test("The name sources of a Search text are read from their indexes alone") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, "beach.jpg" and another, both with a Face of Alice, both in the Location Rome and in the album Trip. The text
+     * "beach alice rome trip" is resolved with a probe limit of one hit, so "beach" is complete with its one hit, which is the
+     * search's one candidate, and the other three terms are tested on that candidate's own row.
+     *
+     * Assertions:
+     *
+     * The probe reads the person's, the Location's and the album's assets from the index that leads with each, and the search
+     * tests the candidate's memberships and faces through an index that leads with the asset, none of them reading its table:
+     * index-only scans on PostgreSQL, covering indexes on SQLite, whose `face_01` cannot carry the person.
+     */
+    val alice = addPerson("Alice")
+    val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
+    val trip = testApp.service.album.add("Trip")
+    val assets = List(importAsset("beach.jpg"), importAsset("lake.jpg"))
+    assets.foreach(addFace(alice, _))
+    testApp.service.location.addAssets(rome.persistedId, assets.map(_.persistedId).toSet)
+    testApp.service.album.addAssets(trip.persistedId, assets.map(_.persistedId).toSet)
+    val query = new SearchQuery(text = Some("beach alice rome trip"), params = browsingView)
+    val repositoryId = RequestContext.getRepository.persistedId
+    val tables = List("face", "location_asset", "album_asset")
+
+    def plans: (String, String) = {
+      val text = testApp.service.search.resolveText(query.textExpression.value, probeLimit = 1)
+      text.candidates shouldBe Some(Set(assets.head.persistedId))
+      (
+        indexOnlyPlanOf(SearchQueries.textProbe(searchDialect, text, repositoryId, limit = 1).value, tables*),
+        indexOnlyPlanOf(SearchQueries.cappedCount(searchDialect, query.withResolvedText(text), repositoryId), tables*))
+    }
+    // PostgreSQL needs the tables analyzed to be told they are vacuumed. SQLite, told that they hold two rows, would scan them
+    // rather than seek, and without statistics it plans as it does for a library.
+    val (probePlan, searchPlan) = if (isPostgres) atScale(())(plans) else plans
+
+    // Over tables of two rows PostgreSQL may read either index of a membership table; what matters is that it reads no table
+    def covering(table: String, index: String): String =
+      if (isPostgres) s"Index Only Scan using \\w+ on $table " else s"USING COVERING INDEX $index "
+    def reads(plan: String, table: String, index: String): Unit =
+      withClue(s"$table in $plan: ")(covering(table, index).r.findFirstIn(plan).isDefined shouldBe true)
+
+    reads(probePlan, "face", "face_02")
+    reads(probePlan, "location_asset", "location_asset_01")
+    reads(probePlan, "album_asset", "album_asset_01")
+    reads(searchPlan, "location_asset", "location_asset_02")
+    reads(searchPlan, "album_asset", "album_asset_02")
+    if (isPostgres) reads(searchPlan, "face", "face_01")
   }
 
   /** Three assets whose file names and "place" metadata values share words in different orders */
@@ -654,6 +1187,17 @@ import altitude.core.util.*
   }
 
   test("Search text: every term must match, in the file name or in a metadata value") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * An asset is found only when every term matches it, each in either its file name or its place value.
+     */
     val f = fixtureForText
 
     found("beach golden") shouldBe Set(f.beach, f.dog)
@@ -662,6 +1206,21 @@ import altitude.core.util.*
   }
 
   test("Search text: a term matches the start of a word") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * A term matches the words it is a prefix of, in any case, and not those it is only inside of.
+     *
+     * Edge cases:
+     *
+     * A term typed in upper case ("GOLD") and a suffix of a word ("unset").
+     */
     val f = fixtureForText
 
     found("sun") shouldBe Set(f.beach, f.dog)
@@ -670,6 +1229,22 @@ import altitude.core.util.*
   }
 
   test("Search text: a term of several words is those words in sequence, the last one a prefix") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * A term that splits into several words matches them only consecutively and in order, all whole but the last, which may be a
+     * prefix.
+     *
+     * Edge cases:
+     *
+     * Words in the wrong order, and a prefix in a word that is not the last.
+     */
     val f = fixtureForText
 
     found("IMG_12") shouldBe Set(f.beach, f.lake)
@@ -681,6 +1256,21 @@ import altitude.core.util.*
   }
 
   test("Search text: a phrase is whole consecutive words") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * A phrase matches its words whole, consecutively and in the order typed, in the file name or in a metadata value.
+     *
+     * Edge cases:
+     *
+     * A partial word inside a phrase, and an unbalanced quote, which is closed at the end of the text.
+     */
     val f = fixtureForText
 
     found("\"beach sunset\"") shouldBe Set(f.beach)
@@ -693,6 +1283,21 @@ import altitude.core.util.*
   }
 
   test("Search text: OR makes alternatives and binds tighter than AND") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * Alternatives joined by OR match either term, and the group is AND-ed with the terms around it.
+     *
+     * Edge cases:
+     *
+     * A phrase as an alternative, and a lower-case "or", which is an ordinary word.
+     */
     val f = fixtureForText
 
     found("gate OR bridge") shouldBe Set(f.beach, f.lake)
@@ -703,6 +1308,21 @@ import altitude.core.util.*
   }
 
   test("Search text: a leading minus excludes") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * An excluded term removes the assets it matches, alone or beside positive terms.
+     *
+     * Edge cases:
+     *
+     * Text of only exclusions, an excluded phrase, an excluded term of several words, and an excluded alternative.
+     */
     val f = fixtureForText
 
     found("golden -gate") shouldBe Set(f.dog)
@@ -715,6 +1335,22 @@ import altitude.core.util.*
   }
 
   test("Search text: nothing typed is query syntax, and text without a word is no text") {
+
+    /**
+     * Setup:
+     *
+     * Three assets from `fixtureForText`: "IMG_1234-beachSunset.jpg" with the place "Golden Gate", "IMG_1299-mountainLake.jpg"
+     * with "Bay Bridge" and "sunsetBeach.png" with "Golden Retriever".
+     *
+     * Assertions:
+     *
+     * Operators of the engines' full-text syntax are matched as plain words or separators, never as operators, and text with no
+     * usable word matches every asset, like no text at all.
+     *
+     * Edge cases:
+     *
+     * `&`, `|`, `!`, `:*`, quotes, parentheses, AND, NOT and NEAR typed into the text.
+     */
     val f = fixtureForText
 
     found("beach & (sunset:* | 'x') !") shouldBe Set()
@@ -724,6 +1360,22 @@ import altitude.core.util.*
   }
 
   test("Search names: a named, visible person finds the assets with a Face of theirs") {
+
+    /**
+     * Setup:
+     *
+     * Two assets: one with a Face of "Alice Liddell", the other with Faces of a hidden person, a person marked as a bad match and
+     * an unnamed person.
+     *
+     * Assertions:
+     *
+     * A person's name finds the assets with their Face, by a word, a prefix, or two words of the same name; hidden, bad-match and
+     * unnamed people find nothing.
+     *
+     * Edge cases:
+     *
+     * An unnamed person's generated "Unknown N" name, which is not searchable.
+     */
     val withAlice = importAsset("one.jpg")
     val withOthers = importAsset("two.jpg")
     addFace(addPerson("Alice Liddell"), withAlice)
@@ -747,6 +1399,21 @@ import altitude.core.util.*
   }
 
   test("Search names: renaming, hiding and merging people shows in the next search") {
+
+    /**
+     * Setup:
+     *
+     * Two assets with a Face each, of Alice and of Bob.
+     *
+     * Assertions:
+     *
+     * The next search after each change follows the people: a renamed person is found by the new name only, a hidden one not at
+     * all until shown again, and a merge leaves both assets under the surviving name.
+     *
+     * Edge cases:
+     *
+     * The person merged away is no candidate at all, whatever Faces it may still have.
+     */
     val withAlice = importAsset("one.jpg")
     val withBob = importAsset("two.jpg")
     val alice = addPerson("Alice")
@@ -772,6 +1439,17 @@ import altitude.core.util.*
   }
 
   test("Search names: a Location finds its assets, a Category those of its Locations") {
+
+    /**
+     * Setup:
+     *
+     * Rome and Milan in the Category "Italy", Paris without a Category, one asset in each, and a fourth asset in none.
+     *
+     * Assertions:
+     *
+     * A Location's name finds its assets and a Category's name finds those of all its Locations, combining with prefixes,
+     * exclusions and OR like any term.
+     */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, Some(italy.persistedId))
     val milan = testApp.service.location.addLocation("Milan", 45.5, 9.2, Some(italy.persistedId))
@@ -792,6 +1470,21 @@ import altitude.core.util.*
   }
 
   test("Search names: renaming, moving, deleting and refilling Locations shows in the next search") {
+
+    /**
+     * Setup:
+     *
+     * Rome in the Category "Italy" holding one asset, an empty Category "France", and a second asset.
+     *
+     * Assertions:
+     *
+     * The next search after each change follows the Locations: renaming the Location and its Category, moving it to another
+     * Category, adding and removing assets, deleting the Category and deleting the Location.
+     *
+     * Edge cases:
+     *
+     * A deleted Category leaves its Locations at the top level, still found by their own names.
+     */
     val italy = testApp.service.location.addCategory("Italy")
     val france = testApp.service.location.addCategory("France")
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, Some(italy.persistedId))
@@ -827,6 +1520,22 @@ import altitude.core.util.*
   }
 
   test("Search names: a folder finds the assets in it and in every folder below it, the root none") {
+
+    /**
+     * Setup:
+     *
+     * Folders Trips > Japan 2019 > Kyoto with an asset at each level, a folder "Work" with an asset, and an asset in the root
+     * folder.
+     *
+     * Assertions:
+     *
+     * A folder's name finds the assets in it and in every folder below it, and terms may match different folders of one path,
+     * exclusions included.
+     *
+     * Edge cases:
+     *
+     * A digit word of a folder name ("2019"), and the root folder's name, which finds nothing.
+     */
     val trips: Folder = testApp.service.folder.add("Trips")
     val japan: Folder = testApp.service.folder.add("Japan 2019", Some(trips.persistedId))
     val kyoto: Folder = testApp.service.folder.add("Kyoto", Some(japan.persistedId))
@@ -849,6 +1558,22 @@ import altitude.core.util.*
   }
 
   test("Search names: renaming, moving and deleting folders, and moving assets, shows in the next search") {
+
+    /**
+     * Setup:
+     *
+     * Folders Trips > Japan with one asset, a folder "Archive", and a second asset in the root folder.
+     *
+     * Assertions:
+     *
+     * The next search after each change follows the folder paths: renaming a folder, moving it under another, moving assets
+     * between folders, deleting a folder and restoring an asset from the trash.
+     *
+     * Edge cases:
+     *
+     * A deleted folder is recycled with everything below it and neither names anything, even for a search that includes the
+     * trash; restoring an asset restores its folders and their names.
+     */
     val trips: Folder = testApp.service.folder.add("Trips")
     val japan: Folder = testApp.service.folder.add("Japan", Some(trips.persistedId))
     val archive: Folder = testApp.service.folder.add("Archive")
@@ -881,6 +1606,17 @@ import altitude.core.util.*
   }
 
   test("Search names: an album finds its assets, and its changes show in the next search") {
+
+    /**
+     * Setup:
+     *
+     * An album "Best of Summer" holding one of two assets.
+     *
+     * Assertions:
+     *
+     * The album's name finds its assets, by a word or as a phrase, and the next search follows a rename, added and removed
+     * assets, and the album's deletion.
+     */
     val album = testApp.service.album.add("Best of Summer")
     val asset = importAsset("one.jpg").persistedId
     val other = importAsset("two.jpg").persistedId
@@ -903,6 +1639,22 @@ import altitude.core.util.*
   }
 
   test("Search names: a phrase, and a term of several words, match within one name") {
+
+    /**
+     * Setup:
+     *
+     * An asset "ann.jpg" with a Face of "Mary", in the album "Mary" and the Location "Ann Arbor", and another asset in the folder
+     * "Mary Ann".
+     *
+     * Assertions:
+     *
+     * Separate terms may match in different names and in the Search document, but a phrase or a term of several words must match
+     * within one name or within the document.
+     *
+     * Edge cases:
+     *
+     * A phrase that crosses two names, and a partial last word in a phrase.
+     */
     val annArbor = testApp.service.location.addLocation("Ann Arbor", 42.3, -83.7)
     val album = testApp.service.album.add("Mary")
     val folder: Folder = testApp.service.folder.add("Mary Ann")
@@ -924,6 +1676,21 @@ import altitude.core.util.*
   }
 
   test("Search names: a name with a camelCase hump is found by the word in one case and by the part after the hump") {
+
+    /**
+     * Setup:
+     *
+     * Assets each reached by one humped name - the person "DeShawn", the folder "MacArthur", the album "LaGuardia", the Location
+     * "McAllen", and the Category "DeKalb" of the Location "Sycamore" - one with a Face of "Leblanc", and a decoy.
+     *
+     * Assertions:
+     *
+     * Every kind of name with a hump is found by the whole word in one case and by the part after the hump.
+     *
+     * Edge cases:
+     *
+     * The other way round: a name written in one case ("Leblanc") is found by the word typed with a hump.
+     */
     val byPerson = importAsset("one.jpg")
     val byFolder = importAsset("two.jpg", Some(testApp.service.folder.add("MacArthur"))).persistedId
     val byAlbum = importAsset("three.jpg").persistedId
@@ -955,6 +1722,20 @@ import altitude.core.util.*
   }
 
   test("Search names: a phrase matches within one reading of a name with a camelCase hump") {
+
+    /**
+     * Setup:
+     *
+     * An asset in the Location "LaGuardia Airport".
+     *
+     * Assertions:
+     *
+     * A phrase matches the name typed in one case, split at the hump, or with the hump.
+     *
+     * Edge cases:
+     *
+     * A phrase that would match only by running from the end of one reading into the other.
+     */
     val airport = testApp.service.location.addLocation("LaGuardia Airport", 40.8, -73.9)
     val asset = importAsset("one.jpg").persistedId
     testApp.service.location.addAssets(airport.persistedId, Set(asset))
@@ -967,6 +1748,18 @@ import altitude.core.util.*
   }
 
   test("Search names: terms combine across sources, and an exclusion holds in every source") {
+
+    /**
+     * Setup:
+     *
+     * Alice's Face in three assets - one in the Location Rome, one in the folder "Rome trip", one in neither - and an asset named
+     * "rome.jpg".
+     *
+     * Assertions:
+     *
+     * Terms may each match in a different source (a person, a Location, a folder, a file name), and an excluded term removes an
+     * asset when it matches in any source.
+     */
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5)
     val folder: Folder = testApp.service.folder.add("Rome trip")
     val alice = addPerson("Alice")
@@ -985,6 +1778,17 @@ import altitude.core.util.*
   }
 
   test("Search names: counts and grouped pages follow the names, resolved afresh for every page") {
+
+    /**
+     * Setup:
+     *
+     * Two assets in the folder "Trips" and one outside it, searched for "trips" in grouped pages of one asset.
+     *
+     * Assertions:
+     *
+     * The count and the first page's total follow the folder name, and the page after the cursor still finds an asset moved
+     * meanwhile into a new subfolder, as the names are resolved again for every page.
+     */
     val folder: Folder = testApp.service.folder.add("Trips")
     val first = importAsset("a.jpg", Some(folder)).persistedId
     val second = importAsset("b.jpg", Some(folder)).persistedId
@@ -1013,7 +1817,23 @@ import altitude.core.util.*
   }
 
   test("Relevance: an asset ranks by the best source the term matched it in") {
-    // One term, "al", that reaches each asset through a different source
+
+    /**
+     * Setup:
+     *
+     * One term, "al", that reaches each asset through a different source: a file name, an album, a folder, a Category, a Location
+     * and a person, plus one asset reached through all of them at once and an unrelated asset. Capture times order the assets of
+     * equal worth.
+     *
+     * Assertions:
+     *
+     * Assets rank by the worth of their best source - a person, then a Location, a Category, a folder or an album alike, then the
+     * file name - with the newer capture first among equals.
+     *
+     * Edge cases:
+     *
+     * The asset matched in every source is worth its best source, not the sum of them.
+     */
     val folder: Folder = testApp.service.folder.add("Alfa")
     val alps = testApp.service.location.addCategory("Alps")
     val chamonix = testApp.service.location.addLocation("Chamonix", 45.9, 6.9, Some(alps.persistedId))
@@ -1047,6 +1867,22 @@ import altitude.core.util.*
   }
 
   test("Relevance: terms add up, alternatives count as the best of them, and an exclusion counts for nothing") {
+
+    /**
+     * Setup:
+     *
+     * Alice's Face in an asset in the Location Rome and in an asset named "rome.jpg", an asset named "alice-rome.jpg", and
+     * another asset in Rome, captured on four consecutive days.
+     *
+     * Assertions:
+     *
+     * Each AND-ed term adds the worth of its best source, an OR group is worth its best matching alternative, and an excluded
+     * term filters without scoring.
+     *
+     * Edge cases:
+     *
+     * Text of only exclusions, where every match ties and the tiebreakers alone decide the order.
+     */
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5)
     val alice = addPerson("Alice")
     val aliceInRome = importAsset("one.jpg")
@@ -1072,6 +1908,18 @@ import altitude.core.util.*
   }
 
   test("Relevance: equal matches read newest capture first, the undated ones last, then by ID, page after page") {
+
+    /**
+     * Setup:
+     *
+     * Six assets that "beach" matches equally: an older capture, the newest one, two twins captured at the same time between
+     * them, and two undated assets.
+     *
+     * Assertions:
+     *
+     * Equal matches read newest capture first, undated ones last, and by ID within a tie, and pages of two and of five walked by
+     * cursor cut the same order.
+     */
     val assets = (1 to 6).map(n => importAsset(s"beach-$n.jpg").persistedId).toList
     val List(older, newest, twinA, twinB, undatedA, undatedB) = assets: @unchecked
     val imported = OffsetDateTime.parse("2026-09-07T12:00:00Z")
@@ -1082,15 +1930,20 @@ import altitude.core.util.*
 
     val expected = newest :: List(twinA, twinB).sorted ::: older :: List(undatedA, undatedB).sorted
     ranked("beach") shouldBe expected
-    // Offset pages of the flat grid cut the same order
-    (1 to 3).toList.flatMap(page => ranked("beach", rpp = 2, page = page)) shouldBe expected
-    (1 to 2).toList.flatMap(page => ranked("beach", rpp = 5, page = page)) shouldBe expected
+    // The pages of the flat grid cut the same order
+    ranked("beach", rpp = 2) shouldBe expected
+    ranked("beach", rpp = 5) shouldBe expected
   }
 
-  /** The IDs of the assets a Search text matches, most relevant first */
-  private def ranked(text: String, rpp: Int = PAGE_SIZE, page: Int = 1): List[String] =
-    search(new SearchQuery(text = Some(text), rpp = rpp, page = page, searchSort = List(SearchSort.Relevance))).records
-      .map(_.persistedId)
+  /** The IDs of the assets a Search text matches, most relevant first: every page of the search, walked by cursor */
+  private def ranked(text: String, rpp: Int = PAGE_SIZE): List[String] = {
+    def page(cursor: Option[SearchCursor]): SearchResult =
+      search(new SearchQuery(text = Some(text), rpp = rpp, searchSort = List(SearchSort.Relevance), cursor = cursor))
+
+    List
+      .unfold(Option(page(None)))(_.map(current => (current, current.nextCursor.map(cursor => page(Some(cursor))))))
+      .flatMap(_.records.map(_.persistedId))
+  }
 
   /** Gives the asset a capture time, the tiebreaker of equally relevant matches */
   private def takenAt(asset: Asset, taken: String): Unit =
@@ -1156,6 +2009,60 @@ import altitude.core.util.*
   /** A flat page's statement, for its plan */
   private def flatPage(query: SearchQuery): SqlStr =
     SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
+
+  test("Indexing writes open their own transaction") {
+
+    /**
+     * Setup:
+     *
+     * An asset and a KEYWORD field, with the search service's index writes called directly, outside any transaction.
+     *
+     * Assertions:
+     *
+     * Adding a metadata value and reindexing a rename each write the Search document on their own.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
+    val asset = testContext.persistAsset()
+
+    val withValue = asset.copy(userMetadata = UserMetadata(Map(field.persistedId -> Set("giraffe"))))
+    testApp.service.search.addMetadataValue(withValue, field, "giraffe")
+    documentBody(asset).get should include("giraffe")
+
+    val renamed = asset.copy(fileName = "zebra.jpg")
+    testApp.service.search.reindexAsset(renamed)
+    documentBody(asset).get should include("zebra")
+  }
+
+  test("Search reads open their own transaction") {
+
+    /**
+     * Setup:
+     *
+     * One asset with coordinates, and the search service's reads called directly, outside any transaction.
+     *
+     * Assertions:
+     *
+     * The flat search, the count, the capped count, the map cells, the map bounds and the grouped search each find the asset on
+     * their own.
+     */
+    val asset = testContext.persistAsset()
+    testContext.setAssetCoordinates(asset.persistedId, latitude = 10, longitude = 20)
+    val q = new SearchQuery(rpp = PAGE_SIZE)
+
+    testApp.service.search.search(q, scopeFingerprint = "test").records.map(_.persistedId) shouldBe List(asset.persistedId)
+    testApp.service.search.count(q) shouldBe 1
+    testApp.service.search.cappedCount(q) shouldBe 1
+    testApp.service.search.mapCells(q, BoundingBox(-90, -180, 90, 180), zoom = 0).cells.map(_.count).sum shouldBe 1
+    testApp.service.search.mapBounds(q).map(_.count) shouldBe Some(1)
+
+    val grouped = new SearchQuery(
+      rpp = PAGE_SIZE,
+      searchSort = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)),
+      grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
+    )
+    testApp.service.search.searchGrouped(grouped, scopeFingerprint = "test").assets.map(_.persistedId) shouldBe
+      List(asset.persistedId)
+  }
 
   /** The stored body of an asset's Search document, if it has one */
   private def documentBody(asset: Asset): Option[String] =

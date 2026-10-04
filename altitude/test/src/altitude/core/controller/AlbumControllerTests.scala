@@ -11,14 +11,29 @@ import altitude.core.models.Asset
 @DoNotDiscover class AlbumControllerTests extends ControllerTestCore {
 
   test("Album list JSON is sorted by name and carries asset counts") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the albums "Zermatt" and "beach", added in that order, and one imported asset in
+     * "beach".
+     *
+     * Assertions:
+     *
+     * The album list API answers JSON ordered by name ignoring case, with each album's ID and asset count.
+     *
+     * Edge cases:
+     *
+     * "Zermatt" comes before "beach" byte-wise and in insertion order, but after it ignoring case.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
 
     withServer(App) {
       host =>
+        val zermatt: Album = testApp.service.album.add("Zermatt")
         val beach: Album = testApp.service.album.add("beach")
-        val alps: Album = testApp.service.album.add("Alps")
         val asset: Asset = testContext.persistAsset()
         testApp.service.album.addAssets(beach.persistedId, Set(asset.persistedId))
 
@@ -28,13 +43,24 @@ import altitude.core.models.Asset
         response.headers("content-type").head should include("application/json")
 
         val albums = ujson.read(response.text()).arr
-        albums.map(_("name").str) shouldEqual List("Alps", "beach")
-        albums.map(_("id").str) shouldEqual List(alps.persistedId, beach.persistedId)
-        albums.map(_("numOfAssets").num) shouldEqual List(0, 1)
+        albums.map(_("name").str) shouldEqual List("beach", "Zermatt")
+        albums.map(_("id").str) shouldEqual List(beach.persistedId, zermatt.persistedId)
+        albums.map(_("numOfAssets").num) shouldEqual List(1, 0)
     }
   }
 
   test("Assets are added to and removed from an album") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one empty album and two imported assets.
+     *
+     * Assertions:
+     *
+     * The album assets API adds both assets, then removes one, reporting how many it added or removed, and the album's membership
+     * follows each call.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -78,6 +104,17 @@ import altitude.core.models.Asset
   }
 
   test("Search results are filtered by album and report the album as their scope") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one album and two imported assets, only one of them in the album.
+     *
+     * Assertions:
+     *
+     * A search scoped to the album renders only its member, marks the results with the album as their scope, and keeps the album
+     * in the URL the browser is told to show.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()

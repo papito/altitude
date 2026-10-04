@@ -25,7 +25,7 @@ class AlbumController(using logger: Logger) extends BaseController:
   @cask.put(f"/$prefix/r/:repoId/assets")
   def addAssetsToAlbum(repoId: String)(using request: Request): Response[String] =
     val (albumId, assetIds) = membershipRequest(unscrubbedJson.get)
-    logger.info(s"Adding assets ${assetIds.mkString(", ")} to album $albumId")
+    logger.trace(s"Adding assets ${assetIds.mkString(", ")} to album $albumId")
 
     val added = App.altitude.service.album.addAssets(albumId, assetIds)
     cask.Response(ujson.Obj("added" -> added).toString, 200, Seq(("Content-Type", "application/json")))
@@ -34,7 +34,7 @@ class AlbumController(using logger: Logger) extends BaseController:
   @cask.delete(f"/$prefix/r/:repoId/assets")
   def removeAssetsFromAlbum(repoId: String)(using request: Request): Response[String] =
     val (albumId, assetIds) = membershipRequest(unscrubbedJson.get)
-    logger.info(s"Removing assets ${assetIds.mkString(", ")} from album $albumId")
+    logger.trace(s"Removing assets ${assetIds.mkString(", ")} from album $albumId")
 
     val removed = App.altitude.service.album.removeAssets(albumId, assetIds)
     cask.Response(ujson.Obj("removed" -> removed).toString, 200, Seq(("Content-Type", "application/json")))

@@ -164,38 +164,51 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     recs.map(makeModel)
 
-  def recycleFacesForAssets(assetIds: Set[String]): Unit =
-    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
+  def recycleFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "-")
 
+  def restoreFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "+")
+
+  /**
+   * Adds to (or with `-`, takes from) each person's face count the faces they have on the assets. The people are found from the
+   * assets' faces, an uncorrelated set read once through the index that leads with the asset, rather than by testing every person
+   * for a face on one of them.
+   */
+  private def addFacesOfAssets(assetIds: Set[String], sign: String): Unit =
     val sql = s"""
       UPDATE person
-         SET num_of_faces = num_of_faces - (
+         SET num_of_faces = num_of_faces $sign (
             SELECT COUNT(*)
-            FROM face f
-            WHERE f.person_id = person.id
-              AND f.asset_id IN ($placeHolders))
-         WHERE EXISTS (
-          SELECT 1
-              FROM face
-              WHERE person.id = face.person_id
-                AND face.asset_id IN ($placeHolders))
+              FROM face f
+             WHERE f.person_id = person.id
+               AND f.asset_id $inIdSet)
+       WHERE id IN (SELECT person_id FROM face WHERE asset_id $inIdSet)
     """
-    updateByBySql(sql, assetIds.toList ++ assetIds.toList)
+    updateByBySql(sql, List(idSet(assetIds), idSet(assetIds)))
 
-  def restoreFacesForAssets(assetIds: Set[String]): Unit =
-    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
+  // On PostgreSQL; SQLite's one write connection serializes the writers
+  override def lockAssetPeople(assetId: String): Unit =
+    val sql = s"""
+      SELECT id
+        FROM person
+       WHERE repository_id = ?
+         AND id IN (SELECT person_id FROM face WHERE asset_id = ?)
+      $forUpdate
+    """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
+
+  override def deleteFaceless(personIds: Set[String]): Set[String] =
+    if personIds.isEmpty then return Set.empty
 
     val sql = s"""
-      UPDATE person
-         SET num_of_faces = num_of_faces + (
-            SELECT COUNT(*)
-            FROM face f
-            WHERE f.person_id = person.id
-              AND f.asset_id IN ($placeHolders))
-         WHERE EXISTS (
-          SELECT 1
-              FROM face
-              WHERE person.id = face.person_id
-                AND face.asset_id IN ($placeHolders))
+      SELECT id
+        FROM person
+       WHERE repository_id = ?
+         AND id $inIdSet
+         AND NOT EXISTS (SELECT 1 FROM face WHERE face.person_id = person.id)
     """
-    updateByBySql(sql, assetIds.toList ++ assetIds.toList)
+    val faceless = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(personIds)))
+      .map(_(FieldConst.ID).asInstanceOf[String])
+      .toSet
+
+    if faceless.nonEmpty then updateByBySql(s"DELETE FROM person WHERE id $inIdSet", List(idSet(faceless)))
+    faceless

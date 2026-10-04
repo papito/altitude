@@ -18,7 +18,7 @@ class AssetController(using logger: Logger) extends BaseController:
     val jsonIn: ujson.Obj = unscrubbedJson.get
     val folderId = jsonIn(Api.Field.FOLDER_ID).str
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
-    logger.info(s"Moving assets ${assetIdSet.mkString(", ")} to $folderId")
+    logger.trace(s"Moving assets ${assetIdSet.mkString(", ")} to $folderId")
     App.altitude.service.library.moveAssetsToFolder(assetIdSet, folderId)
 
     cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
@@ -28,7 +28,7 @@ class AssetController(using logger: Logger) extends BaseController:
   def moveAssetsToTrash(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = unscrubbedJson.get
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
-    logger.info(s"Recycling assets ${assetIdSet.mkString(", ")}")
+    logger.trace(s"Recycling assets ${assetIdSet.mkString(", ")}")
 
     App.altitude.service.library.recycleAssets(assetIdSet)
 
@@ -39,18 +39,22 @@ class AssetController(using logger: Logger) extends BaseController:
   def restoreAssets(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = unscrubbedJson.get
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
-    logger.info(s"Restoring assets ${assetIdSet.mkString(", ")}")
+    logger.trace(s"Restoring assets ${assetIdSet.mkString(", ")}")
 
-    App.altitude.service.library.restoreRecycledAssets(assetIdSet)
+    val result = App.altitude.service.library.restoreRecycledAssets(assetIdSet)
 
-    cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
+    jsonResponse(
+      ujson.Obj(
+        Api.Field.Asset.RESTORED -> result.restored.toSeq,
+        Api.Field.Asset.DUPLICATES -> result.duplicates.toSeq
+      ))
 
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/purge")
   def purgeSelectedAssets(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = unscrubbedJson.get
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
-    logger.info(s"Purging selected assets ${assetIdSet.mkString(", ")}")
+    logger.trace(s"Purging selected assets ${assetIdSet.mkString(", ")}")
 
     App.altitude.service.library.purgeSelectedAssets(assetIdSet)
 

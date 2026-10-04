@@ -23,14 +23,14 @@ class StagingService(app: Altitude):
 
   /** Moves a file into staging; the source is gone after */
   def stageMove(source: Path): Path =
-    Files.move(source, freshPath(), StandardCopyOption.REPLACE_EXISTING)
+    logStaged(source.toString, Files.move(source, freshPath(), StandardCopyOption.REPLACE_EXISTING))
 
   /** Copies a file into staging, leaving the source alone */
   def stageCopy(source: Path): Path =
-    Files.copy(source, freshPath(), StandardCopyOption.REPLACE_EXISTING)
+    logStaged(source.toString, Files.copy(source, freshPath(), StandardCopyOption.REPLACE_EXISTING))
 
   def stage(bytes: Array[Byte]): Path =
-    Files.write(freshPath(), bytes)
+    logStaged(s"${bytes.length} bytes", Files.write(freshPath(), bytes))
 
   /** Deletes a staged file; a path outside staging, such as a file already renamed into the store, is left alone */
   def discard(path: Path): Unit =
@@ -42,6 +42,11 @@ class StagingService(app: Altitude):
   def clear(): Unit =
     FileUtils.forceMkdir(dir.toFile)
     FileUtils.cleanDirectory(dir.toFile)
+    logger.debug(s"Cleared staging directory: $dir")
+
+  private def logStaged(source: String, staged: Path): Path =
+    logger.trace(s"Staged $source as $staged")
+    staged
 
   private def freshPath(): Path =
     Files.createDirectories(dir)

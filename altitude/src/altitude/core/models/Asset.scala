@@ -41,7 +41,7 @@ case class Asset(
     folderId: String,
     width: Int = 0,
     height: Int = 0,
-    // A Video's length; None for an image
+    // How long a Video or an animated GIF plays; None for a still image
     durationMs: Option[Long] = None,
     userMetadata: UserMetadata = UserMetadata(),
     publicMetadata: PublicMetadata = PublicMetadata(),

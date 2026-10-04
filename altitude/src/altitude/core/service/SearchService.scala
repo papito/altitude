@@ -25,6 +25,7 @@ import altitude.core.util.SearchResult
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchTerm
 import altitude.core.util.SearchWords
+import altitude.core.util.SortValue
 
 object SearchService:
 
@@ -45,7 +46,7 @@ class SearchService(val app: Altitude):
 
   def indexAsset(asset: Asset): Unit =
     require(asset.id.isDefined, "Asset ID cannot be empty")
-    logger.info(s"Indexing asset $asset")
+    logger.trace(s"Indexing asset $asset")
 
     txManager.withTransaction {
       val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
@@ -53,9 +54,12 @@ class SearchService(val app: Altitude):
     }
 
   def reindexAsset(asset: Asset): Unit =
-    logger.info(s"Reindexing asset $asset")
-    val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
-    searchDao.reindexAsset(asset, metadataFields)
+    logger.trace(s"Reindexing asset $asset")
+
+    txManager.withTransaction {
+      val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
+      searchDao.reindexAsset(asset, metadataFields)
+    }
 
   /**
    * The Search text with each term resolved against the names of the repository's people, Locations, Categories, folders and
@@ -92,7 +96,7 @@ class SearchService(val app: Altitude):
           ResolvedSearchText(expression.groups.map(group => ResolvedSearchGroup(group.alternatives.map(resolve)))),
           probeLimit)
 
-      logger.debug(
+      logger.trace(
         s"Resolved the Search text against ${names.values.map(_.size).sum} names in ${System.currentTimeMillis - started}ms: " +
           resolved.groups
             .flatMap(_.alternatives)
@@ -123,49 +127,113 @@ class SearchService(val app: Altitude):
       candidates = Option.when(complete.nonEmpty)(complete.map(index => hits.getOrElse(index, Nil).toSet).reduce(_ intersect _))
     )
 
-  def search(query: SearchQuery): SearchResult =
-    searchDao.search(query)
+  /**
+   * A flat page: the DAO returns the rows, the continuation cursor is assembled here ([[cursorAt]]). Sorted by capture time the
+   * search is ordered by day first, and the cursor carries the last image's day.
+   */
+  def search(query: SearchQuery, scopeFingerprint: String): SearchResult =
+    val started = System.currentTimeMillis
+    val page = txManager.asReadOnly {
+      searchDao.search(query)
+    }
+
+    val nextCursor = Option.when(page.hasMore) {
+      val last = page.rows.last
+      cursorAt(query, scopeFingerprint, last.day.map(_.toString), None, last.asset, last.sortValue, last.secondSortValue)
+    }
+    val result = SearchResult(page.rows.map(_.asset), page.total, nextCursor, query.rpp, query.searchSort)
+
+    logger.trace(
+      s"Search page: ${result.records.length} assets" +
+        result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
+        s", in ${System.currentTimeMillis - started}ms")
+    result
+
+  /**
+   * The cursor that continues a search after the image at this position. It carries the scope fingerprint of the search as
+   * requested and, under the Relevance sort, which orders by the capture time next, that too.
+   */
+  private def cursorAt(
+      query: SearchQuery,
+      scopeFingerprint: String,
+      key: Option[String],
+      groupId: Option[String],
+      asset: Asset,
+      sortValue: SortValue,
+      secondSortValue: SortValue): SearchCursor =
+    SearchCursor(
+      key = key,
+      groupId = groupId,
+      sortValue = sortValue,
+      id = asset.persistedId,
+      scope = scopeFingerprint,
+      secondSortValue = Option.when(query.searchSort.exists(_.isRelevance))(secondSortValue)
+    )
 
   def count(query: SearchQuery): Int =
-    searchDao.count(query)
+    val started = System.currentTimeMillis
+    val count = txManager.asReadOnly {
+      searchDao.count(query)
+    }
+    logger.trace(s"Counted $count matching assets in ${System.currentTimeMillis - started}ms")
+    count
+
+  def countByFolder(): Map[String, Int] =
+    txManager.asReadOnly {
+      searchDao.countByFolder()
+    }
 
   def cappedCount(query: SearchQuery): Int =
-    searchDao.cappedCount(query)
+    val started = System.currentTimeMillis
+    val count = txManager.asReadOnly {
+      searchDao.cappedCount(query)
+    }
+    logger.trace(s"Counted $count matching assets, capped at ${query.totalCap}, in ${System.currentTimeMillis - started}ms")
+    count
 
   /** What the map draws for a viewport at a zoom: the cells over the plotted points in the box, and the Locations pinned in it */
   def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
     val started = System.currentTimeMillis
-    val result = MapCells(
-      cells = searchDao.mapCells(query, bbox, SearchService.cellDegrees(zoom)),
-      locations = searchDao.mapLocations(query, bbox))
-    logger.debug(
+    // Both aggregates read one snapshot
+    val result = txManager.asReadOnly {
+      MapCells(
+        cells = searchDao.mapCells(query, bbox, SearchService.cellDegrees(zoom)),
+        locations = searchDao.mapLocations(query, bbox))
+    }
+    logger.trace(
       s"Map at zoom $zoom in $bbox: ${result.cells.length} cells, ${result.locations.length} Locations, " +
         s"in ${System.currentTimeMillis - started}ms")
     result
 
   /** The box around every point the search plots, for fitting the map to a result; nothing when nothing is plotted */
   def mapBounds(query: SearchQuery): Option[MapBounds] =
-    searchDao.mapBounds(query)
+    val started = System.currentTimeMillis
+    val bounds = txManager.asReadOnly {
+      searchDao.mapBounds(query)
+    }
+    logger.trace(s"Map bounds ${bounds.getOrElse("of nothing plotted")}, in ${System.currentTimeMillis - started}ms")
+    bounds
 
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
-   * points at the last returned image and carries the scope fingerprint of the search as requested; under the Relevance sort,
-   * which orders by the capture time next, it carries that too.
+   * points at the last returned image ([[cursorAt]]).
    */
   def searchGrouped(query: SearchQuery, scopeFingerprint: String): GroupedSearchResult =
     val started = System.currentTimeMillis
-    val page = searchDao.searchGrouped(query)
+    val page = txManager.asReadOnly {
+      searchDao.searchGrouped(query)
+    }
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
-      SearchCursor(
-        key = last.group.cursorKey,
-        groupId = last.group.cursorGroupId,
-        sortValue = last.sortValue,
-        id = last.asset.persistedId,
-        scope = scopeFingerprint,
-        secondSortValue = Option.when(query.searchSort.head.isRelevance)(last.secondSortValue)
-      )
+      cursorAt(
+        query,
+        scopeFingerprint,
+        last.group.cursorKey,
+        last.group.cursorGroupId,
+        last.asset,
+        last.sortValue,
+        last.secondSortValue)
     }
 
     val groups = GroupedSearchResult.groupsOf(page.rows)
@@ -178,7 +246,7 @@ class SearchService(val app: Altitude):
       continuesGroup = query.cursor.exists(cursor => groups.headOption.exists(_.key.continues(cursor)))
     )
 
-    logger.debug(
+    logger.trace(
       s"Grouped search by ${result.grouping.by} ${result.grouping.direction}, sorted ${result.sort}: " +
         s"${result.assets.length} images in ${result.groups.length} groups" +
         result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
@@ -191,8 +259,6 @@ class SearchService(val app: Altitude):
    * Search document rewritten from the asset as given, which must already carry the value
    */
   def addMetadataValue(asset: Asset, field: UserMetadataField, value: String): Unit =
-    searchDao.addMetadataValue(asset, field, value)
-
-  /** [[addMetadataValue]] for several values of one field */
-  def addMetadataValues(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
-    searchDao.addMetadataValues(asset, field, values)
+    txManager.withTransaction {
+      searchDao.addMetadataValue(asset, field, value)
+    }

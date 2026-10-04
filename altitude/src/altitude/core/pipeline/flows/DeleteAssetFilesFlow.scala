@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 import altitude.core.Altitude
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
-import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+import altitude.core.pipeline.PipelineUtils.withContext
 
 object DeleteAssetFilesFlow:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -16,15 +16,15 @@ object DeleteAssetFilesFlow:
   def apply(app: Altitude): Flow[TAssetWithContext, TAssetWithContext, NotUsed] =
     Flow[TAssetWithContext].map {
       case (asset, ctx) =>
-        setThreadLocalRequestContext(ctx)
+        withContext(ctx) {
+          debugInfo(s"\tRemoving files for ${asset.persistedId}")
 
-        debugInfo(s"\tRemoving files for ${asset.persistedId}")
-
-        try {
-          app.service.fileStore.purgeAssetById(asset.persistedId)
-        } catch {
-          case _: Exception =>
-            logger.error(s"Error purging file data for asset ${asset.persistedId}")
+          try {
+            app.service.fileStore.purgeAssetById(asset.persistedId)
+          } catch {
+            case _: Exception =>
+              logger.error(s"Error purging file data for asset ${asset.persistedId}")
+          }
         }
         (asset, ctx)
     }

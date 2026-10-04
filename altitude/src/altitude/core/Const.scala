@@ -18,6 +18,7 @@ object Const:
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
     val SQLITE_READ_POOL_SIZE = "db.sqlite.read_pool_size"
+    val DB_POOL_LEAK_DETECTION_THRESHOLD = "db.pool.leak_detection_threshold"
 
     val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
     val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
@@ -25,6 +26,7 @@ object Const:
     val FACE_DETECTION_MIN_FACE_SIZE = "face.detection.min_face_size"
     val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
     val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
+    val FACE_RECOGNITION_HNSW_EF_SEARCH = "face.recognition.hnsw_ef_search"
     // The two tiers of Face quality, see reference.conf
     val FACE_QUALITY_ENROLL_THRESHOLD = "face.quality.enroll_threshold"
     val FACE_QUALITY_KEEP_THRESHOLD = "face.quality.keep_threshold"
@@ -42,9 +44,18 @@ object Const:
     val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
     val MAP_GEOCODER_URL = "map.geocoder.url"
 
+    // How many threads do the import's work, see reference.conf
+    val IMPORT_PARALLELISM = "import.parallelism"
+    // How long each queue (import, purge) is given at shutdown to finish what it has accepted, see reference.conf
+    val PIPELINE_SHUTDOWN_TIMEOUT = "pipeline.shutdown_timeout"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"
+    // DEV-only: explain each new query once, into sql-debug.log
+    val DEV_SQL_EXPLAIN = "dev.sql_explain"
+    // DEV-only: a pipeline queue whose stream fails restarts it after a backoff
+    val DEV_RESTART_PIPELINE = "dev.restart_pipeline"
 
   object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3

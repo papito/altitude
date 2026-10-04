@@ -11,6 +11,16 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
 @DoNotDiscover class ContentViewControllerTests extends ControllerTestCore {
 
   test("View preview image") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported.
+     *
+     * Assertions:
+     *
+     * The preview content route serves the asset's preview with the preview MIME type.
+     */
     testContext.persistRepository() // and user
     val repoId = testContext.repository.persistedId
 
@@ -30,6 +40,20 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
   }
 
   test("A preview is gzipped for a client that names gzip among other codings, spaced or weighted or not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported, its preview requested with different Accept-Encoding headers.
+     *
+     * Assertions:
+     *
+     * The preview is gzipped whenever the client accepts gzip, and sent uncompressed when it does not.
+     *
+     * Edge cases:
+     *
+     * gzip alone, in a list with and without a space after the comma, with a quality weight, and in upper case.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
@@ -57,6 +81,17 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
   }
 
   test("View a file: the whole original, typed as detected, offering byte ranges") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported.
+     *
+     * Assertions:
+     *
+     * The file content route sends the stored original byte for byte, with its full length, typed as the JPEG it was detected as,
+     * and offers byte ranges.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
@@ -77,6 +112,23 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
   }
 
   test("A byte range of a file is a 206 window of it, uncompressed, and one past the end is a 416") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported, its file requested with Range headers by a client that also
+     * accepts gzip.
+     *
+     * Assertions:
+     *
+     * A satisfiable range is a 206 carrying exactly that window of the original, with a matching Content-Range and length and no
+     * compression. A range that starts at or past the end is a 416 naming the file's size.
+     *
+     * Edge cases:
+     *
+     * An open-ended range, a suffix range of the last bytes, a start exactly at the file's size, and positions too long for a
+     * Long - a start that is past the end, and a suffix that covers the whole file.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
@@ -126,6 +178,16 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
     s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FILE}/${asset.persistedId}"
 
   test("View a person's cover image") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with people/meme-ben.jpg imported, in which the import detects a face.
+     *
+     * Assertions:
+     *
+     * The face content route, which person covers are drawn from, serves that face's display image as a PNG.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 

@@ -88,8 +88,6 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
 
   override def addAssets(locationId: String, assetIds: Set[String]): Int =
-    val placeholders = List.fill(assetIds.size)("?").mkString(", ")
-
     // Rows are selected from the asset table so that unknown, foreign, and recycled ids are dropped, and assets already in
     // the Location are skipped rather than tripping the unique index
     val sql = s"""
@@ -97,7 +95,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       SELECT asset.${FieldConst.REPO_ID}, ?, asset.${FieldConst.ID}
         FROM asset
        WHERE asset.${FieldConst.REPO_ID} = ?
-         AND asset.${FieldConst.ID} IN ($placeholders)
+         AND asset.${FieldConst.ID} $inIdSet
          AND asset.${FieldConst.Asset.IS_RECYCLED} = ?
          AND NOT EXISTS (
            SELECT 1
@@ -107,31 +105,27 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
     """
 
     val values: List[Any] =
-      List(locationId, RequestContext.getRepository.persistedId) ++ assetIds.toList ++ List(nativeBool(false), locationId)
+      List(locationId, RequestContext.getRepository.persistedId, idSet(assetIds), nativeBool(false), locationId)
 
     updateByBySql(sql, values)
 
   override def removeAssets(locationId: String, assetIds: Set[String]): Int =
-    val placeholders = List.fill(assetIds.size)("?").mkString(", ")
-
     val sql = s"""
       DELETE FROM $membershipTable
        WHERE ${FieldConst.Location.LOCATION_ID} = ?
-         AND ${FieldConst.Location.ASSET_ID} IN ($placeholders)
+         AND ${FieldConst.Location.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, locationId :: assetIds.toList)
+    updateByBySql(sql, List(locationId, idSet(assetIds)))
 
   override def removeAssetsFromAllLocations(assetIds: Set[String]): Int =
-    val placeholders = List.fill(assetIds.size)("?").mkString(", ")
-
     val sql = s"""
       DELETE FROM $membershipTable
        WHERE ${FieldConst.REPO_ID} = ?
-         AND ${FieldConst.Location.ASSET_ID} IN ($placeholders)
+         AND ${FieldConst.Location.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, RequestContext.getRepository.persistedId :: assetIds.toList)
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
 
   override def getAssetIds(locationId: String): Set[String] =
     val sql = s"""

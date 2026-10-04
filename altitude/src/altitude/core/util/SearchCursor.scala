@@ -10,14 +10,15 @@ import altitude.core.SearchCursorException
 import altitude.core.util.Query.QueryParam
 
 /**
- * Where a grouped search continues from: the last returned image's position (its group, sort value, ID) and a fingerprint of the
- * search the cursor belongs to. It is an opaque, versioned token to the client and supplies only a position: every request
- * re-applies authorization and every filter, and the values are bound, never inlined. The page size is not part of it, so a
- * continuation may ask for a different one.
+ * Where a search continues from: the last returned image's position (its group, sort value, ID) and a fingerprint of the search
+ * the cursor belongs to. A search starts at its first page and is continued from a position, never by page number. It is an
+ * opaque, versioned token to the client and supplies only a position: every request re-applies authorization and every filter,
+ * and the values are bound, never inlined. The page size is not part of it, so a continuation may ask for a different one.
  *
  * The group is `key`, the value the groups are ordered by (the ISO day of a date grouping, the path key of a Location grouping),
  * and for a Location also `groupId`, the Location's ID. Both absent means the trailing group of images with no date or no
- * Location.
+ * Location. A flat search has no groups, but one sorted by capture time is ordered by day first, and its cursor carries the
+ * image's ISO day as `key`.
  *
  * The Relevance sort orders by two values before the ID, so its position has `secondSortValue` as well: the image's capture time,
  * [[SortValue.Null]] when it has none. Under any other sort it is absent, and it is read only under that sort.
@@ -51,7 +52,7 @@ case class SearchCursor(
     secondSortValue.getOrElse(throw SearchCursorException("Malformed cursor"))
 
 object SearchCursor:
-  private val VERSION = 5
+  private val VERSION = 6
 
   def decode(token: String): SearchCursor =
     try
@@ -71,7 +72,7 @@ object SearchCursor:
 
   /**
    * Identifies the search a cursor may continue: the engine, repository, filters as requested (a folder filter as given, not its
-   * currently expanded descendants), grouping, ordering. Not a secret: it only tells apart searches.
+   * currently expanded descendants), grouping if any, ordering. Not a secret: it only tells apart searches.
    */
   def scopeFingerprint(query: SearchQuery, repositoryId: String, dbEngine: String): String =
     def canonical(value: Any): String = value match
@@ -81,8 +82,6 @@ object SearchCursor:
     def sortedPairs(values: Map[String, Any]): String =
       values.toList.map { case (key, value) => s"$key=${canonical(value)}" }.sorted.mkString(";")
 
-    val grouping = query.grouping.getOrElse(throw IllegalArgumentException("A cursor needs a grouped search"))
-    val sort = query.searchSort.head
     val description = List(
       dbEngine,
       repositoryId,
@@ -94,10 +93,10 @@ object SearchCursor:
       query.albumIds.toList.sorted.mkString(","),
       query.locationIds.toList.sorted.mkString(","),
       query.bbox.map(_.toString).getOrElse(""),
-      grouping.by.apiValue,
-      grouping.direction.id.toString,
-      sort.field,
-      sort.direction.id.toString
+      query.grouping.fold("")(_.by.apiValue),
+      query.grouping.fold("")(_.direction.id.toString),
+      query.searchSort.headOption.fold("")(_.field),
+      query.searchSort.headOption.fold("")(_.direction.id.toString)
     ).mkString("|")
 
     MessageDigest

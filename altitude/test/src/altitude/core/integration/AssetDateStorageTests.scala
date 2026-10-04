@@ -1,8 +1,8 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.time.{ Duration, LocalDateTime, ZoneOffset }
-import java.util.TimeZone
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
@@ -29,20 +29,37 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     testApp.service.asset.getById(persisted.persistedId)
   }
 
-  private def withJvmTimeZone[T](zoneId: String)(f: => T): T = {
-    val original = TimeZone.getDefault
-    TimeZone.setDefault(TimeZone.getTimeZone(zoneId))
-    try f
-    finally TimeZone.setDefault(original)
-  }
-
   test("Capture timestamp is stored and read back as the camera's wall-clock time") {
+
+    /**
+     * Setup:
+     *
+     * An asset written straight through the DAO with an EXIF-style capture time of 2024:03:10 23:59:59.
+     *
+     * Assertions:
+     *
+     * The capture time reads back as exactly that wall-clock time.
+     *
+     * Edge cases:
+     *
+     * The last second of a day, which any time zone shift would push into another day.
+     */
     val asset = addAssetWithCaptureTime(Some("2024:03:10 23:59:59"))
     asset.originalCreatedAt shouldEqual Some(LocalDateTime.of(2024, 3, 10, 23, 59, 59))
   }
 
   test("Capture timestamp inside the server's DST gap is preserved, not shifted") {
-    // 02:30 on 2026-03-08 does not exist in America/New_York (the default zone on the development machine)
+
+    /**
+     * Setup:
+     *
+     * With the JVM in America/New_York (the default zone on the development machine), an asset with a capture time of 2026:03:08
+     * 02:30:00, which does not exist there: the clocks skip from 02:00 to 03:00 that night.
+     *
+     * Assertions:
+     *
+     * The capture time reads back unchanged instead of being shifted out of the gap.
+     */
     withJvmTimeZone("America/New_York") {
       val asset = addAssetWithCaptureTime(Some("2026:03:08 02:30:00"))
       asset.originalCreatedAt shouldEqual Some(LocalDateTime.of(2026, 3, 8, 2, 30, 0))
@@ -50,6 +67,22 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("Capture timestamp does not change with the JVM time zone") {
+
+    /**
+     * Setup:
+     *
+     * An asset with a capture time of 2024:07:01 00:10:00, re-read with the JVM in Pacific/Kiritimati (UTC+14), Etc/GMT+12
+     * (UTC-12) and UTC.
+     *
+     * Assertions:
+     *
+     * Every re-read returns the same wall-clock time.
+     *
+     * Edge cases:
+     *
+     * Zones at both extremes of the offset range, either of which would move ten past midnight into another day if the time were
+     * converted.
+     */
     val asset = addAssetWithCaptureTime(Some("2024:07:01 00:10:00"))
     val expected = Some(LocalDateTime.of(2024, 7, 1, 0, 10, 0))
 
@@ -63,6 +96,21 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("Missing capture dates stay null and public metadata cannot supply one") {
+
+    /**
+     * Setup:
+     *
+     * An asset with no capture time, and two more whose public metadata carry a display date, one well-formed ("2024:07:04
+     * 08:09:10") and one not a date at all; all three are written straight through the DAO.
+     *
+     * Assertions:
+     *
+     * None of them gets a capture time or a capture-time source: public metadata is never a source for one.
+     *
+     * Edge cases:
+     *
+     * A display date that does not parse.
+     */
     val missing = addAssetWithCaptureTime(None)
     missing.originalCreatedAt shouldBe None
     missing.originalCreatedAtSource shouldBe None
@@ -76,10 +124,22 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("Coordinates round-trip through storage and stay null when absent") {
+
+    /**
+     * Setup:
+     *
+     * Two assets written through the DAO and marked complete: one at -33.857, 151.2152 and one with no coordinates.
+     *
+     * Assertions:
+     *
+     * The coordinates read back as stored and the missing ones stay empty, both through the regular read and through the
+     * hand-written SQL that locks assets for recycling, which builds the model from its own row map.
+     */
     val located = testContext.makeAsset().copy(latitude = Some(-33.857), longitude = Some(151.2152))
     val unlocated = testContext.makeAsset()
+    // Completed as an import completes them, since the locking read skips an unfinished import
     val ids = testApp.txManager.withTransaction {
-      List(located, unlocated).map(asset => testApp.DAO.asset.add(asset).persistedId)
+      List(located, unlocated).map(asset => testApp.service.asset.markAsCompleted(testApp.DAO.asset.add(asset)).persistedId)
     }
     val reread = ids.map(testApp.service.asset.getById)
     reread.head.latitude shouldBe Some(-33.857)
@@ -94,6 +154,18 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("The import result carries the resolved capture time and its persisted provenance") {
+
+    /**
+     * Setup:
+     *
+     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24) and images/exif/DSCF1160.JPG (2008-04-17
+     * 11:12:02), imported through the pipeline.
+     *
+     * Assertions:
+     *
+     * The asset the import returns carries the capture time with its EXIF-original source, and the same values are read back from
+     * the model, its JSON and the raw column ("exif_original").
+     */
     for (
       (file, expected) <- List(
         "images/cactus.jpg" -> LocalDateTime.of(2011, 5, 16, 17, 46, 24),
@@ -115,6 +187,22 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("Metadata extraction merges upstream inputs and preserves them through storage") {
+
+    /**
+     * Setup:
+     *
+     * An asset over a 150 px random image, its extracted metadata seeded upstream with an "Altitude Import" field and a PNG-IHDR
+     * directory holding a wrong "Image Width" and an extra note, imported through the pipeline.
+     *
+     * Assertions:
+     *
+     * The seeded fields survive extraction and storage, a value the extractor reads from the file replaces the seeded one, and
+     * the seeded metadata itself is left unchanged.
+     *
+     * Edge cases:
+     *
+     * A seeded field that collides with one the extractor reads from the file.
+     */
     val seeded = ExtractedMetadata(
       Map(
         "Altitude Import" -> Map("File System Created" -> "2020-01-01"),
@@ -129,6 +217,16 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("Import timestamp is written in UTC regardless of the JVM time zone") {
+
+    /**
+     * Setup:
+     *
+     * An asset written through the DAO with the JVM in Pacific/Kiritimati (UTC+14).
+     *
+     * Assertions:
+     *
+     * The stored import time, read as UTC in each engine's own way, is within 30 seconds of the current UTC time.
+     */
     val asset = withJvmTimeZone("Pacific/Kiritimati") {
       addAssetWithCaptureTime(None)
     }
@@ -149,6 +247,17 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("A PNG creation-time chunk is resolved and persisted through the real import") {
+
+    /**
+     * Setup:
+     *
+     * A random PNG with a tEXt "Creation Time" chunk of "Thu, 4 Jul 2024 08:09:10 GMT", staged and imported through the pipeline.
+     *
+     * Assertions:
+     *
+     * The capture time resolves to 2024-07-04 08:09:10 from the PNG creation-time chunk, and the time, its source and the raw
+     * chunk are all read back from storage.
+     */
     val data = IntegrationTestUtil.pngWithTextChunk(
       IntegrationTestUtil.generateRandomImagBytesBgr(),
       "Creation Time",
@@ -164,6 +273,16 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
   }
 
   test("An imported image without date metadata belongs to the No date group") {
+
+    /**
+     * Setup:
+     *
+     * A PNG with no date metadata (images/3.png), imported through the pipeline.
+     *
+     * Assertions:
+     *
+     * It has no capture time and no source, and a search grouped by Date Taken puts it, alone, in the No date group.
+     */
     val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/3.png"))
     imported.originalCreatedAt shouldBe None
     imported.originalCreatedAtSource shouldBe None

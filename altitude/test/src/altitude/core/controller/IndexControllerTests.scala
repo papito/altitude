@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import java.net.URLEncoder
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 
@@ -22,6 +23,16 @@ import altitude.core.App
    */
 
   test("Unauthenticated initialized install is not allowed to access protected route") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a user's repository, and a client that has not logged in.
+     *
+     * Assertions:
+     *
+     * The repository's main page answers with a redirect to the login page, which carries the page's address to return to.
+     */
     val repo = testContext.persistRepository()
     testApp.service.system.readMetadata.isInitialized shouldBe true
 
@@ -29,10 +40,22 @@ import altitude.core.App
       host =>
         val response = requests.get(s"$host/r/${repo.persistedId}", maxRedirects = 0, check = false)
         response.statusCode shouldBe 302
+        response.headers("location") shouldBe Seq(s"/login?redirect=${URLEncoder.encode(s"/r/${repo.persistedId}", "UTF-8")}")
     }
   }
 
   test("The Search input is in the nav of the main page only, and a nav reload keeps it there") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * The Search form is in the main page's nav but not the import page's, and a nav reload carries it only when asked with
+     * search=true, as the main page asks.
+     */
     val repoId = testContext.persistRepository().persistedId
     login()
 

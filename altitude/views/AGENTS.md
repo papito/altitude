@@ -587,11 +587,11 @@ user-supplied names and server errors, without HTML markup or pre-escaping. Auto
 
 **Infinite scroll + lazy load** — The last `.cell` (by position: a Location page can hold its last
 asset in an earlier cell too) gets class `last-cell` and carries how the next
-page is reached: its number in `data-app-search-next-page` (an ungrouped grid) or the encoded
-cursor in `data-app-search-after` (a grouped grid). An `IntersectionObserver` in
+page is reached: the encoded cursor in `data-app-search-after`, in an ungrouped grid and a grouped
+one alike. An `IntersectionObserver` in
 `js/search-results/infinite-scroll.js` watches it and calls `loadNextPage(lastCellEl)`, exported from the
 same module: it reads the continuation, deletes the attribute, requests the page through `runSearch`
-as `transient` parameters (`{ p }` or `{ after }`, with `isContinuousScroll`), and appends the result
+as `transient` parameters (`{ after }`, with `isContinuousScroll`), and appends the result
 after the cell. The request in flight is kept per cell, so a second caller gets the same promise and
 no page is requested twice; the detail modal is that second caller when it steps past the last
 loaded cell. A cell loses its attribute as it loads, so scrolling back over it loads nothing again.
@@ -728,8 +728,10 @@ using `reloadFolderTree`, which renders fresh counts as part of the rebuild. `ap
 and `app.reloadLocationCounts()` do the same for the album and Location lists (`refreshAlbumCounts`,
 `refreshLocationCounts`), and fetch nothing while another explorer tab is active.
 
-Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`,
-and drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
+Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`.
+A restore answers `{restored, duplicates}`: an asset whose content was imported again after it was recycled stays in
+the trash, so only the `restored` cells leave the grid and the snackbar warns about the rest.
+Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 
@@ -775,8 +777,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
-| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the next page number or the cursor. `data-media-type` names what the asset is; a Video's cell wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Video Duration checkbox like every other field |
-| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by page number |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
+| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, the crowded-pin panel `#mapPanel`, and the pin styles |
 | `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
@@ -793,9 +795,9 @@ it knows about; the `searchParams` store supplies the rest. Nothing else builds 
 `/htmx/search/r/:repoId`.
 
 `js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
-`locationId`, `q`, `bbox`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`, `p`) and the rules for combining them:
-choosing a folder, a person, an album, or a Location clears the other three, a view clears all four, and any change other than paging
-returns to page 1. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
+`locationId`, `q`, `bbox`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`) and the rules for combining them:
+choosing a folder, a person, an album, or a Location clears the other three, and a view clears all four. The store
+holds no position: a search starts at its first page, and a later page is one request's `after` cursor. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
 drawn on, so a view, a folder, a person, an album, a Location or a new `q` clears it too. Search text
 (`q`) is one more place to look, the whole repository outside the trash: a change of `q` clears the
 folder, person, album and Location and returns `view` to the repository view, and each of those four,
@@ -813,11 +815,11 @@ default applies (Relevance with text, newest import without). The two combinatio
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
 change): `q` with the trash view becomes the repository view, and `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
-the text it ranked. The server also refuses a page size outside 1 to 500 and a page number an `Int`
-does not hold; the store keeps only whole numbers in those ranges (`normalize`, with
+the text it ranked. The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
+in that range (`normalize`, with
 `Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
 default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every
-search. How far `p` may go for a given page size is the server's alone to say. A parameter still at
+search. A parameter still at
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
@@ -840,9 +842,8 @@ refuses it without text.
 
 `groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
 day; the Group dropdown in `search_results.scala.html` sets both from its selected option, and "No
-grouping" sets both to empty, which the store normalizes to `null`. A grouped search has no page
-number: the serializer leaves `p` out whenever `groupBy` is set (the server rejects the pair), and
-the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
+grouping" sets both to empty, which the store normalizes to `null`. A search has no page
+number, grouped or not: the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
 remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
 URL. The layout is the one exception: the store's `merge` writes a changed `layout` to
 `localStorage` (`Const.localStore.resultsLayout`), and seeding takes the layout from the URL first and
@@ -870,7 +871,7 @@ has settled):
 The hydrator also owns the rule that folder navigation does nothing in triage and trash, so that
 guard lives in one place rather than in markup.
 
-Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's `p` or
+Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's
 `after`, and the grid layout and no grouping of the crowded-pin panel's request while the store says
 map) are passed as `transient` and are serialized into that one request only. `runSearch` also takes
 a `target` and `swap` (the panel searches into `#mapPanelContent`) and a `source`, the element htmx

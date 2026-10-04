@@ -16,7 +16,22 @@ import altitude.core.util.Util
 
 @DoNotDiscover class UserMetadataServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  test("Number field type can be added") {
+  test("A NUMBER field accepts only numeric values") {
+
+    /**
+     * Setup:
+     *
+     * A NUMBER user metadata field and one asset.
+     *
+     * Assertions:
+     *
+     * Setting the field to a value that is not a number, "one" or a lone ".", fails validation, while numbers in a variety of
+     * spellings are accepted and stored as given.
+     *
+     * Edge cases:
+     *
+     * Leading and trailing dots and leading zeros; a blank value among them is dropped rather than refused.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
     val asset: Asset = testContext.persistAsset()
 
@@ -32,9 +47,29 @@ import altitude.core.util.Util
 
     // these should be ok
     data = Map[String, Set[String]](field.persistedId -> Set("000.", "0", "", "0000.00123", ".000", "36352424", "234324221"))
+    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+
+    // The blank value is dropped, the rest are stored as given
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe
+      Set("000.", "0", "0000.00123", ".000", "36352424", "234324221")
   }
 
-  test("Boolean field type can be added") {
+  test("A BOOL field accepts a single recognized boolean, in any letter case") {
+
+    /**
+     * Setup:
+     *
+     * A BOOL user metadata field and one asset.
+     *
+     * Assertions:
+     *
+     * Values that are not booleans ("one", "on") and conflicting values (TRUE and FALSE together) fail validation. Letter-case
+     * variants of one boolean are a single value rather than a conflict, and every recognized spelling is stored as given.
+     *
+     * Edge cases:
+     *
+     * TRUE, FALSE, true, False, 1 and 0 are all recognized; TRUE and true together collapse into one value.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.BOOL))
     val asset: Asset = testContext.persistAsset()
 
@@ -53,27 +88,32 @@ import altitude.core.util.Util
     intercept[ValidationException] {
       testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
     }
-    // ... but non-conflicting duplicates are ok
-    data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "TRUE"))
-
-    // these should be ok
-    data = Map[String, Set[String]](field.persistedId -> Set("TRUE"))
+    // ... but letter-case variants of one value are non-conflicting duplicates, stored as one value
+    data = Map[String, Set[String]](field.persistedId -> Set("TRUE", "true"))
     testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value.toLowerCase) shouldBe Set("true")
 
-    data = Map[String, Set[String]](field.persistedId -> Set("FALSE"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
-
-    data = Map[String, Set[String]](field.persistedId -> Set("true"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
-
-    data = Map[String, Set[String]](field.persistedId -> Set("False"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
-
-    data = Map[String, Set[String]](field.persistedId -> Set("False"))
-    testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+    // every recognized spelling is ok, and stored as given
+    Seq("TRUE", "FALSE", "true", "False", "1", "0").foreach {
+      value =>
+        data = Map[String, Set[String]](field.persistedId -> Set(value))
+        testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(data))
+        testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe Set(value)
+    }
   }
 
   test("Setting metadata values") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, a NUMBER field and one asset.
+     *
+     * Assertions:
+     *
+     * Metadata naming a field the repository does not have is refused as not found, even alongside a known field; valid keyword
+     * and number values are stored and both fields read back.
+     */
     val keywordMetadataField =
       testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -105,6 +145,21 @@ import altitude.core.util.Util
   }
 
   test("Test/update empty value sets") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field and a NUMBER field set on one asset, the keyword to three values and the number to an empty set.
+     *
+     * Assertions:
+     *
+     * A field given no values is not stored, and updating the remaining field to no values removes it, leaving the asset with no
+     * metadata.
+     *
+     * Edge cases:
+     *
+     * Empty value sets, both on set and on update.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
@@ -129,6 +184,17 @@ import altitude.core.util.Util
   }
 
   test("Update metadata values") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field and a NUMBER field set on one asset, then a third, KEYWORD field added.
+     *
+     * Assertions:
+     *
+     * An update naming the number field and the new field keeps the keyword field it leaves out, adds the new field, and replaces
+     * the number field's values, dropping the ones the update does not repeat.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
@@ -163,6 +229,16 @@ import altitude.core.util.Util
   }
 
   test("Add/get fields") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field named "field name".
+     *
+     * Assertions:
+     *
+     * The field reads back by ID with its type.
+     */
     val metadataField = testApp.service.metadata.addField(UserMetadataField(name = "field name", fieldType = FieldType.KEYWORD))
 
     val storedField: UserMetadataField = testApp.service.metadata.getFieldById(metadataField.persistedId)
@@ -170,6 +246,16 @@ import altitude.core.util.Util
   }
 
   test("Delete metadata field") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, read back once to show it exists.
+     *
+     * Assertions:
+     *
+     * After the field is deleted, reading it by ID fails as not found.
+     */
     val metadataField =
       testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -183,6 +269,16 @@ import altitude.core.util.Util
   }
 
   test("Get all fields for a repo") {
+
+    /**
+     * Setup:
+     *
+     * Two fields added by the first user of the repository and one by a second user; then a third user who adds none.
+     *
+     * Assertions:
+     *
+     * Fields belong to the repository, not to the user who added them: the first and the third user both see all three.
+     */
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
@@ -203,6 +299,16 @@ import altitude.core.util.Util
   }
 
   test("Adding a duplicate-named field should not succeed") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field named "field name".
+     *
+     * Assertions:
+     *
+     * Adding a second field with the same name fails as a duplicate.
+     */
     val fieldName = "field name"
     testApp.service.metadata.addField(UserMetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
 
@@ -212,6 +318,16 @@ import altitude.core.util.Util
   }
 
   test("Metadata added initially should be present") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, and an asset persisted with two values of it.
+     *
+     * Assertions:
+     *
+     * The asset reads back with its user metadata.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val data = Map[String, Set[String]](field.persistedId -> Set("one", "two"))
@@ -225,6 +341,16 @@ import altitude.core.util.Util
   }
 
   test("Not defined user metadata values should not return") {
+
+    /**
+     * Setup:
+     *
+     * KEYWORD, NUMBER and TEXT fields, and an asset persisted with a value for the TEXT field only.
+     *
+     * Assertions:
+     *
+     * The asset's user metadata holds only the field that has a value, not the defined but unset ones.
+     */
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
@@ -243,6 +369,16 @@ import altitude.core.util.Util
   }
 
   test("Delete metadata value") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, and an asset persisted with three values of it.
+     *
+     * Assertions:
+     *
+     * Deleting two of the values by ID leaves the field with the third.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val data = Map[String, Set[String]](field.persistedId -> Set("1", "2", "3"))
@@ -263,6 +399,18 @@ import altitude.core.util.Util
   }
 
   test("Metadata IDs should be created and not overwritten") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field and a NUMBER field, an asset with one keyword value set, and a second asset persisted with the same
+     * metadata.
+     *
+     * Assertions:
+     *
+     * A stored value gets an ID, adding a value of another field leaves that ID unchanged, and metadata given at asset creation
+     * gets IDs too.
+     */
     val field1 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val field2 = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.NUMBER))
@@ -295,6 +443,20 @@ import altitude.core.util.Util
   }
 
   test("Adding empty keyword value should be explicitly not allowed") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field and one asset.
+     *
+     * Assertions:
+     *
+     * Adding a blank value fails validation.
+     *
+     * Edge cases:
+     *
+     * An empty string, spaces only, and a mix of spaces, a tab and a newline.
+     */
     val _metadataField = UserMetadataField(
       name = Util.randomStr(),
       fieldType = FieldType.KEYWORD
@@ -317,6 +479,16 @@ import altitude.core.util.Util
   }
 
   test("Boolean values should replace each other with no errors") {
+
+    /**
+     * Setup:
+     *
+     * A BOOL field and one asset, given true, true again, then false.
+     *
+     * Assertions:
+     *
+     * Each value replaces the previous one without a duplicate error, so the field ends with the last value, false, alone.
+     */
     val _metadataField = UserMetadataField(
       name = Util.randomStr(),
       fieldType = FieldType.BOOL
@@ -330,10 +502,20 @@ import altitude.core.util.Util
     testApp.service.metadata.addMetadataValue(asset.persistedId, metadataField.persistedId, false)
 
     val metadata = testApp.service.metadata.getMetadata(asset.persistedId)
-    metadata.get(metadataField.persistedId).get.size shouldBe 1
+    metadata.get(metadataField.persistedId).value.map(_.value) shouldBe Set("false")
   }
 
   test("Text fields cannot be blank") {
+
+    /**
+     * Setup:
+     *
+     * A TEXT field and one asset.
+     *
+     * Assertions:
+     *
+     * Adding a value of only spaces fails validation.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.TEXT))
 
     val asset: Asset = testContext.persistAsset()
@@ -344,6 +526,16 @@ import altitude.core.util.Util
   }
 
   test("Update value by ID") {
+
+    /**
+     * Setup:
+     *
+     * A TEXT field set to "Some text" on one asset.
+     *
+     * Assertions:
+     *
+     * Updating the value by its ID changes the text and keeps the ID.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.TEXT))
 
     val asset: Asset = testContext.persistAsset()
@@ -369,6 +561,17 @@ import altitude.core.util.Util
   }
 
   test("Updating value by ID should work case-insensitively") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field set to "tag1" on one asset.
+     *
+     * Assertions:
+     *
+     * Values compare case-insensitively, yet changing the value to "TAG1" by its ID is not refused as a duplicate of itself: the
+     * new case is stored under the same ID.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val asset: Asset = testContext.persistAsset()
@@ -395,6 +598,16 @@ import altitude.core.util.Util
   }
 
   test("Updating value by ID with the same value should not raise exceptions") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field set to "tag1" on one asset.
+     *
+     * Assertions:
+     *
+     * Updating the value by its ID to the same text succeeds and leaves the ID and the value unchanged.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val asset: Asset = testContext.persistAsset()
@@ -419,6 +632,16 @@ import altitude.core.util.Util
   }
 
   test("Updating value by ID with empty value should raise") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field set to "tag1" on one asset.
+     *
+     * Assertions:
+     *
+     * Updating the value by its ID to whitespace only, spaces and a tab, fails validation.
+     */
     val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
 
     val asset: Asset = testContext.persistAsset()
@@ -435,5 +658,32 @@ import altitude.core.util.Util
     intercept[ValidationException] {
       testApp.service.metadata.updateMetadataValue(asset.persistedId, storedValue.persistedId, "  \t  ")
     }
+  }
+
+  test("A value that differs only in letter case is a duplicate, however many values the field holds") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field on one asset holding five values, "one" to "five".
+     *
+     * Assertions:
+     *
+     * Adding "THREE" fails validation as a duplicate of "three", and the field keeps its five values.
+     *
+     * Edge cases:
+     *
+     * Five values make the stored set a hashed set, which looks a value up by its hash code before comparing.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val asset: Asset = testContext.persistAsset()
+    val values = List("one", "two", "three", "four", "five")
+    values.foreach(testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, _))
+
+    intercept[ValidationException] {
+      testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "THREE")
+    }
+
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe values.toSet
   }
 }

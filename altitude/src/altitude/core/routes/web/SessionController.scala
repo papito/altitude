@@ -32,11 +32,11 @@ class SessionController(using logger: Logger) extends cask.Routes:
   /** Process login form submission */
   @cask.postForm("/login")
   def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] =
-    logger.info(s"Login attempt for user: $login")
+    logger.trace(s"Login attempt for user: $login")
 
     App.altitude.service.user.loginAndSetUser(login, password) match {
       case Some((user, token)) =>
-        logger.info(s"User logged in successfully: ${user.email}")
+        logger.debug(s"User logged in successfully: ${user.email}")
 
         // Determine where to redirect after successful login
         // Validate redirect URL to prevent open redirect vulnerabilities
@@ -82,7 +82,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
 
     tokenOpt.foreach {
       token =>
-        logger.info("Logging out user")
+        logger.trace("Logging out user")
         App.altitude.service.user.logout(token)
     }
 
@@ -115,7 +115,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
 
     tokenOpt.foreach {
       token =>
-        logger.info("API logout")
+        logger.trace("API logout")
         App.altitude.service.user.logout(token)
     }
 

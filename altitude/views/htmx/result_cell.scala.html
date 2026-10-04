@@ -4,22 +4,22 @@
 @import altitude.core.models.Asset
 
 @* One cell of the results grid, ungrouped or grouped. The page's last cell carries how the next page is reached, for the
-   IntersectionObserver in js/search-results/infinite-scroll.js, which requests it through the search funnel: the next page
-   number (an ungrouped search) or the encoded cursor (a grouped one), never both. Every other cell carries neither.
+   IntersectionObserver in js/search-results/infinite-scroll.js, which requests it through the search funnel: the encoded
+   cursor of the page. Every other cell carries none.
    `alt-has-no-date` keeps its name: the controller tests assert on it. The cell's `id` is `asset-<id>` unless the grid
    holds the asset more than once (a Location grouping passes `asset-<id>-in-<locationId>`); `data-asset-id` on the
-   thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; a Video's cell
-   wears a play badge over its Preview and shows its duration among the metadata. *@
-@(asset: Asset, isContinuousScroll: Boolean, nextPage: Option[Int] = None, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
+   thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; the cell of an
+   asset that plays, a Video or an animated GIF, wears a play badge over its Preview and shows its duration among the
+   metadata. *@
+@(asset: Asset, isContinuousScroll: Boolean, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
 @defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
 <div id="@{Option(cellId).getOrElse(s"asset-${asset.persistedId}")}"
-     class="@if(nextPage.isDefined || nextCursor.isDefined) {cell last-cell} else {cell}"
+     class="@if(nextCursor.isDefined) {cell last-cell} else {cell}"
      data-folder-id="@{asset.folderId}"
      data-media-type="@{asset.assetType.mediaType}"
      @if(asset.isTriaged){data-is-triaged="true"}
      @if(showNoDate && asset.originalCreatedAt.isEmpty){alt-has-no-date="true"}
-     @if(nextPage.isDefined){data-app-search-next-page="@{nextPage.get}"}
      @if(nextCursor.isDefined){data-app-search-after="@{nextCursor.get}"}>
 
     @* The thumbnail box: the drag handle, the box-selection hit target, and where the selection

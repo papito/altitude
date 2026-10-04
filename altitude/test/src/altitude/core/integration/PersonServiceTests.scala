@@ -4,6 +4,7 @@ import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
+import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 import scalasql.core.SqlStr.SqlStringSyntax
 
@@ -12,6 +13,7 @@ import scala.util.Random
 import altitude.core.Altitude
 import altitude.core.Const.FaceRecognition
 import altitude.core.DuplicateException
+import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 import altitude.core.models.Face
@@ -26,6 +28,16 @@ import altitude.core.util.Util
   val NUM_OF_FACES = 12
 
   test("A Face's Frame time is stored and read back, and a Face in an image has none") {
+
+    /**
+     * Setup:
+     *
+     * One asset and one Person with two Faces: one with a Frame time of 4500 ms, as in a Video, and one without, as in an image.
+     *
+     * Assertions:
+     *
+     * Reading the asset's Faces returns the Video Face's Frame time as stored and none for the image Face.
+     */
     val asset = testContext.persistAsset()
     val person = testApp.service.person.addPerson(Person())
     val inVideo = testApp.service.person.addFace(makeFace(frameTimeMs = Some(4500L)), asset, person)
@@ -37,6 +49,16 @@ import altitude.core.util.Util
   }
 
   test("A Face's quality and tier are stored and read back") {
+
+    /**
+     * Setup:
+     *
+     * One asset and one Person with a match-only Face of quality 12.5 and an enrolled Face of quality 27.25.
+     *
+     * Assertions:
+     *
+     * Both Faces read back with the quality and tier they were stored with.
+     */
     val asset = testContext.persistAsset()
     val person = testApp.service.person.addPerson(Person())
     val matchOnly = testApp.service.person.addFace(makeFace(quality = 12.5, isEnrolled = false), asset, person)
@@ -63,6 +85,16 @@ import altitude.core.util.Util
   )
 
   test("Can save and retrieve a face object") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/movies-speed.png`, a still with two faces.
+     *
+     * Assertions:
+     *
+     * Detection finds two faces, the asset has as many stored Faces, and they belong to two People with one Face each.
+     */
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
@@ -78,7 +110,17 @@ import altitude.core.util.Util
     people.last.numOfFaces should be(1)
   }
 
-  test("An unknown person is marked as known edit") {
+  test("Renaming an unknown person marks it as named") {
+
+    /**
+     * Setup:
+     *
+     * A Person added without a name, which gives it an "Unknown N" name.
+     *
+     * Assertions:
+     *
+     * The person is unnamed when added and when read back, and becomes named once renamed to "Ben".
+     */
     val person = testApp.service.person.addPerson(Person())
     person.isNamed should be(false)
 
@@ -92,6 +134,16 @@ import altitude.core.util.Util
   }
 
   test("Update person's name") {
+
+    /**
+     * Setup:
+     *
+     * A Person added with the name "Ben", its row read back with raw SQL.
+     *
+     * Assertions:
+     *
+     * The row holds the name and its lowercase sort name, both as added and after renaming to "Jerry".
+     */
     val name = "Ben"
     val person: Person = testApp.service.person.addPerson(Person(name = Some(name)))
     person.isNamed should be(true)
@@ -116,6 +168,16 @@ import altitude.core.util.Util
   }
 
   test("Faces are added to a person") {
+
+    /**
+     * Setup:
+     *
+     * Imports of two photos of the same person, `people/meme-ben2.png` and `people/meme-ben3.png`.
+     *
+     * Assertions:
+     *
+     * The second photo's face joins the Person the first photo started, who then has two Faces.
+     */
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     testApp.service.library.addImportAsset(importAsset1)
 
@@ -129,6 +191,16 @@ import altitude.core.util.Util
   }
 
   test("Person becomes valid after adding enough faces") {
+
+    /**
+     * Setup:
+     *
+     * A new Person given `MIN_FACES_THRESHOLD` (3) test Faces, each on an asset of its own.
+     *
+     * Assertions:
+     *
+     * The person is below the face threshold when added and above it once the Faces are in.
+     */
     val person: Person = testApp.service.person.addPerson(Person())
     person.isAboveThreshold should be(false)
 
@@ -139,6 +211,16 @@ import altitude.core.util.Util
   }
 
   test("Person has cover face assigned") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/meme-ben.jpg`, a photo of one person, into a library with no People.
+     *
+     * Assertions:
+     *
+     * The import starts one Person with one Face, and that Face is the person's cover.
+     */
     val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
@@ -151,18 +233,44 @@ import altitude.core.util.Util
   }
 
   test("Can add and retrieve a person") {
+
+    /**
+     * Setup:
+     *
+     * Two Persons added with no name and no Faces.
+     *
+     * Assertions:
+     *
+     * Both read back by ID as visible and unnamed, each with its own "Unknown N" name.
+     */
     val person1Model = Person()
     val person1: Person = testApp.service.person.addPerson(person1Model)
 
     val retrievedPerson1: Person = testApp.service.person.getById(person1.persistedId)
     retrievedPerson1.isHidden should be(false)
+    retrievedPerson1.isNamed should be(false)
 
     val person2Model = Person()
     val person2: Person = testApp.service.person.addPerson(person2Model)
     val retrievedPerson2: Person = testApp.service.person.getById(person2.persistedId)
+    retrievedPerson2.isHidden should be(false)
+    retrievedPerson2.isNamed should be(false)
+    // Each unnamed person draws its own number from the label sequence
+    retrievedPerson2.name should not be retrievedPerson1.name
   }
 
   test("Merging people results in correct persistence state") {
+
+    /**
+     * Setup:
+     *
+     * Person A with three test Faces and Person B with four, each Face on an asset of its own; A is merged into B.
+     *
+     * Assertions:
+     *
+     * B has seven Faces by the merge result, by its stored count and by a Search for its assets, and every one of A's former
+     * Faces now belongs to B.
+     */
     val personA: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personA, 3)
 
@@ -192,7 +300,39 @@ import altitude.core.util.Util
     faces.count(_.personId.get == mergedB.persistedId) should be(NEW_FACES_TOTAL)
   }
 
+  test("A person's top faces are the best detections, best first") {
+
+    /**
+     * Setup:
+     *
+     * A person with eight faces of random detection scores, read with a limit of three and with no limit to speak of.
+     *
+     * Assertions:
+     *
+     * The three returned are the three highest-scoring of the eight, in descending score order.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, 8)
+
+    val all = testApp.service.person.getPersonFaces(person.persistedId)
+    val top = testApp.service.person.getPersonFaces(person.persistedId, limit = 3)
+
+    all.size should be(8)
+    all.map(_.detectionScore) should be(all.map(_.detectionScore).sorted.reverse)
+    top.map(_.persistedId) should be(all.take(3).map(_.persistedId))
+  }
+
   test("Person merge B -> A") {
+
+    /**
+     * Setup:
+     *
+     * Persons A and B with twelve test Faces each, every Face on an asset of its own; B is merged into A.
+     *
+     * Assertions:
+     *
+     * A holds all 24 Faces, by its stored count and by the Faces stored for it, while B is left with a zero count and no Faces.
+     */
     val personA: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personA, NUM_OF_FACES)
 
@@ -204,7 +344,7 @@ import altitude.core.util.Util
     val mergedA: Person = testApp.service.person.merge(dest = personA, source = personB)
 
     //
-    // *** Sanity checks for persisted instances of source and destination2
+    // *** Sanity checks for persisted instances of source and destination
     //
     val aFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedA.persistedId)
     aFacesInDb.size should be(NUM_OF_FACES * 2)
@@ -220,6 +360,17 @@ import altitude.core.util.Util
   }
 
   test("Person merge C -> B, B -> A") {
+
+    /**
+     * Setup:
+     *
+     * Named Persons C and B with twelve test Faces each and A with none; C is merged into B, then the merged B into A.
+     *
+     * Assertions:
+     *
+     * After each merge the destination holds all 24 Faces, B is above the face threshold after the first, and every merged-away
+     * person is left with a zero count and no Faces, so C's Faces travel through B to A.
+     */
     val personC: Person = testApp.service.person.addPerson(Person(name = Some("C")))
     testContext.addTestFacesAndAssets(personC, NUM_OF_FACES)
 
@@ -268,6 +419,16 @@ import altitude.core.util.Util
   }
 
   test("Merged named person does not cause naming conflicts") {
+
+    /**
+     * Setup:
+     *
+     * Persons named "London" and "Phoenix" with one test Face each; Phoenix is merged into London.
+     *
+     * Assertions:
+     *
+     * London keeps its name, and a new Person can then take the name "Phoenix", since the name index covers only live people.
+     */
     val mergedIntoName = "London"
     val personA: Person = testApp.service.person.addPerson(Person(name = Some(mergedIntoName)))
     testContext.addTestFacesAndAssets(personA)
@@ -287,6 +448,16 @@ import altitude.core.util.Util
   }
 
   test("A live person cannot take the name of another live person") {
+
+    /**
+     * Setup:
+     *
+     * Two live Persons named "Alice" and "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming Bob to "Alice" fails as a duplicate.
+     */
     testApp.service.person.addPerson(Person(name = Some("Alice")))
     val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
 
@@ -294,6 +465,21 @@ import altitude.core.util.Util
   }
 
   test("A person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover") {
+
+    /**
+     * Setup:
+     *
+     * Three Persons with one test Face each. The first is merged into the second, the second takes the first's cover Face as its
+     * own, and the second is then merged into the third.
+     *
+     * Assertions:
+     *
+     * Both merged-away rows keep the same cover face ID, which the cover face index allows because it covers only live people.
+     *
+     * Edge cases:
+     *
+     * Two soft-deleted people sharing one cover Face.
+     */
     val first: Person = testApp.service.person.addPerson(Person())
     val second: Person = testApp.service.person.addPerson(Person())
     val third: Person = testApp.service.person.addPerson(Person())
@@ -311,6 +497,18 @@ import altitude.core.util.Util
   }
 
   test("Listing the live people reads a partial index over them") {
+
+    /**
+     * Setup:
+     *
+     * A lookup on the person table with the predicates of `PersonDao.getAll`: the repository, a non-zero face count and not
+     * deleted.
+     *
+     * Assertions:
+     *
+     * The engine's plan reads one of the partial indexes over the live people, `person_03`, or `person_02` when PostgreSQL plans
+     * over a handful of rows.
+     */
     val engine = searchDialect
     import engine.dialect.*
     val repositoryId = RequestContext.getRepository.persistedId
@@ -324,6 +522,18 @@ import altitude.core.util.Util
   }
 
   test("Merging of people in the same asset results in correct face counts") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/movies-speed.png`, which starts two People with one Face each in the same asset; the second is merged
+     * into the first.
+     *
+     * Assertions:
+     *
+     * The merged person's face count is one, not two: the count is recounted from a Search for the person's assets, and both
+     * Faces are in one asset.
+     */
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
@@ -340,7 +550,7 @@ import altitude.core.util.Util
     val mergedPerson: Person = testApp.service.person.merge(dest = people.head, source = people.last)
 
     /**
-     * After the merge, there should be still oen asset and one person with one asset. This is technically not a real scenario -
+     * After the merge, there should be still one asset and one person with one asset. This is technically not a real scenario -
      * except for twins, one person cannot be in the image twice, but the use case is real. As same person gets merged into
      * themselves across assets, the face count should not drift and reflect the actual search results
      */
@@ -350,7 +560,17 @@ import altitude.core.util.Util
   }
 
   test("Known person keeps the same when merged into Unknown") {
-    // destination merge person is not named
+
+    /**
+     * Setup:
+     *
+     * An unnamed Person A and a Person B named "London", each with one test Face; B is merged into A, so the destination is not
+     * named.
+     *
+     * Assertions:
+     *
+     * A takes B's name, since only the source was named.
+     */
     val personA: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personA)
 
@@ -367,6 +587,16 @@ import altitude.core.util.Util
   }
 
   test("Same person can appear in the same image more than once") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/twins.png`, the same person twice in one image.
+     *
+     * Assertions:
+     *
+     * The asset has one Person with two Faces: the second face matches the first, stored just before it.
+     */
     val importAsset = IntegrationTestUtil.getImportAsset("people/twins.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
@@ -376,6 +606,16 @@ import altitude.core.util.Util
   }
 
   test("Hidden person should not be returned with bulk retrieval") {
+
+    /**
+     * Setup:
+     *
+     * Two Persons with six test Faces each, both above the face threshold; one is then hidden.
+     *
+     * Assertions:
+     *
+     * Listing the people above the threshold returns both before hiding and only the visible one after.
+     */
     val person: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, 6)
 
@@ -388,6 +628,16 @@ import altitude.core.util.Util
   }
 
   test("Hidden person is not returned for an asset") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/meme-ben.jpg`, which starts one Person; that person is then hidden.
+     *
+     * Assertions:
+     *
+     * The asset lists its Person before hiding and no one after.
+     */
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
     val asset = testApp.service.library.addImportAsset(importAsset1)
 
@@ -400,6 +650,17 @@ import altitude.core.util.Util
   }
 
   test("Recycled asset should not count toward face count") {
+
+    /**
+     * Setup:
+     *
+     * Two Persons sharing five assets, each asset with one test Face of each; two of the assets are recycled.
+     *
+     * Assertions:
+     *
+     * The first person's face count drops from five to three on recycling, while all five of their Faces stay stored until a
+     * purge.
+     */
     val totalAssets = 5
     val people = List.fill(2)(testApp.service.person.addPerson(Person()))
     var person: Person = people.head
@@ -425,6 +686,16 @@ import altitude.core.util.Util
   }
 
   test("Restored asset should restore person face counts") {
+
+    /**
+     * Setup:
+     *
+     * Two Persons sharing five assets, each asset with one test Face of each; two of the assets are recycled, then restored.
+     *
+     * Assertions:
+     *
+     * The first person's face count drops from five to three on recycling and returns to five on restore.
+     */
     val totalAssets = 5
     val people = List.fill(2)(testApp.service.person.addPerson(Person()))
     var person: Person = people.head
@@ -452,6 +723,16 @@ import altitude.core.util.Util
   }
 
   test("Moving triaged asset to a folder does not change person face counts") {
+
+    /**
+     * Setup:
+     *
+     * A Person with one Face on a triaged asset, which is then moved to the repository's root folder.
+     *
+     * Assertions:
+     *
+     * The person's face count is one before the move and still one after.
+     */
     val person: Person = testApp.service.person.addPerson(Person())
     val triagedAsset: Asset = testContext.persistAsset(isTriaged = true)
 
@@ -480,5 +761,42 @@ import altitude.core.util.Util
 
     persistedPerson = testApp.service.person.getById(person.persistedId)
     persistedPerson.numOfFaces shouldBe 1
+  }
+
+  test("Incrementing a counter opens its own transaction") {
+
+    /**
+     * Setup:
+     *
+     * A new Person whose face count is incremented with no transaction around the call.
+     *
+     * Assertions:
+     *
+     * The increment is committed: the person reads back with one face.
+     */
+    val person = testApp.service.person.addPerson(Person())
+    testApp.service.person.increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
+    testApp.service.person.getPersonById(person.persistedId).numOfFaces shouldBe 1
+  }
+
+  test("An asset's faces are read with their people") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/movies-speed.png`, a still with two faces, and a second asset with no faces.
+     *
+     * Assertions:
+     *
+     * Each of the first asset's two Faces comes paired with the Person it belongs to, and the faceless asset yields nothing.
+     */
+    val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+
+    val facesWithPeople = testApp.service.person.getAssetFacesWithPeople(importedAsset.persistedId)
+    facesWithPeople.size should be(2)
+    facesWithPeople.foreach { case (face, person) => face.personId shouldBe Some(person.persistedId) }
+
+    testApp.service.person.getAssetFacesWithPeople(testContext.persistAsset().persistedId) shouldBe empty
   }
 }

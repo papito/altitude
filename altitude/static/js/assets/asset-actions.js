@@ -6,7 +6,7 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "../common/snackbar.js"
-import { allowHttpStatuses, getHttpErrorMessage, http } from "../http/client.js"
+import { getHttpErrorMessage, http } from "../http/client.js"
 import { cellsOf } from "../search-results/cells.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
 
@@ -196,6 +196,10 @@ export function createAssetActions({
         }
     }
 
+    /**
+     * An asset whose content was imported again after it was recycled stays in the trash: the
+     * server restores the rest and names both, so only the restored cells leave the grid.
+     */
     async function restoreAssets({ assetIds }) {
         const payload = { assetIds }
 
@@ -203,24 +207,24 @@ export function createAssetActions({
             const response = await http.put(
                 `/api/asset/r/${context.getRepoId()}/restore`,
                 payload,
-                {
-                    validateStatus: allowHttpStatuses(409),
-                },
             )
+            const { restored, duplicates } = response.data
+            const restoredMessage = `${
+                restored.length > 1 ? `${restored.length} assets` : "Asset"
+            } restored`
 
-            if (response.status === 409) {
+            if (duplicates.length === 0) {
+                showSuccessSnackBar(restoredMessage)
+            } else {
+                const skippedMessage = `${duplicates.length} not restored: an asset with the same content exists`
                 showWarningSnackBar(
-                    "Cannot restore: a non-recycled asset with the same content already exists",
+                    restored.length > 0
+                        ? `${restoredMessage}; ${skippedMessage}`
+                        : skippedMessage,
                 )
-                return
             }
 
-            const successMessage = `${
-                assetIds.length > 1 ? "Assets" : "Asset"
-            } restored`
-            showSuccessSnackBar(successMessage)
-
-            removeAssetsFromGrid(assetIds)
+            removeAssetsFromGrid(restored)
             selectedAssets().reset()
             refreshCounts()
         } catch (error) {

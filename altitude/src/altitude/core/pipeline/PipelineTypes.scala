@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
-import altitude.core.models.Face
 import altitude.core.models.Repository
 import altitude.core.models.User
 
@@ -19,10 +18,8 @@ object PipelineTypes:
       InvalidAsset(dataAsset.asset, Some(cause), Some(dataAsset.path))
 
   type TAssetOrInvalid = Either[Asset, InvalidAsset]
-  private type TDataAssetOrInvalid = Either[AssetWithData, InvalidAsset]
+  type TDataAssetOrInvalid = Either[AssetWithData, InvalidAsset]
   type TDataAssetOrInvalidWithContext = (TDataAssetOrInvalid, PipelineContext)
   type TDataAssetWithContext = (AssetWithData, PipelineContext)
   type TAssetOrInvalidWithContext = (TAssetOrInvalid, PipelineContext)
   type TAssetWithContext = (Asset, PipelineContext)
-
-  type TFaceWithContext = (Face, PipelineContext)

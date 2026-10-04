@@ -2,25 +2,21 @@ package altitude.core.service
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
-import org.apache.pekko.stream.OverflowStrategy
-import org.apache.pekko.stream.QueueOfferResult
 import org.apache.pekko.stream.scaladsl.Flow
-import org.apache.pekko.stream.scaladsl.Keep
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-import scala.util.Failure
-import scala.util.Success
+import scala.jdk.DurationConverters.*
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
+import altitude.core.Const
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
+import altitude.core.pipeline.QueuedPipeline
 import altitude.core.pipeline.flows._
 
 class PurgePipelineService(app: Altitude):
@@ -41,7 +37,15 @@ class PurgePipelineService(app: Altitude):
       .via(deletePurgedFromDBFlow)
       .mergeSubstreams
 
-  private val queuePurgePipeline = runAsQueue()
+  private val queue = QueuedPipeline[TAssetWithContext](
+    "purge",
+    combinedFlow,
+    describe = asset => s"asset [${asset._1.persistedId}]",
+    bufferSize = app.parallelism * 2,
+    maxConcurrentOffers = app.parallelism,
+    shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala,
+    restartOnFailure = app.isPipelineRestartEnabled
+  )
 
   def run(
       source: Source[TAssetWithContext, NotUsed],
@@ -50,46 +54,23 @@ class PurgePipelineService(app: Altitude):
       .via(combinedFlow)
       .runWith(outputSink)
 
-  private def runAsQueue() =
-    logger.info("Starting the purge queue pipeline")
+  /**
+   * Queues the assets for purging one at a time, offering each once the queue has taken the one before, so a recycle bin of any
+   * size is queued under the queue's backpressure while the caller goes on. An asset the queue does not take stays marked for
+   * purging, for the startup job to queue again.
+   */
+  def enqueue(assets: Seq[TAssetWithContext]): Unit =
+    given ExecutionContext = system.executionContext
 
-    val (queue, source) = Source
-      .queue[TAssetWithContext](
-        bufferSize = app.parallelism * 2,
-        overflowStrategy = OverflowStrategy.backpressure,
-        maxConcurrentOffers = app.parallelism)
-      .preMaterialize()
-
-    val res = source
-      .merge(Source.never) // Keep the queue open and never complete
-      .via(combinedFlow)
-      .toMat(Sink.foreach(_ => ()))(Keep.right)
+    Source(assets)
+      .mapAsync(1) {
+        asset =>
+          val assetId = asset._1.persistedId
+          queue
+            .offer(asset)
+            .map(_ => logger.trace(s"Asset [$assetId] queued for purging"))
+            .recover { case ex => logger.error(s"Asset [$assetId] not queued for purging", ex) }
+      }
       .run()
 
-    res.onComplete {
-      case Success(_) =>
-        // this should never happen DURING the app run
-        logger.error("Purge queue pipeline completed")
-      case Failure(e) =>
-        logger.error("Purge queue pipeline failed", e)
-    }(ExecutionContext.global)
-
-    queue
-
-  def addToQueue(asset: TAssetWithContext): Future[Unit] =
-    queuePurgePipeline
-      .offer(asset)
-      .map {
-        case QueueOfferResult.Enqueued =>
-          logger.info(s"Added asset to the purge queue: ${asset._1.fileName}")
-        case QueueOfferResult.Dropped =>
-          logger.warn(s"Asset dropped from the purge queue: ${asset._1.fileName}}")
-        case QueueOfferResult.Failure(ex) =>
-          logger.error(s"Failed to add asset to the purge queue: ${asset._1.fileName}", ex)
-        case QueueOfferResult.QueueClosed =>
-          logger.warn(s"Purge queue closed, asset dropped: ${asset._1.fileName}")
-      }(ExecutionContext.global)
-
-  def shutdown(): Unit =
-    queuePurgePipeline.complete()
-    Await.result(queuePurgePipeline.watchCompletion(), Duration.Inf)
+  def shutdown(): Unit = queue.shutdown()

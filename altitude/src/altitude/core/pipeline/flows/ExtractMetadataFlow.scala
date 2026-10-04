@@ -5,25 +5,22 @@ import java.time.ZoneOffset
 import org.apache.pekko.NotUsed
 import org.apache.pekko.stream.scaladsl.Flow
 
-import scala.concurrent.Future
+import scala.concurrent.ExecutionContext
 
 import altitude.core.Altitude
-import altitude.core.VideoException
 import altitude.core.models.Asset
-import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
-import altitude.core.pipeline.PipelineUtils.setThreadLocalRequestContext
+import altitude.core.pipeline.PipelineUtils.stage
 import altitude.core.util.CaptureDateInputs
 import altitude.core.util.CaptureDateResolver
 import altitude.core.util.GeoLocationResolver
 
 object ExtractMetadataFlow:
   def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
-    Flow[TDataAssetOrInvalidWithContext].mapAsync(app.parallelism) {
-      case (Left(dataAsset), ctx) =>
-        setThreadLocalRequestContext(ctx)
-
+    given ExecutionContext = app.importDispatcher
+    stage("Metadata extraction", app.importParallelism) {
+      dataAsset =>
         debugInfo(s"\tExtracting metadata for asset: ${dataAsset.asset.fileName}")
         // Merge upstream synthetic metadata so every resolver input remains available for a later replay.
         val extractedMetadata = dataAsset.asset.extractedMetadata.merge(app.service.metadataExtractor.extract(dataAsset.path))
@@ -37,24 +34,21 @@ object ExtractMetadataFlow:
           s"\tCoordinates for ${dataAsset.asset.fileName}: ${point.map(p => s"${p.latitude}, ${p.longitude}").getOrElse("none")}")
         val publicMetadata = Asset.getPublicMetadata(extractedMetadata)
 
-        try
-          val (width, height, durationMs) = app.service.asset.getDimensionsAndDuration(dataAsset)
+        // A file whose type claims an image or a video its decoder cannot read is dropped here, as an ImageException or a
+        // VideoException
+        val (width, height, durationMs) = app.service.asset.getDimensionsAndDuration(dataAsset)
 
-          val asset: Asset = dataAsset.asset.copy(
-            extractedMetadata = extractedMetadata,
-            publicMetadata = publicMetadata,
-            originalCreatedAt = capture.map(_.at),
-            originalCreatedAtSource = capture.map(_.source),
-            latitude = point.map(_.latitude),
-            longitude = point.map(_.longitude),
-            width = width,
-            height = height,
-            durationMs = durationMs
-          )
+        val asset: Asset = dataAsset.asset.copy(
+          extractedMetadata = extractedMetadata,
+          publicMetadata = publicMetadata,
+          originalCreatedAt = capture.map(_.at),
+          originalCreatedAtSource = capture.map(_.source),
+          latitude = point.map(_.latitude),
+          longitude = point.map(_.longitude),
+          width = width,
+          height = height,
+          durationMs = durationMs
+        )
 
-          Future.successful((Left(dataAsset.copy(asset = asset)), ctx))
-        catch
-          // A container Tika calls a video but FFmpeg cannot open is dropped, not a pipeline failure
-          case e: VideoException => Future.successful((Right(InvalidAsset(dataAsset, e)), ctx))
-      case (Right(invalid), ctx) => Future.successful((Right(invalid), ctx))
+        Left(dataAsset.copy(asset = asset))
     }

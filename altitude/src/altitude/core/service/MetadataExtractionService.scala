@@ -1,6 +1,7 @@
 package altitude.core.service
 
 import com.drew.imaging.ImageMetadataReader
+import com.drew.imaging.ImageProcessingException
 import com.drew.lang.KeyValuePair
 import com.drew.metadata.Directory
 import com.drew.metadata.png.PngDirectory
@@ -47,8 +48,16 @@ class MetadataExtractionService:
           case _ => ()
       }
 
+      logger.trace(
+        s"Extracted ${extractedMetadata.data.values.map(_.size).sum} values " +
+          s"in ${extractedMetadata.data.size} directories from $path")
       extractedMetadata
     catch
+      // A format the reader does not know, or a file it cannot parse: the asset goes on without metadata, and the decoder that
+      // reads its dimensions decides whether the file is usable
+      case e: ImageProcessingException =>
+        logger.debug(s"No metadata extracted from $path: ${e.getMessage}")
+        ExtractedMetadata()
       case e: Exception =>
         logger.error("Error extracting metadata", e)
         ExtractedMetadata()
@@ -72,9 +81,11 @@ class MetadataExtractionService:
       val detector: Detector = new DefaultDetector
       val tikaMediaType: TikaMediaType = detector.detect(inputStream.get, metadata)
 
-      AssetType(
+      val assetType = AssetType(
         mediaType = tikaMediaType.getType,
         mediaSubtype = tikaMediaType.getSubtype,
         mime = tikaMediaType.getBaseType.toString)
+      logger.trace(s"Detected $path as ${assetType.mime}")
+      assetType
 
     finally if inputStream.isDefined then inputStream.get.close()

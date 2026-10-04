@@ -13,13 +13,22 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 
 ## Where it runs
 
-Face recognition is a stage of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists
-and is indexed: `FacialRecognitionFlow`, its own async stage on both engines. It calls
-`FaceRecognitionService.processAsset`, which dispatches on the asset's media type: `processImage` or `processVideo`.
-Both detect the faces first, outside any transaction, and then match and store them in a short `withFaceVector`
-transaction, so the detection never holds SQLite's one write connection.
-Whatever the stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
-rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`.
+Faces are two stages of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists and is
+indexed, on both engines, their work on the import dispatcher's threads (`import.parallelism`):
+
+- `DetectFacesFlow` calls `FaceRecognitionService.detect`, which finds the faces without touching the database: an
+  image's every detection (`extractFaces`), or a Video's clusters (see **Videos**). An animated image (an image with a
+  duration, an animated GIF) is not searched for faces. The stage works on up to `import.parallelism` assets of a
+  repository at once. The detections, a `DetectedFaces` of each Face with its crops, ride on the pipeline element
+  (`AssetWithData.detectedFaces`) to the next stage.
+- `RecognizeFacesFlow` calls `recognizeAndStore`, which matches and stores them in a short `withFaceVector`
+  transaction, so the detection never holds SQLite's one write connection. It works on one asset of a repository at a
+  time, in upload order, so a face can join the Person an earlier photo of the same upload started.
+
+Whatever a stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
+rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`. Each Face's files are written as it
+is stored, inside that transaction, and a rollback deletes the files already written (`withFaceFiles`), so a Face in the
+database always has its files and a rolled-back one leaves none.
 
 `withFaceVector` (`transactions/TransactionManager.scala`) wraps every read or write that touches the `features`
 column: on SQLite it loads the `sqlite-vector` extension and runs `vector_init('face', 'features',
@@ -64,10 +73,19 @@ one's own files.
 `FaceRecognitionService.recognizeFace(face): Option[Person]` finds the Person for an unsaved Face:
 
 1. `FaceDao.searchClosestFaceMatches` returns the `face.recognition.match_count` (5) nearest stored Faces within
-   `face.recognition.cosine_distance_threshold` (0.55), in distance order. The SQL is hand-written per engine
-   (pgvector `<=>`, or `vector_full_scan` on SQLite; neither has a vector index, so it is an exact scan of the
-   repository) and sees only **enrolled** Faces of people who are **not a bad match**. Hidden people stay matchable:
-   hiding is a display preference.
+   `face.recognition.cosine_distance_threshold` (0.55), in distance order. The SQL is hand-written per engine and sees
+   only **enrolled** Faces of people who are **not a bad match**, in the context repository. Hidden people stay
+   matchable: hiding is a display preference.
+   - **PostgreSQL** (`postgres.FaceDao.CLOSEST_MATCHES_SQL`): the candidates come from `face_03`, a partial HNSW index
+     over the enrolled Faces' vectors at half precision (`features::halfvec(512)`, `WHERE is_enrolled`). The statement
+     asks it for four times `match_count` Faces, ordered by the same cast, then takes their exact `<=>` distances at
+     full precision, applies the threshold and keeps the nearest. `withFaceVector` sets `hnsw.ef_search`
+     (`face.recognition.hnsw_ef_search`, 100) and `hnsw.iterative_scan = relaxed_order` for the transaction, so the
+     index scan goes on until its limit is met by Faces that pass the repository and bad-match filters. The search is
+     approximate; over a handful of Faces it is exhaustive.
+   - **SQLite**: `vector_full_scan` is an exact scan of the `face` table, every repository's rows, filtered
+     afterwards. sqlite-vector's quantized scan reads only the rows present when the table was last quantized, so it
+     would miss a Face saved a moment ago, such as the first of two Faces of one image.
 2. The matches vote by Person; most votes win and a tie goes to the closest Face.
 3. With no match, an **enrolled** Face starts a new Person (`PersonService.addPerson`, named "Unknown N" from the
    `person_label` sequence, with a zero-padded sort name). A **match-only** Face is nobody's: `None`, and the caller drops it.
@@ -86,7 +104,7 @@ fires mostly through the Video support rule below.
 
 ## Videos
 
-`processVideo` runs detection on every Sampled frame (`VideoService.sampleTimes`: every
+`detect` runs detection on every Sampled frame of a Video (`VideoService.sampleTimes`: every
 `video.faces.sample_interval_ms`, at most `video.faces.max_sampled_frames`), tags each Face with its Frame time, and
 holds all detections of the video in memory. Then, with the pure functions of the `FaceRecognitionService` companion:
 
@@ -101,8 +119,8 @@ holds all detections of the video in memory. Then, with the pure functions of th
 4. **Support** is the number of distinct Frame times in the cluster. Under `video.faces.min_cluster_frames` (2) the
    Face is match-only whatever its quality, so a passer-by in one frame cannot start a Person. A clip shorter than the
    sample interval has one frame, so nobody enrolls from it.
-5. One Face per Person per Video: when two clusters resolve to the same Person, the later, lower-quality one is
-   dropped with an INFO log, so a pose change that splits a person in two does not fail the import.
+5. One Face per Person per Video: when two clusters resolve to the same Person (`recognizeAndStore`), the later,
+   lower-quality one is dropped, so a pose change that splits a person in two does not fail the import.
 
 ## Storage
 
@@ -122,8 +140,11 @@ The crops live in the file store (`FileSystemStoreService.addFace`) as
 
 A `person` row carries `name`, `is_named`, `num_of_faces`, `cover_face_id`, `is_hidden`, `is_bad_match`, `is_deleted`.
 `PersonService.addFace` inserts the Face, increments `num_of_faces` and sets the cover face when it is the first.
-Recycling an asset decrements the counts of its people and restoring increments them; the faces themselves go with the
-asset on purge. Moving an asset between folders or triage does not touch the counts.
+Recycling an asset decrements the counts of its people and restoring increments them, whether it is restored or moved out
+of the trash into a folder; only the assets a call actually recycles or takes out of the trash are counted. The faces
+themselves go with the asset on purge, and their files with them, except the cover face of its person. An import the
+pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the counts it
+added are given back, its faces and their files go, and a person it started, left with no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
 
 The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilter`: complete (at least
 `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named), incomplete, hidden. Its actions:

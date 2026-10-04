@@ -64,6 +64,26 @@ import altitude.core.util.SearchQuery
   private def bounds(query: SearchQuery = searchQuery()): Option[MapBounds] = testApp.service.library.mapBounds(query)
 
   test("Cells aggregate the plotted points: an asset at its own point, or at its Locations' pins without one") {
+
+    /**
+     * Setup:
+     *
+     * Rome under the Italy category, Sydney and an empty Location; two assets at the same Paris point, an asset without a point
+     * in Rome, one without a point in Rome and Sydney, an asset with its own point in London that is also in Rome, and an asset
+     * with neither, added to Sydney and removed again.
+     *
+     * Assertions:
+     *
+     * The world view gathers the plotted points into one cell per position, with counts that add up to the plotted points and
+     * each cell represented by one of its own assets. The Locations in view list their matching members' count and their
+     * category's name.
+     *
+     * Edge cases:
+     *
+     * Two assets on one point share a cell, an asset in two Locations is plotted at both pins, an asset with its own point is
+     * plotted there and never at its Location's pin (though it still counts in the Location), and neither an empty Location nor
+     * an asset whose membership was removed shows up.
+     */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", (41.9028, 12.4964), Some(italy.persistedId))
     val sydney = addLocation("Sydney", (-33.8688, 151.2093))
@@ -108,6 +128,22 @@ import altitude.core.util.SearchQuery
   }
 
   test("The representative asset of a cell is its newest capture, then the lowest ID; a cell of one carries its asset") {
+
+    /**
+     * Setup:
+     *
+     * Three assets at one Paris point, one undated, one taken on 2026-09-01 and one on 2026-09-05; the dated ones are recycled in
+     * turn and a second undated asset is added. Last, a lone asset at a Tokyo point.
+     *
+     * Assertions:
+     *
+     * A cell is represented by its newest capture and, when none of its assets has a capture time, by the lowest asset ID. A cell
+     * of one is represented by its only asset.
+     *
+     * Edge cases:
+     *
+     * Undated assets rank after dated ones, and among themselves by ID, so the choice is stable across pans.
+     */
     val undated = persistAt(paris._1, paris._2)
     val older = persistAt(paris._1, paris._2)
     val newest = persistAt(paris._1, paris._2)
@@ -124,10 +160,29 @@ import altitude.core.util.SearchQuery
     testApp.service.library.recycleAssets(Set(older.persistedId))
     val alsoUndated = persistAt(paris._1, paris._2)
     setTaken(alsoUndated, None)
-    summary(cellsOf().cells) shouldEqual List((2, List(undated, alsoUndated).map(_.persistedId).min))
+    val lowestUndated = List(undated, alsoUndated).map(_.persistedId).min
+    summary(cellsOf().cells) shouldEqual List((2, lowestUndated))
+
+    val alone = persistAt(35.6762, 139.6503)
+    summary(cellsOf().cells) shouldEqual List((1, alone.persistedId), (2, lowestUndated))
   }
 
   test("Cells merge by the zoom's cell size, and the zoom is clamped to 0..20") {
+
+    /**
+     * Setup:
+     *
+     * Two assets a degree of longitude apart at latitude 48.5.
+     *
+     * Assertions:
+     *
+     * Zoom 0 merges them into one cell placed at their centroid, zoom 10 keeps them apart, and zooms outside 0..20 behave as the
+     * nearest bound.
+     *
+     * Edge cases:
+     *
+     * The out-of-range zooms -5 and 25.
+     */
     val west = persistAt(48.5, 2.2)
     val east = persistAt(48.5, 3.2)
 
@@ -144,6 +199,20 @@ import altitude.core.util.SearchQuery
   }
 
   test("Cells and Locations are clipped to the viewport, across the antimeridian too") {
+
+    /**
+     * Setup:
+     *
+     * A Sydney Location with one member that has no point, an asset in Paris, and assets on either side of the antimeridian.
+     *
+     * Assertions:
+     *
+     * Each viewport returns only the cells and the Locations inside it.
+     *
+     * Edge cases:
+     *
+     * A viewport across the antimeridian gathers both sides, while the same edges the other way round return nothing.
+     */
     val sydney = addLocation("Sydney", (-33.8688, 151.2093))
     val inParis = persistAt(paris._1, paris._2)
     val pinned = testContext.persistAsset()
@@ -163,43 +232,96 @@ import altitude.core.util.SearchQuery
     cellsOf(BoundingBox.parse("-1,-179,1,179")).cells shouldBe Nil
   }
 
-  test("A cells query reads the geotagged assets through the asset_geo partial index") {
-    val inParis = persistAt(paris._1, paris._2)
+  /** A library for the planner: 5,000 copies of the asset, one in ten of them geotagged somewhere on the globe */
+  private def seedGeotagged(template: Asset): Unit = {
+    seedCopies(template.persistedId, copies = 5000, folders = 500)
+    update("""UPDATE asset SET latitude = -80 + (checksum % 160), longitude = -180 + (checksum % 360)
+             | WHERE checksum >= 1000000 AND checksum % 10 = 0""".stripMargin)
+  }
+
+  test("The viewport statements read the geotagged assets through the asset_geo partial index alone") {
+
+    /**
+     * Setup:
+     *
+     * Two assets in Paris and one without a point, the last seeded into 5,000 copies of which one in ten is geotagged, analyzed
+     * and rolled back once the plans are read. The cells statement over a Paris viewport, and the capped count of the grid scoped
+     * to the same box, which is what the crowded-pin panel shows.
+     *
+     * Assertions:
+     *
+     * The cells statement reads its assets' own points from `asset_geo` and nothing else of the asset: the index carries the ID
+     * and the capture time a cell is ranked by, so the read is index-only on PostgreSQL and covering on SQLite. The grid scoped
+     * to the box bounds its assets by `asset_geo` as well.
+     */
+    persistAt(paris._1, paris._2)
     persistAt(48.8606, 2.3376)
-    testContext.persistAsset()
+    val template = testContext.persistAsset()
+    val box = BoundingBox.parse("48,2,49,3")
+    val repositoryId = RequestContext.getRepository.persistedId
 
-    val cells = SearchQueries.mapCells(
-      searchDialect,
-      searchQuery(),
-      RequestContext.getRepository.persistedId,
-      BoundingBox.parse("48,2,49,3"),
-      SearchService.cellDegrees(12))
+    val cells = SearchQueries.mapCells(searchDialect, searchQuery(), repositoryId, box, SearchService.cellDegrees(12))
+    val inBox = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false), bbox = Some(box))
+    val grid = SearchQueries.cappedCount(searchDialect, inBox, repositoryId)
 
-    // Postgres costs a plan by the table's statistics, and over a handful of rows every index on the repository costs the same,
-    // so its choice would be a tie. At a library's scale - thousands of assets, most without a point, analyzed - it is not.
-    // SQLite has no statistics before ANALYZE and prefers the index that constrains the most columns.
-    val plan =
-      if (isPostgres)
-        atScale {
-          update(
-            """INSERT INTO asset
-              |SELECT (jsonb_populate_record(a, jsonb_build_object(
-              |  'id', lpad(g::text, 36, '0'), 'checksum', 1000000 + g,
-              |  'latitude', CASE WHEN g % 10 = 0 THEN -80 + g % 160 END,
-              |  'longitude', CASE WHEN g % 10 = 0 THEN -180 + g % 360 END))).*
-              |  FROM asset a, generate_series(1, 5000) g
-              | WHERE a.id = ?""".stripMargin,
-            inParis.persistedId
-          )
-        }(planOf(cells))
-      else planOf(cells)
+    val (cellsPlan, gridPlan) = atScale(seedGeotagged(template)) {
+      (indexOnlyPlanOf(cells, "asset"), planOf(grid))
+    }
+
+    withClue(cellsPlan) {
+      if (isPostgres) cellsPlan should include("Index Only Scan using asset_geo")
+      else cellsPlan should include("USING COVERING INDEX asset_geo")
+    }
+    withClue(gridPlan)(gridPlan should include("asset_geo"))
+  }
+
+  test("The Locations of a viewport are counted from their own members, not from every match") {
+
+    /**
+     * Setup:
+     *
+     * A Location pinned in Paris holding one asset, in a library of 5,000 other assets, analyzed and rolled back once the plan is
+     * read, and the statement that counts the matching assets of the Locations in a Paris viewport.
+     *
+     * Assertions:
+     *
+     * The plan finds the matching assets by their ID, from the memberships of the Locations in the box, and never passes over an
+     * index of the repository's assets.
+     */
+    val location = addLocation("Paris")
+    val member = testContext.persistAsset()
+    testApp.service.location.addAssets(location.persistedId, Set(member.persistedId))
+    val template = testContext.persistAsset()
+
+    val locations =
+      SearchQueries.mapLocations(
+        searchDialect,
+        searchQuery(),
+        RequestContext.getRepository.persistedId,
+        BoundingBox.parse("48,2,49,3"))
+
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(locations))
 
     withClue(plan) {
-      plan should include("asset_geo")
+      plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1")
+      (plan should not).include("asset_search_")
+      (plan should not).include(if (isPostgres) "Seq Scan on asset" else "SCAN asset")
     }
   }
 
   test("Bounds cover both point sources, count plotted points, and are absent when nothing is plotted") {
+
+    /**
+     * Setup:
+     *
+     * First an empty library, then an asset with neither a point nor a Location; then a Sydney Location with a member that has no
+     * point, assets with their own points in Paris and London, and the first asset added to Sydney and removed again.
+     *
+     * Assertions:
+     *
+     * Bounds are absent while nothing is plotted; then they span both own points and Location pins with the count of plotted
+     * points, and follow the search when it is scoped to a Location.
+     */
     bounds() shouldBe None
 
     val nowhere = testContext.persistAsset()
@@ -227,6 +349,18 @@ import altitude.core.util.SearchQuery
   }
 
   test("The map reads the same matching set as the grid: view flags, folder scope, and the repository") {
+
+    /**
+     * Setup:
+     *
+     * A Trips folder with an asset in Paris, an asset in Rome outside it, a recycled asset in Tokyo, a Rome Location holding both
+     * live assets, and another repository's asset in Paris.
+     *
+     * Assertions:
+     *
+     * Cells, Location counts and bounds read the same matching set as the grid: the trash view plots only the recycled asset, a
+     * folder scope narrows all three, the root folder is the whole repository, and another repository's assets never appear.
+     */
     val folder: Folder = testApp.service.folder.add("Trips")
     val inFolder = persistAt(paris._1, paris._2, folder = Some(folder))
     val elsewhere = persistAt(41.9028, 12.4964)
@@ -263,6 +397,18 @@ import altitude.core.util.SearchQuery
   }
 
   test("The map follows the Search text: cells, Location counts and bounds are those of the assets the names find") {
+
+    /**
+     * Setup:
+     *
+     * A Trips folder with an asset in Paris that is also in Rome, an unrelated asset in Tokyo, and an asset without a point in
+     * Rome.
+     *
+     * Assertions:
+     *
+     * Searching a folder's or a Location's name plots only the assets the name finds, at their own points or their Locations'
+     * pins, with Location counts and bounds to match; an excluded term narrows the bounds, and text that finds nothing has none.
+     */
     val trips: Folder = testApp.service.folder.add("Trips")
     val inFolder = persistAt(paris._1, paris._2, folder = Some(trips))
     persistAt(35.6762, 139.6503)

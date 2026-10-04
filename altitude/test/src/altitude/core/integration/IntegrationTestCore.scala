@@ -66,6 +66,13 @@ abstract class IntegrationTestCore
     IntegrationTestUtil.createFileStoreDir(testApp)
   }
 
+  /**
+   * The IDs among more unknown ones than a PostgreSQL statement takes parameters for (65,535): a selection that only a statement
+   * binding its ID set as one value can run
+   */
+  def amongManyUnknownIds(ids: Set[String]): Set[String] =
+    ids ++ (1 to 70000).map(n => f"unknown-$n%028d")
+
   def switchContextUser(user: User): Unit = {
     testApp.service.user.switchContextToUser(user)
   }
@@ -73,4 +80,11 @@ abstract class IntegrationTestCore
   def switchContextRepo(repository: Repository): Unit = {
     testApp.service.repository.switchContextToRepository(repository)
   }
+
+  /** The context repository's six stored stats by dimension, without the totals, which are summed on read */
+  def storedStats: Map[String, Long] =
+    testApp.service.stats.getStats.stats
+      .filterNot(stat => stat.dimension == Stats.TOTAL_ASSETS || stat.dimension == Stats.TOTAL_BYTES)
+      .map(stat => stat.dimension -> stat.dimVal)
+      .toMap
 }

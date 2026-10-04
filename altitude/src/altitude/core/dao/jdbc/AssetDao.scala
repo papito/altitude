@@ -89,9 +89,6 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def queryNotRecycled(q: Query): QueryResult[Asset] =
     queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository())
 
-  override def queryTriaged(q: Query): QueryResult[Asset] =
-    queryRecords(q.add(FieldConst.Asset.IS_TRIAGED -> true).withRepository())
-
   override def queryRecycled(q: Query): QueryResult[Asset] =
     queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository())
 
@@ -177,77 +174,58 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       """
 
     val updateValues = List(metadataWithIds.toJson.toString, RequestContext.getRepository.persistedId, assetId)
-    logger.debug(s"Update SQL: [$sql] with values: $updateValues")
+    logger.trace(s"Update SQL: [$sql] with values: $updateValues")
     val runner: QueryRunner = new QueryRunner()
 
     runner.update(RequestContext.getConn, sql, updateValues*)
 
   override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
-    getAssetsByIdAndRecycledFlag(assetIds, isRecycled = false)
+    lockForTransition(Some(assetIds), isRecycled = Some(false))
 
-  override def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
-    if assetIds.isEmpty then return List.empty[Asset]
+  override def getAssetsToMove(assetIds: Set[String]): List[Asset] =
+    lockForTransition(Some(assetIds), isRecycled = None)
 
-    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
+  override def getAssetsToRestore(assetIds: Set[String]): List[Asset] =
+    lockForTransition(Some(assetIds), isRecycled = Some(true))
 
-    val sql = s"""
-      SELECT asset.*,
-             NULL AS ${FieldConst.Asset.USER_METADATA},
-             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
-        FROM asset
-       WHERE id IN ($placeHolders)
-         $forUpdate
-    """
+  override def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
+    lockForTransition(assetIds, isRecycled = Some(true))
 
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList)
-    res.map(makeModel)
+  /**
+   * The context repository's completed assets that are not marked for purging, among the IDs when given, recycled or live when
+   * asked, locked until the transaction ends. The flags are literals, which each engine reads as its own boolean, so no bind
+   * value differs by engine.
+   */
+  private def lockForTransition(assetIds: Option[Set[String]], isRecycled: Option[Boolean]): List[Asset] =
+    if assetIds.exists(_.isEmpty) then return List.empty[Asset]
 
-  private def getAssetsByIdAndRecycledFlag(assetIds: Set[String], isRecycled: Boolean): List[Asset] =
-    if assetIds.isEmpty then return List.empty[Asset]
-
-    val placeHolders = List.fill(assetIds.size)("?").mkString(",")
+    val idFilter = assetIds.fold("")(_ => s"AND id $inIdSet")
+    val recycledFilter = isRecycled.fold("")(flag => s"AND ${FieldConst.Asset.IS_RECYCLED} = ${if flag then "TRUE" else "FALSE"}")
 
     val sql = s"""
       SELECT asset.*,
              NULL AS ${FieldConst.Asset.USER_METADATA},
              NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
         FROM asset
-       WHERE id IN ($placeHolders)
-         AND is_recycled = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+         $idFilter
+         $recycledFilter
          $forUpdate
     """
 
-    val res: List[Map[String, AnyRef]] = manyBySqlQuery(sql, assetIds.toList ++ List(this.nativeBool(isRecycled)))
-    res.map(makeModel)
+    val values = RequestContext.getRepository.persistedId :: assetIds.map(idSet).toList
+    manyBySqlQuery(sql, values).map(makeModel)
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
     val existingMetadata = getUserMetadata(assetId) match
       case Some(m) => m
       case None => UserMetadata()
 
-    logger.debug(s"Updating $existingMetadata with $metadata")
+    logger.trace(s"Updating $existingMetadata with $metadata")
     val newData = (existingMetadata.data ++ metadata.data).filterNot(m => deletedFields.contains(m._1))
     val newMetadata = new UserMetadata(newData)
-    logger.debug(s"New metadata -> $newMetadata")
+    logger.trace(s"New metadata -> $newMetadata")
 
     setUserMetadata(assetId, newMetadata)
-
-  override def countByFolder(): Map[String, Int] =
-    // Mirrors the search predicate (SearchQueryBuilder): a folder's count must match what clicking it shows
-    val sql = s"""
-      SELECT ${FieldConst.Asset.FOLDER_ID}, COUNT(*) AS ${FieldConst.Folder.NUM_OF_ASSETS}
-        FROM asset
-       WHERE ${FieldConst.REPO_ID} = ?
-         AND ${FieldConst.Asset.IS_RECYCLED} = ?
-         AND ${FieldConst.Asset.IS_TRIAGED} = ?
-         AND ${FieldConst.Asset.IS_PURGED} = ?
-         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = ?
-       GROUP BY ${FieldConst.Asset.FOLDER_ID}
-    """
-
-    val values =
-      List(RequestContext.getRepository.persistedId, nativeBool(false), nativeBool(false), nativeBool(false), nativeBool(true))
-
-    manyBySqlQuery(sql, values).map {
-      rec => rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String] -> getIntField(rec(FieldConst.Folder.NUM_OF_ASSETS))
-    }.toMap

@@ -9,6 +9,7 @@ import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
 import scalasql.dialects.Dialect
 
+import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 
@@ -69,3 +70,9 @@ trait PostgresOverrides:
     labelRes("nextval")
 
   override val forUpdate: String = "FOR UPDATE"
+
+  override protected val inIdSet: String = "= ANY(?)"
+
+  // varchar[] rather than text[]: against a CHAR(36) column it is the array that is cast, and the column's index is used
+  override protected def idSet(ids: Set[String]): Any =
+    RequestContext.getConn.createArrayOf("varchar", ids.toArray[AnyRef])

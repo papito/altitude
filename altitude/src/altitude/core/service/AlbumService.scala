@@ -16,7 +16,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
 
   def add(name: String): Album =
     txManager.withTransaction {
-      logger.info(s"Adding album [$name]")
+      logger.debug(s"Adding album [$name]")
       add(Album(name = name.trim))
     }
 
@@ -31,14 +31,14 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       // The copy validates the new name the same way a new album is validated
       val renamed = album.copy(name = newName.trim)
 
-      logger.info(s"Renaming album [${album.name}] to [${renamed.name}]")
+      logger.debug(s"Renaming album [${album.name}] to [${renamed.name}]")
       updateById(albumId, Map(FieldConst.Album.NAME -> renamed.name, FieldConst.Album.NAME_LC -> renamed.nameLowercase))
       renamed
     }
 
   override def deleteById(id: String): Int =
     txManager.withTransaction {
-      logger.info(s"Deleting album [$id]")
+      logger.debug(s"Deleting album [$id]")
       val deleted = super.deleteById(id)
       if deleted == 0 then throw NotFoundException(s"Album $id not found")
       deleted
@@ -52,7 +52,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       getById(albumId)
 
       val added = dao.addAssets(albumId, assetIds)
-      logger.info(s"Added $added of ${assetIds.size} asset(s) to album [$albumId]")
+      logger.debug(s"Added $added of ${assetIds.size} asset(s) to album [$albumId]")
       added
     }
 
@@ -61,7 +61,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
 
     txManager.withTransaction {
       val removed = dao.removeAssets(albumId, assetIds)
-      logger.info(s"Removed $removed asset(s) from album [$albumId]")
+      logger.debug(s"Removed $removed asset(s) from album [$albumId]")
       removed
     }
 
@@ -70,7 +70,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
 
     txManager.withTransaction {
       val removed = dao.removeAssetsFromAllAlbums(assetIds)
-      logger.debug(s"Removed $removed album membership(s) for assets [${assetIds.mkString(",")}]")
+      logger.trace(s"Removed $removed album membership(s) for assets [${assetIds.mkString(",")}]")
       removed
     }
 

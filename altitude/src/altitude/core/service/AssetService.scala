@@ -1,6 +1,6 @@
 package altitude.core.service
 
-import java.awt.image.BufferedImage
+import java.io.IOException
 import javax.imageio.ImageIO
 import org.opencv.core.MatOfByte
 import org.opencv.imgcodecs.Imgcodecs
@@ -9,10 +9,12 @@ import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
+import altitude.core.ImageException
 import altitude.core.dao.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.MimedPreviewData
+import altitude.core.util.ImageUtil
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
@@ -24,7 +26,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     if asset.isRecycled == isRecycled then return
 
     txManager.withTransaction {
-      logger.info(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
+      logger.debug(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
 
       dao.updateById(asset.persistedId, Map(FieldConst.Asset.IS_RECYCLED -> isRecycled))
     }
@@ -41,6 +43,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       val asset: Asset = getById(assetId)
 
       if asset.isRecycled then throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
+      logger.debug(s"Renaming asset [${asset.persistedId}] from [${asset.fileName}] to [$newFilename]")
 
       val data = Map(
         FieldConst.Asset.FILENAME -> newFilename
@@ -58,11 +61,6 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       dao.queryNotRecycled(q)
     }
 
-  def queryTriaged(q: Query): QueryResult[Asset] =
-    txManager.asReadOnly {
-      dao.queryTriaged(q)
-    }
-
   def queryRecycled(q: Query): QueryResult[Asset] =
     txManager.asReadOnly {
       dao.queryRecycled(q)
@@ -71,11 +69,6 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   def queryAll(q: Query): QueryResult[Asset] =
     txManager.asReadOnly {
       dao.queryAll(q)
-    }
-
-  def pruneDanglingAssets(): Unit =
-    txManager.withTransaction {
-      dao.deleteByQuery(new Query(Map(FieldConst.Asset.IS_PIPELINE_PROCESSED -> false)))
     }
 
   def getDanglingAssets: List[Asset] =
@@ -110,14 +103,28 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       case _ => new Array[Byte](0)
 
   /**
-   * The display size and, for a Video, the length, from one read of the file. A Video's size has the container's rotation
-   * applied, so a portrait phone recording is portrait.
+   * The display size and, for a Video or an animated GIF, the length. An image's size is read from its header, without decoding
+   * it, which face detection and the preview each do, and so is an animated GIF's playing time; a Video's size has the
+   * container's rotation applied, so a portrait phone recording is portrait. An image no reader takes, or whose header it cannot
+   * read, is an [[ImageException]], a Video FFmpeg cannot open a [[altitude.core.VideoException]].
    */
   def getDimensionsAndDuration(dataAsset: AssetWithData): (Int, Int, Option[Long]) /* width, height, duration */ =
     dataAsset.asset.assetType.mediaType match
       case "image" =>
-        val img: BufferedImage = ImageIO.read(dataAsset.path.toFile)
-        (img.getWidth, img.getHeight, None)
+        val input = ImageIO.createImageInputStream(dataAsset.path.toFile)
+        try
+          val readers = ImageIO.getImageReaders(input)
+          if !readers.hasNext then throw ImageException(s"No image reader takes ${dataAsset.path}")
+          val reader = readers.next()
+          try
+            // Seekable and with its metadata, so a GIF's frames can be counted and their delays read
+            reader.setInput(input)
+            // GIF alone: a multi-page TIFF also holds several images, and is no animation
+            val durationMs = if reader.getFormatName == "gif" then ImageUtil.gifPlayingTimeMs(reader) else None
+            (reader.getWidth(0), reader.getHeight(0), durationMs)
+          catch case ex: IOException => throw ImageException(s"Cannot read the header of ${dataAsset.path}: ${ex.getMessage}")
+          finally reader.dispose()
+        finally input.close()
       case "video" =>
         val info = app.service.video.probe(dataAsset.path)
         (info.width, info.height, Some(info.durationMs))
@@ -134,27 +141,38 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
 
     previewData.length match
       case size if size > 0 =>
+        logger.trace(s"Preview of asset [${dataAsset.asset.persistedId}]: $size bytes")
         val preview: MimedPreviewData = MimedPreviewData(assetId = dataAsset.asset.persistedId, data = previewData)
 
         app.service.fileStore.addPreview(preview)
 
         Some(preview)
-      case _ => None
+      case _ =>
+        logger.trace(
+          s"No preview for asset [${dataAsset.asset.persistedId}] of media type [${dataAsset.asset.assetType.mediaType}]")
+        None
 
   def getPreview(assetId: String): MimedPreviewData =
     app.service.fileStore.getPreviewById(assetId)
 
+  // The rows a library operation may change, locked for the caller's transaction, so each is a write: see `AssetDao`
+
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
-    txManager.asReadOnly {
+    txManager.withTransaction {
       dao.getAssetsToRecycle(assetIds)
     }
 
-  def getAssetsToMove(assetIds: Set[String], folderId: String): List[Asset] =
-    txManager.asReadOnly {
-      dao.getAssetsToMove(assetIds, folderId)
+  def getAssetsToMove(assetIds: Set[String]): List[Asset] =
+    txManager.withTransaction {
+      dao.getAssetsToMove(assetIds)
     }
 
-  def countByFolder(): Map[String, Int] =
-    txManager.asReadOnly {
-      dao.countByFolder()
+  def getAssetsToRestore(assetIds: Set[String]): List[Asset] =
+    txManager.withTransaction {
+      dao.getAssetsToRestore(assetIds)
+    }
+
+  def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
+    txManager.withTransaction {
+      dao.getAssetsToPurge(assetIds)
     }

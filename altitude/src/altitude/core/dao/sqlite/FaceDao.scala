@@ -51,6 +51,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     preparedStatement.setDouble(13, face.quality)
     preparedStatement.setBoolean(14, face.isEnrolled)
 
+    logger.trace(s"Inserting face [$id] for person [${person.persistedId}] in asset [${asset.persistedId}]")
     preparedStatement.execute()
 
     face.copy(id = Some(id), assetId = asset.id, personId = person.id)

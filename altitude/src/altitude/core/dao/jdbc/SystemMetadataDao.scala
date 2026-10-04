@@ -30,16 +30,19 @@ abstract class SystemMetadataDao(override val config: Config)
   def updateVersion(toVersion: Int): Unit =
     val runner: QueryRunner = new QueryRunner()
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.VERSION} = ? WHERE id = ?"
+    logger.trace(s"UPDATE SQL: $sql, to version $toVersion")
     runner.update(RequestContext.getConn, sql, toVersion, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
 
   def setInitialized(): Unit =
     val runner: QueryRunner = new QueryRunner()
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
+    logger.trace(s"UPDATE SQL: $sql, initialized")
     runner.update(RequestContext.getConn, sql, true, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
 
   def setUninitialized(): Unit =
     val runner: QueryRunner = new QueryRunner()
     val sql = s"UPDATE system SET ${FieldConst.SystemMetadata.IS_INITIALIZED} = ? WHERE id = ?"
+    logger.trace(s"UPDATE SQL: $sql, uninitialized")
     runner.update(RequestContext.getConn, sql, false, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID)
 
   // overriding the base method since there is no repository relation in this model

@@ -6,6 +6,7 @@ import scalasql.Table
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.FaceRow
 import altitude.core.models.Face
 
@@ -52,6 +53,21 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       isEnrolled = getBooleanField(rec(FieldConst.Face.IS_ENROLLED)),
       frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS))
     )
+
+  // Reads `face_02` backwards and stops at the limit: no count of the person's faces and no sort of them
+  override def getTopFaces(personId: String, limit: Int): List[Face] =
+    import dialect.*
+
+    val top = FaceRow.select.filter(_.personId `=` personId).sortBy(_.id).asc.sortBy(_.detectionScore).desc.take(limit)
+    Db.read(dialect)(_.run(top)).map(toModel).toList
+
+  // Reads `face_01`, which leads with the asset
+  override def getAllAssetFaces(assetId: String): List[Face] =
+    import dialect.*
+
+    val repositoryId = RequestContext.getRepository.persistedId
+    val faces = FaceRow.select.filter(face => face.assetId `=` assetId && face.repositoryId `=` repositoryId)
+    Db.read(dialect)(_.run(faces)).map(toModel).toList
 
   def getAssetFaces(assetId: String): List[Face] =
     val sql = """

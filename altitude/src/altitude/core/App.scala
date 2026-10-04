@@ -52,6 +52,8 @@ object App extends cask.Main:
   altitude.setIsInitializedState()
 
   altitude.service.library.pruneDanglingAssets()
+  altitude.service.library.requeuePurgePending()
+  altitude.service.library.reconcileStats()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
 

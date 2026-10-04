@@ -2,7 +2,7 @@ package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldEqual, shouldNot }
+import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual, shouldNot }
 
 import scala.language.reflectiveCalls
 
@@ -13,11 +13,13 @@ import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
+import altitude.core.dao.sql.Db
+import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Repository
 
-@DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class FolderServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
   /** Standard set of folders to start with, can be used by many tests here */
   def folderHierarchyFixture: Object {
@@ -57,6 +59,16 @@ import altitude.core.models.Repository
   }
 
   test("Invalid folder names should fail") {
+
+    /**
+     * Setup:
+     *
+     * Folder names that are empty or made only of whitespace: a space, a line break between spaces, and spaces and tabs.
+     *
+     * Assertions:
+     *
+     * Each is rejected as invalid.
+     */
     intercept[ValidationException] {
       testApp.service.folder.add("")
     }
@@ -64,14 +76,24 @@ import altitude.core.models.Repository
       testApp.service.folder.add(" ")
     }
     intercept[ValidationException] {
-      testApp.service.folder.add(" ")
+      testApp.service.folder.add(" \r\n ")
     }
     intercept[ValidationException] {
       testApp.service.folder.add("\t \t   ")
     }
   }
 
-  test("New folders  should be free of user-entered space characters") {
+  test("New folders should be free of user-entered space characters") {
+
+    /**
+     * Setup:
+     *
+     * Two folders whose names are padded with spaces, one with a trailing newline.
+     *
+     * Assertions:
+     *
+     * Both are stored with the surrounding whitespace trimmed and the inner space kept.
+     */
     val folder1: Folder = testApp.service.folder.add(" folder  ")
     folder1.name shouldEqual "folder"
 
@@ -79,8 +101,18 @@ import altitude.core.models.Repository
     folder2.name shouldEqual "Folder one"
   }
 
-  test("Deleting a folder should also remove all children") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+  test("Deleting a folder should also recycle all children") {
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. folder1 is deleted.
+     *
+     * Assertions:
+     *
+     * folder1 and every folder below it, at all depths, read back as recycled.
+     */
     val f = folderHierarchyFixture
 
     testApp.service.library.deleteFolderById(f.folder1.persistedId)
@@ -100,19 +132,50 @@ import altitude.core.models.Repository
   }
 
   test("Deleting a non-existing folder should fail with a NOT FOUND") {
+
+    /**
+     * Setup:
+     *
+     * A folder ID that does not exist.
+     *
+     * Assertions:
+     *
+     * Deleting it fails as not found.
+     */
     intercept[NotFoundException] {
       testApp.service.library.deleteFolderById("bogus")
     }
   }
 
   test("Deleting the root folder should fail") {
+
+    /**
+     * Setup:
+     *
+     * The context repository's root folder.
+     *
+     * Assertions:
+     *
+     * Deleting it is refused as an illegal operation.
+     */
     intercept[IllegalOperationException] {
       testApp.service.library.deleteFolderById(RequestContext.getRepository.rootFolderId)
     }
   }
 
   test("Moving a folder to another folder should work") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. folder1_1_1 is moved under folder2.
+     *
+     * Assertions:
+     *
+     * The child counts of the source and target parents change by one each: folder2 goes from one child to two, folder1_1 from
+     * one to none.
+     */
     val f = folderHierarchyFixture
 
     // assert initial state
@@ -130,7 +193,21 @@ import altitude.core.models.Repository
   }
 
   test("Moving a folder to repository root should work") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. folder1_1_1 and then folder1_1 are moved to the root.
+     *
+     * Assertions:
+     *
+     * The root's child count grows by one with each move, from two to four.
+     *
+     * Edge cases:
+     *
+     * A folder moved to the root from two levels down, then its former parent.
+     */
     val f = folderHierarchyFixture
 
     testApp.app.service.folder.getChildren(rootId = RequestContext.getRepository.rootFolderId).length shouldBe 2
@@ -143,27 +220,28 @@ import altitude.core.models.Repository
   }
 
   test("Can traverse the folder hierarchy") {
-    /*
-    folder1
-      folder1_1
-        folder1_1_1
-          folder1_1_1_1
-    folder2
-        folder2_1
-        folder2_2
-        folder2_3
-        folder2_4
-    folder3
-        folder_3_1
-     */
 
+    /**
+     * Setup:
+     *
+     * Three top-level folders: folder1 with a chain of three nested descendants, folder2 with four children added in reverse name
+     * order, and folder3 with one child.
+     *
+     * folder1 folder1_1 folder1_1_1 folder1_1_1_1 folder2 folder2_1 folder2_2 folder2_3 folder2_4 folder3 folder3_1
+     *
+     * Assertions:
+     *
+     * Immediate children of the root exclude the root itself, children come back sorted by name whatever order they were added
+     * in, a deep folder's ancestors are every folder above it short of the root, and a folder's recursive children are its whole
+     * subtree.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     val folder1_1: Folder = testApp.service.folder.add(name = "folder1_1", parentId = folder1.id)
 
     val folder1_1_1: Folder = testApp.service.folder.add(name = "folder1_1_1", parentId = folder1_1.id)
 
-    val folder1_1_1_1: Folder = testApp.service.folder.add(name = "folder1_1_1", parentId = folder1_1_1.id)
+    val folder1_1_1_1: Folder = testApp.service.folder.add(name = "folder1_1_1_1", parentId = folder1_1_1.id)
 
     val folder2: Folder = testApp.service.folder.add("folder2")
     val folder2_4: Folder = testApp.service.folder.add("folder2_4", parentId = folder2.id)
@@ -205,7 +283,17 @@ import altitude.core.models.Repository
   }
 
   test("Folder counts should be accurate") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1.
+     *
+     * Assertions:
+     *
+     * Child counts match the tree: the root has two children, folder1 has two, and of those folder1_1 has one and folder1_2 none.
+     */
     val f = folderHierarchyFixture
 
     val rootFolderChildren = testApp.service.folder.getChildren(RequestContext.getRepository.rootFolderId)
@@ -223,10 +311,23 @@ import altitude.core.models.Repository
   }
 
   test("Illegal folder move actions should throw") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
-    val f = folderHierarchyFixture
 
-    testApp.service.folder.add("folder3")
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. A second folder named folder1_1_1 is added under folder2.
+     *
+     * Assertions:
+     *
+     * Moving a folder into itself is an illegal operation, and moving it into its own descendant or into a parent that already
+     * has a child of the same name is a duplicate.
+     *
+     * Edge cases:
+     *
+     * Moving a folder into a folder three levels below it.
+     */
+    val f = folderHierarchyFixture
 
     // create folder1_1_1 as a duplicate under a different parent
     testApp.service.folder.add(name = "folder1_1_1", parentId = f.folder2.id)
@@ -248,11 +349,17 @@ import altitude.core.models.Repository
   }
 
   test("Duplicate folder name moves should throw") {
-    /*
-    folder1
-      child
-    folder2
-        CHILD
+
+    /**
+     * Setup:
+     *
+     * Two top-level folders, each with one child whose names differ only by case.
+     *
+     * folder1 child folder2 CHILD
+     *
+     * Assertions:
+     *
+     * Moving one child under the other's parent is a duplicate, since folder names compare case-insensitively.
      */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
@@ -268,7 +375,17 @@ import altitude.core.models.Repository
     }
   }
 
-  test("Moving into a folder that doe not exist should throw") {
+  test("Moving into a folder that does not exist should throw") {
+
+    /**
+     * Setup:
+     *
+     * A top-level folder and a destination folder ID that does not exist.
+     *
+     * Assertions:
+     *
+     * The move is rejected as invalid.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     // move into a folder that does not exist
@@ -278,6 +395,16 @@ import altitude.core.models.Repository
   }
 
   test("Rename a folder") {
+
+    /**
+     * Setup:
+     *
+     * A folder named "folder", renamed to "newName".
+     *
+     * Assertions:
+     *
+     * The folder reads back under its new name.
+     */
     val folder1: Folder = testApp.service.folder.add("folder")
 
     testApp.service.folder.rename(folder1.persistedId, "newName")
@@ -287,6 +414,16 @@ import altitude.core.models.Repository
   }
 
   test("Folder name casing can be changed") {
+
+    /**
+     * Setup:
+     *
+     * A folder named "folder", renamed to "Folder".
+     *
+     * Assertions:
+     *
+     * Renaming a folder to a different casing of its own name is not a duplicate, and the new casing is stored.
+     */
     val folder1: Folder = testApp.service.folder.add("folder")
 
     testApp.service.folder.rename(folder1.persistedId, "Folder")
@@ -295,7 +432,17 @@ import altitude.core.models.Repository
     renamedFolder.name shouldEqual "Folder"
   }
 
-  test("Duplicate folder rename actions should thrown") {
+  test("Duplicate folder rename actions should throw") {
+
+    /**
+     * Setup:
+     *
+     * Two sibling folders at the root.
+     *
+     * Assertions:
+     *
+     * Renaming one to the other's name is a duplicate.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val folder2: Folder = testApp.service.folder.add("folder2")
 
@@ -305,6 +452,16 @@ import altitude.core.models.Repository
   }
 
   test("Illegal folder rename actions should throw") {
+
+    /**
+     * Setup:
+     *
+     * A top-level folder and the repository's root folder.
+     *
+     * Assertions:
+     *
+     * Renaming the root folder is refused as an illegal operation.
+     */
     val folder1: Folder = testApp.service.folder.add("folder")
 
     // rename a system folder
@@ -322,7 +479,22 @@ import altitude.core.models.Repository
   private def rootFolderId: String = RequestContext.getRepository.rootFolderId
 
   test("Folder tree is assembled from the root with children sorted by name") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. A top-level folder named "deleted" is added and then deleted.
+     *
+     * Assertions:
+     *
+     * The tree starts at the repository's root, lists each folder's children sorted by name with their child counts, and leaves
+     * the deleted folder out.
+     *
+     * Edge cases:
+     *
+     * A recycled folder at the top level.
+     */
     val f = folderHierarchyFixture
     val deleted: Folder = testApp.service.folder.add("deleted")
     testApp.service.library.deleteFolderById(deleted.persistedId)
@@ -341,7 +513,22 @@ import altitude.core.models.Repository
   }
 
   test("Folder tree asset counts roll up recursively") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. An empty top-level folder3 is added, then eight assets: two in
+     * folder1_1_1_1, one each in folder1_1_1_2 and folder1_2, three in folder2_1 and one at the root.
+     *
+     * Assertions:
+     *
+     * Each folder's count is its own assets plus those of its whole subtree, up to the root counting all eight.
+     *
+     * Edge cases:
+     *
+     * Folders that hold no assets of their own but have them below, and a folder with none at all.
+     */
     val f = folderHierarchyFixture
     val folder3: Folder = testApp.service.folder.add("folder3")
 
@@ -368,6 +555,16 @@ import altitude.core.models.Repository
   }
 
   test("Triaged assets do not count toward any folder") {
+
+    /**
+     * Setup:
+     *
+     * Two triaged assets, which have no folder.
+     *
+     * Assertions:
+     *
+     * The root's recursive asset count stays at zero.
+     */
     testContext.persistAsset(isTriaged = true)
     testContext.persistAsset(isTriaged = true)
 
@@ -375,7 +572,18 @@ import altitude.core.models.Repository
   }
 
   test("Recycling and restoring an asset updates folder counts") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. One asset is imported into folder1_1, recycled, then restored.
+     *
+     * Assertions:
+     *
+     * The asset counts in folder1_1 and every ancestor up to the root drop to zero while it is recycled and come back once it is
+     * restored.
+     */
     val f = folderHierarchyFixture
     val asset: Asset = testContext.persistAsset(folder = Some(f.folder1_1))
 
@@ -395,7 +603,18 @@ import altitude.core.models.Repository
   }
 
   test("Moving an asset between folders updates folder counts") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. One asset in folder1_2 is moved to folder2_1.
+     *
+     * Assertions:
+     *
+     * The source folder and its ancestors lose the asset and the destination and its ancestors gain it, with the root's total
+     * unchanged.
+     */
     val f = folderHierarchyFixture
     val asset: Asset = testContext.persistAsset(folder = Some(f.folder1_2))
 
@@ -410,7 +629,17 @@ import altitude.core.models.Repository
   }
 
   test("Sorting a triaged asset into a folder updates folder counts") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. One triaged asset is moved into folder1.
+     *
+     * Assertions:
+     *
+     * The asset counts nowhere while triaged, and once moved it counts in folder1 and the root.
+     */
     val f = folderHierarchyFixture
     val asset: Asset = testContext.persistAsset(isTriaged = true)
 
@@ -424,7 +653,19 @@ import altitude.core.models.Repository
   }
 
   test("Moving a folder subtree carries its asset counts") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. Assets are added to folder1_1, folder1_1_1, folder1_1_1_1 and
+     * folder2, then folder1_1 is moved under folder2.
+     *
+     * Assertions:
+     *
+     * The moved subtree keeps its three assets, folder1 drops to zero, folder2 counts its own asset plus the subtree's, and the
+     * root total stays at four.
+     */
     val f = folderHierarchyFixture
     testContext.persistAsset(folder = Some(f.folder1_1))
     testContext.persistAsset(folder = Some(f.folder1_1_1))
@@ -441,7 +682,18 @@ import altitude.core.models.Repository
   }
 
   test("Deleting a folder drops its subtree from the counts") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. Assets are added to folder1_1, folder1_1_1, folder1_1_1_2 and
+     * folder1_2, then folder1_1 is deleted.
+     *
+     * Assertions:
+     *
+     * The deleted folder leaves the tree, and its parent and the root count only the one asset left in folder1_2.
+     */
     val f = folderHierarchyFixture
     testContext.persistAsset(folder = Some(f.folder1_1))
     testContext.persistAsset(folder = Some(f.folder1_1_1))
@@ -457,7 +709,18 @@ import altitude.core.models.Repository
   }
 
   test("Purging recycled assets leaves folder counts unchanged") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. Two assets are imported into folder1_1 and one of them is
+     * recycled, then purged.
+     *
+     * Assertions:
+     *
+     * Recycling already takes the asset out of the counts, so purging it changes none of them.
+     */
     val f = folderHierarchyFixture
     testContext.persistAsset(folder = Some(f.folder1_1))
     val asset: Asset = testContext.persistAsset(folder = Some(f.folder1_1))
@@ -471,7 +734,18 @@ import altitude.core.models.Repository
   }
 
   test("Assets not yet through the pipeline do not count toward any folder") {
-    // see folderHierarchyFixture for folder hierarchy breakdown
+
+    /**
+     * Setup:
+     *
+     * The standard folderHierarchyFixture tree: folder1 holding folder1_1 (with folder1_1_1 and its children folder1_1_1_1 and
+     * folder1_1_1_2) and folder1_2, and folder2 holding folder2_1. One asset is imported into folder1, then its
+     * is_pipeline_processed flag is cleared with raw SQL, written with each engine's own boolean literal.
+     *
+     * Assertions:
+     *
+     * An asset the import pipeline has not finished stops counting in its folder and the root.
+     */
     val f = folderHierarchyFixture
     val asset: Asset = testContext.persistAsset(folder = Some(f.folder1))
     treeCounts(f.folder1.persistedId) shouldEqual 1
@@ -490,7 +764,45 @@ import altitude.core.models.Repository
     counts(rootFolderId) shouldEqual 0
   }
 
+  test("Folder counts are read from the capture-day index alone") {
+
+    /**
+     * Setup:
+     *
+     * An asset in a folder seeded into 5,000 copies over 500 folders for the planner, which are rolled back after the plan is
+     * read, and the statement that counts the repository's assets by folder.
+     *
+     * Assertions:
+     *
+     * The plan reads `asset_search_date_taken`, which carries the folder, and never the table: an index-only scan on PostgreSQL,
+     * a covering index on SQLite.
+     */
+    val folder: Folder = testApp.service.folder.add("Trips")
+    val template = testContext.persistAsset(folder = Some(folder))
+    val engine = searchDialect
+    val counts =
+      Db.render(SearchQueries.folderCounts(engine, RequestContext.getRepository.persistedId), engine.dialect)
+        .withCompleteQuery(false)
+
+    val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(indexOnlyPlanOf(counts, "asset"))
+
+    withClue(plan) {
+      if (isPostgres) plan should include("Index Only Scan using asset_search_date_taken")
+      else plan should include("USING COVERING INDEX asset_search_date_taken")
+    }
+  }
+
   test("Folder counts are scoped to the context repository") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the first repository, then a second repository with two assets of its own.
+     *
+     * Assertions:
+     *
+     * Each repository's root counts only its own assets.
+     */
     val firstRepo: Repository = testContext.repository
     testContext.persistAsset()
 

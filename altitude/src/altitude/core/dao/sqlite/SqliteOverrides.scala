@@ -64,3 +64,7 @@ trait SqliteOverrides:
     res("id")
 
   override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for "FOR UPDATE"
+
+  override protected val inIdSet: String = "IN (SELECT value FROM json_each(?))"
+
+  override protected def idSet(ids: Set[String]): Any = ujson.write(ids)

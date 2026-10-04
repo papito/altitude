@@ -19,6 +19,20 @@ import altitude.core.Const
   }
 
   test("All Location dialogs render the appropriate kinds, values, and map configuration") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the category "Italy", the Location "Beach" in it, and the top-level Location "Park".
+     *
+     * Assertions:
+     *
+     * The Locations tab and every Location dialog render as HTML documents, each dialog with its title, the rename, delete and
+     * move ones naming the item they act on, and the rename and delete ones worded for a category when given one. Each picker
+     * offers only the kind it can pick: categories in the add and move dialogs, with the current one selected, and Locations in
+     * the add-to-location dialog, a categorized one by its path. The add dialog carries the pin map's configuration, with the
+     * coordinates in hidden inputs.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -76,6 +90,25 @@ import altitude.core.Const
   }
 
   test("Add Location validates decimals, optional fields and duplicate names with form replacement") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the category "Italy", and Add Location payloads posted as the dialog sends them,
+     * coordinates as decimal strings.
+     *
+     * Assertions:
+     *
+     * A valid Location is saved with its trimmed name, its coordinates and its category, and the success detail names the
+     * category so the list can expand it. An invalid field, a duplicate name or a missing pin saves nothing and answers with the
+     * add form carrying the error in place of the submitted one, keeping what was entered.
+     *
+     * Edge cases:
+     *
+     * Coordinates that are empty, not numbers, NaN, Infinity or just out of range; a malformed category ID and a Location's ID as
+     * the category; a missing coordinate, reported as the pin being required; JSON numbers at the extremes (-90, 180) with an
+     * empty category, which saves a top-level Location whose success detail has no category.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -143,6 +176,26 @@ import altitude.core.Const
   }
 
   test("Category add, rename, move, dialog membership and delete persist their changes") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, built up through the dialog endpoints: the category "Italy", the Location "Beach" and two
+     * imported assets.
+     *
+     * Assertions:
+     *
+     * Each dialog action persists its change - adding a category, renaming and moving the Location, adding assets to it, deleting
+     * the category and then the Location - and each refused input answers with its dialog's form carrying the error. Membership
+     * reports the number of assets the server added, not the size of the selection.
+     *
+     * Edge cases:
+     *
+     * Names are trimmed and unique regardless of case across categories and Locations; a Location cannot be moved into a
+     * Location, and assets cannot be added to a category; an empty category moves a Location to the top level; a repeated
+     * membership adds nothing; deleting a category moves its Location to the top level, and deleting a Location leaves its assets
+     * in the library.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -207,6 +260,17 @@ import altitude.core.Const
   }
 
   test("Missing or malformed action IDs are 400s, and foreign Location dialogs and mutations are 404s") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository holding the Location "Elsewhere".
+     *
+     * Assertions:
+     *
+     * A rename or move with an empty or malformed ID is a 400, and every dialog and mutation addressed to the other repository's
+     * Location is a 404 that leaves it unchanged.
+     */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
     login()
@@ -265,6 +329,17 @@ import altitude.core.Const
   }
 
   test("Location action routes require authentication") {
+
+    /**
+     * Setup:
+     *
+     * A repository, and a client that accepts JSON and has not logged in, so the routes answer 401 instead of redirecting to the
+     * login page.
+     *
+     * Assertions:
+     *
+     * The Locations tab, every Location dialog and every Location action answer 401.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     val headers = Map("Accept" -> "application/json")

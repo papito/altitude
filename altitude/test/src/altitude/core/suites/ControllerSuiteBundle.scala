@@ -17,15 +17,5 @@ class ControllerSuiteBundle extends AllControllerTestSuites() with BeforeAndAfte
     println("\n@@@@@@@@@@@@@@@@")
     println("CONTROLLER TESTS")
     println("@@@@@@@@@@@@@@@@\n")
-
-    /* We are testing HTTP server output doing its own thing in a different process, so we cannot
-       and should not write to anything - the connection here is just to explore the state of the DB.
-       The DB is shared - the DB connection is not.
-     */
-    // RequestContext.conn.value = Some(testApp.txManager.connection(readOnly = true))
-  }
-
-  override def afterAll(): Unit = {
-    // testApp.txManager.close()
   }
 }

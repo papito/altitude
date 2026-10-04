@@ -9,6 +9,20 @@ import altitude.core.models.Person
 @DoNotDiscover class PeopleActionControllerTests extends ControllerTestCore {
 
   test("Choose person cover face modal renders without a width parameter") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one Person, who has one test Face on an asset.
+     *
+     * Assertions:
+     *
+     * The choose-cover-face modal, requested with only the person's ID, renders with its face selector.
+     *
+     * Edge cases:
+     *
+     * No width parameter is sent.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -29,11 +43,19 @@ import altitude.core.models.Person
     }
   }
 
-  /**
-   * The client owns the search parameters, so a merge reports only that it happened. Showing the destination person is a normal
-   * search the browser runs off the dialog's success event.
-   */
   test("Merging people returns no content and does not redirect to search results") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with two People, each with one test Face on an asset of their own.
+     *
+     * Assertions:
+     *
+     * Merging one into the other answers 204 with no Location header, so nothing redirects. The client owns the search
+     * parameters, so a merge reports only that it happened; showing the destination person is a normal search the browser runs
+     * off the dialog's success event.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()

@@ -15,13 +15,16 @@ import scala.util.control.NonFatal
 import altitude.core.Const
 import altitude.core.Environment
 import altitude.core.RequestContext
+import altitude.core.ThreadVariable
 
 object TransactionManager:
-  def apply(config: Config): TransactionManager = new TransactionManager(config)
+  def apply(config: Config, explainer: Option[SqlExplainer] = None): TransactionManager =
+    new TransactionManager(config, explainer)
 
 /**
  * Connections and the transactions on them. Every transaction runs on a connection borrowed from a HikariCP pool and carried by
- * `RequestContext.conn`; a transaction started inside another joins it.
+ * `RequestContext.conn` for as long as it lasts; a transaction started inside another, on the same thread, joins it, and a thread
+ * started inside one is outside of it. A pool logs a connection held longer than `db.pool.leak_detection_threshold`.
  *
  * PostgreSQL has one pool, every connection opened with `db.postgres.options`. A read transaction is `REPEATABLE READ` and
  * `READ ONLY`, so all of its statements see one snapshot, and each of its statements has the `db.postgres.read_statement_timeout`
@@ -30,15 +33,22 @@ object TransactionManager:
  * SQLite has a read pool and a write pool of one connection over the same file, every connection opened with the same PRAGMAs. A
  * write transaction begins `IMMEDIATE`, taking the write lock when it starts, and the single write connection queues writers in
  * the process instead of failing them with `SQLITE_BUSY`. A read transaction reads one WAL snapshot, and its connection refuses
- * writes (`query_only`): a write nested in a read transaction would otherwise be discarded by its closing rollback.
+ * writes (`query_only`): a "write" nested in a read transaction would otherwise be discarded by its closing rollback.
  *
- * Both engines end a read transaction with a rollback: it has nothing to keep.
+ * Both engines end a read transaction with a rollback: it has nothing to keep. A rollback that fails is logged, so a failed
+ * transaction always fails with its own exception.
+ *
+ * A manager given an `explainer` (development only) hands out each connection wrapped in an [[ExplainingConnection]], which
+ * offers the explainer every DML statement prepared on it. Without one, a transaction runs on the pooled connection itself.
  */
-class TransactionManager(val config: Config):
+class TransactionManager(val config: Config, explainer: Option[SqlExplainer] = None):
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val engine: String = config.getString(Const.Conf.DB_ENGINE)
+
+  // Whether an enclosing `withFaceVector` of this thread has set the transaction's connection up for searching face vectors
+  private val isFaceVectorRegistered = new ThreadVariable(false)
 
   // Whether the pools were opened, so that a manager that never ran a transaction has nothing to close
   @volatile private var isOpen = false
@@ -72,7 +82,7 @@ class TransactionManager(val config: Config):
       // On SQLite this begins the transaction, IMMEDIATE on the write connection
       conn.setAutoCommit(false)
       if readOnly && engine == Const.DbEngineName.POSTGRES then beginPostgresRead(conn)
-      conn
+      explainer.fold(conn)(ExplainingConnection(conn, _))
     catch
       case ex: Exception =>
         conn.close()
@@ -88,49 +98,63 @@ class TransactionManager(val config: Config):
     finally statement.close()
 
   def withTransaction[A](f: => A): A =
-    if isInTransaction then return f
-
-    RequestContext.conn.value = Some(connection(readOnly = false))
-
-    try
-      // actual function call
-      val res: A = f
-      commit()
-      res
-    catch
-      case ex: Exception =>
-        rollback()
-        throw ex
-    finally close()
+    if isInTransaction then f else transaction(readOnly = false)(f)
 
   /**
-   * A write transaction that can search face vectors: on SQLite the `face.features` column is registered with the vector
-   * extension, which every connection loads when it is opened, before the transaction's first statement. Registering needs the
-   * `face` table, which a database being created does not have yet when its first connections are opened.
+   * A write transaction that can search face vectors: what the engine needs for it ([[faceVectorSetup]]) is run once, for the
+   * outermost call. On SQLite that registers the `face.features` column with the vector extension, which every connection loads
+   * when it is opened; registering needs the `face` table, which a database being created does not have yet when its first
+   * connections are opened.
    */
   def withFaceVector[A](f: => A): A =
     withTransaction {
-      if engine == Const.DbEngineName.SQLITE then
+      if isFaceVectorRegistered.value then f
+      else
         val statement = RequestContext.getConn.createStatement()
-        try statement.execute("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
+        try faceVectorSetup.foreach(statement.execute)
         finally statement.close()
-      f
+        isFaceVectorRegistered.withValue(true)(f)
     }
 
+  /**
+   * What a transaction runs before it searches the face vectors. SQLite registers the column with the vector extension.
+   * PostgreSQL sets, for the transaction, how its vector index is searched: the candidates it keeps, and that a scan goes on past
+   * them until the statement's limit is met, since the repository and the bad matches are filtered after the index is read.
+   */
+  private lazy val faceVectorSetup: List[String] = engine match
+    case Const.DbEngineName.SQLITE =>
+      List("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
+    case Const.DbEngineName.POSTGRES =>
+      List(
+        s"SET LOCAL hnsw.ef_search = ${config.getInt(Const.Conf.FACE_RECOGNITION_HNSW_EF_SEARCH)}",
+        "SET LOCAL hnsw.iterative_scan = relaxed_order")
+
   def asReadOnly[A](f: => A): A =
-    if isInTransaction then return f
+    if isInTransaction then f else transaction(readOnly = true)(f)
 
-    RequestContext.conn.value = Some(connection(readOnly = true))
+  /**
+   * Runs `f` in a transaction of its own, on a connection the thread holds until `f` ends. A write is committed; a read has
+   * nothing to keep and is rolled back, as is a transaction that failed.
+   */
+  private def transaction[A](readOnly: Boolean)(f: => A): A =
+    val conn = connection(readOnly)
 
-    try f
+    try
+      val res = RequestContext.conn.withValue(Some(conn))(f)
+      if readOnly then rollback(conn) else conn.commit()
+      res
     catch
       case ex: Exception =>
-        logger.error(s"Error (${ex.getClass.getName}): ${ex.getMessage}")
+        rollback(conn)
         throw ex
     finally
-      try rollback()
-      catch case NonFatal(ex) => logger.warn(s"Could not end a read transaction: ${ex.getMessage}")
-      finally close()
+      // Returns the connection to its pool
+      conn.close()
+
+  /** A failure is logged, never thrown: the caller gets the failure of the transaction, not of its rollback */
+  private def rollback(conn: Connection): Unit =
+    try conn.rollback()
+    catch case NonFatal(ex) => logger.warn(s"Could not roll back a transaction: ${ex.getMessage}")
 
   /**
    * Lets SQLite refresh the statistics of the tables that need them, on the write connection between transactions; PostgreSQL's
@@ -146,7 +170,7 @@ class TransactionManager(val config: Config):
         try statement.execute("PRAGMA optimize")
         finally statement.close()
       finally conn.close()
-      logger.info("SQLite statistics optimized")
+      logger.trace("SQLite statistics optimized")
     catch case NonFatal(ex) => logger.warn(s"Could not optimize SQLite statistics: ${ex.getMessage}")
 
   /** Closes the pools and every connection in them */
@@ -155,41 +179,34 @@ class TransactionManager(val config: Config):
 
     val (readPool, writePool) = pools
     Set(readPool, writePool).foreach(_.close())
-    logger.info("Connection pools closed")
+    logger.debug("Connection pools closed")
 
-  private def isInTransaction: Boolean = RequestContext.conn.value.exists(conn => !conn.isClosed)
+  private def isInTransaction: Boolean = RequestContext.conn.value.isDefined
 
-  private def rollback(): Unit =
-    RequestContext.conn.value.get.rollback()
-
-  def close(): Unit =
-    if RequestContext.conn.value.isDefined && RequestContext.conn.value.get.isClosed then
-      logger.warn("Connection already closed")
-      return
-
-    // Returns the connection to its pool
-    RequestContext.conn.value.get.close()
-    RequestContext.conn.value = None
-
-  def commit(): Unit =
-    RequestContext.conn.value.get.commit()
+  /** What every pool has: its name, its size, and the time after which a connection still held is reported as a leak */
+  private def poolConfig(name: String, size: Int): HikariConfig =
+    val hikari = new HikariConfig()
+    hikari.setPoolName(name)
+    hikari.setMaximumPoolSize(size)
+    hikari.setLeakDetectionThreshold(config.getDuration(Const.Conf.DB_POOL_LEAK_DETECTION_THRESHOLD).toMillis)
+    hikari
 
   /**
    * The PostgreSQL pool. Unless `db.postgres.pool_size` says otherwise, it has a connection per core, for requests running at
-   * once, plus four for the import pipeline (a transaction at most per asynchronous stage of each repository's import), and never
-   * fewer than 10.
+   * once, plus five for the import pipeline (a transaction at most per database stage of a repository's import), and never fewer
+   * than 10.
    */
   private def postgresPool(): HikariDataSource =
-    val hikari = new HikariConfig()
-    hikari.setPoolName("postgres")
+    val hikari = poolConfig(
+      "postgres",
+      if config.hasPath(Const.Conf.POSTGRES_POOL_SIZE) then config.getInt(Const.Conf.POSTGRES_POOL_SIZE)
+      else math.max(10, Runtime.getRuntime.availableProcessors + 5)
+    )
     hikari.setJdbcUrl(config.getString(Const.Conf.POSTGRES_URL))
     hikari.setUsername(config.getString(Const.Conf.POSTGRES_USER))
     hikari.setPassword(config.getString(Const.Conf.POSTGRES_PASSWORD))
-    hikari.setMaximumPoolSize(
-      if config.hasPath(Const.Conf.POSTGRES_POOL_SIZE) then config.getInt(Const.Conf.POSTGRES_POOL_SIZE)
-      else math.max(10, Runtime.getRuntime.availableProcessors + 4))
     hikari.addDataSourceProperty("options", config.getString(Const.Conf.POSTGRES_OPTIONS))
-    logger.info(s"Opening a PostgreSQL pool of ${hikari.getMaximumPoolSize} connections")
+    logger.trace(s"Opening a PostgreSQL pool of ${hikari.getMaximumPoolSize} connections")
     new HikariDataSource(hikari)
 
   /** A SQLite pool over the database file. Each connection is set up once, as the pool opens it. */
@@ -214,11 +231,9 @@ class TransactionManager(val config: Config):
     }
     dataSource.setUrl(config.getString(Const.Conf.SQLITE_URL))
 
-    val hikari = new HikariConfig()
-    hikari.setPoolName(name)
+    val hikari = poolConfig(name, size)
     hikari.setDataSource(dataSource)
-    hikari.setMaximumPoolSize(size)
-    logger.info(s"Opening a SQLite pool [$name] of $size connections")
+    logger.trace(s"Opening a SQLite pool [$name] of $size connections")
     new HikariDataSource(hikari)
 
   /**
@@ -234,7 +249,7 @@ class TransactionManager(val config: Config):
       if isReadPool then statement.execute("PRAGMA query_only=1")
       else statement.execute("PRAGMA wal_autocheckpoint=500")
     finally statement.close()
-    logger.debug(s"SQLite connection set up. Read pool: $isReadPool")
+    logger.trace(s"SQLite connection set up. Read pool: $isReadPool")
 
   /** The sqlite-vector build for this platform */
   private lazy val vectorExtensionPath: String =
@@ -252,5 +267,5 @@ class TransactionManager(val config: Config):
         (dir, "vector.so")
 
     val path = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
-    logger.info(s"The sqlite-vector extension is at: $path")
+    logger.debug(s"The sqlite-vector extension is at: $path")
     path

@@ -65,7 +65,7 @@ class LibraryService(val app: Altitude):
     AssetWithData(asset, staged)
 
   def addImportAsset(importAsset: ImportAsset): Asset =
-    logger.info(s"Importing asset '$importAsset'")
+    logger.debug(s"Importing asset '$importAsset'")
     val dataAssetIn = convImportAsset2dataAsset(importAsset)
     addAsset(dataAssetIn)
 
@@ -79,6 +79,61 @@ class LibraryService(val app: Altitude):
     result.head match {
       case (Left(assetOut), _) => assetOut
       case (Right(invalid), _) => throw invalid.cause.getOrElse(new Exception("Unknown error"))
+    }
+
+  /** The import pipeline's index stage: the asset persisted and its Search document written, together or not at all */
+  def persistAndIndex(asset: Asset): Asset =
+    txManager.withTransaction {
+      val persisted = app.service.asset.add(asset)
+      app.service.search.indexAsset(persisted)
+      logger.trace(s"Persisted and indexed asset [${persisted.persistedId}]")
+      persisted
+    }
+
+  /**
+   * The import pipeline's last stage: the asset marked complete and counted in the stats. An asset that never gets here is purged
+   * at startup, so it is never counted.
+   */
+  def completeImport(asset: Asset): Asset =
+    txManager.withTransaction {
+      val completed = app.service.asset.markAsCompleted(asset)
+      app.service.stats.addAsset(asset)
+      logger.trace(s"Import of asset [${asset.persistedId}] complete")
+      completed
+    }
+
+  /**
+   * Undoes what the import of an asset wrote, for an asset the pipeline dropped or an import a crash cut off. Nothing to undo for
+   * an asset that was never persisted (dropped before the index stage, or a duplicate it refused) or that completed. In one
+   * transaction: the people of its faces are locked, so a face another import gives one of them meanwhile keeps that person; the
+   * face counts it added are given back; its row goes, with its faces, its Search document and its metadata; and a person left
+   * with no face, which only this import can have started, goes too. Once that commits, its files go: its faces' (a cover face of
+   * a person who stays keeps them, as on purge), its stored file and its preview. Its stats need nothing: an asset counts once
+   * its import completes.
+   */
+  def discardImport(asset: Asset): Unit =
+    asset.id.foreach {
+      assetId =>
+        val unfinished = new Query(Map(FieldConst.ID -> assetId, FieldConst.Asset.IS_PIPELINE_PROCESSED -> false))
+
+        val discarded = txManager.withTransaction {
+          Option.when(app.service.asset.queryAll(unfinished).nonEmpty) {
+            app.service.person.lockAssetPeople(assetId)
+            val facesWithPeople = app.service.person.getAssetFacesWithPeople(assetId)
+            app.service.person.recycleFacesForAssets(Set(assetId))
+            app.service.asset.deleteByQuery(unfinished)
+            val deletedPeople = app.service.person.deletePeopleWithoutFaces(facesWithPeople.map(_._2.persistedId).toSet)
+            (facesWithPeople, deletedPeople)
+          }
+        }
+
+        discarded.foreach {
+          case (facesWithPeople, deletedPeople) =>
+            app.service.person.purgeFaceFiles(facesWithPeople, deletedPeople)
+            app.service.fileStore.purgeAssetById(assetId)
+            logger.debug(
+              s"Discarded the import of asset [$assetId]: ${facesWithPeople.size} faces, ${deletedPeople.size} people it started")
+        }
     }
 
   def query(query: Query): QueryResult[Asset] =
@@ -96,10 +151,9 @@ class LibraryService(val app: Altitude):
       app.service.asset.query(_query)
     }
 
+  /** A flat page with its assets, continued by cursor as a grouped page is ([[continued]]) */
   def search(query: SearchQuery): SearchResult =
-    txManager.asReadOnly {
-      app.service.search.search(withResolvedScope(query))
-    }
+    continued(query)(app.service.search.search)
 
   /** How many assets a search matches, exactly, scoped like `search`: what merging people recounts a person's assets by */
   def count(query: SearchQuery): Int =
@@ -128,16 +182,20 @@ class LibraryService(val app: Altitude):
       app.service.search.mapBounds(withResolvedScope(query))
     }
 
-  /**
-   * A grouped page with its assets, for the grouped grid. A cursor is accepted only for the search it was issued for,
-   * fingerprinted as requested: a folder filter by the folder given and the Search text as typed, since a folder's descendants
-   * and the names the text matches are resolved afresh on every page.
-   */
+  /** A grouped page with its assets, for the grouped grid, continued by cursor ([[continued]]) */
   def searchGrouped(query: SearchQuery): GroupedSearchResult =
+    continued(query)(app.service.search.searchGrouped)
+
+  /**
+   * Runs a page of a search that a cursor may continue. A cursor is accepted only for the search it was issued for, fingerprinted
+   * as requested: a folder filter by the folder given and the Search text as typed, since a folder's descendants and the names
+   * the text matches are resolved afresh on every page.
+   */
+  private def continued[T](query: SearchQuery)(page: (SearchQuery, String) => T): T =
     txManager.asReadOnly {
       val scope = SearchCursor.scopeFingerprint(query, RequestContext.getRepository.persistedId, app.dataSourceType)
       query.cursor.foreach(_.requireScope(scope))
-      app.service.search.searchGrouped(withResolvedScope(query), scope)
+      page(withResolvedScope(query), scope)
     }
 
   /** What every search resolves against the repository as it is now, in the caller's transaction, before it reaches the DAO */
@@ -170,7 +228,7 @@ class LibraryService(val app: Altitude):
 
     txManager.withTransaction {
       val folder: Folder = app.service.folder.getById(id)
-      logger.info(s"Deleting folder $folder")
+      logger.debug(s"Deleting folder $folder")
 
       val children = app.service.folder.getChildrenRecursive(id)
       val allFoldersToDeleteIds = (children.map(_.persistedId) :+ folder.persistedId).toSet[Any]
@@ -185,49 +243,73 @@ class LibraryService(val app: Altitude):
       recycleAssets(assetIdsToRecycle)
     }
 
-  def restoreRecycledAssets(assetIds: Set[String]): Unit =
-    logger.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
+  /**
+   * Restores recycled assets, all in one transaction: an asset whose content is live again (imported anew after it was recycled)
+   * stays in the trash and is reported, and any other failure restores nothing. An ID that is no asset of the repository fails
+   * the restore; a live asset, or one marked for purging, is ignored.
+   */
+  def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
+    logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
-    assetIds.foreach {
-      assetId =>
-        logger.info(s"Restoring recycled asset [$assetId]")
+    val result = txManager.withTransaction {
+      val recycled = app.service.asset.getAssetsToRestore(assetIds)
+      requireAssets(assetIds -- recycled.map(_.persistedId))
 
-        val asset: Asset = app.service.asset.getById(assetId)
-        val existing = app.service.asset.getByChecksum(asset.checksum)
+      // One at a time: a restored asset makes a recycled copy of its content a duplicate
+      val (restored, duplicates) = recycled.foldLeft((List.empty[Asset], List.empty[Asset])) {
+        case ((restored, duplicates), asset) =>
+          if app.service.asset.getByChecksum(asset.checksum).isDefined then
+            logger.debug(s"Not restoring asset [${asset.persistedId}]: an asset with the same content is live")
+            (restored, asset :: duplicates)
+          else
+            restoreRecycledAsset(asset)
+            (asset :: restored, duplicates)
+      }
 
-        if existing.isDefined then throw DuplicateException()
+      if restored.nonEmpty then
+        app.service.stats.transition(before = restored, after = restored.map(_.copy(isRecycled = false)))
+        app.service.person.restoreFacesForAssets(restored.map(_.persistedId).toSet)
 
-        txManager.withTransaction {
-          if asset.isRecycled then
-            app.service.asset.setRecycledProp(asset, isRecycled = false)
-
-            // Assets recycled directly from triage have no folder assigned — skip folder restoration
-            if !asset.isTriaged then
-              // Restore the full ancestor chain (top-down) so the folder tree is consistent.
-              // getAncestors returns from root -> direct parent, so we can iterate in order.
-              val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
-              ancestors.foreach {
-                ancestor => if ancestor.isRecycled then app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
-              }
-
-              // Restore the immediate folder of the asset
-              val folder: Folder = app.service.folder.getById(asset.folderId)
-              if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
-
-            val restoredAsset: Asset = app.service.asset.getById(assetId)
-            app.service.stats.restoreAsset(restoredAsset)
-            app.service.person.restoreFacesForAssets(Set(assetId))
-        }
+      RestoreResult(restored = restored.map(_.persistedId).toSet, duplicates = duplicates.map(_.persistedId).toSet)
     }
+
+    logger.debug(s"Restored ${result.restored.size} assets; ${result.duplicates.size} left in the trash as duplicates")
+    result
+
+  /** Fails with NotFoundException when an ID is no asset of the context repository */
+  private def requireAssets(assetIds: Set[String]): Unit =
+    if assetIds.isEmpty then return
+
+    val found = app.service.asset.queryAll(new Query().add(FieldConst.ID -> Query.IN(assetIds.asInstanceOf[Set[Any]])))
+    val unknown = assetIds -- found.records.map(_.persistedId)
+    if unknown.nonEmpty then
+      throw NotFoundException(s"Cannot find ${unknown.size} of the assets in the repository, [${unknown.head}] among them")
+
+  private def restoreRecycledAsset(asset: Asset): Unit =
+    logger.debug(s"Restoring recycled asset [${asset.persistedId}]")
+    app.service.asset.setRecycledProp(asset, isRecycled = false)
+
+    // Assets recycled directly from triage have no folder assigned — skip folder restoration
+    if !asset.isTriaged then
+      // Restore the full ancestor chain (top-down) so the folder tree is consistent.
+      // getAncestors returns from root -> direct parent, so we can iterate in order.
+      val ancestors: List[Folder] = app.service.folder.getAncestors(asset.folderId)
+      ancestors.foreach {
+        ancestor => if ancestor.isRecycled then app.service.folder.setRecycledProp(folder = ancestor, isRecycled = false)
+      }
+
+      // Restore the immediate folder of the asset
+      val folder: Folder = app.service.folder.getById(asset.folderId)
+      if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
 
   /** Note that this is also how we restore assets from the recycle bin or move them from triage. */
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit =
+    if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
+
     txManager.withTransaction {
-      val assetsToMove = app.service.asset.getAssetsToMove(assetIds, destFolderId)
+      val assetsToMove = app.service.asset.getAssetsToMove(assetIds)
 
-      if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
-
-      logger.info(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
+      logger.debug(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
       if assetsToMove.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
 
@@ -239,49 +321,20 @@ class LibraryService(val app: Altitude):
             FieldConst.Asset.IS_TRIAGED -> false)
         )
 
-        // update the stats in one pass
-        val (triagedAssets, triagedBytes, recycledAssets, recycledAssetsBytes, sortedAssets, sortedBytes) =
-          assetsToMove.foldLeft((0, 0L, 0, 0L, 0, 0L)) {
-            case (
-                  (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum),
-                  asset) =>
-              if asset.isTriaged then
-                (
-                  triagedAssetsSum + 1,
-                  triagedBytesSum + asset.sizeBytes,
-                  recycledAssetsSum,
-                  recycledAssetsBytesSum,
-                  sortedAssetsSum + 1,
-                  sortedBytesSum + asset.sizeBytes)
-              else if asset.isRecycled then
-                (
-                  triagedAssetsSum,
-                  triagedBytesSum,
-                  recycledAssetsSum + 1,
-                  recycledAssetsBytesSum + asset.sizeBytes,
-                  sortedAssetsSum + 1,
-                  sortedBytesSum + asset.sizeBytes)
-              else
-                // asset, not in a special state, being movied from one folder to another - no global stats change
-                (triagedAssetsSum, triagedBytesSum, recycledAssetsSum, recycledAssetsBytesSum, sortedAssetsSum, sortedBytesSum)
-          }
+        // A recycled asset counts as recycled even when it was recycled from triage and keeps its triage flag, and an asset moved
+        // from one folder to another stays sorted
+        app.service.stats
+          .transition(before = assetsToMove, after = assetsToMove.map(_.copy(isRecycled = false, isTriaged = false)))
 
-        app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
-        app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
-        app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, recycledAssets)
-        app.service.stats.decrementStat(Stats.RECYCLED_BYTES, recycledAssetsBytes)
-
-        app.service.stats.incrementStat(Stats.SORTED_ASSETS, sortedAssets)
-        app.service.stats.incrementStat(Stats.SORTED_BYTES, sortedBytes)
-
-        // Restoring face counts is only valid when assets are coming out of recycle.
-        // Triage/folder moves should not mutate person.numOfFaces.
-        if assetsToMove.nonEmpty && assetsToMove.forall(_.isRecycled) then app.service.person.restoreFacesForAssets(assetIds)
+        // Only the assets coming out of recycle give their faces back; triage and folder moves leave face counts alone
+        val restoredIds = assetsToMove.filter(_.isRecycled).map(_.persistedId).toSet
+        if restoredIds.nonEmpty then app.service.person.restoreFacesForAssets(restoredIds)
     }
 
   def recycleAssets(assetIds: Set[String]): Unit =
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
+      logger.debug(s"Recycling assets [${assetIds.mkString(",")}]: ${assetsToRecycle.size} recyclable")
 
       if assetsToRecycle.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
@@ -291,110 +344,84 @@ class LibraryService(val app: Altitude):
           data = Map(FieldConst.Asset.IS_RECYCLED -> true)
         )
 
-        // update the stats in one pass
-        val (triagedAssets, triagedBytes, sortedAssets, sortedBytes) = assetsToRecycle.foldLeft((0, 0L, 0, 0L)) {
-          case ((triagedAssetsSum, triagedBytesSum, sortedAssetsSum, sortedBytesSum), asset) =>
-            if asset.isTriaged then (triagedAssetsSum + 1, triagedBytesSum + asset.sizeBytes, sortedAssetsSum, sortedBytesSum)
-            else (triagedAssetsSum, triagedBytesSum, sortedAssetsSum + 1, sortedBytesSum + asset.sizeBytes)
-        }
+        // Only the assets not already in the recycle bin are counted and lose their faces
+        app.service.stats.transition(before = assetsToRecycle, after = assetsToRecycle.map(_.copy(isRecycled = true)))
 
-        app.service.stats.decrementStat(Stats.TRIAGE_ASSETS, triagedAssets)
-        app.service.stats.decrementStat(Stats.TRIAGE_BYTES, triagedBytes)
-        app.service.stats.decrementStat(Stats.SORTED_ASSETS, sortedAssets)
-        app.service.stats.decrementStat(Stats.SORTED_BYTES, sortedBytes)
-
-        app.service.stats.incrementStat(Stats.RECYCLED_ASSETS, assetIds.size)
-        app.service.stats.incrementStat(Stats.RECYCLED_BYTES, triagedBytes + sortedBytes)
-
-        app.service.person.recycleFacesForAssets(assetIds)
+        val recycledIds = assetsToRecycle.map(_.persistedId).toSet
+        app.service.person.recycleFacesForAssets(recycledIds)
 
         // Albums and Locations only point at assets; a recycled asset leaves every one of them and a restore does not bring
         // it back
-        val recycledIds = assetsToRecycle.map(_.persistedId).toSet
         app.service.album.removeAssetsFromAllAlbums(recycledIds)
         app.service.location.removeAssetsFromAllLocations(recycledIds)
     }
 
   def purgeRecycleBin(): Unit =
-    val assetsToPurge = txManager.withTransaction {
-      this.markRecycledAssetsForPurging()
-      app.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true))
-    }
-
-    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
-    assetsToPurge.records.map(app.service.purgePipeline.addToQueue(_, pipelineContext))
+    logger.debug("Purging the recycle bin")
+    val assetsToPurge = txManager.withTransaction(markForPurging(app.service.asset.getAssetsToPurge(None)))
+    queueForPurging(assetsToPurge)
 
   def purgeSelectedAssets(assetIds: Set[String]): Unit =
-    logger.info(s"Purging selected assets [${assetIds.mkString(",")}]")
+    logger.debug(s"Purging selected assets [${assetIds.mkString(",")}]")
+    val assetsToPurge = txManager.withTransaction(markForPurging(app.service.asset.getAssetsToPurge(Some(assetIds))))
+    queueForPurging(assetsToPurge)
 
-    val assetsToPurge = txManager.withTransaction {
-      markSelectedAssetsForPurging(assetIds)
-      app.service.asset.queryRecycled(
-        new Query()
-          .add(FieldConst.Asset.IS_PURGED -> true)
-          .add(FieldConst.ID -> Query.IN(assetIds.asInstanceOf[Set[Any]]))
-      )
+  /**
+   * Marks the assets for purging and takes them out of the recycled stats. From here they are out of every library operation; the
+   * purge queue deletes their files and rows.
+   */
+  private def markForPurging(assets: List[Asset]): List[Asset] =
+    if assets.nonEmpty then
+      val purgeQuery = new Query().add(FieldConst.ID -> Query.IN(assets.map(_.persistedId).toSet[Any]))
+      app.service.asset.updateByQuery(purgeQuery, Map(FieldConst.Asset.IS_PURGED -> true))
+
+      app.service.stats.transition(before = assets, after = Nil)
+      logger.info(s"Marked ${assets.size} assets for purging")
+    assets
+
+  /** Hands assets marked for purging in the context repository to the purge queue, once their mark has committed */
+  private def queueForPurging(assets: List[Asset], account: User = RequestContext.getAccount): Unit =
+    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = account)
+    app.service.purgePipeline.enqueue(assets.map((_, pipelineContext)))
+
+  /**
+   * Queues again, in every repository, the assets marked for purging that are still there: the app stopped before the purge queue
+   * deleted them, or their delete failed. They were taken out of the stats when they were marked.
+   */
+  def requeuePurgePending(): Unit =
+    forEachRepository {
+      repository =>
+        val pending = app.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true)).records
+
+        if pending.nonEmpty then
+          logger.info(s"Queueing ${pending.size} assets marked for purging again. Repo: ${repository.name}")
+          queueForPurging(pending, account = app.service.user.getById(repository.ownerAccountId))
     }
 
-    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
-    assetsToPurge.records.map(app.service.purgePipeline.addToQueue(_, pipelineContext))
+  /** Repairs every repository's stats from its assets, which the library operations only ever adjust */
+  def reconcileStats(): Unit =
+    forEachRepository(_ => app.service.stats.reconcile(): Unit)
 
-  private def markSelectedAssetsForPurging(assetIds: Set[String]): Unit =
-    txManager.withTransaction {
-      val assetQuery = new Query()
-        .add(FieldConst.Asset.IS_RECYCLED -> true)
-        .add(FieldConst.ID -> Query.IN(assetIds.asInstanceOf[Set[Any]]))
-
-      val assets = app.service.asset.queryAll(assetQuery).records.map(r => r: Asset)
-
-      if assets.nonEmpty then
-        val purgeQuery = new Query().add(FieldConst.ID -> Query.IN(assets.map(_.persistedId).toSet[Any]))
-        app.service.asset.updateByQuery(purgeQuery, Map(FieldConst.Asset.IS_PURGED -> true))
-
-        val totalBytes = assets.foldLeft(0L)((sum, asset) => sum + asset.sizeBytes)
-
-        app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, assets.size)
-        app.service.stats.decrementStat(Stats.RECYCLED_BYTES, totalBytes)
-    }
-
-  private def markRecycledAssetsForPurging(): Unit =
-    txManager.withTransaction {
-      val assetQuery = new Query().add(FieldConst.Asset.IS_RECYCLED -> true)
-
-      val recycledCount = app.service.asset.updateByQuery(assetQuery, Map(FieldConst.Asset.IS_PURGED -> true))
-
-      // trashbin should be at zero
-      val stats = app.service.stats.getStats
-      require(stats.getStatValue(Stats.RECYCLED_ASSETS) == recycledCount, "Recycled assets count mismatch")
-
-      app.service.stats.decrementStat(Stats.RECYCLED_ASSETS, stats.getStatValue(Stats.RECYCLED_ASSETS))
-      app.service.stats.decrementStat(Stats.RECYCLED_BYTES, stats.getStatValue(Stats.RECYCLED_BYTES))
-    }
-
+  /** Discards, in every repository, the imports a crash or a shutdown cut off before they completed ([[discardImport]]) */
   def pruneDanglingAssets(): Unit =
     forEachRepository {
       repository =>
-        logger.info(s"Pruning dangling assets. Repo: ${repository.name}")
+        logger.debug(s"Pruning dangling assets. Repo: ${repository.name}")
         val danglingAssets = app.service.asset.getDanglingAssets
 
-        if danglingAssets.nonEmpty then
-          logger.warn(s"Found ${danglingAssets.size} dangling assets")
-          danglingAssets.foreach(asset => logger.warn(s"Will prune: ${asset.persistedId} - ${asset.fileName}"))
-        app.service.asset.pruneDanglingAssets()
+        if danglingAssets.nonEmpty then logger.warn(s"Found ${danglingAssets.size} dangling assets")
+        danglingAssets.foreach {
+          asset =>
+            logger.warn(s"Will prune: ${asset.persistedId} - ${asset.fileName}")
+            discardImport(asset)
+        }
     }
 
-  /** Runs the operation in every repository's context, then restores the caller's own repository context */
+  /**
+   * Runs the operation in every repository's context, then restores the caller's own repository context. The operation opens its
+   * own transactions, so what it does after one commits, such as deleting files, happens after that commit.
+   */
   def forEachRepository(operation: Repository => Unit): Unit =
-    val callerRepository = RequestContext.repository.value
-
-    txManager.withTransaction {
-      val repositories = app.DAO.repository.getAll
-
-      try
-        repositories.foreach {
-          repository =>
-            RequestContext.repository.value = Some(repository)
-            operation(repository)
-        }
-      finally RequestContext.repository.value = callerRepository
+    app.service.repository.getAll.foreach {
+      repository => RequestContext.repository.withValue(Some(repository))(operation(repository))
     }

@@ -8,9 +8,11 @@ import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.Cancellable
 import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.actor.typed.DispatcherSelector
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.DurationInt
 
 import altitude.core.dao.jdbc.PersonDao
@@ -41,17 +43,18 @@ import altitude.core.service.UserService
 import altitude.core.service.VideoService
 import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
+import altitude.core.transactions.SqlExplainer
 import altitude.core.transactions.TransactionManager
 
 class Altitude(val dbEngineOverride: Option[String] = None):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
-  logger.info(s"Environment is: ${Environment.CURRENT}")
+  logger.debug(s"Environment is: ${Environment.CURRENT}")
 
   final val app: Altitude = this
 
   // ID for this application
   final val id: Int = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
-  logger.info(s"Initializing Altitude Server application. Instance ID [$id]")
+  logger.debug(s"Initializing Altitude Server application. Instance ID [$id]")
 
   /**
    * In development, application-dev.conf will override system defaults.
@@ -150,15 +153,55 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final private val schemaVersion = 2
 
   final val dataSourceType: String = config.getString(Const.Conf.DB_ENGINE)
-  logger.info(s"Datasource type: $dataSourceType")
+  logger.debug(s"Datasource type: $dataSourceType")
 
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
-  logger.info(s"File store type: $fileStoreType")
+  logger.debug(s"File store type: $fileStoreType")
 
-  final val txManager: TransactionManager = TransactionManager(app.config)
+  // The SQL explain log, for development only
+  private val sqlExplainer: Option[SqlExplainer] =
+    Option.when(Environment.devSwitch(config, Const.Conf.DEV_SQL_EXPLAIN)) {
+      val file = new File(Environment.ROOT_PATH, SqlExplainer.FILE_NAME)
+      logger.info(s"The SQL explain log is on: each new query is explained once, into $file")
+      new SqlExplainer(dataSourceType, file)
+    }
 
+  // For development only: a pipeline queue whose stream fails restarts it after a backoff, rather than staying down. Read before
+  // the services, whose queues are started as they are wired up.
+  final val isPipelineRestartEnabled: Boolean = Environment.devSwitch(config, Const.Conf.DEV_RESTART_PIPELINE)
+  if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
+
+  final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer)
+
+  /**
+   * How many threads do the import's work (`import.parallelism`, see reference.conf): left unset, half the cores and never fewer
+   * than 2. Every one of them holds its own face detection and recognition networks.
+   */
+  final val importParallelism: Int =
+    if config.hasPath(Const.Conf.IMPORT_PARALLELISM) then config.getInt(Const.Conf.IMPORT_PARALLELISM)
+    else math.max(2, Runtime.getRuntime.availableProcessors / 2)
+  logger.info(s"Import parallelism: $importParallelism threads")
+
+  // The app's config, with the dispatcher the import's work runs on
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
-    ActorSystem[AltitudeActorSystem.Command](AltitudeActorSystem(), "altitude-actor-system")
+    val importDispatcherConfig = ConfigFactory.parseString(s"""
+      altitude.import-dispatcher {
+        type = Dispatcher
+        executor = "thread-pool-executor"
+        thread-pool-executor.fixed-pool-size = $importParallelism
+      }
+    """)
+    ActorSystem[AltitudeActorSystem.Command](
+      AltitudeActorSystem(),
+      "altitude-actor-system",
+      importDispatcherConfig.withFallback(config))
+
+  /**
+   * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
+   * dispatcher, which the status ticker and the SQLite optimize schedule share, only route
+   */
+  final val importDispatcher: ExecutionContextExecutor =
+    actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
 
   // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
   private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
@@ -175,12 +218,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val user: dao.UserDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.UserDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.UserDao(app.config) with dao.sqlite.SqliteOverrides
-      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
-    }
-
-    val userToken: dao.UserTokenDao = dataSourceType match {
-      case Const.DbEngineName.POSTGRES => new dao.jdbc.UserTokenDao(app.config) with dao.postgres.PostgresOverrides
-      case Const.DbEngineName.SQLITE => new dao.jdbc.UserTokenDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
@@ -292,13 +329,13 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   if dataSourceType == Const.DbEngineName.SQLITE then {
     val dbFolder = new File(dataPath, "db")
     if !dbFolder.exists() then {
-      logger.info("Creating the DB folder for SQLite: " + dbFolder)
+      logger.debug("Creating the DB folder for SQLite: " + dbFolder)
       FileUtils.forceMkdir(dbFolder)
     }
   }
 
-  // How many assets the import and purge queues buffer and admit at once, on both engines: a pipeline stage does its work before
-  // it hands an asset on, so this does not multiply the concurrent work, which the pipeline's asynchronous boundaries decide
+  // How many assets the import and purge queues buffer and admit at once, on both engines. It does not decide the concurrent work
+  // of an import, which the import dispatcher's threads (`importParallelism`) bound.
   val parallelism: Int = Runtime.getRuntime.availableProcessors()
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
@@ -317,13 +354,15 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       service.migrationService.migrate()
 
   def cleanup(): Unit =
-    logger.info("Cleaning up resources")
+    logger.debug("Cleaning up resources")
+    // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
-    logger.info("Pipeline system terminated")
+    service.purgePipeline.shutdown()
 
     sqliteOptimizing.foreach(_.cancel())
     txManager.optimize()
     txManager.shutdown()
+    sqlExplainer.foreach(_.close())
 
     // This is already done by default and will cause a warning
     // actorSystem.terminate()
@@ -334,4 +373,4 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   def clearState(): Unit =
     repositoriesById = Map.empty
 
-  logger.info("Altitude Server instance initialized")
+  logger.debug("Altitude Server instance initialized")

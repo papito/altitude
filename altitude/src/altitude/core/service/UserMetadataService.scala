@@ -32,6 +32,7 @@ class UserMetadataService(val app: Altitude):
         logger.debug(s"Duplicate found for field [${metadataField.name}]")
         throw DuplicateException()
 
+      logger.debug(s"Adding metadata field [${metadataField.name}] of type [${metadataField.fieldType}]")
       metadataFieldDao.add(metadataField)
     }
 
@@ -51,6 +52,7 @@ class UserMetadataService(val app: Altitude):
 
   def deleteFieldById(id: String): Int =
     txManager.withTransaction {
+      logger.debug(s"Deleting metadata field [$id]")
       metadataFieldDao.deleteById(id)
     }
 
@@ -64,7 +66,7 @@ class UserMetadataService(val app: Altitude):
     }
 
   def setMetadata(assetId: String, metadata: UserMetadata): Unit =
-    logger.info(s"Setting metadata for asset [$assetId]: $metadata")
+    logger.debug(s"Setting metadata for asset [$assetId]: $metadata")
 
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
@@ -73,7 +75,7 @@ class UserMetadataService(val app: Altitude):
 
   // OPTIMIZE: this cleans and validates existing values (the ones that have IDs)
   def updateMetadata(assetId: String, metadata: UserMetadata): Unit =
-    logger.info(s"Updating metadata for asset [$assetId]: $metadata")
+    logger.debug(s"Updating metadata for asset [$assetId]: $metadata")
 
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
@@ -109,7 +111,7 @@ class UserMetadataService(val app: Altitude):
     }
 
   private def addFieldValue(assetId: String, fieldId: String, newValue: String): Unit =
-    logger.info(s"Adding value [$newValue] for field [$fieldId] on asset [$assetId] ")
+    logger.debug(s"Adding value [$newValue] for field [$fieldId] on asset [$assetId] ")
 
     txManager.withTransaction {
       val metadata = UserMetadata(Map(fieldId -> Set(UserMetadataValue(value = newValue))))
@@ -151,7 +153,7 @@ class UserMetadataService(val app: Altitude):
     }
 
   def deleteFieldValue(assetId: String, valueId: String): Unit =
-    logger.info(s"Deleting value [$valueId] for on asset [$assetId] ")
+    logger.debug(s"Deleting value [$valueId] for on asset [$assetId] ")
 
     txManager.withTransaction {
       val currentMetadata = getMetadata(assetId)
@@ -171,7 +173,7 @@ class UserMetadataService(val app: Altitude):
 
   def updateFieldValue(assetId: String, valueId: String, newValue: String): Unit =
 
-    logger.info(s"Updating value [$valueId] for on asset [$assetId] with [$newValue] ")
+    logger.debug(s"Updating value [$valueId] for on asset [$assetId] with [$newValue] ")
 
     txManager.withTransaction {
       val currentMetadata = getMetadata(assetId)
@@ -225,7 +227,7 @@ class UserMetadataService(val app: Altitude):
         updateMetadata(assetId, UserMetadata(newData))
     }
 
-  def clean(metadata: UserMetadata): UserMetadata =
+  private def clean(metadata: UserMetadata): UserMetadata =
     // get all metadata fields configured for this repository
     val fields = getAllFields
 
@@ -279,7 +281,7 @@ class UserMetadataService(val app: Altitude):
 
     UserMetadata(data = cleanData)
 
-  def validate(metadata: UserMetadata): Unit =
+  private def validate(metadata: UserMetadata): Unit =
     if metadata.data.isEmpty then return
 
     // get all metadata fields configured for this repository
@@ -316,7 +318,7 @@ class UserMetadataService(val app: Altitude):
    * @return
    *   clean, de-duplicated copy of the metadata
    */
-  def cleanAndValidate(metadata: UserMetadata): UserMetadata =
+  private def cleanAndValidate(metadata: UserMetadata): UserMetadata =
     val cleanMetadata = clean(metadata)
     validate(cleanMetadata)
     cleanMetadata

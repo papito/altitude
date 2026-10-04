@@ -21,7 +21,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
   def addLocation(name: String, latitude: Double, longitude: Double, categoryId: Option[String] = None): Location =
     txManager.withTransaction {
       categoryId.foreach(requireCategory)
-      logger.info(s"Adding location [$name] at [$latitude, $longitude]" + categoryId.fold("")(id => s" under [$id]"))
+      logger.debug(s"Adding location [$name] at [$latitude, $longitude]" + categoryId.fold("")(id => s" under [$id]"))
       add(
         Location(
           name = name.trim,
@@ -33,7 +33,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
 
   def addCategory(name: String): Location =
     txManager.withTransaction {
-      logger.info(s"Adding location category [$name]")
+      logger.debug(s"Adding location category [$name]")
       add(Location(name = name.trim, kind = LocationKind.Category))
     }
 
@@ -52,7 +52,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       // The copy validates the new name the same way a new row is validated
       val renamed = location.copy(name = newName.trim)
 
-      logger.info(s"Renaming location [${location.name}] to [${renamed.name}]")
+      logger.debug(s"Renaming location [${location.name}] to [${renamed.name}]")
       updateById(id, Map(FieldConst.Location.NAME -> renamed.name, FieldConst.Location.NAME_LC -> renamed.nameLowercase))
       renamed
     }
@@ -64,7 +64,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       if location.kind != LocationKind.Location then throw IllegalOperationException(s"Only a Location can be moved: $id")
       categoryId.foreach(requireCategory)
 
-      logger.info(s"Moving location [${location.name}] to " + categoryId.fold("the top level")(id => s"category [$id]"))
+      logger.debug(s"Moving location [${location.name}] to " + categoryId.fold("the top level")(id => s"category [$id]"))
       updateById(id, Map(FieldConst.Location.CATEGORY_ID -> categoryId))
       location.copy(categoryId = categoryId)
     }
@@ -76,8 +76,8 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
 
       if location.kind == LocationKind.Category then
         val moved = dao.moveChildrenToRoot(id)
-        logger.info(s"Deleting location category [${location.name}], moving $moved location(s) to the top level")
-      else logger.info(s"Deleting location [${location.name}]")
+        logger.debug(s"Deleting location category [${location.name}], moving $moved location(s) to the top level")
+      else logger.debug(s"Deleting location [${location.name}]")
 
       val deleted = super.deleteById(id)
       if deleted == 0 then throw NotFoundException(s"Location $id not found")
@@ -90,7 +90,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       if assetIds.isEmpty then 0
       else
         val added = dao.addAssets(locationId, assetIds)
-        logger.info(s"Added $added of ${assetIds.size} asset(s) to location [$locationId]")
+        logger.debug(s"Added $added of ${assetIds.size} asset(s) to location [$locationId]")
         added
     }
 
@@ -100,7 +100,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       if assetIds.isEmpty then 0
       else
         val removed = dao.removeAssets(locationId, assetIds)
-        logger.info(s"Removed $removed asset(s) from location [$locationId]")
+        logger.debug(s"Removed $removed asset(s) from location [$locationId]")
         removed
     }
 
@@ -109,7 +109,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
 
     txManager.withTransaction {
       val removed = dao.removeAssetsFromAllLocations(assetIds)
-      logger.debug(s"Removed $removed location membership(s) for assets [${assetIds.mkString(",")}]")
+      logger.trace(s"Removed $removed location membership(s) for assets [${assetIds.mkString(",")}]")
       removed
     }
 

@@ -24,6 +24,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   override def add(folder: Folder): Folder =
     txManager.withTransaction {
+      logger.debug(s"Adding folder [${folder.name}] under [${folder.parentId}]")
       super.add(folder)
     }
 
@@ -49,7 +50,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       val childrenByParentId = folders.filter(f => f.persistedId != f.parentId).groupBy(_.parentId)
 
       // Assets in recycled folders never surface here: deleting a folder recycles its assets in the same transaction
-      val directCounts = app.service.asset.countByFolder()
+      val directCounts = app.service.search.countByFolder()
 
       assembleTree(rootFolder, childrenByParentId, directCounts)
     }
@@ -130,6 +131,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
     txManager.withTransaction {
       val folder: Folder = getById(folderId)
+      logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 
       val folderForUpdate: Folder = folder.copy(
         name = newName
@@ -145,7 +147,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
     if folder.isRecycled == isRecycled then return
 
     txManager.withTransaction {
-      logger.info(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
+      logger.debug(s"Setting folder [${folder.persistedId}] recycled flag to [$isRecycled]")
 
       dao.updateById(folder.persistedId, Map(FieldConst.Folder.IS_RECYCLED -> isRecycled))
     }

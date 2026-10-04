@@ -20,7 +20,7 @@ class SystemService(val app: Altitude):
   protected val txManager: TransactionManager = app.txManager
 
   def version: Int =
-    txManager.withTransaction {
+    txManager.asReadOnly {
       try readMetadata.version
       catch
         case ex: SQLException =>

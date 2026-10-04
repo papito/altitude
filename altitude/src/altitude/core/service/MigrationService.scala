@@ -37,7 +37,7 @@ abstract class MigrationService(val app: Altitude):
     stmt.close()
 
   private def runSqlScript(path: String): Unit =
-    logger.info(s"Running migration script: $path")
+    logger.debug(s"Running migration script: $path")
     val resourceUrl = getClass.getResource(path)
     val source = Source.fromURL(resourceUrl)
     val commands = source.mkString
@@ -48,11 +48,11 @@ abstract class MigrationService(val app: Altitude):
     }
 
   def migrationRequired: Boolean =
-    logger.info("Checking if migration is required")
+    logger.debug("Checking if migration is required")
     val version = app.service.system.version
-    logger.info(s"Current database version is @ $version")
+    logger.debug(s"Current database version is @ $version")
     val isRequired = version < CURRENT_VERSION
-    logger.info(s"Migration required? : $isRequired")
+    logger.debug(s"Migration required? : $isRequired")
     isRequired
 
   /**
@@ -63,7 +63,7 @@ abstract class MigrationService(val app: Altitude):
   def migrate(): Unit =
     val oldVersion = app.service.system.version
     logger.warn("!!!! MIGRATING !!!!")
-    logger.info(s"From version $oldVersion to $CURRENT_VERSION")
+    logger.debug(s"From version $oldVersion to $CURRENT_VERSION")
 
     if oldVersion == 0 then
       runSqlScript(s"$MIGRATIONS_DIR/all.sql")

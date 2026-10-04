@@ -116,6 +116,15 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected val forUpdate: String
 
+  /**
+   * The test of a hand-written statement for a column being one of a set of IDs, `column $inIdSet`, whose one placeholder takes
+   * the whole set as [[idSet]] binds it, so a selection of any size neither grows the statement nor reaches the engine's
+   * parameter limit. The typed twin is `Columns.isInSet`.
+   */
+  protected val inIdSet: String
+
+  protected def idSet(ids: Set[String]): Any
+
   def add(modelIn: Model): Model = throw NotImplementedError("add method must be implemented")
 
   def getJsonFromColumn(column: AnyRef): ujson.Obj =
@@ -145,7 +154,7 @@ abstract class BaseDao[Model <: BaseModel]:
     makeModel(rec)
 
   def getById(id: String): Model =
-    logger.debug(s"Getting by ID '$id' from '$tableName'")
+    logger.trace(s"Getting by ID '$id' from '$tableName'")
     val q: Query = new Query().add(FieldConst.ID -> id)
     getOneByQuery(q)
 
@@ -158,18 +167,10 @@ abstract class BaseDao[Model <: BaseModel]:
     updateByQuery(q, data)
 
   def deleteByQuery(q: Query): Int =
-    logger.debug(s"Deleting record by query: $q")
-    BaseDao.incrWriteQueryCount()
-    val fieldPlaceholders: List[String] = q.params.keys.map(_ + " = ?").toList
-    val sql = s"""
-      DELETE
-        FROM $tableName
-       WHERE ${fieldPlaceholders.mkString(",")}
-      """
-    logger.debug(s"Delete SQL: $sql, with values: ${q.params.values.toList}")
-    val runner = queryRunner
-    val numDeleted = runner.update(RequestContext.getConn, sql, q.params.values.toList.map(_.asInstanceOf[Object])*)
-    logger.debug(s"Deleted records: $numDeleted")
+    import dialect.*
+
+    val numDeleted = Db.write(dialect)(_.run(table.delete(row => DynamicFilter(table, writeColumns(row), q, dialect))))
+    logger.trace(s"Deleted records: $numDeleted")
     numDeleted
 
   def query(q: Query): QueryResult[Model] = queryRecords(q)
@@ -194,22 +195,24 @@ abstract class BaseDao[Model <: BaseModel]:
 
     val rows = Db.read(dialect)(_.run(page))
     val total: Int = rows.headOption.map(_._2).getOrElse(0)
-    logger.debug(s"Found [$total] records. Retrieved [${rows.length}] records")
+    logger.trace(s"Found [$total] records. Retrieved [${rows.length}] records")
     QueryResult(records = rows.map((row, _) => toModel(row)).toList, total = total, rpp = q.rpp, sort = q.sort)
 
   protected def addRecord(sql: String, values: List[Any]): Unit =
     BaseDao.incrWriteQueryCount()
+    logger.trace(s"INSERT SQL: $sql with values: $values")
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
 
   private def executeAndGetMany(sql: String, values: List[Any]): List[Map[String, AnyRef]] =
     BaseDao.incrReadQueryCount()
-    logger.debug(s"SELECT SQL: $sql with values: $values")
+    logger.trace(s"SELECT SQL: $sql with values: $values")
     val res =
       queryRunner
         .query(RequestContext.getConn, sql, new MapListHandler(rowProcessor), values.map(_.asInstanceOf[Object])*)
         .asScala
         .toList
+    logger.trace(s"Found ${res.length} records")
     res.map(_.asScala.toMap[String, AnyRef])
 
   def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] =
@@ -220,25 +223,28 @@ abstract class BaseDao[Model <: BaseModel]:
 
     val q = new Query().add(FieldConst.ID -> Query.IN(ids.asInstanceOf[Set[Any]]))
     val rows = Db.read(dialect)(_.run(matching(q)))
-    logger.debug(s"Found ${rows.length} records")
+    logger.trace(s"Found ${rows.length} records")
     rows.map(toModel).toList
 
   def updateByQuery(q: Query, data: Map[String, Any]): Int =
     import dialect.*
 
     val assignments = data.toSeq.map {
-      (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, updateColumns(row), name, value, dialect)
+      (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, writeColumns(row), name, value, dialect)
     }
 
-    val update = table.update(row => DynamicFilter(table, updateColumns(row), q, dialect)).set(assignments*)
+    val update = table.update(row => DynamicFilter(table, writeColumns(row), q, dialect)).set(assignments*)
     val numUpdated = Db.write(dialect)(_.run(update))
-    logger.debug("Updated records: " + numUpdated)
+    logger.trace("Updated records: " + numUpdated)
     numUpdated
 
   def updateByBySql(sql: String, values: List[Any]): Int =
     BaseDao.incrWriteQueryCount()
+    logger.trace(s"WRITE SQL: $sql with values: $values")
     val runner = queryRunner
-    runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
+    val numAffected = runner.update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
+    logger.trace(s"Affected records: $numAffected")
+    numAffected
 
   def getFloatListByJsonKey(jsonStr: String, key: String): List[Float] =
     val json = ujson.read(jsonStr)
@@ -258,12 +264,9 @@ abstract class BaseDao[Model <: BaseModel]:
          SET $field = $field + $count
        WHERE id = ?
       """
-    logger.debug(s"INCR SQL: $sql, $id")
+    logger.trace(s"INCR SQL: $sql, $id")
     val runner = queryRunner
     runner.update(RequestContext.getConn, sql, id)
-
-  def decrement(id: String, field: String, count: Int = 1): Unit =
-    increment(id, field, -count)
 
   /** Every row of this table the query selects, as a typed relation */
   private def matching(q: Query) =
@@ -276,7 +279,7 @@ abstract class BaseDao[Model <: BaseModel]:
   private def selectColumns(row: Row[Expr]): Map[String, Expr[?]] =
     Columns.byName(table, rowQueryable.walkExprs(row))
 
-  private def updateColumns(row: Row[Column]): Map[String, Expr[?]] =
+  private def writeColumns(row: Row[Column]): Map[String, Expr[?]] =
     Columns.byName(table, rowQueryable.asInstanceOf[Queryable.Row[Row[Column], Row[Sc]]].walkExprs(row))
 
   protected given rowQueryable: Queryable.Row[Row[Expr], Row[Sc]] = table.containerQr(using dialect)

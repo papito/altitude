@@ -8,4 +8,10 @@ import altitude.core.models.Person
 trait FaceDao extends BaseDao[Face]:
   def add(face: Face, asset: Asset, person: Person): Face
   def getAssetFaces(assetId: String): List[Face]
+
+  /** Every Face of an asset, whoever its person is: those of hidden and bad-match people too, which `getAssetFaces` leaves out */
+  def getAllAssetFaces(assetId: String): List[Face]
+
+  /** A person's faces by detection score, best first and then by ID, no more than `limit` of them */
+  def getTopFaces(personId: String, limit: Int): List[Face]
   def searchClosestFaceMatches(features: Array[Float]): List[Face]

@@ -45,7 +45,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       // we must force the context to the new repository because following operations depend on this
       switchContextToRepository(repo)
 
-      logger.info(s"Creating repository [$repo] system folders")
+      logger.debug(s"Creating repository [$repo] system folders")
 
       val rootFolder = Folder(
         id = Some(contextRepo.rootFolderId),
@@ -63,7 +63,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
 
       app.service.stats.createStat(Stats.RECYCLED_ASSETS)
       app.service.stats.createStat(Stats.RECYCLED_BYTES)
-      logger.info(s"Created repository [$repo]")
+      logger.debug(s"Created repository [$repo]")
 
       repo
     }
@@ -72,8 +72,11 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
    * Right now there is just one repo - we will deal with multiple once later.
    */
   def getDefaultRepository: Repository =
+    getAll.head
+
+  def getAll: List[Repository] =
     txManager.asReadOnly {
-      dao.getAll.head
+      dao.getAll
     }
 
   override def getById(id: String): Repository =
@@ -86,6 +89,7 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
     repo
 
   def switchContextToRepository(repo: Repository): Unit =
+    logger.trace(s"Switching the repository context to [${repo.persistedId}]")
     RequestContext.repository.value = Some(repo)
 
   def setContextFromRequest(repoId: Option[String]): Unit =
@@ -93,5 +97,4 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       try
         val repo: Repository = getById(repoId.get)
         RequestContext.repository.value = Some(repo)
-      catch
-        case _: NotFoundException => {}
+      catch case _: NotFoundException => logger.debug(s"Repository [${repoId.get}] from the request not found; no context set")

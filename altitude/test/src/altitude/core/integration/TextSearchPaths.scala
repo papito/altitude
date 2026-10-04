@@ -29,7 +29,7 @@ trait TextSearchPaths { self: IntegrationTestCore =>
 
   protected def search(query: SearchQuery): SearchResult =
     onBothPaths(query)(testApp.service.library.search)(
-      result => (result.records.map(_.persistedId), result.total, result.hasMore))
+      result => (result.records.map(_.persistedId), result.total, result.nextCursor))
 
   protected def searchGrouped(query: SearchQuery): GroupedSearchResult =
     onBothPaths(query)(testApp.service.library.searchGrouped) {

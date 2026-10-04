@@ -34,6 +34,16 @@ import altitude.core.routes.RangeStreaming.FileWindow
       received.write(bytes, offset, length)
 
   test("A window of a file is written whole") {
+
+    /**
+     * Setup:
+     *
+     * A 1,000-byte temporary file of counting bytes.
+     *
+     * Assertions:
+     *
+     * A 50-byte window from byte 100 writes exactly that slice of the file.
+     */
     val bytes = Array.tabulate[Byte](1000)(_.toByte)
 
     withFile(bytes) {
@@ -45,21 +55,60 @@ import altitude.core.routes.RangeStreaming.FileWindow
   }
 
   test("A client that goes away mid-stream ends the response without an error") {
-    // A player drops the connection whenever it has what it wants: the metadata of a Video, the asset the user left
-    withFile(Array.fill[Byte](100000)(1)) {
+
+    /**
+     * Setup:
+     *
+     * A 100,000-byte temporary file of counting bytes, written to clients that take the first 50,000 bytes and then refuse every
+     * write, once with a ClosedChannelException and once with a "Broken pipe" IOException.
+     *
+     * Assertions:
+     *
+     * Either way the window ends quietly, without an exception, and the client holds an unbroken start of the file no longer than
+     * it took: a player drops the connection whenever it has what it wants, the metadata of a Video or the asset the user left.
+     *
+     * Edge cases:
+     *
+     * A client that refuses the very first write, before any byte reaches it.
+     */
+    val bytes = Array.tabulate[Byte](100000)(_.toByte)
+
+    withFile(bytes) {
       path =>
-        Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe")).foreach {
-          failure =>
-            val client = DepartingClient(accepted = 0, failure())
-            noException should be thrownBy FileWindow(path, 0, 100000, MIME).writeBytesTo(client)
-        }
+        for
+          accepted <- Seq(0, 50000)
+          failure <- Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe"))
+        do
+          val client = DepartingClient(accepted, failure())
+          noException should be thrownBy FileWindow(path, 0, bytes.length, MIME).writeBytesTo(client)
+
+          val received = client.received.toByteArray
+          received.length should be <= accepted
+          received shouldBe bytes.take(received.length)
+          if accepted > 0 then received should not be empty
     }
   }
 
   test("A file that cannot be read is still an error") {
-    val missing = Files.createTempDirectory("range-streaming").resolve("missing.bin")
 
-    a[NoSuchFileException] should be thrownBy FileWindow(missing, 0, 10, MIME).writeBytesTo(ByteArrayOutputStream())
+    /**
+     * Setup:
+     *
+     * A path to a file that does not exist, in a temporary directory removed afterwards, and a 10-byte temporary file.
+     *
+     * Assertions:
+     *
+     * A failure to read the file still throws, unlike a client going away.
+     *
+     * Edge cases:
+     *
+     * A missing file, and a 20-byte window over the 10-byte file, which runs out of bytes to transfer.
+     */
+    val dir = Files.createTempDirectory("range-streaming")
+    try
+      val missing = dir.resolve("missing.bin")
+      a[NoSuchFileException] should be thrownBy FileWindow(missing, 0, 10, MIME).writeBytesTo(ByteArrayOutputStream())
+    finally Files.deleteIfExists(dir)
 
     // A window past the end of the file has nothing to transfer
     withFile(Array.fill[Byte](10)(1)) {

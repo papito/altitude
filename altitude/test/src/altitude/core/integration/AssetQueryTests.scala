@@ -4,27 +4,109 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.shouldBe
 
 import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.FieldConst
+import altitude.core.routes.SearchRequestParser
 import altitude.core.util.Query
 
 @DoNotDiscover class AssetQueryTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Empty search") {
+
+    /**
+     * Setup:
+     *
+     * A repository with no assets.
+     *
+     * Assertions:
+     *
+     * A query with no filter returns no records and no pages.
+     */
     val results = testApp.service.library.query(new Query())
     results.records.length shouldBe 0
     results.totalPages shouldBe 0
   }
 
   test("Search all") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the root folder.
+     *
+     * Assertions:
+     *
+     * A query with no filter returns it.
+     */
     testContext.persistAsset()
 
     val assets = testApp.service.library.query(new Query()).records
     assets.length shouldBe 1
   }
 
-  test("Search triage") {}
+  test("The triage view holds the triaged assets that are not recycled") {
 
-  test("Search recycled") {}
+    /**
+     * Setup:
+     *
+     * An asset in the root folder and two triaged assets, one of them recycled, searched in the scope the triage view parses to.
+     *
+     * Assertions:
+     *
+     * The triage view returns the triaged asset still in the library, alone.
+     *
+     * Edge cases:
+     *
+     * Recycling leaves an asset's triage flag set, so only the view's scope keeps the recycled one out.
+     */
+    testContext.persistAsset()
+    val triaged = testContext.persistAsset(isTriaged = true)
+    val recycled = testContext.persistAsset(isTriaged = true)
+    testApp.service.library.recycleAssets(Set(recycled.persistedId))
+
+    viewAssetIds(Const.Search.View.TRIAGE) shouldBe Set(triaged.persistedId)
+  }
+
+  test("The trash view holds the recycled assets not yet marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * An asset in the root folder and two recycled assets, one of them then marked for purging, searched in the scope the trash
+     * view parses to.
+     *
+     * Assertions:
+     *
+     * The trash view returns the recycled asset that is not being purged, alone.
+     *
+     * Edge cases:
+     *
+     * An asset marked for purging is still recycled until the purge deletes it, and leaves the trash view at once.
+     */
+    testContext.persistAsset()
+    val recycled = testContext.persistAsset()
+    val purging = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(recycled.persistedId, purging.persistedId))
+    testApp.service.asset.updateById(purging.persistedId, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    viewAssetIds(Const.Search.View.TRASHBIN) shouldBe Set(recycled.persistedId)
+  }
 
   test("Pagination") {
+
+    /**
+     * Setup:
+     *
+     * Six assets in the root folder, queried two to a page, then six and twenty to a page.
+     *
+     * Assertions:
+     *
+     * Each page holds as many records as fit on it and every page reports the full total and page count, which is three at two to
+     * a page and one when a page holds them all.
+     *
+     * Edge cases:
+     *
+     * A page past the last one comes back with no records, and with a total and page count of zero.
+     */
     (1 to 6).foreach(n => testContext.persistAsset())
 
     val q = new Query(rpp = 2, page = 1)
@@ -65,4 +147,9 @@ import altitude.core.util.Query
     results6.records.length shouldBe 6
     results6.totalPages shouldBe 1
   }
+
+  /** The IDs of the assets a search in the view's scope returns, as the search results route parses the view */
+  private def viewAssetIds(view: String): Set[String] =
+    val scope = SearchRequestParser.parse(view, None, None, None, None, None, None).toOption.value
+    testApp.service.library.search(scope.query(rpp = 10)).records.map(_.persistedId).toSet
 }

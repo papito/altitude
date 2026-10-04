@@ -69,7 +69,7 @@ object SearchText:
 
     val numOfTerms = tokens.count(_.isDefined)
     if numOfTerms > MAX_TERMS then
-      logger.info(s"Search text has $numOfTerms terms: the ones past the first $MAX_TERMS are dropped")
+      logger.debug(s"Search text has $numOfTerms terms: the ones past the first $MAX_TERMS are dropped")
 
     // (groups so far, whether an OR precedes the next term, terms kept so far)
     val (groups, _, _) = tokens.foldLeft((Vector.empty[SearchGroup], false, 0)) {

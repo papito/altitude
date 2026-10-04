@@ -14,7 +14,7 @@ class TrashActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/purge")
   def purgeRecycleBin(repoId: String)(using request: Request): Response[String] =
-    logger.info("Purging the recycle bin")
+    logger.debug("Purging the recycle bin")
 
     // Call the Sanitation Dept
     App.altitude.service.library.purgeRecycleBin()
