@@ -79,19 +79,19 @@ class FaceRecognitionService(val app: Altitude):
 
   private def processImage(dataAsset: AssetWithData): Unit =
     val faceWithImages = app.service.faceDetection.extractFaces(dataAsset.bytes, Some(dataAsset.asset.fileName))
-    logger.info(s"Detected ${faceWithImages.size} faces")
+    logger.debug(s"Detected ${faceWithImages.size} faces")
 
-    logger.info(s"Face rec on asset ${dataAsset.asset}")
+    logger.trace(s"Face rec on asset ${dataAsset.asset}")
     withFaceFiles {
       store =>
         faceWithImages.foreach {
           case (detectedFace: Face, faceImages: FaceImages) =>
             recognizeFace(detectedFace) match
               case Some(person) => store(detectedFace, faceImages, dataAsset.asset, person)
-              case None => logger.info(s"Match-only $detectedFace matches nobody; dropped")
+              case None => logger.trace(s"Match-only $detectedFace matches nobody; dropped")
         }
     }
-    logger.info(s"Face rec DONE: ${dataAsset.asset}")
+    logger.trace(s"Face rec DONE: ${dataAsset.asset}")
 
   /**
    * Faces in a Video: every Sampled frame is detected, and the detections of the whole video are clustered by embedding
@@ -114,12 +114,12 @@ class FaceRecognitionService(val app: Altitude):
             faces.map { case (face, images) => (face.copy(frameTimeMs = Some(frame.timeMs)), images) }
         }.toList
     }
-    logger.info(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
+    logger.debug(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
 
     val features = (detection: (Face, FaceImages)) => detection._1.features
     val clusters =
       mergeClusters(cluster(detections, features, _._1.quality, cosineDistanceThreshold), features, cosineDistanceThreshold)
-    logger.info(s"${clusters.size} distinct faces in ${dataAsset.asset}")
+    logger.trace(s"${clusters.size} distinct faces in ${dataAsset.asset}")
 
     withFaceFiles {
       store =>
@@ -130,21 +130,21 @@ class FaceRecognitionService(val app: Altitude):
             val face = best.copy(
               features = meanNormalized(cluster.members.map(features)),
               isEnrolled = best.isEnrolled && support >= minClusterFrames)
-            logger.debug(s"Cluster of ${cluster.members.size} detections in $support frames: $face")
+            logger.trace(s"Cluster of ${cluster.members.size} detections in $support frames: $face")
 
             recognizeFace(face) match
               case Some(person) if peopleWithAFace.contains(person.persistedId) =>
-                logger.info(s"Person ${person.persistedId} already has a Face in ${dataAsset.asset}; dropping $face")
+                logger.trace(s"Person ${person.persistedId} already has a Face in ${dataAsset.asset}; dropping $face")
                 peopleWithAFace
               case Some(person) =>
                 store(face, faceImages, dataAsset.asset, person)
                 peopleWithAFace + person.persistedId
               case None =>
-                logger.info(s"Match-only $face matches nobody in ${dataAsset.asset}; dropped")
+                logger.trace(s"Match-only $face matches nobody in ${dataAsset.asset}; dropped")
                 peopleWithAFace
         }
     }
-    logger.info(s"Face rec DONE: ${dataAsset.asset}")
+    logger.trace(s"Face rec DONE: ${dataAsset.asset}")
 
   /** Persists a recognized Face and writes its files */
   private type StoreFace = (Face, FaceImages, Asset, Person) => Unit
@@ -165,7 +165,7 @@ class FaceRecognitionService(val app: Altitude):
     try txManager.withFaceVector(f(store))
     catch
       case ex: Exception =>
-        logger.info(s"Face rec rolled back; deleting the files of ${written.size} faces")
+        logger.trace(s"Face rec rolled back; deleting the files of ${written.size} faces")
         written.foreach(app.service.fileStore.purgeFaceById)
         throw ex
 
@@ -186,13 +186,13 @@ class FaceRecognitionService(val app: Altitude):
         val personVotes = faceMatches.zipWithIndex.groupBy(_._1.personId.get)
         val (bestPersonId, votes) = personVotes.maxBy { case (_, votes) => (votes.size, -votes.head._2) }
 
-        logger.debug(
+        logger.trace(
           s"Face match: ${votes.size}/$matchCount votes for person $bestPersonId " +
             s"(${personVotes.size} distinct person(s) in top-${faceMatches.size})")
 
         Some(app.service.person.getPersonById(bestPersonId))
       else if detectedFace.isEnrolled then
-        logger.info("No match. Adding new person")
+        logger.debug("No match. Adding new person")
         Some(app.service.person.addPerson(Person()))
       else None
     }

@@ -45,7 +45,7 @@ class SearchService(val app: Altitude):
 
   def indexAsset(asset: Asset): Unit =
     require(asset.id.isDefined, "Asset ID cannot be empty")
-    logger.info(s"Indexing asset $asset")
+    logger.trace(s"Indexing asset $asset")
 
     txManager.withTransaction {
       val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
@@ -53,7 +53,7 @@ class SearchService(val app: Altitude):
     }
 
   def reindexAsset(asset: Asset): Unit =
-    logger.info(s"Reindexing asset $asset")
+    logger.trace(s"Reindexing asset $asset")
 
     txManager.withTransaction {
       val metadataFields: Map[String, UserMetadataField] = app.service.metadata.getAllFields
@@ -95,7 +95,7 @@ class SearchService(val app: Altitude):
           ResolvedSearchText(expression.groups.map(group => ResolvedSearchGroup(group.alternatives.map(resolve)))),
           probeLimit)
 
-      logger.debug(
+      logger.trace(
         s"Resolved the Search text against ${names.values.map(_.size).sum} names in ${System.currentTimeMillis - started}ms: " +
           resolved.groups
             .flatMap(_.alternatives)
@@ -127,19 +127,31 @@ class SearchService(val app: Altitude):
     )
 
   def search(query: SearchQuery): SearchResult =
-    txManager.asReadOnly {
+    val started = System.currentTimeMillis
+    val result = txManager.asReadOnly {
       searchDao.search(query)
     }
+    logger.trace(
+      s"Search page ${query.page}: ${result.records.length} assets" +
+        result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
+        s", in ${System.currentTimeMillis - started}ms")
+    result
 
   def count(query: SearchQuery): Int =
-    txManager.asReadOnly {
+    val started = System.currentTimeMillis
+    val count = txManager.asReadOnly {
       searchDao.count(query)
     }
+    logger.trace(s"Counted $count matching assets in ${System.currentTimeMillis - started}ms")
+    count
 
   def cappedCount(query: SearchQuery): Int =
-    txManager.asReadOnly {
+    val started = System.currentTimeMillis
+    val count = txManager.asReadOnly {
       searchDao.cappedCount(query)
     }
+    logger.trace(s"Counted $count matching assets, capped at ${query.totalCap}, in ${System.currentTimeMillis - started}ms")
+    count
 
   /** What the map draws for a viewport at a zoom: the cells over the plotted points in the box, and the Locations pinned in it */
   def mapCells(query: SearchQuery, bbox: BoundingBox, zoom: Int): MapCells =
@@ -150,16 +162,19 @@ class SearchService(val app: Altitude):
         cells = searchDao.mapCells(query, bbox, SearchService.cellDegrees(zoom)),
         locations = searchDao.mapLocations(query, bbox))
     }
-    logger.debug(
+    logger.trace(
       s"Map at zoom $zoom in $bbox: ${result.cells.length} cells, ${result.locations.length} Locations, " +
         s"in ${System.currentTimeMillis - started}ms")
     result
 
   /** The box around every point the search plots, for fitting the map to a result; nothing when nothing is plotted */
   def mapBounds(query: SearchQuery): Option[MapBounds] =
-    txManager.asReadOnly {
+    val started = System.currentTimeMillis
+    val bounds = txManager.asReadOnly {
       searchDao.mapBounds(query)
     }
+    logger.trace(s"Map bounds ${bounds.getOrElse("of nothing plotted")}, in ${System.currentTimeMillis - started}ms")
+    bounds
 
   /**
    * A grouped page: the DAO returns the rows and counts, the groups and the continuation cursor are assembled here. The cursor
@@ -194,7 +209,7 @@ class SearchService(val app: Altitude):
       continuesGroup = query.cursor.exists(cursor => groups.headOption.exists(_.key.continues(cursor)))
     )
 
-    logger.debug(
+    logger.trace(
       s"Grouped search by ${result.grouping.by} ${result.grouping.direction}, sorted ${result.sort}: " +
         s"${result.assets.length} images in ${result.groups.length} groups" +
         result.total.map(total => s" of $total matching").getOrElse(" (continued)") +

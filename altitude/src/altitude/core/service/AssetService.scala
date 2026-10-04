@@ -24,7 +24,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     if asset.isRecycled == isRecycled then return
 
     txManager.withTransaction {
-      logger.info(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
+      logger.debug(s"Setting asset [${asset.persistedId}] recycled flag to [$isRecycled]")
 
       dao.updateById(asset.persistedId, Map(FieldConst.Asset.IS_RECYCLED -> isRecycled))
     }
@@ -41,6 +41,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       val asset: Asset = getById(assetId)
 
       if asset.isRecycled then throw IllegalOperationException(s"Cannot rename a recycled asset: [$asset]")
+      logger.debug(s"Renaming asset [${asset.persistedId}] from [${asset.fileName}] to [$newFilename]")
 
       val data = Map(
         FieldConst.Asset.FILENAME -> newFilename
@@ -134,12 +135,16 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
 
     previewData.length match
       case size if size > 0 =>
+        logger.trace(s"Preview of asset [${dataAsset.asset.persistedId}]: $size bytes")
         val preview: MimedPreviewData = MimedPreviewData(assetId = dataAsset.asset.persistedId, data = previewData)
 
         app.service.fileStore.addPreview(preview)
 
         Some(preview)
-      case _ => None
+      case _ =>
+        logger.trace(
+          s"No preview for asset [${dataAsset.asset.persistedId}] of media type [${dataAsset.asset.assetType.mediaType}]")
+        None
 
   def getPreview(assetId: String): MimedPreviewData =
     app.service.fileStore.getPreviewById(assetId)

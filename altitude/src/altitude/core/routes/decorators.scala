@@ -130,7 +130,7 @@ object decorators:
 
       val pathInfo = s"${req.exchange.getRequestPath}, ${req.exchange.getRequestMethod}?${req.exchange.getQueryParameters}"
 
-      logger.info(s"Request START - $pathInfo")
+      logger.debug(s"Request START - $pathInfo")
 
       delegate(req, Map()) match {
         case cask.router.Result.Success(response: cask.endpoints.WsHandler) =>
@@ -139,7 +139,7 @@ object decorators:
           cask.router.Result.Success(response)
         case cask.router.Result.Success(response) =>
           // Regular HTTP response
-          logger.info(s"Request END [${response.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")
+          logger.debug(s"Request END [${response.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")
           cask.router.Result.Success(response)
         case error =>
           logger.error(error.toString)

@@ -145,7 +145,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/move")
   def htmxMoveFolder(repoId: String, movedFolderId: String, newParentId: String)(using request: Request): Response[String] =
-    logger.info(s"Moving folder $movedFolderId to $newParentId")
+    logger.trace(s"Moving folder $movedFolderId to $newParentId")
 
     // short-circuit if this is a noop
     if movedFolderId == newParentId then return cask.Response("", 400, Seq(("Content-Type", "text/html")))

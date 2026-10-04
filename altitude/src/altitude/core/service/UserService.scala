@@ -69,7 +69,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
    * token will remain cryptographically valid until it expires.
    */
   def logout(token: String): Unit =
-    logger.info("Logging out user (stateless - clearing client cookie only)")
+    logger.debug("Logging out user (stateless - clearing client cookie only)")
     // No server-side action needed - the SessionController clears the cookie
 
   override def add(objIn: User): User =
@@ -77,6 +77,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   def add(objIn: User, password: String): User =
     txManager.withTransaction {
+      logger.debug(s"Adding user [${objIn.email}]")
       val passwordHash = Util.hashPassword(password)
       dao.addUser(objIn, passwordHash)
     }
@@ -101,6 +102,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   def setLastActiveRepoId(user: User, repoId: String): Unit =
     txManager.withTransaction {
+      logger.trace(s"Setting the last active repository of user [${user.persistedId}] to [$repoId]")
       dao.updateById(user.persistedId, Map(FieldConst.User.LAST_ACTIVE_REPO_ID -> repoId))
     }
 

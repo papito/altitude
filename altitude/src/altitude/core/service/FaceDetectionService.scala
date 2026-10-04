@@ -213,7 +213,7 @@ class FaceDetectionService(app: Altitude):
   if faceDebugEnabled then
     FileUtils.forceMkdir(new File(debugDir))
     FileUtils.cleanDirectory(new File(debugDir))
-    logger.info(s"Cleared debug directory: $debugDir")
+    logger.debug(s"Cleared debug directory: $debugDir")
 
   private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2023mar.onnx")
   private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
@@ -347,7 +347,7 @@ class FaceDetectionService(app: Altitude):
           isEnrolled = embedding.norm >= enrollThreshold,
           checksum = MurmurHash.hash32(imageBytes.toArray)
         )
-        logger.debug(s"$face in ${fileName.getOrElse("image")}")
+        logger.trace(s"$face in ${fileName.getOrElse("image")}")
 
         val faceImages = FaceImages(
           image = imageBytes.toArray,
@@ -378,7 +378,7 @@ class FaceDetectionService(app: Altitude):
 
     // Dropped after the debug dump, so a face below the floor can still be looked at when calibrating the thresholds
     val (kept, dropped) = entries.partition(_.face.quality >= keepThreshold)
-    dropped.foreach(e => logger.info(s"Dropped below the quality floor $keepThreshold: ${e.face}"))
+    dropped.foreach(e => logger.trace(s"Dropped below the quality floor $keepThreshold: ${e.face}"))
     kept.map(e => (e.face, e.faceImages))
 
   /**

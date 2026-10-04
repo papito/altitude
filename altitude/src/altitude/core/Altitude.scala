@@ -45,13 +45,13 @@ import altitude.core.transactions.TransactionManager
 
 class Altitude(val dbEngineOverride: Option[String] = None):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
-  logger.info(s"Environment is: ${Environment.CURRENT}")
+  logger.debug(s"Environment is: ${Environment.CURRENT}")
 
   final val app: Altitude = this
 
   // ID for this application
   final val id: Int = scala.util.Random.nextInt(java.lang.Integer.MAX_VALUE)
-  logger.info(s"Initializing Altitude Server application. Instance ID [$id]")
+  logger.debug(s"Initializing Altitude Server application. Instance ID [$id]")
 
   /**
    * In development, application-dev.conf will override system defaults.
@@ -150,10 +150,10 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final private val schemaVersion = 2
 
   final val dataSourceType: String = config.getString(Const.Conf.DB_ENGINE)
-  logger.info(s"Datasource type: $dataSourceType")
+  logger.debug(s"Datasource type: $dataSourceType")
 
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
-  logger.info(s"File store type: $fileStoreType")
+  logger.debug(s"File store type: $fileStoreType")
 
   final val txManager: TransactionManager = TransactionManager(app.config)
 
@@ -292,7 +292,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   if dataSourceType == Const.DbEngineName.SQLITE then {
     val dbFolder = new File(dataPath, "db")
     if !dbFolder.exists() then {
-      logger.info("Creating the DB folder for SQLite: " + dbFolder)
+      logger.debug("Creating the DB folder for SQLite: " + dbFolder)
       FileUtils.forceMkdir(dbFolder)
     }
   }
@@ -317,9 +317,9 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       service.migrationService.migrate()
 
   def cleanup(): Unit =
-    logger.info("Cleaning up resources")
+    logger.debug("Cleaning up resources")
     service.importPipeline.shutdown()
-    logger.info("Pipeline system terminated")
+    logger.debug("Pipeline system terminated")
 
     sqliteOptimizing.foreach(_.cancel())
     txManager.optimize()
@@ -334,4 +334,4 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   def clearState(): Unit =
     repositoriesById = Map.empty
 
-  logger.info("Altitude Server instance initialized")
+  logger.debug("Altitude Server instance initialized")

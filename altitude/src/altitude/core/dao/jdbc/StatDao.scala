@@ -47,7 +47,7 @@ abstract class StatDao(override val config: Config) extends BaseDao[Stat] with a
          SET ${FieldConst.Stat.DIM_VAL} = ${FieldConst.Stat.DIM_VAL} + $count
        WHERE ${FieldConst.REPO_ID} = ? and ${FieldConst.Stat.DIMENSION} = ?
       """
-    logger.debug(s"INCR STAT SQL: $sql, for $statName")
+    logger.trace(s"INCR STAT SQL: $sql, for $statName")
 
     val runner: QueryRunner = new QueryRunner()
     runner.update(RequestContext.getConn, sql, RequestContext.getRepository.persistedId, statName)

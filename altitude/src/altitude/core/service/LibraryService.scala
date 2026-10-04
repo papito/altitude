@@ -65,7 +65,7 @@ class LibraryService(val app: Altitude):
     AssetWithData(asset, staged)
 
   def addImportAsset(importAsset: ImportAsset): Asset =
-    logger.info(s"Importing asset '$importAsset'")
+    logger.debug(s"Importing asset '$importAsset'")
     val dataAssetIn = convImportAsset2dataAsset(importAsset)
     addAsset(dataAssetIn)
 
@@ -86,6 +86,7 @@ class LibraryService(val app: Altitude):
     txManager.withTransaction {
       val persisted = app.service.asset.add(asset)
       app.service.search.indexAsset(persisted)
+      logger.trace(s"Persisted and indexed asset [${persisted.persistedId}]")
       persisted
     }
 
@@ -97,6 +98,7 @@ class LibraryService(val app: Altitude):
     txManager.withTransaction {
       val completed = app.service.asset.markAsCompleted(asset)
       app.service.stats.addAsset(asset)
+      logger.trace(s"Import of asset [${asset.persistedId}] complete")
       completed
     }
 
@@ -189,7 +191,7 @@ class LibraryService(val app: Altitude):
 
     txManager.withTransaction {
       val folder: Folder = app.service.folder.getById(id)
-      logger.info(s"Deleting folder $folder")
+      logger.debug(s"Deleting folder $folder")
 
       val children = app.service.folder.getChildrenRecursive(id)
       val allFoldersToDeleteIds = (children.map(_.persistedId) :+ folder.persistedId).toSet[Any]
@@ -209,7 +211,7 @@ class LibraryService(val app: Altitude):
    * stays in the trash and is reported, and any other failure restores nothing. An asset that is not recycled is ignored.
    */
   def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
-    logger.info(s"Restoring recycled assets [${assetIds.mkString(",")}]")
+    logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
 
     val result = txManager.withTransaction {
       assetIds.foldLeft(RestoreResult(restored = Set.empty, duplicates = Set.empty)) {
@@ -226,11 +228,11 @@ class LibraryService(val app: Altitude):
       }
     }
 
-    logger.info(s"Restored ${result.restored.size} assets; ${result.duplicates.size} left in the trash as duplicates")
+    logger.debug(s"Restored ${result.restored.size} assets; ${result.duplicates.size} left in the trash as duplicates")
     result
 
   private def restoreRecycledAsset(asset: Asset): Unit =
-    logger.info(s"Restoring recycled asset [${asset.persistedId}]")
+    logger.debug(s"Restoring recycled asset [${asset.persistedId}]")
     app.service.asset.setRecycledProp(asset, isRecycled = false)
 
     // Assets recycled directly from triage have no folder assigned — skip folder restoration
@@ -257,7 +259,7 @@ class LibraryService(val app: Altitude):
 
       if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
 
-      logger.info(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
+      logger.debug(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
       if assetsToMove.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToMove.map(_.persistedId).toSet[Any]))
 
@@ -312,6 +314,7 @@ class LibraryService(val app: Altitude):
   def recycleAssets(assetIds: Set[String]): Unit =
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
+      logger.debug(s"Recycling assets [${assetIds.mkString(",")}]: ${assetsToRecycle.size} recyclable")
 
       if assetsToRecycle.nonEmpty then
         val assetQuery = new Query().add(FieldConst.ID -> Query.IN(assetsToRecycle.map(_.persistedId).toSet[Any]))
@@ -350,12 +353,13 @@ class LibraryService(val app: Altitude):
       this.markRecycledAssetsForPurging()
       app.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true))
     }
+    logger.debug(s"Purging the recycle bin: ${assetsToPurge.records.size} assets queued")
 
     val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
     assetsToPurge.records.map(app.service.purgePipeline.addToQueue(_, pipelineContext))
 
   def purgeSelectedAssets(assetIds: Set[String]): Unit =
-    logger.info(s"Purging selected assets [${assetIds.mkString(",")}]")
+    logger.debug(s"Purging selected assets [${assetIds.mkString(",")}]")
 
     val assetsToPurge = txManager.withTransaction {
       markSelectedAssetsForPurging(assetIds)
@@ -404,7 +408,7 @@ class LibraryService(val app: Altitude):
   def pruneDanglingAssets(): Unit =
     forEachRepository {
       repository =>
-        logger.info(s"Pruning dangling assets. Repo: ${repository.name}")
+        logger.debug(s"Pruning dangling assets. Repo: ${repository.name}")
         val danglingAssets = app.service.asset.getDanglingAssets
 
         if danglingAssets.nonEmpty then

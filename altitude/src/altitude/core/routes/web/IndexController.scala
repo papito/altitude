@@ -21,14 +21,14 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     val devUser = App.altitude.service.user.getDevUser
 
     if devUser.isDefined then
-      logger.info(s"User authenticated: ${devUser.get.email}")
+      logger.debug(s"User authenticated: ${devUser.get.email}")
       return Response("", 302, Seq("Location" -> s"/r/${devUser.get.lastActiveRepoId.get}"), Nil)
 
     extractToken(request) match
       case Some(token) =>
         App.altitude.service.user.getUserFromToken(token) match
           case Some(user) =>
-            logger.info(s"User authenticated: ${user.email}")
+            logger.debug(s"User authenticated: ${user.email}")
 
             // Get the last active repo id for the user, and if it doesn't exist, set it to the default repo id and use that.
             val repoId = user.lastActiveRepoId.getOrElse {

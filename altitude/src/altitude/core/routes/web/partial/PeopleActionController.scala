@@ -53,7 +53,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val person: Person = App.altitude.service.person.getById(personId)
     val face: Face = App.altitude.service.person.getFaceById(faceId)
 
-    logger.info(s"Setting cover image for person $personId to face $faceId")
+    logger.trace(s"Setting cover image for person $personId to face $faceId")
     val updatedPerson = App.altitude.service.person.setFaceAsCover(person, face)
 
     val payload = "<!doctype html>" + htmx.html.person_inner(person = updatedPerson)
@@ -104,7 +104,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val newName = jsonIn(Api.Field.Person.NAME).str
 
     if newName.toLowerCase == person.name.get.toLowerCase then
-      logger.info("Name has not changed")
+      logger.debug("Name has not changed")
       val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
       return cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
@@ -148,7 +148,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   def mergePeople(repoId: String, srcPersonId: String, destPersonId: String)(using request: Request): Response[String] =
     val srcPerson: Person = App.altitude.service.person.getById(srcPersonId)
     val destPerson: Person = App.altitude.service.person.getById(destPersonId)
-    logger.info(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
+    logger.debug(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
     App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
 
@@ -158,7 +158,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")
   def hidePerson(repoId: String, personId: String)(using request: Request): Response[String] =
     val person: Person = App.altitude.service.person.getById(personId)
-    logger.info(s"Hiding person: $personId")
+    logger.trace(s"Hiding person: $personId")
 
     val updatedPerson = App.altitude.service.person.setVisibility(person, isHidden = true)
 
@@ -169,7 +169,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   @cask.delete(f"/$prefix/r/:repoId/p/:personId")
   def discardPersonAsBadMatch(repoId: String, personId: String)(using request: Request): Response[String] =
     val person: Person = App.altitude.service.person.getById(personId)
-    logger.info(s"Discarding person: $personId")
+    logger.trace(s"Discarding person: $personId")
 
     val updatedPerson = App.altitude.service.person.markAsBadMatch(person)
 
@@ -179,7 +179,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/show")
   def showPerson(repoId: String, personId: String)(using request: Request): Response[String] =
-    logger.info(s"Showing person: $personId")
+    logger.trace(s"Showing person: $personId")
     val person: Person = App.altitude.service.person.getById(personId)
 
     val updatedPerson = App.altitude.service.person.setVisibility(person, isHidden = false)

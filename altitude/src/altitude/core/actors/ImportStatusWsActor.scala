@@ -37,18 +37,18 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
     Behaviors.same
     msg match {
       case AddClient(userId, client) =>
-        context.log.info(s"Adding client $client for user $userId")
+        context.log.trace(s"Adding client $client for user $userId")
         val clients = userToWsClientLookup.getOrElse(userId, List())
         userToWsClientLookup.update(userId, client :: clients)
         Behaviors.same
 
       case UserWideImportStatus(userId, assetOrInvalid) =>
-        context.log.info(s"Sending message to WS clients for user $userId")
+        context.log.trace(s"Sending message to WS clients for user $userId")
         userToWsClientLookup.get(userId).foreach {
           clients =>
             clients.foreach {
               client =>
-                context.log.info(s"Sending message to client $client")
+                context.log.trace(s"Sending message to client $client")
 
                 val wsContent = assetOrInvalid match {
                   case Left(asset) =>
@@ -74,7 +74,7 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
         Behaviors.same
 
       case RemoveClient(userId, client) =>
-        context.log.info(s"Removing client $client for user $userId")
+        context.log.trace(s"Removing client $client for user $userId")
         userToWsClientLookup.get(userId).foreach(clients => userToWsClientLookup.update(userId, clients.filterNot(_ == client)))
         Behaviors.same
     }

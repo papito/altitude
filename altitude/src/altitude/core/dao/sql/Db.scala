@@ -19,10 +19,10 @@ import altitude.core.RequestContext
 object Db:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** Central SQL logging for every statement ScalaSql runs, replacing the per-call `logger.debug(sql)` of the raw paths */
+  /** Central SQL logging for every statement ScalaSql runs, replacing the per-call `logger.trace(sql)` of the raw paths */
   val config: scalasql.Config = new scalasql.Config:
     override def logSql(sql: String, file: String, line: Int): Unit =
-      logger.debug(s"SQL: $sql ($file:$line)")
+      logger.trace(s"SQL: $sql ($file:$line)")
 
   /** The SQLSTATE of a statement PostgreSQL cancelled, as it does one that runs past its `statement_timeout` */
   private val QUERY_CANCELED = "57014"

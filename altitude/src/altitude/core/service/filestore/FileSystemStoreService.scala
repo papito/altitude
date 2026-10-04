@@ -43,6 +43,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
       Files.createDirectories(destFile.getParent)
       // Staging is on this filesystem, so this is a rename
       Files.move(dataAsset.path, destFile, StandardCopyOption.REPLACE_EXISTING)
+      logger.trace(s"Stored ${dataAsset.path} as $destFile")
     catch
       case ex: IOException =>
         throw StorageException(s"Error storing ${dataAsset.path} as $destFile: $ex")
@@ -50,7 +51,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
   override def assetFile(assetId: String): Path = Path.of(filePath(assetId))
 
   override def addFace(face: Face, faceImages: FaceImages): Unit =
-    logger.debug(s"Creating face [${face.persistedId}] on file system")
+    logger.trace(s"Creating face [${face.persistedId}] on file system")
 
     val destDisplayFile = new File(displayFacePath(face.persistedId))
     val detectedFaceFile = new File(detectedFacePath(face.persistedId))
@@ -64,6 +65,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
 
   override def addPreview(preview: MimedPreviewData): Unit =
     val destFilePath = previewFilePath(preview.assetId)
+    logger.trace(s"Storing the preview of asset [${preview.assetId}] as $destFilePath")
 
     putBinaryData(new File(destFilePath), preview.data)
 

@@ -51,7 +51,7 @@ class PurgePipelineService(app: Altitude):
       .runWith(outputSink)
 
   private def runAsQueue() =
-    logger.info("Starting the purge queue pipeline")
+    logger.debug("Starting the purge queue pipeline")
 
     val (queue, source) = Source
       .queue[TAssetWithContext](
@@ -81,7 +81,7 @@ class PurgePipelineService(app: Altitude):
       .offer(asset)
       .map {
         case QueueOfferResult.Enqueued =>
-          logger.info(s"Added asset to the purge queue: ${asset._1.fileName}")
+          logger.debug(s"Added asset to the purge queue: ${asset._1.fileName}")
         case QueueOfferResult.Dropped =>
           logger.warn(s"Asset dropped from the purge queue: ${asset._1.fileName}}")
         case QueueOfferResult.Failure(ex) =>
@@ -93,3 +93,4 @@ class PurgePipelineService(app: Altitude):
   def shutdown(): Unit =
     queuePurgePipeline.complete()
     Await.result(queuePurgePipeline.watchCompletion(), Duration.Inf)
+    logger.debug("Purge queue pipeline shut down")

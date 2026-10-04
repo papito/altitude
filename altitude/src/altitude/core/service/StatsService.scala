@@ -50,32 +50,32 @@ class StatsService(val app: Altitude):
     }
 
   def addAsset(asset: Asset): Unit =
-    logger.debug(s"Adding asset [${asset.id}]")
+    logger.trace(s"Adding asset [${asset.id}]")
 
     txManager.withTransaction {
       if asset.isTriaged then
-        logger.debug(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
+        logger.trace(s"Asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
         app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
         app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
       else
-        logger.debug(s"Asset [${asset.id}] moving TO sorted. Incrementing SORTED")
+        logger.trace(s"Asset [${asset.id}] moving TO sorted. Incrementing SORTED")
 
         app.service.stats.incrementStat(Stats.SORTED_ASSETS)
         app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
     }
 
   private def moveRecycledAsset(asset: Asset): Unit =
-    logger.debug(s"Moving recycled asset [${asset.id}]. Decrementing RECYCLED")
+    logger.trace(s"Moving recycled asset [${asset.id}]. Decrementing RECYCLED")
 
     app.service.stats.decrementStat(Stats.RECYCLED_ASSETS)
     app.service.stats.decrementStat(Stats.RECYCLED_BYTES, asset.sizeBytes)
 
     if asset.isTriaged then
-      logger.debug(s"Recycled asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
+      logger.trace(s"Recycled asset [${asset.id}] moving TO triage. Incrementing TRIAGE")
       app.service.stats.incrementStat(Stats.TRIAGE_ASSETS)
       app.service.stats.incrementStat(Stats.TRIAGE_BYTES, asset.sizeBytes)
     else
-      logger.debug(s"Recycled asset [${asset.id}] moving TO sorted. Incrementing SORTED")
+      logger.trace(s"Recycled asset [${asset.id}] moving TO sorted. Incrementing SORTED")
       app.service.stats.incrementStat(Stats.SORTED_ASSETS)
       app.service.stats.incrementStat(Stats.SORTED_BYTES, asset.sizeBytes)
 

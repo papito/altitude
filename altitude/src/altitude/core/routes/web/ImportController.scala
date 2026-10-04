@@ -42,7 +42,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
   @cask.postForm("/import/r/:repoId/upload/:uploadId")
   def uploadFilesForm(files: Seq[cask.FormEntry] = Seq.empty, repoId: String, uploadId: String)(using
       request: cask.Request): cask.Response[String] =
-    logger.info(s"Uploading selected files. Upload ID: $uploadId")
+    logger.debug(s"Uploading selected files. Upload ID: $uploadId")
 
     val formData: FormData = request.exchange.getAttachment(FormDataParser.FORM_DATA)
 
@@ -60,11 +60,11 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     do
       val formValues = formData.get(fieldName).asScala.toList
       for formValue <- formValues if formValue.isFileItem && !ImportController.isCancelled(uploadId) do
-        logger.info("Next file")
+        logger.trace("Next file")
 
         val fileItem = formValue.getFileItem
         val fileName = formValue.getFileName
-        logger.info(s"Received file: $fileName")
+        logger.debug(s"Received file: $fileName")
 
         // Undertow deletes its temp file when the request ends, before the queued pipeline runs, so the file is moved out
         // of its hands; a small item it kept in memory is written out instead
@@ -76,11 +76,11 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
           else App.altitude.service.staging.stageMove(fileItem.getFile)
         val assetWithData = App.altitude.service.library.stagedFileToAsset(fileName, staged)
 
-        logger.info(s"Adding file to import queue: $fileName")
+        logger.debug(s"Adding file to import queue: $fileName")
         val fut = App.altitude.service.importPipeline.addToQueue((assetWithData, pipelineContext))
         Await.result(fut, Duration.Inf)
 
-    logger.info("All files sent to queue")
+    logger.debug("All files sent to queue")
     cask.Response(uploadFormPayload, 200, Seq(("Content-Type", "text/html")))
 
   @cask.websocket("/import/status")
@@ -95,7 +95,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
             logger.warn("Connection error: " + e.getMessage)
             App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
           case cask.Ws.Close(_, _) | cask.Ws.ChannelClosed() =>
-            logger.info("Connection closed.")
+            logger.debug("Connection closed.")
             App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
         }
     }

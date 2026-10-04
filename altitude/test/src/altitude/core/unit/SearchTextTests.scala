@@ -26,20 +26,20 @@ import altitude.core.util.SearchText
   private def expression(groups: Seq[SearchTerm]*): Option[SearchExpression] =
     Some(SearchExpression(groups.map(SearchGroup(_))))
 
-  /** The INFO messages `SearchText` logs while the block runs */
-  private def infoLogged(block: => Unit): Seq[String] = {
+  /** The DEBUG messages `SearchText` logs while the block runs */
+  private def debugLogged(block: => Unit): Seq[String] = {
     val logger = LoggerFactory.getLogger(SearchText.getClass).asInstanceOf[Logger]
     val appender = ListAppender[ILoggingEvent]()
     val level = logger.getLevel
     appender.start()
     logger.addAppender(appender)
-    logger.setLevel(Level.INFO)
+    logger.setLevel(Level.DEBUG)
     try block
     finally {
       logger.detachAppender(appender)
       logger.setLevel(level)
     }
-    appender.list.asScala.toSeq.filter(_.getLevel == Level.INFO).map(_.getFormattedMessage)
+    appender.list.asScala.toSeq.filter(_.getLevel == Level.DEBUG).map(_.getFormattedMessage)
   }
 
   test("Terms separated by spaces are AND-ed") {
@@ -119,11 +119,11 @@ import altitude.core.util.SearchText
     SearchText.parse("- OR \"\" ...") shouldBe None
   }
 
-  test("Terms past the sixteenth are dropped, and that is logged at INFO") {
+  test("Terms past the sixteenth are dropped, and that is logged at DEBUG") {
     val words = (1 to 18).map(n => "w" + ('a' + n).toChar)
     var parsed = Option.empty[SearchExpression]
 
-    val logged = infoLogged { parsed = SearchText.parse(words.mkString(" ")) }
+    val logged = debugLogged { parsed = SearchText.parse(words.mkString(" ")) }
 
     parsed shouldBe expression(words.take(16).map(word => Seq(bare(word)))*)
     logged should have size 1
@@ -141,7 +141,7 @@ import altitude.core.util.SearchText
     val words = (1 to 16).map(n => "w" + ('a' + n).toChar)
     var parsed = Option.empty[SearchExpression]
 
-    val logged = infoLogged { parsed = SearchText.parse(words.mkString(" ")) }
+    val logged = debugLogged { parsed = SearchText.parse(words.mkString(" ")) }
 
     parsed.map(_.groups.size) shouldBe Some(16)
     logged shouldBe empty

@@ -123,7 +123,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     if layout == Const.Search.Layout.MAP then
       // In map layout `bbox` is the crowded-pin panel's scope (the URL keeps it): the map itself plots the whole search
       val query = scope.copy(bbox = None).query()
-      logger.info(s"MAP QUERY: $query")
+      logger.trace(s"MAP QUERY: $query")
       val library = App.altitude.service.library
       val (total, bounds) =
         try (library.cappedCount(query), library.mapBounds(query))
@@ -160,7 +160,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           case Left(message) => return badRequest(message)
           case Right(query) => query
 
-      logger.info(s"GROUPED QUERY: ${searchQuery.toString}")
+      logger.trace(s"GROUPED QUERY: ${searchQuery.toString}")
 
       val results: GroupedSearchResult =
         try App.altitude.service.library.searchGrouped(searchQuery)
@@ -198,7 +198,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     val searchQuery = scope.query(rpp = rpp, page = page, searchSort = List(searchSort))
 
-    logger.info(s"QUERY: ${searchQuery.toString}")
+    logger.trace(s"QUERY: ${searchQuery.toString}")
 
     val results =
       try App.altitude.service.library.search(searchQuery)

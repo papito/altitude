@@ -79,7 +79,7 @@ class VideoService(config: Config):
         durationMs = Math.round(grabber.getLengthInTime / 1000.0),
         frameRate = grabber.getFrameRate,
         hasAudio = grabber.getAudioChannels > 0)
-      logger.debug(s"Probed $path: $info, rotation $rotation")
+      logger.trace(s"Probed $path: $info, rotation $rotation")
       info
   }
 
@@ -116,6 +116,7 @@ class VideoService(config: Config):
 
   /** The frames at the Frame times, decoded by one open of the Video; see [[withFrames]] */
   def sampledFrames[A](path: Path, times: Seq[Long])(consume: Iterator[VideoService.SampledFrame] => A): A =
+    logger.trace(s"Decoding ${times.size} frames of $path")
     withFrames(path)(decode => consume(decode(times)))
 
   /**
@@ -133,8 +134,9 @@ class VideoService(config: Config):
           }
       }
 
+      bright.foreach(frame => logger.trace(s"The Preview of $path is the frame at ${frame.timeMs}ms"))
       bright.getOrElse {
-        logger.info(s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
+        logger.debug(s"No Sampled frame of $path clears the brightness floor; the Preview is the frame at a tenth of the duration")
         decode(Seq(durationMs / 10))
           .nextOption()
           .getOrElse(throw RuntimeException(s"No frame could be decoded from $path"))

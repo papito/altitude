@@ -27,7 +27,7 @@ class PasetoService(val app: Altitude):
         .newInstance()
         .asInstanceOf[java.security.Provider]
       java.security.Security.addProvider(bcProvider)
-      logger.info("BouncyCastle provider initialized for PASETO")
+      logger.debug("BouncyCastle provider initialized for PASETO")
     catch
       case e: Exception =>
         logger.warn(s"Failed to initialize BouncyCastle provider: ${e.getMessage}")

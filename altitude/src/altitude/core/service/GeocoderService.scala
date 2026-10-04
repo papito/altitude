@@ -57,7 +57,7 @@ class GeocoderService(config: Config):
       .GET()
       .build()
 
-    logger.info(s"Geocoding [$query]")
+    logger.debug(s"Geocoding [$query]")
     val response =
       try client.send(request, HttpResponse.BodyHandlers.ofString())
       catch case e: Exception => throw GeocoderException(s"The geocoder could not be reached: ${e.getMessage}")

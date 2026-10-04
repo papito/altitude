@@ -55,6 +55,8 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       if person.numOfFaces == 0 then setFaceAsCover(person, persistedFace.get)
 
       increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
+      logger.trace(
+        s"Added face [${persistedFace.get.persistedId}] to person [${person.persistedId}] in asset [${asset.persistedId}]")
 
       persistedFace.get
     }
@@ -67,13 +69,15 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         numOfFaces = person.getFaces.size
       )
 
-      dao.add(personForUpdate)
+      val added = dao.add(personForUpdate)
+      logger.trace(s"Added person [${added.persistedId}]")
+      added
     }
 
   def merge(dest: Person, source: Person): Person =
     if source == dest then throw IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
 
-    logger.info(s"Merging person ${source.name} into ${dest.name}")
+    logger.debug(s"Merging person ${source.name} into ${dest.name}")
 
     txManager.withTransaction {
       val persistedDest: Person = dao.getById(dest.persistedId)
@@ -139,11 +143,15 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * If an asset is restored, we just do the reverse of this and everyone is happy.
    */
   def recycleFacesForAssets(assetIds: Set[String]): Unit =
+    logger.trace(s"Recycling the faces of assets [${assetIds.mkString(",")}]")
+
     txManager.withTransaction {
       dao.recycleFacesForAssets(assetIds)
     }
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit =
+    logger.trace(s"Restoring the faces of assets [${assetIds.mkString(",")}]")
+
     txManager.withTransaction {
       dao.restoreFacesForAssets(assetIds)
     }
@@ -178,6 +186,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   def setFaceAsCover(person: Person, face: Face): Person =
     txManager.withTransaction {
+      logger.debug(s"Setting the cover of person [${person.persistedId}] to face [${face.persistedId}]")
       val personForUpdate = person.copy(coverFaceId = Some(face.persistedId))
 
       updateById(person.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> face.persistedId))
@@ -187,6 +196,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   def updateName(person: Person, newName: String): Person =
     txManager.withTransaction {
+      logger.debug(s"Renaming person [${person.persistedId}] to [$newName]")
       updateById(
         person.persistedId,
         Map(
@@ -200,12 +210,14 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   def setVisibility(person: Person, isHidden: Boolean): Person =
     txManager.withTransaction {
+      logger.debug(s"Setting person [${person.persistedId}] hidden to [$isHidden]")
       updateById(person.persistedId, Map(FieldConst.Person.IS_HIDDEN -> isHidden))
       person.copy(isHidden = isHidden)
     }
 
   def markAsBadMatch(person: Person): Person =
     txManager.withTransaction {
+      logger.debug(s"Marking person [${person.persistedId}] as a bad match")
       updateById(person.persistedId, Map(FieldConst.Person.IS_BAD_MATCH -> true))
       person.copy(isBadMatch = true)
     }

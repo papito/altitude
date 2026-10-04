@@ -47,6 +47,9 @@ class MetadataExtractionService:
           case _ => ()
       }
 
+      logger.trace(
+        s"Extracted ${extractedMetadata.data.values.map(_.size).sum} values " +
+          s"in ${extractedMetadata.data.size} directories from $path")
       extractedMetadata
     catch
       case e: Exception =>
@@ -72,9 +75,11 @@ class MetadataExtractionService:
       val detector: Detector = new DefaultDetector
       val tikaMediaType: TikaMediaType = detector.detect(inputStream.get, metadata)
 
-      AssetType(
+      val assetType = AssetType(
         mediaType = tikaMediaType.getType,
         mediaSubtype = tikaMediaType.getSubtype,
         mime = tikaMediaType.getBaseType.toString)
+      logger.trace(s"Detected $path as ${assetType.mime}")
+      assetType
 
     finally if inputStream.isDefined then inputStream.get.close()

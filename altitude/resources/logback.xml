@@ -12,6 +12,8 @@
     </root>
 
     <logger name="altitude.core" level="INFO" />
+    <!-- Request START/END $ -->
+    <logger name="altitude.core.routes.decorators$" level="DEBUG" />
     <logger name="org.xnio" level="WARN" />
     <logger name="com.zaxxer.hikari" level="WARN" />
     <logger name="io.undertow" level="INFO" />

@@ -29,7 +29,7 @@ object Environment:
       new File(url.toURI).getParentFile.getAbsolutePath
     case _ => System.getProperty("user.dir")
   }
-  logger.info(s"Root path: $ROOT_PATH")
+  logger.debug(s"Root path: $ROOT_PATH")
 
   /**
    * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths (e.g. OpenCV
@@ -37,7 +37,7 @@ object Environment:
    */
   private lazy val tempResourceDir: Path =
     val dir = Files.createTempDirectory("altitude-resources")
-    logger.info(s"Created temp resource directory: $dir")
+    logger.debug(s"Created temp resource directory: $dir")
     dir.toFile.deleteOnExit()
     dir
 
@@ -70,7 +70,7 @@ object Environment:
           try {
             Files.copy(stream, destFile.toPath, StandardCopyOption.REPLACE_EXISTING)
             destFile.deleteOnExit()
-            logger.info(s"Extracted classpath resource $classpathPath to $destFile")
+            logger.debug(s"Extracted classpath resource $classpathPath to $destFile")
           } finally {
             stream.close()
           }

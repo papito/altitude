@@ -43,7 +43,7 @@ private class AltitudeActorSystem(context: ActorContext[AltitudeActorSystem.Comm
 
   override def onSignal: PartialFunction[Signal, Behavior[AltitudeActorSystem.Command]] =
     case PostStop =>
-      logger.info("Actor system stopped")
+      logger.debug("Actor system stopped")
       this
 
-  logger.info("Actor system started")
+  logger.debug("Actor system started")

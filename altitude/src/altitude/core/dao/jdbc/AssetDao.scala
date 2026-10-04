@@ -177,7 +177,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       """
 
     val updateValues = List(metadataWithIds.toJson.toString, RequestContext.getRepository.persistedId, assetId)
-    logger.debug(s"Update SQL: [$sql] with values: $updateValues")
+    logger.trace(s"Update SQL: [$sql] with values: $updateValues")
     val runner: QueryRunner = new QueryRunner()
 
     runner.update(RequestContext.getConn, sql, updateValues*)
@@ -225,10 +225,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       case Some(m) => m
       case None => UserMetadata()
 
-    logger.debug(s"Updating $existingMetadata with $metadata")
+    logger.trace(s"Updating $existingMetadata with $metadata")
     val newData = (existingMetadata.data ++ metadata.data).filterNot(m => deletedFields.contains(m._1))
     val newMetadata = new UserMetadata(newData)
-    logger.debug(s"New metadata -> $newMetadata")
+    logger.trace(s"New metadata -> $newMetadata")
 
     setUserMetadata(assetId, newMetadata)
 

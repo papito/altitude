@@ -90,7 +90,7 @@ class ImportPipelineService(app: Altitude):
       .runWith(outputSink)
 
   private def runAsQueue() =
-    logger.info("Starting the import queue pipeline")
+    logger.debug("Starting the import queue pipeline")
 
     val (queue, source) = Source
       .queue[TDataAssetWithContext](
@@ -120,7 +120,7 @@ class ImportPipelineService(app: Altitude):
       .offer(asset)
       .map {
         case QueueOfferResult.Enqueued =>
-          logger.info(s"Added asset to the import queue: ${asset._1.asset.fileName}")
+          logger.debug(s"Added asset to the import queue: ${asset._1.asset.fileName}")
         case QueueOfferResult.Dropped =>
           logger.warn(s"Asset dropped from the import queue: ${asset._1.asset.fileName}}")
         case QueueOfferResult.Failure(ex) =>
@@ -132,3 +132,4 @@ class ImportPipelineService(app: Altitude):
   def shutdown(): Unit =
     queueImportPipeline.complete()
     Await.result(queueImportPipeline.watchCompletion(), Duration.Inf)
+    logger.debug("Import queue pipeline shut down")

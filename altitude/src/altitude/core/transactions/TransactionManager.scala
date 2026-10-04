@@ -146,7 +146,7 @@ class TransactionManager(val config: Config):
         try statement.execute("PRAGMA optimize")
         finally statement.close()
       finally conn.close()
-      logger.info("SQLite statistics optimized")
+      logger.trace("SQLite statistics optimized")
     catch case NonFatal(ex) => logger.warn(s"Could not optimize SQLite statistics: ${ex.getMessage}")
 
   /** Closes the pools and every connection in them */
@@ -155,7 +155,7 @@ class TransactionManager(val config: Config):
 
     val (readPool, writePool) = pools
     Set(readPool, writePool).foreach(_.close())
-    logger.info("Connection pools closed")
+    logger.debug("Connection pools closed")
 
   private def isInTransaction: Boolean = RequestContext.conn.value.exists(conn => !conn.isClosed)
 
@@ -189,7 +189,7 @@ class TransactionManager(val config: Config):
       if config.hasPath(Const.Conf.POSTGRES_POOL_SIZE) then config.getInt(Const.Conf.POSTGRES_POOL_SIZE)
       else math.max(10, Runtime.getRuntime.availableProcessors + 4))
     hikari.addDataSourceProperty("options", config.getString(Const.Conf.POSTGRES_OPTIONS))
-    logger.info(s"Opening a PostgreSQL pool of ${hikari.getMaximumPoolSize} connections")
+    logger.trace(s"Opening a PostgreSQL pool of ${hikari.getMaximumPoolSize} connections")
     new HikariDataSource(hikari)
 
   /** A SQLite pool over the database file. Each connection is set up once, as the pool opens it. */
@@ -218,7 +218,7 @@ class TransactionManager(val config: Config):
     hikari.setPoolName(name)
     hikari.setDataSource(dataSource)
     hikari.setMaximumPoolSize(size)
-    logger.info(s"Opening a SQLite pool [$name] of $size connections")
+    logger.trace(s"Opening a SQLite pool [$name] of $size connections")
     new HikariDataSource(hikari)
 
   /**
@@ -234,7 +234,7 @@ class TransactionManager(val config: Config):
       if isReadPool then statement.execute("PRAGMA query_only=1")
       else statement.execute("PRAGMA wal_autocheckpoint=500")
     finally statement.close()
-    logger.debug(s"SQLite connection set up. Read pool: $isReadPool")
+    logger.trace(s"SQLite connection set up. Read pool: $isReadPool")
 
   /** The sqlite-vector build for this platform */
   private lazy val vectorExtensionPath: String =
@@ -252,5 +252,5 @@ class TransactionManager(val config: Config):
         (dir, "vector.so")
 
     val path = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
-    logger.info(s"The sqlite-vector extension is at: $path")
+    logger.debug(s"The sqlite-vector extension is at: $path")
     path
