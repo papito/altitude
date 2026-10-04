@@ -1,0 +1,74 @@
+package altitude.core.pipeline
+
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.stream.ActorAttributes
+import org.apache.pekko.stream.OverflowStrategy
+import org.apache.pekko.stream.QueueOfferResult
+import org.apache.pekko.stream.Supervision
+import org.apache.pekko.stream.scaladsl.Flow
+import org.apache.pekko.stream.scaladsl.Keep
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.scaladsl.Source
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.util.Failure
+import scala.util.Success
+
+/**
+ * A pipeline's flow run once, for the life of the app, behind a queue that elements are offered to: the import and the purge
+ * queues. The queue buffers `bufferSize` elements and admits `maxConcurrentOffers` offers at once, and backpressures beyond that.
+ */
+class QueuedPipeline[In](name: String, flow: Flow[In, ?, NotUsed], bufferSize: Int, maxConcurrentOffers: Int)(using
+    system: ActorSystem[?]):
+  final protected val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  private given ExecutionContext = system.executionContext
+
+  /**
+   * The last resort for a failure outside a stage's work, which `PipelineUtils.guarded` does not see: the element is dropped and
+   * the queue goes on. It reaches no sink, so it is neither reported nor discarded; the stages never rely on this.
+   */
+  private val resumeOnFailure: Supervision.Decider = {
+    ex =>
+      logger.error(s"An element failed outside a stage of the $name queue and was dropped", ex)
+      Supervision.Resume
+  }
+
+  private val queue = {
+    logger.debug(s"Starting the $name queue")
+
+    val (queue, source) = Source
+      .queue[In](
+        bufferSize = bufferSize,
+        overflowStrategy = OverflowStrategy.backpressure,
+        maxConcurrentOffers = maxConcurrentOffers)
+      .preMaterialize()
+
+    val done = source
+      .merge(Source.never) // Keep the queue open and never complete
+      .via(flow)
+      .toMat(Sink.ignore)(Keep.right)
+      .withAttributes(ActorAttributes.supervisionStrategy(resumeOnFailure))
+      .run()
+
+    done.onComplete {
+      // This should never happen DURING the app run
+      case Success(_) => logger.error(s"The $name queue completed")
+      case Failure(e) => logger.error(s"The $name queue failed", e)
+    }
+
+    queue
+  }
+
+  def offer(element: In): Future[QueueOfferResult] = queue.offer(element)
+
+  def shutdown(): Unit =
+    queue.complete()
+    Await.result(queue.watchCompletion(), Duration.Inf)
+    logger.debug(s"The $name queue shut down")

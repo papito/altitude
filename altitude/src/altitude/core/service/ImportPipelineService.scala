@@ -2,28 +2,20 @@ package altitude.core.service
 
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.typed.ActorSystem
-import org.apache.pekko.stream.ActorAttributes
-import org.apache.pekko.stream.OverflowStrategy
 import org.apache.pekko.stream.QueueOfferResult
-import org.apache.pekko.stream.Supervision
 import org.apache.pekko.stream.scaladsl.Flow
-import org.apache.pekko.stream.scaladsl.Keep
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration.Duration
-import scala.util.Failure
-import scala.util.Success
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
+import altitude.core.pipeline.QueuedPipeline
 import altitude.core.pipeline.flows.AddPreviewFlow
 import altitude.core.pipeline.flows.AssignIdFlow
 import altitude.core.pipeline.flows.CheckDuplicateFlow
@@ -84,17 +76,11 @@ class ImportPipelineService(app: Altitude):
     .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)
 
-  /**
-   * The last resort for a failure outside a stage's work, which `PipelineUtils.guarded` does not see: the element is dropped and
-   * the queue goes on. It reaches no sink, so it is neither reported nor discarded; the stages never rely on this.
-   */
-  private val resumeOnFailure: Supervision.Decider = {
-    ex =>
-      logger.error("An element failed outside a stage of the import queue and was dropped", ex)
-      Supervision.Resume
-  }
-
-  private val queueImportPipeline = runAsQueue()
+  private val queue = QueuedPipeline[TDataAssetWithContext](
+    "import",
+    combinedFlow,
+    bufferSize = app.parallelism * 2,
+    maxConcurrentOffers = app.parallelism)
 
   def run(
       source: Source[TDataAssetWithContext, NotUsed],
@@ -104,48 +90,18 @@ class ImportPipelineService(app: Altitude):
       .via(combinedFlow)
       .runWith(outputSink)
 
-  private def runAsQueue() =
-    logger.debug("Starting the import queue pipeline")
-
-    val (queue, source) = Source
-      .queue[TDataAssetWithContext](
-        bufferSize = app.parallelism * 2,
-        overflowStrategy = OverflowStrategy.backpressure,
-        maxConcurrentOffers = app.parallelism)
-      .preMaterialize()
-
-    val res = source
-      .merge(Source.never) // Keep the queue open and never complete
-      .via(combinedFlow)
-      .toMat(Sink.foreach(_ => ()))(Keep.right)
-      .withAttributes(ActorAttributes.supervisionStrategy(resumeOnFailure))
-      .run()
-
-    res.onComplete {
-      case Success(_) =>
-        // this should never happen DURING the app run
-        logger.error("Import queue pipeline completed")
-      case Failure(e) =>
-        logger.error("Import queue pipeline failed", e)
-    }(ExecutionContext.global)
-
-    queue
-
   def addToQueue(asset: TDataAssetWithContext): Future[Unit] =
-    queueImportPipeline
+    queue
       .offer(asset)
       .map {
         case QueueOfferResult.Enqueued =>
           logger.debug(s"Added asset to the import queue: ${asset._1.asset.fileName}")
         case QueueOfferResult.Dropped =>
-          logger.warn(s"Asset dropped from the import queue: ${asset._1.asset.fileName}}")
+          logger.warn(s"Asset dropped from the import queue: ${asset._1.asset.fileName}")
         case QueueOfferResult.Failure(ex) =>
           logger.error(s"Failed to add asset to the import queue: ${asset._1.asset.fileName}", ex)
         case QueueOfferResult.QueueClosed =>
           logger.warn(s"Import queue closed, asset dropped: ${asset._1.asset.fileName}")
-      }(ExecutionContext.global)
+      }(system.executionContext)
 
-  def shutdown(): Unit =
-    queueImportPipeline.complete()
-    Await.result(queueImportPipeline.watchCompletion(), Duration.Inf)
-    logger.debug("Import queue pipeline shut down")
+  def shutdown(): Unit = queue.shutdown()
