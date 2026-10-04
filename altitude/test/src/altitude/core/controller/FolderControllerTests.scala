@@ -9,6 +9,22 @@ import altitude.core.models.Folder
 @DoNotDiscover class FolderControllerTests extends ControllerTestCore {
 
   test("Folder tree JSON carries recursive asset counts") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with folder1 and its child folder1_1: two imported assets in folder1_1, one in folder1, and
+     * one triaged asset outside any folder.
+     *
+     * Assertions:
+     *
+     * The folder tree API nests folder1_1 under folder1 under the root, and gives each folder its number of children and an asset
+     * count that includes the assets of every folder below it.
+     *
+     * Edge cases:
+     *
+     * The triaged asset is counted nowhere, not even in the root.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()

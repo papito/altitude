@@ -10,6 +10,17 @@ import altitude.core.util.Query
 @DoNotDiscover class LibraryServiceRestoreTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Move recycled asset to folder") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the root folder, recycled, then moved into a new folder.
+     *
+     * Assertions:
+     *
+     * Moving a recycled asset into a folder restores it: it leaves the recycle bin, is live again, and is in the destination
+     * folder.
+     */
     val asset: Asset = testContext.persistAsset()
     testApp.service.asset.query(new Query()).records.length shouldBe 1
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
@@ -31,6 +42,16 @@ import altitude.core.util.Query
   }
 
   test("Restore recycled assets") {
+
+    /**
+     * Setup:
+     *
+     * One asset, recycled and then restored.
+     *
+     * Assertions:
+     *
+     * The asset is live again.
+     */
     val asset: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))
     testApp.service.library.restoreRecycledAssets(Set(asset.persistedId))
@@ -38,6 +59,20 @@ import altitude.core.util.Query
   }
 
   test("Restore an asset that was imported again") {
+
+    /**
+     * Setup:
+     *
+     * An asset in a folder, imported and recycled, after which a second copy of the same content (the same checksum) is imported.
+     *
+     * Assertions:
+     *
+     * Restoring the recycled copy is skipped and reported as a duplicate, and the copy stays in the recycle bin.
+     *
+     * Edge cases:
+     *
+     * Importing content whose earlier copy is in the recycle bin is allowed.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     val assetWithFolder = testContext.makeAsset().copy(folderId = folder1.persistedId)
@@ -60,6 +95,17 @@ import altitude.core.util.Query
   }
 
   test("Restore skips an asset whose content is live again and restores the rest") {
+
+    /**
+     * Setup:
+     *
+     * Two assets in a folder, both recycled, after which a second copy of one of them is imported; both are restored together.
+     *
+     * Assertions:
+     *
+     * The restore is partial: the asset with no live copy is restored, the other is reported as a duplicate and stays in the
+     * recycle bin, and the stats count one recycled and two sorted assets.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val restorable: Asset = testContext.persistAsset(folder = Some(folder1))
 
@@ -84,6 +130,16 @@ import altitude.core.util.Query
   }
 
   test("A restore that fails restores nothing") {
+
+    /**
+     * Setup:
+     *
+     * One recycled asset in a folder, restored together with an unknown asset ID that is looked up after it.
+     *
+     * Assertions:
+     *
+     * The restore fails on the unknown ID and is rolled back as a whole: the asset stays recycled and the stats are unchanged.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
     testApp.service.library.recycleAssets(Set(asset.persistedId))
@@ -100,6 +156,16 @@ import altitude.core.util.Query
   }
 
   test("Restoring an asset into a recycled folder should restore the folder") {
+
+    /**
+     * Setup:
+     *
+     * An asset in a folder, recycled, after which the folder itself is deleted.
+     *
+     * Assertions:
+     *
+     * Restoring the asset brings its folder back out of the recycle bin.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
@@ -117,6 +183,16 @@ import altitude.core.util.Query
   }
 
   test("Restoring an asset into a recycled folder should restore the full ancestor chain") {
+
+    /**
+     * Setup:
+     *
+     * A chain of nested folders A > B > C with an asset in C; deleting A recycles all three folders and the asset.
+     *
+     * Assertions:
+     *
+     * Restoring the asset brings back the asset and every folder on its path, not just the immediate one.
+     */
     val folderA: Folder = testApp.service.folder.add("A")
     val folderB: Folder = testApp.service.folder.add(name = "B", parentId = folderA.id)
     val folderC: Folder = testApp.service.folder.add(name = "C", parentId = folderB.id)
@@ -142,6 +218,16 @@ import altitude.core.util.Query
   }
 
   test("Restoring a triage-origin asset brings it back to triage") {
+
+    /**
+     * Setup:
+     *
+     * One asset in triage (no folder), recycled and then restored.
+     *
+     * Assertions:
+     *
+     * The asset keeps its triage flag while recycled, and comes back to triage, still with no folder.
+     */
     val asset: Asset = testContext.persistAsset(isTriaged = true)
     (testApp.service.asset.getById(asset.persistedId): Asset).isTriaged shouldBe true
 
@@ -160,6 +246,16 @@ import altitude.core.util.Query
   }
 
   test("Restoring triage-origin asset updates triage stats, not sorted stats") {
+
+    /**
+     * Setup:
+     *
+     * One asset in triage, recycled and then restored.
+     *
+     * Assertions:
+     *
+     * The asset moves from the triage count to the recycled count and back, and the sorted count stays at zero throughout.
+     */
     val asset: Asset = testContext.persistAsset(isTriaged = true)
     testApp.service.library.recycleAssets(Set(asset.persistedId))
 
@@ -177,6 +273,16 @@ import altitude.core.util.Query
   }
 
   test("Restoring sorted asset updates sorted stats, not triage stats") {
+
+    /**
+     * Setup:
+     *
+     * One asset in a folder, recycled and then restored.
+     *
+     * Assertions:
+     *
+     * The asset moves from the sorted count to the recycled count and back, and the triage count stays at zero throughout.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val asset: Asset = testContext.persistAsset(folder = Some(folder1))
     testApp.service.library.recycleAssets(Set(asset.persistedId))

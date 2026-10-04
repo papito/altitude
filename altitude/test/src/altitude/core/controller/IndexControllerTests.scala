@@ -22,6 +22,16 @@ import altitude.core.App
    */
 
   test("Unauthenticated initialized install is not allowed to access protected route") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a user's repository, and a client that has not logged in.
+     *
+     * Assertions:
+     *
+     * The repository's main page answers with a redirect instead of the page.
+     */
     val repo = testContext.persistRepository()
     testApp.service.system.readMetadata.isInitialized shouldBe true
 
@@ -33,6 +43,17 @@ import altitude.core.App
   }
 
   test("The Search input is in the nav of the main page only, and a nav reload keeps it there") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * The Search form is in the main page's nav but not the import page's, and a nav reload carries it only when asked with
+     * search=true, as the main page asks.
+     */
     val repoId = testContext.persistRepository().persistedId
     login()
 

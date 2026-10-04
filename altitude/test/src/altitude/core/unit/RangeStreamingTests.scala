@@ -34,6 +34,16 @@ import altitude.core.routes.RangeStreaming.FileWindow
       received.write(bytes, offset, length)
 
   test("A window of a file is written whole") {
+
+    /**
+     * Setup:
+     *
+     * A 1,000-byte temporary file of counting bytes.
+     *
+     * Assertions:
+     *
+     * A 50-byte window from byte 100 writes exactly that slice of the file.
+     */
     val bytes = Array.tabulate[Byte](1000)(_.toByte)
 
     withFile(bytes) {
@@ -45,7 +55,18 @@ import altitude.core.routes.RangeStreaming.FileWindow
   }
 
   test("A client that goes away mid-stream ends the response without an error") {
-    // A player drops the connection whenever it has what it wants: the metadata of a Video, the asset the user left
+
+    /**
+     * Setup:
+     *
+     * A 100,000-byte temporary file, written to a client that refuses its first write, once with a ClosedChannelException and
+     * once with a "Broken pipe" IOException.
+     *
+     * Assertions:
+     *
+     * Either way the window ends quietly, without an exception: a player drops the connection whenever it has what it wants, the
+     * metadata of a Video or the asset the user left.
+     */
     withFile(Array.fill[Byte](100000)(1)) {
       path =>
         Seq[() => IOException](() => ClosedChannelException(), () => IOException("Broken pipe")).foreach {
@@ -57,6 +78,20 @@ import altitude.core.routes.RangeStreaming.FileWindow
   }
 
   test("A file that cannot be read is still an error") {
+
+    /**
+     * Setup:
+     *
+     * A path to a file that does not exist, and a 10-byte temporary file.
+     *
+     * Assertions:
+     *
+     * A failure to read the file still throws, unlike a client going away.
+     *
+     * Edge cases:
+     *
+     * A missing file, and a 20-byte window over the 10-byte file, which runs out of bytes to transfer.
+     */
     val missing = Files.createTempDirectory("range-streaming").resolve("missing.bin")
 
     a[NoSuchFileException] should be thrownBy FileWindow(missing, 0, 10, MIME).writeBytesTo(ByteArrayOutputStream())

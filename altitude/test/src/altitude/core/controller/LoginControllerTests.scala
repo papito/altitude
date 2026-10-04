@@ -10,6 +10,16 @@ import altitude.core.App
 @DoNotDiscover class LoginControllerTests extends ControllerTestCore {
 
   test("Valid login") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a user and their repository.
+     *
+     * Assertions:
+     *
+     * Logging in with the user's email and password redirects, and the session cookie it sets opens the repository's main page.
+     */
     val repo = testContext.persistRepository()
     testApp.app.isInitialized = true
 
@@ -37,6 +47,16 @@ import altitude.core.App
   }
 
   test("Invalid login") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a user and their repository, and credentials that match no user.
+     *
+     * Assertions:
+     *
+     * The login is refused with a 401.
+     */
     val repo = testContext.persistRepository()
     testApp.app.isInitialized = true
 

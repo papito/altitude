@@ -144,6 +144,26 @@ import altitude.core.util.*
   }
 
   test("Cursor traversal matches the complete order for every grouping, sort field and direction") {
+
+    /**
+     * Setup:
+     *
+     * The fixture: 12 assets captured over four days (2026-09-03 to 2026-09-06), three a day and each imported an hour after
+     * capture, with repeated capture times and file names, plus 4 undated assets sharing one import time. It is walked page by
+     * page through encoded cursors, grouped by Date Taken.
+     *
+     * Assertions:
+     *
+     * For both group directions, every sort field (capture time, import time, file name, size, area) and both sort directions,
+     * the walk reproduces the complete order computed independently of SQL: the day, the sort with nulls where the engine puts
+     * them, then the ID. Every cursor survives encoding, and every continuation is non-empty and flags whether it continues the
+     * anchor's group.
+     *
+     * Edge cases:
+     *
+     * Ties on every sort key leave the order to the ID, and size and area tie for every asset. Walking one asset a page makes
+     * every position an anchor, including both ends and each tie inside the undated group.
+     */
     val assets = fixture()
 
     for {
@@ -168,6 +188,22 @@ import altitude.core.util.*
   }
 
   test("The cursor points at the last returned image and ends with the results") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). It is grouped by Date Taken, sorted by file name and
+     * read 5 a page, then 16 a page.
+     *
+     * Assertions:
+     *
+     * Each page picks up where the previous one stopped, the cursor names the last asset returned, only the first page carries
+     * the total, and the last page has no cursor.
+     *
+     * Edge cases:
+     *
+     * A first page that holds exactly every result has no cursor either.
+     */
     val assets = fixture()
     val grouping = SearchGrouping(GroupBy.DateTaken)
     val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
@@ -194,6 +230,22 @@ import altitude.core.util.*
   }
 
   test("Deleting the anchor or inserting before it does not skip or repeat images") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). Its first page of 5, grouped by Date Taken and sorted
+     * by file name, gives the cursor; then the anchor is recycled, and later an asset that sorts before the anchor is added.
+     *
+     * Assertions:
+     *
+     * After each change the continuation from the same cursor returns the same next five assets, while a fresh first page's total
+     * follows the change.
+     *
+     * Edge cases:
+     *
+     * The anchor itself is no longer in the results when the search continues from it.
+     */
     val assets = fixture()
     val grouping = SearchGrouping(GroupBy.DateTaken)
     val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
@@ -217,6 +269,24 @@ import altitude.core.util.*
   }
 
   test("A cursor is rejected for a different scope or ordering, and when malformed") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). The cursor comes from its first page of 5, grouped by
+     * Date Taken and sorted by file name; a folder, a Location in Rome and a box around Rome serve as other scopes.
+     *
+     * Assertions:
+     *
+     * The cursor is refused when the text, the sort field or direction, the group direction or the grouping, the folder, the
+     * Location or the bounding box differ, and decoding refuses an older version, garbage, an empty object and an empty string.
+     * The same search still continues.
+     *
+     * Edge cases:
+     *
+     * A cursor with no day and a null sort value survives encoding, and a continuation may ask for another page size: it is not
+     * part of the position.
+     */
     fixture()
     val grouping = SearchGrouping(GroupBy.DateTaken)
     val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
@@ -269,6 +339,18 @@ import altitude.core.util.*
   }
 
   test("A cursor continues correctly through a legacy null import time") {
+
+    /**
+     * Setup:
+     *
+     * SQLite only: the fixture without its undated assets, with one asset's import time cleared to NULL, as a legacy row may have
+     * it.
+     *
+     * Assertions:
+     *
+     * Grouped by capture day and sorted by import time in either direction, walking one and two assets a page keeps that asset in
+     * its day, first or last in it as SQLite puts nulls for the direction.
+     */
     if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
       val assets = fixture(includeUndated = false)
       val undated = assets(2)
@@ -296,6 +378,26 @@ import altitude.core.util.*
   }
 
   test("Cursor traversal by Location matches the complete order for every sort field and direction") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). It is spread over Rome and Alba in the Italy category
+     * and an uncategorized Berlin, with overlapping memberships: Rome holds 6, Berlin 8 (three shared with Rome), Alba 2, and 3
+     * assets are in no Location.
+     *
+     * Assertions:
+     *
+     * For every sort field and direction, walking 5, 1 and 6 assets a page reproduces the Locations in path order (Berlin, then
+     * Italy's Alba and Rome) and then the assets in none, each block in sort order then by ID. The first page counts each asset
+     * once although some repeat across Locations, and its cursor names the Location by its path key and ID, the path key of a
+     * categorized one carrying its category.
+     *
+     * Edge cases:
+     *
+     * Walking one asset a page makes each group boundary an anchor, and at six a page Rome fills exactly one page. Deleting the
+     * anchor's Location mid-walk moves on to the trailing group, which its members in no other Location have joined.
+     */
     val assets = fixture()
     val italy = testApp.service.location.addCategory("Italy")
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, Some(italy.persistedId))
@@ -383,6 +485,23 @@ import altitude.core.util.*
         (-relevance(asset.id), asset.taken.isEmpty, -asset.taken.map(_.toEpochSecond(ZoneOffset.UTC)).getOrElse(0L), asset.id))
 
   test("Cursor traversal under the Relevance sort matches the complete order by day, in both directions") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). The text "img" matches every file name, an album holds
+     * every third asset and a person is on every fourth, so an asset's Relevance is its best source: 5 for the person, 2 for the
+     * album, 1 for the file name alone.
+     *
+     * Assertions:
+     *
+     * In both day directions, walking 1, 2 and 5 assets a page under the Relevance sort reproduces the order computed in Scala:
+     * the day, the best Relevance, the newest capture with the undated last, then the ID.
+     *
+     * Edge cases:
+     *
+     * The fixture ties on Relevance and on capture time, and ranks an older capture above a newer one.
+     */
     val assets = fixture()
     val relevance = rankByImg(assets)
     // The fixture has to tie on Relevance and on capture time, and to rank an older capture above a newer one
@@ -399,6 +518,20 @@ import altitude.core.util.*
   }
 
   test("Cursor traversal under the Relevance sort matches the complete order by Location") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). The text "img" matches every file name, an album holds
+     * every third asset and a person is on every fourth, so an asset's Relevance is its best source: 5 for the person, 2 for the
+     * album, 1 for the file name alone. The assets are spread over Rome and Berlin with overlapping memberships, both Locations
+     * and the trailing group mixing dated and undated assets of every Relevance.
+     *
+     * Assertions:
+     *
+     * Walking 1, 2 and 5 assets a page reproduces Berlin, Rome and then the assets in none, each block by Relevance, the newest
+     * capture with the undated last, then the ID.
+     */
     val assets = fixture()
     val relevance = rankByImg(assets)
     val rome = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
@@ -417,6 +550,25 @@ import altitude.core.util.*
   }
 
   test("A Relevance cursor carries the capture time beside the Relevance, and a column sort's cursor does not") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). The text "img" matches every file name, an album holds
+     * every third asset and a person is on every fourth, so an asset's Relevance is its best source: 5 for the person, 2 for the
+     * album, 1 for the file name alone. Grouped by Location with no Location defined, first pages of 1 and 15 are read under the
+     * Relevance sort and of 1 under a file name sort.
+     *
+     * Assertions:
+     *
+     * A Relevance cursor names its asset with its Relevance and its capture time, survives encoding and continues the walk, while
+     * a column sort's cursor carries no capture time.
+     *
+     * Edge cases:
+     *
+     * The cursor of an undated asset says so with an explicit null rather than omitting the capture time, and continues to the
+     * last asset. A Relevance cursor without its capture time, or used under another sort, is refused.
+     */
     val assets = fixture()
     val relevance = rankByImg(assets)
     val grouping = SearchGrouping(GroupBy.Location)
@@ -447,6 +599,18 @@ import altitude.core.util.*
   }
 
   test("Text of exclusions alone is traversed under the Relevance sort by the tiebreakers") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture (12 assets over four capture days, 4 undated). It is searched with `-nothing`, an exclusion that
+     * matches no asset, three assets a page.
+     *
+     * Assertions:
+     *
+     * Every asset scores no Relevance, so grouped by Location and by Date Taken the walk follows the tiebreakers alone: the
+     * newest capture with the undated last, then the ID.
+     */
     val assets = fixture()
     val nothing = assets.map(_.id -> 0).toMap
     val excluded = Some("-nothing")

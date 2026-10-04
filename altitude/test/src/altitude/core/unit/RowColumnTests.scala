@@ -51,6 +51,17 @@ import altitude.core.dao.sql.tables._
   private val engines = List("postgres" -> AltitudePostgresDialect, "sqlite" -> AltitudeSqliteDialect)
 
   test("Every row class selects only columns both schemas have") {
+
+    /**
+     * Setup:
+     *
+     * The rendered `SELECT` of each of the 16 row classes on both engines, and the `CREATE TABLE` columns parsed from each
+     * engine's `all.sql`, with PostgreSQL's inherited `_core` columns folded in.
+     *
+     * Assertions:
+     *
+     * Every table exists in both schemas, and each rendered statement selects at least one column and none the schema lacks.
+     */
     for {
       (engine, dialect) <- engines
       schema = schemaColumns(engine)
@@ -68,6 +79,17 @@ import altitude.core.dao.sql.tables._
   }
 
   test("The names the filter and update paths resolve are the names the rendered SQL uses") {
+
+    /**
+     * Setup:
+     *
+     * Each row class's field labels, mapped through the configured column name mapper, beside its rendered `SELECT` on both
+     * engines.
+     *
+     * Assertions:
+     *
+     * The mapped names are exactly the set of columns the rendered statement selects.
+     */
     for {
       (engine, dialect) <- engines
       (table, sql) <- rendered(dialect)
@@ -82,6 +104,16 @@ import altitude.core.dao.sql.tables._
   }
 
   test("The asset row covers every column its model is built from") {
+
+    /**
+     * Setup:
+     *
+     * The asset row's rendered SQLite `SELECT`, and a hand-kept list of the columns `AssetDao.makeModel` reads.
+     *
+     * Assertions:
+     *
+     * The row selects every column on the list.
+     */
     val selected = selectedColumns(rendered(AltitudeSqliteDialect).toMap.apply(AssetRow)).toSet
 
     // The columns `makeModel` reads, and which `toModel` therefore has to read too
@@ -115,6 +147,16 @@ import altitude.core.dao.sql.tables._
   }
 
   test("Columns render unquoted, so an expression index can still match them") {
+
+    /**
+     * Setup:
+     *
+     * The asset row's rendered PostgreSQL `SELECT`.
+     *
+     * Assertions:
+     *
+     * No identifier is quoted, and a column reads as the bare `asset0.original_created_at`.
+     */
     val sql = rendered(AltitudePostgresDialect).toMap.apply(AssetRow)
 
     sql.contains("\"") shouldBe false

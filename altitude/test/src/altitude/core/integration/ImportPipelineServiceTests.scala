@@ -34,6 +34,16 @@ import altitude.core.pipeline.sinks.VoidAssetSink
 @DoNotDiscover class ImportPipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Void pipeline sink should produce no results") {
+
+    /**
+     * Setup:
+     *
+     * Five assets over staged random images, streamed through the import pipeline into the void sink.
+     *
+     * Assertions:
+     *
+     * The pipeline runs to completion and the sink hands back no results.
+     */
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
@@ -47,6 +57,16 @@ import altitude.core.pipeline.sinks.VoidAssetSink
   }
 
   test("Pipeline should import multiple assets") {
+
+    /**
+     * Setup:
+     *
+     * Ten assets over staged random images, streamed through the import pipeline into a sink that collects every result.
+     *
+     * Assertions:
+     *
+     * Every asset comes out of the pipeline imported, and each is marked as pipeline-processed in the repository.
+     */
     val batchSize = 10
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
@@ -71,6 +91,17 @@ import altitude.core.pipeline.sinks.VoidAssetSink
   }
 
   test("Assets queued at once, as concurrent uploads queue them, are all imported") {
+
+    /**
+     * Setup:
+     *
+     * Six assets over staged random images offered to the long-running import queue all at once, every offer made before any is
+     * awaited.
+     *
+     * Assertions:
+     *
+     * All six end up pipeline-processed in the repository, polled for up to a minute.
+     */
     val batchSize = 6
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     val repositoryId = RequestContext.getRepository.persistedId
@@ -93,6 +124,16 @@ import altitude.core.pipeline.sinks.VoidAssetSink
   }
 
   test("Pipeline should complete on duplicate asset errors") {
+
+    /**
+     * Setup:
+     *
+     * Ten assets over staged random images, the first one sent twice in a row, for eleven elements.
+     *
+     * Assertions:
+     *
+     * The pipeline completes with a result for every element: ten imports, and the repeated element rejected as a duplicate.
+     */
     val batchSize = 10
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
@@ -128,6 +169,16 @@ import altitude.core.pipeline.sinks.VoidAssetSink
   }
 
   test("Pipeline should complete on unsupported media type errors") {
+
+    /**
+     * Setup:
+     *
+     * One asset over a staged random image, labelled with a made-up media type ("bad/type").
+     *
+     * Assertions:
+     *
+     * The pipeline completes with the asset rejected as an unsupported media type, and its staged file deleted.
+     */
     val badMediaType = AssetType("bad", "type", "mime")
     val assetWithBadMediaType = testContext.makeAsset().copy(assetType = badMediaType)
     val assetWithData = testContext.makeAssetWithData(asset = Some(assetWithBadMediaType))
@@ -151,6 +202,17 @@ import altitude.core.pipeline.sinks.VoidAssetSink
   }
 
   test("Pipeline should complete on a video no frame of which decodes, and go on importing") {
+
+    /**
+     * Setup:
+     *
+     * A clip whose media data is zeroed (TestVideos.undecodable), so it probes as a two-second video but no frame of it decodes,
+     * followed by an asset over a staged random image.
+     *
+     * Assertions:
+     *
+     * The pipeline completes with the clip dropped and its staged file deleted, and the photo behind it is imported.
+     */
     val clip =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.undecodable.toFile))
     val photo = testContext.makeAssetWithData()
@@ -178,6 +240,17 @@ import altitude.core.pipeline.sinks.VoidAssetSink
   }
 
   test("Pipeline stores the coordinates a photo carries") {
+
+    /**
+     * Setup:
+     *
+     * A JPEG geotagged at 33.857 N, 151.2152 E (images/exif/gps-north-east.jpg), imported through the pipeline.
+     *
+     * Assertions:
+     *
+     * The asset stores the coordinates as decimal degrees, and its extracted metadata keeps the raw GPS directory, ref tags
+     * included.
+     */
     val dataAsset =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset("images/exif/gps-north-east.jpg"))
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)

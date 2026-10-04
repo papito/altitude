@@ -24,6 +24,20 @@ import altitude.core.util.SearchQuery
     testApp.service.library.search(query).records.map(r => (r: Asset).persistedId).toSet
 
   test("Album names are trimmed and cannot be empty") {
+
+    /**
+     * Setup:
+     *
+     * Album names that are empty, whitespace only, and padded with spaces.
+     *
+     * Assertions:
+     *
+     * Empty and blank names are rejected, and a padded name is stored trimmed.
+     *
+     * Edge cases:
+     *
+     * A name made only of spaces and a tab.
+     */
     intercept[ValidationException] {
       testApp.service.album.add("")
     }
@@ -36,6 +50,21 @@ import altitude.core.util.SearchQuery
   }
 
   test("Album names are unique per repository, ignoring case") {
+
+    /**
+     * Setup:
+     *
+     * Two albums, "Trip" and "Other".
+     *
+     * Assertions:
+     *
+     * Adding or renaming to a name that differs from another album's only by case is a duplicate, while an album can be renamed
+     * to a different casing of its own name.
+     *
+     * Edge cases:
+     *
+     * Renaming an album to its own name in another case.
+     */
     val album: Album = testApp.service.album.add("Trip")
     testApp.service.album.add("Other")
 
@@ -53,6 +82,20 @@ import altitude.core.util.SearchQuery
   }
 
   test("Albums are listed by name with their asset counts") {
+
+    /**
+     * Setup:
+     *
+     * Three albums named "beach", "Alps" and "Empty", and two imported assets: both in "beach", one in "Alps", none in "Empty".
+     *
+     * Assertions:
+     *
+     * Albums are listed in case-insensitive name order, each with the number of assets it holds.
+     *
+     * Edge cases:
+     *
+     * An album with no assets counts zero, and a lowercase name sorts among capitalized ones.
+     */
     val beach: Album = testApp.service.album.add("beach")
     val alps: Album = testApp.service.album.add("Alps")
     val empty: Album = testApp.service.album.add("Empty")
@@ -73,6 +116,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Rename an album") {
+
+    /**
+     * Setup:
+     *
+     * One album, renamed to a name padded with spaces.
+     *
+     * Assertions:
+     *
+     * The album reads back under the new, trimmed name.
+     */
     val album: Album = testApp.service.album.add("before")
 
     testApp.service.album.rename(album.persistedId, " after ")
@@ -82,6 +135,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Deleting an album removes its memberships and leaves the assets alone") {
+
+    /**
+     * Setup:
+     *
+     * Two albums sharing one imported asset; the first album is deleted.
+     *
+     * Assertions:
+     *
+     * The deleted album is gone, while the asset is neither recycled nor dropped from the other album.
+     */
     val album: Album = testApp.service.album.add("doomed")
     val other: Album = testApp.service.album.add("other")
     val asset: Asset = testContext.persistAsset()
@@ -100,6 +163,21 @@ import altitude.core.util.SearchQuery
   }
 
   test("Adding assets to an album is idempotent and an asset can be in many albums") {
+
+    /**
+     * Setup:
+     *
+     * Two albums and two imported assets in the root folder; one asset is added to the first album twice and to the second once.
+     *
+     * Assertions:
+     *
+     * Each add counts only the assets that were not already members, each album holds exactly its own assets, and the asset
+     * itself stays in its folder and is not recycled.
+     *
+     * Edge cases:
+     *
+     * Adding an asset that is already a member alongside a new one.
+     */
     val album1: Album = testApp.service.album.add("one")
     val album2: Album = testApp.service.album.add("two")
     val asset1: Asset = testContext.persistAsset()
@@ -120,6 +198,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Recycled and unknown assets are not added to an album") {
+
+    /**
+     * Setup:
+     *
+     * One album, one live asset, one recycled asset and an asset ID that does not exist, all added in one call.
+     *
+     * Assertions:
+     *
+     * Only the live asset is added and counted.
+     */
     val album: Album = testApp.service.album.add("album")
     val asset: Asset = testContext.persistAsset()
     val recycled: Asset = testContext.persistAsset()
@@ -132,6 +220,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Removing assets from an album leaves the assets alone") {
+
+    /**
+     * Setup:
+     *
+     * An album holding two imported assets; one of them is removed.
+     *
+     * Assertions:
+     *
+     * The removal counts one, the album keeps only the other asset, and the removed asset is not recycled.
+     */
     val album: Album = testApp.service.album.add("album")
     val asset1: Asset = testContext.persistAsset()
     val asset2: Asset = testContext.persistAsset()
@@ -144,6 +242,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Recycling an asset removes it from every album and restoring does not add it back") {
+
+    /**
+     * Setup:
+     *
+     * Two albums: one holds the asset to recycle and a keeper, the other holds only the asset to recycle.
+     *
+     * Assertions:
+     *
+     * Recycling the asset drops it from both albums, and restoring it from the recycle bin leaves both albums as they were.
+     */
     val album1: Album = testApp.service.album.add("one")
     val album2: Album = testApp.service.album.add("two")
     val asset: Asset = testContext.persistAsset()
@@ -163,6 +271,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Deleting a folder removes its assets from albums") {
+
+    /**
+     * Setup:
+     *
+     * An album holding an asset in a folder and an asset at the root; the folder is then deleted.
+     *
+     * Assertions:
+     *
+     * Only the root asset stays in the album.
+     */
     val album: Album = testApp.service.album.add("album")
     val folder: Folder = testApp.service.folder.add("folder")
     val inFolder: Asset = testContext.persistAsset(folder = Some(folder))
@@ -175,6 +293,17 @@ import altitude.core.util.SearchQuery
   }
 
   test("Deleting an asset row removes its album memberships through the schema") {
+
+    /**
+     * Setup:
+     *
+     * An album holding two assets; the row of one of them is deleted directly, the way the purge pipeline and dangling-asset
+     * pruning do.
+     *
+     * Assertions:
+     *
+     * The album drops the deleted asset by schema cascade alone, in both its asset IDs and its count.
+     */
     val album: Album = testApp.service.album.add("album")
     val asset: Asset = testContext.persistAsset()
     val keeper: Asset = testContext.persistAsset()
@@ -188,6 +317,16 @@ import altitude.core.util.SearchQuery
   }
 
   test("Albums are scoped to the repository") {
+
+    /**
+     * Setup:
+     *
+     * An album with one asset in the first repository, then a second repository with an album of the same name.
+     *
+     * Assertions:
+     *
+     * The same name is allowed in another repository, and each repository sees only its own albums and counts.
+     */
     val firstRepo: Repository = testContext.repository
     val album: Album = testApp.service.album.add("shared name")
     val asset: Asset = testContext.persistAsset()
@@ -207,6 +346,17 @@ import altitude.core.util.SearchQuery
   }
 
   test("Searching by album returns only its non-recycled assets") {
+
+    /**
+     * Setup:
+     *
+     * An album holding one asset at the root and one in a folder, an asset outside the album, and a second, empty album.
+     *
+     * Assertions:
+     *
+     * An album search returns the album's assets from any folder and nothing else, drops an asset once it is recycled, and finds
+     * nothing in an empty album.
+     */
     val album: Album = testApp.service.album.add("album")
     val folder: Folder = testApp.service.folder.add("folder")
     val inAlbum1: Asset = testContext.persistAsset()

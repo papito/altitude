@@ -8,23 +8,80 @@ import altitude.core.util.Query
 
 @DoNotDiscover class AssetQueryTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Empty search") {
+
+    /**
+     * Setup:
+     *
+     * A repository with no assets.
+     *
+     * Assertions:
+     *
+     * A query with no filter returns no records and no pages.
+     */
     val results = testApp.service.library.query(new Query())
     results.records.length shouldBe 0
     results.totalPages shouldBe 0
   }
 
   test("Search all") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the root folder.
+     *
+     * Assertions:
+     *
+     * A query with no filter returns it.
+     */
     testContext.persistAsset()
 
     val assets = testApp.service.library.query(new Query()).records
     assets.length shouldBe 1
   }
 
-  test("Search triage") {}
+  test("Search triage") {
 
-  test("Search recycled") {}
+    /**
+     * Setup:
+     *
+     * None: the test is an empty placeholder.
+     *
+     * Assertions:
+     *
+     * None; it always passes.
+     */
+  }
+
+  test("Search recycled") {
+
+    /**
+     * Setup:
+     *
+     * None: the test is an empty placeholder.
+     *
+     * Assertions:
+     *
+     * None; it always passes.
+     */
+  }
 
   test("Pagination") {
+
+    /**
+     * Setup:
+     *
+     * Six assets in the root folder, queried two to a page, then six and twenty to a page.
+     *
+     * Assertions:
+     *
+     * Each page holds as many records as fit on it and every page reports the full total and page count, which is three at two to
+     * a page and one when a page holds them all.
+     *
+     * Edge cases:
+     *
+     * A page past the last one comes back with no records, and with a total and page count of zero.
+     */
     (1 to 6).foreach(n => testContext.persistAsset())
 
     val q = new Query(rpp = 2, page = 1)

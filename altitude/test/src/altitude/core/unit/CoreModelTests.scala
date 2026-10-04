@@ -21,6 +21,16 @@ import altitude.core.util.JsonCodec.given
 @DoNotDiscover class CoreModelTests extends funsuite.AnyFunSuite with TestFocus {
 
   test("Serialize and deserialize a Stat model") {
+
+    /**
+     * Setup:
+     *
+     * A Stat with a dimension name and a value.
+     *
+     * Assertions:
+     *
+     * The Stat survives a round trip through JSON with both fields intact.
+     */
     val stat = Stat(dimension = "test_dim", dimVal = 42)
     val json = stat.toJson
     val deserialized: Stat = json
@@ -29,6 +39,16 @@ import altitude.core.util.JsonCodec.given
   }
 
   test("Serialize and deserialize a Folder model") {
+
+    /**
+     * Setup:
+     *
+     * A Folder with an ID, a parent ID and a name.
+     *
+     * Assertions:
+     *
+     * The Folder survives a round trip through JSON with its ID, name and parent intact.
+     */
     val folder = Folder(id = Some("test-id"), parentId = "parent-id", name = "Test Folder")
     val json = folder.toJson
     val deserialized: Folder = json
@@ -38,6 +58,18 @@ import altitude.core.util.JsonCodec.given
   }
 
   test("A Video's duration and a Face's Frame time travel through JSON, and are absent for an image") {
+
+    /**
+     * Setup:
+     *
+     * A video asset with a 90.5 s duration and a copy of it as an image with none, plus a Face from a video Frame at 1.5 s with
+     * a quality and an enrollment flag, and a copy of the Face with no Frame time.
+     *
+     * Assertions:
+     *
+     * The duration and the Frame time are written to JSON under their snake_case names and read back, and the image's JSON has no
+     * duration key at all. The Face's quality and enrollment flag also travel through JSON.
+     */
     val video = Asset(
       userId = "u",
       assetType = AssetType("video", "mp4", "video/mp4"),
@@ -72,6 +104,16 @@ import altitude.core.util.JsonCodec.given
   }
 
   test("The device model comes from EXIF, or from a phone video's QuickTime keys when EXIF has none") {
+
+    /**
+     * Setup:
+     *
+     * Extracted metadata with a model only in the QuickTime keys, the same with an EXIF model added, and empty metadata.
+     *
+     * Assertions:
+     *
+     * The public device model is the EXIF one when present, falls back to the QuickTime one, and is absent when neither exists.
+     */
     val quickTime = ExtractedMetadata(Map("QuickTime Metadata" -> Map("Model" -> "iPhone 15")))
     Asset.getPublicMetadata(quickTime).deviceModel should be(Some("iPhone 15"))
     val both = ExtractedMetadata(quickTime.data + ("Exif IFD0" -> Map("Model" -> "NIKON D90")))
@@ -80,6 +122,16 @@ import altitude.core.util.JsonCodec.given
   }
 
   test("Model toJson contains expected fields") {
+
+    /**
+     * Setup:
+     *
+     * A Stat with a dimension name and a value.
+     *
+     * Assertions:
+     *
+     * The JSON text of the Stat contains both the dimension name and the value.
+     */
     val stat = Stat(dimension = "my_dimension", dimVal = 100)
     val jsonStr = stat.toJson.toString()
     jsonStr should include("my_dimension")

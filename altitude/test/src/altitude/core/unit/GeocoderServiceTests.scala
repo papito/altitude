@@ -59,6 +59,16 @@ import altitude.core.service.GeocoderService
     ]"""
 
   test("A disabled geocoder refuses every search and says so") {
+
+    /**
+     * Setup:
+     *
+     * A geocoder service configured with map.geocoder.enabled off, pointed at the local stub.
+     *
+     * Assertions:
+     *
+     * It reports itself disabled, refuses a search, and never sends a request to the stub.
+     */
     val service = GeocoderService(config(enabled = false))
     service.isEnabled shouldBe false
     intercept[IllegalOperationException] {
@@ -68,6 +78,17 @@ import altitude.core.service.GeocoderService
   }
 
   test("A search asks for JSON with a small limit, identifies itself, and maps the places") {
+
+    /**
+     * Setup:
+     *
+     * An enabled geocoder service and a stub answering with two Nominatim places named Paris; the query is padded with spaces.
+     *
+     * Assertions:
+     *
+     * The places map to labelled results in the order given, and the request carries the trimmed query, format=json, the limit of
+     * five and the Altitude User-Agent.
+     */
     response = (200, nominatimBody)
     val results = GeocoderService(config(enabled = true)).search("  Paris ")
 
@@ -83,12 +104,37 @@ import altitude.core.service.GeocoderService
   }
 
   test("A blank query asks nothing of the geocoder") {
+
+    /**
+     * Setup:
+     *
+     * An enabled geocoder service and a query of only whitespace.
+     *
+     * Assertions:
+     *
+     * The search returns nothing without sending a request.
+     */
     lastQuery = None
     GeocoderService(config(enabled = true)).search(" \t ") shouldBe Nil
     lastQuery shouldBe None
   }
 
   test("Query text is URL-encoded, and a place without coordinates is skipped") {
+
+    /**
+     * Setup:
+     *
+     * A stub answering with three places - one with coordinates, one without, one with coordinates that are not numbers - and a
+     * query with an apostrophe, an accented letter and an ampersand.
+     *
+     * Assertions:
+     *
+     * Only the place with usable coordinates comes back, and the query reaches the stub URL-encoded.
+     *
+     * Edge cases:
+     *
+     * Missing and non-numeric coordinates, and characters that would otherwise break the query string.
+     */
     response = (
       200,
       """[{"display_name": "Somewhere", "lat": "1.5", "lon": "2.5"}, {"display_name": "Nowhere"}, {"display_name": "Bad", "lat": "x", "lon": "y"}]""")
@@ -97,6 +143,20 @@ import altitude.core.service.GeocoderService
   }
 
   test("An upstream failure or a body that is not a place list is a GeocoderException") {
+
+    /**
+     * Setup:
+     *
+     * A stub answering in turn with a 503, an HTML page, and a JSON error object.
+     *
+     * Assertions:
+     *
+     * Each of them fails the search with a GeocoderException rather than an empty result.
+     *
+     * Edge cases:
+     *
+     * A non-200 status, a body that is not JSON, and JSON that is not a list.
+     */
     response = (503, "busy")
     intercept[GeocoderException] {
       GeocoderService(config(enabled = true)).search("Paris")

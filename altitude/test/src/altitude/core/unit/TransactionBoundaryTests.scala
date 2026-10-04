@@ -19,6 +19,21 @@ import scala.meta.*
   import TransactionBoundaryTests.*
 
   test("A service method that reaches a DAO opens or joins a transaction itself") {
+
+    /**
+     * Setup:
+     *
+     * Every Scala source under altitude/core/service, parsed with Scalameta.
+     *
+     * Assertions:
+     *
+     * Every DAO reference in a non-private service method sits inside a transaction wrapper (withTransaction, asReadOnly or
+     * withFaceVector) within that method; any that does not is listed by file, line and method.
+     *
+     * Edge cases:
+     *
+     * A private helper is exempt, as its caller's wrapper covers it, and a DAO's companion object does not count as a DAO.
+     */
     val violations = for {
       file <- sources("service")
       ref <- file.tree.collect { case select: Term.Select if isDaoReference(select) => select }
@@ -30,6 +45,16 @@ import scala.meta.*
   }
 
   test("Only services open transactions") {
+
+    /**
+     * Setup:
+     *
+     * Every Scala source under altitude/core/dao, pipeline and routes, parsed with Scalameta.
+     *
+     * Assertions:
+     *
+     * None of them names the transaction manager or any of its wrappers.
+     */
     val violations = for {
       file <- sources("dao") ++ sources("pipeline") ++ sources("routes")
       name <- file.tree.collect { case name: Term.Name if TransactionNames.contains(name.value) => name }
@@ -39,6 +64,16 @@ import scala.meta.*
   }
 
   test("Pipeline flows and controllers reach DAOs only through services") {
+
+    /**
+     * Setup:
+     *
+     * Every Scala source under altitude/core/pipeline and routes, parsed with Scalameta.
+     *
+     * Assertions:
+     *
+     * None of them selects the app's DAO registry, so pipeline flows and controllers reach data only through services.
+     */
     val violations = for {
       file <- sources("pipeline") ++ sources("routes")
       select <- file.tree.collect { case select @ Term.Select(_, Term.Name("DAO")) => select }

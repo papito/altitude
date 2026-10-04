@@ -9,6 +9,21 @@ import altitude.core.util.Query
 
 @DoNotDiscover class LibraryServiceRecycleTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Recycle multiple assets") {
+
+    /**
+     * Setup:
+     *
+     * Eight assets in the root folder; five of them are recycled together, then recycled again.
+     *
+     * Assertions:
+     *
+     * Only the five are in the recycle bin and the other three stay live, and the recycled and sorted stats count exactly those
+     * assets and their bytes.
+     *
+     * Edge cases:
+     *
+     * Recycling assets that are already recycled changes nothing, the stats included.
+     */
     val assetsToRecycle = (1 to 5).map(_ => testContext.persistAsset())
 
     // not recycled and should stay that way
@@ -32,6 +47,20 @@ import altitude.core.util.Query
   }
 
   test("Rename asset and attempt to rename a recycled asset") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the root folder, renamed, then recycled.
+     *
+     * Assertions:
+     *
+     * The new name shows on the returned asset and on a fresh read, and renaming the asset once it is recycled is refused.
+     *
+     * Edge cases:
+     *
+     * A recycled asset cannot be renamed.
+     */
     var asset: Asset = testContext.persistAsset()
     var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
     updatedAsset.fileName shouldBe "newName"
@@ -49,6 +78,18 @@ import altitude.core.util.Query
   }
 
   test("Recycle asset") {
+
+    /**
+     * Setup:
+     *
+     * Two users each add an asset to the same repository, and the first user recycles one of them; then a second repository,
+     * owned by the second user, is switched to.
+     *
+     * Assertions:
+     *
+     * Assets belong to the repository, not to the user: the first user sees both, recycling moves one of them from the live
+     * assets to the recycle bin, and the second repository's recycle bin is empty.
+     */
     testContext.persistAsset()
 
     // SECOND USER
@@ -74,14 +115,33 @@ import altitude.core.util.Query
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0
   }
 
-  /** Just because an asset is recycled doesn't mean it can't be retrieved */
   test("Get recycled asset") {
+
+    /**
+     * Setup:
+     *
+     * One asset, recycled.
+     *
+     * Assertions:
+     *
+     * Just because an asset is recycled doesn't mean it can't be retrieved: it is still read by its ID.
+     */
     val asset: Asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))
     testApp.service.asset.getById(asset.persistedId)
   }
 
   test("Recycle folder assets") {
+
+    /**
+     * Setup:
+     *
+     * Two top-level folders and a child of the second, with an asset in each; both top-level folders are deleted.
+     *
+     * Assertions:
+     *
+     * Deleting a folder recycles its assets and those of its descendants, so all three assets end up recycled.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     val folder2: Folder = testApp.service.folder.add("folder2")

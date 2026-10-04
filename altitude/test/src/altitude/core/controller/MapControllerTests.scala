@@ -7,6 +7,26 @@ import altitude.core.App
 
 @DoNotDiscover class MapControllerTests extends ControllerTestCore {
   test("Map cells and bounds share the grid scope and count plotted points") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the Location "Beach", in "Category" and pinned at 10, 20, holding two imported assets:
+     * one with its own point at 11, 21, and one with no point, which the map plots at the Location's pin. A third asset, in no
+     * Location, has its own point at -40, -50.
+     *
+     * Assertions:
+     *
+     * Scoped to the Location as the grid is, the bounds and the cells agree on the two assets, the cells counting plotted points
+     * and listing the Location's pin with its member count. Panning clips cells and pins to the viewport, while a visible
+     * Location still counts all of its members. The map follows the grid's scope - search text, recycling, the trash view - and
+     * ignores the grid-only parameters the client sends with it.
+     *
+     * Edge cases:
+     *
+     * The panel's bbox filter, the sort, layout, grouping and paging parameters change nothing; search text that matches nothing
+     * is a count with no bounds; a recycled asset leaves the library's bounds and is the trash view's only point.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -76,6 +96,23 @@ import altitude.core.App
   }
 
   test("Map input errors are JSON 400s and a disabled geocoder is a JSON 404") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with no assets, and the geocoder disabled, as the test configuration has it.
+     *
+     * Assertions:
+     *
+     * A malformed viewport or zoom on the cells route is a JSON 400 naming the bad parameter, search text in the trash is refused
+     * on both map routes, and the disabled geocoder is a JSON 404.
+     *
+     * Edge cases:
+     *
+     * A missing parameter, a viewport whose south is above its north, NaN in the viewport and a fractional zoom; text with no
+     * usable term, which counts as no text and is allowed in the trash; a malformed bbox search filter, which is ignored rather
+     * than refused.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -135,6 +172,16 @@ import altitude.core.App
   }
 
   test("Every Map API route requires authentication") {
+
+    /**
+     * Setup:
+     *
+     * A repository, and a client that has not logged in.
+     *
+     * Assertions:
+     *
+     * The cells, bounds and geocode routes answer 401.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     withServer(App) {

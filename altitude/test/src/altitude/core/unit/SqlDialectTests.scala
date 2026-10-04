@@ -16,16 +16,35 @@ import altitude.core.dao.sql.tables.AssetRow
 @DoNotDiscover class SqlDialectTests extends funsuite.AnyFunSuite with TestFocus {
 
   test("Table operations carry this project's dialect, not the library's own") {
-    /*
-     * ScalaSql's `SqliteDialect.TableOps` resolves the dialect from the library's `SqliteDialect` object instead of the one in
-     * scope. A table built through it reads and writes every column with the stock type mappers, which silently loses the
-     * timestamp handling below; the symptom is a wall-clock timestamp shifted by the JVM zone, far from its cause.
+
+    /**
+     * Setup:
+     *
+     * The asset row class, turned into table operations through each of this project's dialects.
+     *
+     * Assertions:
+     *
+     * Both dialects build the base `TableOps`, which threads the dialect it is given. ScalaSql's `SqliteDialect.TableOps`
+     * resolves the dialect from the library's `SqliteDialect` object instead of the one in scope. A table built through it reads
+     * and writes every column with the stock type mappers, which silently loses this project's timestamp handling; the symptom
+     * is a wall-clock timestamp shifted by the JVM zone, far from its cause.
      */
     AltitudeSqliteDialect.TableOpsConv(AssetRow).getClass shouldBe classOf[TableOps[?]]
     AltitudePostgresDialect.TableOpsConv(AssetRow).getClass shouldBe classOf[TableOps[?]]
   }
 
   test("SQLite timestamps are the text the schema stores, with no zone conversion") {
+
+    /**
+     * Setup:
+     *
+     * A wall-clock time that falls in the US daylight-saving gap (2026-03-08 02:30), and the SQLite dialect's temporal type
+     * mappers.
+     *
+     * Assertions:
+     *
+     * Every temporal type binds as text, and a timestamp formats to the `yyyy-MM-dd HH:mm:ss` text the schema stores.
+     */
     val wallClock = LocalDateTime.of(2026, 3, 8, 2, 30, 0)
 
     AltitudeSqliteDialect.LocalDateTimeType.jdbcType shouldBe JDBCType.VARCHAR
@@ -37,6 +56,16 @@ import altitude.core.dao.sql.tables.AssetRow
   }
 
   test("PostgreSQL reads an instant as the moment the column stores") {
+
+    /**
+     * Setup:
+     *
+     * The PostgreSQL dialect's temporal type mappers.
+     *
+     * Assertions:
+     *
+     * An instant maps to `TIMESTAMP WITH TIME ZONE`, and the wall-clock and calendar-day types keep the stock mappings.
+     */
     AltitudePostgresDialect.OffsetDateTimeType.jdbcType shouldBe JDBCType.TIMESTAMP_WITH_TIMEZONE
 
     // The wall-clock and calendar-day mappers are the stock ones, which already read the java.time types
@@ -45,6 +74,16 @@ import altitude.core.dao.sql.tables.AssetRow
   }
 
   test("Identifiers are never quoted, so an expression index can still match a column") {
+
+    /**
+     * Setup:
+     *
+     * Both of this project's dialects.
+     *
+     * Assertions:
+     *
+     * Neither dialect casts its bound parameters.
+     */
     AltitudeSqliteDialect.castParams shouldBe false
     AltitudePostgresDialect.castParams shouldBe false
   }

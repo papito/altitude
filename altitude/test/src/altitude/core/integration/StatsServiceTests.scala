@@ -21,6 +21,19 @@ import altitude.core.util.Query
 @DoNotDiscover class StatsServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Test totals") {
+
+    /**
+     * Setup:
+     *
+     * In the common repository: an asset in a folder, a triaged asset, and two assets recycled right after import, one from the
+     * folder and one from the root folder. The triaged asset is then moved into the folder, and last a second, empty repository
+     * becomes the current one.
+     *
+     * Assertions:
+     *
+     * The sorted, triage, recycled and total counts follow each step, with the bytes of each at the count times the fixture's
+     * size, and the second repository's stats are all zero, since stats are kept per repository.
+     */
     // create an asset in a folder
     val folder1: Folder = testApp.service.folder.add("folder1")
 
@@ -80,6 +93,17 @@ import altitude.core.util.Query
   }
 
   test("Recycle multiple assets") {
+
+    /**
+     * Setup:
+     *
+     * Two triaged assets and two in a folder, then every asset of the repository recycled in one call.
+     *
+     * Assertions:
+     *
+     * Before the recycle the sorted and triage counts reflect the imports; after it nothing is left sorted and all four assets
+     * are counted as recycled, bytes included.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     (1 to 2).foreach {
@@ -107,6 +131,16 @@ import altitude.core.util.Query
   }
 
   test("Recycle triaged assets") {
+
+    /**
+     * Setup:
+     *
+     * Five triaged assets, one of which is then recycled.
+     *
+     * Assertions:
+     *
+     * The recycled asset moves from the triage count to the recycled count.
+     */
     val total = 5
     val triagedAssets = (1 to total).foldLeft(List[Asset]()) {
       (acc, _) =>
@@ -125,6 +159,16 @@ import altitude.core.util.Query
   }
 
   test("Recycling already recycled asset should do nothing") {
+
+    /**
+     * Setup:
+     *
+     * Three assets in the root folder, the first of which is recycled twice.
+     *
+     * Assertions:
+     *
+     * The second recycle changes nothing: the asset leaves the sorted count and is counted as recycled only once.
+     */
     val total = 3
     val assets = (1 to total).foldLeft(List[Asset]())((acc, _) => acc :+ testContext.persistAsset())
 
@@ -139,6 +183,17 @@ import altitude.core.util.Query
   }
 
   test("Recycle a folder") {
+
+    /**
+     * Setup:
+     *
+     * Two folders with two assets each, then the first folder deleted.
+     *
+     * Assertions:
+     *
+     * Deleting a folder recycles its assets: they leave the sorted count and are counted as recycled, bytes included, while the
+     * other folder's assets stay sorted.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
     val folder2: Folder = testApp.service.folder.add("folder2")
 
@@ -163,6 +218,16 @@ import altitude.core.util.Query
   }
 
   test("Purging the recycle bin should correctly update the recycle stats (to zero)") {
+
+    /**
+     * Setup:
+     *
+     * Five assets imported through the import pipeline in one stream, all of them recycled, then the recycle bin purged.
+     *
+     * Assertions:
+     *
+     * Once the bin is purged, the recycled count and bytes are back to zero.
+     */
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
@@ -257,6 +322,18 @@ import altitude.core.util.Query
    */
 
   test("Stat writes open their own transaction") {
+
+    /**
+     * Setup:
+     *
+     * Stat writes made outside any transaction: the triage count incremented by three and decremented by one, then the stats of
+     * a restore applied for a triaged, recycled asset that was never persisted.
+     *
+     * Assertions:
+     *
+     * Each write takes effect and is visible to the next read. The restore moves the asset from recycled back to triage, which
+     * takes the recycled count below zero, since nothing was recycled before.
+     */
     testApp.service.stats.incrementStat(Stats.TRIAGE_ASSETS, 3)
     testApp.service.stats.decrementStat(Stats.TRIAGE_ASSETS)
     testApp.service.stats.getStats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 2

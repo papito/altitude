@@ -12,6 +12,20 @@ import altitude.core.util.Query
 @DoNotDiscover class LibraryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Rename asset and attempt to rename a recycled asset") {
+
+    /**
+     * Setup:
+     *
+     * One asset in the root folder, renamed, then recycled.
+     *
+     * Assertions:
+     *
+     * The new name shows on the returned asset and on a fresh read, and renaming the asset once it is recycled is refused.
+     *
+     * Edge cases:
+     *
+     * A recycled asset cannot be renamed.
+     */
     val asset: Asset = testContext.persistAsset()
     var updatedAsset: Asset = testApp.service.asset.rename(asset.persistedId, "newName")
     updatedAsset.fileName shouldBe "newName"
@@ -29,10 +43,20 @@ import altitude.core.util.Query
   }
 
   test("Folder filtering") {
-    /*
-    folder1
-    folder2
-      folder2_1
+
+    /**
+     * Setup:
+     *
+     * Two top-level folders and a child of the second, with two assets in each:
+     *
+     * folder1
+     * folder2
+     *   folder2_1
+     *
+     * Assertions:
+     *
+     * A folder filter matches the assets of the folder and of all of its descendants: two for each leaf folder, four for the
+     * parent.
      */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
@@ -73,9 +97,17 @@ import altitude.core.util.Query
   test("Move assets between folders") {
 
     /**
-     * Scenario:
+     * Setup:
      *
-     * Three folders - there are assets in all three, but we are moving ALL of the assets into just one folder.
+     * Three folders with three assets in each; ALL nine assets are moved into the last folder.
+     *
+     * Assertions:
+     *
+     * The move completes without an exception; nothing else is checked.
+     *
+     * Edge cases:
+     *
+     * The selection includes the three assets already in the destination folder.
      */
     val folders = (1 to 3).map(n => testApp.service.folder.add(s"folder$n"))
 
@@ -85,6 +117,17 @@ import altitude.core.util.Query
   }
 
   test("Move asset to a different folder") {
+
+    /**
+     * Setup:
+     *
+     * Two folders with one asset in the first, which is moved into the second; then a second, empty repository is switched to.
+     *
+     * Assertions:
+     *
+     * The asset leaves the first folder's results and shows in the second's, and the second repository sees none of the first
+     * repository's assets, even filtered by the first repository's folder.
+     */
     val folder1: Folder = testApp.service.folder.add("folder1")
 
     val folder2: Folder = testApp.service.folder.add("folder2")

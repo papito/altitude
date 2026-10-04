@@ -11,6 +11,16 @@ import altitude.core.models.Asset
 @DoNotDiscover class AlbumControllerTests extends ControllerTestCore {
 
   test("Album list JSON is sorted by name and carries asset counts") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the albums "beach" and "Alps", and one imported asset in "beach".
+     *
+     * Assertions:
+     *
+     * The album list API answers JSON ordered by name, with each album's ID and asset count.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -35,6 +45,17 @@ import altitude.core.models.Asset
   }
 
   test("Assets are added to and removed from an album") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one empty album and two imported assets.
+     *
+     * Assertions:
+     *
+     * The album assets API adds both assets, then removes one, reporting how many it added or removed, and the album's membership
+     * follows each call.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -78,6 +99,17 @@ import altitude.core.models.Asset
   }
 
   test("Search results are filtered by album and report the album as their scope") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one album and two imported assets, only one of them in the album.
+     *
+     * Assertions:
+     *
+     * A search scoped to the album renders only its member, marks the results with the album as their scope, and keeps the album
+     * in the URL the browser is told to show.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()

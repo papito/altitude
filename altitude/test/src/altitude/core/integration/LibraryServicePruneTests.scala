@@ -10,6 +10,17 @@ import altitude.core.util.SearchQuery
 
 @DoNotDiscover class LibraryServicePruneTests(override val testApp: Altitude) extends IntegrationTestCore {
   test("Prune should remove all assets in undefined state") {
+
+    /**
+     * Setup:
+     *
+     * Three imported assets in the root folder, all then flagged as not pipeline-processed, the state an import that never
+     * finished leaves an asset in.
+     *
+     * Assertions:
+     *
+     * The three are found as dangling and pruned, after which none of them is left to query or to search.
+     */
     val assetCount = 3
     for (_ <- 1 to assetCount)
       testContext.persistAsset()

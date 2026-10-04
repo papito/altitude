@@ -38,6 +38,17 @@ import altitude.core.models.AssetType
   }
 
   test("A cell names its media type, and a Video's cell wears a play badge and shows its duration") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an imported image and a 65-second MP4 Video added directly as a completed asset.
+     *
+     * Assertions:
+     *
+     * Each cell of the HTML grid names its media type, and only the Video's cell wears the play badge and shows its duration as
+     * 1:05.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -66,6 +77,19 @@ import altitude.core.models.AssetType
   }
 
   test("Location grouping renders paths and continues by cursor to No location") {
+
+    /**
+     * Setup:
+     *
+     * A Beach Location under the Italy category holding two undated assets, and a third asset in no Location, grouped by Location
+     * one asset to a page.
+     *
+     * Assertions:
+     *
+     * The first page heads the group with its Category › Location path, reflects the grouping in the Group dropdown and the
+     * fragment's data attributes, and gives an asset in a Location a cell ID qualified by it. The continuation finishes Beach
+     * without repeating its header and opens No location, whose cell keeps the plain asset ID.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -101,6 +125,22 @@ import altitude.core.models.AssetType
   }
 
   test("A Location page marks only its last cell for continuation, though that asset has a cell under an earlier Location") {
+
+    /**
+     * Setup:
+     *
+     * Beach and Hills Locations, an asset in both, one in Beach only and one in neither, read as a Location-grouped page of
+     * three.
+     *
+     * Assertions:
+     *
+     * The page holds the shared asset under both Locations, and exactly one cell - the last by position, under Hills - is marked
+     * as the last and carries the cursor.
+     *
+     * Edge cases:
+     *
+     * The page's last asset also has a cell earlier on the same page.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -129,6 +169,24 @@ import altitude.core.models.AssetType
   }
 
   test("Location and bbox filter both grid shapes, and map layout ignores grouping and paging") {
+
+    /**
+     * Setup:
+     *
+     * A Beach Location pinned at 1, 2 with one undated member, and an undated asset outside it.
+     *
+     * Assertions:
+     *
+     * The Location and bounding-box filters narrow the ungrouped, Location and day grids to the member, and the fragment carries
+     * the Location scope. The map layout ignores the grid-only parameters, plotting and totalling the whole search with the Group
+     * control disabled and keeping layout, Location and box in the replaced URL. Malformed box and layout values are plain-text
+     * 400s.
+     *
+     * Edge cases:
+     *
+     * Invalid grouping, cursor and paging parameters, which the map layout ignores rather than rejects, and a box with a latitude
+     * out of range.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -193,6 +251,21 @@ import altitude.core.models.AssetType
   }
 
   test("The No date header crosses a page boundary and is not repeated on continuation") {
+
+    /**
+     * Setup:
+     *
+     * Assets taken on 2026-09-05 and 2026-09-06 and two undated ones, grouped by capture day three to a page.
+     *
+     * Assertions:
+     *
+     * Descending, the dated days come first and the No date group trails with its full count and no date element; the
+     * continuation adds the remaining undated asset without another header and ends the cursor. Ascending, No date leads.
+     *
+     * Edge cases:
+     *
+     * SQLite's null placement, which the controller tests run on: null days trail descending and lead ascending.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -223,6 +296,18 @@ import altitude.core.models.AssetType
   }
 
   test("The no date badge follows the effective capture sort on grouped and ungrouped pages") {
+
+    /**
+     * Setup:
+     *
+     * One dated and one undated asset, searched ungrouped and grouped by capture day, under the capture time, import time and
+     * filename sorts.
+     *
+     * Assertions:
+     *
+     * The no date badge and the cell's no-date marker appear on the undated asset's cell only, and only when the results are
+     * sorted by capture time.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -271,6 +356,23 @@ import altitude.core.models.AssetType
   }
 
   test("Grouped HTML pages open each day with a header and carry the cursor on the last cell") {
+
+    /**
+     * Setup:
+     *
+     * Three assets taken on 2026-09-06 and one on 2026-09-05, grouped by capture day two to a page in filename order.
+     *
+     * Assertions:
+     *
+     * The first page is an HTML fragment whose replaced URL carries the grouping, with a header giving the whole day's count, the
+     * overall total, cells in sort order and the grouping reflected in the Group dropdown; only its last cell carries the cursor,
+     * and no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the
+     * last page, carries no cursor.
+     *
+     * Edge cases:
+     *
+     * Continuing from the first cursor after the remaining assets were recycled is a 204 with nothing to append.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -342,6 +444,16 @@ import altitude.core.models.AssetType
   }
 
   test("Grouped HTML honors the view") {
+
+    /**
+     * Setup:
+     *
+     * Two assets taken on the same day, one of them recycled.
+     *
+     * Assertions:
+     *
+     * The date-grouped trash view shows only the recycled asset under its day, and the library view only the kept one.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -367,6 +479,22 @@ import altitude.core.models.AssetType
   }
 
   test("Invalid grouped requests are plain-text 400 errors") {
+
+    /**
+     * Setup:
+     *
+     * Two dated assets and a real cursor taken from a one-asset grouped page.
+     *
+     * Assertions:
+     *
+     * Every malformed or contradictory grouping, direction, cursor, page size, page number or sort is a plain-text 400 naming the
+     * parameter at fault. A cursor is refused for a different search but accepted with another page size.
+     *
+     * Edge cases:
+     *
+     * An empty groupBy, the removed dateImported grouping, a direction with the Location grouping, a cursor that decodes to an
+     * empty JSON object, the page sizes 0 and 501, and a valid cursor sent without isContinuousScroll.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -418,6 +546,23 @@ import altitude.core.models.AssetType
   }
 
   test("An ungrouped page is bounded: rpp and p out of range are plain-text 400 errors") {
+
+    /**
+     * Setup:
+     *
+     * Two dated assets.
+     *
+     * Assertions:
+     *
+     * Page sizes outside 1..500 and page numbers outside 1..42949672 (the last page whose rows an Int offset can number at the
+     * default 50) are plain-text 400s stating the bounds, on first pages and continuations alike; pages within the bounds are
+     * served, and a page size of 1 or 500 returns one asset or both.
+     *
+     * Edge cases:
+     *
+     * The page sizes 0, -1 and 501; the pages 0, -1, one past the bound and Int.MaxValue; and Int.MaxValue accepted at one asset
+     * a page.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -460,6 +605,23 @@ import altitude.core.models.AssetType
   }
 
   test("Text is sorted by Relevance unless the request says otherwise, and Relevance needs text") {
+
+    /**
+     * Setup:
+     *
+     * beach.jpg taken on 2026-09-06 and sand.jpg taken on 2026-09-05 in the "Beach days" album, searched for "beach".
+     *
+     * Assertions:
+     *
+     * Search text defaults to the Relevance sort on every grid shape and the map layout, ranking the album match above the
+     * file-name match, while a sort the request names wins and no usable text defaults to the newest import. A Relevance page
+     * continues by cursor, and the Relevance sort without usable text, or with a direction appended, is a plain-text 400.
+     *
+     * Edge cases:
+     *
+     * Text without a usable term ("- OR") is no text; the day grouping puts the two assets on different days, so their order is
+     * not compared there.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -523,6 +685,21 @@ import altitude.core.models.AssetType
   }
 
   test("Results carry their Search text and offer the Relevance sort only with it") {
+
+    /**
+     * Setup:
+     *
+     * One asset named beach.jpg, searched ungrouped, grouped by day and in map layout.
+     *
+     * Assertions:
+     *
+     * With Search text the fragment carries it in data-results-q and the Relevance option is selected, or offered unselected when
+     * the request names another sort; without usable text data-results-q is empty and Relevance is not offered.
+     *
+     * Edge cases:
+     *
+     * Text without a usable term ("- OR").
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -555,6 +732,17 @@ import altitude.core.models.AssetType
   }
 
   test("Search text with the trash view is a plain-text 400") {
+
+    /**
+     * Setup:
+     *
+     * An empty repository, searched in the trash view ungrouped, grouped by day and in map layout.
+     *
+     * Assertions:
+     *
+     * Search text in the trash is a plain-text 400 naming the trash, while the trash alone, the trash with text that has no
+     * usable term, and text in another view are served.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -583,6 +771,16 @@ import altitude.core.models.AssetType
   }
 
   test("Grouped requests require authentication and a repository the user can see") {
+
+    /**
+     * Setup:
+     *
+     * A repository and no logged-in user.
+     *
+     * Assertions:
+     *
+     * An unauthenticated grouped request is redirected when it asks for HTML and refused with a 401 when it asks for JSON.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
@@ -607,6 +805,21 @@ import altitude.core.models.AssetType
 
   test(
     "An ungrouped page carries the next page number until the last page; the first page carries the total and whether it is capped") {
+
+    /**
+     * Setup:
+     *
+     * Three assets taken at the same moment, two to a page in filename order.
+     *
+     * Assertions:
+     *
+     * The first page carries the total, whether it is capped, and the next page number on its last cell; the second page holds
+     * the remaining asset with neither a next page nor a total.
+     *
+     * Edge cases:
+     *
+     * A continuation past the last page is a 204 with nothing to append.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -636,6 +849,18 @@ import altitude.core.models.AssetType
   }
 
   test("Ungrouped HTML results are unchanged, and results are HTML only") {
+
+    /**
+     * Setup:
+     *
+     * One dated asset.
+     *
+     * Assertions:
+     *
+     * Without an Accept header the ungrouped search is an HTML grid in grid layout, with no grouping, no group headers and no
+     * bounding-box scope, and a continuation past the last page is a 204. Asking for JSON, by the Accept header or by the legacy
+     * Content-Type, is a 400 (a JSON error pointing to HTML for the Accept header).
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()

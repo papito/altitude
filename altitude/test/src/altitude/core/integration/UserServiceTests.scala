@@ -22,6 +22,16 @@ import altitude.core.util.Util
 @DoNotDiscover class UserServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Can create and get a new user") {
+
+    /**
+     * Setup:
+     *
+     * A regular user with a random email and name, added next to the common setup's user.
+     *
+     * Assertions:
+     *
+     * The user can be read back by its ID.
+     */
     val user: User = testContext.persistUser()
     val storedUser: User = testApp.service.user.getById(user.persistedId)
 
@@ -29,11 +39,31 @@ import altitude.core.util.Util
   }
 
   test("Can set user active repository") {
+
+    /**
+     * Setup:
+     *
+     * A new regular user and the common setup's repository.
+     *
+     * Assertions:
+     *
+     * Setting the repository as the user's last active one completes without an error; the stored value is not read back.
+     */
     val user: User = testContext.persistUser()
     testApp.service.user.setLastActiveRepoId(user, testContext.repository.persistedId)
   }
 
   test("Check valid user password") {
+
+    /**
+     * Setup:
+     *
+     * A regular user with a known password.
+     *
+     * Assertions:
+     *
+     * Logging in with the user's email and that password succeeds and yields the user and a session token.
+     */
     val password = "MyPassword123"
 
     val userModel = User(
@@ -56,6 +86,16 @@ import altitude.core.util.Util
   }
 
   test("Login fails with invalid password") {
+
+    /**
+     * Setup:
+     *
+     * A regular user with a known password.
+     *
+     * Assertions:
+     *
+     * Logging in with the user's email and a different password yields nothing.
+     */
     val password = "MyPassword123"
     val wrongPassword = "WrongPassword456"
 
@@ -73,6 +113,16 @@ import altitude.core.util.Util
   }
 
   test("Login fails with non-existent user") {
+
+    /**
+     * Setup:
+     *
+     * An email that belongs to no user.
+     *
+     * Assertions:
+     *
+     * Logging in with it yields nothing.
+     */
     val nonExistentEmail = "nonexistent@example.com"
     val password = "SomePassword123"
 
@@ -83,6 +133,18 @@ import altitude.core.util.Util
 
   if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
     test("Logging in does not wait for the SQLite write connection") {
+
+      /**
+       * Setup:
+       *
+       * A regular user with a known password, and a write transaction on a thread of its own that holds SQLite's single write
+       * connection until the test releases it.
+       *
+       * Assertions:
+       *
+       * While the write connection is held, logging in still completes within a few seconds and succeeds, since a login only
+       * reads.
+       */
       val password = "MyPassword123"
       val userModel = User(email = Util.randomStr(), name = Util.randomStr(), accountType = AccountType.User)
       testContext.persistUser(Some(userModel), password = password)

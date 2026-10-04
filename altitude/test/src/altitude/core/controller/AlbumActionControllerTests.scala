@@ -10,6 +10,17 @@ import altitude.core.models.Album
 @DoNotDiscover class AlbumActionControllerTests extends ControllerTestCore {
 
   test("Albums tab and dialogs render") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one album, "holiday".
+     *
+     * Assertions:
+     *
+     * The Albums tab renders the hosts the client fills in - the list, the add controls and the empty state - and the add, rename
+     * and delete dialogs render, the rename and delete ones naming the album.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -50,6 +61,21 @@ import altitude.core.models.Album
   }
 
   test("Adding an album succeeds, and a validation error replaces the dialog form in place") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with no albums, and album names posted to the add endpoint as JSON.
+     *
+     * Assertions:
+     *
+     * A valid name creates the album, trimmed, with an empty response. A blank or duplicate name creates nothing and answers with
+     * the add dialog's form carrying the error, retargeted to replace the submitted form in place.
+     *
+     * Edge cases:
+     *
+     * Surrounding whitespace is trimmed, and a name that differs from an existing one only by case is a duplicate.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()
@@ -84,6 +110,17 @@ import altitude.core.models.Album
   }
 
   test("Renaming and deleting an album") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one album, "before".
+     *
+     * Assertions:
+     *
+     * A rename persists the new name, a blank name answers with the rename dialog's form carrying the error in place of the
+     * submitted one, and a delete removes the album.
+     */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     login()

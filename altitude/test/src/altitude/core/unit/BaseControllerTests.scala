@@ -14,6 +14,16 @@ import altitude.core.routes.BaseController
   private object controller extends BaseController
 
   test("A dialog's success detail is ASCII in its header, so text outside Latin-1 reaches the client intact") {
+
+    /**
+     * Setup:
+     *
+     * A dialog success response whose detail is a JSON object with a name in German and Japanese ("Zürich 東京").
+     *
+     * Assertions:
+     *
+     * The success detail header is pure ASCII, and parsing it as JSON gives back the original name unchanged.
+     */
     val header = controller
       .dialogSuccessResponse(ujson.Obj("name" -> "Zürich 東京"))
       .headers

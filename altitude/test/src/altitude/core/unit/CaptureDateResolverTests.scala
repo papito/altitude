@@ -21,6 +21,22 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("Each metadata rung resolves alone, preserving local clocks and deterministic UTC clocks") {
+
+    /**
+     * Setup:
+     *
+     * Metadata holding a single date source at a time, each spelling 2024-07-04 08:09:10 its own way: the EXIF digitized and file
+     * change dates, IPTC date and time pairs with +14:00 and -12:00 offsets, PNG tIME, a GPS date and time stamp, each of the
+     * four XMP keys and each of the three PNG text chunks.
+     *
+     * Assertions:
+     *
+     * Each source alone resolves to that wall-clock time, recorded with that source; offsets are dropped, never converted.
+     *
+     * Edge cases:
+     *
+     * An IPTC date with no time resolves to midnight, while a GPS date stamp with no time stamp resolves to nothing.
+     */
     val expected = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
     val examples = List(
       CaptureDateSource.ExifDigitized -> inputs(("Exif SubIFD", "Date/Time Digitized", "2024:07:04 08:09:10")),
@@ -49,6 +65,25 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("A video's container dates resolve: the phone's local creation date, then the UTC creation time in any zone") {
+
+    /**
+     * Setup:
+     *
+     * Video container metadata: the phone's local QuickTime creation date with a +02:00 offset, and the container's UTC creation
+     * time as metadata-extractor describes it in the JVM's zone, in the MP4 and QuickTime track and container directories, with
+     * numeric offsets and with zone names (EDT, JST, UTC).
+     *
+     * Assertions:
+     *
+     * The local creation date resolves to its own wall clock, and every description of the container's instant to the same UTC
+     * wall clock. The phone's local date outranks the container's instant, which outranks GPS, and an EXIF original date outranks
+     * the phone's local date.
+     *
+     * Edge cases:
+     *
+     * The container epoch, 1904-01-01 00:00:00 UTC, is a sentinel that resolves to nothing, even described in another zone as the
+     * last evening of 1903.
+     */
     val expected = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
     val local = ("QuickTime Metadata", "Creation Date", "2024-07-04T08:09:10+0200")
     CaptureDateResolver.resolve(inputs(local), ceiling) shouldBe Some(
@@ -87,6 +122,23 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("The first plausible rung wins and diagnostics retain implausible parsed candidates") {
+
+    /**
+     * Setup:
+     *
+     * Metadata with a date in every metadata source, each on a different day of January 2024; and a second set with an EXIF
+     * original at the 1970 epoch sentinel, an XMP create date three days past the ceiling, and a plausible Photoshop date.
+     *
+     * Assertions:
+     *
+     * The candidates come back in the resolver's priority order, one for every source but the filename, and dropping the sources
+     * one at a time from the top always lets the next one win. Implausible values stay among the candidates, while resolution
+     * skips them for the first plausible one.
+     *
+     * Edge cases:
+     *
+     * A sentinel and a future date, both ranked above the plausible date.
+     */
     val fields = List(
       ("Exif SubIFD", "Date/Time Original", "2024:01:01 01:00:00"),
       ("Exif SubIFD", "Date/Time Digitized", "2024:01:02 01:00:00"),
@@ -116,6 +168,18 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("Capture metadata spells a wall clock, regardless of offset, precision or separators") {
+
+    /**
+     * Setup:
+     *
+     * One wall-clock time spelled the ways metadata spells it: EXIF colons, ISO dashes with a T or a space, offsets in either
+     * form or Z, nanoseconds, stray whitespace, and RFC 1123; plus spellings without seconds, and dates without a time.
+     *
+     * Assertions:
+     *
+     * Each parses to its wall clock with the offset and the fraction dropped; missing seconds are zero, and a missing time of day
+     * is midnight.
+     */
     val expected = Some(LocalDateTime.of(2024, 7, 4, 8, 9, 10))
     List(
       "2024:07:04 08:09:10",
@@ -132,11 +196,39 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("Strict parsing rejects invalid calendar dates and zero metadata") {
+
+    /**
+     * Setup:
+     *
+     * An all-zero EXIF date, February 30th, February 29th of a non-leap year, hour 25, an empty string and text that is not a
+     * date.
+     *
+     * Assertions:
+     *
+     * None of them parses.
+     */
     List("0000:00:00 00:00:00", "2024:02:30", "2023-02-29", "2024:07:04 25:00:00", "", "not a date")
       .foreach(raw => WallClockParser.parse(raw) shouldBe None)
   }
 
   test("Resolution records provenance and does not invent a date") {
+
+    /**
+     * Setup:
+     *
+     * EXIF original dates around the plausibility limits - 1899, the last second of 1825, the 1970, 1904 and 1980 sentinels, two
+     * and three days past the ceiling, and one second into 1970 - and metadata with no date at all.
+     *
+     * Assertions:
+     *
+     * A plausible date resolves with its EXIF-original provenance, and nothing is resolved from missing metadata or from an
+     * implausible date.
+     *
+     * Edge cases:
+     *
+     * The bounds: the last second before 1826 is rejected, two days past the ceiling is tolerated but three are not, and a
+     * sentinel is rejected only at its exact midnight, not a second later.
+     */
     CaptureDateResolver.resolve(original("1899:06:01 12:00:00"), ceiling) shouldBe
       Some(CaptureDate(LocalDateTime.of(1899, 6, 1, 12, 0), CaptureDateSource.ExifOriginal))
     CaptureDateResolver.resolve(CaptureDateInputs(ExtractedMetadata(), "image.jpg"), ceiling) shouldBe None
@@ -147,6 +239,17 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("Capture source JSON uses stable database values and rejects unknown names") {
+
+    /**
+     * Setup:
+     *
+     * Every capture-date source, and an unknown name ("future_source").
+     *
+     * Assertions:
+     *
+     * Each source is written to JSON as its database value and read back both from the JSON and from that value, and the unknown
+     * name is rejected on both paths.
+     */
     CaptureDateSource.values.foreach {
       source =>
         JsonCodec.write(source) shouldBe s"\"${source.dbValue}\""
@@ -158,6 +261,18 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("Filename dates accept narrow camera and timestamp patterns as the last rung") {
+
+    /**
+     * Setup:
+     *
+     * Ten file names that spell 2024-07-04 08:09:10 in camera, phone and app patterns (IMG_, VID, PXL_, MVIMG_, Screenshot,
+     * signal-, photo_, a bare compact timestamp, and dashed dates with dotted or dashed times), with no metadata.
+     *
+     * Assertions:
+     *
+     * Each name resolves to that time, with the filename as its source. With metadata present, a plausible EXIF date wins over
+     * the name, while an implausible one falls through to it.
+     */
     val expected = Some(CaptureDate(LocalDateTime.of(2024, 7, 4, 8, 9, 10), CaptureDateSource.FileName))
     val names = List(
       "IMG_20240704_080910.jpg",
@@ -178,6 +293,17 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
   }
 
   test("Filename dates reject incidental digit runs, malformed dates, sentinels and future clocks") {
+
+    /**
+     * Setup:
+     *
+     * File names whose digits are not a capture time: a prefix outside the known set, a timestamp with no separator, a date
+     * alone, eight bare digits, seconds followed by more digits, February 30th, the 1970 epoch and a date in 2099.
+     *
+     * Assertions:
+     *
+     * None of them resolves to a capture time.
+     */
     List(
       "order20240704_080910.jpg",
       "20240704080910.jpg",

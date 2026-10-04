@@ -10,6 +10,16 @@ import altitude.core.DataScrubber
 @DoNotDiscover class DataScrubberTests extends funsuite.AnyFunSuite with TestFocus {
 
   test("Test data scrubbing in bulk") {
+
+    /**
+     * Setup:
+     *
+     * A scrubber that trims two fields and lowercases one of them, over a JSON object with padded, mixed-case values.
+     *
+     * Assertions:
+     *
+     * Each field is scrubbed by exactly the rules listed for it: one is only trimmed, the other trimmed and lowercased.
+     */
     val dataScrubber = DataScrubber(
       trim = List("toTrim", "toTrimAndLower"),
       lower = List("toTrimAndLower")

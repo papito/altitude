@@ -103,6 +103,16 @@ import altitude.core.util.*
   private def ids(result: GroupedSearchResult): List[String] = result.assets.map(_.persistedId)
 
   test("Assets without a capture date remain in grouped results") {
+
+    /**
+     * Setup:
+     *
+     * One asset whose capture time is cleared to NULL.
+     *
+     * Assertions:
+     *
+     * A date-grouped search still returns it, in a single No date group counted in both the group and the total.
+     */
     val undated = testContext.persistAsset()
     testApp.txManager.withTransaction {
       update("UPDATE asset SET original_created_at = NULL WHERE id = ?", undated.persistedId)
@@ -124,6 +134,23 @@ import altitude.core.util.*
   }
 
   test("The No date group follows native ordering and every filter bounds its count") {
+
+    /**
+     * Setup:
+     *
+     * Two undated assets - one in a folder with the keywords "beach" and "sunset" - and three assets taken over two days,
+     * searched in both group directions.
+     *
+     * Assertions:
+     *
+     * The No date group sits where the engine sorts nulls, first or last, holding and counting both undated assets among all
+     * five. A folder scope, Search text and a metadata filter together narrow the group, its count and the total to the one asset
+     * that matches all three.
+     *
+     * Edge cases:
+     *
+     * The null group's position differs by engine: PostgreSQL leads with it descending, SQLite ascending.
+     */
     val folder = testApp.service.folder.add("undated")
     val keyword = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
     val metadata = UserMetadata(Map(keyword.persistedId -> Set("beach", "sunset")))
@@ -150,6 +177,17 @@ import altitude.core.util.*
   }
 
   test("The No date group spans full pages with one consistent count") {
+
+    /**
+     * Setup:
+     *
+     * Five undated assets, read two to a page in both group directions.
+     *
+     * Assertions:
+     *
+     * Walking three pages by cursor returns every asset once in filename order, the No date group showing its full count of five
+     * on each page; the later pages continue the group and the last one ends the cursor.
+     */
     val assets = (1 to 5).map(n => persistUndated(s"$n.jpg"))
     for (direction <- SortDirection.values.toList) {
       val first = grouped(direction = direction, rpp = 2)
@@ -173,6 +211,23 @@ import altitude.core.util.*
   }
 
   test("Pages are grouped by capture day with full-day totals and continued by cursor to the end") {
+
+    /**
+     * Setup:
+     *
+     * Three assets taken on 2026-09-06, one of them at 23:59:59, and two on 2026-09-05, read two to a page in filename order.
+     *
+     * Assertions:
+     *
+     * Each page groups its assets by capture day with the whole day's count, not the page's share. The first page alone carries
+     * the overall total, a continuation knows it continues the day the previous page ended in, and the cursor walks to the last
+     * page and then ends.
+     *
+     * Edge cases:
+     *
+     * A capture a second before midnight stays on its day, a day split across a page boundary, and a search that matches nothing,
+     * which is an empty first page with a zero total.
+     */
     val a1 = persistDated("2026-09-06T10:00:00", "a1.jpg")
     val a2 = persistDated("2026-09-06T09:00:00", "a2.jpg")
     val a3 = persistDated("2026-09-06T23:59:59", "a3.jpg")
@@ -205,6 +260,17 @@ import altitude.core.util.*
   }
 
   test("Group direction and the sort within a day are independent") {
+
+    /**
+     * Setup:
+     *
+     * Two assets on each of two days, taken at different hours.
+     *
+     * Assertions:
+     *
+     * The direction of the days and the sort within a day apply independently: ascending days can hold assets in descending
+     * filename order, and descending days assets in ascending capture time.
+     */
     val a1 = persistDated("2026-09-06T10:00:00", "a1.jpg")
     val a2 = persistDated("2026-09-06T09:00:00", "a2.jpg")
     val b1 = persistDated("2026-09-05T08:00:00", "b1.jpg")
@@ -221,6 +287,21 @@ import altitude.core.util.*
   }
 
   test("Capture days follow the camera's calendar date under any JVM time zone") {
+
+    /**
+     * Setup:
+     *
+     * One asset taken ten minutes after midnight on 2026-09-06.
+     *
+     * Assertions:
+     *
+     * It is grouped under 2026-09-06 whatever the JVM's default time zone.
+     *
+     * Edge cases:
+     *
+     * The zones at both ends of the offset range, UTC+14 and UTC-12, where any instant conversion would move the capture to
+     * another day.
+     */
     val asset = persistDated("2026-09-06T00:10:00", "a.jpg")
 
     List("Pacific/Kiritimati", "Etc/GMT+12", "UTC").foreach {
@@ -232,6 +313,17 @@ import altitude.core.util.*
   }
 
   test("A day larger than the page spans pages with the same total") {
+
+    /**
+     * Setup:
+     *
+     * Seven assets taken at the same moment on one day, read three to a page.
+     *
+     * Assertions:
+     *
+     * Three pages return all seven in filename order, each showing the day with its full count of seven; the later pages continue
+     * the group and the last one ends the cursor.
+     */
     val assets = (1 to 7).map(n => persistDated("2026-09-06T10:00:00", f"img$n%02d.jpg"))
 
     val page1 = grouped(rpp = 3)
@@ -250,6 +342,24 @@ import altitude.core.util.*
   }
 
   test("Text, metadata, folder, album and person filters bound both the assets and every count") {
+
+    /**
+     * Setup:
+     *
+     * A keyword field and a number field, a folder with a subfolder, three assets taken on 2026-09-06 (in the subfolder, in the
+     * folder, and outside both with only the "beach" keyword) and one taken on 2026-09-05. An album of two of them and a person
+     * with a Face on a fresh asset dated 2026-09-04 are added along the way.
+     *
+     * Assertions:
+     *
+     * Each filter - metadata values, Search text, a folder, a subfolder with text, an album and a person - returns only its
+     * matches, and the day groups' counts and the total count exactly those assets.
+     *
+     * Edge cases:
+     *
+     * An asset that matches two metadata filters is neither duplicated nor counted twice, and a folder scope includes its
+     * subfolder.
+     */
     val keywords = testApp.service.metadata.addField(UserMetadataField(name = "keywords", fieldType = FieldType.KEYWORD))
     val rating = testApp.service.metadata.addField(UserMetadataField(name = "rating", fieldType = FieldType.NUMBER))
     val both = UserMetadata(Map(keywords.persistedId -> Set("beach", "sunset"), rating.persistedId -> Set("5")))
@@ -300,6 +410,18 @@ import altitude.core.util.*
   }
 
   test("Root folder scope, view and repository isolation bound the counts") {
+
+    /**
+     * Setup:
+     *
+     * An asset in the root folder, a triaged one and a recycled one, all taken on the same day, then a second user and repository
+     * with an asset of their own on that day.
+     *
+     * Assertions:
+     *
+     * The root folder scope is the whole library - triaged assets included, recycled ones not - and the trash view holds the
+     * recycled asset alone. Each repository's day groups and totals count its own assets only.
+     */
     val sorted = persistDated("2026-09-06T10:00:00", "a1.jpg")
     val triaged = testContext.persistAsset(isTriaged = true)
     testContext.setAssetDates(
@@ -336,6 +458,16 @@ import altitude.core.util.*
   }
 
   test("A grouped page is one statement regardless of the number of days on it") {
+
+    /**
+     * Setup:
+     *
+     * Four assets, each taken on a different day.
+     *
+     * Assertions:
+     *
+     * A grouped page holding all four days costs exactly one read statement.
+     */
     (1 to 4).foreach(n => persistDated(s"2026-09-0${n}T10:00:00", s"d$n.jpg"))
 
     val before = RequestContext.readQueryCount.value
@@ -346,6 +478,21 @@ import altitude.core.util.*
   }
 
   test("A legacy null import time keeps its capture day") {
+
+    /**
+     * Setup:
+     *
+     * On SQLite only: two assets taken on 2026-09-06, one of them with its import time (created_at) cleared to NULL as on a
+     * legacy row.
+     *
+     * Assertions:
+     *
+     * Sorted by import time, both assets are still grouped under their capture day and counted in it and in the total.
+     *
+     * Edge cases:
+     *
+     * The NULL import time, which only SQLite's legacy rows can have; on PostgreSQL the test asserts nothing.
+     */
     if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
       val dated = persistDated("2026-09-06T10:00:00", "a1.jpg")
       val undated = persistDated("2026-09-06T11:00:00", "a2.jpg")
@@ -363,6 +510,25 @@ import altitude.core.util.*
   }
 
   test("Location groups are in path order, hold an asset under each of its Locations, and end with No location") {
+
+    /**
+     * Setup:
+     *
+     * Rome and Alba under the Italy category, top-level Berlin and Kyoto, and four assets: one in Rome and Berlin, one in Alba,
+     * one in Alba and Kyoto, and one in no Location.
+     *
+     * Assertions:
+     *
+     * A single statement reads the page. The groups follow the sidebar's path order and end with No location, an asset appears
+     * under each of its Locations while the total counts assets, and each group's key carries the Location's ID and path key for
+     * the cursor. The request's direction does not change the order, the sort applies within each group, and a search matching
+     * nothing is an empty page with a zero count.
+     *
+     * Edge cases:
+     *
+     * A category's Locations sort at the category's name, so Italy's Alba and Rome fall between Berlin and Kyoto; an asset in two
+     * Locations.
+     */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", Some(italy.persistedId))
     val alba = addLocation("Alba", Some(italy.persistedId))
@@ -415,6 +581,24 @@ import altitude.core.util.*
   }
 
   test("Location groups span pages with one consistent count and continue into No location") {
+
+    /**
+     * Setup:
+     *
+     * Rome under the Italy category and top-level Berlin; six assets - three in Berlin, three in Rome (two of them shared with
+     * Berlin) and two in no Location - read at several page sizes.
+     *
+     * Assertions:
+     *
+     * Walking by cursor visits every group in path order, each group showing the same full count on every page it spans;
+     * continuation flags mark the pages that carry a group over, only the first page has the total, and the cursor ends after No
+     * location.
+     *
+     * Edge cases:
+     *
+     * A Location that runs out exactly at a page boundary, a page that ends inside No location, and a page that crosses from the
+     * last Location into No location.
+     */
     val italy = testApp.service.location.addCategory("Italy")
     val rome = addLocation("Rome", Some(italy.persistedId))
     val berlin = addLocation("Berlin")
@@ -460,6 +644,25 @@ import altitude.core.util.*
   }
 
   test("Under the Relevance sort every group reads best match first, then newest capture, and continues by cursor") {
+
+    /**
+     * Setup:
+     *
+     * Assets named with "beach" on two days and one undated, two assets whose names do not match but whose album "Beach days"
+     * does, and an unrelated asset; later the Locations Rome and Berlin with overlapping members. Everything is searched for
+     * "beach" under the Relevance sort, two to a page.
+     *
+     * Assertions:
+     *
+     * In every day group and every Location group the album matches lead the file-name matches and ties go to the newest capture.
+     * Walking the pages by cursor returns the same assets in the same order as the unpaged search, with each group's full count
+     * on every page it spans.
+     *
+     * Edge cases:
+     *
+     * The No date group's engine-dependent position, an undated asset ranking last within its Relevance in a Location group, and
+     * an asset in two Locations.
+     */
     val album = testApp.service.album.add("Beach days")
     val a1 = persistDated("2026-09-06T10:00:00", "beach-1.jpg").persistedId
     val a2 = persistDated("2026-09-06T09:00:00", "two.jpg").persistedId
@@ -504,6 +707,19 @@ import altitude.core.util.*
   }
 
   test("Every filter bounds the Location groups and their counts, and the Location filter scopes a search") {
+
+    /**
+     * Setup:
+     *
+     * Rome and Berlin, a folder holding one asset in Rome and one in no Location, and an asset outside the folder in both Rome
+     * and Berlin.
+     *
+     * Assertions:
+     *
+     * A folder scope narrows the Location groups and their counts, and scoped to a Location the groups are the Locations of its
+     * assets with no trailing No location group. The Location filter bounds a flat search, a day grouping and the bare count
+     * alike, also combined with a folder, and recycling an asset drops it from its Locations' groups and counts.
+     */
     val rome = addLocation("Rome")
     val berlin = addLocation("Berlin")
     val folder = testApp.service.folder.add("trip")
@@ -541,6 +757,23 @@ import altitude.core.util.*
   }
 
   test("The bounding-box filter plots an asset at its own point, or at its Locations' pins without one") {
+
+    /**
+     * Setup:
+     *
+     * A Sydney Location and assets with their own points in Paris, Tokyo and on either side of the antimeridian; an asset without
+     * a point is in Sydney, the Tokyo one is in Sydney too, and one with no point is added to Sydney and removed again.
+     *
+     * Assertions:
+     *
+     * A box finds an asset by its own point, or by a Location's pin only when it has no point of its own, and the same predicate
+     * bounds the count and a grouped page.
+     *
+     * Edge cases:
+     *
+     * A box across the antimeridian (its west edge greater than its east edge) covers both sides while the same edges the other
+     * way round find nothing, and an asset whose only membership was removed is plotted nowhere.
+     */
     val sydney = addLocation("Sydney", pin = (-33.8688, 151.2093))
     val own = persistDated("2026-09-06T10:00:00", "paris.jpg")
     setCoordinates(own, paris._1, paris._2)

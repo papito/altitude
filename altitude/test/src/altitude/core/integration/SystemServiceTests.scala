@@ -12,6 +12,18 @@ import altitude.core.util.Query
 @DoNotDiscover class SystemServiceTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 
   test("Initialize system") {
+
+    /**
+     * Setup:
+     *
+     * The common setup's repository and its owner, with the request context cleared, then a system initialization with a new
+     * admin, a repository named "My Repository" and a password.
+     *
+     * Assertions:
+     *
+     * The system metadata and the app both report the system initialized, initialization adds exactly one repository and one
+     * user next to the common setup's, and the new admin becomes the request context's account.
+     */
     RequestContext.clear()
     RequestContext.account.value shouldBe None
 

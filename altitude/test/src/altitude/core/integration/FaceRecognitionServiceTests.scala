@@ -30,6 +30,18 @@ import altitude.core.service.FaceRecognitionService
 @DoNotDiscover class FaceRecognitionServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Recognize a person") {
+
+    /**
+     * Setup:
+     *
+     * Two photos of the same person, `people/meme-ben2.png` and `people/meme-ben3.png`, each imported, which stores their faces.
+     * Each photo's face is also extracted again outside the import to query recognition directly.
+     *
+     * Assertions:
+     *
+     * Extraction produces all four face images: the crop, the display thumbnail, the aligned crop and its grayscale copy.
+     * Recognizing either face returns the Person the first import started, and that Person has two Faces, one per photo.
+     */
     val importAsset1 = IntegrationTestUtil.getImportAsset("people/meme-ben2.png")
     testApp.service.library.addImportAsset(importAsset1)
     val (face1, faceImages) = testApp.service.faceDetection.extractFaces(importAsset1.bytes).head
@@ -52,6 +64,18 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("Only enrolled Faces of people who are not a bad match are match candidates, for either tier of query") {
+
+    /**
+     * Setup:
+     *
+     * Three People, each with a Face at the same synthetic embedding on one asset: one enrolled, one match-only, and one enrolled
+     * but of a person marked as a bad match.
+     *
+     * Assertions:
+     *
+     * Both an enrolled and a match-only query at that embedding resolve to the enrolled person, so neither the match-only Face
+     * nor the bad match's Face is a candidate.
+     */
     val asset = testContext.persistAsset()
     val vector = unitVector(1)
     val enrolled = testApp.service.person.addPerson(Person())
@@ -73,6 +97,17 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("With no candidate, an enrolled Face starts a Person and a match-only Face is nobody's") {
+
+    /**
+     * Setup:
+     *
+     * One Person whose only Face, at a synthetic embedding, is match-only, so that embedding has no candidate.
+     *
+     * Assertions:
+     *
+     * A match-only query there resolves to nobody, while an enrolled query starts a new Person rather than joining the match-only
+     * Face's owner.
+     */
     val asset = testContext.persistAsset()
     val vector = unitVector(2)
     val matchOnly = testApp.service.person.addPerson(Person())
@@ -84,6 +119,17 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("A tied vote goes to the closest Face") {
+
+    /**
+     * Setup:
+     *
+     * Two People with one enrolled Face each: one at a synthetic embedding, the other at the normalized mean of it and an
+     * unrelated vector, about 0.29 away and within the match threshold.
+     *
+     * Assertions:
+     *
+     * A query at either Face matches both, one vote per Person, and the tie goes to the Person whose Face is closer to the query.
+     */
     val asset = testContext.persistAsset()
     val vector = unitVector(3)
     val nearby = FaceRecognitionService.meanNormalized(Seq(vector, unitVector(4)))
@@ -103,6 +149,17 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("A match-only face of nobody leaves neither a Person nor a Face behind") {
+
+    /**
+     * Setup:
+     *
+     * An import of `affleck.jpg` letterboxed into a clip-sized frame and blurred at FRAME_BLUR, which makes its face match-only,
+     * into a library with no People.
+     *
+     * Assertions:
+     *
+     * The face has no Person to join and is dropped: the asset has no Faces and no People, and no Person exists.
+     */
     val blurred: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(TestVideos.frameStill("affleck.jpg", TestVideos.FRAME_BLUR).toFile))
 
@@ -112,6 +169,16 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("One person in a clip gives one enrolled Face, with a Frame time inside the clip") {
+
+    /**
+     * Setup:
+     *
+     * An import of a synthesized three-second clip of `affleck.jpg` (`TestVideos.oneFace`).
+     *
+     * Assertions:
+     *
+     * The clip has one enrolled Face, with a Frame time within the clip's duration, and one Person.
+     */
     val clip: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.oneFace.toFile))
 
     val faces = testApp.service.person.getAssetFaces(clip.persistedId)
@@ -122,6 +189,16 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("Two people one after the other in a clip give two Faces of two people") {
+
+    /**
+     * Setup:
+     *
+     * An import of a synthesized clip of `bullock.jpg` for three seconds, then `damon.jpg` for three seconds.
+     *
+     * Assertions:
+     *
+     * The clip has two Faces of two distinct People, each with a Frame time inside its own person's span.
+     */
     val clip: Asset =
       testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.twoPeopleInSequence.toFile))
 
@@ -136,6 +213,17 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("The same person in a second clip, and in a photo, is one Person") {
+
+    /**
+     * Setup:
+     *
+     * Three imports of one person: the `affleck.jpg` photo, the three-second `TestVideos.oneFace` clip, and a second, two-second
+     * clip of the same portrait.
+     *
+     * Assertions:
+     *
+     * Each asset has one Person, all three are the same Person, and that Person has three Faces.
+     */
     val photo: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/affleck.jpg"))
     val clip: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.oneFace.toFile))
     val secondClip: Asset = testApp.service.library.addImportAsset(
@@ -148,7 +236,22 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("A person seen in only one Sampled frame does not start a Person") {
-    // Sampled at 0, 1000 and 2000 ms, so the person is in the first frame only
+
+    /**
+     * Setup:
+     *
+     * An import of a clip of `bullock.jpg` for half a second, then two and a half seconds of black, into a library with no
+     * People. Frames are sampled at 0, 1000 and 2000 ms, so the person is in the first sampled frame only.
+     *
+     * Assertions:
+     *
+     * With a single frame of support the Face is match-only, and with no Person to join it is dropped: the clip has no Faces and
+     * no Person exists.
+     *
+     * Edge cases:
+     *
+     * A cluster under the minimum of two supporting frames, from a sharp face that would otherwise enroll.
+     */
     val clip: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(
         TestVideos.clip(Seq(TestVideos.person("bullock.jpg", 0.5), TestVideos.black(2.5))).toFile))
@@ -158,6 +261,17 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("A person seen in only one Sampled frame still joins a known person, as a match-only Face") {
+
+    /**
+     * Setup:
+     *
+     * The `affleck.jpg` photo imported first, then a clip of the same portrait for half a second followed by two and a half
+     * seconds of black, so the person is in one sampled frame.
+     *
+     * Assertions:
+     *
+     * The clip's single Face is match-only and joins the Person the photo started, who then has two Faces.
+     */
     val photo: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/affleck.jpg"))
     val clip: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(
@@ -172,6 +286,17 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("A clip of only a blurred face starts no Person") {
+
+    /**
+     * Setup:
+     *
+     * An import of a three-second clip of `affleck.jpg` blurred at FRAME_BLUR, into a library with no People.
+     *
+     * Assertions:
+     *
+     * The blurred face is match-only even though it is in every sampled frame, so with no Person to join, the clip has no Faces
+     * and no Person exists.
+     */
     val clip: Asset = testApp.service.library.addImportAsset(
       IntegrationTestUtil.fileToImportAsset(
         TestVideos.clip(Seq(TestVideos.person("affleck.jpg", 3, TestVideos.FRAME_BLUR))).toFile))
@@ -181,6 +306,16 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("Recognize two new people") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/movies-speed.png`, a still with two faces, into a library with no People.
+     *
+     * Assertions:
+     *
+     * The import starts two People for the asset.
+     */
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
@@ -189,6 +324,18 @@ import altitude.core.service.FaceRecognitionService
   }
 
   test("Faces rolled back with their asset leave no files behind") {
+
+    /**
+     * Setup:
+     *
+     * A persisted asset, then face processing run on a staged PNG of `bullock.jpg` drawn twice side by side, so both detections
+     * and their crops are byte-identical.
+     *
+     * Assertions:
+     *
+     * The second Face breaks the face checksum index after the first Face's files are written. Processing fails with a duplicate
+     * error, the asset keeps no Faces, and the repository's faces directory holds no files.
+     */
     val asset = testContext.persistAsset()
     val dataAsset = AssetWithData(asset, testApp.service.staging.stage(samePortraitTwice("people/bullock.jpg")))
 

@@ -44,6 +44,17 @@ import altitude.core.util.SortValue
   private val engines = List("postgres" -> PostgresSearchDialect, "sqlite" -> SqliteSearchDialect)
 
   test("Every search is scoped to its repository and to processed assets alone") {
+
+    /**
+     * Setup:
+     *
+     * An empty query's matching relation, rendered on both engines.
+     *
+     * Assertions:
+     *
+     * The relation reads the asset table limited to the repository and to assets the pipeline has processed, binding those two
+     * values and nothing else.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       val sql = matchingSql(dialect, new SearchQuery())
 
@@ -55,6 +66,23 @@ import altitude.core.util.SortValue
   }
 
   test("A flat page picks its rows over narrow ones, one past the page, then reads the page in full") {
+
+    /**
+     * Setup:
+     *
+     * A query of 25 rows a page sorted by file name descending, rendered as its first and third flat page on both engines.
+     *
+     * Assertions:
+     *
+     * The page is a materialized slice of IDs and sort values, ordered by its own columns and limited to one row past the page at
+     * the page's offset; only those rows are joined back to the asset table in full, in the same order, with no window count and
+     * no explicit null ordering. Only the first page carries the overall count, capped one past 10,000, and every placeholder has
+     * a bound value.
+     *
+     * Edge cases:
+     *
+     * A query without a page size is refused, so no flat page is unbounded.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       def page(number: Int): SqlStr = SearchQueries.flat(
         dialect,
@@ -87,6 +115,19 @@ import altitude.core.util.SortValue
   }
 
   test("A term's document source is a CTE at the head of the statement, matched in the engine's own dialect") {
+
+    /**
+     * Setup:
+     *
+     * The text "beach", resolved to no names, rendered as an exact count on each engine.
+     *
+     * Assertions:
+     *
+     * The statement opens with a materialized CTE over the search documents, which the asset tests membership in, and the
+     * document source carries no repository filter of its own: the asset is scoped to it. PostgreSQL matches the document's
+     * tsvector with `to_tsquery`, SQLite matches through its full-text table, and only the text, the repository and the pipeline
+     * flag are bound.
+     */
     val postgres = countSql(PostgresSearchDialect, textQuery("beach"))
     val sqlite = countSql(SqliteSearchDialect, textQuery("beach"))
 
@@ -105,6 +146,18 @@ import altitude.core.util.SortValue
   }
 
   test("Each term tests membership in its sources: groups AND-ed, alternatives OR-ed, an excluded alternative negated") {
+
+    /**
+     * Setup:
+     *
+     * The text `beach OR -lake "golden gate"` - a group of two alternatives, one of them excluded, and a phrase - rendered as an
+     * exact count on both engines.
+     *
+     * Assertions:
+     *
+     * Alternatives are OR-ed with the excluded one negated, the groups are AND-ed, each term's document source is built once at
+     * the head of the statement, and each term binds one query string.
+     */
     for ((engine, dialect) <- engines) {
       val sql = countSql(dialect, textQuery("""beach OR -lake "golden gate""""))
 
@@ -122,6 +175,21 @@ import altitude.core.util.SortValue
   }
 
   test("A term is bound as one query string in the engine's syntax: a prefix on the last word unless it is a phrase") {
+
+    /**
+     * Setup:
+     *
+     * The text `beach IMG_12 "golden gate" -"lake"`: a word, a file-name-like word, a phrase and an excluded phrase.
+     *
+     * Assertions:
+     *
+     * Each term binds one string in the engine's own full-text syntax - adjacent `<->` words on PostgreSQL, a quoted phrase on
+     * SQLite - with a prefix match on the last word of a word term and none on a phrase.
+     *
+     * Edge cases:
+     *
+     * `IMG_12` splits into two adjacent words, and the excluded term is bound like any other: its negation lives in the SQL.
+     */
     val text = """beach IMG_12 "golden gate" -"lake""""
 
     textBinds(PostgresSearchDialect, text) shouldBe List("beach:*", "img <-> 12:*", "golden <-> gate", "lake")
@@ -129,6 +197,17 @@ import altitude.core.util.SortValue
   }
 
   test("A term with a camelCase hump is bound as one query string, the OR of its readings") {
+
+    /**
+     * Setup:
+     *
+     * The text `McDonald "LaGuardia airport"`: a camelCase word and a phrase that starts with one.
+     *
+     * Assertions:
+     *
+     * Each term binds one string on both engines that ORs the split reading with the joined one, the word keeping its prefix
+     * match and the phrase taking none.
+     */
     val text = """McDonald "LaGuardia airport""""
 
     textBinds(PostgresSearchDialect, text) shouldBe
@@ -138,12 +217,35 @@ import altitude.core.util.SortValue
   }
 
   test("Text without a usable term adds no filter") {
+
+    /**
+     * Setup:
+     *
+     * Text made only of an operator, punctuation and a dangling `OR`.
+     *
+     * Assertions:
+     *
+     * The matching relation reads no search document on either engine.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       matchingSql(dialect, new SearchQuery(text = Some("- !!! OR"))).contains("search_document") shouldBe false
     }
   }
 
   test("A term is the OR of the name sources it resolved to and the document, each ID set bound as one parameter") {
+
+    /**
+     * Setup:
+     *
+     * The text "alice" resolved to an album, two people, three folders, a category and a Location, rendered as an exact count on
+     * both engines.
+     *
+     * Assertions:
+     *
+     * The term ORs one membership test per source in declaration order - person, Location, category, folder, album, document -
+     * each a CTE except the folder, which is the asset's own column. The person CTE reads faces by person ID, and each ID set is
+     * bound as one parameter in the engine's set form.
+     */
     val ids = Map(
       SearchSource.Album -> Set("a1"),
       SearchSource.Person -> Set("p1", "p2"),
@@ -173,6 +275,17 @@ import altitude.core.util.SortValue
   }
 
   test("A group of one excluded term is an anti-join on each of its sources") {
+
+    /**
+     * Setup:
+     *
+     * The text `-alice` resolved to one person, rendered as an exact count on each engine.
+     *
+     * Assertions:
+     *
+     * Each of the term's sources, the person and the document, is AND-ed as an anti-join: `NOT EXISTS` on PostgreSQL and `NOT IN`
+     * on SQLite.
+     */
     val postgres = countSql(PostgresSearchDialect, textQuery("-alice", Map(SearchSource.Person -> Set("p1"))))
     val sqlite = countSql(SqliteSearchDialect, textQuery("-alice", Map(SearchSource.Person -> Set("p1"))))
 
@@ -189,6 +302,21 @@ import altitude.core.util.SortValue
   }
 
   test("The probe is one statement: a branch per positive group, one row past the limit, every source scoped to its repository") {
+
+    /**
+     * Setup:
+     *
+     * The text `alice OR bob beach -lake` with every term resolved to one person, probed with a limit of 10 on both engines.
+     *
+     * Assertions:
+     *
+     * The probe has one branch per positive group, each read to one row past the limit, every person and document source of
+     * alice, bob and beach is scoped to the repository, and every placeholder has a bound value.
+     *
+     * Edge cases:
+     *
+     * Text of an exclusion alone has no probe at all.
+     */
     for ((engine, dialect) <- engines) {
       // Every term resolved to one person
       val text = resolved("alice OR bob beach -lake", Map(SearchSource.Person -> Set("p1"))).get
@@ -211,6 +339,19 @@ import altitude.core.util.SortValue
   }
 
   test("On the selective path the text is the candidate set, and what remains of it is tested on the asset's own row") {
+
+    /**
+     * Setup:
+     *
+     * The text `alice beach -lake` resolved to one person, with a probe outcome stitched in by hand: alice's group complete,
+     * beach too broad, and two candidate assets. The query is sorted by Relevance, 50 rows a page, on both engines.
+     *
+     * Assertions:
+     *
+     * The count builds no text CTE: it filters by the candidate set and tests beach and lake as correlated `EXISTS` probes on the
+     * asset's own row through each source, the excluded term negated. The flat page scores the Relevance of alice and of beach,
+     * each as a `CASE` over its sources' probes.
+     */
     for ((engine, dialect) <- engines) {
       val text = resolved("alice beach -lake", Map(SearchSource.Person -> Set("p1"))).get
       // The probe found alice complete and beach too broad; an exclusion is never complete
@@ -245,6 +386,16 @@ import altitude.core.util.SortValue
   }
 
   test("An ID set is bound whole: an array on PostgreSQL, a JSON array on SQLite") {
+
+    /**
+     * Setup:
+     *
+     * A folder filter of two folder IDs.
+     *
+     * Assertions:
+     *
+     * The set is bound as one value on each engine: the set itself on PostgreSQL and its JSON array text on SQLite.
+     */
     val query = new SearchQuery(folderIds = Set("f1", "f2"))
 
     bound(PostgresSearchDialect, query) should contain(Set("f1", "f2"))
@@ -252,12 +403,34 @@ import altitude.core.util.SortValue
   }
 
   test("Text that was not resolved against the names is refused, not searched by the document alone") {
+
+    /**
+     * Setup:
+     *
+     * A query with the text "beach" but no resolved text.
+     *
+     * Assertions:
+     *
+     * Rendering it fails with an `IllegalStateException` on both engines.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       intercept[IllegalStateException](matchingSql(dialect, new SearchQuery(text = Some("beach"))))
     }
   }
 
   test("Metadata filters are one semi-join that counts the values an asset carries") {
+
+    /**
+     * Setup:
+     *
+     * Three metadata filters - a keyword, a number and a boolean - rendered on PostgreSQL.
+     *
+     * Assertions:
+     *
+     * The filters are one subquery on the asset ID over the metadata parameters that matches each field and value, groups by
+     * asset and keeps the assets carrying as many matches as there are filters. The outer query neither joins nor groups, and
+     * every value is bound.
+     */
     val query =
       new SearchQuery(metadataFilters = Map("kw_field" -> "beach", "num_field" -> 12, "bool_field" -> Query.EQUALS(false)))
     val sql = matchingSql(PostgresSearchDialect, query)
@@ -280,6 +453,17 @@ import altitude.core.util.SortValue
   }
 
   test("Person and album filters are semi-joins too") {
+
+    /**
+     * Setup:
+     *
+     * A filter of two people rendered on SQLite, and a filter of one album rendered on PostgreSQL.
+     *
+     * Assertions:
+     *
+     * Each filter is a subquery on the asset ID with its ID set bound as one parameter: the person filter reads the face's own
+     * person ID without joining people, and the album filter reads the album memberships.
+     */
     val people = matchingSql(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2")))
     val albums = matchingSql(PostgresSearchDialect, new SearchQuery(albumIds = Set("a1")))
 
@@ -298,6 +482,22 @@ import altitude.core.util.SortValue
   }
 
   test("Location and bounding-box filters are semi-joins that bind their values") {
+
+    /**
+     * Setup:
+     *
+     * A filter of two Locations rendered on SQLite, a bounding box around Paris rendered on PostgreSQL, and a box across the
+     * antimeridian rendered on SQLite.
+     *
+     * Assertions:
+     *
+     * The Location filter is a semi-join over the memberships with its ID set bound as one parameter. The box matches an asset's
+     * own point or, when it has none, the pin of a Location it is in, every edge bound.
+     *
+     * Edge cases:
+     *
+     * A box across the antimeridian turns the longitude range into two open-ended halves.
+     */
     val byLocation = matchingSql(SqliteSearchDialect, new SearchQuery(locationIds = Set("l1", "l2")))
     withClue(byLocation) {
       byLocation.contains("asset0.id IN (SELECT") shouldBe true
@@ -328,6 +528,18 @@ import altitude.core.util.SortValue
   }
 
   test("A count is one COUNT over the matching relation; a capped one stops one past its cap") {
+
+    /**
+     * Setup:
+     *
+     * The text "beach" with a recycled flag, a Location filter and a cap of 2, rendered as an exact and a capped count on both
+     * engines.
+     *
+     * Assertions:
+     *
+     * Both counts are one `count(*)` over the matching relation after the text's CTE, carrying every filter and no ordering; the
+     * exact count is unlimited, and the capped one stops at one past its cap.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = textQuery("beach", params = Map("is_recycled" -> false), locationIds = Set("l1"), totalCap = 2)
       val exact = SearchQueries.count(dialect, query, "repo-1").toString.replaceAll("\\s+", " ").trim
@@ -347,6 +559,16 @@ import altitude.core.util.SortValue
   }
 
   test("Folder and column filters bind their values") {
+
+    /**
+     * Setup:
+     *
+     * A recycled-flag filter and a filter of two folders, rendered on SQLite.
+     *
+     * Assertions:
+     *
+     * Both are bound predicates on the asset's own columns, the folder set bound as one JSON parameter.
+     */
     val query = new SearchQuery(params = Map("is_recycled" -> false), folderIds = Set("f1", "f2"))
     val sql = matchingSql(SqliteSearchDialect, query)
 
@@ -358,11 +580,26 @@ import altitude.core.util.SortValue
     }
   }
 
-  /**
-   * The tuned shape of a grouped page, over every combination that changes it: both engines, both group directions, a first page
-   * and a continuation from either a dated or an undated anchor, sorted by the grouping column itself or by another.
-   */
   test("A grouped page keeps its guarded null slices and its separately indexable day counts") {
+
+    /**
+     * Setup:
+     *
+     * A query of 50 rows a page grouped by Date Taken, with a recycled flag, a folder and a metadata filter, rendered over every
+     * combination that changes its shape: both engines, both group directions, a first page and a continuation from either a
+     * dated or an undated anchor, sorted by the grouping column itself or by another.
+     *
+     * Assertions:
+     *
+     * The undated slice and its guard appear only when a continuation from a dated anchor can run into undated assets that sort
+     * after it. The day counts are separate dated and undated queries joined to the page null-safely, no null ordering is spelled
+     * out, only a first page counts the total (capped one past 10,000), and every placeholder has a bound value.
+     *
+     * Edge cases:
+     *
+     * An undated anchor sorted by capture time continues within the undated group or past it, depending on where the engine puts
+     * nulls for the direction.
+     */
     for {
       (engine, dialect) <- engines
       direction <- SortDirection.values.toList
@@ -415,6 +652,17 @@ import altitude.core.util.SortValue
   }
 
   test("A grouped slice reads in day-index order, with SQLite's planner hint on a non-grouping sort") {
+
+    /**
+     * Setup:
+     *
+     * A query of 50 rows a page grouped by Date Taken descending, sorted by file name or by capture time.
+     *
+     * Assertions:
+     *
+     * The slice orders by the engine's own day index expression, then the sort, then the ID. On SQLite a file name sort term
+     * carries the unary `+` that keeps the planner off its index, while a capture time sort does not.
+     */
     def slice(dialect: SearchDialect, field: String): String =
       val query = new SearchQuery(
         rpp = 50,
@@ -434,6 +682,16 @@ import altitude.core.util.SortValue
   }
 
   test("A cursor day is bound with a redundant inclusive bound, so the day index can seek to it") {
+
+    /**
+     * Setup:
+     *
+     * A PostgreSQL continuation of a page grouped by Date Taken descending and sorted by file name, from an anchor on 2026-09-06.
+     *
+     * Assertions:
+     *
+     * Besides the comparison that continues after the anchor, the day carries an inclusive upper bound the day index can seek to.
+     */
     val query = new SearchQuery(
       rpp = 50,
       searchSort = List(SearchSort("filename", SortDirection.ASC)),
@@ -450,6 +708,17 @@ import altitude.core.util.SortValue
   }
 
   test("Every branch of a grouped page selects from the same relation, so a count cannot drift from its rows") {
+
+    /**
+     * Setup:
+     *
+     * A first SQLite page for "beach" with a recycled flag, grouped by Date Taken and sorted by file name.
+     *
+     * Assertions:
+     *
+     * The text is matched once, and the candidate slice, both day-count probes and the overall count all apply the same
+     * predicates through the one CTE of the term's document source.
+     */
     val query = new SearchQuery(
       params = Map("is_recycled" -> false),
       rpp = 50,
@@ -470,6 +739,16 @@ import altitude.core.util.SortValue
   }
 
   test("The grouped statement selects the asset columns its row class reads, in that order") {
+
+    /**
+     * Setup:
+     *
+     * A PostgreSQL page grouped by Date Taken and sorted by file name.
+     *
+     * Assertions:
+     *
+     * The select list is the asset row's columns in declaration order, followed by the day, the sort values and the day total.
+     */
     val query = new SearchQuery(
       rpp = 50,
       searchSort = List(SearchSort("filename", SortDirection.ASC)),
@@ -482,11 +761,26 @@ import altitude.core.util.SortValue
         "d.n AS day_total") shouldBe true
   }
 
-  /**
-   * The shape of a page grouped by Location, over what changes it: both engines, a first page and a continuation from an anchor
-   * in a Location or in the trailing "No location" group, sorted by a nullable timestamp or by a text column.
-   */
   test("A Location page slices the located and the unlocated relation, guards the second, and binds every value") {
+
+    /**
+     * Setup:
+     *
+     * A query of 50 rows a page for "beach" grouped by Location, with a recycled flag and a folder, rendered over what changes
+     * its shape: both engines, a first page and a continuation from an anchor in a Location (Rome in Italy) or in the trailing
+     * "No location" group, sorted by a nullable timestamp or by a text column.
+     *
+     * Assertions:
+     *
+     * Until the anchor is in the trailing group, the page has a located slice joining the memberships, the Location and its
+     * category, and a guarded unlocated slice of the matches in no Location. Located rows come first in path order whatever the
+     * engine does with nulls, the group counts are joined to the page null-safely, only a first page counts the total, every
+     * branch reads the one CTE of the term's document source, and every placeholder has a bound value.
+     *
+     * Edge cases:
+     *
+     * A continuation from a located anchor compares its path key, then its Location ID, then the sort.
+     */
     for {
       (engine, dialect) <- engines
       position <- List("first", "located", "unlocated")
@@ -554,6 +848,17 @@ import altitude.core.util.SortValue
   }
 
   test("A Location slice reads in path order, then the Location, the sort and the ID") {
+
+    /**
+     * Setup:
+     *
+     * A query of 50 rows a page grouped by Location and sorted by file name descending, on both engines.
+     *
+     * Assertions:
+     *
+     * The located slice orders by the path key, the Location ID, the sort and the ID, and the trailing group by the sort alone.
+     * SQLite puts its planner hint on every sort term, since there is no grouping index to protect.
+     */
     def slice(dialect: SearchDialect): String =
       val query = new SearchQuery(
         rpp = 50,
@@ -572,6 +877,17 @@ import altitude.core.util.SortValue
   }
 
   test("The Location statement selects the asset columns its row class reads, then the group columns") {
+
+    /**
+     * Setup:
+     *
+     * A PostgreSQL page grouped by Location and sorted by file name.
+     *
+     * Assertions:
+     *
+     * The select list is the asset row's columns in declaration order, followed by the Location, its path, name and category, the
+     * sort values and the group total.
+     */
     val query = new SearchQuery(
       rpp = 50,
       searchSort = List(SearchSort("filename", SortDirection.ASC)),
@@ -586,6 +902,23 @@ import altitude.core.util.SortValue
   }
 
   test("Relevance is rendered only under its sort, once on a flat page: one CASE per scoring group, the best source first") {
+
+    /**
+     * Setup:
+     *
+     * The text `alice OR bob paris -lake` resolved to a folder and a person, rendered as a flat page of 50 under the Relevance
+     * sort and again under a file name sort, on both engines.
+     *
+     * Assertions:
+     *
+     * Under the Relevance sort each scoring group is one `CASE` - the alternatives share it and the exclusion has none - testing
+     * its best-scoring source first. The slice orders by the Relevance and capture time it selected rather than computing them
+     * again, and the page orders by the columns the slice carries.
+     *
+     * Edge cases:
+     *
+     * A column sort renders no Relevance at all.
+     */
     val ids = Map(SearchSource.Folder -> Set("f1"), SearchSource.Person -> Set("p1"))
     val text = "alice OR bob paris -lake"
 
@@ -610,6 +943,24 @@ import altitude.core.util.SortValue
   }
 
   test("A grouped Relevance page scores every match once, then orders, slices and continues over the scores") {
+
+    /**
+     * Setup:
+     *
+     * A continuation of a page for "beach" sorted by Relevance and grouped by Date Taken or by Location, on both engines, from an
+     * anchor with a capture time or with none.
+     *
+     * Assertions:
+     *
+     * The Relevance is computed once per match into a `scored` CTE and read from there: the continuation compares the Relevance,
+     * then the capture time with undated assets last, then the ID, and the slice, the candidates and the page all order by the
+     * scores. Every placeholder has a bound value.
+     *
+     * Edge cases:
+     *
+     * An anchor without a capture time continues among the undated assets, and a cursor missing the capture time altogether is
+     * refused.
+     */
     for {
       (engine, dialect) <- engines
       by <- GroupBy.values.toList
@@ -668,6 +1019,20 @@ import altitude.core.util.SortValue
   }
 
   test("The map's cells are one statement: the plotted points in the box, gridded, one window pass, the newest per cell") {
+
+    /**
+     * Setup:
+     *
+     * A query with a recycled flag and a Location filter, rendered as the cells of a box around Paris at a cell size of 0.25
+     * degrees on both engines.
+     *
+     * Assertions:
+     *
+     * The plotted points are the union of an asset's own point in the box and, for an asset without one, the pin of each Location
+     * it is in that is in the box, both branches carrying the search's filters. The points are gridded into cells, and one window
+     * pass counts and averages each cell and picks its newest asset, undated last, with no null ordering spelled out and every
+     * placeholder bound.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(params = Map("is_recycled" -> false), locationIds = Set("l1"))
       val statement = SearchQueries.mapCells(dialect, query, "repo-1", BoundingBox(48.0, 2.0, 49.0, 3.0), 0.25)
@@ -700,6 +1065,17 @@ import altitude.core.util.SortValue
   }
 
   test("The map's bounds are one aggregate over the same plotted points, over the whole search") {
+
+    /**
+     * Setup:
+     *
+     * The text "beach" with a recycled flag, rendered as the map bounds on both engines.
+     *
+     * Assertions:
+     *
+     * The bounds are one min, max and count aggregate over the same plotted points, with no box, and both point sources apply the
+     * text through the one CTE of the term's document source.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = textQuery("beach", params = Map("is_recycled" -> false))
       val statement = SearchQueries.mapBounds(dialect, query, "repo-1")
@@ -719,6 +1095,22 @@ import altitude.core.util.SortValue
   }
 
   test("The map's Locations are one statement: the matches once, then the pinned Locations in the box joined to their members") {
+
+    /**
+     * Setup:
+     *
+     * A query with a recycled flag and a folder filter, rendered as the map's Locations in a box across the antimeridian on both
+     * engines.
+     *
+     * Assertions:
+     *
+     * The matching relation is materialized once, and the repository's pinned Locations in the box are joined to their matching
+     * members and their category and grouped per Location, with every placeholder bound.
+     *
+     * Edge cases:
+     *
+     * The box across the antimeridian covers the longitudes on both sides of it.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(params = Map("is_recycled" -> false), folderIds = Set("f1"))
       val statement = SearchQueries.mapLocations(dialect, query, "repo-1", BoundingBox(-1.0, 179.0, 1.0, -179.0))
@@ -743,6 +1135,17 @@ import altitude.core.util.SortValue
   }
 
   test("A Location's group count is driven by its own members, not by a pass over the library") {
+
+    /**
+     * Setup:
+     *
+     * A query of 50 rows a page with a recycled flag, grouped by Location and sorted by file name, on both engines.
+     *
+     * Assertions:
+     *
+     * The group count joins the page Location's own memberships to the asset under the search's predicates, rather than testing
+     * every asset's membership with an `IN` subquery.
+     */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(
         params = Map("is_recycled" -> false),

@@ -24,6 +24,16 @@ import altitude.core.util.Query
 @DoNotDiscover class PurgePipelineServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   test("Purging assets should remove asset data from DB and file store") {
+
+    /**
+     * Setup:
+     *
+     * Five assets over random images, three of them recycled one by one; the three recycled ones run through the purge pipeline.
+     *
+     * Assertions:
+     *
+     * Each purged asset is gone from the database, and its preview and file are gone from the file store.
+     */
     val totalAssets = 5
     val assets = List.fill(totalAssets)(testContext.persistAsset())
 
@@ -56,6 +66,18 @@ import altitude.core.util.Query
   }
 
   test("Purging assets should remove face data from DB and file store") {
+
+    /**
+     * Setup:
+     *
+     * Three people with a face each in three shared assets (nine faces), plus a decoy person with faces in three more assets.
+     * Only the first three assets run through the purge pipeline.
+     *
+     * Assertions:
+     *
+     * Every face of the three people is gone from the database, and all four of its images from the file store, except each
+     * person's cover face, whose images a purge keeps.
+     */
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
@@ -107,6 +129,17 @@ import altitude.core.util.Query
   }
 
   test("Purging assets twice should be a NO-OP") {
+
+    /**
+     * Setup:
+     *
+     * Three people with a face each in three assets; the same assets run through the purge pipeline twice, without being
+     * recycled.
+     *
+     * Assertions:
+     *
+     * The second purge, of assets already purged, completes without throwing; nothing else is checked.
+     */
     val assetsPerPerson = 3
     val totalPeople = 3
     val people = List.fill(totalPeople)(testApp.service.person.addPerson(Person()))
@@ -127,6 +160,16 @@ import altitude.core.util.Query
   }
 
   test("Purging an asset does not delete a face asset that is marked as COVER") {
+
+    /**
+     * Setup:
+     *
+     * One person with a face in each of three assets, the first face set as the person's cover; all three assets are purged.
+     *
+     * Assertions:
+     *
+     * The cover face's record goes with its asset, but all four of its images stay in the file store.
+     */
     val assetsPerPerson = 3
     val person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, assetCount = assetsPerPerson)
@@ -155,6 +198,18 @@ import altitude.core.util.Query
   }
 
   test("Purging assets should only delete face data for the purged assets") {
+
+    /**
+     * Setup:
+     *
+     * Three images of one face (people/meme-ben.jpg, meme-ben2.png, meme-ben3.png) imported, then fed through the import pipeline
+     * a second time. One of the assets is recycled and run straight through the purge pipeline, since purgeRecycleBin only queues
+     * the purge and cannot be awaited.
+     *
+     * Assertions:
+     *
+     * Every face image of the two assets that were not purged is still in the file store.
+     */
     val importAssetPaths = List(
       "people/meme-ben.jpg",
       "people/meme-ben2.png",
@@ -204,6 +259,17 @@ import altitude.core.util.Query
   }
 
   test("Purging the recycle bin should not affect other assets") {
+
+    /**
+     * Setup:
+     *
+     * Three portraits (people/damon.jpg, affleck.jpg, bullock.jpg) imported, then fed through the import pipeline a second time.
+     * Two of them are recycled and the recycle bin is purged.
+     *
+     * Assertions:
+     *
+     * The asset that was not recycled is still in the database, with its preview, its file and every one of its face images.
+     */
     val importAssetPaths = List(
       "people/damon.jpg",
       "people/affleck.jpg",
