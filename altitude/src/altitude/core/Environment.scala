@@ -1,5 +1,6 @@
 package altitude.core
 
+import com.typesafe.config.Config
 import java.io.File
 import java.io.InputStream
 import java.nio.file.Files
@@ -30,6 +31,17 @@ object Environment:
     case _ => System.getProperty("user.dir")
   }
   logger.debug(s"Root path: $ROOT_PATH")
+
+  /**
+   * The one rule for a development-only key: it is on only when it is `true` and the environment is dev. Set anywhere else, it is
+   * off, with a WARN.
+   */
+  def devSwitch(config: Config, key: String, environment: String = CURRENT): Boolean =
+    if !config.getBoolean(key) then false
+    else if environment != Name.DEV then
+      logger.warn(s"$key is for the dev environment only: ignored")
+      false
+    else true
 
   /**
    * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths (e.g. OpenCV

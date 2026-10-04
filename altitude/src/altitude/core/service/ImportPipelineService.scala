@@ -85,7 +85,8 @@ class ImportPipelineService(app: Altitude):
     describe = _._1.asset.fileName,
     bufferSize = app.parallelism * 2,
     maxConcurrentOffers = app.parallelism,
-    shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala
+    shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala,
+    restartOnFailure = app.isPipelineRestartEnabled
   )
 
   def run(

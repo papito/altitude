@@ -52,6 +52,8 @@ object Const:
     val DEV_PASSWORD = "dev.password"
     // DEV-only: explain each new query once, into sql-debug.log
     val DEV_SQL_EXPLAIN = "dev.sql_explain"
+    // DEV-only: a pipeline queue whose stream fails restarts it after a backoff
+    val DEV_RESTART_PIPELINE = "dev.restart_pipeline"
 
   object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3

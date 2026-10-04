@@ -8,6 +8,7 @@ import altitude.core.unit.CaptureDateResolverTests
 import altitude.core.unit.CoreModelTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
+import altitude.core.unit.EnvironmentTests
 import altitude.core.unit.FaceClusteringTests
 import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
@@ -50,6 +51,7 @@ abstract class AllUnitTestSuites
     new BaseControllerTests,
     new UrlServiceTests,
     new UtilTests,
+    new EnvironmentTests,
     new MurmurHashTests,
     new VideoServiceTests,
     new RangeStreamingTests,

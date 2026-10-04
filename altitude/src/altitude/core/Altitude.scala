@@ -156,16 +156,18 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final val fileStoreType: String = config.getString(Const.Conf.DEFAULT_STORAGE_ENGINE)
   logger.debug(s"File store type: $fileStoreType")
 
-  // The SQL explain log, for development only: any other environment ignores the switch
+  // The SQL explain log, for development only
   private val sqlExplainer: Option[SqlExplainer] =
-    if !config.getBoolean(Const.Conf.DEV_SQL_EXPLAIN) then None
-    else if Environment.CURRENT != Environment.Name.DEV then
-      logger.warn(s"${Const.Conf.DEV_SQL_EXPLAIN} is for the dev environment only: ignored")
-      None
-    else
+    Option.when(Environment.devSwitch(config, Const.Conf.DEV_SQL_EXPLAIN)) {
       val file = new File(Environment.ROOT_PATH, SqlExplainer.FILE_NAME)
       logger.info(s"The SQL explain log is on: each new query is explained once, into $file")
-      Some(new SqlExplainer(dataSourceType, file))
+      new SqlExplainer(dataSourceType, file)
+    }
+
+  // For development only: a pipeline queue whose stream fails restarts it after a backoff, rather than staying down. Read before
+  // the services, whose queues are started as they are wired up.
+  final val isPipelineRestartEnabled: Boolean = Environment.devSwitch(config, Const.Conf.DEV_RESTART_PIPELINE)
+  if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer)
 

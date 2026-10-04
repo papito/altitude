@@ -5,8 +5,12 @@ import altitude.test.TestVideos
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.ConcurrentLinkedQueue
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.NotUsed
+import org.apache.pekko.stream.ActorAttributes
+import org.apache.pekko.stream.Supervision
+import org.apache.pekko.stream.scaladsl.Flow
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
@@ -19,7 +23,9 @@ import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.DurationLong
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -39,6 +45,7 @@ import altitude.core.models.Repository
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.QueuedPipeline
 import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.pipeline.sinks.VoidAssetSink
 import altitude.core.service.ImportPipelineService
@@ -77,6 +84,29 @@ import altitude.core.util.Query
   /** Puts the repository's `files` directory back after [[breakFileStore]] */
   private def restoreFileStore(repository: Repository): Unit =
     Files.delete(Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES))
+
+  /**
+   * A queue of the test's own over a flow that fails its stream on the element "bad" (its stage stops on a failure, rather than
+   * resuming as the queue's stages do) and records every other element it passes
+   */
+  private def failingQueue(restartOnFailure: Boolean, passed: ConcurrentLinkedQueue[String]): QueuedPipeline[String] =
+    val flow = Flow[String]
+      .map {
+        element =>
+          if element == "bad" then throw RuntimeException("Failed by the test")
+          passed.add(element)
+          element
+      }
+      .withAttributes(ActorAttributes.supervisionStrategy(Supervision.stoppingDecider))
+
+    QueuedPipeline[String](
+      "test",
+      flow,
+      describe = identity,
+      bufferSize = 2,
+      maxConcurrentOffers = 2,
+      shutdownTimeout = 30.seconds,
+      restartOnFailure = restartOnFailure)(using testApp.actorSystem)
 
   /** The pipeline's result for the asset of a file name, imported or dropped */
   private def resultFor(results: Seq[TAssetOrInvalidWithContext], fileName: String): TAssetOrInvalidWithContext =
@@ -237,6 +267,78 @@ import altitude.core.util.Query
       Await.result(pipeline.addToQueue((upload, PipelineContext(testContext.repository, testContext.user))), 30.seconds)
     }
     Files.exists(upload.path) shouldBe false
+  }
+
+  test("With the restart on, a queue whose stream fails restarts it and imports what is offered after") {
+
+    /**
+     * Setup:
+     *
+     * A queue of the test's own, restart on, over a flow that fails its stream on one element. That element offered, then a good
+     * one, offered again until it comes out of the flow (an offer made during the restart's backoff is refused, and one the
+     * failing stream took is lost).
+     *
+     * Assertions:
+     *
+     * The good element comes out of the flow, from the restarted stream.
+     */
+    val passed = ConcurrentLinkedQueue[String]()
+    val pipeline = failingQueue(restartOnFailure = true, passed)
+
+    Await.result(pipeline.offer("bad"), 10.seconds)
+    eventually {
+      Try(Await.result(pipeline.offer("good"), 10.seconds))
+      passed.asScala should contain("good")
+    }
+    pipeline.shutdown()
+  }
+
+  test("With the restart off, a queue whose stream fails stays down and refuses what is offered after") {
+
+    /**
+     * Setup:
+     *
+     * A queue of the test's own, restart off, over a flow that fails its stream on one element. That element offered, then a good
+     * one, offered again until an offer is refused (one the failing stream took is lost).
+     *
+     * Assertions:
+     *
+     * The good element's offer fails with `QueueRefusedException`, and nothing came out of the flow.
+     */
+    val passed = ConcurrentLinkedQueue[String]()
+    val pipeline = failingQueue(restartOnFailure = false, passed)
+
+    Await.result(pipeline.offer("bad"), 10.seconds)
+    eventually {
+      intercept[QueueRefusedException](Await.result(pipeline.offer("good"), 10.seconds))
+    }
+    passed shouldBe empty
+    pipeline.shutdown()
+  }
+
+  test("Shutdown during a restart's backoff returns at once") {
+
+    /**
+     * Setup:
+     *
+     * A queue of the test's own, restart on and a 30-second drain limit, over a flow that fails its stream on one element. That
+     * element offered, then good ones until one is refused, which means the stream is waiting out its backoff; then the queue
+     * shut down.
+     *
+     * Assertions:
+     *
+     * Shutdown returns well within the drain limit, rather than waiting for a restarted stream to drain.
+     */
+    val pipeline = failingQueue(restartOnFailure = true, ConcurrentLinkedQueue[String]())
+
+    Await.result(pipeline.offer("bad"), 10.seconds)
+    eventually {
+      intercept[QueueRefusedException](Await.result(pipeline.offer("good"), 10.seconds))
+    }
+
+    val started = System.nanoTime()
+    pipeline.shutdown()
+    (System.nanoTime() - started).nanos should be < 5.seconds
   }
 
   test("An image that cannot be decoded is dropped, and the asset behind it is imported") {
