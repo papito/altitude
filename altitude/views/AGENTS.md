@@ -1,5 +1,17 @@
 # Frontend – Agent Guide
 
+## Do
+
+The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For frontend work:
+
+* For UI work, prompt the developer to run "make db" and "make watch" if localhost:8080 is not accessible or if the repo is not initialized (setup form visible or no assets present).
+* Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
+* Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified. The style guide (`views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions: read its usage notes before choosing a color, spacing, or component, and keep it current in the same change (the list is under **Style guide** below).
+* Always prefer CSS Grid and Flexbox.
+* The main stylesheet is `static/css/core.css`; reuse its `:root` variables. Component styles also live in Twirl partials, such as the folder tree and popover styles in `htmx/folders.scala.html`.
+* Strongly prefer CSS variables over hard-coded values, especially if duplicated.
+* Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
+
 ## Stack
 
 - **HTMX 4** — server-driven HTML fragments, no SPA routing
@@ -747,8 +759,8 @@ Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules ca
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 
-**Style guide** — `views/style_guide.scala.html` is a dev-only page (`StyleGuideController`; the nav shows its
-button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
+**Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`,
+`StyleGuideController`; the nav shows its button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
 and per shared primitive of `core.css` and `tabs.css` (buttons, forms, navigation and tabs, menus and dialogs,
 feedback, badges and states), plus a token audit. It is the main page's chrome without the explorer and the grid, and
 starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/json-enc.js` itself.
@@ -765,6 +777,10 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
   use the real classes; the page's own styles (`sg-` classes) only lay the page out, from the `:root` variables.
+  Three more things keep the page current:
+  - A changed size, font, or icon set updates the values the specimens state in text.
+  - A new `:root` token gets a comment directly above its declaration; the guide shows it as the token's note.
+  - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
 - **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
   (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup), both
   opening `htmx/style_guide_sample_dialog.scala.html` in the modal host. A blank name returns the validation

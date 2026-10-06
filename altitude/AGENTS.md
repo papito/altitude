@@ -2,11 +2,23 @@
 
 ## Do
 
-* Update this document if you are making changes to the architecture, design patterns, or anything else that future developers should know when working on the codebase. 
-* Factor out duplicated code into helper methods.
-* Update comments and docstrings when making changes to the code and warn about discrepancies in comments vs code.
+These apply to every change, server or frontend.
+
+* Avoid documentation drift. When code is added, changed, or removed, update the guide that describes it in the same change: this document for the architecture, design patterns, or anything else future developers should know, [views/AGENTS.md](views/AGENTS.md) for the frontend, [docs/faces.md](../docs/faces.md) for faces, and the glossary in the root [CONTEXT.md](../CONTEXT.md) for domain terms. Guidance goes in the guide that owns the area, never in the root `AGENTS.md`, which only routes to the guides.
+* When adding features or modifying existing behavior, review nearby code comments and docstrings, update them where needed, and warn about discrepancies in comments vs code.
+* Always add comments for less than trivial logic, unless the comment is redundant with the code, and it's a simple getter/setter or similar. If you find yourself writing a comment that starts with "This is needed because..." or "This exists to work around...", consider whether the code can be refactored to eliminate the need for the comment.
+* Always log on INFO important events and log on DEBUG events that may be useful for debugging. Avoid logging on DEBUG events that are too noisy to be useful (use TRACE if available).
+* Extract shared logic into functions when the same or similar logic appears more than once.
+
+### Server-side
+
+* Use test-driven Development with strict red-green-refactor cycle using integration tests. Do not trigger TDD for documentation-only, configuration-only changes, or front-end-facing code.
+* Write the minimal amount of code that preserves clarity, readability, and maintainability. "Minimal" does NOT mean that you should leave dead or redundant code after changes and refactoring.
+* DO NOT add new migrations or bump the schema version: see **Schema migrations**.
 
 ## Architecture Overview
+
+Altitude is a Scala 3 application built with Mill: Cask serves HTTP, Twirl renders the templates, Pekko Streams runs the import and purge pipelines, ScalaSql and JDBC reach SQLite or PostgreSQL, and OpenCV and FFmpeg (through Bytedeco) decode media. The versions are in `build.mill`.
 
 `App.scala` is the single entrypoint (extends `cask.Main`). It registers all routes and wires the app via `new Altitude()`.
 
@@ -255,7 +267,9 @@ The map never receives a result set: a repository can hold millions of assets, s
 
 ## Schema migrations
 
-`schemaVersion` in `Altitude.scala` is the current version. A fresh database (version 0) runs `migrations/<engine>/all.sql` once and is stamped with the current version. `MigrationService` can still run `migrations/<engine>/<version>.sql` for each version an existing database is behind, but no such files exist: the rule in force (root `AGENTS.md`) is that every schema change goes into both `all.sql` files as original definitions, `schemaVersion` stays 2, and a database is recreated from scratch.
+`schemaVersion` in `Altitude.scala` is the current version. A fresh database (version 0) runs `migrations/<engine>/all.sql` once and is stamped with the current version. `MigrationService` can still run `migrations/<engine>/<version>.sql` for each version an existing database is behind, but no such files exist.
+
+DO NOT add new migrations or bump the version number. All changes go into `all.sql` for both Postgres and SQLite, as original table/index definitions as if it were a fresh schema (no ALTER); `schemaVersion` stays 2, and a database is recreated from scratch.
 
 ## Config & Environments
 
