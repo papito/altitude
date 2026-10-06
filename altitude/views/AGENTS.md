@@ -188,7 +188,7 @@ no editor.
 
 ## Alpine.js Integration
 
-Alpine serves three distinct roles in this codebase:
+Alpine serves four distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
 Stores initialized in `js/frontend-app.js` and `js/stores/app-stores.js` hold shared data — the active
@@ -215,6 +215,18 @@ set (`x-show`, `x-text`), and `reset()` from its Deselect All button clears it.
 outside clicks); the component only places the panel, closes it when focus leaves or when the page scrolls or the explorer
 resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
 menus** below.
+
+### 4. Rendering a page's own data
+A page that renders data it already holds may do so with `x-for` templates over one component, so its
+markup stays in the Twirl template instead of being built node by node in JavaScript. The style guide
+is the one such page: `x-data="styleGuide"` wraps its sections, and the component (`js/style-guide.js`,
+registered when the page's module script imports it, before `initApp()` starts Alpine) holds the data
+and the logic that needs the browser. Keep the expressions in such a template to property reads and
+single method calls: nothing lints them, so anything longer belongs in the component. A card or row
+repeated across sections is a Twirl reusable block (`@tokenCards(kinds)` in `style_guide.scala.html`),
+since Alpine has no template reuse of its own. Twirl reads `@` as its own, so Alpine's shorthand is
+written `@@click`. The explorer lists (folder tree, albums, Locations) are still rendered by their
+JavaScript modules.
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
@@ -742,24 +754,27 @@ feedback, badges and states), plus a token audit. It is the main page's chrome w
 starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/json-enc.js` itself.
 
 - **Discovered, nothing to maintain:** the tokens and the icons. The server's source scan is embedded as JSON
-  (`#styleGuideScan`) and `js/style-guide.js` renders it: each `:root` token resolved against the loaded stylesheets
-  and placed by the kind of its value (`[data-token-kind]`, a space-separated list, so borders and shadows share one
-  grid), with its note (the comment directly above its
-  declaration), reference count, an "Unused" flag, and the tokens sharing its value; a click copies its `var()`
-  reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
+  (`#styleGuideScan`); the `styleGuide` Alpine component (`js/style-guide.js`) reads it, and the page's `x-for`
+  templates render what the component holds (see **Rendering a page's own data** above): each `:root` token resolved
+  against the loaded stylesheets and placed by the kind of its value (`@tokenCards("border shadow")` asks the
+  component for those kinds, one after another, so borders and shadows share one grid), with its note (the comment
+  directly above its declaration), reference count, an "Unused" flag, and the tokens sharing its value; a click
+  copies its `var()` reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
   replaces), the ones only set from JavaScript, and the color literals grouped by resolved color, each naming the
   token that already holds that color.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
   use the real classes; the page's own styles (`sg-` classes) only lay the page out, from the `:root` variables.
-- **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`, both
+- **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
+  (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup), both
   opening `htmx/style_guide_sample_dialog.scala.html` in the modal host. A blank name returns the validation
   replacement; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
   a snackbar. Nothing is persisted.
 - **Font tester:** the Typography section's right half (its left half holds the `--font` card, the sizes and the
   text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
   has that font, decided by measuring the text with the value in front of each generic family against the generic
-  family alone. Nothing is requested from the server.
+  family alone. The input is the component's `fontInput` (`x-model`), which the specimen's style and the status
+  derive from. Nothing is requested from the server.
 
 The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates.
 
@@ -804,8 +819,8 @@ The scan leaves the guide's own files out, so a specimen never counts as a use o
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
-| `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the hosts `js/style-guide.js` fills |
-| `static/js/style-guide.js` | the style guide's rendering of the source scan (tokens, icons, token audit), its live menu and dialog specimens, and its snackbar demo |
+| `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit |
+| `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the font tester's state) and the style guide's live menu and dialog specimens |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |

@@ -10,7 +10,7 @@
 
 `App.scala` is the single entrypoint (extends `cask.Main`). It registers all routes and wires the app via `new Altitude()`.
 
-The frontend is now organized around a thin composition root in `static/js/frontend-app.js`.
+The frontend is organized around a thin composition root in `static/js/frontend-app.js`.
 Feature logic is split into focused ES module folders instead of accumulating in one large file:
 
 - `static/js/stores/` — Alpine store initialization (`app-stores.js`), including the search parameter set (`search-params.js`)

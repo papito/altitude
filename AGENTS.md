@@ -37,6 +37,15 @@ The main stylesheet is `altitude/static/css/core.css`; reuse its `:root` variabl
 
 Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 
+The style guide (`altitude/views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions. Read its usage notes before choosing a color, spacing, or component, and keep it current in the same change:
+
+- A new or changed reusable class in `core.css` or `tabs.css` adds or updates its specimen.
+- A changed size, font, or icon set updates the values the specimens state in text.
+- A new `:root` token gets a comment directly above its declaration; the guide shows it as the token's note.
+- A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
+
+Details are under **Style guide** in [altitude/views/AGENTS.md](altitude/views/AGENTS.md).
+
 ### Database migrations
 
 DO NOT add new migrations or bump the version number. All changes go into all.sql for both Postgres and Sqlite - as original table/index defintions as if it were a fresh schema (no ALTER).
