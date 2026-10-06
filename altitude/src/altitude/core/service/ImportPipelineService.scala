@@ -9,7 +9,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
-import scala.jdk.DurationConverters.*
+import scala.jdk.DurationConverters._
 import scala.util.Failure
 import scala.util.Success
 

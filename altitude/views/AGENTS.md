@@ -755,6 +755,10 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   opening `htmx/style_guide_sample_dialog.scala.html` in the modal host. A blank name returns the validation
   replacement; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
   a snackbar. Nothing is persisted.
+- **Font tester:** the Typography section's right half (its left half holds the `--font` card, the sizes and the
+  text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
+  has that font, decided by measuring the text with the value in front of each generic family against the generic
+  family alone. Nothing is requested from the server.
 
 The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates.
 

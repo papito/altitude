@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.jdk.DurationConverters.*
+import scala.jdk.DurationConverters._
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem

@@ -71,6 +71,11 @@
         gap: var(--control-vertical-space);
       }
 
+      /* One font token, one column: a text specimen wants the width */
+      .sg-tokens[data-token-kind="font"] {
+        grid-template-columns: 1fr;
+      }
+
       /* A token card is a button: clicking it copies the token's var() reference */
       .sg-token {
         display: grid;
@@ -108,6 +113,19 @@
       /* A line of text, as tall as the font stack makes it */
       .sg-sample.font {
         height: auto;
+      }
+
+      /* A section split into two columns of equal width */
+      .sg-halves {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: var(--control-horizontal-space);
+        align-items: start;
+      }
+
+      .sg-halves > div {
+        display: grid;
+        row-gap: var(--control-vertical-space);
       }
 
       .sg-dim {
@@ -208,27 +226,45 @@
         <section id="typography">
           <h2>Typography</h2>
           <p>One font stack, <code>--font</code>, at a 14px base on <code>body</code>. Other sizes are relative to it and
-             belong to a component, shown here on the real ones.</p>
-          <div class="sg-tokens" data-token-kind="font"></div>
+             belong to a component, shown here on the real ones. The tester previews any font this browser has
+             installed.</p>
+          <div class="sg-halves">
+            <div>
+              <div class="sg-tokens" data-token-kind="font"></div>
 
-          <h3>Sizes</h3>
-          <div class="sg-row">
-            <span>Body text, 14px</span>
-            <button type="button" class="action-button small">Small button, 0.8em</button>
-            <span class="asset-count">Asset count, 0.9em</span>
-            <input type="text" value="Input, 1.2em" aria-label="Input size specimen">
-            <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, 1.3em</span>
-          </div>
+              <h3>Sizes</h3>
+              <div class="sg-row">
+                <span>Body text, 14px</span>
+                <button type="button" class="action-button small">Small button, 0.8em</button>
+                <span class="asset-count">Asset count, 0.9em</span>
+                <input type="text" value="Input, 1.2em" aria-label="Input size specimen">
+                <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, 1.3em</span>
+              </div>
 
-          <h3>Text colors</h3>
-          <div class="sg-row">
-            <span>Default</span>
-            <span style="color: var(--font-color-dim)">--font-color-dim</span>
-            <span style="color: var(--faded-font-color)">--faded-font-color</span>
-            <span style="color: var(--success-font-color)">--success-font-color</span>
-            <span style="color: var(--warning-font-color)">--warning-font-color</span>
-            <span style="color: var(--error-font-color)">--error-font-color</span>
-            <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
+              <h3>Text colors</h3>
+              <div class="sg-row">
+                <span>Default</span>
+                <span style="color: var(--font-color-dim)">--font-color-dim</span>
+                <span style="color: var(--faded-font-color)">--faded-font-color</span>
+                <span style="color: var(--success-font-color)">--success-font-color</span>
+                <span style="color: var(--warning-font-color)">--warning-font-color</span>
+                <span style="color: var(--error-font-color)">--error-font-color</span>
+                <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
+              </div>
+            </div>
+
+            @* The font tester: js/style-guide.js previews the typed family on the specimen *@
+            <div>
+              <h3>Font tester</h3>
+              <input type="text" id="styleGuideFontInput" autocomplete="off" spellcheck="false"
+                     placeholder="A font family, a stack, or a keyword such as monospace"
+                     aria-label="Font family to test">
+              <span class="sg-dim" id="styleGuideFontStatus">Type a font family to preview it.</span>
+              <div id="styleGuideFontSpecimen">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+                tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+                ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+                voluptate velit esse cillum dolore eu fugiat nulla pariatur.</div>
+            </div>
           </div>
         </section>
 

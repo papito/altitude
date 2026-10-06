@@ -6,7 +6,7 @@
  * resolves each `:root` token against the stylesheets the browser actually loaded, sorts the
  * tokens into the page's sections by the kind of value they hold, and renders the icons and the
  * token audit. It also builds the live menu and dialog specimens through the modules the explorer
- * lists use, and wires the snackbar demo buttons.
+ * lists use, wires the snackbar demo buttons, and binds the font tester of the Typography section.
  */
 import {
     buildContextMenuCtrl,
@@ -41,6 +41,12 @@ const TOKEN_KINDS = [
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
 
+// Wide glyphs and digits, so two fonts seldom measure the same
+const FONT_PROBE_TEXT = "mmmmmmmmmmlliWWW0123456789"
+// The typed value is tried in front of each generic family: a font that is the default of one of
+// them measures the same as that fallback, and the others tell it apart
+const FONT_PROBE_FALLBACKS = ["monospace", "sans-serif", "serif"]
+
 const SNACKBARS = {
     success: showSuccessSnackBar,
     warning: showWarningSnackBar,
@@ -59,6 +65,7 @@ export function initStyleGuide() {
     renderLiterals(scan.literals, rootTokens)
     mountMenuSpecimens()
     bindSnackbarButtons()
+    bindFontTester()
 
     // A single-field form submits on Return; the error specimen has nowhere to submit to
     document
@@ -395,4 +402,60 @@ function bindSnackbarButtons() {
                 SNACKBARS[type](`A ${type} message`),
             )
         })
+}
+
+/** Whether the browser renders `family` (a family, a stack or a generic keyword) with a font it has */
+function isFontAvailable(family) {
+    const context = document.createElement("canvas").getContext("2d")
+    const widthIn = (fontFamily) => {
+        context.font = `72px ${fontFamily}`
+        return context.measureText(FONT_PROBE_TEXT).width
+    }
+    return FONT_PROBE_FALLBACKS.some(
+        (fallback) => widthIn(`${family}, ${fallback}`) !== widthIn(fallback),
+    )
+}
+
+/**
+ * The typed value as a `font-family` value: as written when it parses (a family, a stack or a
+ * generic keyword), else quoted as one family name (a name with a digit, such as "Neue Haas 55")
+ */
+function asFontFamily(value) {
+    return CSS.supports("font-family", value) ? value : JSON.stringify(value)
+}
+
+/**
+ * The font tester: the typed value becomes the specimen's font family, and the status says whether
+ * the browser has it. The value is made parseable before it is measured because the canvas font
+ * setter ignores a value it cannot parse and keeps the previous font.
+ */
+function bindFontTester() {
+    const inputEl = document.getElementById("styleGuideFontInput")
+    const specimenEl = document.getElementById("styleGuideFontSpecimen")
+    const statusEl = document.getElementById("styleGuideFontStatus")
+
+    const setStatus = (text, isFlag) => {
+        statusEl.textContent = text
+        statusEl.className = isFlag ? "sg-flag" : "sg-dim"
+    }
+
+    inputEl.addEventListener("input", () => {
+        const value = inputEl.value.trim()
+        const family = asFontFamily(value)
+
+        if (value === "") {
+            specimenEl.style.fontFamily = ""
+            setStatus("Type a font family to preview it.", false)
+        } else if (isFontAvailable(family)) {
+            specimenEl.style.fontFamily = family
+            setStatus("Available in this browser.", false)
+        } else {
+            // The browser falls back on its own; the status says so
+            specimenEl.style.fontFamily = family
+            setStatus(
+                "Not available in this browser: shown in the fallback font.",
+                true,
+            )
+        }
+    })
 }

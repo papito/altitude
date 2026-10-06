@@ -12,7 +12,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.*
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
