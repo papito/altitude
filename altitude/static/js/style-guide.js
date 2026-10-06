@@ -2,11 +2,12 @@
  * The style guide page (dev only, `views/style_guide.scala.html`).
  *
  * The server scans the source tree (`StyleGuideScan`) and embeds what it found as JSON: the tokens
- * and where they are declared and referenced, the color literals and the icons. This module
- * resolves each `:root` token against the stylesheets the browser actually loaded, sorts the
- * tokens into the page's sections by the kind of value they hold, and renders the icons and the
- * token audit. It also builds the live menu and dialog specimens through the modules the explorer
- * lists use, wires the snackbar demo buttons, and binds the font tester of the Typography section.
+ * and where they are declared and referenced, the color literals and the icons. The `styleGuide`
+ * Alpine component holds what the page's templates render from it: each `:root` token resolved
+ * against the stylesheets the browser actually loaded and sorted by the kind of value it holds, the
+ * icons and the token audit. It is also the state of the font tester of the Typography section, and
+ * what the page's buttons call. The live menu and dialog specimens are no template:
+ * `initStyleGuide` builds them through the modules the explorer lists use.
  */
 import {
     buildContextMenuCtrl,
@@ -18,6 +19,7 @@ import {
     showWarningSnackBar,
 } from "./common/snackbar.js"
 import { Const } from "./constants.js"
+import { Alpine } from "./lib/alpine.esm.min.js"
 
 const BORDER_STYLES =
     /\b(solid|dashed|dotted|double|groove|ridge|inset|outset)\b/
@@ -25,18 +27,43 @@ const BORDER_STYLES =
 /**
  * The kinds of token value, in the order they are tested: the first whose test passes is the
  * token's kind. The order matters because the tests overlap (a color is also a valid border).
+ * A token's sample is drawn with the token itself: its `var()` reference is the value of each of
+ * `sampleProperties`, over `sampleText` for a kind that shows on text.
  */
 const TOKEN_KINDS = [
-    { kind: "color", test: (value) => CSS.supports("color", value) },
-    { kind: "length", test: (value) => CSS.supports("width", value) },
+    {
+        kind: "color",
+        test: (value) => CSS.supports("color", value),
+        sampleProperties: ["backgroundColor"],
+    },
+    {
+        kind: "length",
+        test: (value) => CSS.supports("width", value),
+        sampleProperties: ["width"],
+    },
     {
         kind: "border",
         test: (value) =>
             BORDER_STYLES.test(value) && CSS.supports("border", value),
+        sampleProperties: ["border"],
     },
-    { kind: "shadow", test: (value) => CSS.supports("box-shadow", value) },
-    { kind: "font", test: (value) => CSS.supports("font-family", value) },
+    {
+        kind: "shadow",
+        test: (value) => CSS.supports("box-shadow", value),
+        // The shadow tokens are used for both boxes and text
+        sampleProperties: ["boxShadow", "textShadow"],
+        sampleText: "Shadow",
+    },
+    {
+        kind: "font",
+        test: (value) => CSS.supports("font-family", value),
+        sampleProperties: ["fontFamily"],
+        sampleText: "The quick brown fox jumps over the lazy dog",
+    },
 ]
+
+// The kind of a value none of the tests pass, and of a token without a value
+const OTHER_KIND = { kind: "other", sampleProperties: [] }
 
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
@@ -47,54 +74,116 @@ const FONT_PROBE_TEXT = "mmmmmmmmmmlliWWW0123456789"
 // them measures the same as that fallback, and the others tell it apart
 const FONT_PROBE_FALLBACKS = ["monospace", "sans-serif", "serif"]
 
-const SNACKBARS = {
-    success: showSuccessSnackBar,
-    warning: showWarningSnackBar,
-    error: showErrorSnackBar,
-}
+// Referenced as `x-data="styleGuide"` by the style guide page, whose module script imports this
+// module, and so registers the component, before it starts the app
+Alpine.data("styleGuide", styleGuide)
 
+/** Builds the specimens no template renders, once the app has started and the repository is set */
 export function initStyleGuide() {
-    const scan = JSON.parse(
-        document.getElementById("styleGuideScan").textContent,
-    )
-    const rootTokens = resolveRootTokens(scan)
-
-    renderRootTokens(rootTokens)
-    renderIcons(scan.icons)
-    renderScopedTokens(scan, rootTokens)
-    renderLiterals(scan.literals, rootTokens)
     mountMenuSpecimens()
-    bindSnackbarButtons()
-    bindFontTester()
-
-    // A single-field form submits on Return; the error specimen has nowhere to submit to
-    document
-        .getElementById("styleGuideErrorForm")
-        .addEventListener("submit", (event) => event.preventDefault())
 
     document.body.addEventListener(Const.events.styleGuideSampleSubmitted, () =>
         showSuccessSnackBar("Sample submitted. Nothing was saved."),
     )
 }
 
-function createEl(tag, { className, text } = {}) {
-    const el = document.createElement(tag)
-    if (className) {
-        el.className = className
+/** The data and the actions of the page's templates */
+function styleGuide() {
+    const scan = JSON.parse(
+        document.getElementById("styleGuideScan").textContent,
+    )
+    const rootTokens = resolveRootTokens(scan)
+    const rootValues = new Map(
+        rootTokens.map(({ name, value }) => [name, value]),
+    )
+
+    return {
+        icons: Object.keys(scan.icons)
+            .sort()
+            .map((name) => ({ name, count: scan.icons[name] })),
+        // The tokens declared outside `:root`, and the ones only set from JavaScript
+        scopedTokens: scan.scopedTokens,
+        runtimeTokens: scan.runtimeTokens,
+        literals: groupLiterals(scan.literals, rootTokens),
+        // What is typed into the font tester
+        fontInput: "",
+
+        showSuccessSnackBar,
+        showWarningSnackBar,
+        showErrorSnackBar,
+
+        /**
+         * The `:root` tokens of `kinds` (space-separated), one kind after another and in source
+         * order within a kind, so kinds sharing a grid are not interleaved
+         */
+        tokensOf(kinds) {
+            return kinds
+                .split(" ")
+                .flatMap((kind) =>
+                    rootTokens.filter((token) => token.kind === kind),
+                )
+        },
+
+        referencesOf(name) {
+            return referencesOf(scan, name)
+        },
+
+        /** A scoped token named like a `:root` token overrides it */
+        overrideNote(name) {
+            return rootValues.has(name)
+                ? `Overrides the :root value ${rootValues.get(name)}`
+                : ""
+        },
+
+        copyReference(name) {
+            const reference = `var(${name})`
+
+            navigator.clipboard.writeText(reference).then(
+                () => showSuccessSnackBar(`Copied ${reference}`),
+                () => showErrorSnackBar(`Could not copy ${reference}`),
+            )
+        },
+
+        /** The typed value as the specimen's `font-family`, empty while nothing is typed */
+        get fontFamily() {
+            const value = this.fontInput.trim()
+            return value === "" ? "" : asFontFamily(value)
+        },
+
+        /** Whether the browser shows the specimen in a fallback font of its own choosing */
+        get isFontMissing() {
+            return this.fontFamily !== "" && !isFontAvailable(this.fontFamily)
+        },
+
+        get fontStatus() {
+            if (this.fontFamily === "") {
+                return "Type a font family to preview it."
+            }
+            return this.isFontMissing
+                ? "Not available in this browser: shown in the fallback font."
+                : "Available in this browser."
+        },
     }
-    if (text !== undefined) {
-        el.textContent = text
-    }
-    return el
 }
 
 function kindOf(value) {
-    return TOKEN_KINDS.find(({ test }) => test(value))?.kind ?? "other"
+    return TOKEN_KINDS.find(({ test }) => test(value)) ?? OTHER_KIND
+}
+
+function referencesOf(scan, name) {
+    return scan.references[name] ?? 0
+}
+
+function usageLabel(references) {
+    if (references === 0) {
+        return "Unused"
+    }
+    return references === 1 ? "1 reference" : `${references} references`
 }
 
 /** The color `value` paints, in the browser's one serialization, so spellings of a color compare equal */
 function resolveColor(value) {
-    const probeEl = createEl("span")
+    const probeEl = document.createElement("span")
     probeEl.style.color = value
     document.body.appendChild(probeEl)
     const color = getComputedStyle(probeEl).color
@@ -103,17 +192,22 @@ function resolveColor(value) {
 }
 
 /**
- * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind, their
- * reference count, and the names of the other tokens of that kind with the same value. A token the
- * scan found in the source but the served stylesheet does not have yet resolves to nothing
- * (`value` is empty, `kind` is "other").
+ * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind and
+ * sample, their reference count, and the names of the other tokens of that kind with the same
+ * value. A token the scan found in the source but the served stylesheet does not have yet resolves
+ * to nothing (`value` is empty, `kind` is "other").
  */
 function resolveRootTokens(scan) {
     const rootStyle = getComputedStyle(document.documentElement)
 
     const tokens = scan.rootTokens.map(({ name, note }) => {
         const value = rootStyle.getPropertyValue(name).trim()
-        const kind = value ? kindOf(value) : "other"
+        const {
+            kind,
+            sampleProperties,
+            sampleText = "",
+        } = value ? kindOf(value) : OTHER_KIND
+        const references = referencesOf(scan, name)
 
         return {
             name,
@@ -122,7 +216,12 @@ function resolveRootTokens(scan) {
             kind,
             // What two tokens must share to be duplicates of each other
             identity: kind === "color" ? resolveColor(value) : value,
-            references: scan.references[name] ?? 0,
+            references,
+            usage: usageLabel(references),
+            sampleStyle: Object.fromEntries(
+                sampleProperties.map((property) => [property, `var(${name})`]),
+            ),
+            sampleText,
         }
     })
 
@@ -141,221 +240,33 @@ function resolveRootTokens(scan) {
     return tokens
 }
 
-/** A specimen of the token, drawn with the token itself */
-function buildSample({ name, kind }) {
-    const sampleEl = createEl("div", { className: `sg-sample ${kind}` })
-    const reference = `var(${name})`
-
-    if (kind === "color") {
-        sampleEl.style.backgroundColor = reference
-    } else if (kind === "length") {
-        sampleEl.style.width = reference
-    } else if (kind === "border") {
-        sampleEl.style.border = reference
-    } else if (kind === "shadow") {
-        // The shadow tokens are used for both boxes and text
-        sampleEl.style.boxShadow = reference
-        sampleEl.style.textShadow = reference
-        sampleEl.textContent = "Shadow"
-    } else if (kind === "font") {
-        sampleEl.style.fontFamily = reference
-        sampleEl.textContent = "The quick brown fox jumps over the lazy dog"
-    }
-
-    return sampleEl
-}
-
-function referencesLabel(count) {
-    return count === 1 ? "1 reference" : `${count} references`
-}
-
-/** A token card: clicking it copies the token's `var()` reference */
-function buildTokenCard(token) {
-    const cardEl = createEl("button", { className: "sg-token" })
-    cardEl.type = "button"
-
-    cardEl.appendChild(buildSample(token))
-    cardEl.appendChild(createEl("code", { text: token.name }))
-    cardEl.appendChild(
-        createEl("span", {
-            className: token.value ? "" : "sg-flag",
-            text: token.value || "Not served yet: rebuild the resources",
-        }),
-    )
-    if (token.note) {
-        cardEl.appendChild(
-            createEl("span", { className: "sg-dim", text: token.note }),
-        )
-    }
-    cardEl.appendChild(
-        token.references === 0
-            ? createEl("span", { className: "sg-flag", text: "Unused" })
-            : createEl("span", {
-                  className: "sg-dim",
-                  text: referencesLabel(token.references),
-              }),
-    )
-    if (token.duplicates.length > 0) {
-        cardEl.appendChild(
-            createEl("span", {
-                className: "sg-flag",
-                text: `Same value as ${token.duplicates.join(", ")}`,
-            }),
-        )
-    }
-
-    cardEl.addEventListener("click", () => copyReference(token.name))
-    return cardEl
-}
-
-function copyReference(name) {
-    const reference = `var(${name})`
-
-    navigator.clipboard.writeText(reference).then(
-        () => showSuccessSnackBar(`Copied ${reference}`),
-        () => showErrorSnackBar(`Could not copy ${reference}`),
-    )
-}
-
-/** Each token goes to the container of its kind (`data-token-kind`, a space-separated list, so one container may hold
- * several kinds). Tokens are grouped by kind and keep their source order within it, so sharing a container does not
- * interleave the kinds */
-function renderRootTokens(rootTokens) {
-    const kinds = [...new Set(rootTokens.map((token) => token.kind))]
-    kinds.forEach((kind) => {
-        const container = document.querySelector(`[data-token-kind~="${kind}"]`)
-        rootTokens.filter((token) => token.kind === kind).forEach((token) => container.appendChild(buildTokenCard(token)))
-    })
-}
-
-function renderIcons(icons) {
-    const hostEl = document.getElementById("styleGuideIcons")
-
-    Object.keys(icons)
-        .sort()
-        .forEach((icon) => {
-            const rowEl = createEl("div")
-            const iconEl = createEl("i", { className: `fas ${icon}` })
-            iconEl.setAttribute("aria-hidden", "true")
-            const labelEl = createEl("span")
-            labelEl.appendChild(createEl("code", { text: icon }))
-            labelEl.appendChild(
-                createEl("span", {
-                    className: "sg-dim",
-                    text: ` × ${icons[icon]}`,
-                }),
-            )
-            rowEl.appendChild(iconEl)
-            rowEl.appendChild(labelEl)
-            hostEl.appendChild(rowEl)
-        })
-}
-
-/** A table row of plain text cells; a cell may also be an element */
-function buildRow(tag, cells) {
-    const rowEl = createEl("tr")
-    cells.forEach((cell) => {
-        const cellEl = createEl(tag)
-        if (cell instanceof Node) {
-            cellEl.appendChild(cell)
-        } else {
-            cellEl.textContent = cell
-        }
-        rowEl.appendChild(cellEl)
-    })
-    return rowEl
-}
-
 /**
- * The tokens declared outside `:root` and the ones only set from JavaScript. Their values are shown
- * as declared: the elements they apply to are not on this page, so there is nothing to resolve them
- * against. A scoped token named like a `:root` token overrides it.
+ * The color literals, one entry per color: the spellings of a color (`#fff`, `#FFF`, `#FFFFFF`)
+ * are grouped by what they resolve to, most used first. A color a `:root` token already holds
+ * names that token as the replacement.
  */
-function renderScopedTokens(scan, rootTokens) {
-    const tableEl = document.getElementById("styleGuideScopedTokens")
-    const rootValues = new Map(
-        rootTokens.map(({ name, value }) => [name, value]),
-    )
-
-    tableEl.appendChild(
-        buildRow("th", ["Token", "Value", "Declared at", "References", ""]),
-    )
-
-    scan.scopedTokens.forEach(({ name, value, location }) => {
-        tableEl.appendChild(
-            buildRow("td", [
-                createEl("code", { text: name }),
-                value,
-                location,
-                scan.references[name] ?? 0,
-                rootValues.has(name)
-                    ? `Overrides the :root value ${rootValues.get(name)}`
-                    : "",
-            ]),
-        )
-    })
-
-    scan.runtimeTokens.forEach(({ name, locations }) => {
-        tableEl.appendChild(
-            buildRow("td", [
-                createEl("code", { text: name }),
-                "",
-                locations.join(", "),
-                scan.references[name] ?? 0,
-                "Set at runtime from JavaScript",
-            ]),
-        )
-    })
-}
-
-/**
- * The color literals, one row per color: the spellings of a color (`#fff`, `#FFF`, `#FFFFFF`) are
- * grouped by what they resolve to, most used first. A color a `:root` token already holds names
- * that token as the replacement.
- */
-function renderLiterals(literals, rootTokens) {
-    const tableEl = document.getElementById("styleGuideLiterals")
+function groupLiterals(literals, rootTokens) {
     const colorTokens = rootTokens.filter(({ kind }) => kind === "color")
     const byColor = new Map()
 
     literals.forEach(({ value, locations }) => {
         const color = resolveColor(value)
-        const group = byColor.get(color) ?? { spellings: [], locations: [] }
+        const group = byColor.get(color) ?? {
+            color,
+            spellings: [],
+            locations: [],
+            tokens: colorTokens
+                .filter(({ identity }) => identity === color)
+                .map(({ name }) => name),
+        }
         group.spellings.push(value)
         group.locations.push(...locations)
         byColor.set(color, group)
     })
 
-    tableEl.appendChild(
-        buildRow("th", ["", "Literal", "Uses", "Token to use instead"]),
+    return Array.from(byColor.values()).sort(
+        (a, b) => b.locations.length - a.locations.length,
     )
-
-    Array.from(byColor.entries())
-        .sort(([, a], [, b]) => b.locations.length - a.locations.length)
-        .forEach(([color, { spellings, locations }]) => {
-            const swatchEl = createEl("span", { className: "sg-swatch" })
-            swatchEl.style.backgroundColor = color
-
-            const usesEl = createEl("details")
-            usesEl.appendChild(
-                createEl("summary", { text: String(locations.length) }),
-            )
-            locations.forEach((location) =>
-                usesEl.appendChild(createEl("div", { text: location })),
-            )
-
-            tableEl.appendChild(
-                buildRow("td", [
-                    swatchEl,
-                    spellings.join(", "),
-                    usesEl,
-                    colorTokens
-                        .filter(({ identity }) => identity === color)
-                        .map(({ name }) => name)
-                        .join(", "),
-                ]),
-            )
-        })
 }
 
 /**
@@ -389,21 +300,10 @@ function mountMenuSpecimens() {
             ],
         }),
     )
-    hostEl.appendChild(createEl("span", { text: "A row's ⋯ menu" }))
+    hostEl.append("A row's ⋯ menu")
 
     // Alpine's mutation observer initializes the new controls; htmx needs to be told
     htmx.process(hostEl)
-}
-
-function bindSnackbarButtons() {
-    document
-        .querySelectorAll("[data-style-guide-snackbar]")
-        .forEach((buttonEl) => {
-            const type = buttonEl.dataset.styleGuideSnackbar
-            buttonEl.addEventListener("click", () =>
-                SNACKBARS[type](`A ${type} message`),
-            )
-        })
 }
 
 /** Whether the browser renders `family` (a family, a stack or a generic keyword) with a font it has */
@@ -420,44 +320,10 @@ function isFontAvailable(family) {
 
 /**
  * The typed value as a `font-family` value: as written when it parses (a family, a stack or a
- * generic keyword), else quoted as one family name (a name with a digit, such as "Neue Haas 55")
+ * generic keyword), else quoted as one family name (a name with a digit, such as "Neue Haas 55").
+ * It is made parseable before it is measured because the canvas font setter ignores a value it
+ * cannot parse and keeps the previous font.
  */
 function asFontFamily(value) {
     return CSS.supports("font-family", value) ? value : JSON.stringify(value)
-}
-
-/**
- * The font tester: the typed value becomes the specimen's font family, and the status says whether
- * the browser has it. The value is made parseable before it is measured because the canvas font
- * setter ignores a value it cannot parse and keeps the previous font.
- */
-function bindFontTester() {
-    const inputEl = document.getElementById("styleGuideFontInput")
-    const specimenEl = document.getElementById("styleGuideFontSpecimen")
-    const statusEl = document.getElementById("styleGuideFontStatus")
-
-    const setStatus = (text, isFlag) => {
-        statusEl.textContent = text
-        statusEl.className = isFlag ? "sg-flag" : "sg-dim"
-    }
-
-    inputEl.addEventListener("input", () => {
-        const value = inputEl.value.trim()
-        const family = asFontFamily(value)
-
-        if (value === "") {
-            specimenEl.style.fontFamily = ""
-            setStatus("Type a font family to preview it.", false)
-        } else if (isFontAvailable(family)) {
-            specimenEl.style.fontFamily = family
-            setStatus("Available in this browser.", false)
-        } else {
-            // The browser falls back on its own; the status says so
-            specimenEl.style.fontFamily = family
-            setStatus(
-                "Not available in this browser: shown in the fallback font.",
-                true,
-            )
-        }
-    })
 }

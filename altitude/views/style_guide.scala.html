@@ -1,10 +1,27 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Stats
 
-@* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan) that
-   js/style-guide.js renders the tokens, the icons and the token audit from; the specimens below are static markup
-   using the real classes of core.css and tabs.css. *@
+@* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan): the `styleGuide`
+   Alpine component (js/style-guide.js) reads it, and the templates below render the tokens, the icons and the token
+   audit from the component. The specimens are static markup using the real classes of core.css and tabs.css. *@
 @(stats: Stats, scanJson: String)
+
+@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another. A card
+   is a button: clicking it copies the token's var() reference. *@
+@tokenCards(kinds: String) = {
+  <div class="sg-tokens">
+    <template x-for="token in tokensOf('@kinds')">
+      <button type="button" class="sg-token" @@click="copyReference(token.name)">
+        <div class="sg-sample" :class="token.kind" :style="token.sampleStyle" x-text="token.sampleText"></div>
+        <code x-text="token.name"></code>
+        <span :class="{ 'sg-flag': !token.value }" x-text="token.value || 'Not served yet: rebuild the resources'"></span>
+        <span class="sg-dim" x-show="token.note" x-text="token.note"></span>
+        <span :class="token.references ? 'sg-dim' : 'sg-flag'" x-text="token.usage"></span>
+        <span class="sg-flag" x-show="token.duplicates.length" x-text="'Same value as ' + token.duplicates.join(', ')"></span>
+      </button>
+    </template>
+  </div>
+}
 
 <!DOCTYPE html>
 
@@ -73,12 +90,12 @@
       }
 
       /* One font token, one column: a text specimen wants the width */
-      .sg-tokens[data-token-kind="font"] {
+      #typography .sg-tokens {
         grid-template-columns: 1fr;
       }
 
-      /* A token card is a button: clicking it copies the token's var() reference. Its one column never grows past
-         the card, so a sample wider than the card (a 400px length bar) is clamped by its max-width instead */
+      /* A token card's one column never grows past the card, so a sample wider than the card (a 400px length bar) is
+         clamped by its max-width instead */
       .sg-token {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -222,13 +239,13 @@
         <a href="#token-audit">Token audit</a>
       </div>
 
-      <div>
+      <div x-data="styleGuide">
         <section id="colors">
           <h2>Colors</h2>
           <p>Every color token of <code>:root</code> in <code>core.css</code>. Click a token to copy its
              <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
              under Token audit.</p>
-          <div class="sg-tokens" data-token-kind="color"></div>
+          @tokenCards("color")
         </section>
 
         <section id="typography">
@@ -238,7 +255,7 @@
              installed.</p>
           <div class="sg-halves">
             <div>
-              <div class="sg-tokens" data-token-kind="font"></div>
+              @tokenCards("font")
 
               <h3>Sizes</h3>
               <div class="sg-row">
@@ -261,14 +278,15 @@
               </div>
             </div>
 
-            @* The font tester: js/style-guide.js previews the typed family on the specimen *@
+            @* The font tester: the typed value becomes the specimen's font family, and the status says whether the
+               browser has it *@
             <div>
               <h3>Font tester</h3>
-              <input type="text" id="styleGuideFontInput" autocomplete="off" spellcheck="false"
+              <input type="text" x-model="fontInput" autocomplete="off" spellcheck="false"
                      placeholder="A font family, a stack, or a keyword such as monospace"
                      aria-label="Font family to test">
-              <span class="sg-dim" id="styleGuideFontStatus">Type a font family to preview it.</span>
-              <div id="styleGuideFontSpecimen">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+              <span :class="isFontMissing ? 'sg-flag' : 'sg-dim'" x-text="fontStatus"></span>
+              <div :style="{ fontFamily }">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
                 tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
                 ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
                 voluptate velit esse cillum dolore eu fugiat nulla pariatur.</div>
@@ -280,13 +298,13 @@
           <h2>Spacing &amp; sizing</h2>
           <p>Use the section space between large areas, such as panels and page paddings, and the control spaces between
              individual elements and list rows.</p>
-          <div class="sg-tokens" data-token-kind="length"></div>
+          @tokenCards("length")
         </section>
 
         <section id="borders-shadows">
           <h2>Borders &amp; shadows</h2>
           <p>A border token carries width, style and color together; use it whole rather than restating its parts.</p>
-          <div class="sg-tokens" data-token-kind="border shadow"></div>
+          @tokenCards("border shadow")
         </section>
 
         <section id="panels-layout">
@@ -309,7 +327,14 @@
           <h2>Icons</h2>
           <p>Font Awesome 5, solid style (<code>fas</code>). These are the icons in use in the templates and scripts,
              each with the number of places it appears; reuse one before adding another.</p>
-          <div class="sg-icons" id="styleGuideIcons"></div>
+          <div class="sg-icons">
+            <template x-for="icon in icons">
+              <div>
+                <i class="fas" :class="icon.name" aria-hidden="true"></i>
+                <span><code x-text="icon.name"></code> <span class="sg-dim" x-text="'× ' + icon.count"></span></span>
+              </div>
+            </template>
+          </div>
         </section>
 
         <section id="buttons">
@@ -334,7 +359,8 @@
             <input type="text" placeholder="input" aria-label="Input specimen">
             <input type="text" class="readonly" value="input.readonly" readonly aria-label="Read-only input specimen">
             <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
-            <form action="#" id="styleGuideErrorForm">
+            @* A single-field form submits on Return; the error specimen has nowhere to submit to *@
+            <form action="#" @@submit.prevent>
               <div class="error">This field is required</div>
               <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
             </form>
@@ -365,7 +391,7 @@
           <p>Both controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
              like an Add button, opens a separate modal anchored below its control. Submit the dialog blank to see the
              validation state, or with a name to see a completed operation.</p>
-          @* js/style-guide.js builds both controls here, the way the explorer lists build theirs *@
+          @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
         </section>
 
@@ -374,9 +400,9 @@
           <p>The outcome of an action is reported in the snackbar: success for a completed one, warning for one that
              partly applied, error for a failure. A failure to load a page area is a server error message in place.</p>
           <div class="sg-row">
-            <button type="button" class="action-button success" data-style-guide-snackbar="success">Success snackbar</button>
-            <button type="button" class="action-button warning" data-style-guide-snackbar="warning">Warning snackbar</button>
-            <button type="button" class="action-button error" data-style-guide-snackbar="error">Error snackbar</button>
+            <button type="button" class="action-button success" @@click="showSuccessSnackBar('A success message')">Success snackbar</button>
+            <button type="button" class="action-button warning" @@click="showWarningSnackBar('A warning message')">Warning snackbar</button>
+            <button type="button" class="action-button error" @@click="showErrorSnackBar('An error message')">Error snackbar</button>
           </div>
           <div id="serverError">#serverError: something went wrong on the server.</div>
           <div class="sg-row">
@@ -388,12 +414,15 @@
         <section id="badges-states">
           <h2>Badges &amp; states</h2>
           <p>A scope the results are narrowed to, such as the map area, follows the total as a chip; the whole chip is the
-             button that clears it. A count follows its row's name, dimmed. The drag and drop states are set by the
+             button that clears it. A count follows its row's name, dimmed. A Location's pin on a map is the
+             <code>.location-pin</code> glyph, drawn as a Leaflet div icon. The drag and drop states are set by the
              drag and drop modules, never by hand.</p>
           <div class="sg-row">
             <button type="button" class="filter-chip" title="Showing the map area only">Map area &times;</button>
             <span>.filter-chip</span>
             <span>Row name <span class="asset-count">(12)</span></span>
+            <span class="location-pin"><i class="fas fa-map-marker-alt" aria-hidden="true"></i></span>
+            <span>.location-pin</span>
             <span class="draggable">.draggable</span>
             <span class="dragging">.dragging</span>
             <span class="drop-target">.drop-target</span>
@@ -408,15 +437,54 @@
              component; an override replaces a <code>:root</code> value for that component.</p>
 
           <h3>Other tokens</h3>
-          <div class="sg-tokens" data-token-kind="other"></div>
+          @tokenCards("other")
 
           <h3>Scoped and runtime tokens</h3>
-          <table id="styleGuideScopedTokens"></table>
+          @* Their values are shown as declared: the elements they apply to are not on this page, so there is
+             nothing to resolve them against *@
+          <table>
+            <tr><th>Token</th><th>Value</th><th>Declared at</th><th>References</th><th></th></tr>
+            <template x-for="token in scopedTokens">
+              <tr>
+                <td><code x-text="token.name"></code></td>
+                <td x-text="token.value"></td>
+                <td x-text="token.location"></td>
+                <td x-text="referencesOf(token.name)"></td>
+                <td x-text="overrideNote(token.name)"></td>
+              </tr>
+            </template>
+            <template x-for="token in runtimeTokens">
+              <tr>
+                <td><code x-text="token.name"></code></td>
+                <td></td>
+                <td x-text="token.locations.join(', ')"></td>
+                <td x-text="referencesOf(token.name)"></td>
+                <td>Set at runtime from JavaScript</td>
+              </tr>
+            </template>
+          </table>
 
           <h3>Color literals</h3>
           <p>Colors written as literals instead of tokens, grouped by the color they resolve to. A literal equal to a
              token should use it.</p>
-          <table id="styleGuideLiterals"></table>
+          <table>
+            <tr><th></th><th>Literal</th><th>Uses</th><th>Token to use instead</th></tr>
+            <template x-for="literal in literals">
+              <tr>
+                <td><span class="sg-swatch" :style="{ backgroundColor: literal.color }"></span></td>
+                <td x-text="literal.spellings.join(', ')"></td>
+                <td>
+                  <details>
+                    <summary x-text="literal.locations.length"></summary>
+                    <template x-for="location in literal.locations">
+                      <div x-text="location"></div>
+                    </template>
+                  </details>
+                </td>
+                <td x-text="literal.tokens.join(', ')"></td>
+              </tr>
+            </template>
+          </table>
         </section>
       </div>
     </main>
@@ -428,6 +496,7 @@
     <script type="module">
       import { initApp } from "/static/js/app.js"
       import { highlightNav } from "/static/js/common/navigation.js"
+      // Importing the module registers the `styleGuide` component, before `initApp()` starts Alpine
       import { initStyleGuide } from "/static/js/style-guide.js"
 
       initApp()
