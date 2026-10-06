@@ -54,6 +54,9 @@
     --dnd-drop-target-color: rgb(109, 140, 253);
     --dnd-draggable-border: 1px solid #b0acac;
 
+    /* Chips: a dismissable scope the results are narrowed to, such as the map area */
+    --chip-padding: 2px 8px;
+    --chip-border-radius: 10px;
 
     /* For messages such as form validation and server response status */
     --message-background-color: #2f2e2e;
@@ -281,6 +284,18 @@ form input.error, form input.error:focus {
     color: var(--font-color-dim);
     font-size: .9em;
     white-space: nowrap;
+}
+
+/* A dismissable scope chip, in the drop-target blue: the whole chip is the button that clears the scope it names
+   (its text, then ×), so it carries no separate close control */
+.filter-chip {
+    padding: var(--chip-padding);
+    border: 1px solid var(--dnd-drop-target-color);
+    border-radius: var(--chip-border-radius);
+    background: none;
+    color: var(--dnd-drop-target-color);
+    font-size: smaller;
+    cursor: pointer;
 }
 
 /*          */

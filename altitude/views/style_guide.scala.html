@@ -67,7 +67,8 @@
 
       .sg-tokens {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(calc(var(--modal-content-width) * 0.7), 1fr));
+        /* auto-fit, so a kind with fewer cards than tracks (shadows) still spans the width */
+        grid-template-columns: repeat(auto-fit, minmax(calc(var(--modal-content-width) * 0.7), 1fr));
         gap: var(--control-vertical-space);
       }
 
@@ -76,9 +77,11 @@
         grid-template-columns: 1fr;
       }
 
-      /* A token card is a button: clicking it copies the token's var() reference */
+      /* A token card is a button: clicking it copies the token's var() reference. Its one column never grows past
+         the card, so a sample wider than the card (a 400px length bar) is clamped by its max-width instead */
       .sg-token {
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         row-gap: calc(var(--control-vertical-space) / 3);
         align-content: start;
         padding: var(--panel-padding);
@@ -180,6 +183,11 @@
         background-color: var(--dnd-drop-target-color);
       }
 
+      /* The error form is taller than the fields beside it; line the fields up on their bottoms */
+      #forms .sg-row {
+        align-items: end;
+      }
+
       /* The drag count badge positions itself absolutely over the dragged thumbnail */
       .sg-badge-host {
         position: relative;
@@ -278,8 +286,7 @@
         <section id="borders-shadows">
           <h2>Borders &amp; shadows</h2>
           <p>A border token carries width, style and color together; use it whole rather than restating its parts.</p>
-          <div class="sg-tokens" data-token-kind="border"></div>
-          <div class="sg-tokens" data-token-kind="shadow"></div>
+          <div class="sg-tokens" data-token-kind="border shadow"></div>
         </section>
 
         <section id="panels-layout">
@@ -327,11 +334,11 @@
             <input type="text" placeholder="input" aria-label="Input specimen">
             <input type="text" class="readonly" value="input.readonly" readonly aria-label="Read-only input specimen">
             <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
+            <form action="#" id="styleGuideErrorForm">
+              <div class="error">This field is required</div>
+              <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
+            </form>
           </div>
-          <form action="#" id="styleGuideErrorForm">
-            <div class="error">This field is required</div>
-            <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
-          </form>
         </section>
 
         <section id="navigation-tabs">
@@ -380,9 +387,12 @@
 
         <section id="badges-states">
           <h2>Badges &amp; states</h2>
-          <p>A count follows its row's name, dimmed. The drag and drop states are set by the drag and drop modules, never
-             by hand.</p>
+          <p>A scope the results are narrowed to, such as the map area, follows the total as a chip; the whole chip is the
+             button that clears it. A count follows its row's name, dimmed. The drag and drop states are set by the
+             drag and drop modules, never by hand.</p>
           <div class="sg-row">
+            <button type="button" class="filter-chip" title="Showing the map area only">Map area &times;</button>
+            <span>.filter-chip</span>
             <span>Row name <span class="asset-count">(12)</span></span>
             <span class="draggable">.draggable</span>
             <span class="dragging">.dragging</span>

@@ -31,7 +31,7 @@
     height: 100%;
   }
 
-  /* The grid / map layout toggle: two pressed-state buttons, the pressed one in the drop-target blue */
+  /* The grid / map layout toggle: two pressed-state buttons, the pressed one in the tertiary background */
   #layoutToggle {
     display: flex;
     gap: 2px;
@@ -59,16 +59,9 @@
     background-color: var(--background-tertiary-color);
   }
 
-  /* The "Map area" chip: the bbox scope of the crowded-pin panel, cleared by its × */
+  /* The "Map area" chip (a .filter-chip): the bbox scope of the crowded-pin panel, set off from the total */
   #bboxScope {
     margin-left: 10px;
-    padding: 2px 8px;
-    border: 1px solid var(--dnd-drop-target-color);
-    border-radius: 10px;
-    background: none;
-    color: var(--dnd-drop-target-color);
-    font-size: smaller;
-    cursor: pointer;
   }
 
   /* Direct children only: as a descendant selector this would also match the View control's popover
@@ -358,7 +351,7 @@
       <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.label"></span>
       @* The map-area scope of the crowded-pin panel (js/map/map-panel.js); its × clears `bbox` in either layout *@
       @if(bbox.isDefined) {
-        <button id="bboxScope" type="button" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
+        <button id="bboxScope" type="button" class="filter-chip" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
       }
     </div>
   </div>

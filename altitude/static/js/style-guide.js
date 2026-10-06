@@ -217,12 +217,14 @@ function copyReference(name) {
     )
 }
 
-/** Each token goes to the container of its kind (`data-token-kind`), in source order */
+/** Each token goes to the container of its kind (`data-token-kind`, a space-separated list, so one container may hold
+ * several kinds). Tokens are grouped by kind and keep their source order within it, so sharing a container does not
+ * interleave the kinds */
 function renderRootTokens(rootTokens) {
-    rootTokens.forEach((token) => {
-        document
-            .querySelector(`[data-token-kind="${token.kind}"]`)
-            .appendChild(buildTokenCard(token))
+    const kinds = [...new Set(rootTokens.map((token) => token.kind))]
+    kinds.forEach((kind) => {
+        const container = document.querySelector(`[data-token-kind~="${kind}"]`)
+        rootTokens.filter((token) => token.kind === kind).forEach((token) => container.appendChild(buildTokenCard(token)))
     })
 }
 

@@ -511,8 +511,8 @@ holds `#map` (`data-map-bounds="s,w,n,e"`, empty when nothing is plotted, `data-
 `data-map-tile-url`, `data-map-attribution`; `isolation: isolate`, so Leaflet's panes stay under the
 modals) and the hidden `<aside id="mapPanel">`. The pin styles (`.asset-pin`, `.location-pin.on-map`)
 live in that template; `.location-pin` itself is in `core.css`, shared with the pin editor. While the
-results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip, whose
-`data-app-search-bbox=""` clears it, in either layout.
+results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip (a `core.css` `.filter-chip`:
+the whole chip is the button), whose `data-app-search-bbox=""` clears it, in either layout.
 
 `js/map/map-view.js` hydrates `#map` (`data-app-fragment="map-view"`, after the results hydrator). One
 map exists at a time: the results hydrator calls `disposeMapView()` for every new results fragment,
@@ -743,7 +743,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 
 - **Discovered, nothing to maintain:** the tokens and the icons. The server's source scan is embedded as JSON
   (`#styleGuideScan`) and `js/style-guide.js` renders it: each `:root` token resolved against the loaded stylesheets
-  and placed by the kind of its value (`[data-token-kind]`), with its note (the comment directly above its
+  and placed by the kind of its value (`[data-token-kind]`, a space-separated list, so borders and shadows share one
+  grid), with its note (the comment directly above its
   declaration), reference count, an "Unused" flag, and the tokens sharing its value; a click copies its `var()`
   reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
   replaces), the ones only set from JavaScript, and the color literals grouped by resolved color, each naming the
