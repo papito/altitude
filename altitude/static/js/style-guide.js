@@ -5,9 +5,10 @@
  * and where they are declared and referenced, the color literals and the icons. The `styleGuide`
  * Alpine component holds what the page's templates render from it: each `:root` token resolved
  * against the stylesheets the browser actually loaded and sorted by the kind of value it holds, the
- * icons and the token audit. It is also the state of the font tester of the Typography section, and
- * what the page's buttons call. The live menu and dialog specimens are no template:
- * `initStyleGuide` builds them through the modules the explorer lists use.
+ * icons and the token audit. It is also the state of the font tester of the Typography section and
+ * of the alpha slider of the `--background-color` card, and what the page's buttons call. The live
+ * menu and dialog specimens are no template: `initStyleGuide` builds them through the modules the
+ * explorer lists use.
  */
 import {
     buildContextMenuCtrl,
@@ -68,6 +69,11 @@ const OTHER_KIND = { kind: "other", sampleProperties: [] }
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
 
+// The token whose card has an alpha slider
+const ALPHA_SLIDER_TOKEN = "--background-color"
+// A color with its alpha replaced, as `withAlpha` writes it: the first group is the color
+const ALPHA_REPLACEMENT = /^rgb\(from (.+) r g b \/ [\d.]+\)$/
+
 // Wide glyphs and digits, so two fonts seldom measure the same
 const FONT_PROBE_TEXT = "mmmmmmmmmmlliWWW0123456789"
 // The typed value is tried in front of each generic family: a font that is the default of one of
@@ -107,6 +113,8 @@ function styleGuide() {
         literals: groupLiterals(scan.literals, rootTokens),
         // What is typed into the font tester
         fontInput: "",
+        // The alphas the sliders were dragged to, by token name
+        alphas: {},
 
         showSuccessSnackBar,
         showWarningSnackBar,
@@ -136,11 +144,35 @@ function styleGuide() {
         },
 
         copyReference(name) {
-            const reference = `var(${name})`
+            copy(`var(${name})`)
+        },
 
-            navigator.clipboard.writeText(reference).then(
-                () => showSuccessSnackBar(`Copied ${reference}`),
-                () => showErrorSnackBar(`Could not copy ${reference}`),
+        copyValue(token) {
+            copy(this.currentValue(token))
+        },
+
+        /** Where a token's alpha slider stands: at the declared alpha until it is dragged */
+        alphaOf(token) {
+            return this.alphas[token.name] ?? token.alpha
+        },
+
+        /** A token's value: as declared, or with the alpha its slider was dragged to */
+        currentValue(token) {
+            const alpha = this.alphaOf(token)
+            return alpha === token.alpha
+                ? token.value
+                : withAlpha(token.value, alpha)
+        },
+
+        /**
+         * Gives the token `alpha` for as long as the page is open: the value is declared inline on
+         * the root element, where it wins over the stylesheet's
+         */
+        setAlpha(token, alpha) {
+            this.alphas[token.name] = alpha
+            document.documentElement.style.setProperty(
+                token.name,
+                this.currentValue(token),
             )
         },
 
@@ -174,6 +206,13 @@ function referencesOf(scan, name) {
     return scan.references[name] ?? 0
 }
 
+function copy(text) {
+    navigator.clipboard.writeText(text).then(
+        () => showSuccessSnackBar(`Copied ${text}`),
+        () => showErrorSnackBar(`Could not copy ${text}`),
+    )
+}
+
 function usageLabel(references) {
     if (references === 0) {
         return "Unused"
@@ -192,10 +231,30 @@ function resolveColor(value) {
 }
 
 /**
+ * The alpha of a color in the browser's serialization (`resolveColor`): the fourth component of
+ * `rgba(r, g, b, a)`, or what follows the slash of `color(srgb r g b / a)`. A color serialized
+ * without an alpha is opaque.
+ */
+function alphaOfColor(color) {
+    const [, alpha = 1] = color.match(/(?:\/|^rgba\(.*,)\s*([\d.]+)\)$/) ?? []
+    return Number(alpha)
+}
+
+/**
+ * `color` with its alpha replaced, in relative color syntax, so the color itself stays as it is
+ * written. A color that already is such a replacement (a slider's value pasted into the
+ * stylesheet) gets the new alpha in place of its own, rather than a second wrapper.
+ */
+function withAlpha(color, alpha) {
+    const [, base = color] = color.match(ALPHA_REPLACEMENT) ?? []
+    return `rgb(from ${base} r g b / ${alpha})`
+}
+
+/**
  * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind and
- * sample, their reference count, and the names of the other tokens of that kind with the same
- * value. A token the scan found in the source but the served stylesheet does not have yet resolves
- * to nothing (`value` is empty, `kind` is "other").
+ * sample, their reference count, the names of the other tokens of that kind with the same value,
+ * and for a color its alpha. A token the scan found in the source but the served stylesheet does
+ * not have yet resolves to nothing (`value` is empty, `kind` is "other").
  */
 function resolveRootTokens(scan) {
     const rootStyle = getComputedStyle(document.documentElement)
@@ -208,14 +267,19 @@ function resolveRootTokens(scan) {
             sampleText = "",
         } = value ? kindOf(value) : OTHER_KIND
         const references = referencesOf(scan, name)
+        const isColor = kind === "color"
+        // What two tokens must share to be duplicates of each other
+        const identity = isColor ? resolveColor(value) : value
 
         return {
             name,
             note,
             value,
             kind,
-            // What two tokens must share to be duplicates of each other
-            identity: kind === "color" ? resolveColor(value) : value,
+            identity,
+            // The declared alpha of a color
+            alpha: isColor ? alphaOfColor(identity) : undefined,
+            hasAlphaSlider: isColor && name === ALPHA_SLIDER_TOKEN,
             references,
             usage: usageLabel(references),
             sampleStyle: Object.fromEntries(

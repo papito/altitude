@@ -791,6 +791,13 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   has that font, decided by measuring the text with the value in front of each generic family against the generic
   family alone. The input is the component's `fontInput` (`x-model`), which the specimen's style and the status
   derive from. Nothing is requested from the server.
+- **Alpha slider:** the `--background-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider
+  under its copy button. Dragging it declares the token inline on the root element with that alpha, so the page
+  repaints with it until it is reloaded; nothing is stored. The value is written in relative color syntax
+  (`rgb(from #363636 r g b / 0.6)`), which keeps the color as declared; the card shows it, and Copy value copies it
+  for pasting into `core.css`. The slider starts at the declared alpha, and a declared value that already is such a
+  replacement has its alpha replaced rather than wrapped again. A token card is therefore a `div` holding the copy
+  button and, for that token, the slider row: an input cannot sit inside a button.
 
 The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates.
 

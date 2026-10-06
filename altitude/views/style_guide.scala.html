@@ -7,18 +7,30 @@
 @(stats: Stats, scanJson: String)
 
 @* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another. A card
-   is a button: clicking it copies the token's var() reference. *@
+   is mostly a button: clicking it copies the token's var() reference. The card of a token with an alpha slider
+   (js/style-guide.js) has the slider below the button, and a button that copies the value the slider gives it. *@
 @tokenCards(kinds: String) = {
   <div class="sg-tokens">
     <template x-for="token in tokensOf('@kinds')">
-      <button type="button" class="sg-token" @@click="copyReference(token.name)">
-        <div class="sg-sample" :class="token.kind" :style="token.sampleStyle" x-text="token.sampleText"></div>
-        <code x-text="token.name"></code>
-        <span :class="{ 'sg-flag': !token.value }" x-text="token.value || 'Not served yet: rebuild the resources'"></span>
-        <span class="sg-dim" x-show="token.note" x-text="token.note"></span>
-        <span :class="token.references ? 'sg-dim' : 'sg-flag'" x-text="token.usage"></span>
-        <span class="sg-flag" x-show="token.duplicates.length" x-text="'Same value as ' + token.duplicates.join(', ')"></span>
-      </button>
+      <div class="sg-token">
+        <button type="button" @@click="copyReference(token.name)">
+          <div class="sg-sample" :class="token.kind" :style="token.sampleStyle" x-text="token.sampleText"></div>
+          <code x-text="token.name"></code>
+          <span :class="{ 'sg-flag': !token.value }" x-text="currentValue(token) || 'Not served yet: rebuild the resources'"></span>
+          <span class="sg-dim" x-show="token.note" x-text="token.note"></span>
+          <span :class="token.references ? 'sg-dim' : 'sg-flag'" x-text="token.usage"></span>
+          <span class="sg-flag" x-show="token.duplicates.length" x-text="'Same value as ' + token.duplicates.join(', ')"></span>
+        </button>
+        <template x-if="token.hasAlphaSlider">
+          <div class="sg-row">
+            <label class="sg-row">Alpha
+              <input type="range" min="0" max="1" step="0.01" :value="alphaOf(token)"
+                     @@input="setAlpha(token, $event.target.valueAsNumber)">
+            </label>
+            <button type="button" class="action-button small" @@click="copyValue(token)">Copy value</button>
+          </div>
+        </template>
+      </div>
     </template>
   </div>
 }
@@ -94,21 +106,36 @@
         grid-template-columns: 1fr;
       }
 
-      /* A token card's one column never grows past the card, so a sample wider than the card (a 400px length bar) is
-         clamped by its max-width instead */
-      .sg-token {
+      /* A token card and the button that fills it. Their one column never grows past the card, so a sample wider
+         than the card (a 400px length bar) is clamped by its max-width instead */
+      .sg-token, .sg-token > button {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         row-gap: calc(var(--control-vertical-space) / 3);
         align-content: start;
+      }
+
+      .sg-token {
         padding: var(--panel-padding);
         border: 1px solid var(--panel-border-color);
+        overflow-wrap: anywhere;
+      }
+
+      .sg-token > button {
+        padding: 0;
+        border: 0;
         background: none;
         color: inherit;
         font: inherit;
         text-align: left;
         cursor: pointer;
-        overflow-wrap: anywhere;
+      }
+
+      /* core.css gives every input the box of a text field */
+      .sg-token input[type="range"] {
+        padding: 0;
+        border: 0;
+        background: none;
       }
 
       .sg-sample {
@@ -244,7 +271,8 @@
           <h2>Colors</h2>
           <p>Every color token of <code>:root</code> in <code>core.css</code>. Click a token to copy its
              <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
-             under Token audit.</p>
+             under Token audit. The slider of <code>--background-color</code> repaints this page with the token at
+             another alpha, until the page is reloaded.</p>
           @tokenCards("color")
         </section>
 
