@@ -3,7 +3,8 @@
 
 @* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan): the `styleGuide`
    Alpine component (js/style-guide.js) reads it, and the templates below render the tokens, the icons and the token
-   audit from the component. The specimens are static markup using the real classes of core.css and tabs.css. *@
+   audit from the component, which is also the state of the theme switcher. The specimens are static markup using
+   the real classes of core.css and tabs.css. *@
 @(stats: Stats, scanJson: String)
 
 @* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another. A card
@@ -247,10 +248,15 @@
       @includes.html.nav(stats = stats)
     </nav>
 
-    <main>
+    <main x-data="styleGuide">
       @includes.html.html_common()
 
       <div id="styleGuideToc">
+        @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for the guide *@
+        <div id="styleGuideTheme" class="toggle-group" role="group" aria-label="Theme">
+          <button type="button" :aria-pressed="isTheme('light')" @@click="setTheme('light')">Light</button>
+          <button type="button" :aria-pressed="isTheme('dark')" @@click="setTheme('dark')">Dark</button>
+        </div>
         <a href="#colors">Colors</a>
         <a href="#typography">Typography</a>
         <a href="#spacing">Spacing &amp; sizing</a>
@@ -266,13 +272,15 @@
         <a href="#token-audit">Token audit</a>
       </div>
 
-      <div x-data="styleGuide">
+      <div>
         <section id="colors">
           <h2>Colors</h2>
-          <p>Every color token of <code>:root</code> in <code>core.css</code>. Click a token to copy its
+          <p>Every color token of <code>:root</code> in <code>core.css</code>, each a
+             <code>light-dark(light, dark)</code> pair. The app is dark; the Light / Dark switch above the contents shows
+             this page in either theme and is remembered in this browser. Click a token to copy its
              <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
-             under Token audit. The slider of <code>--background-color</code> repaints this page with the token at
-             another alpha, until the page is reloaded.</p>
+             under Token audit. The slider of <code>--background-color</code> repaints this page with the token's color
+             of the theme shown at another alpha, until the page is reloaded.</p>
           @tokenCards("color")
         </section>
 
@@ -296,7 +304,8 @@
 
               <h3>Text colors</h3>
               <div class="sg-row">
-                <span>Default</span>
+                <span style="color: var(--font-color)">--font-color</span>
+                <span style="color: var(--on-fill-color); background-color: var(--success-background-color)">--on-fill-color</span>
                 <span style="color: var(--font-color-dim)">--font-color-dim</span>
                 <span style="color: var(--faded-font-color)">--faded-font-color</span>
                 <span style="color: var(--success-font-color)">--success-font-color</span>
@@ -369,13 +378,20 @@
           <h2>Buttons</h2>
           <p>Success, warning and error buttons signal an outcome, not emphasis. Hover and keyboard focus share one look,
              through <code>:focus-visible</code> and not <code>:focus</code>, so a button a dialog returns focus to is
-             not left glowing after a mouse click.</p>
+             not left glowing after a mouse click. A choice between ways of showing the same thing is a
+             <code>.toggle-group</code>: its buttons side by side, the current one <code>aria-pressed="true"</code>. The
+             theme switch above the contents is a live one.</p>
           <div class="sg-row">
             <button type="button" class="action-button">.action-button</button>
             <button type="button" class="action-button success">.success</button>
             <button type="button" class="action-button warning">.warning</button>
             <button type="button" class="action-button error">.error</button>
             <button type="button" class="action-button small"><i class="fas fa-plus" aria-hidden="true"></i><span>.small</span></button>
+            <div class="toggle-group" role="group" aria-label="Toggle group specimen">
+              <button type="button" aria-pressed="true">Current</button>
+              <button type="button" aria-pressed="false">Other</button>
+            </div>
+            <span>.toggle-group</span>
           </div>
         </section>
 

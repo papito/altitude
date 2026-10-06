@@ -94,6 +94,8 @@ export const Const = {
         horizontalSplitSizes: "horizontalSplitSizes",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
+        // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
+        styleGuideTheme: "styleGuideTheme",
     },
 
     sessionStore: {

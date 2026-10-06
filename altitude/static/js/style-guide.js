@@ -5,10 +5,10 @@
  * and where they are declared and referenced, the color literals and the icons. The `styleGuide`
  * Alpine component holds what the page's templates render from it: each `:root` token resolved
  * against the stylesheets the browser actually loaded and sorted by the kind of value it holds, the
- * icons and the token audit. It is also the state of the font tester of the Typography section and
- * of the alpha slider of the `--background-color` card, and what the page's buttons call. The live
- * menu and dialog specimens are no template: `initStyleGuide` builds them through the modules the
- * explorer lists use.
+ * icons and the token audit. It is also the state of the theme switcher, of the font tester of the
+ * Typography section and of the alpha slider of the `--background-color` card, and what the page's
+ * buttons call. The live menu and dialog specimens are no template: `initStyleGuide` builds them
+ * through the modules the explorer lists use.
  */
 import {
     buildContextMenuCtrl,
@@ -69,6 +69,11 @@ const OTHER_KIND = { kind: "other", sampleProperties: [] }
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
 
+// The themes, in the order `light-dark()` takes their colors
+const THEMES = ["light", "dark"]
+// A `light-dark()` value: the group is its two colors
+const LIGHT_DARK = /^light-dark\((.*)\)$/s
+
 // The token whose card has an alpha slider
 const ALPHA_SLIDER_TOKEN = "--background-color"
 // A color with its alpha replaced, as `withAlpha` writes it: the first group is the color
@@ -98,12 +103,18 @@ function styleGuide() {
     const scan = JSON.parse(
         document.getElementById("styleGuideScan").textContent,
     )
+    // A token resolves to its color in the theme the page is shown in, so the theme comes first
+    const theme = rememberedTheme()
+    applyTheme(theme)
     const rootTokens = resolveRootTokens(scan)
     const rootValues = new Map(
         rootTokens.map(({ name, value }) => [name, value]),
     )
 
     return {
+        // The theme the page is shown in
+        theme,
+        rootTokens,
         icons: Object.keys(scan.icons)
             .sort()
             .map((name) => ({ name, count: scan.icons[name] })),
@@ -113,12 +124,32 @@ function styleGuide() {
         literals: groupLiterals(scan.literals, rootTokens),
         // What is typed into the font tester
         fontInput: "",
-        // The alphas the sliders were dragged to, by token name
+        // The alphas the sliders were dragged to in the theme shown, by token name
         alphas: {},
 
         showSuccessSnackBar,
         showWarningSnackBar,
         showErrorSnackBar,
+
+        isTheme(theme) {
+            return this.theme === theme
+        },
+
+        /**
+         * Shows the page in `theme` and remembers it for the next visit. The tokens are resolved
+         * again, since the color a token holds depends on the theme. An alpha a slider was dragged
+         * to is by then part of its token's value, declared inline on the root element, so the
+         * sliders start over from what the tokens resolve to.
+         */
+        setTheme(theme) {
+            this.theme = theme
+            applyTheme(theme)
+            localStorage.setItem(Const.localStore.styleGuideTheme, theme)
+
+            this.rootTokens = resolveRootTokens(scan)
+            this.literals = groupLiterals(scan.literals, this.rootTokens)
+            this.alphas = {}
+        },
 
         /**
          * The `:root` tokens of `kinds` (space-separated), one kind after another and in source
@@ -128,7 +159,7 @@ function styleGuide() {
             return kinds
                 .split(" ")
                 .flatMap((kind) =>
-                    rootTokens.filter((token) => token.kind === kind),
+                    this.rootTokens.filter((token) => token.kind === kind),
                 )
         },
 
@@ -151,17 +182,23 @@ function styleGuide() {
             copy(this.currentValue(token))
         },
 
-        /** Where a token's alpha slider stands: at the declared alpha until it is dragged */
+        /**
+         * Where a token's alpha slider stands: at the alpha of the token's color in the theme
+         * shown, until it is dragged
+         */
         alphaOf(token) {
             return this.alphas[token.name] ?? token.alpha
         },
 
-        /** A token's value: as declared, or with the alpha its slider was dragged to */
+        /**
+         * A token's value: as declared, or with the alpha its slider was dragged to on its color
+         * of the theme shown
+         */
         currentValue(token) {
             const alpha = this.alphaOf(token)
             return alpha === token.alpha
                 ? token.value
-                : withAlpha(token.value, alpha)
+                : withAlpha(token.value, alpha, this.theme)
         },
 
         /**
@@ -220,7 +257,24 @@ function usageLabel(references) {
     return references === 1 ? "1 reference" : `${references} references`
 }
 
-/** The color `value` paints, in the browser's one serialization, so spellings of a color compare equal */
+/** The theme chosen on an earlier visit, else the one the stylesheet declares */
+function rememberedTheme() {
+    const theme = localStorage.getItem(Const.localStore.styleGuideTheme)
+
+    return THEMES.includes(theme)
+        ? theme
+        : getComputedStyle(document.documentElement).colorScheme
+}
+
+/** Shows the page in `theme`: the root element declares the scheme every `light-dark()` color follows */
+function applyTheme(theme) {
+    document.documentElement.style.colorScheme = theme
+}
+
+/**
+ * The color `value` paints in the theme the page is shown in, in the browser's one serialization,
+ * so spellings of a color compare equal
+ */
 function resolveColor(value) {
     const probeEl = document.createElement("span")
     probeEl.style.color = value
@@ -241,11 +295,53 @@ function alphaOfColor(color) {
 }
 
 /**
+ * `value` with the alpha of its color replaced. Of a `light-dark()` pair only the color of `theme`
+ * changes, so the value stays one declaration for both themes.
+ */
+function withAlpha(value, alpha, theme) {
+    const colors = themeColorsOf(value)
+    if (!colors) {
+        return withColorAlpha(value, alpha)
+    }
+
+    const index = THEMES.indexOf(theme)
+    colors[index] = withColorAlpha(colors[index], alpha)
+    return `light-dark(${colors.join(", ")})`
+}
+
+/**
+ * The two colors of a `light-dark()` value, in the order of `THEMES`, or nothing for any other
+ * value. They are split at the comma outside every parenthesis, since a color may hold commas of
+ * its own (`rgb(54, 54, 54)`).
+ */
+function themeColorsOf(value) {
+    const [, colors = ""] = value.match(LIGHT_DARK) ?? []
+    let depth = 0
+
+    for (let index = 0; index < colors.length; index++) {
+        const char = colors[index]
+
+        if (char === "(") {
+            depth++
+        } else if (char === ")") {
+            depth--
+        } else if (char === "," && depth === 0) {
+            return [
+                colors.slice(0, index).trim(),
+                colors.slice(index + 1).trim(),
+            ]
+        }
+    }
+
+    return null
+}
+
+/**
  * `color` with its alpha replaced, in relative color syntax, so the color itself stays as it is
  * written. A color that already is such a replacement (a slider's value pasted into the
  * stylesheet) gets the new alpha in place of its own, rather than a second wrapper.
  */
-function withAlpha(color, alpha) {
+function withColorAlpha(color, alpha) {
     const [, base = color] = color.match(ALPHA_REPLACEMENT) ?? []
     return `rgb(from ${base} r g b / ${alpha})`
 }
@@ -253,8 +349,9 @@ function withAlpha(color, alpha) {
 /**
  * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind and
  * sample, their reference count, the names of the other tokens of that kind with the same value,
- * and for a color its alpha. A token the scan found in the source but the served stylesheet does
- * not have yet resolves to nothing (`value` is empty, `kind` is "other").
+ * and for a color its alpha. Two colors are the same, and a color has its alpha, in the theme the
+ * page is shown in. A token the scan found in the source but the served stylesheet does not have
+ * yet resolves to nothing (`value` is empty, `kind` is "other").
  */
 function resolveRootTokens(scan) {
     const rootStyle = getComputedStyle(document.documentElement)
@@ -277,7 +374,7 @@ function resolveRootTokens(scan) {
             value,
             kind,
             identity,
-            // The declared alpha of a color
+            // The alpha of a color, in the theme shown
             alpha: isColor ? alphaOfColor(identity) : undefined,
             hasAlphaSlider: isColor && name === ALPHA_SLIDER_TOKEN,
             references,

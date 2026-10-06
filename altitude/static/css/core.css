@@ -1,30 +1,72 @@
 :root {
+    /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    --background-color: #363636;
-    --background-form-color: #363535;
-    --background-secondary-color: rgb(56, 56, 65);
-    --background-tertiary-color: rgb(75, 75, 87);
+    --background-color: light-dark(rgb(from #363636 r g b / 0.88), #363636);
+    --background-form-color: light-dark(#363535, #363535);
+    --background-secondary-color: light-dark(rgb(56, 56, 65), rgb(56, 56, 65));
+    --background-tertiary-color: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
 
-    --form-border: 2px solid #646161;
+    --form-border: 2px solid light-dark(#646161, #646161);
+
+    /* The edge of an input or a textarea */
+    --input-border: 2px solid light-dark(#ccc, #ccc);
+    /* The text typed into an input or a textarea */
+    --input-font-color: light-dark(#2C3E50, #2C3E50);
+    /* The field of an input or a textarea */
+    --input-background-color: light-dark(#f6f6f6, #f6f6f6);
+    /* The field of an input that cannot be edited */
+    --input-readonly-background-color: light-dark(#ada8a8, #ada8a8);
+
+    /* The face of an action button that signals no outcome */
+    --button-background-color: light-dark(rgb(76, 75, 75), rgb(76, 75, 75));
+    /* The edge of an action button */
+    --button-border: 2px solid light-dark(#bdbbbb, #bdbbbb);
+    /* Under the label of an action button */
+    --button-text-shadow: light-dark(rgba(72, 70, 70, 0.55), rgba(72, 70, 70, 0.55)) 4px 4px 4px;
 
     --modal-border-width: 2px;
-    --modal-border: var(--modal-border-width) solid rgba(129, 128, 128, 0.98);
-    --modal-background-color: #3b3b3b;
-    --modal-close-color: #fff;
+    --modal-border: var(--modal-border-width) solid light-dark(rgba(129, 128, 128, 0.98), rgba(129, 128, 128, 0.98));
+    --modal-background-color: light-dark(#3b3b3b, #3b3b3b);
+    --modal-close-color: light-dark(#fff, #fff);
+    /* Lifts a general dialog off the page */
+    --modal-box-shadow: light-dark(rgba(10, 0, 0, 0.66), rgba(10, 0, 0, 0.66)) 6px 6px 6px;
+    /* Behind the asset detail, all but hiding the page */
+    --asset-detail-backdrop-color: light-dark(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.9));
+    /* Dims what is behind it: the page under a general dialog, the Preview under a play badge or a pin's count */
+    --scrim-color: light-dark(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45));
     /* General dialogs: content width on wide screens, and the gap kept to the viewport edges on narrow ones */
     --modal-content-width: 400px;
     --modal-content-padding: 15px;
     --modal-viewport-gap: 10px;
     --modal-toolbar-height: 30px;
 
-    --result-border: 1px solid #837c7c;
+    /* The edge of a context menu and the divider between its actions */
+    --menu-border: 1px solid light-dark(gray, gray);
+
+    --result-border: 1px solid light-dark(#837c7c, #837c7c);
+    /* Sets a cell's metadata off from the Preview above it */
+    --result-metadata-shadow: 0 -2px 2px 0 light-dark(rgba(44, 43, 43, 0.75), rgba(44, 43, 43, 0.75));
+    /* The checkmark of a selected asset */
+    --selection-color: light-dark(#4CAF50, #4CAF50);
+    /* Under the checkmark of a selected asset */
+    --selection-shadow: 0 2px 4px light-dark(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2));
+    /* Around a focused dropdown */
+    --dropdown-focus-shadow: 0 0 2px 2px light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1));
 
     --form-error-border: 2px solid var(--error-color);
-    --navbar-border: 1px solid #272727;
-    --navbar-text-shadow: rgba(0,0,0,0.75) 0 1px;
-    --box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0;
-    --font-color-dim: #b0acac;
+    --navbar-border: 1px solid light-dark(#272727, #272727);
+    --navbar-text-shadow: light-dark(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)) 0 1px;
+    /* The brand name in the nav */
+    --brand-color: light-dark(#979393, #979393);
+    /* The base color of a nav entry, under the color of its link and label */
+    --navbar-menu-color: light-dark(#9399b4, #9399b4);
+    /* The edge of the nav's Search input */
+    --navbar-input-border: 2px groove light-dark(#5a5855, #5a5855);
+    --box-shadow: light-dark(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) 0 1px 0;
+    /* Under a tab the pointer is over */
+    --tab-hover-background-color: light-dark(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
+    --font-color-dim: light-dark(#b0acac, #b0acac);
 
     /* Larger spacing for larger app areas, like panels and page paddings */
     --section-vertical-space: 35px;
@@ -36,30 +78,49 @@
     --footer-height: 44px;
 
     /* font colors */
-    --faded-font-color: #b0acac;
-    --success-font-color: #82da5f;
-    --success-background-color: #377a1c;
-    --warning-font-color: #dca051;
-    --warning-background-color: #7c4802;
-    --error-font-color: #fc1e1e;
-    --error-background-color: #a80404;
-    --error-color: #fc1e1e;
+
+    /* Text on the app's own surfaces */
+    --font-color: light-dark(#fff, #fff);
+    /* What is drawn on a colored fill or over an image, light in either theme: the label of a button or a marker,
+       the snackbar's text and edge, a pin's frame */
+    --on-fill-color: light-dark(#fff, #fff);
+    --faded-font-color: light-dark(#b0acac, #b0acac);
+    --success-font-color: light-dark(#82da5f, #82da5f);
+    --success-background-color: light-dark(#377a1c, #377a1c);
+    --warning-font-color: light-dark(#dca051, #dca051);
+    --warning-background-color: light-dark(#7c4802, #7c4802);
+    --error-font-color: light-dark(#fc1e1e, #fc1e1e);
+    --error-background-color: light-dark(#a80404, #a80404);
+    --error-color: light-dark(#fc1e1e, #fc1e1e);
+    /* The name of a person who has not been named yet */
+    --person-unknown-color: light-dark(#fdda63, #fdda63);
 
     /* Panels */
-    --panel-border-color: #464646;
+    --panel-border-color: light-dark(#464646, #464646);
     --panel-padding: 12px;
+    /* The root folder's icon */
+    --folder-root-icon-color: light-dark(#f8c98f, #f8c98f);
 
     /* Dragon Drop */
-    --dnd-can-drop-color: #377a1c;
-    --dnd-drop-target-color: rgb(109, 140, 253);
-    --dnd-draggable-border: 1px solid #b0acac;
+    --dnd-can-drop-color: light-dark(#377a1c, #377a1c);
+    --dnd-drop-target-color: light-dark(rgb(109, 140, 253), rgb(109, 140, 253));
+    --dnd-draggable-border: 1px solid light-dark(#b0acac, #b0acac);
+    /* Behind an element while it is dragged */
+    --dnd-dragging-background-color: light-dark(rgba(129, 128, 128, 0.48), rgba(129, 128, 128, 0.48));
+    /* The trash: its nav entry as a drop target and, faintly, the tint of its view */
+    --trashbin-color: light-dark(#ce7d0a, #ce7d0a);
+
+    /* Under what sits on a map: an asset pin's frame, a Location pin's glyph, a pin's count */
+    --pin-shadow: light-dark(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)) 0 1px 4px;
+    /* Lifts the crowded-pin panel off the map to its left */
+    --map-panel-shadow: light-dark(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)) -4px 0 8px;
 
     /* Chips: a dismissable scope the results are narrowed to, such as the map area */
     --chip-padding: 2px 8px;
     --chip-border-radius: 10px;
 
     /* For messages such as form validation and server response status */
-    --message-background-color: #2f2e2e;
+    --message-background-color: light-dark(#2f2e2e, #2f2e2e);
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
 }
 
@@ -74,7 +135,7 @@ body {
     font-size: 14px;
     margin: 0;
     background-color: var(--background-color);
-    color: #FFFFFF;
+    color: var(--font-color);
     font-family: var(--font);
     display: grid;
     grid-template-rows: [header]  auto
@@ -85,7 +146,7 @@ body {
 
 footer {
     padding: 5px;
-    color: #fff;
+    color: var(--font-color);
     bottom: 0;
     display: grid;
     font-size: .9em;
@@ -101,12 +162,12 @@ footer {
 
 /* The tint is a variable so the sticky date headers of the results grid can paint the same one over the page background */
 #content.triage {
-    --view-tint: rgba(55, 122, 28, 0.07);
+    --view-tint: rgb(from var(--success-background-color) r g b / 0.07);
     background-color: var(--view-tint);
 }
 
 #content.trashbin {
-    --view-tint: rgba(206, 125, 10, 0.05);
+    --view-tint: rgb(from var(--trashbin-color) r g b / 0.05);
     background-color: var(--view-tint);
 }
 
@@ -117,15 +178,15 @@ footer {
 
 input, textarea {
     padding: 8px;
-    border: 2px solid #ccc;
+    border: var(--input-border);
     border-radius: 4px;
-    color: #2C3E50;
+    color: var(--input-font-color);
     font-size: 1.2em;
-    background-color: #f6f6f6;
+    background-color: var(--input-background-color);
 }
 
 input.readonly {
-    background-color: #ada8a8;
+    background-color: var(--input-readonly-background-color);
 }
 
 form div.error {
@@ -143,15 +204,15 @@ form input.error, form input.error:focus {
 /*         */
 
 .action-button {
-    background: rgb(76, 75, 75);
+    background: var(--button-background-color);
     font-weight: bold;
-    color: white;
-    border: 2px solid #bdbbbb;
+    color: var(--on-fill-color);
+    border: var(--button-border);
     border-radius: 4px;
     cursor: pointer;
     padding: 7px;
     text-decoration: none;
-    text-shadow: rgba(72, 70, 70, 0.55) 4px 4px 4px;
+    text-shadow: var(--button-text-shadow);
     font-size: 1em;
 }
 
@@ -183,6 +244,34 @@ form input.error, form input.error:focus {
     margin-left: 5px;
 }
 
+/* A set of choices of which one is current: its buttons side by side, the current one `aria-pressed="true"`
+   in the tertiary background */
+.toggle-group {
+    display: flex;
+    gap: 2px;
+}
+
+.toggle-group button {
+    padding: 5px 10px;
+    background-color: var(--background-secondary-color);
+    border: 1px solid var(--background-tertiary-color);
+    color: var(--faded-font-color);
+    cursor: pointer;
+}
+
+.toggle-group button:first-child {
+    border-radius: 5px 0 0 5px;
+}
+
+.toggle-group button:last-child {
+    border-radius: 0 5px 5px 0;
+}
+
+.toggle-group button[aria-pressed="true"] {
+    color: var(--font-color);
+    background-color: var(--background-tertiary-color);
+}
+
 /*                                             */
 /* CONTEXT MENUS (folders, albums, Locations, and View settings)  */
 /*                                             */
@@ -203,7 +292,7 @@ form input.error, form input.error:focus {
     font: inherit;
     font-size: 1.3em;
     line-height: 1;
-    color: #FFFFFF;
+    color: var(--font-color);
     cursor: pointer;
 }
 
@@ -217,7 +306,7 @@ form input.error, form input.error:focus {
     width: max-content;
     /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
     padding: 0;
-    border: 1px solid gray;
+    border: var(--menu-border);
     border-radius: 5px;
     color: inherit;
     background-color: var(--modal-background-color);
@@ -264,7 +353,7 @@ form input.error, form input.error:focus {
 
 /* Divider between rows only, never above the first or below the last */
 .context-menu .actions button + button {
-    border-top: 1px solid gray;
+    border-top: var(--menu-border);
 }
 
 /* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
@@ -303,7 +392,7 @@ form input.error, form input.error:focus {
 /*          */
 
 #serverError {
-    color: #FFF;
+    color: var(--font-color);
     background-color: var(--message-background-color);
     border: 1px solid var(--error-color);
     padding: 8px;
@@ -317,7 +406,7 @@ form input.error, form input.error:focus {
     visibility: hidden;
     min-width: 500px;
     margin-left: -250px;
-    color: #fff;
+    color: var(--on-fill-color);
     text-align: center;
     border-radius: 2px;
     padding: 16px;
@@ -326,7 +415,7 @@ form input.error, form input.error:focus {
     left: 50%;
     top: 50px;
     height: 30px;
-    border: 1px solid white;
+    border: 1px solid var(--on-fill-color);
 }
 
 #snackbar.show {
@@ -361,7 +450,7 @@ form input.error, form input.error:focus {
     padding-right: 4px;
     border: var(--dnd-draggable-border);
     border-radius: 4px;
-    background-color: rgba(129, 128, 128, 0.48);
+    background-color: var(--dnd-dragging-background-color);
 }
 
 .drop-target {
@@ -370,7 +459,7 @@ form input.error, form input.error:focus {
 }
 
 #trash.drop-target {
-    background-color: #ce7d0a;
+    background-color: var(--trashbin-color);
 }
 
 .draggable {
@@ -399,7 +488,7 @@ form input.error, form input.error:focus {
     font-size: 28px;
     line-height: 1;
     text-align: center;
-    text-shadow: rgba(0, 0, 0, 0.6) 0 1px 2px;
+    text-shadow: var(--pin-shadow);
 }
 
 /*       */
@@ -417,7 +506,7 @@ form input.error, form input.error:focus {
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgba(0,0,0,0.4);
+    background-color: var(--scrim-color);
 }
 
 /* Default content width, shrunk on narrow viewports so the box (content + its border) keeps
@@ -454,7 +543,7 @@ form input.error, form input.error:focus {
     width: fit-content;
     border: var(--modal-border);
     border-radius: 5px;
-    box-shadow: rgba(10, 0, 0, 0.66) 6px 6px 6px;
+    box-shadow: var(--modal-box-shadow);
 }
 
 .modal-toolbar {
@@ -462,7 +551,7 @@ form input.error, form input.error:focus {
     align-items: center;
     grid-template-columns: 1fr minmax(auto, max-content);
     background-color: var(--background-secondary-color);
-    border-bottom: 1px solid #44495e;
+    border-bottom: 1px solid var(--background-tertiary-color);
 }
 
 /* Keep the X white without an outline, including when the modal focuses it on open. */
@@ -495,7 +584,7 @@ form input.error, form input.error:focus {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.9);
+    background-color: var(--asset-detail-backdrop-color);
 }
 
 /* The asset's stored size (--asset-width, --asset-height, from setAssetDetailSize) fitted into the viewport below the
@@ -537,14 +626,14 @@ nav {
      grid-template-columns: 120px repeat(5, 1fr) 220px;
      grid-column-gap: 10px;
      background: var(--background-secondary-color);
-     color: #fff;
+     color: var(--font-color);
      align-items: center;
      border-bottom: var(--navbar-border);
      text-shadow: var(--navbar-text-shadow);
  }
 
 nav span, nav a {
-    color: #FFF;
+    color: var(--font-color);
     text-decoration: none;
     font-size: 10px;
     font-weight: bold;
@@ -555,7 +644,7 @@ nav .brand a {
     letter-spacing: .15em;
     text-transform: uppercase;
     text-decoration: none;
-    color: #979393;
+    color: var(--brand-color);
     font-weight: bold;
     font-size: 16px;
 }
@@ -568,7 +657,7 @@ nav div {
 
 nav .menu {
     letter-spacing: .10em;
-    color: #9399b4;
+    color: var(--navbar-menu-color);
     padding: 6px;
     cursor: pointer;
 }
@@ -579,7 +668,7 @@ nav .menu span {
 
 nav .menu.active {
     background-color: var(--background-tertiary-color);
-    color: #FFF;
+    color: var(--font-color);
     border: 2px solid var(--warning-background-color);
     border-radius: 5px;
     font-weight: bold;
@@ -587,9 +676,9 @@ nav .menu.active {
 
 nav input {
     border-radius: 3px;
-    border: 2px groove #5a5855;
+    border: var(--navbar-input-border);
     padding: 5px;
-    background-color: #e8e8e8;
+    background-color: var(--input-background-color);
     width: 90%;
     /* a flex item's min-width:auto would keep the input from shrinking to fit the fixed last column */
     min-width: 0;
@@ -603,7 +692,7 @@ nav form {
 }
 
 nav input::placeholder {
-    color: #a5a2a2;
+    color: var(--faded-font-color);
 }
 
 nav .menu.triage i, nav .menu.triage span {
