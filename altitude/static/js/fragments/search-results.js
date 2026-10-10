@@ -9,6 +9,7 @@ import { bindBoxSelection } from "../search-results/box-selection.js"
 import { bindInfiniteScroll } from "../search-results/infinite-scroll.js"
 import { bindLazyImages } from "../search-results/lazy-images.js"
 import { bindMetadataVisibility } from "../search-results/metadata-visibility.js"
+import { bindPageWindow } from "../search-results/page-window.js"
 import { bindAssetSelection } from "../search-results/selection.js"
 import { ensureViewSettingsControl } from "../search-results/view-settings-control.js"
 
@@ -21,24 +22,23 @@ import { ensureViewSettingsControl } from "../search-results/view-settings-contr
  * `map-view` fragment), and the same fragment is what the crowded-pin panel loads into
  * `#mapPanelContent` (js/map/map-panel.js): that one is the panel's grid, so it leaves the
  * displayed map, its total and the viewed scope alone, reports its count to the panel's heading,
- * and gets no box selection (the gesture is bound to the `#content` pane).
+ * scrolls in the panel, and gets no box selection (the gesture is bound to the `#content` pane).
  */
 export function hydrateSearchResultsFragment({ fragmentEl }) {
     const contentElement = document.getElementById("content")
     const assetsElement = fragmentEl.querySelector("#assets")
     const total = Number(fragmentEl.dataset.resultsTotal || 0)
     const isTotalCapped = fragmentEl.dataset.resultsTotalCapped === "true"
+    const scrollElement = isInMapPanel(fragmentEl)
+        ? document.getElementById("mapPanelContent")
+        : contentElement
 
     Alpine.store(Const.state.selectedAssets).reset()
+    scrollElement?.scrollTo({ top: 0, behavior: "auto" })
 
     if (isInMapPanel(fragmentEl)) {
-        document
-            .getElementById("mapPanelContent")
-            ?.scrollTo({ top: 0, behavior: "auto" })
         setMapPanelCount(total, isTotalCapped)
     } else {
-        contentElement?.scrollTo({ top: 0, behavior: "auto" })
-
         // The previous fragment is gone, and with it the map it held, if any
         disposeMapView()
 
@@ -56,6 +56,7 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
 
     bindAssetSelection({ assetsElement })
     bindInfiniteScroll({ assetsElement })
+    bindPageWindow({ assetsElement, scrollElement })
     bindLazyImages({ assetsElement })
     bindMetadataVisibility({ assetsElement })
 }

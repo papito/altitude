@@ -178,6 +178,14 @@
     justify-content: flex-start;
     /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
     isolation: isolate;
+    /* The page window (js/search-results/page-window.js) folds, reloads and drops pages above and below the viewport
+       and corrects the scroll position itself, so the browser's own anchoring must not correct it a second time */
+    overflow-anchor: none;
+  }
+
+  /* A page folded above the window: a full row of about the page's height, carrying the page's cursor */
+  #assets .page-spacer {
+    flex-basis: 100%;
   }
 
   /* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
@@ -325,7 +333,7 @@
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
-   The grid's behaviours (selection, infinite scroll, lazy images, metadata visibility, box selection) are bound by that
+   The grid's behaviours (selection, infinite scroll, the page window, lazy images, metadata visibility, box selection) are bound by that
    hydrator from the modules under js/search-results/. The layout and grouping the grid was rendered with are what a
    continuation of it sends (js/search-results/infinite-scroll.js): the crowded-pin panel's grid is a plain grid while
    the store says map. *@

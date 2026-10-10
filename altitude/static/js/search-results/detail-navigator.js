@@ -15,6 +15,7 @@ import {
 } from "../common/video-playback.js"
 import { assetIdOf } from "./cells.js"
 import { loadNextPage } from "./infinite-scroll.js"
+import { isSpacer, reloadSpacer } from "./page-window.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 
 // A Video shorter than this loops, like a Live Photo; a longer one stops at the end
@@ -99,9 +100,11 @@ async function playShownVideo({ videoEl, isCurrent }) {
  *
  * The results grid is the modal's source of truth: next and previous move between the grid's
  * `.cell`s in document order, skipping the group headers of a grouped grid, and a cell removed from
- * the grid drops out of navigation with it. At the end of the loaded grid, next loads the following
- * page exactly as the scroll observer does (`loadNextPage`) and continues into it; at the true end,
- * and at the first cell, nothing happens.
+ * the grid drops out of navigation with it. A page folded into a spacer (js/search-results/page-window.js)
+ * is reloaded as the walk meets it (`reloadSpacer`), whichever way it steps, and the step continues
+ * into it. At the end of the loaded grid, next loads the following page exactly as the scroll
+ * observer does (`loadNextPage`) and continues into it; at the true end, and at the true first cell,
+ * nothing happens.
  *
  * What is remembered is the cell the modal was opened from or stepped to, not the asset: a Location
  * grouping holds an asset in a cell under each of its Locations, and stepping from the cell keeps
@@ -132,11 +135,11 @@ export function createSearchDetailCoordinator({ context }) {
         return currentCell?.isConnected ? currentCell : null
     }
 
-    /** The nearest `.cell` among the siblings in `direction`, past any group header */
-    function siblingCellOf(cellEl, direction) {
+    /** The nearest `.cell` or page spacer among the siblings in `direction`, past any group header */
+    function siblingStopOf(cellEl, direction) {
         let el = cellEl[direction]
 
-        while (el && !el.classList.contains("cell")) {
+        while (el && !el.classList.contains("cell") && !isSpacer(el)) {
             el = el[direction]
         }
 
@@ -148,7 +151,13 @@ export function createSearchDetailCoordinator({ context }) {
         loadAssetDetail(assetIdOf(cellEl), cellEl)
     }
 
-    async function handleShowNext() {
+    /**
+     * Shows the nearest cell in `direction`. A folded page met on the way is reloaded first, and at
+     * the edge of the loaded grid `loadBeyond`, if given, brings the page beyond it in; either way
+     * the step then looks again, since a page whose assets are gone brings no cell, only the
+     * spacer after it, if any. The page may still be arriving for a detail view that moved on.
+     */
+    async function step({ direction, loadBeyond = null }) {
         if (!isAssetDetailActive()) {
             return
         }
@@ -160,15 +169,13 @@ export function createSearchDetailCoordinator({ context }) {
             return
         }
 
-        let nextCellEl = siblingCellOf(cellEl, "nextElementSibling")
+        let targetEl = siblingStopOf(cellEl, direction)
 
-        if (!nextCellEl) {
-            // The end of the loaded grid: the current cell is its last, and carries the continuation
-            // if there is one. The page may still be arriving for a detail view that moved on.
+        while (targetEl ? isSpacer(targetEl) : loadBeyond !== null) {
             try {
-                await loadNextPage(cellEl)
+                await (targetEl ? reloadSpacer(targetEl) : loadBeyond(cellEl))
             } catch (error) {
-                console.error("Error loading the next page of results", error)
+                console.error("Error loading a page of results", error)
                 return
             }
 
@@ -176,26 +183,31 @@ export function createSearchDetailCoordinator({ context }) {
                 return
             }
 
-            nextCellEl = siblingCellOf(cellEl, "nextElementSibling")
+            const el = siblingStopOf(cellEl, direction)
+
+            // Nothing came in: a failed reload left its spacer, or the grid has no page beyond
+            if (el === targetEl) {
+                return
+            }
+
+            targetEl = el
         }
 
-        if (nextCellEl) {
-            showCell(nextCellEl)
+        if (targetEl) {
+            showCell(targetEl)
         }
     }
 
+    /** At the last loaded cell, the next page is loaded as the scroll observer loads it */
+    function handleShowNext() {
+        return step({
+            direction: "nextElementSibling",
+            loadBeyond: loadNextPage,
+        })
+    }
+
     function handleShowPrevious() {
-        if (!isAssetDetailActive()) {
-            return
-        }
-
-        const cellEl = currentCellEl()
-        const previousCellEl =
-            cellEl && siblingCellOf(cellEl, "previousElementSibling")
-
-        if (previousCellEl) {
-            showCell(previousCellEl)
-        }
+        return step({ direction: "previousElementSibling" })
     }
 
     /**
