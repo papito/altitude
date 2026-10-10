@@ -47,6 +47,7 @@ export const Const = {
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
+        settingsSaved: "SETTINGS_SAVED_EVENT",
     },
 
     /**
@@ -71,6 +72,8 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
+        // A Setting field's default, which its Reset fills in
+        settingDefault: "data-setting-default",
     },
 
     context: {

@@ -132,13 +132,29 @@ import altitude.core.models.Settings
       Map(Settings.FACE_DETECTION_BOUNDING_BOX_SIZE -> "200", Settings.FACE_DETECTION_MIN_FACE_SIZE -> "200")) shouldBe empty
   }
 
-  test("The vector index keeps at least four times the match count") {
-    val errors = testApp.settings.validate(
-      Map(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "39", Settings.FACE_RECOGNITION_MATCH_COUNT -> "10"))
-    errors.keySet shouldBe Set(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH)
+  test("The vector index keeps at least four times the match count, a rule of PostgreSQL alone") {
 
-    testApp.settings.validate(
-      Map(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "40", Settings.FACE_RECOGNITION_MATCH_COUNT -> "10")) shouldBe empty
+    /**
+     * The search width is a PostgreSQL Setting: SQLite neither shows nor applies it, so a match count its stored seed would
+     * refuse saves there, while PostgreSQL holds the rule.
+     */
+    val tooNarrow = Map(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "39", Settings.FACE_RECOGNITION_MATCH_COUNT -> "10")
+    val wide = Map(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "40", Settings.FACE_RECOGNITION_MATCH_COUNT -> "10")
+    // Thirty candidates against the seed width of 100
+    val manyCandidates = Map(Settings.FACE_RECOGNITION_MATCH_COUNT -> "30")
+
+    testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES =>
+        testApp.settings.validate(tooNarrow).keySet shouldBe Set(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH)
+        testApp.settings.validate(wide) shouldBe empty
+        testApp.settings.validate(manyCandidates).keySet shouldBe Set(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH)
+        testApp.settings.applicable.map(_.name) should contain(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH)
+      case _ =>
+        testApp.settings.validate(tooNarrow) shouldBe empty
+        testApp.settings.save(manyCandidates)
+        testApp.settings.current.faceRecognitionMatchCount shouldBe 30
+        testApp.settings.applicable.map(_.name) should not contain Settings.FACE_RECOGNITION_HNSW_EF_SEARCH
+    }
   }
 
   test("The enroll threshold is at least the keep threshold") {

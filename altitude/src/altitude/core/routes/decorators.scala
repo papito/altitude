@@ -13,6 +13,7 @@ import scala.jdk.CollectionConverters._
 
 import altitude.core.App
 import altitude.core.RequestContext
+import altitude.core.models.AccountType
 import altitude.core.models.User
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
@@ -66,6 +67,11 @@ object decorators:
         val cookies = req.exchange.getRequestCookies
         Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
     }
+
+  // An API request (one that accepts JSON, or an /api/ path) is answered in JSON
+  private def isApiRequest(req: cask.Request): Boolean =
+    Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
+      req.exchange.getRequestPath.startsWith("/api/")
 
   /**
    * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized
@@ -121,11 +127,6 @@ object decorators:
           ))
       else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
 
-    // An API request (one that accepts JSON, or an /api/ path) is answered in JSON
-    private def isApiRequest(req: cask.Request): Boolean =
-      Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
-        req.exchange.getRequestPath.startsWith("/api/")
-
     private def handleUnauthenticated(req: cask.Request): Result[Raw] =
       if isApiRequest(req) then
         Result.Success(
@@ -146,6 +147,27 @@ object decorators:
             statusCode = 302,
             headers = Seq("Location" -> s"/login?redirect=$originalUrl")
           ))
+
+  /**
+   * Decorator for an Admin-only endpoint, applied after `requireLogin`, which has put the account in the context. A User or a
+   * Guest is answered with 403, JSON for an API request and plain text otherwise; there is nowhere to redirect them to.
+   */
+  class requireAdmin extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      val user = RequestContext.account.value.getOrElse(
+        throw IllegalStateException(s"requireAdmin on ${req.exchange.getRequestPath} ran without requireLogin before it"))
+
+      // The innermost decorator's map fills the endpoint's extra parameter list, so the request travels on from here too
+      if user.accountType == AccountType.Admin then delegate(req, Map("request" -> req))
+      else
+        logger.warn(s"Account [${user.persistedId}] (${user.accountType}) refused ${req.exchange.getRequestPath}: Admin only")
+        if isApiRequest(req) then
+          Result.Success(
+            Response(
+              """{"error": "Forbidden", "message": "Admin only"}""",
+              statusCode = 403,
+              headers = Seq("Content-Type" -> "application/json")))
+        else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
 
   class requestResponseLogger extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =

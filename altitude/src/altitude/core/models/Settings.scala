@@ -332,21 +332,26 @@ object Settings:
 
   /**
    * Why each of `values` is not valid, by name; empty when the whole set is. A name the registry does not know is an error, and a
-   * cross-field rule is judged only when both of its fields pass their own.
+   * cross-field rule is judged only when both of its fields pass their own and its field applies to `engine`: a Setting of the
+   * other engine keeps a stored value nobody can see or change.
    */
-  def validate(values: Map[String, String]): Map[String, String] =
+  def validate(values: Map[String, String], engine: String): Map[String, String] =
     val own: Map[String, String] = values.flatMap {
       (name, text) =>
         byName.get(name) match
           case None => Some(name -> "Unknown setting")
           case Some(definition) => definition.valueType.error(text).map(name -> _)
     }
-    val cross: Map[String, String] = crossRules.flatMap {
-      rule =>
-        (values.get(rule.field), values.get(rule.other)) match
-          case (Some(field), Some(other)) if !own.contains(rule.field) && !own.contains(rule.other) =>
-            val holds = rule.holds(byName(rule.field).valueType.number(field).get, byName(rule.other).valueType.number(other).get)
-            Option.unless(holds)(rule.field -> rule.message)
-          case _ => None
-    }.toMap
+    val cross: Map[String, String] = crossRules
+      .filter(rule => byName(rule.field).engine.forall(_ == engine))
+      .flatMap {
+        rule =>
+          (values.get(rule.field), values.get(rule.other)) match
+            case (Some(field), Some(other)) if !own.contains(rule.field) && !own.contains(rule.other) =>
+              val holds =
+                rule.holds(byName(rule.field).valueType.number(field).get, byName(rule.other).valueType.number(other).get)
+              Option.unless(holds)(rule.field -> rule.message)
+            case _ => None
+      }
+      .toMap
     own ++ cross

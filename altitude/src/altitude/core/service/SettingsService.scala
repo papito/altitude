@@ -27,6 +27,9 @@ class SettingsService(app: Altitude):
   protected lazy val txManager: TransactionManager = app.txManager
   private lazy val settingDao: SettingDao = app.DAO.setting
 
+  /** The Settings this database engine has; the others are neither shown nor saved, and their rules are not judged */
+  val applicable: List[SettingDef] = Settings.all.filter(_.engine.forall(_ == app.dataSourceType))
+
   private val snapshot = new AtomicReference[Option[Settings]](None)
   private val startup = new AtomicReference[Option[Settings]](None)
 
@@ -51,7 +54,7 @@ class SettingsService(app: Altitude):
     val values = known.map(row => row.name -> row.value).toMap
     val missing = Settings.all.map(_.name).filterNot(values.contains)
     if missing.nonEmpty then throw IllegalStateException(s"Settings missing from the database: ${missing.mkString(", ")}")
-    val errors = Settings.validate(values)
+    val errors = Settings.validate(values, app.dataSourceType)
     if errors.nonEmpty then throw IllegalStateException(s"Settings stored with invalid values: $errors")
 
     val loaded = Settings(values, known.map(row => row.name -> row.defaultValue).toMap)
@@ -61,7 +64,8 @@ class SettingsService(app: Altitude):
   }
 
   /** The errors of `values` over the current set, by name: a Setting not in `values` keeps its current value */
-  def validate(values: Map[String, String]): Map[String, String] = Settings.validate(merged(current, trimmed(values)))
+  def validate(values: Map[String, String]): Map[String, String] =
+    Settings.validate(merged(current, trimmed(values)), app.dataSourceType)
 
   /**
    * Saves `values` over the current set, in one transaction, and replaces the snapshot. When any field fails, the
@@ -73,7 +77,7 @@ class SettingsService(app: Altitude):
     val submitted = trimmed(values)
     val merged = this.merged(before, submitted)
 
-    val errors = Settings.validate(merged)
+    val errors = Settings.validate(merged, app.dataSourceType)
     if errors.nonEmpty then
       val ex = ValidationException()
       ex.errors ++= errors
