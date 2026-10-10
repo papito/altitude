@@ -21,7 +21,7 @@ class ContentViewController extends cask.Routes:
     dataType match {
       case C.DataStore.PREVIEW =>
         val preview: MimedPreviewData = App.altitude.service.fileStore.getPreviewById(itemId)
-        cask.Response(preview.data, headers = Seq("Content-Type" -> preview.mimeType))
+        cacheableImage(preview.data, preview.mimeType)
 
       case C.DataStore.FILE =>
         // The stored original, streamed with byte ranges so a Video plays and seeks, typed as the asset was detected
@@ -32,11 +32,18 @@ class ContentViewController extends cask.Routes:
 
       case C.DataStore.FACE =>
         val faceData = App.altitude.service.fileStore.getDisplayFaceById(itemId)
-        cask.Response(faceData.data, headers = Seq("Content-Type" -> faceData.mimeType))
+        cacheableImage(faceData.data, faceData.mimeType)
 
       case _ =>
         cask.Response(Array.empty[Byte], statusCode = 404)
 
     }
+
+  /**
+   * A preview or a face never changes under its URL, so the browser may keep it for an hour, which covers a session of scrolling;
+   * private, since the route is meant to require a login
+   */
+  private def cacheableImage(data: Array[Byte], mimeType: String): Response.Raw =
+    cask.Response(data, headers = Seq("Content-Type" -> mimeType, "Cache-Control" -> "private, max-age=3600"))
 
   initialize()

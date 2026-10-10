@@ -21,8 +21,9 @@ object decorators:
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * cask's gzip decorator, except for a response that offers byte ranges: a stored original is a compressed format already, and a
-   * range names its raw bytes, which a compressed body would not match.
+   * cask's gzip decorator, except for a response that offers byte ranges and for an image. A stored original is a compressed
+   * format already, and a range names its raw bytes, which a compressed body would not match. An image is deflated already, so a
+   * gzip costs CPU on both ends, saves nothing, and discards its Content-Length.
    */
   class compress extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -34,7 +35,7 @@ object decorators:
         .exists(_.equalsIgnoreCase("gzip"))
 
       delegate(req, Map()).transform {
-        case v: Raw if acceptsGzip && !v.headers.contains(RangeStreaming.ACCEPT_RANGES) =>
+        case v: Raw if acceptsGzip && !v.headers.contains(RangeStreaming.ACCEPT_RANGES) && !isImage(v) =>
           val gzipped = new Response.Data {
             override def write(out: OutputStream): Unit =
               val wrap = new GZIPOutputStream(out)
@@ -47,6 +48,9 @@ object decorators:
           Response(gzipped, v.statusCode, v.headers :+ ("Content-Encoding" -> "gzip"), v.cookies)
         case v: Raw => v
       }
+
+    private def isImage(response: Raw): Boolean =
+      response.headers.exists((name, value) => name.equalsIgnoreCase("Content-Type") && value.startsWith("image/"))
 
   private val AUTH_HEADER_NAME = "Authorization"
   private val BEARER_PREFIX = "Bearer "

@@ -39,7 +39,42 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
     }
   }
 
-  test("A preview is gzipped for a client that names gzip among other codings, spaced or weighted or not") {
+  test("A preview and a face are cacheable for an hour, privately; the stored original is not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with people/meme-ben.jpg imported, in which the import detects a face.
+     *
+     * Assertions:
+     *
+     * The preview and the face content routes answer with a private, hour-long Cache-Control, and the file content route answers
+     * with none.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+
+    val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
+    val face: Face = testApp.service.person.getAssetFaces(importedAsset.persistedId).head
+
+    login()
+
+    withServer(App) {
+      host =>
+        def cacheControl(url: String): Option[Seq[String]] =
+          requests.get(url, cookies = testContext.cookies).headers.get("cache-control")
+
+        val privateHour = Some(Seq("private, max-age=3600"))
+        cacheControl(
+          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}") shouldBe privateHour
+        cacheControl(
+          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}") shouldBe privateHour
+        cacheControl(fileUrl(host, repoId, importedAsset)) shouldBe None
+    }
+  }
+
+  test("A preview is never gzipped, however the client names gzip among the codings it accepts") {
 
     /**
      * Setup:
@@ -48,11 +83,11 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
      *
      * Assertions:
      *
-     * The preview is gzipped whenever the client accepts gzip, and sent uncompressed when it does not.
+     * The preview is sent uncompressed whether or not the client accepts gzip: an image is deflated already.
      *
      * Edge cases:
      *
-     * gzip alone, in a list with and without a space after the comma, with a quality weight, and in upper case.
+     * gzip alone, in a list with and without a space after the comma, with a quality weight, in upper case, and identity.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -64,19 +99,49 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
 
     withServer(App) {
       host =>
-        def preview(acceptEncoding: String) = requests.get(
-          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
+        Seq("gzip", "gzip,deflate", "deflate, gzip", "gzip;q=1.0, deflate", "GZIP", "identity").foreach {
+          acceptEncoding =>
+            withClue(acceptEncoding) {
+              val response = requests.get(
+                s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
+                headers = Map("Accept-Encoding" -> acceptEncoding),
+                cookies = testContext.cookies
+              )
+              response.headers.contains("content-encoding") shouldBe false
+            }
+        }
+    }
+  }
+
+  test("The search results fragment is gzipped for a client that accepts gzip, and plain for one that does not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, its search results fragment requested with gzip and identity Accept-Encoding headers.
+     *
+     * Assertions:
+     *
+     * The HTML fragment is gzipped for a client that accepts gzip, and sent uncompressed for one that accepts identity only.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+
+    login()
+
+    withServer(App) {
+      host =>
+        def searchResults(acceptEncoding: String) = requests.get(
+          s"$host/htmx/search/r/$repoId",
           headers = Map("Accept-Encoding" -> acceptEncoding),
           cookies = testContext.cookies
         )
 
-        Seq("gzip", "gzip,deflate", "deflate, gzip", "gzip;q=1.0, deflate", "GZIP").foreach {
-          acceptEncoding =>
-            withClue(acceptEncoding) {
-              preview(acceptEncoding).headers("content-encoding") shouldBe Seq("gzip")
-            }
-        }
-        preview("identity").headers.contains("content-encoding") shouldBe false
+        val gzipped = searchResults("gzip")
+        gzipped.statusCode shouldBe 200
+        gzipped.contentType.head should startWith("text/html")
+        gzipped.headers("content-encoding") shouldBe Seq("gzip")
+        searchResults("identity").headers.contains("content-encoding") shouldBe false
     }
   }
 
