@@ -20,6 +20,7 @@ import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
 import altitude.core.service.AlbumService
 import altitude.core.service.AssetService
+import altitude.core.service.ContentSigner
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
@@ -310,6 +311,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
 
   object service {
     val system: SystemService = SystemService(app)
+    val contentSigner: ContentSigner = ContentSigner(system.loadOrCreateSigningKey())
     val paseto: PasetoService = PasetoService(app)
     val user: UserService = UserService(app)
     val repository: RepositoryService = RepositoryService(app)

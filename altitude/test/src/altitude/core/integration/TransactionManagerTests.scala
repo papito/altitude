@@ -26,18 +26,6 @@ import altitude.core.models.Settings
 
   private def countAssets: Int = query("SELECT count(*) AS n FROM asset").head("n").toString.toInt
 
-  /** Runs `f` on a thread of its own, outside the caller's transaction, and waits for it to finish */
-  private def onAnotherThread(f: => Unit): Unit = {
-    var failure: Option[Throwable] = None
-    val thread = new Thread(
-      () =>
-        try f
-        catch { case ex: Throwable => failure = Some(ex) })
-    thread.start()
-    thread.join()
-    failure.foreach(throw _)
-  }
-
   test("A read transaction reads one snapshot, whatever another transaction commits meanwhile") {
 
     /**
@@ -54,7 +42,9 @@ import altitude.core.models.Settings
 
     val (before, after) = testApp.txManager.asReadOnly {
       val before = countAssets
-      onAnotherThread(testContext.persistAsset())
+      val (thread, failure) = onAnotherThread(testContext.persistAsset(): Unit)
+      thread.join()
+      failure.get.foreach(throw _)
       (before, countAssets)
     }
 

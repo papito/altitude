@@ -1,9 +1,6 @@
 package altitude.core.integration
 
 import altitude.test.TestContext
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
@@ -18,7 +15,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import altitude.core.Altitude
-import altitude.core.Const
 import altitude.core.ConstraintException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
@@ -50,71 +46,6 @@ import altitude.core.util.Query
   private def importedAsset(sizeBytes: Long, isTriaged: Boolean = false): Asset = {
     val asset = testContext.makeAsset(isTriaged = isTriaged).copy(sizeBytes = sizeBytes)
     testApp.service.library.completeImport(testApp.service.library.persistAndIndex(asset))
-  }
-
-  /** Runs `f` on a thread of its own, which inherits the test's repository and account but not its transaction */
-  private def onAnotherThread(f: => Unit): (Thread, AtomicReference[Option[Throwable]]) = {
-    val failure = new AtomicReference[Option[Throwable]](None)
-    val thread = new Thread(
-      () =>
-        try f
-        catch { case ex: Throwable => failure.set(Some(ex)) })
-    thread.start()
-    (thread, failure)
-  }
-
-  /**
-   * Runs `first` and `second` on threads of their own, each in its transaction, `first` holding its transaction open until
-   * `second` waits for it: for a row lock on PostgreSQL, whose backend is identified by its process ID, and for the one write
-   * connection on SQLite, whose waiter is the thread parked in the pool.
-   */
-  private def contend(first: => Unit, second: => Unit): Unit = {
-    val holding = new CountDownLatch(1)
-    val release = new CountDownLatch(1)
-    val secondBackend = new AtomicReference[Option[AnyRef]](None)
-
-    val (firstThread, firstFailure) = onAnotherThread {
-      testApp.txManager.withTransaction {
-        first
-        holding.countDown()
-        release.await(30, TimeUnit.SECONDS): Unit
-      }
-    }
-
-    try {
-      holding.await(30, TimeUnit.SECONDS) shouldBe true
-
-      val (secondThread, secondFailure) = onAnotherThread {
-        testApp.txManager.withTransaction {
-          if (testApp.dataSourceType == Const.DbEngineName.POSTGRES) {
-            secondBackend.set(Some(query("SELECT pg_backend_pid() AS pid").head("pid")))
-          }
-          second
-        }
-      }
-
-      // pg_stat_activity is read once per transaction, so every poll is a transaction of its own
-      def secondIsWaiting: Boolean = testApp.dataSourceType match {
-        case Const.DbEngineName.POSTGRES =>
-          secondBackend.get.exists(
-            pid =>
-              testApp.txManager.asReadOnly {
-                query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
-              })
-        case _ => secondThread.getState == Thread.State.TIMED_WAITING || secondThread.getState == Thread.State.WAITING
-      }
-
-      Eventually.eventually(Eventually.timeout(Span(30, Seconds)), Eventually.interval(Span(20, Millis))) {
-        secondIsWaiting shouldBe true
-      }
-      release.countDown()
-      secondThread.join()
-      secondFailure.get.foreach(throw _)
-    } finally {
-      release.countDown()
-      firstThread.join()
-    }
-    firstFailure.get.foreach(throw _)
   }
 
   test("Test totals") {

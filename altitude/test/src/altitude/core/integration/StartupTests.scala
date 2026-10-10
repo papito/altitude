@@ -2,6 +2,7 @@ package altitude.core.integration
 
 import altitude.test.TestFocus
 import java.sql.SQLException
+import java.time.Instant
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
@@ -11,6 +12,7 @@ import scala.concurrent.duration.DurationInt
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.models.Settings
+import altitude.core.service.ContentSigner
 import altitude.core.suites.TestDatabase
 
 /**
@@ -43,6 +45,29 @@ import altitude.core.suites.TestDatabase
         other.service.system.readMetadata.version shouldBe versionBefore
         other.settings.atStartup.importParallelism shouldBe 0
         other.importParallelism should be >= 2
+    }
+  }
+
+  test("A new instance against a migrated database signs with the stored signing key rather than a new one") {
+
+    /**
+     * Setup:
+     *
+     * The signing key the test database holds (created by asking for it, as the suite bundle resets the database after the
+     * running instance has started), then a second instance started against the database.
+     *
+     * Assertions:
+     *
+     * The new instance reads the same key, and its signer signs a content path as a signer with that key does.
+     */
+    val key = testApp.service.system.loadOrCreateSigningKey()
+    val path = "/content/r/repo/preview/item"
+    val expiresAt = Instant.now.plusSeconds(60)
+
+    withFreshInstance {
+      other =>
+        other.service.system.loadOrCreateSigningKey() shouldBe key
+        other.service.contentSigner.sign(path, expiresAt) shouldBe ContentSigner(key).sign(path, expiresAt)
     }
   }
 

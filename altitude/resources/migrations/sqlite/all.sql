@@ -1,7 +1,10 @@
 CREATE TABLE system (
   id INT NOT NULL DEFAULT 1 CHECK (id = 1), -- this is the ONLY ID in the system table
   version INT NOT NULL,
-  is_initialized TINYINT NOT NULL DEFAULT FALSE
+  is_initialized TINYINT NOT NULL DEFAULT FALSE,
+  -- The HMAC-SHA256 key of signed content URLs, the Base64 of 32 random bytes, generated on first start
+  -- (SystemService.loadOrCreateSigningKey) so a signed URL survives a restart
+  signing_key CHAR(44)
 );
 
 CREATE UNIQUE INDEX system_01 ON system (id);

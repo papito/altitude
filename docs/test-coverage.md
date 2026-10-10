@@ -57,6 +57,20 @@ Sources: [PasetoService](../altitude/src/altitude/core/service/PasetoService.sca
 - [ ] Document with a test that a new service instance generates a different key and rejects tokens from the previous instance. [MEDIUM]
 - [ ] Verify the documented stateless logout contract: logout does not revoke the token, while the HTTP session removes the client cookie. [MINOR]
 
+## Signed content URLs and the signing key
+
+Sources: [ContentSigner](../altitude/src/altitude/core/service/ContentSigner.scala), [SystemService](../altitude/src/altitude/core/service/SystemService.scala). Evidence: [ContentSignerTests](../altitude/test/src/altitude/core/unit/ContentSignerTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala), [StartupTests](../altitude/test/src/altitude/core/integration/StartupTests.scala).
+
+- ✅ A signed path verifies under the same key until its expiry and not at or after it; a signature under another key does not verify.
+- ✅ The signature is 43 characters of URL-safe Base64 with no padding.
+- ✅ `sign` produces exactly a known-answer signature computed outside the code (`openssl`), and `verify` accepts it.
+- ✅ Only the spelling `sign` makes verifies: the same signature padded, or with its last character varied in the unused bits, is refused.
+- ✅ A moved expiry, a changed signature character and another item's path are refused; a malformed expiry or signature is refused without an exception.
+- ✅ A database without a signing key gets a 32-byte key created and stored; asked for again, the stored key is returned, and a stored key is never replaced.
+- ✅ An instance that finds no key while another transaction stores one adopts the stored key (a row-lock wait on PostgreSQL).
+- ✅ A second instance against the same database reads the stored key, and its signer signs as one with that key does.
+- [ ] The content route's acceptance of a signed URL has no test yet. [CRITICAL]
+
 ## Repository creation, lookup, and context
 
 Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositoryService.scala). Evidence: [RepositoryServiceTests](../altitude/test/src/altitude/core/integration/RepositoryServiceTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala).
