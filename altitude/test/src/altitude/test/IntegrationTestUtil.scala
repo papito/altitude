@@ -28,19 +28,6 @@ object IntegrationTestUtil {
     finally TimeZone.setDefault(original)
   }
 
-  def createTestDir(testApp: Altitude): Unit = {
-    val testDir = new File(testApp.config.getString(C.Conf.TEST_DIR))
-
-    if (!testDir.exists()) {
-      FileUtils.forceMkdir(testDir)
-    }
-
-    val dbDir = new File(testDir, "db")
-    if (!dbDir.exists()) {
-      FileUtils.forceMkdir(dbDir)
-    }
-  }
-
   def createFileStoreDir(testApp: Altitude): Unit = {
     val dataDir = new File(testApp.config.getString(C.Conf.FS_DATA_DIR))
 

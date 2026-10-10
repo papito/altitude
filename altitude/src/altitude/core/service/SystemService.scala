@@ -1,6 +1,5 @@
 package altitude.core.service
 
-import java.sql.SQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -18,20 +17,6 @@ class SystemService(val app: Altitude):
 
   private val systemMetadataDao: SystemMetadataDao = app.DAO.systemMetadata
   protected val txManager: TransactionManager = app.txManager
-
-  def version: Int =
-    txManager.asReadOnly {
-      try readMetadata.version
-      catch
-        case ex: SQLException =>
-          // Swallow - normal for new installations and tests with no DB yet
-          0
-    }
-
-  def setVersion(version: Int): Unit =
-    txManager.withTransaction {
-      systemMetadataDao.updateVersion(toVersion = version)
-    }
 
   def readMetadata: SystemMetadata =
     txManager.asReadOnly {

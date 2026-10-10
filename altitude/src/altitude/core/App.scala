@@ -46,8 +46,6 @@ object App extends cask.Main:
 
   val altitude: Altitude = new Altitude()
 
-  altitude.runMigrations()
-
   // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
   altitude.setIsInitializedState()
 
