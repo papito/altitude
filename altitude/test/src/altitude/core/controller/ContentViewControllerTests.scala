@@ -1,13 +1,21 @@
 package altitude.core.controller
 
 import altitude.test.IntegrationTestUtil
+import ch.qos.logback.classic.{ Level, Logger }
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import java.time.Instant
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.startWith
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+import org.slf4j.LoggerFactory
+
+import scala.jdk.CollectionConverters.*
 
 import altitude.core.{ App, Const }
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.{ Asset, Face, ImportAsset, UserMetadata }
+import altitude.core.routes.decorators
 
 @DoNotDiscover class ContentViewControllerTests extends ControllerTestCore {
 
@@ -222,6 +230,264 @@ import altitude.core.models.{ Asset, Face, ImportAsset, UserMetadata }
     }
   }
 
+  test("A signed URL serves a preview, a face and an original without a login, as a logged-in request is served") {
+
+    /**
+     * Setup:
+     *
+     * A user's repository with people/meme-ben.jpg imported, in which the import detects a face, each item requested by a URL
+     * signed by the server's signer, without a cookie, and by its plain URL with the user's cookie.
+     *
+     * Assertions:
+     *
+     * The preview, the face, the whole original and a 206 window of it are served to the signed request, with the status, the
+     * bytes and the content headers (type, length, range, caching, nosniff, sandbox, disposition) of the logged-in request.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+
+    val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/meme-ben.jpg"))
+    val face: Face = testApp.service.person.getAssetFaces(importedAsset.persistedId).head
+
+    login()
+
+    withServer(App) {
+      host =>
+        val contentHeaders = Seq(
+          "content-type",
+          "content-length",
+          "content-range",
+          "accept-ranges",
+          "cache-control",
+          "x-content-type-options",
+          "content-security-policy",
+          "content-disposition"
+        )
+
+        Seq(
+          (200, Const.DataStore.PREVIEW, importedAsset.persistedId, Map.empty[String, String]),
+          (200, Const.DataStore.FACE, face.persistedId, Map.empty[String, String]),
+          (200, Const.DataStore.FILE, importedAsset.persistedId, Map.empty[String, String]),
+          (206, Const.DataStore.FILE, importedAsset.persistedId, Map("Range" -> "bytes=0-99"))
+        ).foreach {
+          case (status, dataType, itemId, headers) =>
+            withClue(s"$dataType $headers") {
+              val signed =
+                requests.get(signedUrl(host, repoId, dataType, itemId), headers = headers, maxRedirects = 0, check = false)
+              val loggedIn =
+                requests.get(contentUrl(host, repoId, dataType, itemId), headers = headers, cookies = testContext.cookies)
+
+              signed.statusCode shouldBe status
+              loggedIn.statusCode shouldBe status
+              contentHeaders.foreach(name => withClue(name)(signed.headers.get(name) shouldBe loggedIn.headers.get(name)))
+              signed.bytes shouldBe loggedIn.bytes
+            }
+        }
+    }
+  }
+
+  test("A signed URL with a moved expiry, a changed signature or past its expiry is a 403, never cached") {
+
+    /**
+     * Setup:
+     *
+     * A user's repository with images/1.jpg imported, its preview requested by signed URLs without a cookie.
+     *
+     * Assertions:
+     *
+     * The signed URL with its expiry moved a second, with one character of its signature changed, and one signed with an expiry
+     * already past are each a plain-text 403 with no Cache-Control, all with one body, so a refusal does not say which it was.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/1.jpg"))
+
+    withServer(App) {
+      host =>
+        val path = contentPath(repoId, Const.DataStore.PREVIEW, importedAsset.persistedId)
+        val exp = Instant.now.plusSeconds(3600).getEpochSecond
+        val sig = signature(App.altitude.service.contentSigner.sign(path, Instant.ofEpochSecond(exp)))
+        val changedSig = (if sig.head == 'A' then 'B' else 'A') +: sig.tail
+
+        val refusals = Seq(
+          s"$host$path?exp=${exp + 1}&sig=$sig",
+          s"$host$path?exp=$exp&sig=$changedSig",
+          signedUrl(host, repoId, Const.DataStore.PREVIEW, importedAsset.persistedId, Instant.now.minusSeconds(60))
+        ).map(url => requests.get(url, maxRedirects = 0, check = false))
+
+        refusals.foreach {
+          response =>
+            withClue(response.url) {
+              response.statusCode shouldBe 403
+              response.contentType.head should startWith("text/plain")
+              response.headers.contains("cache-control") shouldBe false
+            }
+        }
+        refusals.map(_.text()).distinct.size shouldBe 1
+    }
+  }
+
+  test("A signature for one item opens neither another item nor the same item as another data type") {
+
+    /**
+     * Setup:
+     *
+     * A user's repository with images/1.jpg and images/2.jpg imported, the first asset's preview signed.
+     *
+     * Assertions:
+     *
+     * The signature's exp and sig on the second asset's preview path, and on the first asset's file path, are 403s without a
+     * cookie: the signature covers the path, which names one item of one data type.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val signedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/1.jpg"))
+    val otherAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
+
+    withServer(App) {
+      host =>
+        val signed = signedUrl(host, repoId, Const.DataStore.PREVIEW, signedAsset.persistedId)
+        val query = signed.substring(signed.indexOf('?'))
+
+        Seq(
+          previewUrl(host, repoId, otherAsset.persistedId),
+          fileUrl(host, repoId, signedAsset.persistedId)
+        ).foreach {
+          url =>
+            withClue(url) {
+              requests.get(url + query, maxRedirects = 0, check = false).statusCode shouldBe 403
+            }
+        }
+    }
+  }
+
+  test("A request with only one of exp and sig is not signed: the login redirect without a cookie, served with one") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported, its preview requested with only the exp, and with only the sig,
+     * of a valid signed URL.
+     *
+     * Assertions:
+     *
+     * Without a cookie, each is redirected to the login page, as an unsigned request is. With the cookie, each is served: the
+     * lone parameter is not an unknown argument.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/1.jpg"))
+
+    login()
+
+    withServer(App) {
+      host =>
+        val path = contentPath(repoId, Const.DataStore.PREVIEW, importedAsset.persistedId)
+        val signed = App.altitude.service.contentSigner.sign(path, Instant.now.plusSeconds(3600))
+        val exp = signed.substring(signed.indexOf("exp=")).takeWhile(_ != '&')
+
+        Seq(s"$host$path?$exp", s"$host$path?sig=${signature(signed)}").foreach {
+          url =>
+            withClue(url) {
+              val anonymous = requests.get(url, maxRedirects = 0, check = false)
+              anonymous.statusCode shouldBe 302
+              anonymous.headers("location").head should startWith("/login")
+
+              requests.get(url, cookies = testContext.cookies, check = false).statusCode shouldBe 200
+            }
+        }
+    }
+  }
+
+  test("A signed URL for a repository that does not exist is a 404") {
+
+    /**
+     * Setup:
+     *
+     * A preview path naming a random repository and a random item, signed by the server's signer.
+     *
+     * Assertions:
+     *
+     * The signed URL, without a cookie, is a plain-text 404, as a request for a repository that does not exist is with a login.
+     */
+    withServer(App) {
+      host =>
+        val response =
+          requests.get(signedUrl(host, BaseDao.genId, Const.DataStore.PREVIEW, BaseDao.genId), maxRedirects = 0, check = false)
+        response.statusCode shouldBe 404
+        response.contentType.head should startWith("text/plain")
+    }
+  }
+
+  test("A request with exp and sig is answered by the signature alone, whoever is logged in") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported, and a second user's repository with images/2.jpg imported.
+     *
+     * Assertions:
+     *
+     * A valid signed URL for the second user's preview is served with the first user's cookie, which alone would be a 404 there.
+     * The first user's own preview, with one character of the signature changed, is a 403 with their cookie, which alone would
+     * serve it.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val ownAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/1.jpg"))
+    login()
+
+    val stranger = testContext.persistUser()
+    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    testApp.service.repository.switchContextToRepository(strangersRepo)
+    testApp.service.user.switchContextToUser(stranger)
+    val foreign: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
+
+    withServer(App) {
+      host =>
+        def get(url: String): requests.Response =
+          requests.get(url, cookies = testContext.cookies, maxRedirects = 0, check = false)
+
+        get(signedUrl(host, strangersRepo.persistedId, Const.DataStore.PREVIEW, foreign.persistedId)).statusCode shouldBe 200
+
+        val signed = signedUrl(host, repoId, Const.DataStore.PREVIEW, ownAsset.persistedId)
+        val sig = signature(signed)
+        val changedSig = (if sig.head == 'A' then 'B' else 'A') +: sig.tail
+        get(signed.stripSuffix(sig) + changedSig).statusCode shouldBe 403
+    }
+  }
+
+  test("A refused signature is logged with the path as requested, so an encoded line break cannot forge a log line") {
+
+    /**
+     * Setup:
+     *
+     * Anonymous preview requests whose repository ID carries a percent-encoded CR LF and a fake log line, one with a signature
+     * that does not match and one with an expiry already past.
+     *
+     * Assertions:
+     *
+     * Both are 403s, and the decorators log each refusal with the path still percent-encoded, so nothing they log carries a line
+     * break.
+     */
+    withServer(App) {
+      host =>
+        val path = s"/${Const.DataStore.CONTENT}/r/x%0D%0AFORGED/${Const.DataStore.PREVIEW}/${BaseDao.genId}"
+
+        val logged = decoratorsLogged {
+          Seq(Instant.now.plusSeconds(3600), Instant.now.minusSeconds(60)).foreach {
+            expiresAt =>
+              requests
+                .get(s"$host$path?exp=${expiresAt.getEpochSecond}&sig=x", maxRedirects = 0, check = false)
+                .statusCode shouldBe 403
+          }
+        }
+
+        logged.count(message => message.startsWith("Signed URL for [") && message.contains("x%0D%0AFORGED")) shouldBe 2
+        logged.exists(message => message.contains('\n') || message.contains('\r')) shouldBe false
+    }
+  }
+
   test("A preview is never gzipped, however the client names gzip among the codings it accepts") {
 
     /**
@@ -387,8 +653,37 @@ import altitude.core.models.{ Asset, Face, ImportAsset, UserMetadata }
     }
   }
 
+  private def contentPath(repoId: String, dataType: String, itemId: String): String =
+    s"/${Const.DataStore.CONTENT}/r/$repoId/$dataType/$itemId"
+
   private def contentUrl(host: String, repoId: String, dataType: String, itemId: String): String =
-    s"$host/${Const.DataStore.CONTENT}/r/$repoId/$dataType/$itemId"
+    host + contentPath(repoId, dataType, itemId)
+
+  // Signed by the server's own signer: `testApp` is another instance, which may hold another key
+  private def signedUrl(
+      host: String,
+      repoId: String,
+      dataType: String,
+      itemId: String,
+      expiresAt: Instant = Instant.now.plusSeconds(3600)): String =
+    host + App.altitude.service.contentSigner.sign(contentPath(repoId, dataType, itemId), expiresAt)
+
+  // The `sig` of a signed URL, its last query parameter
+  private def signature(signed: String): String = signed.substring(signed.indexOf("sig=") + "sig=".length)
+
+  /** The messages the decorators log, at any level, while the block runs; the server runs in this JVM, so it logs here too */
+  private def decoratorsLogged(block: => Unit): Seq[String] =
+    val logger = LoggerFactory.getLogger(decorators.getClass).asInstanceOf[Logger]
+    val appender = ListAppender[ILoggingEvent]()
+    val level = logger.getLevel
+    appender.start()
+    logger.addAppender(appender)
+    logger.setLevel(Level.TRACE)
+    try block
+    finally
+      logger.detachAppender(appender)
+      logger.setLevel(level)
+    appender.list.asScala.toSeq.map(_.getFormattedMessage)
 
   private def fileUrl(host: String, repoId: String, assetId: String): String =
     contentUrl(host, repoId, Const.DataStore.FILE, assetId)

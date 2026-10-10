@@ -4,6 +4,7 @@ import cask.model.Response.Raw
 import cask.router.Result
 import java.io.OutputStream
 import java.lang.System.currentTimeMillis
+import java.time.Instant
 import java.util.zip.GZIPOutputStream
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -73,6 +74,23 @@ object decorators:
     Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
       req.exchange.getRequestPath.startsWith("/api/")
 
+  /** Runs `endpoint` unless the path names a repository that does not exist (`repoContext` found none), answered as not found */
+  private def existingRepositoryOnly(req: cask.Request)(endpoint: => Result[Raw]): Result[Raw] =
+    if RequestContext.repository.value.isEmpty && RepoPath.matches(req.exchange.getRequestPath) then
+      logger.debug(s"No repository found for [${req.exchange.getRequestURI}]")
+      handleNotFound(req)
+    else endpoint
+
+  private def handleNotFound(req: cask.Request): Result[Raw] =
+    if isApiRequest(req) then
+      Result.Success(
+        Response(
+          """{"error": "Not Found", "message": "Repository not found"}""",
+          statusCode = 404,
+          headers = Seq("Content-Type" -> "application/json")
+        ))
+    else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
+
   /**
    * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized
    * response. For web requests, redirects to the login page. A repository in the path that the user does not own is answered as
@@ -112,20 +130,7 @@ object decorators:
         case Some(repo) if repo.ownerAccountId != user.persistedId =>
           logger.warn(s"User [${user.persistedId}] denied repository [${repo.persistedId}] they do not own")
           handleNotFound(req)
-        case None if RepoPath.matches(req.exchange.getRequestPath) =>
-          logger.debug(s"No repository found for [${req.exchange.getRequestPath}]")
-          handleNotFound(req)
-        case _ => endpoint
-
-    private def handleNotFound(req: cask.Request): Result[Raw] =
-      if isApiRequest(req) then
-        Result.Success(
-          Response(
-            """{"error": "Not Found", "message": "Repository not found"}""",
-            statusCode = 404,
-            headers = Seq("Content-Type" -> "application/json")
-          ))
-      else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
+        case _ => existingRepositoryOnly(req)(endpoint)
 
     private def handleUnauthenticated(req: cask.Request): Result[Raw] =
       if isApiRequest(req) then
@@ -147,6 +152,47 @@ object decorators:
             statusCode = 302,
             headers = Seq("Location" -> s"/login?redirect=$originalUrl")
           ))
+
+  /**
+   * Decorator for an endpoint that a signed URL may open without a login. A request with both `exp` and `sig` query parameters is
+   * answered by the signature alone: one that [[altitude.core.service.ContentSigner.verify]] accepts for the request path is
+   * served whoever owns the repository, since the signature is the grant, unless the repository does not exist (a 404, as for
+   * `requireLogin`), and any other is a plain-text 403 (a share-link holder has no account to log in to). Any other request,
+   * including one with only one of the two parameters, is `requireLogin`'s, so the logged-in UI builds plain URLs to the same
+   * route.
+   */
+  class requireLoginOrSignature extends cask.RawDecorator:
+    private val login = requireLogin()
+
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      def param(name: String): Option[String] = req.queryParams.get(name).flatMap(_.headOption)
+
+      (param("exp"), param("sig")) match
+        case (Some(exp), Some(sig)) => signedOnly(req, exp, sig)(delegate(req, Map("request" -> req)))
+        case _ => login.wrapFunction(req, delegate)
+
+    private def signedOnly(req: cask.Request, exp: String, sig: String)(endpoint: => Result[Raw]): Result[Raw] =
+      val path = req.exchange.getRequestPath
+      // The path as requested, still percent-encoded, is what is logged: the decoded one may carry a line break that forges a
+      // log line, and `:repoId` binds any text
+      val requested = req.exchange.getRequestURI
+      val now = Instant.now
+
+      if App.altitude.service.contentSigner.verify(path, exp, sig, now) then
+        logger.trace(s"Signed URL accepted for [$requested]")
+        existingRepositoryOnly(req)(endpoint)
+      else
+        // The answer does not say why; the log does, never with the signature. An expired link is the routine end of one, so DEBUG
+        // whatever its signature. A signature that does not match, with an expiry still ahead or a malformed one, is a tampered or
+        // forged link, or one signed under a key the server no longer holds, so WARN, as an invalid login token is.
+        if exp.toLongOption.exists(_ <= now.getEpochSecond) then
+          logger.debug(s"Signed URL for [$requested] refused: expired at [$exp]")
+        else logger.warn(s"Signed URL for [$requested] refused: the signature does not match")
+        Result.Success(
+          Response(
+            "Forbidden: the link is invalid or has expired",
+            statusCode = 403,
+            headers = Seq("Content-Type" -> "text/plain")))
 
   /**
    * Decorator for an Admin-only endpoint, applied after `requireLogin`, which has put the account in the context. A User or a
@@ -211,7 +257,7 @@ object decorators:
       path match {
         case RepoPath(id) =>
           App.altitude.service.repository.setContextFromRequest(Some(id))
-          logger.trace("Set repository context to: " + id)
+          logger.trace(s"Repository context from [${req.exchange.getRequestURI}]")
         case _ => // println("No repository context found in path: " + path)
       }
 

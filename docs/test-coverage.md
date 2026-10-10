@@ -59,7 +59,7 @@ Sources: [PasetoService](../altitude/src/altitude/core/service/PasetoService.sca
 
 ## Signed content URLs and the signing key
 
-Sources: [ContentSigner](../altitude/src/altitude/core/service/ContentSigner.scala), [SystemService](../altitude/src/altitude/core/service/SystemService.scala). Evidence: [ContentSignerTests](../altitude/test/src/altitude/core/unit/ContentSignerTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala), [StartupTests](../altitude/test/src/altitude/core/integration/StartupTests.scala).
+Sources: [ContentSigner](../altitude/src/altitude/core/service/ContentSigner.scala), [SystemService](../altitude/src/altitude/core/service/SystemService.scala), [decorators](../altitude/src/altitude/core/routes/decorators.scala) (`requireLoginOrSignature`). Evidence: [ContentSignerTests](../altitude/test/src/altitude/core/unit/ContentSignerTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala), [StartupTests](../altitude/test/src/altitude/core/integration/StartupTests.scala), [ContentViewControllerTests](../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala).
 
 - ✅ A signed path verifies under the same key until its expiry and not at or after it; a signature under another key does not verify.
 - ✅ The signature is 43 characters of URL-safe Base64 with no padding.
@@ -69,7 +69,12 @@ Sources: [ContentSigner](../altitude/src/altitude/core/service/ContentSigner.sca
 - ✅ A database without a signing key gets a 32-byte key created and stored; asked for again, the stored key is returned, and a stored key is never replaced.
 - ✅ An instance that finds no key while another transaction stores one adopts the stored key (a row-lock wait on PostgreSQL).
 - ✅ A second instance against the same database reads the stored key, and its signer signs as one with that key does.
-- [ ] The content route's acceptance of a signed URL has no test yet. [CRITICAL]
+- ✅ HTTP: a signed URL, without a cookie, serves a preview, a face, an original and a 206 window of it with the status, bytes and content headers of the logged-in request.
+- ✅ HTTP: a signed URL with its expiry moved, one character of its signature changed, or its expiry past is a plain-text 403 with no `Cache-Control`, one body for all three; a signature on another item's path, or on the same item as another data type, is a 403.
+- ✅ HTTP: a request with only `exp` or only `sig` is unsigned: the login redirect without a cookie, served with one (not cask's 400 for an unknown argument).
+- ✅ HTTP: a signed URL for a repository that does not exist is a plain-text 404.
+- ✅ HTTP: a request with `exp` and `sig` is answered by the signature alone, whatever the cookie: a valid one serves another user's preview with a cookie that alone is a 404 there, and a changed signature is a 403 with the owner's cookie.
+- ✅ HTTP: a refused signature is logged with the path still percent-encoded, so a `%0D%0A` in the path puts no line break in the log.
 
 ## Repository creation, lookup, and context
 

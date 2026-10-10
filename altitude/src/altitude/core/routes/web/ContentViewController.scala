@@ -10,17 +10,22 @@ import altitude.core.NotFoundException
 import altitude.core.Validators
 import altitude.core.models.MimedPreviewData
 import altitude.core.routes.RangeStreaming
-import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requireLoginOrSignature
 
 class ContentViewController(using logger: Logger) extends cask.Routes:
 
   /**
-   * A preview, a face or a stored original, served to the owner of the repository only. The file store builds paths from the item
-   * ID, so an ID that is not a UUID is a 400, and anything the ID does not name, in the database or on disk, is a 404.
+   * A preview, a face or a stored original, served to the owner of the repository, or to the holder of a signed URL for that one
+   * item. The file store builds paths from the item ID, so an ID that is not a UUID is a 400, and anything the ID does not name,
+   * in the database or on disk, is a 404.
+   *
+   * `exp` and `sig` are a signed URL's, which the decorator verifies; they are declared only because cask answers a query
+   * parameter that an endpoint does not declare with a 400.
    */
-  @requireLogin()
+  @requireLoginOrSignature()
   @cask.get("/content/r/:repoId/:dataType/:itemId")
-  def getContent(repoId: String, dataType: String, itemId: String)(using request: Request): Response.Raw =
+  def getContent(repoId: String, dataType: String, itemId: String, exp: Option[String] = None, sig: Option[String] = None)(using
+      request: Request): Response.Raw =
     if !Validators.isUuid(itemId) then
       logger.debug(s"Content [$dataType] requested with an item ID that is not a UUID: [$itemId]")
       return plainText(C.Msg.Err.VALUE_NOT_A_UUID, 400)
