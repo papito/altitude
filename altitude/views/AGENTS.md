@@ -13,7 +13,7 @@
 
 ```
 views/
-  *.scala.html          ← full pages (index, login, setup, pipeline)
+  *.scala.html          ← full pages (index, login, setup, pipeline, settings)
   includes/             ← reusable layout fragments (nav, header, batch ops, search results)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
@@ -52,12 +52,13 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
+| `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
@@ -130,8 +131,9 @@ Two-layer event bus, both on `document.body`:
    element that issued the request (`readSuccessEvent` in `js/fragments/helpers.js`).
 2. **HTMX lifecycle events** — `htmx:before:request` / `htmx:after:request` / `htmx:after:settle` —
    handled by `js/listeners/htmx-requests.js` (one rule for every request: a response of 400 or
-   above goes to the snackbar with its path and status; a successful one dispatches the declared
-   success event and, for a tab, selects it; every swap hydrates the fragments it inserted) and by
+   above goes to the snackbar with its path and status; a validation replacement, a 200 with
+   `HX-Retarget: this`, is swapped in and announces nothing; any other successful one dispatches the
+   declared success event and, for a tab, selects it; every swap hydrates the fragments it inserted) and by
    `js/listeners/dialogs.js` for modal opens and dialog operations. There is no router keyed on
    request URLs.
 
@@ -768,6 +770,26 @@ grid (`js/search-results/metadata-visibility.js`) keeps one `show-<field>` class
 on `#assets`, and the CSS in `includes/search_results.scala.html` shows the matching
 `.metadata > .<field>` rows: no per-cell work, nothing to re-apply for appended pages.
 
+**Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, an Admin's page, `SettingsController`) is shaped like
+the import page: `header_common`, the shared nav, one `main`, `html_common` for the snackbar, `json-enc.js`, and the page
+module `js/settings-page.js`, which registers the htmx request rule with a minimal app and the save listener
+(`js/listeners/settings.js`), and `highlightNav("settings")`. `main` holds the one form, `htmx/settings_form.scala.html`
+(`#settingsForm`), rendered by `SettingsFormController.form` for the page and again by its save, `POST
+/htmx/settings/r/:repoId`: `hx-target="this"`, `hx-swap="outerHTML settle:0"`, `hx-json-enc`,
+`data-app-success-event="SETTINGS_SAVED_EVENT"`. Its sections are the Setting groups, each a grid of label and control
+rows (`.setting` is `display: contents`, so the labels of a section line up); a field is a text input, or a checkbox with
+`value="true"` for a flag, named after its Setting (`field-<name>`), followed by its Reset button, its error, a restart
+notice ("Saved X, running Y until the server restarts") for a Restart setting whose saved value is not the running one,
+and its help text ending in `Default: …`. The Settings of the other engine are not rendered (PostgreSQL only:
+`face.recognition.hnsw_ef_search`, `db.postgres.read_statement_timeout`). Reset is `data-app-reset-setting`, handled by one
+delegated click listener in the page module that fills the input from the row's `data-setting-default`
+(`Const.attributes.settingDefault`) and clears its `error` class; nothing is written until Save. A failed validation comes
+back as a validation replacement (`HX-Retarget: this`, see above) with the submitted values kept and each error beside its
+field, so no success event fires; a save answers the saved form and `SETTINGS_SAVED_EVENT` shows "Settings saved". The CSS
+is the partial's own `<style>` over `core.css` variables (`--section-vertical-space`, `--control-*-space`,
+`--faded-font-color`, `--warning-font-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
+to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
+
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
 calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
@@ -820,7 +842,11 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/search-results/page-window.js` | the window of loaded pages: folds pages a viewport above into `.page-spacer`s, reloads a spacer as a continuation when it nears (`reloadSpacer`), drops pages a viewport below, keeps the group header still open at a fold, and corrects the scroll position itself |
 | `static/js/search-results/lazy-images.js` | loads thumbnails within a viewport, placeholders them once more than a viewport away, the first page's included |
 | `static/js/search-results/metadata-visibility.js` | keeps the `show-<field>` classes on `#assets` in step with the metadata fields set |
-| `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, declared success events, tab selection, fragment hydration |
+| `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, validation replacements (no event), declared success events, tab selection, fragment hydration |
+| `static/js/settings-page.js` | the Settings page module: the request rule over its one form, the save listener, the Reset buttons |
+| `static/js/listeners/settings.js` | `SETTINGS_SAVED_EVENT` → the success snackbar |
+| `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
+| `views/htmx/settings_form.scala.html` | The one Settings form: sections per group, a field per applicable Setting with Reset, error, restart notice and help |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |

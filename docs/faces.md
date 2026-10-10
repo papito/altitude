@@ -8,17 +8,18 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 [FaceRecognitionService](../altitude/src/altitude/core/service/FaceRecognitionService.scala),
 [PersonService](../altitude/src/altitude/core/service/PersonService.scala), the engine
 [FaceDao](../altitude/src/altitude/core/dao/postgres/FaceDao.scala)s, the
-[face table](../altitude/resources/migrations/postgres/all.sql) and the `face.*` and `video.faces.*` keys of
-[reference.conf](../altitude/resources/reference.conf).
+[face table](../altitude/resources/migrations/postgres/all.sql) and the `face.*` and `video.faces.*` Settings of the
+registry in [Settings.scala](../altitude/src/altitude/core/models/Settings.scala) (see **Settings** below).
 
 ## Where it runs
 
 Faces are two stages of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists and is
-indexed, on both engines, their work on the import dispatcher's threads (`import.parallelism`):
+indexed, on both engines, their work on the import dispatcher's threads (the `import.parallelism` Setting, a Restart
+setting: 0, the default, means half the cores and never fewer than 2):
 
 - `DetectFacesFlow` calls `FaceRecognitionService.detect`, which finds the faces without touching the database: an
   image's every detection (`extractFaces`), or a Video's clusters (see **Videos**). An animated image (an image with a
-  duration, an animated GIF) is not searched for faces. The stage works on up to `import.parallelism` assets of a
+  duration, an animated GIF) is not searched for faces. The stage works on up to that many assets of a
   repository at once. The detections, a `DetectedFaces` of each Face with its crops, ride on the pipeline element
   (`AssetWithData.detectedFaces`) to the next stage.
 - `RecognizeFacesFlow` calls `recognizeAndStore`, which matches and stores them in a short `withFaceVector`
@@ -40,11 +41,11 @@ column: on SQLite it loads the `sqlite-vector` extension and runs `vector_init('
 returns a `(Face, FaceImages)` per face it keeps.
 
 1. **YuNet** (`resources/opencv/face_detection_yunet_2023mar.onnx`, OpenCV `FaceDetectorYN`, one instance per thread)
-   finds faces. The image is downscaled to fit `face.detection.bounding_box_size` (1280 px) first and the boxes and
+   finds faces. The image is downscaled to fit the `face.detection.bounding_box_size` Setting (1280 px) first and the boxes and
    landmarks scaled back; the score is not, so that size decides how small a face in a 12 to 48 MP photo can be found.
-   A detection needs a score of at least `face.yunet.confidence_threshold` (0.85, applied inside the detector with NMS
-   `face.yunet.nms_threshold`, 0.3, OpenCV's default; tighter and one of two cheek-to-cheek faces is suppressed) and a
-   box, clamped to the image, of at least `face.detection.min_face_size` (50 px) each way. An image whose smaller side
+   A detection needs a score of at least `face.yunet.confidence_threshold` (0.85, set on the thread's detector before each
+   detection together with NMS `face.yunet.nms_threshold`, 0.3, OpenCV's default; tighter and one of two cheek-to-cheek
+   faces is suppressed) and a box, clamped to the image, of at least `face.detection.min_face_size` (50 px) each way. An image whose smaller side
    is under that size is skipped.
 2. **Alignment**: the five YuNet landmarks (eyes, nose, mouth corners) are warped by a similarity transform
    (`Calib3d.estimateAffinePartial2D`) onto the ArcFace 112×112 reference template (`ARCFACE_REF_LANDMARKS_112`,
@@ -58,7 +59,8 @@ returns a `(Face, FaceImages)` per face it keeps.
    blurred at 5% of their width 15 to 19.6, eyes covered 16 to 19.5. Blur only counts relative to the face: the
    112 px alignment hides any blur small against a large face.
 5. **Tier**: `Face.isEnrolled` is `quality >= face.quality.enroll_threshold` (18.0). A detection under
-   `face.quality.keep_threshold` (15.0) is dropped here, after the debug dump, with an INFO log.
+   `face.quality.keep_threshold` (15.0) is dropped here, after the debug dump, with an INFO log. Both thresholds are read
+   from the snapshot of this `extractFaces` call; changing them never re-tiers Faces already stored.
 6. **Crops** (`FaceImages`): the raw crop as PNG, an 80 px display thumbnail, the aligned 112×112 colour crop and a
    histogram-equalized grayscale copy of it. The Face's `checksum` is `MurmurHash.hash32` of the raw crop PNG.
 
@@ -72,15 +74,16 @@ one's own files.
 
 `FaceRecognitionService.recognizeFace(face): Option[Person]` finds the Person for an unsaved Face:
 
-1. `FaceDao.searchClosestFaceMatches` returns the `face.recognition.match_count` (5) nearest stored Faces within
-   `face.recognition.cosine_distance_threshold` (0.55), in distance order. The SQL is hand-written per engine and sees
+1. `FaceDao.searchClosestFaceMatches(features, matchCount, distanceThreshold)` returns the `face.recognition.match_count`
+   (5) nearest stored Faces within `face.recognition.cosine_distance_threshold` (0.55), in distance order; the service
+   reads both Settings from one snapshot per face and passes them in, so the DAO holds no Setting. The SQL is hand-written per engine and sees
    only **enrolled** Faces of people who are **not a bad match**, in the context repository. Hidden people stay
    matchable: hiding is a display preference.
    - **PostgreSQL** (`postgres.FaceDao.CLOSEST_MATCHES_SQL`): the candidates come from `face_03`, a partial HNSW index
      over the enrolled Faces' vectors at half precision (`features::halfvec(512)`, `WHERE is_enrolled`). The statement
      asks it for four times `match_count` Faces, ordered by the same cast, then takes their exact `<=>` distances at
      full precision, applies the threshold and keeps the nearest. `withFaceVector` sets `hnsw.ef_search`
-     (`face.recognition.hnsw_ef_search`, 100) and `hnsw.iterative_scan = relaxed_order` for the transaction, so the
+     (the PostgreSQL-only `face.recognition.hnsw_ef_search` Setting, 100, read when the outermost `withFaceVector` runs) and `hnsw.iterative_scan = relaxed_order` for the transaction, so the
      index scan goes on until its limit is met by Faces that pass the repository and bad-match filters. The search is
      approximate; over a handful of Faces it is exhaustive.
    - **SQLite**: `vector_full_scan` is an exact scan of the `face` table, every repository's rows, filtered
@@ -156,7 +159,13 @@ The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilte
 - **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, the
   destination takes the source's name when only the source was named, and its count is recounted from the search.
 
-## Configuration
+## Settings
+
+All but `face.debug.enabled` are Live settings: an Admin edits them on the Settings screen (`/settings/r/:repoId`), they
+are stored in the `setting` table, and the next detection or search uses the new value (an import in flight at its next
+stage). Their help text on the screen is the registry's (`models/Settings.scala`); the screen enforces the bounds and the
+cross rules (box size ≥ smallest face, `hnsw_ef_search` ≥ 4 × `match_count`, enroll ≥ keep, `max_sampled_frames` ≥
+`min_cluster_frames`). `face.debug.enabled` stays a `reference.conf` key, read once at startup.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -166,9 +175,10 @@ The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilte
 | `face.detection.min_face_size` | 50 | Smallest face box, in original pixels |
 | `face.recognition.cosine_distance_threshold` | 0.55 | Two embeddings closer than this are the same person, in the index and within a Video |
 | `face.recognition.match_count` | 5 | Nearest candidates that vote |
+| `face.recognition.hnsw_ef_search` | 100 | PostgreSQL only: candidates a search of the vector index keeps as it goes; at least four times `match_count` |
 | `face.quality.enroll_threshold` | 18.0 | Quality to start a Person and be a candidate |
-| `face.quality.keep_threshold` | 15.0 | Quality to be stored at all |
-| `face.debug.enabled` | false | Write the debug artifacts above |
+| `face.quality.keep_threshold` | 15.0 | Quality to be stored at all; neither tier re-tiers stored Faces |
+| `face.debug.enabled` | false | Write the debug artifacts above (a config key, not a Setting) |
 | `video.faces.sample_interval_ms` | 1000 | Spacing of Sampled frames |
 | `video.faces.max_sampled_frames` | 120 | Cap on Sampled frames per Video |
 | `video.faces.min_cluster_frames` | 2 | Fewer frames makes a Video's Face match-only |

@@ -21,7 +21,7 @@ Sources: [BaseService](../altitude/src/altitude/core/service/BaseService.scala),
 - ✅ A read transaction sees one snapshot on both engines: it counts the same assets before and after another thread commits one, and the next read transaction sees it.
 - ✅ A SQLite write transaction holds the write lock from its start even when it has only read: another connection's `BEGIN IMMEDIATE` with no busy timeout is refused.
 - ✅ SQLite read and write connections report `journal_mode=wal`, `foreign_keys=1` and `temp_store=2`; a read connection is `query_only` and the write connection is not.
-- ✅ A PostgreSQL read transaction runs with `jit=off` and `plan_cache_mode=force_custom_plan`, and a statement past its time limit (2 s under test) is a `QueryTimeoutException`.
+- ✅ A PostgreSQL read transaction runs with `jit=off` and `plan_cache_mode=force_custom_plan`, and a statement past its time limit (the `db.postgres.read_statement_timeout` Setting, saved as 1 s for the test) is a `QueryTimeoutException`.
 - [ ] Exercise a write nested inside a read-only service transaction on both engines and assert it is refused (PostgreSQL `READ ONLY`, SQLite `query_only`) rather than discarded; only the SQLite setting itself is asserted. [MEDIUM]
 - [ ] The 503 answers to a timed-out search (plain text from HTML search, JSON from the map endpoints) have no test: controller tests run on SQLite, which has no read time limit. [MINOR]
 - [ ] Hourly `PRAGMA optimize` and the pools' shutdown at `Altitude.cleanup` have no test. [MINOR]
