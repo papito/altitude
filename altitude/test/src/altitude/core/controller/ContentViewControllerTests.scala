@@ -2,11 +2,12 @@ package altitude.core.controller
 
 import altitude.test.IntegrationTestUtil
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.{ endWith, startWith }
+import org.scalatest.matchers.must.Matchers.startWith
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
 import altitude.core.{ App, Const }
-import altitude.core.models.{ Asset, Face }
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.models.{ Asset, Face, ImportAsset, UserMetadata }
 
 @DoNotDiscover class ContentViewControllerTests extends ControllerTestCore {
 
@@ -31,15 +32,102 @@ import altitude.core.models.{ Asset, Face }
 
     withServer(App) {
       host =>
-        val response = requests.get(
-          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
-          cookies = testContext.cookies)
+        val response = requests.get(previewUrl(host, repoId, importedAsset.persistedId), cookies = testContext.cookies)
         response.statusCode shouldBe 200
         response.contentType.head shouldBe "image/webp"
     }
   }
 
-  test("A preview and a face are cacheable for an hour, privately; the stored original is not") {
+  test("Content requires a login and a repository the user owns") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/1.jpg imported, and a second user's repository with images/2.jpg imported.
+     *
+     * Assertions:
+     *
+     * A preview request without a cookie is redirected to the login page. With the cookie, the user's own preview is served, and
+     * the other user's preview is a 404, as for any foreign entity.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/1.jpg"))
+    login()
+
+    val stranger = testContext.persistUser()
+    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    testApp.service.repository.switchContextToRepository(strangersRepo)
+    testApp.service.user.switchContextToUser(stranger)
+    val foreign: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
+
+    withServer(App) {
+      host =>
+        val anonymous = requests.get(previewUrl(host, repoId, importedAsset.persistedId), maxRedirects = 0, check = false)
+        anonymous.statusCode shouldBe 302
+        anonymous.headers("location").head should startWith("/login")
+
+        requests
+          .get(previewUrl(host, repoId, importedAsset.persistedId), cookies = testContext.cookies)
+          .statusCode shouldBe 200
+
+        requests
+          .get(previewUrl(host, strangersRepo.persistedId, foreign.persistedId), cookies = testContext.cookies, check = false)
+          .statusCode shouldBe 404
+    }
+  }
+
+  test("An item ID that is not a UUID is a 400, and one that names nothing stored is a 404, never cached") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with images/2.jpg imported, its stored preview and original then deleted from disk.
+     *
+     * Assertions:
+     *
+     * An item ID that is not a UUID is a plain-text 400 for every data type. A UUID that names no asset or face, a preview or an
+     * original whose file is gone, and an unknown data type are plain-text 404s. None of them carries a Cache-Control.
+     *
+     * Edge cases:
+     *
+     * A path traversal attempt as the item ID.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val gone: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
+    testApp.service.fileStore.purgeAssetById(gone.persistedId)
+    login()
+
+    withServer(App) {
+      host =>
+        def get(url: String): requests.Response = requests.get(url, cookies = testContext.cookies, check = false)
+
+        def plainError(response: requests.Response, status: Int): Unit =
+          response.statusCode shouldBe status
+          response.contentType.head should startWith("text/plain")
+          response.headers.contains("cache-control") shouldBe false
+
+        Seq(Const.DataStore.PREVIEW, Const.DataStore.FILE, Const.DataStore.FACE).foreach {
+          dataType =>
+            withClue(dataType) {
+              Seq("not-a-uuid", "..%2F..%2Fsecret").foreach {
+                itemId =>
+                  val response = get(contentUrl(host, repoId, dataType, itemId))
+                  plainError(response, 400)
+                  response.text() shouldBe Const.Msg.Err.VALUE_NOT_A_UUID
+              }
+              plainError(get(contentUrl(host, repoId, dataType, BaseDao.genId)), 404)
+            }
+        }
+
+        plainError(get(previewUrl(host, repoId, gone.persistedId)), 404)
+        plainError(get(fileUrl(host, repoId, gone.persistedId)), 404)
+        plainError(get(contentUrl(host, repoId, "unknown", BaseDao.genId)), 404)
+    }
+  }
+
+  test("A preview, a face and an original are cached for good, never sniffed, and sandboxed") {
 
     /**
      * Setup:
@@ -48,13 +136,64 @@ import altitude.core.models.{ Asset, Face }
      *
      * Assertions:
      *
-     * The preview and the face content routes answer with a private, hour-long Cache-Control, and the file content route answers
-     * with none.
+     * The preview, the face and the file content routes all answer with a private, year-long, immutable Cache-Control, with
+     * nosniff, and with a sandbox Content-Security-Policy: the bytes under a content URL never change, and an original is a
+     * user's upload served on the application's origin.
+     *
+     * Edge cases:
+     *
+     * A 206 window of the original, and a 416 for a range past its end.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
 
-    val importAsset = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/meme-ben.jpg"))
+    val face: Face = testApp.service.person.getAssetFaces(importedAsset.persistedId).head
+
+    login()
+
+    withServer(App) {
+      host =>
+        def get(url: String, headers: Map[String, String] = Map.empty): requests.Response =
+          requests.get(url, headers = headers, cookies = testContext.cookies, check = false)
+
+        Seq(
+          200 -> get(previewUrl(host, repoId, importedAsset.persistedId)),
+          200 -> get(faceUrl(host, repoId, face.persistedId)),
+          200 -> get(fileUrl(host, repoId, importedAsset.persistedId)),
+          206 -> get(fileUrl(host, repoId, importedAsset.persistedId), Map("Range" -> "bytes=0-99")),
+          416 -> get(fileUrl(host, repoId, importedAsset.persistedId), Map("Range" -> s"bytes=${importedAsset.sizeBytes}-"))
+        ).foreach {
+          case (status, response) =>
+            withClue(response.url) {
+              response.statusCode shouldBe status
+              response.headers("cache-control") shouldBe Seq("private, max-age=31536000, immutable")
+              response.headers("x-content-type-options") shouldBe Seq("nosniff")
+              response.headers("content-security-policy") shouldBe Seq("sandbox")
+            }
+        }
+    }
+  }
+
+  test("An original is offered inline under its own file name; a preview and a face are not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with people/meme-ben.jpg imported under a file name with non-ASCII characters, spaces, a
+     * double quote and a backslash, in which the import detects a face.
+     *
+     * Assertions:
+     *
+     * The whole original and a 206 window of it answer with an inline Content-Disposition carrying the file name twice: as ASCII,
+     * with every other character, the quote and the backslash replaced, and as RFC 5987 UTF-8, percent-encoded. The preview and
+     * the face carry no Content-Disposition.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+
+    val fixture = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg")
+    val importAsset = ImportAsset("""Crème brûlée "ben"\1.jpg""", fixture.path, UserMetadata())
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val face: Face = testApp.service.person.getAssetFaces(importedAsset.persistedId).head
 
@@ -62,15 +201,24 @@ import altitude.core.models.{ Asset, Face }
 
     withServer(App) {
       host =>
-        def cacheControl(url: String): Option[Seq[String]] =
-          requests.get(url, cookies = testContext.cookies).headers.get("cache-control")
+        val disposition =
+          """inline; filename="Cr_me br_l_e _ben__1.jpg"; filename*=UTF-8''Cr%C3%A8me%20br%C3%BBl%C3%A9e%20%22ben%22%5C1.jpg"""
 
-        val privateHour = Some(Seq("private, max-age=3600"))
-        cacheControl(
-          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}") shouldBe privateHour
-        cacheControl(
-          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}") shouldBe privateHour
-        cacheControl(fileUrl(host, repoId, importedAsset)) shouldBe None
+        val whole = requests.get(fileUrl(host, repoId, importedAsset.persistedId), cookies = testContext.cookies)
+        whole.statusCode shouldBe 200
+        whole.headers("content-disposition") shouldBe Seq(disposition)
+
+        val window =
+          requests.get(
+            fileUrl(host, repoId, importedAsset.persistedId),
+            headers = Map("Range" -> "bytes=0-99"),
+            cookies = testContext.cookies)
+        window.statusCode shouldBe 206
+        window.headers("content-disposition") shouldBe Seq(disposition)
+
+        Seq(previewUrl(host, repoId, importedAsset.persistedId), faceUrl(host, repoId, face.persistedId)).foreach {
+          url => requests.get(url, cookies = testContext.cookies).headers.contains("content-disposition") shouldBe false
+        }
     }
   }
 
@@ -103,7 +251,7 @@ import altitude.core.models.{ Asset, Face }
           acceptEncoding =>
             withClue(acceptEncoding) {
               val response = requests.get(
-                s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
+                previewUrl(host, repoId, importedAsset.persistedId),
                 headers = Map("Accept-Encoding" -> acceptEncoding),
                 cookies = testContext.cookies
               )
@@ -167,7 +315,7 @@ import altitude.core.models.{ Asset, Face }
 
     withServer(App) {
       host =>
-        val response = requests.get(fileUrl(host, repoId, importedAsset), cookies = testContext.cookies)
+        val response = requests.get(fileUrl(host, repoId, importedAsset.persistedId), cookies = testContext.cookies)
         response.statusCode shouldBe 200
         response.contentType.head should startWith("image/jpeg")
         response.headers("accept-ranges") shouldBe Seq("bytes")
@@ -206,7 +354,7 @@ import altitude.core.models.{ Asset, Face }
     withServer(App) {
       host =>
         def range(value: String) = requests.get(
-          fileUrl(host, repoId, importedAsset),
+          fileUrl(host, repoId, importedAsset.persistedId),
           headers = Map("Range" -> value, "Accept-Encoding" -> "gzip"),
           cookies = testContext.cookies,
           check = false)
@@ -239,8 +387,17 @@ import altitude.core.models.{ Asset, Face }
     }
   }
 
-  private def fileUrl(host: String, repoId: String, asset: Asset): String =
-    s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FILE}/${asset.persistedId}"
+  private def contentUrl(host: String, repoId: String, dataType: String, itemId: String): String =
+    s"$host/${Const.DataStore.CONTENT}/r/$repoId/$dataType/$itemId"
+
+  private def fileUrl(host: String, repoId: String, assetId: String): String =
+    contentUrl(host, repoId, Const.DataStore.FILE, assetId)
+
+  private def previewUrl(host: String, repoId: String, assetId: String): String =
+    contentUrl(host, repoId, Const.DataStore.PREVIEW, assetId)
+
+  private def faceUrl(host: String, repoId: String, faceId: String): String =
+    contentUrl(host, repoId, Const.DataStore.FACE, faceId)
 
   test("View a person's cover image") {
 
@@ -266,9 +423,7 @@ import altitude.core.models.{ Asset, Face }
 
     withServer(App) {
       host =>
-        val response = requests.get(
-          s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.FACE}/${face.persistedId}",
-          cookies = testContext.cookies)
+        val response = requests.get(faceUrl(host, repoId, face.persistedId), cookies = testContext.cookies)
         response.statusCode shouldBe 200
         response.contentType.head should startWith("image/png")
     }

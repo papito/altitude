@@ -11,6 +11,8 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
+import altitude.core.NotFoundException
+import altitude.core.routes.RangeStreaming
 import altitude.core.routes.RangeStreaming.FileWindow
 
 @DoNotDiscover class RangeStreamingTests extends AnyFunSuite {
@@ -114,5 +116,55 @@ import altitude.core.routes.RangeStreaming.FileWindow
     withFile(Array.fill[Byte](10)(1)) {
       path => an[IOException] should be thrownBy FileWindow(path, 0, 20, MIME).writeBytesTo(ByteArrayOutputStream())
     }
+  }
+
+  test("A file name is offered inline as quoted ASCII and as RFC 5987 UTF-8, never with a raw control character") {
+
+    /**
+     * Setup:
+     *
+     * File names with characters that each form of the Content-Disposition file name treats differently.
+     *
+     * Assertions:
+     *
+     * The ASCII form keeps printable ASCII and replaces every other character, the double quote and the backslash with an
+     * underscore, one per character. The UTF-8 form keeps the RFC 5987 attr-chars and percent-encodes every other byte in upper
+     * case, so neither form can end the header or the parameter early.
+     *
+     * Edge cases:
+     *
+     * Every attr-char punctuation mark; characters outside the attr-chars that encodeURIComponent or URLEncoder leave alone (`*`,
+     * `'`, parentheses) or turn into a plus (a space), and `%`; a CR LF that would start a new header, a tab and a DEL; a
+     * character outside the Basic Multilingual Plane, which is two UTF-16 chars and four UTF-8 bytes; and a lone surrogate, which
+     * is one replaced character in the ASCII form and the `?` that UTF-8 encoding substitutes for it in the other.
+     */
+    def disposition(ascii: String, encoded: String) = s"""inline; filename="$ascii"; filename*=UTF-8''$encoded"""
+
+    RangeStreaming.contentDisposition("IMG_0001.JPG") shouldBe disposition("IMG_0001.JPG", "IMG_0001.JPG")
+    RangeStreaming.contentDisposition("!#$&+-.^_`|~") shouldBe disposition("!#$&+-.^_`|~", "!#$&+-.^_`|~")
+    RangeStreaming.contentDisposition("a b*c'd%e(f).txt") shouldBe disposition("a b*c'd%e(f).txt", "a%20b%2Ac%27d%25e%28f%29.txt")
+    RangeStreaming.contentDisposition("say \"hi\" \\ ü.jpg") shouldBe
+      disposition("say _hi_ _ _.jpg", "say%20%22hi%22%20%5C%20%C3%BC.jpg")
+    RangeStreaming.contentDisposition("evil\r\nSet-Cookie: x=1\t.jpg") shouldBe
+      disposition("evil__Set-Cookie: x=1_.jpg", "evil%0D%0ASet-Cookie%3A%20x%3D1%09.jpg")
+    RangeStreaming.contentDisposition("\uD83D\uDE00.png") shouldBe disposition("_.png", "%F0%9F%98%80.png")
+    RangeStreaming.contentDisposition("a\u007fb") shouldBe disposition("a_b", "a%7Fb")
+    RangeStreaming.contentDisposition("a\uD83Db") shouldBe disposition("a_b", "a%3Fb")
+  }
+
+  test("A file that is not there is not found before any response is made") {
+
+    /**
+     * Setup:
+     *
+     * A path to a file that does not exist, in a temporary directory removed afterwards.
+     *
+     * Assertions:
+     *
+     * Responding with it throws NotFoundException, which a route answers as a 404, rather than the file system's own exception.
+     */
+    val dir = Files.createTempDirectory("range-streaming")
+    try a[NotFoundException] should be thrownBy RangeStreaming.respond(dir.resolve("missing.bin"), MIME, "missing.bin", None)
+    finally Files.deleteIfExists(dir)
   }
 }

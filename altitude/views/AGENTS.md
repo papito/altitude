@@ -617,7 +617,7 @@ Every thumbnail names its preview URL in `data-src`, and a first page's (`isCont
 a viewport and the transparent 1x1 placeholder back once it is more than a viewport away, the first
 page's like any other, so the thumbnails held are bounded by the viewport and not by how far the
 session has scrolled. A released image that comes back is a browser cache hit: the content route
-answers a preview or a face with `Cache-Control: private, max-age=3600`.
+answers a preview, a face and an original with `Cache-Control: private, max-age=31536000, immutable`.
 
 The grid itself is a window of pages (`js/search-results/page-window.js`, bound by the results
 hydrator after infinite scroll and before lazy images, with `#mapPanelContent` as its scroll pane for
