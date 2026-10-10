@@ -14,6 +14,10 @@ object FieldConst:
     val VERSION = "version"
     val IS_INITIALIZED = "is_initialized"
 
+  object Setting:
+    val NAME = "name"
+    val DEFAULT_VALUE = "default_value"
+
   object Repository:
     val NAME = "name"
     val OWNER_ACCOUNT_ID = "owner_account_id"

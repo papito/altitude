@@ -7,6 +7,35 @@ CREATE TABLE system (
 CREATE UNIQUE INDEX system_01 ON system (id);
 INSERT INTO system (version, is_initialized) VALUES (0, 0);
 
+-- The Settings an Admin tunes on the Settings screen, seeded with their defaults; the registry is models/Settings.scala
+CREATE TABLE setting (
+  name TEXT NOT NULL PRIMARY KEY,
+  value TEXT NOT NULL,
+  default_value TEXT NOT NULL
+);
+
+INSERT INTO setting (name, value, default_value) VALUES
+  ('face.yunet.confidence_threshold', '0.85', '0.85'),
+  ('face.yunet.nms_threshold', '0.3', '0.3'),
+  ('face.detection.bounding_box_size', '1280', '1280'),
+  ('face.detection.min_face_size', '50', '50'),
+  ('face.recognition.cosine_distance_threshold', '0.55', '0.55'),
+  ('face.recognition.match_count', '5', '5'),
+  ('face.recognition.hnsw_ef_search', '100', '100'),
+  ('face.quality.enroll_threshold', '18.0', '18.0'),
+  ('face.quality.keep_threshold', '15.0', '15.0'),
+  ('video.faces.sample_interval_ms', '1000', '1000'),
+  ('video.faces.max_sampled_frames', '120', '120'),
+  ('video.faces.min_cluster_frames', '2', '2'),
+  ('video.preview.min_luminance', '40', '40'),
+  ('map.tile.url', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+  ('map.tile.attribution', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
+  ('map.geocoder.enabled', 'false', 'false'),
+  ('map.geocoder.url', 'https://nominatim.openstreetmap.org/search', 'https://nominatim.openstreetmap.org/search'),
+  ('db.postgres.read_statement_timeout', '30', '30'),
+  ('pipeline.shutdown_timeout', '30', '30'),
+  ('import.parallelism', '0', '0');
+
 CREATE TABLE account (
   id CHAR(36) PRIMARY KEY,
   email TEXT NOT NULL,

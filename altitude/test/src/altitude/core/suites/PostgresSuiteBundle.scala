@@ -22,6 +22,7 @@ object PostgresSuiteBundle {
     }
 
     testApp.service.migrationService.migrate()
+    testApp.settings.load()
   }
 }
 

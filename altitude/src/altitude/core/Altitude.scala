@@ -34,6 +34,7 @@ import altitude.core.service.PersonService
 import altitude.core.service.PurgePipelineService
 import altitude.core.service.RepositoryService
 import altitude.core.service.SearchService
+import altitude.core.service.SettingsService
 import altitude.core.service.StagingService
 import altitude.core.service.StatsService
 import altitude.core.service.SystemService
@@ -280,7 +281,16 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       case Const.DbEngineName.SQLITE => new dao.jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
+
+    val setting: dao.SettingDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.SettingDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.SettingDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
   }
+
+  // The Settings an Admin tunes on the Settings screen, loaded once the schema is in place
+  final val settings: SettingsService = SettingsService(app)
 
   object service {
     val migrationService: MigrationService = dataSourceType match {
