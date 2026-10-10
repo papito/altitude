@@ -62,6 +62,9 @@ object Const:
 
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200
+    // The WebP quality of a Preview, 0 to 100, which governs its color planes only: lib webp keeps the alpha plane exact (its
+    // alpha quality is a setting of its own, 100 unless lowered), so transparent padding stays transparent
+    val PREVIEW_WEBP_QUALITY = 80
 
   object DbEngineName:
     val SQLITE = "sqlite"

@@ -71,18 +71,19 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 
 ## Asset persistence, queries, and previews
 
-Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala).
+Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [ImageUtilTests](../altitude/test/src/altitude/core/unit/ImageUtilTests.scala).
 
 - ✅ Unknown asset and preview IDs raise `NotFoundException`.
 - ✅ Persist an `isRecycled` update; a plain asset query leaves recycled assets out while `queryAll` filtered on the recycled flag finds them; query an empty library and paginate ordinary results, including beyond the last page.
 - ✅ Rename an active asset and verify persistence; reject renaming a recycled asset.
-- ✅ Import produces nonzero image dimensions and a preview that decodes as an image filling the square preview box.
+- ✅ Import produces nonzero image dimensions and a preview that is a WebP (the `RIFF`/`WEBP` signature) decoding, through OpenCV, to the square 200-pixel box with three channels, the JPEG being square; a portrait JPEG's preview has four, fills the box's height and is centered horizontally on a transparent border with the odd column after the image (columns 0 to 10 and 188 to 199 transparent, 11 to 187 opaque).
+- ✅ Unit: `ImageUtil.orient` puts the pixels of a two-by-three image where each of the eight EXIF orientations has them (mirrored, turned around, transposed, a quarter turn either way; from 5 on, three rows of two), leaves them for a value the tag cannot hold, and returns a new image, the input unchanged.
 - ✅ The triage view's scope returns the triaged assets that are not recycled, leaving out a sorted asset and a recycled triaged asset, which keeps its triage flag.
 - ✅ The trash view's scope returns the recycled assets not yet marked for purging.
 - [ ] Cover the trash view with combined filters and pagination. Basic recycled counts are already covered by recycle/restore tests. [MEDIUM]
 - [ ] Verify `getByChecksum` selects only an eligible asset in the current repository when the same checksum exists elsewhere or only in recycled records. [MEDIUM]
 - [ ] Define/test invalid filename handling on rename and ensure rejection preserves the old filename. [MINOR]
-- [ ] Assert preview size/aspect ratio and exact width/height for known images; cover corrupt/empty image bytes and the non-image zero-dimension/no-preview branches. [EDGE]
+- [ ] Cover corrupt/empty image bytes and the non-image zero-dimension/no-preview branches. [EDGE]
 - [ ] Verify `setRecycledProp` is a no-op when the persisted state already matches and `markAsCompleted` changes only the intended asset. [EDGE]
 
 ## Import orchestration and asynchronous processing
@@ -105,7 +106,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ A stage built with `PipelineUtils.stage` does its work on a thread of the import dispatcher, with the element's repository as the context repository.
 - ✅ Two more distinct photos of one face than the import has threads, imported in one stream, are one Person with a Face from each: detection runs on several at once and recognition one at a time in upload order (on PostgreSQL the test fails if recognition runs in parallel).
 - ✅ A JPEG and a PNG import with the dimensions `ImageIO` decodes; a PNG whose header reads but whose data does not inflate is dropped with `ImageException`.
-- ✅ A still GIF, which the bundled OpenCV cannot decode, imports through the ImageIO fallback with its dimensions and a preview filling the box, and no duration. An animated GIF of a face imports with the sum of its frame delays as its duration (a zero delay counting as 100 ms) and a preview, and no Face, while a still GIF of the same face has one. A GIF's transparency carries into its preview, its opaque color in the right channels.
+- ✅ A still GIF, which the bundled OpenCV cannot decode, imports through the ImageIO fallback with its dimensions and a preview filling the box (three channels, the GIF being square), and no duration. An animated GIF of a face imports with the sum of its frame delays as its duration (a zero delay counting as 100 ms) and a preview, and no Face, while a still GIF of the same face has one. A GIF's transparency carries into its preview, decoded through OpenCV: the opaque half's pixel has alpha 255 and is red within the lossy tolerance of 8 per channel, the transparent half's alpha is 0 exactly.
 - [ ] Exercise `addToQueue` backpressure past the queue's size. [MEDIUM]
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
 - ✅ An input the pipeline cannot use is dropped and the asset behind it in the same stream is imported, its staged file deleted: bytes no image reader takes under a JPEG type (`ImageException` in the metadata stage, through `run` and through the queue), an asset of a repository whose `files` directory is a plain file (`StorageException` in the file store stage, the next asset in another repository), and a video no frame of which decodes (`VideoException` in the preview stage).
@@ -441,9 +442,9 @@ Sources: [FaceRecognitionService](../altitude/src/altitude/core/service/FaceReco
 
 Sources: [FileStoreService](../altitude/src/altitude/core/service/filestore/FileStoreService.scala), [FileSystemStoreService](../altitude/src/altitude/core/service/filestore/FileSystemStoreService.scala). Evidence: [FileStoreServiceTests](../altitude/test/src/altitude/core/integration/FileStoreServiceTests.scala), [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala), [ContentViewControllerTests](../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala).
 
-- ✅ Imported originals/previews can be read as nonempty bytes; asset purge makes both reads fail with `NotFoundException`.
+- ✅ Imported originals/previews can be read as nonempty bytes, the preview typed `image/webp`; asset purge makes both reads fail with `NotFoundException`.
 - ✅ Purge tests exercise retrieval/removal of all four face-image variants and preservation of cover-face variants.
-- ✅ HTTP content routes return the exercised preview, original, and face MIME types (indirect coverage).
+- ✅ HTTP content routes return the exercised preview (`image/webp`), original, and face MIME types (indirect coverage).
 - ✅ HTTP: a preview and a face answer with `Cache-Control: private, max-age=3600` and the stored original with none; a preview is never gzipped whatever `Accept-Encoding` names (gzip alone, in a list with and without a space, weighted, upper case, identity), while the search results fragment is gzipped for a client that accepts gzip and plain for one that does not.
 - [ ] Assert byte-for-byte original/preview/face round-trips and matching IDs; nonempty buffers cannot detect swapped or truncated content. [MEDIUM]
 - [ ] Use identical object IDs under two repository contexts and verify reads/deletes cannot cross repository directories. [CRITICAL]

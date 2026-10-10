@@ -6,7 +6,6 @@ import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.awt.image.IndexColorModel
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -839,14 +838,16 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * It is imported at 64 by 64 with no duration, and its preview decodes as an image filling the square preview box.
+     * It is imported at 64 by 64 with no duration, and its preview decodes as an image filling the square preview box; being
+     * square, nothing of it is transparent, so the WebP carries no alpha plane: three channels.
      */
     val asset = testApp.service.asset.getById(imported(runPipeline(staged("images/2.gif"))).persistedId)
     (asset.width, asset.height) shouldBe (64, 64)
     asset.durationMs shouldBe None
 
-    val preview = ImageIO.read(new ByteArrayInputStream(testApp.service.asset.getPreview(asset.persistedId).data))
-    (preview.getWidth, preview.getHeight) shouldBe (Const.AssetView.PREVIEW_BOX_PIXELS, Const.AssetView.PREVIEW_BOX_PIXELS)
+    val preview = IntegrationTestUtil.decodePreview(testApp.service.asset.getPreview(asset.persistedId).data)
+    val box = Const.AssetView.PREVIEW_BOX_PIXELS
+    (preview.cols, preview.rows, preview.channels) shouldBe (box, box, 3)
   }
 
   test("An animated GIF imports with its playing time as its duration and a preview, and no face is looked for in it") {
@@ -890,7 +891,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Its preview, which fills the 200-pixel box, is opaque red on the left and transparent on the right.
+     * Its preview, which fills the 200-pixel box, is opaque red on the left, within the lossy encoding's tolerance, and
+     * transparent on the right, exactly.
      */
     val palette = new IndexColorModel(8, 2, Array[Byte](0xff.toByte, 0), Array[Byte](0, 0), Array[Byte](0, 0), 1)
     val image = new BufferedImage(100, 100, BufferedImage.TYPE_BYTE_INDEXED, palette)
@@ -901,10 +903,14 @@ import altitude.core.util.Query
     val upload = testApp.service.library.stagedFileToAsset("half.gif", testApp.service.staging.stage(gif.toByteArray))
     val asset = imported(runPipeline((upload, PipelineContext(testContext.repository, testContext.user))))
 
-    val preview = ImageIO.read(new ByteArrayInputStream(testApp.service.asset.getPreview(asset.persistedId).data))
-    val left = new Color(preview.getRGB(50, 100), true)
-    (left.getAlpha, left.getRed, left.getGreen, left.getBlue) shouldBe (255, 255, 0, 0)
-    new Color(preview.getRGB(150, 100), true).getAlpha shouldBe 0
+    val preview = IntegrationTestUtil.decodePreview(testApp.service.asset.getPreview(asset.persistedId).data)
+    // A pixel's samples are its blue, green, red and alpha
+    val left = preview.get(100, 50)
+    left(3) shouldBe 255.0
+    left(0) shouldBe 0.0 +- 8
+    left(1) shouldBe 0.0 +- 8
+    left(2) shouldBe 255.0 +- 8
+    preview.get(100, 150)(3) shouldBe 0.0
   }
 
   /** `people/affleck.jpg` scaled to 640 by 893 on a white canvas `extraWidth` pixels wider, so frames of one face differ */

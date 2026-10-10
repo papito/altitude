@@ -6,7 +6,7 @@ import org.scalatest.matchers.must.Matchers.{ endWith, startWith }
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 
 import altitude.core.{ App, Const }
-import altitude.core.models.{ Asset, Face, MimedPreviewData }
+import altitude.core.models.{ Asset, Face }
 
 @DoNotDiscover class ContentViewControllerTests extends ControllerTestCore {
 
@@ -19,7 +19,7 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
      *
      * Assertions:
      *
-     * The preview content route serves the asset's preview with the preview MIME type.
+     * The preview content route serves the asset's preview as a WebP.
      */
     testContext.persistRepository() // and user
     val repoId = testContext.repository.persistedId
@@ -35,7 +35,7 @@ import altitude.core.models.{ Asset, Face, MimedPreviewData }
           s"$host/${Const.DataStore.CONTENT}/r/$repoId/${Const.DataStore.PREVIEW}/${importedAsset.persistedId}",
           cookies = testContext.cookies)
         response.statusCode shouldBe 200
-        response.contentType.head shouldBe s"${MimedPreviewData.MIME_TYPE}"
+        response.contentType.head shouldBe "image/webp"
     }
   }
 

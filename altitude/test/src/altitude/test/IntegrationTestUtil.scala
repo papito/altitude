@@ -9,6 +9,9 @@ import java.util.TimeZone
 import java.util.zip.CRC32
 import javax.imageio.ImageIO
 import org.apache.commons.io.FileUtils
+import org.opencv.core.Mat
+import org.opencv.core.MatOfByte
+import org.opencv.imgcodecs.Imgcodecs
 
 import altitude.core.Altitude
 import altitude.core.Const as C
@@ -63,6 +66,9 @@ object IntegrationTestUtil {
     val fileImportAsset = fileToImportAsset(file)
     fileImportAsset
   }
+
+  /** A Preview's bytes decoded as stored, its alpha channel included; the app under test has loaded the OpenCV natives */
+  def decodePreview(bytes: Array[Byte]): Mat = Imgcodecs.imdecode(new MatOfByte(bytes*), Imgcodecs.IMREAD_UNCHANGED)
 
   def generateRandomImagBytesBgr(dimensions: Int = 50): Array[Byte] = {
     val w = dimensions
