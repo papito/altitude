@@ -1,13 +1,18 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
+import altitude.test.NominatimStub
 import altitude.test.TestFocus
+import altitude.test.TestSettings
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
+import altitude.core.models.GeocoderResult
 import altitude.core.models.SettingKind
 import altitude.core.models.Settings
 
@@ -17,29 +22,7 @@ import altitude.core.models.Settings
  */
 @DoNotDiscover class SettingsServiceTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 
-  /** The seeds the plan names, which the table's default_value column carries */
-  private val seeds: Map[String, String] = Map(
-    Settings.FACE_YUNET_CONFIDENCE_THRESHOLD -> "0.85",
-    Settings.FACE_YUNET_NMS_THRESHOLD -> "0.3",
-    Settings.FACE_DETECTION_BOUNDING_BOX_SIZE -> "1280",
-    Settings.FACE_DETECTION_MIN_FACE_SIZE -> "50",
-    Settings.FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD -> "0.55",
-    Settings.FACE_RECOGNITION_MATCH_COUNT -> "5",
-    Settings.FACE_RECOGNITION_HNSW_EF_SEARCH -> "100",
-    Settings.FACE_QUALITY_ENROLL_THRESHOLD -> "18.0",
-    Settings.FACE_QUALITY_KEEP_THRESHOLD -> "15.0",
-    Settings.VIDEO_FACES_SAMPLE_INTERVAL_MS -> "1000",
-    Settings.VIDEO_FACES_MAX_SAMPLED_FRAMES -> "120",
-    Settings.VIDEO_FACES_MIN_CLUSTER_FRAMES -> "2",
-    Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "40",
-    Settings.MAP_TILE_URL -> "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    Settings.MAP_TILE_ATTRIBUTION -> "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors",
-    Settings.MAP_GEOCODER_ENABLED -> "false",
-    Settings.MAP_GEOCODER_URL -> "https://nominatim.openstreetmap.org/search",
-    Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT -> "30",
-    Settings.PIPELINE_SHUTDOWN_TIMEOUT -> "30",
-    Settings.IMPORT_PARALLELISM -> "0"
-  )
+  private val seeds: Map[String, String] = TestSettings.seeds
 
   /** The stored value of every Setting */
   private def storedValues: Map[String, String] =
@@ -267,5 +250,55 @@ import altitude.core.models.Settings
         testApp.DAO.setting.updateValues(Map("no.such.setting" -> "1"))
       }
     }
+  }
+
+  test("A changed detection threshold is used by the next detection") {
+
+    /**
+     * Setup:
+     *
+     * The `people/meme-ben.jpg` portrait, which detection keeps one face of at the seeded detector confidence threshold, detected
+     * again after the threshold is saved as 0.999.
+     *
+     * Assertions:
+     *
+     * The detection after the save finds no face, and the one after the seed is restored finds it again: the threshold is read
+     * per detection, not at startup.
+     */
+    val bytes = IntegrationTestUtil.getImportAsset("people/meme-ben.jpg").bytes
+    testApp.service.faceDetection.extractFaces(bytes) should have size 1
+
+    withSetting(Settings.FACE_YUNET_CONFIDENCE_THRESHOLD, "0.999") {
+      testApp.service.faceDetection.extractFaces(bytes) shouldBe empty
+    }
+
+    testApp.service.faceDetection.extractFaces(bytes) should have size 1
+  }
+
+  test("A changed geocoder switch is used by the next search") {
+
+    /**
+     * Setup:
+     *
+     * A stub of a Nominatim-compatible endpoint on localhost that answers one place; the geocoder is seeded off.
+     *
+     * Assertions:
+     *
+     * A search is refused while the geocoder is off; after the switch and the URL are saved, the next search reaches the stub and
+     * maps its place, with no restart.
+     */
+    val stub = NominatimStub()
+    stub.response = (200, """[{"place_id": 1, "display_name": "Paris", "lat": "48.85", "lon": "2.35"}]""")
+    stub.start()
+
+    try {
+      intercept[IllegalOperationException] {
+        testApp.service.geocoder.search("Paris")
+      }
+
+      testApp.settings.save(Map(Settings.MAP_GEOCODER_ENABLED -> "true", Settings.MAP_GEOCODER_URL -> stub.url))
+
+      testApp.service.geocoder.search("Paris") shouldEqual List(GeocoderResult("Paris", 48.85, 2.35))
+    } finally stub.stop()
   }
 }

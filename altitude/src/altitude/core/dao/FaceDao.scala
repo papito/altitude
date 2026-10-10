@@ -14,4 +14,9 @@ trait FaceDao extends BaseDao[Face]:
 
   /** A person's faces by detection score, best first and then by ID, no more than `limit` of them */
   def getTopFaces(personId: String, limit: Int): List[Face]
-  def searchClosestFaceMatches(features: Array[Float]): List[Face]
+
+  /**
+   * The enrolled Faces of the repository nearest to `features`, closest first: no more than `matchCount`, none at a cosine
+   * distance of `distanceThreshold` or more, and none of a bad-match person
+   */
+  def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face]

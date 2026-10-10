@@ -122,7 +122,7 @@ import altitude.core.util.Query
       describe = identity,
       bufferSize = 2,
       maxConcurrentOffers = 2,
-      shutdownTimeout = 30.seconds,
+      shutdownTimeout = () => 30.seconds,
       restartOnFailure = restartOnFailure)(using testApp.actorSystem)
 
   /** The pipeline's result for the asset of a file name, imported or dropped */

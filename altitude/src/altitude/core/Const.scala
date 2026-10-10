@@ -14,38 +14,14 @@ object Const:
     // The connection pools and what every connection opens with, see reference.conf
     val POSTGRES_POOL_SIZE = "db.postgres.pool_size"
     val POSTGRES_OPTIONS = "db.postgres.options"
-    val POSTGRES_READ_STATEMENT_TIMEOUT = "db.postgres.read_statement_timeout"
     val REL_SQLITE_DB_PATH = "db.sqlite.rel_db_path"
     val SQLITE_URL = "db.sqlite.url"
     val SQLITE_READ_POOL_SIZE = "db.sqlite.read_pool_size"
     val DB_POOL_LEAK_DETECTION_THRESHOLD = "db.pool.leak_detection_threshold"
 
-    val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
-    val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
-    val FACE_DETECTION_BOUNDING_BOX_SIZE = "face.detection.bounding_box_size"
-    val FACE_DETECTION_MIN_FACE_SIZE = "face.detection.min_face_size"
-    val FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD = "face.recognition.cosine_distance_threshold"
-    val FACE_RECOGNITION_MATCH_COUNT = "face.recognition.match_count"
-    val FACE_RECOGNITION_HNSW_EF_SEARCH = "face.recognition.hnsw_ef_search"
-    // The two tiers of Face quality, see reference.conf
-    val FACE_QUALITY_ENROLL_THRESHOLD = "face.quality.enroll_threshold"
-    val FACE_QUALITY_KEEP_THRESHOLD = "face.quality.keep_threshold"
+    // Dumps detection debug images into the project debug/ folder. The tunable face, video, map and pipeline values are Settings
+    // (`models.Settings`), not config.
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
-
-    // How a Video is sampled for its Faces and its Preview, see reference.conf
-    val VIDEO_FACES_SAMPLE_INTERVAL_MS = "video.faces.sample_interval_ms"
-    val VIDEO_FACES_MAX_SAMPLED_FRAMES = "video.faces.max_sampled_frames"
-    val VIDEO_FACES_MIN_CLUSTER_FRAMES = "video.faces.min_cluster_frames"
-    val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
-
-    // The map's basemap and the place-name search behind the Add Location dialog; both talk to third parties, see reference.conf
-    val MAP_TILE_URL = "map.tile.url"
-    val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
-    val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
-    val MAP_GEOCODER_URL = "map.geocoder.url"
-
-    // How long each queue (import, purge) is given at shutdown to finish what it has accepted, see reference.conf
-    val PIPELINE_SHUTDOWN_TIMEOUT = "pipeline.shutdown_timeout"
 
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"

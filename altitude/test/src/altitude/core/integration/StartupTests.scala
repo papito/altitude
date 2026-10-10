@@ -75,21 +75,23 @@ import altitude.core.suites.TestDatabase
   }
 
   test("A failure to read the schema version other than a missing table stops the migration") {
-    // Only PostgreSQL cancels a read at its time limit (2 s under test); SQLite has no comparable failure to stage
+    // Only PostgreSQL cancels a read at its time limit; SQLite has no comparable failure to stage
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
 
-    // Another transaction holds the table locked, so the version read runs past the time limit and is cancelled
-    val locking = testApp.txManager.connection(readOnly = false)
-    try {
-      val stmt = locking.createStatement()
-      try stmt.execute("LOCK TABLE system IN ACCESS EXCLUSIVE MODE")
-      finally stmt.close()
+    // Another transaction holds the table locked, so the version read runs past a one-second time limit and is cancelled
+    withSetting(Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT, "1") {
+      val locking = testApp.txManager.connection(readOnly = false)
+      try {
+        val stmt = locking.createStatement()
+        try stmt.execute("LOCK TABLE system IN ACCESS EXCLUSIVE MODE")
+        finally stmt.close()
 
-      // Taken for a fresh database, the migration would run all.sql, which drops the schema, over the existing one
-      intercept[SQLException](testApp.migrationService.migrate()).getSQLState shouldBe "57014"
-    } finally {
-      locking.rollback()
-      locking.close()
+        // Taken for a fresh database, the migration would run all.sql, which drops the schema, over the existing one
+        intercept[SQLException](testApp.migrationService.migrate()).getSQLState shouldBe "57014"
+      } finally {
+        locking.rollback()
+        locking.close()
+      }
     }
   }
 }

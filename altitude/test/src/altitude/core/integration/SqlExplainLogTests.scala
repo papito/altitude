@@ -40,7 +40,7 @@ import altitude.core.transactions.TransactionManager
       explainer =>
         // A pool of its own, next to the test application's: kept small
         val config = testApp.config.withValue(Const.Conf.POSTGRES_POOL_SIZE, ConfigValueFactory.fromAnyRef(2))
-        val manager = new TransactionManager(config, Some(explainer))
+        val manager = new TransactionManager(config, Some(explainer), () => testApp.settings.currentIfLoaded)
         try f(manager)
         finally manager.shutdown()
     }

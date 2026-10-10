@@ -23,13 +23,17 @@ case class PendingRestart(setting: SettingDef, saved: String, running: String)
 class SettingsService(app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  protected val txManager: TransactionManager = app.txManager
-  private val settingDao: SettingDao = app.DAO.setting
+  // Lazy: this service is constructed before the transaction manager, which reads the loaded Settings for its transactions
+  protected lazy val txManager: TransactionManager = app.txManager
+  private lazy val settingDao: SettingDao = app.DAO.setting
 
   private val snapshot = new AtomicReference[Option[Settings]](None)
   private val startup = new AtomicReference[Option[Settings]](None)
 
-  def current: Settings = snapshot.get.getOrElse(throw IllegalStateException("The settings are not loaded"))
+  /** The current snapshot, or nothing before the first load, which the migration of a fresh database runs ahead of */
+  def currentIfLoaded: Option[Settings] = snapshot.get
+
+  def current: Settings = currentIfLoaded.getOrElse(throw IllegalStateException("The settings are not loaded"))
 
   def atStartup: Settings = startup.get.getOrElse(throw IllegalStateException("The settings are not loaded"))
 

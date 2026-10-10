@@ -81,6 +81,13 @@ abstract class IntegrationTestCore
     testApp.service.repository.switchContextToRepository(repository)
   }
 
+  /** Runs `f` with the Setting saved as `value`, and saves its default back afterwards, so the other suites see the seed */
+  def withSetting[T](name: String, value: String)(f: => T): T = {
+    testApp.settings.save(Map(name -> value))
+    try f
+    finally testApp.settings.save(Map(name -> testApp.settings.current.default(name)))
+  }
+
   /** The context repository's six stored stats by dimension, without the totals, which are summed on read */
   def storedStats: Map[String, Long] =
     testApp.service.stats.getStats.stats

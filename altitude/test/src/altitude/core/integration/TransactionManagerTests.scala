@@ -14,6 +14,7 @@ import altitude.core.QueryTimeoutException
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
+import altitude.core.models.Settings
 
 /**
  * What a transaction is on each engine: a read sees one snapshot, a SQLite write holds the write lock from its start, every
@@ -190,7 +191,8 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
       /**
        * Setup:
        *
-       * A read transaction that reads the JIT and plan cache settings, then a read statement that sleeps for three seconds.
+       * A read transaction that reads the JIT and plan cache settings, then, with the read statement timeout saved as one second,
+       * a read statement that sleeps for two.
        *
        * Assertions:
        *
@@ -204,9 +206,10 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
           List("off", "force_custom_plan")
       }
 
-      // The test configuration's limit is two seconds
-      intercept[QueryTimeoutException] {
-        testApp.txManager.asReadOnly(Db.read(AltitudePostgresDialect)(_.runSql[Int](sql"SELECT 1 FROM pg_sleep(3)")))
+      withSetting(Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT, "1") {
+        intercept[QueryTimeoutException] {
+          testApp.txManager.asReadOnly(Db.read(AltitudePostgresDialect)(_.runSql[Int](sql"SELECT 1 FROM pg_sleep(2)")))
+        }
       }
     }
   }

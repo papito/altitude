@@ -73,10 +73,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
    * release)
    */
 
-  // Short, so the test of the time limit for reads does not wait long. The main reference.conf comes first on the test
-  // classpath, so a key both reference files set keeps the main value; test values are set here instead.
-  private val TEST_READ_STATEMENT_TIMEOUT = "2s"
-
   // the config before final actual config as we need to dynamically figure out some values
   private val preConfig: Config = Environment.CURRENT match {
     case Environment.Name.DEV =>
@@ -104,7 +100,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
             .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
             .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
             .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
-            .withValue(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT, ConfigValueFactory.fromAnyRef(TEST_READ_STATEMENT_TIMEOUT))
 
         case None =>
           ConfigFactory
@@ -114,7 +109,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
             .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
             .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
             .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
-            .withValue(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT, ConfigValueFactory.fromAnyRef(TEST_READ_STATEMENT_TIMEOUT))
       }
 
     case _ =>
@@ -176,9 +170,13 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final val isPipelineRestartEnabled: Boolean = Environment.devSwitch(config, Const.Conf.DEV_RESTART_PIPELINE)
   if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
 
-  // Startup order: transaction manager → DAOs → migration → settings → importParallelism → actor system → services. The import
-  // dispatcher's thread count is a Setting, so the database must be current and read before the actor system is built.
-  final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer)
+  // Startup order: settings service (empty) → transaction manager → DAOs → migration → settings load → importParallelism → actor
+  // system → services. The transaction manager reads the Settings an Admin tunes on the Settings screen for the transactions it
+  // begins, so their service comes first; it is loaded once the schema is in place, and until then a transaction sets none. The
+  // import dispatcher's thread count is a Setting, so the database must be current and read before the actor system is built.
+  final val settings: SettingsService = SettingsService(app)
+
+  final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
 
   // The folder of the SQLite database file, before the first transaction, which the migration below opens
   if dataSourceType == Const.DbEngineName.SQLITE then
@@ -272,8 +270,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   // A fresh or behind database is migrated in every environment, before anything reads it
   migrationService.migrate()
 
-  // The Settings an Admin tunes on the Settings screen, loaded now that the schema is in place
-  final val settings: SettingsService = SettingsService(app)
   settings.load()
 
   /**
@@ -333,8 +329,8 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val importPipeline: ImportPipelineService = ImportPipelineService(app)
     val purgePipeline: PurgePipelineService = PurgePipelineService(app)
     val urlService: UrlService = UrlService()
-    val geocoder: GeocoderService = GeocoderService(app.config)
-    val video: VideoService = VideoService(app.config)
+    val geocoder: GeocoderService = GeocoderService(() => settings.current)
+    val video: VideoService = VideoService(() => settings.current)
 
     val fileStore: FileStoreService = fileStoreType match {
       case Const.StorageEngineName.FS => FileSystemStoreService(app)

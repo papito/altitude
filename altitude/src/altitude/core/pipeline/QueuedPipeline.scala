@@ -44,7 +44,7 @@ class QueuedPipeline[In](
     describe: In => String,
     bufferSize: Int,
     maxConcurrentOffers: Int,
-    shutdownTimeout: FiniteDuration,
+    shutdownTimeout: () => FiniteDuration,
     restartOnFailure: Boolean)(using system: ActorSystem[?]):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -124,7 +124,8 @@ class QueuedPipeline[In](
    * by the database closing under them. What the timeout cuts off is left for the next startup.
    */
   def shutdown(): Unit =
-    logger.info(s"Draining the $name queue, for at most $shutdownTimeout")
+    val timeout = shutdownTimeout()
+    logger.info(s"Draining the $name queue, for at most $timeout")
     stopping.set(true)
 
     // A queue that has stopped is a failed stream's, waiting out the backoff before a restart: nothing to drain or to wait for
@@ -132,8 +133,8 @@ class QueuedPipeline[In](
     if queue.watchCompletion().isCompleted then killSwitch.shutdown() else queue.complete()
 
     // A stream that failed is already over, and its failure was logged
-    try Await.ready(done, shutdownTimeout)
-    catch case _: TimeoutException => logger.warn(s"The $name queue did not finish within $shutdownTimeout; it is left as it is")
+    try Await.ready(done, timeout)
+    catch case _: TimeoutException => logger.warn(s"The $name queue did not finish within $timeout; it is left as it is")
 
 object QueuedPipeline:
 
