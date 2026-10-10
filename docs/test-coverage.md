@@ -322,6 +322,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ A total counts up to its cap and reads one past it when there are more, on a flat first page, a grouped first page and `cappedCount`; within the cap it is exact, and `count` never stops (the merge recount tests use it).
 - ✅ Unit tests pin the flat page's shell on both dialects: a narrow materialized slice of candidates after the cursor's anchor, ordered by the sort and then the ID, one row past the page and with no offset, joined back to `asset` for the page alone, no window count, and a capped total on a first page only.
 - ✅ HTTP: an ungrouped first page carries `data-results-total` and `data-results-total-capped`, its last cell the cursor of the next page until the last page; a cursor without `isContinuousScroll`, a malformed one and one sent with another sort are 400s, and a continuation whose remaining assets left the results is a 204.
+- ✅ HTTP: a first page's thumbnail names its preview URL in `src` and `data-src`, a continuation's in `data-src` alone.
 - [ ] A capped total in HTML (`data-results-total-capped="true"`, "10000+" in the toolbar and the map panel) needs more than 10,000 matches, so it is verified at the service level with a small cap and in the browser only. [MINOR]
 - ✅ HTTP: an ungrouped page is bounded like a grouped one: `rpp` outside 1 to 500 (no page size included) is a plain-text 400 on a first page and a continuation; `rpp=1` limits the page to one of two matches and `rpp=500` returns both.
 - [ ] The `searchParams` store dropping an out-of-range `rpp` from a hand-edited URL is verified in the browser only; there is no JS test harness. [MINOR]
@@ -443,6 +444,7 @@ Sources: [FileStoreService](../altitude/src/altitude/core/service/filestore/File
 - ✅ Imported originals/previews can be read as nonempty bytes; asset purge makes both reads fail with `NotFoundException`.
 - ✅ Purge tests exercise retrieval/removal of all four face-image variants and preservation of cover-face variants.
 - ✅ HTTP content routes return the exercised preview, original, and face MIME types (indirect coverage).
+- ✅ HTTP: a preview and a face answer with `Cache-Control: private, max-age=3600` and the stored original with none; a preview is never gzipped whatever `Accept-Encoding` names (gzip alone, in a list with and without a space, weighted, upper case, identity), while the search results fragment is gzipped for a client that accepts gzip and plain for one that does not.
 - [ ] Assert byte-for-byte original/preview/face round-trips and matching IDs; nonempty buffers cannot detect swapped or truncated content. [MEDIUM]
 - [ ] Use identical object IDs under two repository contexts and verify reads/deletes cannot cross repository directories. [CRITICAL]
 - [ ] Test IDs containing traversal/absolute-path syntax and verify no read/write/delete escapes the intended storage root. [CRITICAL]

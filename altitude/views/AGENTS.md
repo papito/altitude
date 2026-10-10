@@ -53,7 +53,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, and search keys; the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
@@ -544,7 +544,8 @@ Tiles that fail to load leave a blank canvas with the pins on it, and no notice.
 laid over the map's right edge, and runs `runSearch` with `params: { bbox }`, `transient: { layout:
 "grid", groupBy: null, groupDirection: null }`, `target: "#mapPanelContent"` and the panel as `source`.
 `bbox` is a real store parameter, so the panel's grid is an ordinary search: infinite scroll, cursor
-continuation, selection, the detail modal and dragging to a Location row work in it unchanged, and the
+continuation, the page window (scrolling in `#mapPanelContent`), selection, the detail modal and
+dragging to a Location row work in it unchanged, and the
 URL is bookmarkable, since the map hydrator reopens the panel for the `data-results-bbox` its fragment
 carries. The map endpoints and the map layout's total and bounds ignore `bbox`, so the map behind the
 panel keeps plotting the whole search. `js/fragments/search-results.js` hydrates a fragment inside
@@ -589,10 +590,13 @@ user-supplied names and server errors, without HTML markup or pre-escaping. Auto
 asset in an earlier cell too) gets class `last-cell` and carries how the next
 page is reached: the encoded cursor in `data-app-search-after`, in an ungrouped grid and a grouped
 one alike. An `IntersectionObserver` in
-`js/search-results/infinite-scroll.js` watches it and calls `loadNextPage(lastCellEl)`, exported from the
+`js/search-results/infinite-scroll.js` watches it, but only while nothing follows it in the grid (a
+reloaded page's last cell carries a cursor too, and the page it leads to is loaded already: see the
+window below), and calls `loadNextPage(lastCellEl)`, exported from the
 same module: it reads the continuation, deletes the attribute, requests the page through `runSearch`
 as `transient` parameters (`{ after }`, with `isContinuousScroll`), and appends the result
-after the cell. The request in flight is kept per cell, so a second caller gets the same promise and
+after the cell. The request in flight is kept per cell with its cursor (`pendingCursorOf`), so a
+second caller gets the same promise and
 no page is requested twice; the detail modal is that second caller when it steps past the last
 loaded cell. A cell loses its attribute as it loads, so scrolling back over it loads nothing again.
 A page the server rejects is reported through the snackbar like every failed request
@@ -604,6 +608,54 @@ of the results fragment the cell is in (`data-results-layout`, `data-results-gro
 values; for the crowded-pin panel's grid they are the plain grid it was requested as, while the store
 says map.
 
+Every thumbnail names its preview URL in `data-src`, and a first page's (`isContinuousScroll` false in
+`htmx/result_cell.scala.html`) in `src` as well, so the first viewport paints before any script runs.
+`js/search-results/lazy-images.js` observes every `.cell img` with one `IntersectionObserver` whose
+`rootMargin` is `"100% 0px"`, one viewport above and below: an image gets its `src` as it comes within
+a viewport and the transparent 1x1 placeholder back once it is more than a viewport away, the first
+page's like any other, so the thumbnails held are bounded by the viewport and not by how far the
+session has scrolled. A released image that comes back is a browser cache hit: the content route
+answers a preview or a face with `Cache-Control: private, max-age=3600`.
+
+The grid itself is a window of pages (`js/search-results/page-window.js`, bound by the results
+hydrator after infinite scroll and before lazy images, with `#mapPanelContent` as its scroll pane for
+the crowded-pin panel's grid and `#content` otherwise). A page is a record `{ after, nodes,
+keptHeader, spacer }`: the first page at hydration (the initial children of `#assets`), every later
+one from `htmx:after:settle` on `#assets`, keyed by the swap target, with the cursor read off infinite
+scroll's request in flight (`pendingCursorOf`; `page-window.js` imports `infinite-scroll.js`, never the
+reverse, as eslint forbids import cycles). From top to bottom `#assets` holds zero or more spacers,
+then the loaded pages, then nothing. Once a page is appended, while the loaded cells exceed
+`MAX_LOADED_CELLS` (600) and more than two pages are loaded, the topmost page is folded unless one of
+its cells is within a viewport (`window.innerHeight` above or below, the observers' own margin, so a
+folded page is not reloaded at once): its nodes make way for one
+`<div class="page-spacer" data-app-search-after="<cursor>">` (`""` for the first page; `flex-basis:
+100%` in `includes/search_results.scala.html`) as tall as the top of its first cell to the bottom of
+its last (headers left out: a header above the pane sticks to the pane's top, so its box says nothing
+of where the page is), which keeps the scrollbar proportional. A top page none of whose cells is in
+the grid any more (an action removed them) is discarded rather than folded. Spacers are observed with
+one `IntersectionObserver` (`rootMargin: "100% 0px"`), and `reloadSpacer` requests the page as a
+continuation (transient `after`, omitted for the first page, `isContinuousScroll` and the fragment's
+layout and grouping), swapped `afterend` of the spacer, one reload in flight per spacer; on settle the
+nodes are recorded, the server-rendered `data-app-search-after` is stripped from the page's last cell
+(the page it leads to is loaded already), and the kept header and the spacer are removed. A 204 swaps
+nothing and settles nothing, so it is caught on `htmx:after:request`: the spacer is removed and the
+kept header stays for the group's cells on the next page. A reload that pushes the loaded cells over
+the maximum drops the bottom page unless it is within a viewport (the drop would bring it straight
+back, and the fold after that would take the page the modal stepped into): its nodes are removed and
+the grid's last cell gets the dropped page's cursor back and is observed again
+(`observeContinuationCell`), unless a spacer follows that cell, whose own reload brings the cursor
+back on its page's last cell. A scrollbar jump can reload a page out of order and leave spacers
+between loaded pages, which is allowed. Cursors are keyset positions, so after assets were removed
+from a folded page's range a reloaded page can overlap the loaded page below it. `#assets` has
+`overflow-anchor: none`, and every fold, reload and drop notes the viewport offset of the first cell
+on screen (`htmx:before:swap` for a swap, `keepingViewport` otherwise) and restores
+`scrollElement.scrollTop` after; a fold and a drop call `noteGridChange` themselves (a reload's cells
+are announced by infinite scroll's own settle listener). A spacer is no `.cell` or `.result-group`
+and carries no `data-asset-id`, `img` or `.metadata`, so selection, box selection, drag and drop,
+lazy loading and metadata visibility never see it; the detail modal's walk reloads it (**Detail
+navigation**). `pagesOf`, `foldPagesIfNeeded`, `reloadSpacer`, `isSpacer` and `MAX_LOADED_CELLS` are
+exported for tooling.
+
 **Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day or
 a Location, with a `.result-group` header: a checkbox over the group; its name - a
 `<time datetime="yyyy-MM-dd">` with the server-formatted day (**Saturday, January 2, 2025**), "No date",
@@ -614,7 +666,13 @@ the row and is `position: sticky` at the top of `#content` (CSS only, in
 `includes/search_results.scala.html`; `#assets` is an isolation root so the drag stand-in still
 paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
 A continuation of a group already on screen repeats no header, so the new cells read as the same
-group. The one client-side change to a header is its count: `removeAssetsFromGrid`
+group. When the page window folds a page (**Infinite scroll + lazy load**), the header of the group
+still open at the page's end stays in place before the spacer, as the page record's `keptHeader`, but
+only when the next page continues the group with no header of its own; a group closed with the page
+keeps nothing. The kept header keeps sticking over the group's loaded cells and its checkbox keeps
+counting them (a spacer is not a header, so the walk below passes it), and it is removed when the
+page reloads with its own headers, or stays for the group's cells on the next page when the reload is
+a 204. The one client-side change to a header is its count: `removeAssetsFromGrid`
 (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` from
 `js/search-results/date-groups.js` before a cell leaves, which walks back to the nearest header,
 takes one off, and removes the header at zero; a header whose loaded cells are all gone but whose
@@ -641,10 +699,10 @@ it) and its grid version, bumped by `removeAssetsFromGrid` when cells leave and 
 scroll when a page is appended into a group already on screen. Alpine batches effects per microtask,
 so a box selection over hundreds of cells repaints each header once. Headers are never
 selectable (box selection targets `[data-asset-id]`), never draggable, and carry no `img` or
-`.metadata`, so lazy loading and metadata visibility skip them. Images use `data-src` instead of `src`; the same centralized
-search-results fragment hydrator (`js/fragments/search-results.js`) binds selection, infinite scroll, lazy image loading, metadata visibility, and
+`.metadata`, so lazy loading and metadata visibility skip them. Images carry `data-src`, a first page's `src` too; the same centralized
+search-results fragment hydrator (`js/fragments/search-results.js`) binds selection, infinite scroll, the page window, lazy image loading, metadata visibility, and
 box selection for `data-app-fragment="search-results"`, and sets the viewed folder scope from the
-fragment's `data-results-*` metadata. When a loaded image scrolls out of view and is swapped for the
+fragment's `data-results-*` metadata. When a loaded image is more than a viewport away and is swapped for the
 transparent 1x1 placeholder, its rendered size is kept as inline `width`/`height`, so the thumbnail
 box a box selection hit-tests against stays where the image was (the cell's row is fixed, so the
 layout is the same either way).
@@ -693,10 +751,14 @@ streams from the same `/content/.../file/` URL by byte ranges. The results grid 
 the coordinator remembers the cell it shows (not the asset: a Location grouping holds an asset in a
 cell under each of its Locations, and stepping from the cell keeps the walk in the group the user was
 looking at), and next/previous move to the nearest `.cell` sibling of that cell in document order,
-skipping `.result-group` headers. A detail opened from no cell, such as a map pin, has nowhere to step.
-At the end of the loaded grid, next calls `loadNextPage` on the last cell - the same page load the
-scroll observer makes, shared if already in flight - and continues into the cells it appended; at
-the true end, and at the first cell, nothing happens. There is no shadow list and no JSON: a cell
+skipping `.result-group` headers (`handleShowNext` and `handleShowPrevious` share `step({ direction,
+loadBeyond })`, whose `siblingStopOf` stops at a cell or a page spacer). A detail opened from no cell,
+such as a map pin, has nowhere to step. A spacer met in either direction is reloaded (`reloadSpacer`
+from `js/search-results/page-window.js`, shared with the scroll if already in flight) and the walk
+looks again, since a 204 brings no cell and may leave the next spacer in its place. At the end of the
+loaded grid, next calls `loadNextPage` on the last cell - the same page load the scroll observer
+makes, shared if already in flight - and continues into the cells it appended; at the true end, and
+at the true first cell, nothing happens. There is no shadow list and no JSON: a cell
 removed from the grid drops out of navigation with it, and the search route is HTML only.
 
 **Metadata field visibility** — Fields default to `display:none`. Use
@@ -754,8 +816,9 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
 | `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day or a Location) as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through the store on release |
-| `static/js/search-results/infinite-scroll.js` | `loadNextPage` and the observer on the last cell |
-| `static/js/search-results/lazy-images.js` | loads thumbnails as they approach the viewport, placeholders them once far past it |
+| `static/js/search-results/infinite-scroll.js` | `loadNextPage` and the observer on the last cell, watched only while nothing follows it; `pendingCursorOf` and `observeContinuationCell` for the page window |
+| `static/js/search-results/page-window.js` | the window of loaded pages: folds pages a viewport above into `.page-spacer`s, reloads a spacer as a continuation when it nears (`reloadSpacer`), drops pages a viewport below, keeps the group header still open at a fold, and corrects the scroll position itself |
+| `static/js/search-results/lazy-images.js` | loads thumbnails within a viewport, placeholders them once more than a viewport away, the first page's included |
 | `static/js/search-results/metadata-visibility.js` | keeps the `show-<field>` classes on `#assets` in step with the metadata fields set |
 | `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, declared success events, tab selection, fragment hydration |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
@@ -765,7 +828,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
-| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, media loading in the asset-detail modal, and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
+| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal, and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
@@ -776,8 +839,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell |
-| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS gives `#assets` `overflow-anchor: none` and the page spacer its full row |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, the crowded-pin panel `#mapPanel`, and the pin styles |
