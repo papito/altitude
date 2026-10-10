@@ -3,10 +3,12 @@ import { Const } from "../constants.js"
 /**
  * LAZY IMAGES
  *
- * A thumbnail appended by continuous scroll carries its URL in `data-src` instead of `src`. One
- * IntersectionObserver, shared by every grid the page displays, loads an image as it approaches
- * the viewport and swaps a transparent placeholder back in once it has scrolled well past it, so
- * a long session never holds every thumbnail it has scrolled through.
+ * Every thumbnail carries its URL in `data-src`, the first page's included; the first page's also
+ * has `src`, so it paints before any script runs. One IntersectionObserver, shared by every grid
+ * the page displays, loads an image as it comes within a viewport and swaps the transparent
+ * placeholder back in once it is more than a viewport away, so the thumbnails held are bounded by
+ * the viewport, not by how far the session has scrolled. A released image that scrolls back in is
+ * a browser cache hit: the content route sends Cache-Control for an hour.
  */
 
 const placeholderImageData =
@@ -71,7 +73,8 @@ function getLazyImageObserver() {
         },
         {
             root: null,
-            rootMargin: "0px 100% 0px 100%",
+            // One viewport above and below: load that far ahead, release that far behind
+            rootMargin: "100% 0px",
             threshold: [0, 1],
         },
     )
