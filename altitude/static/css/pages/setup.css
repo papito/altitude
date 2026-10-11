@@ -1,0 +1,24 @@
+/* The setup page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
+   :where() adds no specificity, so they win and lose exactly as they did inline */
+
+body:where(.setup) {
+    display: grid;
+    grid-template-rows: [header]  3em
+                        [messages] min-content
+                        [content] auto
+                        [footer]  2em;
+    min-height: 100vh;
+}
+
+:where(body.setup) main {
+    padding-top: calc(var(--section-vertical-space) * 2);
+    display: grid;
+    grid-template-columns: 1fr 400px 1fr;
+}
+
+:where(body.setup) main > div {
+    grid-column: 2;
+    display: grid;
+    grid-auto-rows: min-content;
+    grid-row-gap: var(--section-vertical-space);
+}

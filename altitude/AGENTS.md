@@ -49,7 +49,7 @@ Every request gets its authenticated user and repository injected into **thread-
 - `decorators.requireLogin` — validates the PASETO token (Bearer header or cookie), populates `account`, and answers a repository in the path that the user does not own (`owner_account_id`), or one that does not exist, with the same 404 (JSON for an API request), as for any foreign entity
 - `decorators.requireLoginOrSignature` — the content route's: a request with both `exp` and `sig` query parameters is answered by `ContentSigner.verify` over the request path alone, with no account in the context (a plain-text 403 when the signature is invalid or expired, no redirect; a 404 for a repository that does not exist, as `requireLogin` answers it); any other request is `requireLogin`'s
 
-All three global decorators are applied in `App.mainDecorators`: `compress → requestResponseLogger → repoContext`. Per-route authentication uses `@requireLogin` (`@requireLoginOrSignature` on the content route); an Admin-only route adds `@requireAdmin` after `@requireLogin`, which answers a User or Guest with 403 (JSON for an API request, plain text otherwise, no redirect) and throws if no account is in the context.
+All three global decorators are applied in `App.mainDecorators`: `compress → requestResponseLogger → repoContext`. Per-route authentication uses `@requireLogin` (`@requireLoginOrSignature` on the content route); an Admin-only route adds `@requireAdmin` after `@requireLogin`, which answers a User or Guest with 403 (JSON for an API request, plain text otherwise, no redirect) and throws if no account is in the context. `compress` gzips for a client that accepts it, and marks every response it may gzip with `Vary: Accept-Encoding`. `@immutable` is for a file under a content-hashed name (the stylesheet bundle's route): it adds `Cache-Control: public, max-age=31536000, immutable` to a 200 only, so a miss is never cached.
 
 The DB connection is `RequestContext.conn`, a `ThreadVariable`: the thread's own value, which a thread started meanwhile does not inherit (a `DynamicVariable` is inherited). Only `TransactionManager` binds it, for as long as the outermost transaction of the thread lasts.
 
@@ -293,6 +293,8 @@ make test-focused-sqlite  # run tests tagged `Focused` against SQLite only
 make publish              # fat JAR → target/
 ```
 
+The application's stylesheet is built, not served from source: `cssBundle` in `build.mill` inlines the `@import` lines of `static/css/app.css` (recursively, failing the build on a missing file, a file outside `static/css`, a cycle, or any other `@import` form) into `assets/app.<hash>.css` on the classpath, and `assetManifest` generates `altitude.core.Assets.appCss`, its URL, which `includes/header_common` links. `StaticController` serves only that one name under `/assets/`, cached for good; `/static/` serves the vendored stylesheets, webfonts and JS modules uncached, as before. The hash is compiled in, so a CSS edit needs a recompile and a restart, which `make watch` does; `mill altitude.resources` alone leaves the running server linking the old name, which now answers 404.
+
 > **Do not run `make test`** (requires a live Postgres container). Use `make test-sqlite` and `make test-controllers`, and `make test-psql` when the `altitude-core-postgres-test` container is up.
 > **Do not run tests if only the frontend was changed** (Twirl templates, CSS, JS, HTML) — these can be manually verified in the browser without running the full test suite.
 
@@ -321,7 +323,8 @@ Integration tests extend `IntegrationTestCore`. `beforeEach` auto-creates a fres
 | `altitude/src/altitude/core/routes/web/SettingsController.scala` | The Settings page (Admin only) |
 | `altitude/src/altitude/core/routes/web/partial/SettingsFormController.scala` | The Settings form and its save |
 | `altitude/src/altitude/core/RequestContext.scala` | Thread-local connection/user/repo |
-| `altitude/src/altitude/core/routes/decorators.scala` | Auth (`requireLogin`, `requireLoginOrSignature`, `requireAdmin`) + repo-context decorators |
+| `altitude/src/altitude/core/routes/decorators.scala` | Auth (`requireLogin`, `requireLoginOrSignature`, `requireAdmin`), repo-context, `compress` and `immutable` decorators |
+| `altitude/static/css/app.css` | The stylesheet bundle's entry: its `@import` lines are the cascade order of the application's CSS |
 | `altitude/src/altitude/core/transactions/TransactionManager.scala` | Connection pools, read and write transactions, SQLite PRAGMAs, the PostgreSQL read time limit and `hnsw.ef_search` from the Settings |
 | `altitude/src/altitude/core/transactions/SqlExplainer.scala` | Dev-only SQL explain log (`dev.sql_explain`) |
 | `altitude/src/altitude/core/dao/jdbc/BaseDao.scala` | DAO base + query runner |

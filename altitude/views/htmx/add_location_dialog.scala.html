@@ -4,64 +4,6 @@
 
 @(title: String, categories: List[Location], tileUrl: String, attribution: String, geocoderEnabled: Boolean, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-<style>
-  /* The editor needs room for the map: widen the general modal for this dialog only */
-  #modalContent:has(.location-editor) {
-    --modal-content-width: 720px;
-  }
-
-  /* One field per row; the map, its readout and the place search take rows of their own */
-  #addLocation, #addLocation .location-editor-fields {
-    display: grid;
-    row-gap: var(--control-vertical-space);
-  }
-
-  #addLocation label {
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  #addLocation input[type="text"], #addLocation input[type="search"], #addLocation select {
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  #locationEditorMap {
-    height: 300px;
-  }
-
-  #locationPinReadout {
-    color: var(--font-color-dim);
-    font-size: .9em;
-  }
-
-  #addLocation .geocode-row {
-    display: grid;
-    grid-template-columns: 1fr max-content;
-    column-gap: 6px;
-    align-items: center;
-  }
-
-  /* Place-name results: one button per place, like a menu's actions */
-  #locationGeocodeResults {
-    display: grid;
-  }
-
-  #locationGeocodeResults button {
-    padding: 6px 8px;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  #locationGeocodeResults button:hover, #locationGeocodeResults button:focus-visible {
-    background-color: var(--background-tertiary-color);
-  }
-</style>
-
 @* The pin is placed on the map (js/fragments/location-editor.js): a click places it, dragging moves it, a place-name result
    jumps to it. The coordinates travel in the hidden inputs, so a validation replacement re-renders the pin where it was; the
    readout under the map is the only visible form of them. *@

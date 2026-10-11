@@ -1,0 +1,42 @@
+#settingsForm {
+  display: grid;
+  row-gap: var(--section-vertical-space);
+}
+
+#settingsForm section {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--control-vertical-space) var(--control-horizontal-space);
+}
+
+#settingsForm section h2 {
+  grid-column: 1 / -1;
+}
+
+/* A field's label and its control sit on one row of the section's grid, so the labels line up */
+#settingsForm .setting {
+  display: contents;
+}
+
+#settingsForm .control {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: var(--control-vertical-space) var(--control-horizontal-space);
+  align-items: center;
+}
+
+#settingsForm .control > :not(input):not(button) {
+  grid-column: 1 / -1;
+}
+
+#settingsForm .help {
+  color: var(--faded-font-color);
+}
+
+#settingsForm .pending {
+  color: var(--warning-font-color);
+}
+
+#settingsForm > button {
+  justify-self: start;
+}

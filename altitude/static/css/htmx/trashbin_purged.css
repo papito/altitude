@@ -1,0 +1,10 @@
+#recycleBinPurged {
+    display: grid;
+    grid-template-columns: 1fr;
+    place-items: center;
+    height: 100%;
+    font-size: 16px;
+    letter-spacing: 2px;
+    font-weight: bold;
+    color: var(--faded-font-color);
+}

@@ -25,7 +25,9 @@ object decorators:
   /**
    * cask's gzip decorator, except for a response that offers byte ranges and for an image. A stored original is a compressed
    * format already, and a range names its raw bytes, which a compressed body would not match. An image is deflated already, so a
-   * gzip costs CPU on both ends, saves nothing, and discards its Content-Length.
+   * gzip costs CPU on both ends, saves nothing, and discards its Content-Length. Whether a response is gzipped depends on the
+   * request's Accept-Encoding, so a response that may be says so in `Vary`: a cache keeps a copy per coding rather than handing a
+   * gzipped body to a client that cannot read it.
    */
   class compress extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -37,19 +39,23 @@ object decorators:
         .exists(_.equalsIgnoreCase("gzip"))
 
       delegate(req, Map()).transform {
-        case v: Raw if acceptsGzip && !v.headers.contains(RangeStreaming.ACCEPT_RANGES) && !isImage(v) =>
-          val gzipped = new Response.Data {
-            override def write(out: OutputStream): Unit =
-              val wrap = new GZIPOutputStream(out)
-              v.data.write(wrap)
-              wrap.flush()
-              wrap.close()
-            // The compressed length is not known ahead of time
-            override def headers: Seq[(String, String)] = v.data.headers.filter(_._1 != "Content-Length")
-          }
-          Response(gzipped, v.statusCode, v.headers :+ ("Content-Encoding" -> "gzip"), v.cookies)
+        case v: Raw if !v.headers.contains(RangeStreaming.ACCEPT_RANGES) && !isImage(v) =>
+          val varied = v.copy(headers = v.headers :+ ("Vary" -> "Accept-Encoding"))
+          if acceptsGzip then gzip(varied) else varied
         case v: Raw => v
       }
+
+    private def gzip(v: Raw): Raw =
+      val gzipped = new Response.Data {
+        override def write(out: OutputStream): Unit =
+          val wrap = new GZIPOutputStream(out)
+          v.data.write(wrap)
+          wrap.flush()
+          wrap.close()
+        // The compressed length is not known ahead of time
+        override def headers: Seq[(String, String)] = v.data.headers.filter(_._1 != "Content-Length")
+      }
+      Response(gzipped, v.statusCode, v.headers :+ ("Content-Encoding" -> "gzip"), v.cookies)
 
     private def isImage(response: Raw): Boolean =
       response.headers.exists((name, value) => name.equalsIgnoreCase("Content-Type") && value.startsWith("image/"))
@@ -215,10 +221,23 @@ object decorators:
               headers = Seq("Content-Type" -> "application/json")))
         else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
 
+  /**
+   * For files under content-hashed names: the bytes under a name never change, so a found file may be cached by anyone for
+   * good. A miss carries no Cache-Control, since the name may be served once a build produces that content again.
+   */
+  class immutable extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      delegate(req, Map()).transform {
+        case v: Raw if v.statusCode == 200 =>
+          v.copy(headers = v.headers :+ ("Cache-Control" -> "public, max-age=31536000, immutable"))
+        case v: Raw => v
+      }
+
   class requestResponseLogger extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
 
-      if req.exchange.getRequestPath.startsWith("/static/") || req.exchange.getRequestPath.startsWith("/content") then
+      val path = req.exchange.getRequestPath
+      if path.startsWith("/static/") || path.startsWith("/assets/") || path.startsWith("/content") then
         // skip logging for static file requests
         return delegate(req, Map())
 

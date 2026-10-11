@@ -33,7 +33,7 @@ Do not assume aesthetic preferences such as color, spacing, or padding unless th
 
 Always prefer CSS Grid and Flexbox.
 
-The main stylesheet is `altitude/static/css/core.css`; reuse its `:root` variables. Component styles also live in Twirl partials, such as the folder tree and popover styles in `altitude/views/htmx/folders.scala.html`.
+The application's CSS is one bundle: `altitude/static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `altitude/static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 
 Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 

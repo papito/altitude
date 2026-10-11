@@ -1,0 +1,9 @@
+#viewSettingsForm {
+  display: grid;
+  grid-auto-rows: auto;
+  row-gap: var(--control-vertical-space);
+}
+
+#viewSettingsForm input[type="checkbox"] {
+  vertical-align: middle;
+}

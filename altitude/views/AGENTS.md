@@ -19,23 +19,24 @@ views/
 ```
 
 Full pages include `@includes.html.html_common()` (provides both modal containers and `#snackbar`)
-and `@includes.html.header_common()` (loads HTMX, Alpine, core CSS).
+and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
-controllers as `"<!doctype html>" + template(...)`. They regularly include inline `<style>` blocks
-(scoped styles for that component). Prefer declarative `data-app-*` attributes over inline
+controllers as `"<!doctype html>" + template(...)`. They carry no `<style>`: a partial's styles are in
+`static/css/htmx/<template>.css` (an include's in `static/css/includes/`, a page's in `static/css/pages/`), part of
+the one bundle `header_common` links, so a swap carries markup only. Prefer declarative `data-app-*` attributes over inline
 `<script type="module">` blocks when the behavior can be hydrated centrally from
 `js/frontend-app.js`.
 
-`htmx/folders.scala.html` supplies the folder tab's styles, the navigation warning, the
+`htmx/folders.scala.html` (styled by `static/css/htmx/folders.css`) supplies the navigation warning, the
 `#folderActions` host of the centered "Add folder" button (below the warning), and the empty
 `#rootFolderList` host, marked `data-app-fragment="folder-tree"` so `js/fragments/explorer.js`
 calls `reloadFolderTree(repoId)` once the tab has settled; edit `js/common/folder-tree.js` for
 folder rows and action markup. The tree's interaction contract (expansion gestures, viewed-folder
 highlighting) is under **Folder tree expansion and viewed scope** below. `htmx/albums.scala.html`
-is the same shape for the Albums tab: styles, the two add buttons, and the empty `#albumList` host
+is the same shape for the Albums tab (`static/css/htmx/albums.css`): the two add buttons, and the empty `#albumList` host
 (`data-app-fragment="album-list"`) that `js/common/album-list.js` renders (see **Albums** below), and
-`htmx/locations.scala.html` for the Locations tab: styles, the `#locationActions` / `#noLocations` hosts
+`htmx/locations.scala.html` for the Locations tab (`static/css/htmx/locations.css`): the `#locationActions` / `#noLocations` hosts
 and the empty `#locationList` host (`data-app-fragment="location-list"`) that `js/common/location-list.js`
 renders (see **Locations** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
 explorer tab that issued a load is marked selected from `htmx:after:request`
@@ -388,7 +389,7 @@ An expanded branch and its visible descendants form a **group**, set off from th
 between any two consecutive visible rows the space is the row gap (`--folder-row-gap`, 8px) or twice
 that where a group starts or ends, never more, whether groups end together, one expanded branch directly
 follows another, or an expanded first child follows its parent's row. The tree's top and bottom get no
-extra space, and root is not a group. The CSS in `htmx/folders.scala.html` implements it as a block
+extra space, and root is not a group. The CSS in `static/css/htmx/folders.css` implements it as a block
 margin on `.folder[data-expanded]` (grid items do not collapse margins), cancelled where an expanded
 sibling precedes or where the branch is its parent's last child; expansion already toggles the
 attribute, so the renderer plays no part.
@@ -396,7 +397,7 @@ attribute, so the renderer plays no part.
 Green (`--success-font-color`) marks the **viewed scope**: the folder whose results are displayed
 and all its descendants, because the results cover that subtree. It has nothing to do with
 expansion. `js/common/viewed-folder-scope.js` keeps the scope of the displayed results and marks
-that one folder node with `data-viewed-scope`; the CSS in `htmx/folders.scala.html` colors every
+that one folder node with `data-viewed-scope`; the CSS in `static/css/htmx/folders.css` colors every
 `.folder-icon` under the node (leaves and hidden descendants included) and no icon in a
 menu or dialog. Root is never marked: viewing the root folder turns nothing green, root's icon
 included, because that scope is the whole repository. The search-results fragment carries `data-results-repo-id`, `data-results-view`,
@@ -512,7 +513,7 @@ takes every pixel under the controls) and renders `htmx/map_view` in place of `#
 holds `#map` (`data-map-bounds="s,w,n,e"`, empty when nothing is plotted, `data-map-count`,
 `data-map-tile-url`, `data-map-attribution`; `isolation: isolate`, so Leaflet's panes stay under the
 modals) and the hidden `<aside id="mapPanel">`. The pin styles (`.asset-pin`, `.location-pin.on-map`)
-live in that template; `.location-pin` itself is in `core.css`, shared with the pin editor. While the
+live in `static/css/htmx/map_view.css`; `.location-pin` itself is in `core.css`, shared with the pin editor. While the
 results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip, whose
 `data-app-search-bbox=""` clears it, in either layout.
 
@@ -665,7 +666,7 @@ a Location, with a `.result-group` header: a checkbox over the group; its name -
 naming it; and the group's full match count across every page in `.count` — as text (**(3 items)**,
 **(1 item)**) with the number itself in `data-count`, which is what the client reads and decrements. The header spans
 the row and is `position: sticky` at the top of `#content` (CSS only, in
-`includes/search_results.scala.html`; `#assets` is an isolation root so the drag stand-in still
+`static/css/includes/search_results.css`; `#assets` is an isolation root so the drag stand-in still
 paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
 A continuation of a group already on screen repeats no header, so the new cells read as the same
 group. When the page window folds a page (**Infinite scroll + lazy load**), the header of the group
@@ -713,7 +714,7 @@ layout is the same either way).
 (`js/search-results/box-selection.js`, one controller per displayed grid, created and replaced by the
 search-results hydrator). The vendored Viselect (`lib/viselect.esm.js`) owns the gesture: it draws
 the rectangle inside its own fixed, clipped container on `<body>` (styled by `.selection-area` in
-`includes/search_results.scala.html`), autoscrolls `#content` within 32px of its top and bottom
+`static/css/includes/search_results.css`), autoscrolls `#content` within 32px of its top and bottom
 edges, and keeps the list of thumbnails inside the rectangle; it adds no classes and changes no
 state. Nothing visible changes during the drag. On release the box goes through the
 `selectedAssets` store only: `reset()` for a replacement box, then `select()` for each thumbnail
@@ -767,7 +768,7 @@ removed from the grid drops out of navigation with it, and the search route is H
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)`, which mutate the
 reactive `gridMetadataFields` set and persist it to `localStorage`. A reactive effect per displayed
 grid (`js/search-results/metadata-visibility.js`) keeps one `show-<field>` class per visible field
-on `#assets`, and the CSS in `includes/search_results.scala.html` shows the matching
+on `#assets`, and the CSS in `static/css/includes/search_results.css` shows the matching
 `.metadata > .<field>` rows: no per-cell work, nothing to re-apply for appended pages.
 
 **Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, an Admin's page, `SettingsController`) is shaped like
@@ -786,7 +787,7 @@ delegated click listener in the page module that fills the input from the row's 
 (`Const.attributes.settingDefault`) and clears its `error` class; nothing is written until Save. A failed validation comes
 back as a validation replacement (`HX-Retarget: this`, see above) with the submitted values kept and each error beside its
 field, so no success event fires; a save answers the saved form and `SETTINGS_SAVED_EVENT` shows "Settings saved". The CSS
-is the partial's own `<style>` over `core.css` variables (`--section-vertical-space`, `--control-*-space`,
+is the partial's own file, `static/css/htmx/settings_form.css`, over `core.css` variables (`--section-vertical-space`, `--control-*-space`,
 `--faded-font-color`, `--warning-font-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
@@ -865,11 +866,11 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS gives `#assets` `overflow-anchor: none` and the page spacer its full row |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
-| `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, the crowded-pin panel `#mapPanel`, and the pin styles |
+| `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
 | `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
 | `static/js/map/map-panel.js` | the crowded-pin panel: `openMapPanel` runs the `bbox` search into `#mapPanelContent`; close, "Show only these in the grid" |
 | `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |
