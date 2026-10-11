@@ -5,8 +5,9 @@ import globals from "globals"
 
 /**
  * ESLint flat config for the front-end modules under altitude/static/js. The vendored libraries
- * in static/js/lib are not linted. `htmx` and `interact` are loaded as plain scripts by the page
- * templates, so they are globals (Leaflet is `L`, supercluster is `Supercluster`); Alpine is imported from its ES module wherever it is used.
+ * in static/js/lib are not linted. The ones loaded as plain scripts are globals: `htmx` and `interact`
+ * by the page templates, Leaflet (`L`) and supercluster (`Supercluster`) by js/common/vendor-loader.js.
+ * Alpine is imported from its ES module wherever it is used.
  */
 export default [
     {

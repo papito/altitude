@@ -17,6 +17,7 @@ import { assetIdOf } from "./cells.js"
 import { loadNextPage } from "./infinite-scroll.js"
 import { isSpacer, reloadSpacer } from "./page-window.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
+import { loadMediaChrome } from "../common/vendor-loader.js"
 
 // A Video shorter than this loops, like a Live Photo; a longer one stops at the end
 const LOOP_MAX_DURATION_SECONDS = 10
@@ -260,7 +261,11 @@ export function createSearchDetailCoordinator({ context }) {
         }
 
         try {
-            await setMediaSrcAndWait({ mediaEl, url })
+            // The player's controls are defined by media-chrome, loaded by the first Video alongside it
+            await Promise.all([
+                setMediaSrcAndWait({ mediaEl, url }),
+                isVideo && loadMediaChrome(),
+            ])
 
             if (!isCurrent()) {
                 return

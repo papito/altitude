@@ -7,7 +7,12 @@
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
 - Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
   Viselect for box selection, Leaflet for the Location pin editor and the map, supercluster for the map's on-screen
-  clustering, media-chrome for the asset detail's video player); versions and sources are listed in `static/js/lib/README.md`
+  clustering, media-chrome for the asset detail's video player); versions and sources are listed in `static/js/lib/README.md`,
+  whose **Adding a library** says how a new one is vendored, loaded and linted
+- No library blocks the first render except htmx: the pages' plain library scripts are `defer` (htmx is not, so it still
+  starts on DOMContentLoaded, after its extensions and the modules), and the libraries only some views need (Leaflet
+  and its stylesheet, supercluster, media-chrome) are loaded by the first view that asks, through
+  `js/common/vendor-loader.js`
 
 ## Template Layout
 
@@ -502,8 +507,9 @@ pin is an `L.divIcon` (`.location-pin`), so Leaflet's marker images are not vend
 geocoder is enabled the fragment also renders `#locationGeocode` with a Search button: Enter or the
 button asks `/api/map/r/:repoId/geocode` through the shared client (the newest search wins), the
 results are buttons, and a click jumps the map to the place, places the pin, and fills the name when
-it is empty with the label's first segment; a failed search is a snackbar. Leaflet is loaded as a
-plain script (`window.L`) with its stylesheet by `index.scala.html`.
+it is empty with the label's first segment; a failed search is a snackbar. Leaflet is a plain
+script (`window.L`), loaded with its stylesheet by the first editor or map (`js/common/vendor-loader.js`); the
+hydrator waits for it and skips a fragment removed meanwhile.
 
 **Map view** — `layout` (`grid` | `map`) is a search parameter (see **Search parameters**). The
 toolbar's `#layoutToggle` in `includes/search_results` is two `data-app-search="click"` buttons with a
@@ -871,6 +877,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
+| `static/js/common/vendor-loader.js` | loads Leaflet (with its stylesheet), supercluster and media-chrome once, when a view first needs them |
 | `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
 | `static/js/map/map-panel.js` | the crowded-pin panel: `openMapPanel` runs the `bbox` search into `#mapPanelContent`; close, "Show only these in the grid" |
 | `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |

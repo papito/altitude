@@ -7,6 +7,8 @@
      long-running actions such as purging the recycle bin.
      noSwap: keep htmx 2's behavior of not swapping 4xx/5xx bodies; JS listeners report those via snackbar. -->
 <meta name="htmx-config" content='{"defaultTimeout": 0, "noSwap": [204, 304, "4xx", "5xx"]}'>
+@* htmx alone is not deferred: run while the page is still parsing, it starts on DOMContentLoaded, after every deferred
+   script (its extensions, json-enc and hx-ws) and every module has run; deferred, it would start before they had *@
 <script src="/static/js/lib/htmx.min.js"></script>
-<script src="/static/js/lib/axios.min.js"></script>
+<script src="/static/js/lib/axios.min.js" defer></script>
 <script type="module" src="/static/js/global.js"></script>
