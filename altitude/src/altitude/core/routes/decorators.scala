@@ -225,7 +225,7 @@ object decorators:
    * For files under content-hashed names: the bytes under a name never change, so a found file may be cached by anyone for
    * good. A miss carries no Cache-Control, since the name may be served once a build produces that content again.
    */
-  class immutable extends cask.RawDecorator:
+  class cachedForever extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       delegate(req, Map()).transform {
         case v: Raw if v.statusCode == 200 =>

@@ -3,7 +3,7 @@ package altitude.core.routes.web
 import org.slf4j.Logger
 
 import altitude.core.Assets
-import altitude.core.routes.decorators.immutable
+import altitude.core.routes.decorators.cachedForever
 
 class StaticController(using logger: Logger) extends cask.Routes:
   @cask.staticResources("/static/")
@@ -11,7 +11,7 @@ class StaticController(using logger: Logger) extends cask.Routes:
 
   // The stylesheet bundle, under a name that changes with its content (see `cssBundle` in build.mill). Only this build's name
   // is served: any other under the prefix is not this build's bundle, whatever the classpath holds there
-  @immutable()
+  @cachedForever()
   @cask.get("/assets/:name")
   def assetRoutes(name: String): cask.Response.Raw =
     if s"/assets/$name" == Assets.appCss then
