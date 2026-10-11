@@ -20,6 +20,7 @@ import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
 import altitude.core.service.AlbumService
 import altitude.core.service.AssetService
+import altitude.core.service.ContentSigner
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
@@ -34,6 +35,7 @@ import altitude.core.service.PersonService
 import altitude.core.service.PurgePipelineService
 import altitude.core.service.RepositoryService
 import altitude.core.service.SearchService
+import altitude.core.service.SettingsService
 import altitude.core.service.StagingService
 import altitude.core.service.StatsService
 import altitude.core.service.SystemService
@@ -72,10 +74,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
    * release)
    */
 
-  // Short, so the test of the time limit for reads does not wait long. The main reference.conf comes first on the test
-  // classpath, so a key both reference files set keeps the main value; test values are set here instead.
-  private val TEST_READ_STATEMENT_TIMEOUT = "2s"
-
   // the config before final actual config as we need to dynamically figure out some values
   private val preConfig: Config = Environment.CURRENT match {
     case Environment.Name.DEV =>
@@ -103,7 +101,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
             .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
             .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
             .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
-            .withValue(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT, ConfigValueFactory.fromAnyRef(TEST_READ_STATEMENT_TIMEOUT))
 
         case None =>
           ConfigFactory
@@ -113,7 +110,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
             .withValue(Const.Conf.POSTGRES_URL, ConfigValueFactory.fromAnyRef("jdbc:postgresql://localhost:5433/altitude-test"))
             .withValue(Const.Conf.POSTGRES_USER, ConfigValueFactory.fromAnyRef("altitude-test"))
             .withValue(Const.Conf.POSTGRES_PASSWORD, ConfigValueFactory.fromAnyRef("testdba"))
-            .withValue(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT, ConfigValueFactory.fromAnyRef(TEST_READ_STATEMENT_TIMEOUT))
       }
 
     case _ =>
@@ -125,18 +121,22 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val dataDir: String = app.config.getString(Const.Conf.FS_DATA_DIR)
     FilenameUtils.concat(Environment.ROOT_PATH, dataDir)
 
+  private val SQLITE_URL_PREFIX = "jdbc:sqlite:"
+
   /** Heroically assemble SQLITE URL based on what we have */
   final private val sqliteRelDbPath = preConfig.getString(Const.Conf.REL_SQLITE_DB_PATH)
 
+  // The database file lives under the test directory under test, and under the data directory otherwise, which is absolute, as
+  // every other data path (`dataPath`), since the root is the JAR's folder in production
   final val config: Config = Environment.CURRENT match {
 
     case Environment.Name.TEST =>
       val testDir = preConfig.getString(Const.Conf.TEST_DIR)
-      val sqliteTestUrl = s"jdbc:sqlite:$testDir${File.separator}$sqliteRelDbPath"
+      val sqliteTestUrl = s"$SQLITE_URL_PREFIX$testDir${File.separator}$sqliteRelDbPath"
       preConfig.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteTestUrl))
     case _ =>
-      val dataDir = preConfig.getString(Const.Conf.FS_DATA_DIR)
-      val sqliteUrl = s"jdbc:sqlite:$dataDir${File.separator}$sqliteRelDbPath"
+      val dataDir = FilenameUtils.concat(Environment.ROOT_PATH, preConfig.getString(Const.Conf.FS_DATA_DIR))
+      val sqliteUrl = s"$SQLITE_URL_PREFIX$dataDir${File.separator}$sqliteRelDbPath"
       preConfig.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(sqliteUrl))
   }
 
@@ -171,42 +171,19 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final val isPipelineRestartEnabled: Boolean = Environment.devSwitch(config, Const.Conf.DEV_RESTART_PIPELINE)
   if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
 
-  final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer)
+  // Startup order: settings service (empty) → transaction manager → DAOs → migration → settings load → importParallelism → actor
+  // system → services. The transaction manager reads the Settings an Admin tunes on the Settings screen for the transactions it
+  // begins, so their service comes first; it is loaded once the schema is in place, and until then a transaction sets none. The
+  // import dispatcher's thread count is a Setting, so the database must be current and read before the actor system is built.
+  final val settings: SettingsService = SettingsService(app)
 
-  /**
-   * How many threads do the import's work (`import.parallelism`, see reference.conf): left unset, half the cores and never fewer
-   * than 2. Every one of them holds its own face detection and recognition networks.
-   */
-  final val importParallelism: Int =
-    if config.hasPath(Const.Conf.IMPORT_PARALLELISM) then config.getInt(Const.Conf.IMPORT_PARALLELISM)
-    else math.max(2, Runtime.getRuntime.availableProcessors / 2)
-  logger.info(s"Import parallelism: $importParallelism threads")
+  final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
 
-  // The app's config, with the dispatcher the import's work runs on
-  val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
-    val importDispatcherConfig = ConfigFactory.parseString(s"""
-      altitude.import-dispatcher {
-        type = Dispatcher
-        executor = "thread-pool-executor"
-        thread-pool-executor.fixed-pool-size = $importParallelism
-      }
-    """)
-    ActorSystem[AltitudeActorSystem.Command](
-      AltitudeActorSystem(),
-      "altitude-actor-system",
-      importDispatcherConfig.withFallback(config))
-
-  /**
-   * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
-   * dispatcher, which the status ticker and the SQLite optimize schedule share, only route
-   */
-  final val importDispatcher: ExecutionContextExecutor =
-    actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
-
-  // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
-  private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
-    actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
-  }
+  // The folder of the SQLite database file, before the first transaction, which the migration below opens
+  if dataSourceType == Const.DbEngineName.SQLITE then
+    val dbFile = new File(config.getString(Const.Conf.SQLITE_URL).stripPrefix(SQLITE_URL_PREFIX)).getAbsoluteFile
+    logger.debug(s"Ensuring the SQLite database folder: ${dbFile.getParentFile}")
+    FileUtils.forceMkdir(dbFile.getParentFile)
 
   object DAO {
     val systemMetadata: SystemMetadataDao = dataSourceType match {
@@ -280,23 +257,61 @@ class Altitude(val dbEngineOverride: Option[String] = None):
       case Const.DbEngineName.SQLITE => new dao.jdbc.StatDao(app.config) with dao.sqlite.SqliteOverrides
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
+
+    val setting: dao.SettingDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.SettingDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.SettingDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+  }
+
+  final val migrationService: MigrationService =
+    MigrationService(app, currentVersion = schemaVersion, migrationsDir = s"/migrations/$dataSourceType")
+
+  // A fresh or behind database is migrated in every environment, before anything reads it
+  migrationService.migrate()
+
+  settings.load()
+
+  /**
+   * How many threads do the import's work: the `import.parallelism` Setting as it was saved when the server started (a Restart
+   * setting), or, at 0, half the cores and never fewer than 2. Every one of them holds its own face detection and recognition
+   * networks.
+   */
+  final val importParallelism: Int = settings.atStartup.importParallelism match
+    case 0 => math.max(2, Runtime.getRuntime.availableProcessors / 2)
+    case n => n
+  logger.info(s"Import parallelism: $importParallelism threads")
+
+  // The app's config, with the dispatcher the import's work runs on
+  val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
+    val importDispatcherConfig = ConfigFactory.parseString(s"""
+      altitude.import-dispatcher {
+        type = Dispatcher
+        executor = "thread-pool-executor"
+        thread-pool-executor.fixed-pool-size = $importParallelism
+      }
+    """)
+    ActorSystem[AltitudeActorSystem.Command](
+      AltitudeActorSystem(),
+      "altitude-actor-system",
+      importDispatcherConfig.withFallback(config))
+
+  /**
+   * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
+   * dispatcher, which the status ticker and the SQLite optimize schedule share, only route
+   */
+  final val importDispatcher: ExecutionContextExecutor =
+    actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
+
+  // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
+  private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
+    actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
   }
 
   object service {
-    val migrationService: MigrationService = dataSourceType match {
-      case Const.DbEngineName.SQLITE =>
-        new MigrationService(app) {
-          final override val CURRENT_VERSION = schemaVersion
-          final override val MIGRATIONS_DIR = "/migrations/sqlite"
-        }
-      case Const.DbEngineName.POSTGRES =>
-        new MigrationService(app) {
-          final override val CURRENT_VERSION = schemaVersion
-          final override val MIGRATIONS_DIR = "/migrations/postgres"
-        }
-    }
-
     val system: SystemService = SystemService(app)
+    val contentSigner: ContentSigner = ContentSigner(system.loadOrCreateSigningKey())
     val paseto: PasetoService = PasetoService(app)
     val user: UserService = UserService(app)
     val repository: RepositoryService = RepositoryService(app)
@@ -316,21 +331,13 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val importPipeline: ImportPipelineService = ImportPipelineService(app)
     val purgePipeline: PurgePipelineService = PurgePipelineService(app)
     val urlService: UrlService = UrlService()
-    val geocoder: GeocoderService = GeocoderService(app.config)
-    val video: VideoService = VideoService(app.config)
+    val geocoder: GeocoderService = GeocoderService(() => settings.current)
+    val video: VideoService = VideoService(() => settings.current)
 
     val fileStore: FileStoreService = fileStoreType match {
       case Const.StorageEngineName.FS => FileSystemStoreService(app)
       // S3-based wants to play as well
       case _ => throw NotImplementedError()
-    }
-  }
-
-  if dataSourceType == Const.DbEngineName.SQLITE then {
-    val dbFolder = new File(dataPath, "db")
-    if !dbFolder.exists() then {
-      logger.debug("Creating the DB folder for SQLite: " + dbFolder)
-      FileUtils.forceMkdir(dbFolder)
     }
   }
 
@@ -345,13 +352,6 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   def setIsInitializedState(): Unit =
     this.isInitialized = service.system.readMetadata.isInitialized
     if !this.isInitialized then logger.warn("Instance NOT YET INITIALIZED!")
-
-  def runMigrations(): Unit =
-    if Environment.CURRENT == Environment.Name.TEST then return
-
-    if service.migrationService.migrationRequired then
-      logger.warn("Migration is required!")
-      service.migrationService.migrate()
 
   def cleanup(): Unit =
     logger.debug("Cleaning up resources")

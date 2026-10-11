@@ -4,18 +4,6 @@
 
 @(title: String, locations: List[Location], fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
 
-<style>
-  #addToLocation {
-    display: grid;
-    row-gap: var(--control-vertical-space);
-  }
-
-  #addToLocation select {
-    width: 100%;
-    box-sizing: border-box;
-  }
-</style>
-
 @* js/fragments/add-to-location.js fills the hidden assetIds field from the current selection on the first render
    and keeps the success detail naming the chosen Location. *@
 <form id="addToLocation" data-app-fragment="modal"

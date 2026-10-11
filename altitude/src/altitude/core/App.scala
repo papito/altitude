@@ -16,6 +16,7 @@ import altitude.core.routes.web.ContentViewController
 import altitude.core.routes.web.ImportController
 import altitude.core.routes.web.IndexController
 import altitude.core.routes.web.SessionController
+import altitude.core.routes.web.SettingsController
 import altitude.core.routes.web.SetupController
 import altitude.core.routes.web.StaticController
 import altitude.core.routes.web.partial.AlbumActionController
@@ -25,6 +26,7 @@ import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
 import altitude.core.routes.web.partial.PeopleActionController
 import altitude.core.routes.web.partial.SearchResultsController
+import altitude.core.routes.web.partial.SettingsFormController
 import altitude.core.routes.web.partial.SetupFormController
 import altitude.core.routes.web.partial.TrashActionController
 import altitude.core.routes.web.partial.ViewSettingsActionController
@@ -45,8 +47,6 @@ object App extends cask.Main:
   Loader.load(classOf[opencv_java])
 
   val altitude: Altitude = new Altitude()
-
-  altitude.runMigrations()
 
   // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
   altitude.setIsInitializedState()
@@ -72,10 +72,12 @@ object App extends cask.Main:
     new SessionController,
     new SetupController,
     new ImportController,
+    new SettingsController,
     new ContentViewController,
 
     // partials
     new SetupFormController,
+    new SettingsFormController,
     new NavController,
     new AlbumActionController,
     new LocationActionController,

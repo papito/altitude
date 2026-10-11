@@ -127,16 +127,14 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val (total, bounds) =
         try (library.cappedCount(query), library.mapBounds(query))
         catch case _: QueryTimeoutException => return timedOut
+      val settings = App.altitude.settings.current
       return html(
         includes.html.search_results(
           total = total,
           totalCap = query.totalCap,
           sort = searchSort,
           grouping = None,
-          grid = htmx.html.map_view(
-            bounds,
-            App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
-            App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION)),
+          grid = htmx.html.map_view(bounds, settings.mapTileUrl, settings.mapTileAttribution),
           person = personOf(personId),
           view = view,
           folderId = folderId,

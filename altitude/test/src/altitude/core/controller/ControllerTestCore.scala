@@ -21,6 +21,8 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
     // so we need to reset it before each test.
     // This also sets the test instance as "initialized"
     SqliteSuiteBundle.setup()
+    // The server's own instance shares the database; its snapshot must see the reseeded rows, not an earlier test's saves
+    App.altitude.settings.load()
   }
 
   def uninitializeInstance(): Any = {

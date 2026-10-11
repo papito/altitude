@@ -1,0 +1,64 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.SettingDef
+@import altitude.core.models.SettingGroup
+@import altitude.core.models.SettingType
+@import altitude.core.service.PendingRestart
+
+@* The one form of the Settings screen. Its fields are named after the Settings; `values` are what the fields show (the saved
+   values, or the submitted ones under a validation replacement), `errors` sit beside their fields, and a Restart setting with
+   a value saved but not running carries `pending`. Reset fills a field with its default (js/settings-page.js); only Save writes. *@
+@(settings: List[SettingDef], values: Map[String, String], defaults: Map[String, String], errors: Map[String, String],
+  pending: Map[String, PendingRestart])
+
+<form action="#"
+      id="settingsForm"
+      data-app-success-event="SETTINGS_SAVED_EVENT"
+      hx-target="this"
+      hx-swap="outerHTML settle:0"
+      hx-post="/htmx/settings/r/@{ RequestContext.getRepository.persistedId }"
+      hx-trigger="submit"
+      hx-json-enc>
+
+  @for(group <- SettingGroup.values.toList if settings.exists(_.group == group)) {
+    <section>
+      <h2>@group.label</h2>
+
+      @for(setting <- settings.filter(_.group == group)) {
+        <div class="setting" data-setting-default="@{ defaults(setting.name) }">
+          <label for="field-@{ setting.name }">@setting.label</label>
+
+          <div class="control">
+            @if(setting.valueType == SettingType.Flag) {
+              <input type="checkbox"
+                     id="field-@{ setting.name }"
+                     name="@{ setting.name }"
+                     value="true"
+                     @if(values(setting.name) == "true") { checked }>
+            } else {
+              <input type="text"
+                     id="field-@{ setting.name }"
+                     name="@{ setting.name }"
+                     autocomplete="off"
+                     @if(errors.contains(setting.name)) { class="error" }
+                     value="@{ values(setting.name) }">
+            }
+
+            <button type="button" class="action-button small" data-app-reset-setting>Reset</button>
+
+            @if(errors.contains(setting.name)) {
+              <div class="error">@errors(setting.name)</div>
+            }
+
+            @for(p <- pending.get(setting.name)) {
+              <div class="pending">Saved @p.saved, running @p.running until the server restarts</div>
+            }
+
+            <div class="help">@setting.help Default: @{ defaults(setting.name) }</div>
+          </div>
+        </div>
+      }
+    </section>
+  }
+
+  <button type="submit" class="action-button success">Save</button>
+</form>

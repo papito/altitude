@@ -7,6 +7,7 @@ import org.slf4j.Logger
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.GeocoderException
+import altitude.core.IllegalOperationException
 import altitude.core.QueryTimeoutException
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
@@ -109,15 +110,15 @@ class MapController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/geocode")
   def geocode(repoId: String, q: String = "")(using request: Request): Response[String] =
-    val geocoder = App.altitude.service.geocoder
-    if !geocoder.isEnabled then return jsonError("The geocoder is disabled", 404)
     try
       jsonResponse(
         ujson.Arr.from(
-          geocoder
+          App.altitude.service.geocoder
             .search(q)
             .map(place => ujson.Obj("label" -> place.label, "latitude" -> place.latitude, "longitude" -> place.longitude))))
-    catch case ex: GeocoderException => jsonError(ex.getMessage, 502)
+    catch
+      case _: IllegalOperationException => jsonError("The geocoder is disabled", 404)
+      case ex: GeocoderException => jsonError(ex.getMessage, 502)
 
   /**
    * The search scope without the `bbox` filter: the map plots the whole search, only the panel and the grid apply `bbox`. A scope

@@ -5,11 +5,13 @@ import org.slf4j.Logger
 
 import altitude.core.App
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.requireLogin
 
 class NavController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
 
   /** The nav with fresh counts. `search` asks for the Search input, which only the main page's nav has. */
+  @requireLogin()
   @cask.get(f"/$prefix/nav/r/:repoId")
   def htmxAdminSetup(repoId: String, search: Boolean = false): Response[String] =
     val stats = App.altitude.service.stats.getStats

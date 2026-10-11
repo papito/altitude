@@ -88,7 +88,7 @@ let _viewedAlbumId = null
 
 /**
  * Records the album whose results are displayed and marks its row with `data-viewed-scope`, which
- * the CSS in `views/htmx/albums.scala.html` colors green. Null clears the marker. Like the viewed
+ * the CSS in `static/css/htmx/albums.css` colors green. Null clears the marker. Like the viewed
  * folder scope, this follows the displayed results, never the search parameters.
  */
 export function setViewedAlbum(albumId) {

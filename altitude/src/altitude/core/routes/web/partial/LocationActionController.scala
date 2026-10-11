@@ -178,12 +178,13 @@ class LocationActionController(using logger: Logger) extends BaseController:
       case ex: NotFoundException => cask.Response(ex.getMessage, 404, Seq("Content-Type" -> "text/plain"))
 
   private def addForm(errors: Map[String, String] = Map.empty, json: ujson.Obj = ujson.Obj()): Html =
+    val settings = App.altitude.settings.current
     htmx.html.add_location_dialog(
       Const.UI.ADD_LOCATION_DIALOG_TITLE,
       categories,
-      App.altitude.config.getString(Const.Conf.MAP_TILE_URL),
-      App.altitude.config.getString(Const.Conf.MAP_TILE_ATTRIBUTION),
-      App.altitude.service.geocoder.isEnabled,
+      settings.mapTileUrl,
+      settings.mapTileAttribution,
+      settings.mapGeocoderEnabled,
       errors,
       json
     )

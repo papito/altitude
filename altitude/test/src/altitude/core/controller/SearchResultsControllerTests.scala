@@ -868,6 +868,45 @@ import altitude.core.models.AssetType
     }
   }
 
+  test("A first page's thumbnail carries its URL in src and data-src, a continuation's in data-src alone") {
+
+    /**
+     * Setup:
+     *
+     * Two assets taken at the same moment, one to a page in filename order.
+     *
+     * Assertions:
+     *
+     * The first page's thumbnail names its preview URL in both src, so it paints before any script runs, and data-src, so the
+     * lazy-image observer can release and reload it like any other; the continuation's thumbnail names it in data-src alone.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val List(a1, a2) = List("a1.jpg", "a2.jpg").map(persistDated("2026-09-06T10:00:00", _)): @unchecked
+        def previewUrl(asset: Asset) = s"/content/r/$repoId/preview/${asset.persistedId}"
+        val params = Map(Api.Field.Search.RESULTS_PER_PAGE -> "1", Api.Field.Search.SORT -> "filename0")
+
+        val page1 = htmlSearch(host, repoId, params).text()
+        thumbnailSources(page1, a1) shouldBe Map("src" -> previewUrl(a1), "data-src" -> previewUrl(a1))
+
+        val page2 = htmlSearch(
+          host,
+          repoId,
+          params + (Api.Field.Search.AFTER -> cursorOf(page1).head) + (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")).text()
+        thumbnailSources(page2, a2) shouldBe Map("data-src" -> previewUrl(a2))
+    }
+  }
+
+  /** The `src` and `data-src` attributes of the thumbnail in `asset`'s cell, by name */
+  private def thumbnailSources(html: String, asset: Asset): Map[String, String] = {
+    val img = "(?s)<img.*?>".r.findFirstIn(html.substring(html.indexOf(cell(asset)))).get
+    """(data-src|(?<![-\w])src)="([^"]*)"""".r.findAllMatchIn(img).map(m => m.group(1) -> m.group(2)).toMap
+  }
+
   test("Ungrouped results are an HTML grid, and a JSON request is a JSON 400") {
 
     /**

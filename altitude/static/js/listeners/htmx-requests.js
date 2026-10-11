@@ -2,6 +2,7 @@ import { showErrorSnackBar } from "../common/snackbar.js"
 import {
     getRequestPath,
     getRequestSource,
+    getResponseRetarget,
     getResponseStatus,
     isRequestSuccessful,
 } from "../common/htmx-events.js"
@@ -16,6 +17,8 @@ import { isModalOpenRequest } from "../common/modal.js"
  * - a failed response (HTTP 400 and above; the body is never swapped, see the `noSwap` config)
  *   is reported through the snackbar, so nothing fails silently - not even a page continuous
  *   scroll requested with no visible control behind it;
+ * - a validation replacement (`HX-Retarget: this`, `BaseController.dialogFormValidationResponse`)
+ *   is swapped in and announces nothing: the form came back with its errors;
  * - a successful response dispatches the success event the issuing element declares
  *   (`data-app-success-event`, see `readSuccessEvent`), which is how a plain request element
  *   announces what it did without a router keyed on its URL;
@@ -36,6 +39,10 @@ export function registerHtmxRequestListeners(app) {
             showErrorSnackBar(
                 `Error for request to ${getRequestPath(event)}. HTTP ${getResponseStatus(event)}`,
             )
+            return
+        }
+
+        if (getResponseRetarget(event)) {
             return
         }
 

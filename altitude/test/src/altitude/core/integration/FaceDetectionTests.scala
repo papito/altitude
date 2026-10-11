@@ -8,7 +8,6 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
-import altitude.core.Const
 import altitude.core.util.ImageUtil.matFromBytes
 
 @DoNotDiscover class FaceDetectionTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -157,7 +156,7 @@ import altitude.core.util.ImageUtil.matFromBytes
      * Its face is enrolled, and its quality, the value the decision is made on, clears the configured enroll threshold.
      */
     val face = testApp.service.faceDetection.extractFaces(IntegrationTestUtil.getImportAsset("people/affleck.jpg").bytes).head._1
-    face.quality should be >= testApp.config.getDouble(Const.Conf.FACE_QUALITY_ENROLL_THRESHOLD)
+    face.quality should be >= testApp.settings.current.faceQualityEnrollThreshold
     face.isEnrolled should be(true)
   }
 

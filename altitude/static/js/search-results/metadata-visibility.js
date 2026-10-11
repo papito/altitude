@@ -6,7 +6,7 @@ import { Const } from "../constants.js"
  *
  * Which metadata fields show under every cell is the `gridMetadataFields` set in the context
  * (persisted in localStorage; changed by the view settings dialog). The grid reflects it with one
- * `show-<field>` class per field on `#assets`, and the CSS in `includes/search_results.scala.html`
+ * `show-<field>` class per field on `#assets`, and the CSS in `static/css/includes/search_results.css`
  * does the rest: `#assets.show-fileName .metadata .fileName { display: block }`. So there is no
  * per-cell work, nothing to re-apply when a page is appended, and a change repaints every cell,
  * loaded or not yet loaded, through the stylesheet.

@@ -16,10 +16,7 @@ import altitude.core.Const
 import altitude.core.Environment
 import altitude.core.RequestContext
 import altitude.core.ThreadVariable
-
-object TransactionManager:
-  def apply(config: Config, explainer: Option[SqlExplainer] = None): TransactionManager =
-    new TransactionManager(config, explainer)
+import altitude.core.models.Settings
 
 /**
  * Connections and the transactions on them. Every transaction runs on a connection borrowed from a HikariCP pool and carried by
@@ -27,8 +24,8 @@ object TransactionManager:
  * started inside one is outside of it. A pool logs a connection held longer than `db.pool.leak_detection_threshold`.
  *
  * PostgreSQL has one pool, every connection opened with `db.postgres.options`. A read transaction is `REPEATABLE READ` and
- * `READ ONLY`, so all of its statements see one snapshot, and each of its statements has the `db.postgres.read_statement_timeout`
- * time limit; a write transaction is the engine's default `READ COMMITTED`.
+ * `READ ONLY`, so all of its statements see one snapshot, and each of its statements has the read statement timeout Setting as
+ * its time limit; a write transaction is the engine's default `READ COMMITTED`.
  *
  * SQLite has a read pool and a write pool of one connection over the same file, every connection opened with the same PRAGMAs. A
  * write transaction begins `IMMEDIATE`, taking the write lock when it starts, and the single write connection queues writers in
@@ -40,8 +37,11 @@ object TransactionManager:
  *
  * A manager given an `explainer` (development only) hands out each connection wrapped in an [[ExplainingConnection]], which
  * offers the explainer every DML statement prepared on it. Without one, a transaction runs on the pooled connection itself.
+ *
+ * `settings` is the current Settings snapshot, read as each transaction begins so a saved value is used by the next one, or
+ * nothing before the first load: the migration of a fresh database runs then, and its transactions set no time limit.
  */
-class TransactionManager(val config: Config, explainer: Option[SqlExplainer] = None):
+class TransactionManager(val config: Config, explainer: Option[SqlExplainer], settings: () => Option[Settings]):
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -90,11 +90,9 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer] = N
 
   /** The transaction's own settings, before its first statement; `SET LOCAL` ends with the transaction */
   private def beginPostgresRead(conn: Connection): Unit =
+    val timeLimit = settings().map(s => s"; SET LOCAL statement_timeout = ${s.dbPostgresReadStatementTimeout * 1000}")
     val statement = conn.createStatement()
-    try
-      statement.execute(
-        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; " +
-          s"SET LOCAL statement_timeout = ${config.getDuration(Const.Conf.POSTGRES_READ_STATEMENT_TIMEOUT).toMillis}")
+    try statement.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY" + timeLimit.getOrElse(""))
     finally statement.close()
 
   def withTransaction[A](f: => A): A =
@@ -118,16 +116,17 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer] = N
 
   /**
    * What a transaction runs before it searches the face vectors. SQLite registers the column with the vector extension.
-   * PostgreSQL sets, for the transaction, how its vector index is searched: the candidates it keeps, and that a scan goes on past
-   * them until the statement's limit is met, since the repository and the bad matches are filtered after the index is read.
+   * PostgreSQL sets, for the transaction, how its vector index is searched: the candidates it keeps (the `hnsw.ef_search`
+   * Setting, read when the outermost `withFaceVector` runs, so a save later in the same transaction can leave a face's match
+   * count out of step with it, which `iterative_scan = relaxed_order` tolerates), and that a scan goes on past them until the
+   * statement's limit is met, since the repository and the bad matches are filtered after the index is read.
    */
-  private lazy val faceVectorSetup: List[String] = engine match
+  private def faceVectorSetup: List[String] = engine match
     case Const.DbEngineName.SQLITE =>
       List("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
     case Const.DbEngineName.POSTGRES =>
-      List(
-        s"SET LOCAL hnsw.ef_search = ${config.getInt(Const.Conf.FACE_RECOGNITION_HNSW_EF_SEARCH)}",
-        "SET LOCAL hnsw.iterative_scan = relaxed_order")
+      settings().map(s => s"SET LOCAL hnsw.ef_search = ${s.faceRecognitionHnswEfSearch}").toList :+
+        "SET LOCAL hnsw.iterative_scan = relaxed_order"
 
   def asReadOnly[A](f: => A): A =
     if isInTransaction then f else transaction(readOnly = true)(f)

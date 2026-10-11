@@ -6,15 +6,17 @@
  * editor writes them into the form's hidden `latitude` / `longitude` inputs, which is all the
  * server sees.
  *
- * Leaflet is the plain-script `window.L` (see `static/js/lib/README.md`). One editor exists at a
- * time: hydrating a new one (a fresh dialog, or a validation replacement of the form, which
- * re-renders the hidden inputs with the submitted values) disposes of the previous map first. The
+ * Leaflet is the plain-script `window.L` (see `static/js/lib/README.md`), loaded by the first
+ * editor. One editor exists at a time: hydrating a new one (a fresh dialog, or a validation
+ * replacement of the form, which re-renders the hidden inputs with the submitted values) disposes
+ * of the previous map first. The
  * modal host is shown by `x-show` in a later task than the swap, so the map is sized once its
  * container is actually displayed, and again whenever the container resizes.
  */
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 import { getDisplayedMapView } from "../map/map-state.js"
+import { loadLeaflet } from "../common/vendor-loader.js"
 
 const PIN_ZOOM = 12
 const WORLD_VIEW = { center: [20, 0], zoom: 2 }
@@ -24,9 +26,19 @@ const READOUT_DECIMALS = 4
 // The editor currently on screen, disposed of before the next one is created
 let current = null
 
-export function hydrateLocationEditorFragment({ fragmentEl }) {
-    if (typeof L === "undefined") {
-        console.warn("Leaflet is not loaded; the location editor has no map")
+export async function hydrateLocationEditorFragment({ fragmentEl }) {
+    try {
+        await loadLeaflet()
+    } catch (error) {
+        console.warn(
+            "Leaflet could not be loaded; the location editor has no map",
+            error,
+        )
+        return
+    }
+
+    // A validation replacement or a closed dialog removed the editor while Leaflet loaded
+    if (!fragmentEl.isConnected) {
         return
     }
 

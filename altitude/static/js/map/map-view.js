@@ -4,6 +4,7 @@ import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 import { runSearch } from "../search-results/search.js"
 import { openMapPanel } from "./map-panel.js"
+import { loadMapLibraries } from "../common/vendor-loader.js"
 import {
     currentScopeFingerprint,
     rememberedMapView,
@@ -31,8 +32,8 @@ import {
  *
  * The initial view is the one last looked at in this scope (js/map/map-state.js), else the server's
  * bounds of everything plotted, else the world. Leaflet and supercluster are the plain scripts
- * `window.L` and `window.Supercluster` (static/js/lib/README.md). One map exists at a time: a new
- * results fragment disposes of the previous one.
+ * `window.L` and `window.Supercluster` (static/js/lib/README.md), loaded by the first map. One map
+ * exists at a time: a new results fragment disposes of the previous one.
  */
 
 // The tile layer's maximum, and the deepest zoom the cells are asked at
@@ -49,9 +50,19 @@ const COORDINATE_DECIMALS = 6
 // The map on screen, disposed of before the next one is created
 let current = null
 
-export function hydrateMapViewFragment({ fragmentEl }) {
-    if (typeof L === "undefined" || typeof Supercluster === "undefined") {
-        console.warn("Leaflet or supercluster is not loaded; there is no map")
+export async function hydrateMapViewFragment({ fragmentEl }) {
+    try {
+        await loadMapLibraries()
+    } catch (error) {
+        console.warn(
+            "Leaflet or supercluster could not be loaded; there is no map",
+            error,
+        )
+        return
+    }
+
+    // A newer search replaced the fragment while the libraries loaded: its own hydration has the map
+    if (!fragmentEl.isConnected) {
         return
     }
 

@@ -13,6 +13,11 @@ object FieldConst:
   object SystemMetadata:
     val VERSION = "version"
     val IS_INITIALIZED = "is_initialized"
+    val SIGNING_KEY = "signing_key"
+
+  object Setting:
+    val NAME = "name"
+    val DEFAULT_VALUE = "default_value"
 
   object Repository:
     val NAME = "name"

@@ -21,7 +21,7 @@ Sources: [BaseService](../altitude/src/altitude/core/service/BaseService.scala),
 - ✅ A read transaction sees one snapshot on both engines: it counts the same assets before and after another thread commits one, and the next read transaction sees it.
 - ✅ A SQLite write transaction holds the write lock from its start even when it has only read: another connection's `BEGIN IMMEDIATE` with no busy timeout is refused.
 - ✅ SQLite read and write connections report `journal_mode=wal`, `foreign_keys=1` and `temp_store=2`; a read connection is `query_only` and the write connection is not.
-- ✅ A PostgreSQL read transaction runs with `jit=off` and `plan_cache_mode=force_custom_plan`, and a statement past its time limit (2 s under test) is a `QueryTimeoutException`.
+- ✅ A PostgreSQL read transaction runs with `jit=off` and `plan_cache_mode=force_custom_plan`, and a statement past its time limit (the `db.postgres.read_statement_timeout` Setting, saved as 1 s for the test) is a `QueryTimeoutException`.
 - [ ] Exercise a write nested inside a read-only service transaction on both engines and assert it is refused (PostgreSQL `READ ONLY`, SQLite `query_only`) rather than discarded; only the SQLite setting itself is asserted. [MEDIUM]
 - [ ] The 503 answers to a timed-out search (plain text from HTML search, JSON from the map endpoints) have no test: controller tests run on SQLite, which has no read time limit. [MINOR]
 - [ ] Hourly `PRAGMA optimize` and the pools' shutdown at `Altitude.cleanup` have no test. [MINOR]
@@ -57,6 +57,25 @@ Sources: [PasetoService](../altitude/src/altitude/core/service/PasetoService.sca
 - [ ] Document with a test that a new service instance generates a different key and rejects tokens from the previous instance. [MEDIUM]
 - [ ] Verify the documented stateless logout contract: logout does not revoke the token, while the HTTP session removes the client cookie. [MINOR]
 
+## Signed content URLs and the signing key
+
+Sources: [ContentSigner](../altitude/src/altitude/core/service/ContentSigner.scala), [SystemService](../altitude/src/altitude/core/service/SystemService.scala), [decorators](../altitude/src/altitude/core/routes/decorators.scala) (`requireLoginOrSignature`). Evidence: [ContentSignerTests](../altitude/test/src/altitude/core/unit/ContentSignerTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala), [StartupTests](../altitude/test/src/altitude/core/integration/StartupTests.scala), [ContentViewControllerTests](../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala).
+
+- ✅ A signed path verifies under the same key until its expiry and not at or after it; a signature under another key does not verify.
+- ✅ The signature is 43 characters of URL-safe Base64 with no padding.
+- ✅ `sign` produces exactly a known-answer signature computed outside the code (`openssl`), and `verify` accepts it.
+- ✅ Only the spelling `sign` makes verifies: the same signature padded, or with its last character varied in the unused bits, is refused.
+- ✅ A moved expiry, a changed signature character and another item's path are refused; a malformed expiry or signature is refused without an exception.
+- ✅ A database without a signing key gets a 32-byte key created and stored; asked for again, the stored key is returned, and a stored key is never replaced.
+- ✅ An instance that finds no key while another transaction stores one adopts the stored key (a row-lock wait on PostgreSQL).
+- ✅ A second instance against the same database reads the stored key, and its signer signs as one with that key does.
+- ✅ HTTP: a signed URL, without a cookie, serves a preview, a face, an original and a 206 window of it with the status, bytes and content headers of the logged-in request.
+- ✅ HTTP: a signed URL with its expiry moved, one character of its signature changed, or its expiry past is a plain-text 403 with no `Cache-Control`, one body for all three; a signature on another item's path, or on the same item as another data type, is a 403.
+- ✅ HTTP: a request with only `exp` or only `sig` is unsigned: the login redirect without a cookie, served with one (not cask's 400 for an unknown argument).
+- ✅ HTTP: a signed URL for a repository that does not exist is a plain-text 404.
+- ✅ HTTP: a request with `exp` and `sig` is answered by the signature alone, whatever the cookie: a valid one serves another user's preview with a cookie that alone is a 404 there, and a changed signature is a 403 with the owner's cookie.
+- ✅ HTTP: a refused signature is logged with the path still percent-encoded, so a `%0D%0A` in the path puts no line break in the log.
+
 ## Repository creation, lookup, and context
 
 Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositoryService.scala). Evidence: [RepositoryServiceTests](../altitude/test/src/altitude/core/integration/RepositoryServiceTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala).
@@ -71,18 +90,19 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 
 ## Asset persistence, queries, and previews
 
-Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala).
+Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala). Evidence: [AssetServiceTests](../altitude/test/src/altitude/core/integration/AssetServiceTests.scala), [AssetQueryTests](../altitude/test/src/altitude/core/integration/AssetQueryTests.scala), [AssetImportServiceTests](../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala), [LibraryServiceRecycleTests](../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala), [ImageUtilTests](../altitude/test/src/altitude/core/unit/ImageUtilTests.scala).
 
 - ✅ Unknown asset and preview IDs raise `NotFoundException`.
 - ✅ Persist an `isRecycled` update; a plain asset query leaves recycled assets out while `queryAll` filtered on the recycled flag finds them; query an empty library and paginate ordinary results, including beyond the last page.
 - ✅ Rename an active asset and verify persistence; reject renaming a recycled asset.
-- ✅ Import produces nonzero image dimensions and a preview that decodes as an image filling the square preview box.
+- ✅ Import produces nonzero image dimensions and a preview that is a WebP (the `RIFF`/`WEBP` signature) decoding, through OpenCV, to the square 200-pixel box with three channels, the JPEG being square; a portrait JPEG's preview has four, fills the box's height and is centered horizontally on a transparent border with the odd column after the image (columns 0 to 10 and 188 to 199 transparent, 11 to 187 opaque).
+- ✅ Unit: `ImageUtil.orient` puts the pixels of a two-by-three image where each of the eight EXIF orientations has them (mirrored, turned around, transposed, a quarter turn either way; from 5 on, three rows of two), leaves them for a value the tag cannot hold, and returns a new image, the input unchanged.
 - ✅ The triage view's scope returns the triaged assets that are not recycled, leaving out a sorted asset and a recycled triaged asset, which keeps its triage flag.
 - ✅ The trash view's scope returns the recycled assets not yet marked for purging.
 - [ ] Cover the trash view with combined filters and pagination. Basic recycled counts are already covered by recycle/restore tests. [MEDIUM]
 - [ ] Verify `getByChecksum` selects only an eligible asset in the current repository when the same checksum exists elsewhere or only in recycled records. [MEDIUM]
 - [ ] Define/test invalid filename handling on rename and ensure rejection preserves the old filename. [MINOR]
-- [ ] Assert preview size/aspect ratio and exact width/height for known images; cover corrupt/empty image bytes and the non-image zero-dimension/no-preview branches. [EDGE]
+- [ ] Cover corrupt/empty image bytes and the non-image zero-dimension/no-preview branches. [EDGE]
 - [ ] Verify `setRecycledProp` is a no-op when the persisted state already matches and `markAsCompleted` changes only the intended asset. [EDGE]
 
 ## Import orchestration and asynchronous processing
@@ -105,7 +125,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ A stage built with `PipelineUtils.stage` does its work on a thread of the import dispatcher, with the element's repository as the context repository.
 - ✅ Two more distinct photos of one face than the import has threads, imported in one stream, are one Person with a Face from each: detection runs on several at once and recognition one at a time in upload order (on PostgreSQL the test fails if recognition runs in parallel).
 - ✅ A JPEG and a PNG import with the dimensions `ImageIO` decodes; a PNG whose header reads but whose data does not inflate is dropped with `ImageException`.
-- ✅ A still GIF, which the bundled OpenCV cannot decode, imports through the ImageIO fallback with its dimensions and a preview filling the box, and no duration. An animated GIF of a face imports with the sum of its frame delays as its duration (a zero delay counting as 100 ms) and a preview, and no Face, while a still GIF of the same face has one. A GIF's transparency carries into its preview, its opaque color in the right channels.
+- ✅ A still GIF, which the bundled OpenCV cannot decode, imports through the ImageIO fallback with its dimensions and a preview filling the box (three channels, the GIF being square), and no duration. An animated GIF of a face imports with the sum of its frame delays as its duration (a zero delay counting as 100 ms) and a preview, and no Face, while a still GIF of the same face has one. A GIF's transparency carries into its preview, decoded through OpenCV: the opaque half's pixel has alpha 255 and is red within the lossy tolerance of 8 per channel, the transparent half's alpha is 0 exactly.
 - [ ] Exercise `addToQueue` backpressure past the queue's size. [MEDIUM]
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
 - ✅ An input the pipeline cannot use is dropped and the asset behind it in the same stream is imported, its staged file deleted: bytes no image reader takes under a JPEG type (`ImageException` in the metadata stage, through `run` and through the queue), an asset of a repository whose `files` directory is a plain file (`StorageException` in the file store stage, the next asset in another repository), and a video no frame of which decodes (`VideoException` in the preview stage).
@@ -322,6 +342,7 @@ Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.sca
 - ✅ A total counts up to its cap and reads one past it when there are more, on a flat first page, a grouped first page and `cappedCount`; within the cap it is exact, and `count` never stops (the merge recount tests use it).
 - ✅ Unit tests pin the flat page's shell on both dialects: a narrow materialized slice of candidates after the cursor's anchor, ordered by the sort and then the ID, one row past the page and with no offset, joined back to `asset` for the page alone, no window count, and a capped total on a first page only.
 - ✅ HTTP: an ungrouped first page carries `data-results-total` and `data-results-total-capped`, its last cell the cursor of the next page until the last page; a cursor without `isContinuousScroll`, a malformed one and one sent with another sort are 400s, and a continuation whose remaining assets left the results is a 204.
+- ✅ HTTP: a first page's thumbnail names its preview URL in `src` and `data-src`, a continuation's in `data-src` alone.
 - [ ] A capped total in HTML (`data-results-total-capped="true"`, "10000+" in the toolbar and the map panel) needs more than 10,000 matches, so it is verified at the service level with a small cap and in the browser only. [MINOR]
 - ✅ HTTP: an ungrouped page is bounded like a grouped one: `rpp` outside 1 to 500 (no page size included) is a plain-text 400 on a first page and a continuation; `rpp=1` limits the page to one of two matches and `rpp=500` returns both.
 - [ ] The `searchParams` store dropping an out-of-range `rpp` from a hand-edited URL is verified in the browser only; there is no JS test harness. [MINOR]
@@ -440,9 +461,12 @@ Sources: [FaceRecognitionService](../altitude/src/altitude/core/service/FaceReco
 
 Sources: [FileStoreService](../altitude/src/altitude/core/service/filestore/FileStoreService.scala), [FileSystemStoreService](../altitude/src/altitude/core/service/filestore/FileSystemStoreService.scala). Evidence: [FileStoreServiceTests](../altitude/test/src/altitude/core/integration/FileStoreServiceTests.scala), [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala), [ContentViewControllerTests](../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala).
 
-- ✅ Imported originals/previews can be read as nonempty bytes; asset purge makes both reads fail with `NotFoundException`.
+- ✅ Imported originals/previews can be read as nonempty bytes, the preview typed `image/webp`; asset purge makes both reads fail with `NotFoundException`.
 - ✅ Purge tests exercise retrieval/removal of all four face-image variants and preservation of cover-face variants.
-- ✅ HTTP content routes return the exercised preview, original, and face MIME types (indirect coverage).
+- ✅ HTTP content routes return the exercised preview (`image/webp`), original, and face MIME types (indirect coverage).
+- ✅ HTTP: the content route redirects a request without a session to the login page and answers a repository the user does not own with a 404; an item ID that is not a UUID (a path traversal included) is a plain-text 400 for every data type, and a UUID that names nothing, a preview or original whose file is gone, and an unknown data type are plain-text 404s, none with a `Cache-Control`.
+- ✅ HTTP: a preview, a face, and an original's 200, 206 and 416 answer with `Cache-Control: private, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`; an original's 200 and 206 carry `Content-Disposition: inline` with the file name as ASCII and as RFC 5987 UTF-8 (non-ASCII, space, quote and backslash), a preview and a face none. The unit suite covers the two forms' attr-chars; characters outside the attr-chars that encodeURIComponent or URLEncoder leave alone (`*`, `'`, parentheses) or turn into a plus (space), and `%`; CR LF, tab and DEL; a character outside the BMP and a lone surrogate; and a missing file as `NotFoundException`.
+- ✅ HTTP: a preview is never gzipped whatever `Accept-Encoding` names (gzip alone, in a list with and without a space, weighted, upper case, identity), while the search results fragment is gzipped for a client that accepts gzip and plain for one that does not.
 - [ ] Assert byte-for-byte original/preview/face round-trips and matching IDs; nonempty buffers cannot detect swapped or truncated content. [MEDIUM]
 - [ ] Use identical object IDs under two repository contexts and verify reads/deletes cannot cross repository directories. [CRITICAL]
 - [ ] Test IDs containing traversal/absolute-path syntax and verify no read/write/delete escapes the intended storage root. [CRITICAL]

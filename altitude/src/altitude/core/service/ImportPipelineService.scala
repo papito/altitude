@@ -9,13 +9,12 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
-import scala.jdk.DurationConverters.*
+import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
-import altitude.core.Const
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineTypes.TDataAssetWithContext
 import altitude.core.pipeline.QueuedPipeline
@@ -88,7 +87,7 @@ class ImportPipelineService(app: Altitude):
     describe = _._1.asset.fileName,
     bufferSize = app.parallelism * 2,
     maxConcurrentOffers = app.parallelism,
-    shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala,
+    shutdownTimeout = () => app.settings.current.pipelineShutdownTimeout.seconds,
     restartOnFailure = app.isPipelineRestartEnabled
   )
 

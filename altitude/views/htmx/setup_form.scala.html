@@ -4,57 +4,6 @@
 
 @(formJson: ujson.Obj = ujson.Obj(), fieldErrors: Map[String, String] = Map.empty)
 
-<style>
-#setupForm {
-    display: grid;
-    grid-auto-rows: min-content;
-    grid-row-gap: var(--section-vertical-space);
-}
-
-#setupForm label {
-    display: block;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-bottom: 5px;
-    font-size: 1.2em;
-}
-
-#setupForm input {
-    background-color: #FFFFFF;
-}
-
-#setupForm input:not([type="submit"]) {
-    width: 100%
-}
-
-#setupForm .submit {
-    margin-top: var(--control-vertical-space);
-    display: grid;
-    place-items: center;
-}
-
-#setupForm input[type="submit"] {
-    line-height: 1.3em;
-    font-size: 1.2em;
-    width: 50%
-}
-
-#setupForm .action-button {
-    padding: 10px 36px;
-    font-size: 1.3em;
-}
-
-#setupForm div.error {
-    padding: 5px;
-    margin-top: 2px;
-    background-color: var(--message-background-color);
-    color: #FFF;
-    border: 1px solid var(--error-color);
-    border-bottom: 2px solid var(--error-color);
-    letter-spacing: 1px;
-}
-</style>
-
 <form
     action="#" id="setupForm"
     hx-swap="outerHTML"

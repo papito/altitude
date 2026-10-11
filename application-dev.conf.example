@@ -1,3 +1,4 @@
+# The face, video, map, timeout and import parallelism values are Settings, edited on the Settings screen; a key for one here is ignored
 db.engine=postgres
 dev.user=me
 dev.password=password
@@ -5,5 +6,3 @@ dev.password=password
 # dev.sql_explain=true
 # Restart a pipeline queue whose stream fails, after a backoff, instead of leaving it down until the server restarts
 # dev.restart_pipeline=true
-# Place-name search in the Add Location dialog sends every query to a third party; opt in for local development only
-# map.geocoder.enabled=true

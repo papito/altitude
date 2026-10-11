@@ -106,7 +106,7 @@ let _viewedLocationId = null
 
 /**
  * Records the Location whose results are displayed and marks its row with `data-viewed-scope`,
- * which the CSS in `views/htmx/locations.scala.html` colors green. Null clears the marker. Like
+ * which the CSS in `static/css/htmx/locations.css` colors green. Null clears the marker. Like
  * the viewed folder scope, this follows the displayed results, never the search parameters. A
  * viewed Location inside a collapsed category stays hidden until the category is expanded.
  */

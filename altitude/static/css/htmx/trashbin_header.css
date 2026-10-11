@@ -1,0 +1,12 @@
+#purgeRecycleBin {
+    display: grid;
+    grid-template-columns: 1fr;
+    place-items: center;
+    margin-top: var(--control-vertical-space);
+}
+
+#purgeRecycleBinConfirm {
+    display: grid;
+    place-items: center;
+    row-gap: var(--control-vertical-space);
+}

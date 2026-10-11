@@ -27,6 +27,7 @@ import altitude.core.Const
 import altitude.core.Environment
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
+import altitude.core.models.Settings
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
@@ -199,14 +200,6 @@ class FaceDetectionService(app: Altitude):
 
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  // Read configurable thresholds from config, falling back to sensible defaults
-  private val yunetConfidenceThreshold: Float = app.config.getDouble(Const.Conf.FACE_YUNET_CONFIDENCE_THRESHOLD).toFloat
-  private val yunetNmsThreshold: Float = app.config.getDouble(Const.Conf.FACE_YUNET_NMS_THRESHOLD).toFloat
-  private val boundingBoxSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_BOUNDING_BOX_SIZE)
-  private val minFaceSize: Int = app.config.getInt(Const.Conf.FACE_DETECTION_MIN_FACE_SIZE)
-  // The two quality tiers, on the embedding norm: at least enroll to start a Person, at least keep to be stored at all
-  private val enrollThreshold: Double = app.config.getDouble(Const.Conf.FACE_QUALITY_ENROLL_THRESHOLD)
-  private val keepThreshold: Double = app.config.getDouble(Const.Conf.FACE_QUALITY_KEEP_THRESHOLD)
   private val faceDebugEnabled: Boolean = app.config.getBoolean(Const.Conf.FACE_DEBUG_ENABLED)
 
   private val debugDir: String = FilenameUtils.concat(Environment.ROOT_PATH, "debug")
@@ -232,21 +225,22 @@ class FaceDetectionService(app: Altitude):
    * YuNet face detector.
    *
    * One FaceDetectorYN instance per thread for the same reason as arcFaceNetLocal: the native object carries mutable state (input
-   * size, score/NMS thresholds, detection scratch buffers) and must not be shared across threads. Thresholds are applied once at
-   * construction time inside the initializer.
+   * size, score/NMS thresholds, detection scratch buffers) and must not be shared across threads. The score and NMS thresholds
+   * are Settings, set on the thread's detector before each detection (cheap setters), so a saved value is used by the next one.
    */
-  private val yuNetLocal: ThreadLocal[FaceDetectorYN] = ThreadLocal.withInitial {
-    () =>
-      val detector = FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size())
-      detector.setScoreThreshold(yunetConfidenceThreshold)
-      detector.setNMSThreshold(yunetNmsThreshold)
-      detector
-  }
+  private val yuNetLocal: ThreadLocal[FaceDetectorYN] =
+    ThreadLocal.withInitial(() => FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size()))
 
-  def detectFacesWithYunet(image: Mat): List[Mat] =
+  /** The YuNet detections in an image, one row each, with the detection Settings as they stand now */
+  def detectFacesWithYunet(image: Mat): List[Mat] = detectFacesWithYunet(image, app.settings.current)
+
+  private def detectFacesWithYunet(image: Mat, settings: Settings): List[Mat] =
     if image.empty then
       logger.warn("No data in image")
       return List()
+
+    val minFaceSize = settings.faceDetectionMinFaceSize
+    val boundingBoxSize = settings.faceDetectionBoundingBoxSize
 
     if Math.min(image.size().width, image.size().height).toInt < minFaceSize then
       logger.warn(s"Image dimensions too small to contain a detectable face (${image.width()}x${image.height()} px)")
@@ -266,8 +260,11 @@ class FaceDetectionService(app: Altitude):
         resized
       else image.clone()
 
-    yuNetLocal.get().setInputSize(srcMat.size())
-    yuNetLocal.get().detect(srcMat, detectionResults)
+    val detector = yuNetLocal.get()
+    detector.setScoreThreshold(settings.faceYunetConfidenceThreshold.toFloat)
+    detector.setNMSThreshold(settings.faceYunetNmsThreshold.toFloat)
+    detector.setInputSize(srcMat.size())
+    detector.detect(srcMat, detectionResults)
     srcMat.release()
 
     val numOfFaces = detectionResults.rows()
@@ -312,7 +309,13 @@ class FaceDetectionService(app: Altitude):
 
   /** Extract faces from a decoded BGR image, such as a Sampled frame of a Video. The caller keeps ownership of the image. */
   def extractFaces(imageMat: Mat, fileName: Option[String]): List[(Face, FaceImages)] =
-    val results: List[Mat] = detectFacesWithYunet(imageMat)
+    // One snapshot per extraction: the detection and the two quality tiers (on the embedding norm: at least enroll to start a
+    // Person, at least keep to be stored at all) read the same Settings
+    val settings = app.settings.current
+    val results: List[Mat] = detectFacesWithYunet(imageMat, settings)
+
+    val enrollThreshold = settings.faceQualityEnrollThreshold
+    val keepThreshold = settings.faceQualityKeepThreshold
 
     // Accumulate both the public result and the intermediate Mats needed for debug output in one pass
     case class FaceEntry(face: Face, faceImages: FaceImages, detectionRow: Mat, rawCrop: Mat, alignedColor: Mat)

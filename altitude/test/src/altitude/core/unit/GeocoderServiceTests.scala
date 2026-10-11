@@ -1,11 +1,7 @@
 package altitude.core.unit
 
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpServer
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import java.net.InetSocketAddress
-import java.nio.charset.StandardCharsets
+import altitude.test.NominatimStub
+import altitude.test.TestSettings
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.DoNotDiscover
 import org.scalatest.OptionValues
@@ -15,42 +11,24 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.GeocoderException
 import altitude.core.IllegalOperationException
 import altitude.core.models.GeocoderResult
+import altitude.core.models.Settings
 import altitude.core.service.GeocoderService
 
 /**
- * The geocoder proxy against a stub of a Nominatim-compatible endpoint on localhost: the config gate, the request it sends (the
+ * The geocoder proxy against a stub of a Nominatim-compatible endpoint on localhost: the Setting gate, the request it sends (the
  * identifying `User-Agent` the Nominatim policy asks for, `format=json`, a small `limit`), and what it makes of the answer. No
  * network is touched.
  */
 @DoNotDiscover class GeocoderServiceTests extends AnyFunSuite with BeforeAndAfterAll with OptionValues {
 
-  private val server: HttpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+  private val stub = NominatimStub()
 
-  /** What the stub answers next, and the last request it saw */
-  @volatile private var response: (Int, String) = (200, "[]")
-  @volatile private var lastQuery: Option[String] = None
-  @volatile private var lastUserAgent: Option[String] = None
+  override def beforeAll(): Unit = stub.start()
+  override def afterAll(): Unit = stub.stop()
 
-  server.createContext(
-    "/search",
-    (exchange: HttpExchange) => {
-      lastQuery = Option(exchange.getRequestURI.getRawQuery)
-      lastUserAgent = Option(exchange.getRequestHeaders.getFirst("User-Agent"))
-      val body = response._2.getBytes(StandardCharsets.UTF_8)
-      exchange.getResponseHeaders.add("Content-Type", "application/json")
-      exchange.sendResponseHeaders(response._1, body.length)
-      exchange.getResponseBody.write(body)
-      exchange.close()
-    }
-  )
-
-  override def beforeAll(): Unit = server.start()
-  override def afterAll(): Unit = server.stop(0)
-
-  private def config(enabled: Boolean): Config = ConfigFactory.parseString(s"""
-    map.geocoder.enabled = $enabled
-    map.geocoder.url = "http://127.0.0.1:${server.getAddress.getPort}/search"
-  """)
+  private def settings(enabled: Boolean): () => Settings =
+    val snapshot = TestSettings(Map(Settings.MAP_GEOCODER_ENABLED -> enabled.toString, Settings.MAP_GEOCODER_URL -> stub.url))
+    () => snapshot
 
   private val nominatimBody: String =
     """[
@@ -63,19 +41,17 @@ import altitude.core.service.GeocoderService
     /**
      * Setup:
      *
-     * A geocoder service configured with map.geocoder.enabled off, pointed at the local stub.
+     * A geocoder service whose Settings have the geocoder off, pointed at the local stub.
      *
      * Assertions:
      *
-     * It reports itself disabled, refuses a search, and never sends a request to the stub.
+     * It refuses a search and never sends a request to the stub.
      */
-    lastQuery = None
-    val service = GeocoderService(config(enabled = false))
-    service.isEnabled shouldBe false
+    stub.lastQuery = None
     intercept[IllegalOperationException] {
-      service.search("Paris")
+      GeocoderService(settings(enabled = false)).search("Paris")
     }
-    lastQuery shouldBe None
+    stub.lastQuery shouldBe None
   }
 
   test("A search asks for JSON with a small limit, identifies itself, and maps the places") {
@@ -90,18 +66,18 @@ import altitude.core.service.GeocoderService
      * The places map to labelled results in the order given, and the request carries the trimmed query, format=json, the limit of
      * five and the Altitude User-Agent.
      */
-    response = (200, nominatimBody)
-    val results = GeocoderService(config(enabled = true)).search("  Paris ")
+    stub.response = (200, nominatimBody)
+    val results = GeocoderService(settings(enabled = true)).search("  Paris ")
 
     results shouldEqual List(
       GeocoderResult("Paris, Île-de-France, France", 48.8588897, 2.3200410),
       GeocoderResult("Paris, Texas, United States", 33.6617962, -95.5555130))
 
-    val parameters = lastQuery.value.split("&").toSet
+    val parameters = stub.lastQuery.value.split("&").toSet
     parameters should contain("format=json")
     parameters should contain("limit=5")
     parameters should contain("q=Paris")
-    lastUserAgent.value should startWith("Altitude")
+    stub.lastUserAgent.value should startWith("Altitude")
   }
 
   test("A blank query asks nothing of the geocoder") {
@@ -115,9 +91,9 @@ import altitude.core.service.GeocoderService
      *
      * The search returns nothing without sending a request.
      */
-    lastQuery = None
-    GeocoderService(config(enabled = true)).search(" \t ") shouldBe Nil
-    lastQuery shouldBe None
+    stub.lastQuery = None
+    GeocoderService(settings(enabled = true)).search(" \t ") shouldBe Nil
+    stub.lastQuery shouldBe None
   }
 
   test("Query text is URL-encoded, and a place without coordinates is skipped") {
@@ -136,11 +112,12 @@ import altitude.core.service.GeocoderService
      *
      * Missing and non-numeric coordinates, and characters that would otherwise break the query string.
      */
-    response = (
+    stub.response = (
       200,
       """[{"display_name": "Somewhere", "lat": "1.5", "lon": "2.5"}, {"display_name": "Nowhere"}, {"display_name": "Bad", "lat": "x", "lon": "y"}]""")
-    GeocoderService(config(enabled = true)).search("Rue de l'Église & co") shouldEqual List(GeocoderResult("Somewhere", 1.5, 2.5))
-    lastQuery.value should include("q=Rue+de+l%27%C3%89glise+%26+co")
+    GeocoderService(settings(enabled = true)).search("Rue de l'Église & co") shouldEqual List(
+      GeocoderResult("Somewhere", 1.5, 2.5))
+    stub.lastQuery.value should include("q=Rue+de+l%27%C3%89glise+%26+co")
   }
 
   test("An upstream failure or a body that is not a place list is a GeocoderException") {
@@ -158,19 +135,19 @@ import altitude.core.service.GeocoderService
      *
      * A non-200 status, a body that is not JSON, and JSON that is not a list.
      */
-    response = (503, "busy")
+    stub.response = (503, "busy")
     intercept[GeocoderException] {
-      GeocoderService(config(enabled = true)).search("Paris")
+      GeocoderService(settings(enabled = true)).search("Paris")
     }
 
-    response = (200, "<html>not json</html>")
+    stub.response = (200, "<html>not json</html>")
     intercept[GeocoderException] {
-      GeocoderService(config(enabled = true)).search("Paris")
+      GeocoderService(settings(enabled = true)).search("Paris")
     }
 
-    response = (200, """{"error": "Unable to geocode"}""")
+    stub.response = (200, """{"error": "Unable to geocode"}""")
     intercept[GeocoderException] {
-      GeocoderService(config(enabled = true)).search("Paris")
+      GeocoderService(settings(enabled = true)).search("Paris")
     }
   }
 }
