@@ -2,6 +2,7 @@ package altitude.core.routes
 import cask.model.Response
 import cask.model.Response.Raw
 import cask.router.Result
+import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.lang.System.currentTimeMillis
 import java.time.Instant
@@ -17,6 +18,7 @@ import altitude.core.RequestContext
 import altitude.core.models.AccountType
 import altitude.core.models.User
 import altitude.core.routes.web.SessionController
+import altitude.core.util.MurmurHash
 import altitude.core.util.Util
 
 object decorators:
@@ -27,7 +29,7 @@ object decorators:
    * format already, and a range names its raw bytes, which a compressed body would not match. An image is deflated already, so a
    * gzip costs CPU on both ends, saves nothing, and discards its Content-Length. Whether a response is gzipped depends on the
    * request's Accept-Encoding, so a response that may be says so in `Vary`: a cache keeps a copy per coding rather than handing a
-   * gzipped body to a client that cannot read it.
+   * gzipped body to a client that cannot read it. A 304 has no body to code, but varies as its 200 does.
    */
   class compress extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -41,7 +43,7 @@ object decorators:
       delegate(req, Map()).transform {
         case v: Raw if !v.headers.contains(RangeStreaming.ACCEPT_RANGES) && !isImage(v) =>
           val varied = v.copy(headers = v.headers :+ ("Vary" -> "Accept-Encoding"))
-          if acceptsGzip then gzip(varied) else varied
+          if acceptsGzip && v.statusCode != 304 then gzip(varied) else varied
         case v: Raw => v
       }
 
@@ -230,6 +232,29 @@ object decorators:
       delegate(req, Map()).transform {
         case v: Raw if v.statusCode == 200 =>
           v.copy(headers = v.headers :+ ("Cache-Control" -> "public, max-age=31536000, immutable"))
+        case v: Raw => v
+      }
+
+  /**
+   * For files whose names stay when their content changes (the vendored libraries, the fonts and the JS modules under
+   * /static/): the browser keeps a file but asks before each use (`no-cache`), and an unchanged one answers 304 with no body.
+   * The ETag is a hash of the bytes, taken on every request, so a file refreshed under a running dev server is never answered
+   * as unchanged. It is weak, since `compress` may send the same bytes gzipped.
+   */
+  class revalidated extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      delegate(req, Map()).transform {
+        case v: Raw if v.statusCode == 200 =>
+          val out = ByteArrayOutputStream()
+          v.data.write(out)
+          val bytes = out.toByteArray
+          val etag = s"W/\"${Integer.toHexString(MurmurHash.hash32(bytes))}-${bytes.length}\""
+          val headers = v.headers ++ Seq("ETag" -> etag, "Cache-Control" -> "no-cache")
+          // A comma-separated list of the ETags the browser holds
+          val held = Option(req.exchange.getRequestHeaders.getFirst("If-None-Match")).toSeq.flatMap(_.split(",")).map(_.trim)
+
+          if held.contains(etag) then Response("", 304, headers)
+          else v.copy(data = bytes, headers = headers)
         case v: Raw => v
       }
 

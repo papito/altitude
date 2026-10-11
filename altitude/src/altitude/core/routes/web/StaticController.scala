@@ -4,8 +4,11 @@ import org.slf4j.Logger
 
 import altitude.core.Assets
 import altitude.core.routes.decorators.cachedForever
+import altitude.core.routes.decorators.revalidated
 
 class StaticController(using logger: Logger) extends cask.Routes:
+  // Vendored libraries, fonts and the JS modules, under names that stay when their content changes
+  @revalidated()
   @cask.staticResources("/static/")
   def staticFileRoutes() = "static"
 
