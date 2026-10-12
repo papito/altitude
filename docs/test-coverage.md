@@ -16,6 +16,7 @@ Sources: [BaseService](../altitude/src/altitude/core/service/BaseService.scala),
 - ✅ Translate duplicate album/folder names on supported add/update paths into `DuplicateException`.
 - ✅ Scope normal library queries, grouped search results/counts, and album listings to the current repository.
 - [ ] Attempt reads and mutations using another repository's asset, folder, album, person, and face IDs; verify neither foreign records nor their counters/memberships change. Listing isolation does not exercise ID-based operations. [CRITICAL]
+- [ ] Run every route in `App.allRoutes` through one table-driven controller test: an anonymous request answers 302 or 401, and another repository's IDs on the asset-detail, people, folder and album routes answer 404 and change nothing. [CRITICAL]
 - [ ] Reject empty `updateByQuery` and `deleteByQuery` inputs without changing any rows; verify valid bulk operations remain repository-scoped with two populated repositories. [CRITICAL]
 - [ ] Force a failure after an inner service writes, then verify the outer transaction rolls back every participating row and clears/closes the request connection. Successful workflows do not establish rollback behavior. [CRITICAL]
 - ✅ A read transaction sees one snapshot on both engines: it counts the same assets before and after another thread commits one, and the next read transaction sees it.
@@ -43,6 +44,8 @@ Sources: [UserService](../altitude/src/altitude/core/service/UserService.scala).
 - [ ] Cover `getDevUser` with complete valid credentials, invalid credentials, and either configuration value absent. [MINOR]
 - [ ] Verify adding a user through the passwordless overload is rejected without persistence. [EDGE]
 - ✅ An email address names one account whatever its case: a second account whose email differs only in case is a `DuplicateException`, and login succeeds with the email in any case.
+- [ ] The setup test is commented out (`IndexControllerTests`). Verify a second setup is refused once the instance is initialized, and two concurrent setups create one Admin and one repository. [CRITICAL]
+- [ ] Assert the session cookie's `HttpOnly`, `Secure` and `SameSite=Strict` attributes on the login and setup responses. [MEDIUM]
 
 ## Session token creation and validation
 
@@ -56,6 +59,7 @@ Sources: [PasetoService](../altitude/src/altitude/core/service/PasetoService.sca
 - [ ] Verify token reconstruction works without a database connection and that `getUserFromToken`/`getByToken` update request identity only on successful validation. [MEDIUM]
 - [ ] Document with a test that a new service instance generates a different key and rejects tokens from the previous instance. [MEDIUM]
 - [ ] Verify the documented stateless logout contract: logout does not revoke the token, while the HTTP session removes the client cookie. [MINOR]
+- [ ] Authenticate a request by an `Authorization: Bearer` header, and refuse a missing, malformed or expired one, as the cookie path does. [MEDIUM]
 
 ## Signed content URLs and the signing key
 
@@ -104,6 +108,7 @@ Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala
 - [ ] Define/test invalid filename handling on rename and ensure rejection preserves the old filename. [MINOR]
 - [ ] Cover corrupt/empty image bytes and the non-image zero-dimension/no-preview branches. [EDGE]
 - [ ] Verify `setRecycledProp` is a no-op when the persisted state already matches and `markAsCompleted` changes only the intended asset. [EDGE]
+- [ ] Render a file name, a person name and an album name containing markup in the grid and the detail view, and assert each comes out escaped. [MEDIUM]
 
 ## Import orchestration and asynchronous processing
 
@@ -132,6 +137,9 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Verify user-scoped success/error notifications identify the correct asset and recipient and are not duplicated. [MEDIUM]
 - [ ] Assert the mapping from `ImportAsset` to `AssetWithData`, including supplied user metadata, user identity, filename, exact checksum/size, and detected type. Existing metadata fixtures mainly enter through `addAsset`. [MEDIUM]
 - [ ] Verify an empty finite source completes cleanly with no rows, files, statistics changes, or notifications. [EDGE]
+- [ ] Refuse an anonymous `/import/status` WebSocket handshake and one naming another account's `userId`; assert a file name with markup reaches the import ticker escaped. [CRITICAL]
+- [ ] Upload an SVG and assert it is dropped as an unsupported type; today only the lack of an ImageIO reader drops it. [MEDIUM]
+- [ ] Cancel an upload through the URL the upload form carries; the form and the route disagree on the prefix, so today it answers 404. [MEDIUM]
 
 ## Extracted metadata and capture dates
 

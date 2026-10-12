@@ -2,7 +2,7 @@
 
 Avoid documentation drift. When related code is added, changed, or removed, update AGENTS.md, CLAUDE.md, and ARCHITECTURE.md if they exist.
 
-Read [altitude/AGENTS.md](altitude/AGENTS.md) for architecture and build/test commands. For face detection and recognition, read [docs/faces.md](docs/faces.md). For frontend work, including JavaScript under `altitude/static/js/`, also read [altitude/views/AGENTS.md](altitude/views/AGENTS.md) for template, event, and component conventions.
+Read [altitude/AGENTS.md](altitude/AGENTS.md) for architecture and build/test commands. For face detection and recognition, read [docs/faces.md](docs/faces.md). For security, data safety and operational readiness, read [docs/READINESS.md](docs/READINESS.md); a change that closes or opens one of its items updates it. For frontend work, including JavaScript under `altitude/static/js/`, also read [altitude/views/AGENTS.md](altitude/views/AGENTS.md) for template, event, and component conventions.
 
 When adding features or modifying existing behavior, review nearby code comments and update them where needed.
 
