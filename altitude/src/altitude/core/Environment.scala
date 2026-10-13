@@ -32,6 +32,8 @@ object Environment:
   }
   logger.debug(s"Root path: $ROOT_PATH")
 
+  def isDev: Boolean = CURRENT == Name.DEV
+
   /**
    * The one rule for a development-only key: it is on only when it is `true` and the environment is dev. Set anywhere else, it is
    * off, with a WARN.

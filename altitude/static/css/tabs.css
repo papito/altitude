@@ -31,21 +31,21 @@
 }
 
 [role="tab"]:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--font-color);
+    background: var(--tab-hover-background-color);
 }
 
 /* ACTIVE TAB */
 
 [role="tab"][aria-selected="true"] {
-    color: #fff;
+    color: var(--font-color);
     border-bottom: 2px solid var(--success-font-color);
     background: transparent;
 }
 
 [role="tab"]:focus,
 [role="tab"]:active {
-    color: #fff;
+    color: var(--font-color);
     outline: 0;
 }
 

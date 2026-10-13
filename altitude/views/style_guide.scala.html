@@ -1,0 +1,360 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Stats
+
+@* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan): the `styleGuide`
+   Alpine component (js/style-guide.js) reads it, and the templates below render the tokens, the icons and the token
+   audit from the component, which is also the state of the theme switcher. The specimens are static markup using
+   the real classes of core.css and tabs.css; the guide's own layout is static/css/pages/style_guide.css. *@
+@(stats: Stats, scanJson: String)
+
+@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another. A card
+   is mostly a button: clicking it copies the token's var() reference. The card of a token with an alpha slider
+   (js/style-guide.js) has the slider below the button, and a button that copies the value the slider gives it. *@
+@tokenCards(kinds: String) = {
+  <div class="sg-tokens">
+    <template x-for="token in tokensOf('@kinds')">
+      <div class="sg-token">
+        <button type="button" @@click="copyReference(token.name)">
+          <div class="sg-sample" :class="token.kind" :style="token.sampleStyle" x-text="token.sampleText"></div>
+          <code x-text="token.name"></code>
+          <span :class="{ 'sg-flag': !token.value }" x-text="currentValue(token) || 'Not served yet: restart the dev server'"></span>
+          <span class="sg-dim" x-show="token.note" x-text="token.note"></span>
+          <span :class="token.references ? 'sg-dim' : 'sg-flag'" x-text="token.usage"></span>
+          <span class="sg-flag" x-show="token.duplicates.length" x-text="'Same value as ' + token.duplicates.join(', ')"></span>
+        </button>
+        <template x-if="token.hasAlphaSlider">
+          <div class="sg-row">
+            <label class="sg-row">Alpha
+              <input type="range" min="0" max="1" step="0.01" :value="alphaOf(token)"
+                     @@input="setAlpha(token, $event.target.valueAsNumber)">
+            </label>
+            <button type="button" class="action-button small" @@click="copyValue(token)">Copy value</button>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+}
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <title>ALTITUDE - Style Guide</title>
+
+    @includes.html.header_common()
+    @* The app start binds drag and drop through `interact`, and the sample dialog posts JSON *@
+    <script src="/static/js/lib/interact.min.js" defer></script>
+    <script src="/static/js/lib/json-enc.js" defer></script>
+  </head>
+
+  <body class="style-guide">
+    <nav>
+      @includes.html.nav(stats = stats)
+    </nav>
+
+    <main x-data="styleGuide">
+      @includes.html.html_common()
+
+      <div id="styleGuideToc">
+        @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for the guide *@
+        <div id="styleGuideTheme" class="toggle-group" role="group" aria-label="Theme">
+          <button type="button" :aria-pressed="isTheme('light')" @@click="setTheme('light')">Light</button>
+          <button type="button" :aria-pressed="isTheme('dark')" @@click="setTheme('dark')">Dark</button>
+        </div>
+        <a href="#colors">Colors</a>
+        <a href="#typography">Typography</a>
+        <a href="#spacing">Spacing &amp; sizing</a>
+        <a href="#borders-shadows">Borders &amp; shadows</a>
+        <a href="#panels-layout">Panels &amp; layout</a>
+        <a href="#icons">Icons</a>
+        <a href="#buttons">Buttons</a>
+        <a href="#forms">Forms</a>
+        <a href="#navigation-tabs">Navigation &amp; tabs</a>
+        <a href="#menus-dialogs">Menus &amp; dialogs</a>
+        <a href="#feedback">Feedback</a>
+        <a href="#badges-states">Badges &amp; states</a>
+        <a href="#token-audit">Token audit</a>
+      </div>
+
+      <div>
+        <section id="colors">
+          <h2>Colors</h2>
+          <p>Every color token of <code>:root</code> in <code>core.css</code>, each a
+             <code>light-dark(light, dark)</code> pair. The app is dark; the Light / Dark switch above the contents shows
+             this page in either theme and is remembered in this browser. Click a token to copy its
+             <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
+             under Token audit. The slider of <code>--background-color</code> repaints this page with the token's color
+             of the theme shown at another alpha, until the page is reloaded.</p>
+          @tokenCards("color")
+        </section>
+
+        <section id="typography">
+          <h2>Typography</h2>
+          <p>One font stack, <code>--font</code>, at a 14px base on <code>body</code>. Other sizes are relative to it and
+             belong to a component, shown here on the real ones. The tester previews any font this browser has
+             installed.</p>
+          <div class="sg-halves">
+            <div>
+              @tokenCards("font")
+
+              <h3>Sizes</h3>
+              <div class="sg-row">
+                <span>Body text, 14px</span>
+                <button type="button" class="action-button small">Small button, 0.8em</button>
+                <span class="asset-count">Asset count, 0.9em</span>
+                <input type="text" value="Input, 1.2em" aria-label="Input size specimen">
+                <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, 1.3em</span>
+              </div>
+
+              <h3>Text colors</h3>
+              <div class="sg-row">
+                <span style="color: var(--font-color)">--font-color</span>
+                <span style="color: var(--on-fill-color); background-color: var(--success-background-color)">--on-fill-color</span>
+                <span style="color: var(--font-color-dim)">--font-color-dim</span>
+                <span style="color: var(--faded-font-color)">--faded-font-color</span>
+                <span style="color: var(--success-font-color)">--success-font-color</span>
+                <span style="color: var(--warning-font-color)">--warning-font-color</span>
+                <span style="color: var(--error-font-color)">--error-font-color</span>
+                <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
+              </div>
+            </div>
+
+            @* The font tester: the typed value becomes the specimen's font family, and the status says whether the
+               browser has it *@
+            <div>
+              <h3>Font tester</h3>
+              <input type="text" x-model="fontInput" autocomplete="off" spellcheck="false"
+                     placeholder="A font family, a stack, or a keyword such as monospace"
+                     aria-label="Font family to test">
+              <span :class="isFontMissing ? 'sg-flag' : 'sg-dim'" x-text="fontStatus"></span>
+              <div :style="{ fontFamily }">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+                tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+                ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+                voluptate velit esse cillum dolore eu fugiat nulla pariatur.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="spacing">
+          <h2>Spacing &amp; sizing</h2>
+          <p>Use the section space between large areas, such as panels and page paddings, and the control spaces between
+             individual elements and list rows.</p>
+          @tokenCards("length")
+        </section>
+
+        <section id="borders-shadows">
+          <h2>Borders &amp; shadows</h2>
+          <p>A border token carries width, style and color together; use it whole rather than restating its parts.</p>
+          @tokenCards("border shadow")
+        </section>
+
+        <section id="panels-layout">
+          <h2>Panels &amp; layout</h2>
+          <p>A panel is edged with <code>--panel-border-color</code>, lit by <code>--box-shadow</code> and padded by
+             <code>--panel-padding</code>; its text carries the navbar's text shadow. Lay pages out with CSS Grid and
+             Flexbox.</p>
+          <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
+
+          <h3>Spacing rhythm</h3>
+          <div class="sg-space" style="width: var(--section-vertical-space)"></div>
+          <span class="sg-dim">--section-vertical-space</span>
+          <div class="sg-space" style="width: var(--control-vertical-space)"></div>
+          <span class="sg-dim">--control-vertical-space</span>
+          <div class="sg-space" style="width: var(--control-horizontal-space)"></div>
+          <span class="sg-dim">--control-horizontal-space</span>
+        </section>
+
+        <section id="icons">
+          <h2>Icons</h2>
+          <p>Font Awesome 5, solid style (<code>fas</code>). These are the icons in use in the templates and scripts,
+             each with the number of places it appears; reuse one before adding another.</p>
+          <div class="sg-icons">
+            <template x-for="icon in icons">
+              <div>
+                <i class="fas" :class="icon.name" aria-hidden="true"></i>
+                <span><code x-text="icon.name"></code> <span class="sg-dim" x-text="'× ' + icon.count"></span></span>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <section id="buttons">
+          <h2>Buttons</h2>
+          <p>Success, warning and error buttons signal an outcome, not emphasis. Hover and keyboard focus share one look,
+             through <code>:focus-visible</code> and not <code>:focus</code>, so a button a dialog returns focus to is
+             not left glowing after a mouse click. A choice between ways of showing the same thing is a
+             <code>.toggle-group</code>: its buttons side by side, the current one <code>aria-pressed="true"</code>. The
+             theme switch above the contents is a live one.</p>
+          <div class="sg-row">
+            <button type="button" class="action-button">.action-button</button>
+            <button type="button" class="action-button success">.success</button>
+            <button type="button" class="action-button warning">.warning</button>
+            <button type="button" class="action-button error">.error</button>
+            <button type="button" class="action-button small"><i class="fas fa-plus" aria-hidden="true"></i><span>.small</span></button>
+            <div class="toggle-group" role="group" aria-label="Toggle group specimen">
+              <button type="button" aria-pressed="true">Current</button>
+              <button type="button" aria-pressed="false">Other</button>
+            </div>
+            <span>.toggle-group</span>
+          </div>
+        </section>
+
+        <section id="forms">
+          <h2>Forms</h2>
+          <p>A field in error takes the <code>error</code> class, with the message in a <code>div.error</code> above it
+             inside the form. Mark a field that cannot be edited with <code>readonly</code>.</p>
+          <div class="sg-row">
+            <input type="text" placeholder="input" aria-label="Input specimen">
+            <input type="text" class="readonly" value="input.readonly" readonly aria-label="Read-only input specimen">
+            <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
+            @* A single-field form submits on Return; the error specimen has nowhere to submit to *@
+            <form action="#" @@submit.prevent>
+              <div class="error">This field is required</div>
+              <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
+            </form>
+          </div>
+        </section>
+
+        <section id="navigation-tabs">
+          <h2>Navigation &amp; tabs</h2>
+          <p>The nav above is the live one. A nav entry is <code>.menu</code>; the page marks its own entry
+             <code>active</code>, and an entry with nothing behind it is <code>empty</code> and not a link. A tab is the
+             link itself, selected through <code>aria-selected</code>.</p>
+          <nav aria-label="Navigation specimen">
+            <div class="brand"><a href="#navigation-tabs">Altitude</a></div>
+            <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
+            <div class="menu active"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu.active</span></a></div>
+            <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
+          </nav>
+
+          <div role="tablist">
+            <a role="tab" aria-selected="true" href="#navigation-tabs"><i class="fas fa-folder"></i> Selected</a>
+            <a role="tab" aria-selected="false" href="#navigation-tabs"><i class="fas fa-images"></i> Tab</a>
+          </div>
+          <div role="tabpanel">A tab panel.</div>
+        </section>
+
+        <section id="menus-dialogs">
+          <h2>Menus &amp; dialogs</h2>
+          <p>Both controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
+             like an Add button, opens a separate modal anchored below its control. Submit the dialog blank to see the
+             validation state, or with a name to see a completed operation.</p>
+          @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
+          <div class="sg-row" id="styleGuideMenuSpecimens"></div>
+        </section>
+
+        <section id="feedback">
+          <h2>Feedback</h2>
+          <p>The outcome of an action is reported in the snackbar: success for a completed one, warning for one that
+             partly applied, error for a failure. A failure to load a page area is a server error message in place.</p>
+          <div class="sg-row">
+            <button type="button" class="action-button success" @@click="showSuccessSnackBar('A success message')">Success snackbar</button>
+            <button type="button" class="action-button warning" @@click="showWarningSnackBar('A warning message')">Warning snackbar</button>
+            <button type="button" class="action-button error" @@click="showErrorSnackBar('An error message')">Error snackbar</button>
+          </div>
+          <div id="serverError">#serverError: something went wrong on the server.</div>
+          <div class="sg-row">
+            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <span>Loading indicator: <code>fa-spinner fa-spin</code></span>
+          </div>
+        </section>
+
+        <section id="badges-states">
+          <h2>Badges &amp; states</h2>
+          <p>A scope the results are narrowed to, such as the map area, follows the total as a chip; the whole chip is the
+             button that clears it. A count follows its row's name, dimmed. A Location's pin on a map is the
+             <code>.location-pin</code> glyph, drawn as a Leaflet div icon. The drag and drop states are set by the
+             drag and drop modules, never by hand.</p>
+          <div class="sg-row">
+            <button type="button" class="filter-chip" title="Showing the map area only">Map area &times;</button>
+            <span>.filter-chip</span>
+            <span>Row name <span class="asset-count">(12)</span></span>
+            <span class="location-pin"><i class="fas fa-map-marker-alt" aria-hidden="true"></i></span>
+            <span>.location-pin</span>
+            <span class="draggable">.draggable</span>
+            <span class="dragging">.dragging</span>
+            <span class="drop-target">.drop-target</span>
+            <div class="sg-badge-host"><span class="drag-count-badge">3</span></div>
+            <span>.drag-count-badge</span>
+          </div>
+        </section>
+
+        <section id="token-audit">
+          <h2>Token audit</h2>
+          <p>What the source tree holds beyond the <code>:root</code> tokens. Scoped and runtime tokens belong to one
+             component; an override replaces a <code>:root</code> value for that component.</p>
+
+          <h3>Other tokens</h3>
+          @tokenCards("other")
+
+          <h3>Scoped and runtime tokens</h3>
+          @* Their values are shown as declared: the elements they apply to are not on this page, so there is
+             nothing to resolve them against *@
+          <table>
+            <tr><th>Token</th><th>Value</th><th>Declared at</th><th>References</th><th></th></tr>
+            <template x-for="token in scopedTokens">
+              <tr>
+                <td><code x-text="token.name"></code></td>
+                <td x-text="token.value"></td>
+                <td x-text="token.location"></td>
+                <td x-text="referencesOf(token.name)"></td>
+                <td x-text="overrideNote(token.name)"></td>
+              </tr>
+            </template>
+            <template x-for="token in runtimeTokens">
+              <tr>
+                <td><code x-text="token.name"></code></td>
+                <td></td>
+                <td x-text="token.locations.join(', ')"></td>
+                <td x-text="referencesOf(token.name)"></td>
+                <td>Set at runtime from JavaScript</td>
+              </tr>
+            </template>
+          </table>
+
+          <h3>Color literals</h3>
+          <p>Colors written as literals instead of tokens, grouped by the color they resolve to. A literal equal to a
+             token should use it.</p>
+          <table>
+            <tr><th></th><th>Literal</th><th>Uses</th><th>Token to use instead</th></tr>
+            <template x-for="literal in literals">
+              <tr>
+                <td><span class="sg-swatch" :style="{ backgroundColor: literal.color }"></span></td>
+                <td x-text="literal.spellings.join(', ')"></td>
+                <td>
+                  <details>
+                    <summary x-text="literal.locations.length"></summary>
+                    <template x-for="location in literal.locations">
+                      <div x-text="location"></div>
+                    </template>
+                  </details>
+                </td>
+                <td x-text="literal.tokens.join(', ')"></td>
+              </tr>
+            </template>
+          </table>
+        </section>
+      </div>
+    </main>
+
+    <footer></footer>
+
+    <script type="application/json" id="styleGuideScan">@Html(scanJson)</script>
+
+    <script type="module">
+      import { initApp } from "/static/js/app.js"
+      import { highlightNav } from "/static/js/common/navigation.js"
+      // Importing the module registers the `styleGuide` component, before `initApp()` starts Alpine
+      import { initStyleGuide } from "/static/js/style-guide.js"
+
+      initApp()
+
+      // Set once: the repository cannot change without a full page load
+      window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
+
+      highlightNav("style-guide")
+      initStyleGuide()
+    </script>
+  </body>
+</html>

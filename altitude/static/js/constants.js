@@ -48,6 +48,7 @@ export const Const = {
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
+        styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
     },
 
     /**
@@ -96,6 +97,8 @@ export const Const = {
         horizontalSplitSizes: "horizontalSplitSizes",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
+        // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
+        styleGuideTheme: "styleGuideTheme",
     },
 
     sessionStore: {

@@ -1,5 +1,6 @@
 @import altitude.core.Api
 @import altitude.core.Const
+@import altitude.core.Environment
 @import altitude.core.models.AccountType
 @import altitude.core.models.Stats
 @import altitude.core.RequestContext
@@ -50,6 +51,13 @@
 <div class="menu settings">
     <a href="/settings/r/@repoId"><i class="fas fa-cog"></i><span>Settings</span></a>
 </div>
+}
+
+@* Dev only, like the routes behind it (StyleGuideController) *@
+@if(Environment.isDev) {
+    <div class="menu style-guide">
+        <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
+    </div>
 }
 
 @* Bound by js/search-results/search-input.js. `hx-preserve` keeps this very element, and with it the text being typed, when

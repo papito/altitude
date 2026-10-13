@@ -48,7 +48,7 @@
       <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.label"></span>
       @* The map-area scope of the crowded-pin panel (js/map/map-panel.js); its × clears `bbox` in either layout *@
       @if(bbox.isDefined) {
-        <button id="bboxScope" type="button" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
+        <button id="bboxScope" type="button" class="filter-chip" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
       }
     </div>
   </div>
@@ -137,7 +137,7 @@
   </div>
 
   @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
-  <div id="layoutToggle" role="group" aria-label="Layout">
+  <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
     <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
             data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
     <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"

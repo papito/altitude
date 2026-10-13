@@ -3,6 +3,7 @@
 @import "pages/index.css";
 @import "pages/setup.css";
 @import "pages/pipeline.css";
+@import "pages/style_guide.css";
 @import "includes/brand.css";
 @import "includes/batch_ops.css";
 @import "includes/search_results.css";

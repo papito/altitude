@@ -2,15 +2,27 @@
 
 ## Do
 
-* Update this document if you are making changes to the architecture, design patterns, or anything else that future developers should know when working on the codebase. 
-* Factor out duplicated code into helper methods.
-* Update comments and docstrings when making changes to the code and warn about discrepancies in comments vs code.
+These apply to every change, server or frontend.
+
+* Avoid documentation drift. When code is added, changed, or removed, update the guide that describes it in the same change: this document for the architecture, design patterns, or anything else future developers should know, [views/AGENTS.md](views/AGENTS.md) for the frontend, [docs/faces.md](../docs/faces.md) for faces, the glossary in the root [CONTEXT.md](../CONTEXT.md) for domain terms, and [docs/READINESS.md](../docs/READINESS.md) when a change closes or opens one of its security, data safety or operational readiness items. Guidance goes in the guide that owns the area, never in the root `AGENTS.md`, which only routes to the guides.
+* When adding features or modifying existing behavior, review nearby code comments and docstrings, update them where needed, and warn about discrepancies in comments vs code.
+* Always add comments for less than trivial logic, unless the comment is redundant with the code, and it's a simple getter/setter or similar. If you find yourself writing a comment that starts with "This is needed because..." or "This exists to work around...", consider whether the code can be refactored to eliminate the need for the comment.
+* Always log on INFO important events and log on DEBUG events that may be useful for debugging. Avoid logging on DEBUG events that are too noisy to be useful (use TRACE if available).
+* Extract shared logic into functions when the same or similar logic appears more than once.
+
+### Server-side
+
+* Use test-driven Development with strict red-green-refactor cycle using integration tests. Do not trigger TDD for documentation-only, configuration-only changes, or front-end-facing code.
+* Write the minimal amount of code that preserves clarity, readability, and maintainability. "Minimal" does NOT mean that you should leave dead or redundant code after changes and refactoring.
+* DO NOT add new migrations or bump the schema version: see **Schema migrations**.
 
 ## Architecture Overview
 
+Altitude is a Scala 3 application built with Mill: Cask serves HTTP, Twirl renders the templates, Pekko Streams runs the import and purge pipelines, ScalaSql and JDBC reach SQLite or PostgreSQL, and OpenCV and FFmpeg (through Bytedeco) decode media. The versions are in `build.mill`.
+
 `App.scala` is the single entrypoint (extends `cask.Main`). It registers all routes and wires the app via `new Altitude()`, whose constructor migrates the database and loads the Settings before it builds the actor system (see **Settings** and **Schema migrations**); `App` then prunes, requeues and reconciles (see **Library stats and purging**).
 
-The frontend is now organized around a thin composition root in `static/js/frontend-app.js`.
+The frontend is organized around a thin composition root in `static/js/frontend-app.js`.
 Feature logic is split into focused ES module folders instead of accumulating in one large file:
 
 - `static/js/stores/` — Alpine store initialization (`app-stores.js`), including the search parameter set (`search-params.js`)
@@ -257,7 +269,9 @@ The map never receives a result set: a repository can hold millions of assets, s
 
 ## Schema migrations
 
-`schemaVersion` in `Altitude.scala` is the current version. `Altitude.migrationService` (`MigrationService(app, currentVersion, migrationsDir)`) runs `migrate()` in the constructor, in every environment, after the DAOs and before the Settings load: a fresh database (version 0, which a missing `system` table also means) runs `migrations/<engine>/all.sql` once and is stamped with the current version; a database behind would run `migrations/<engine>/<version>.sql` per version, but no such files exist: the rule in force (root `AGENTS.md`) is that every schema change goes into both `all.sql` files as original definitions, `schemaVersion` stays 2, and a database is recreated from scratch. The service reaches the database through the system metadata DAO and the transaction manager alone, since no service exists yet, and rethrows any read failure other than a missing table, so a locked or refused read never passes for a fresh database. The suite bundles wipe the schema and migrate again after constructing the app (`TestDatabase.reset`).
+`schemaVersion` in `Altitude.scala` is the current version. `Altitude.migrationService` (`MigrationService(app, currentVersion, migrationsDir)`) runs `migrate()` in the constructor, in every environment, after the DAOs and before the Settings load: a fresh database (version 0, which a missing `system` table also means) runs `migrations/<engine>/all.sql` once and is stamped with the current version; a database behind would run `migrations/<engine>/<version>.sql` per version, but no such files exist. The service reaches the database through the system metadata DAO and the transaction manager alone, since no service exists yet, and rethrows any read failure other than a missing table, so a locked or refused read never passes for a fresh database. The suite bundles wipe the schema and migrate again after constructing the app (`TestDatabase.reset`).
+
+DO NOT add new migrations or bump the version number. All changes go into `all.sql` for both Postgres and SQLite, as original table/index definitions as if it were a fresh schema (no ALTER); `schemaVersion` stays 2, and a database is recreated from scratch.
 
 ## Config & Environments
 
@@ -269,6 +283,8 @@ The map never receives a result set: a repository can hold millions of assets, s
 The config files hold only what decides the shape of the process at startup: `fs.data.dir`, `storage.engine.default`, `db.engine`, `db.sqlite.*`, `db.postgres.user`, `db.postgres.password`, `db.postgres.url`, `db.postgres.pool_size`, `db.postgres.options`, `db.pool.leak_detection_threshold`, `face.debug.enabled`, `dev.*` and the test `test.dir`. Everything an Admin tunes is a Setting (next section); a leftover key for one of those in `application.conf` is ignored, as `reference.conf` says at its top.
 
 To skip login during frontend dev work, set `dev.user` and `dev.password` in `application-dev.conf`; `UserService.getDevUser` checks the password until it first succeeds and then reads the user by ID, so a page of thumbnails does not cost a bcrypt check each. To log the plan of each new query to `sql-debug.log`, set `dev.sql_explain=true` there (see "SQL explain log"). To have a pipeline queue whose stream fails restart it, set `dev.restart_pipeline=true` (see **Import Pipeline**). Both are read through `Environment.devSwitch`, the one rule for a development-only key: on only when it is `true` and `ENV=dev`, and off, with a WARN, when it is set in any other environment.
+
+`Environment.isDev` is the check for anything that exists in dev only (an unset `ENV` is prod; an unrecognised value is dev). The **style guide** is such a thing: `App.allRoutes` registers `StyleGuideController` (`routes/web/`) only in dev, so its routes are 404s anywhere else, and `includes/nav.scala.html` renders its button under the same check. The page (`/style-guide/r/:repoId`) scans the source tree on every request with `StyleGuideScan.scan` (`core/util`), a pure function over `altitude/static/css`, `altitude/static/js` and `altitude/views` that finds the design tokens (`:root`, scoped, and set at runtime), their reference counts, the color literals written past them and the icons in use; the result is embedded in the page as JSON. The controller's other two routes serve a sample dialog that validates like a real one and persists nothing. Controller tests reach the routes through a test-only `cask.Main` (`DevApp` in `StyleGuideControllerTests`). The page itself is described under **Style guide** in `views/AGENTS.md`.
 
 ## Settings
 

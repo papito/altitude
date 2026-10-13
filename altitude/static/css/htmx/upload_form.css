@@ -14,11 +14,11 @@
 
 #uploadForm input[type="file"] {
     background-color: var(--background-form-color);
-    color: #FFFFFF;
+    color: var(--font-color);
 }
 
 #uploadForm input::file-selector-button {
-    color: #FFFFFF;
+    color: var(--font-color);
     background-color: var(--background-form-color);
 }
 
@@ -41,5 +41,5 @@
 }
 
 #statusText span {
-    color: #FFFFFF;
+    color: var(--font-color);
 }

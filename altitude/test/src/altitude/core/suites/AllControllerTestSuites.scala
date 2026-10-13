@@ -18,6 +18,7 @@ import altitude.core.controller.PeopleActionControllerTests
 import altitude.core.controller.SearchResultsControllerTests
 import altitude.core.controller.SettingsControllerTests
 import altitude.core.controller.StaticControllerTests
+import altitude.core.controller.StyleGuideControllerTests
 
 abstract class AllControllerTestSuites
   extends Suites(
@@ -36,5 +37,6 @@ abstract class AllControllerTestSuites
     new PeopleActionControllerTests(),
     new SearchResultsControllerTests(),
     new SettingsControllerTests(),
-    new StaticControllerTests()
+    new StaticControllerTests(),
+    new StyleGuideControllerTests()
   )

@@ -1,0 +1,36 @@
+@import altitude.core.RequestContext
+@import altitude.core.routes.web.StyleGuideController.Field
+
+@(fieldErrors: Map[String, String] = Map.empty)
+
+@* The style guide's sample dialog (dev only): the dialog flow of a real one, with nothing persisted. A blank name comes
+   back as a validation response replacing this form. Focus returns to whichever control opened it. *@
+<form action="#"
+      id="styleGuideSample"
+      data-app-fragment="modal"
+      data-app-modal-title="Sample dialog"
+      data-app-dialog-autofocus-selector="#field-@{ Field.NAME }"
+      data-app-success-event="STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT"
+      hx-target="this"
+      hx-swap="none"
+      hx-post="/htmx/style-guide/r/@{RequestContext.getRepository.persistedId}/sample"
+      hx-trigger="submit"
+      hx-json-enc>
+
+  @if(fieldErrors.contains(Field.NAME)) {
+    <div class="error">@{ fieldErrors(Field.NAME) }</div>
+  }
+
+  <div>
+    <label for="field-@{ Field.NAME }"></label>
+    <input type="text"
+           id="field-@{ Field.NAME }"
+           name="@{ Field.NAME }"
+           autocomplete="off"
+           size="30"
+           placeholder="Leave blank to see the error state"
+        @if(fieldErrors.contains(Field.NAME)) {
+           class="error"
+        }>
+  </div>
+</form>

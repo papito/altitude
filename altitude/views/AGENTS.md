@@ -1,5 +1,18 @@
 # Frontend – Agent Guide
 
+## Do
+
+The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For frontend work:
+
+* For UI work, prompt the developer to run "make db" and "make watch" if localhost:8080 is not accessible or if the repo is not initialized (setup form visible or no assets present).
+* Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
+* Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified. The style guide (`views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions: read its usage notes before choosing a color, spacing, or component, and keep it current in the same change (the list is under **Style guide** below).
+* Always prefer CSS Grid and Flexbox.
+* The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
+* Strongly prefer CSS variables over hard-coded values, especially if duplicated.
+* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css` holding a `light-dark(light, dark)` pair. The detail is under **Themes** below.
+* Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
+
 ## Stack
 
 - **HTMX 4** — server-driven HTML fragments, no SPA routing
@@ -18,7 +31,7 @@
 
 ```
 views/
-  *.scala.html          ← full pages (index, login, setup, pipeline, settings)
+  *.scala.html          ← full pages (index, login, setup, pipeline, settings, style_guide)
   includes/             ← reusable layout fragments (nav, header, batch ops, search results)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
@@ -196,7 +209,7 @@ no editor.
 
 ## Alpine.js Integration
 
-Alpine serves three distinct roles in this codebase:
+Alpine serves four distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
 Stores initialized in `js/frontend-app.js` and `js/stores/app-stores.js` hold shared data — the active
@@ -223,6 +236,19 @@ set (`x-show`, `x-text`), and `reset()` from its Deselect All button clears it.
 outside clicks); the component only places the panel, closes it when focus leaves or when the page scrolls or the explorer
 resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
 menus** below.
+
+### 4. Rendering a page's own data
+A page that renders data it already holds may do so with `x-for` templates over one component, so its
+markup stays in the Twirl template instead of being built node by node in JavaScript. The style guide
+is the one such page: `x-data="styleGuide"` is on its `<main>`, so the contents column and the sections
+share it, and the component (`js/style-guide.js`,
+registered when the page's module script imports it, before `initApp()` starts Alpine) holds the data
+and the logic that needs the browser. Keep the expressions in such a template to property reads and
+single method calls: nothing lints them, so anything longer belongs in the component. A card or row
+repeated across sections is a Twirl reusable block (`@tokenCards(kinds)` in `style_guide.scala.html`),
+since Alpine has no template reuse of its own. Twirl reads `@` as its own, so Alpine's shorthand is
+written `@@click`. The explorer lists (folder tree, albums, Locations) are still rendered by their
+JavaScript modules.
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
@@ -512,16 +538,16 @@ script (`window.L`), loaded with its stylesheet by the first editor or map (`js/
 hydrator waits for it and skips a fragment removed meanwhile.
 
 **Map view** — `layout` (`grid` | `map`) is a search parameter (see **Search parameters**). The
-toolbar's `#layoutToggle` in `includes/search_results` is two `data-app-search="click"` buttons with a
-literal `data-app-search-layout`, the current one `aria-pressed="true"`. In map layout the server
+toolbar's `#layoutToggle` in `includes/search_results` (a `.toggle-group` of `core.css`) is two
+`data-app-search="click"` buttons with a literal `data-app-search-layout`, the current one `aria-pressed="true"`. In map layout the server
 disables the Group `<select>`, gives the fragment root `class="map-layout"` (a flex column, so the map
 takes every pixel under the controls) and renders `htmx/map_view` in place of `#assets`: `#mapView`
 holds `#map` (`data-map-bounds="s,w,n,e"`, empty when nothing is plotted, `data-map-count`,
 `data-map-tile-url`, `data-map-attribution`; `isolation: isolate`, so Leaflet's panes stay under the
 modals) and the hidden `<aside id="mapPanel">`. The pin styles (`.asset-pin`, `.location-pin.on-map`)
 live in `static/css/htmx/map_view.css`; `.location-pin` itself is in `core.css`, shared with the pin editor. While the
-results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip, whose
-`data-app-search-bbox=""` clears it, in either layout.
+results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip (a `core.css` `.filter-chip`:
+the whole chip is the button), whose `data-app-search-bbox=""` clears it, in either layout.
 
 `js/map/map-view.js` hydrates `#map` (`data-app-fragment="map-view"`, after the results hydrator). One
 map exists at a time: the results hydrator calls `disposeMapView()` for every new results fragment,
@@ -826,6 +852,75 @@ Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules ca
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 
+**Themes** — The app has a light and a dark theme and is shown in the dark one: `:root` in `core.css` declares
+`color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
+switcher declares another scheme, on that page. Every color is a `:root` token of `core.css` whose value is a
+`light-dark(light, dark)` pair, which the browser resolves by the scheme in force, so no rule is written once per theme.
+A token holding a border or a shadow pairs only the color inside it (`--menu-border: 1px solid light-dark(gray, gray)`).
+The light colors are placeholders equal to the dark ones, except that of `--background-color`.
+
+Stylesheets reference the tokens and write no color literal, named colors included. A new
+color is a new token, with a comment above it, or an existing token whose meaning fits, not merely one that holds the
+same value. Two tokens hold white: `--font-color` is text on the app's own surfaces, and `--on-fill-color` is what is
+drawn on a colored fill or over an image (the label of a button or a marker, the snackbar's text and edge, a pin's
+frame), which stays light in either theme. A color derived from a token is written in relative color syntax, so it
+follows the token's pair: the tints of the triage and trash views are
+`rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--trashbin-color) r g b / 0.05)`. The two
+SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a dropdown) carry
+their fill as a literal, because a data URI cannot read a token.
+
+**Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`,
+`StyleGuideController`; the nav shows its button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
+and per shared primitive of `core.css` and `tabs.css` (buttons, forms, navigation and tabs, menus and dialogs,
+feedback, badges and states), plus a token audit. It is the main page's chrome without the explorer and the grid, and
+starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/json-enc.js` itself.
+
+- **Discovered, nothing to maintain:** the tokens and the icons. The server's source scan is embedded as JSON
+  (`#styleGuideScan`); the `styleGuide` Alpine component (`js/style-guide.js`) reads it, and the page's `x-for`
+  templates render what the component holds (see **Rendering a page's own data** above): each `:root` token resolved
+  against the loaded stylesheets and placed by the kind of its value (`@tokenCards("border shadow")` asks the
+  component for those kinds, one after another, so borders and shadows share one grid), with its note (the comment
+  directly above its declaration), reference count, an "Unused" flag, and the tokens sharing its value; a click
+  copies its `var()` reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
+  replaces), the ones only set from JavaScript, and the color literals grouped by resolved color, each naming the
+  token that already holds that color.
+- **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
+  class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
+  use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
+  under `body.style-guide`) only lay the page out, from the `:root` variables.
+  Three more things keep the page current:
+  - A changed size, font, or icon set updates the values the specimens state in text.
+  - A new `:root` token gets a comment directly above its declaration; the guide shows it as the token's note.
+  - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
+- **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
+  (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup), both
+  opening `htmx/style_guide_sample_dialog.scala.html` in the modal host. A blank name returns the validation
+  replacement; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
+  a snackbar. Nothing is persisted.
+- **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
+  stays on screen. `setTheme` declares `color-scheme` inline on the root element, which every `light-dark()` token
+  follows, remembers the choice in `localStorage` (`Const.localStore.styleGuideTheme`), and resolves the tokens again:
+  the color a token holds, the tokens sharing it and its alpha are those of the theme shown. The page opens in the
+  remembered theme, else in the stylesheet's. Only the style guide reads the choice; the rest of the app stays in the
+  stylesheet's theme.
+- **Font tester:** the Typography section's right half (its left half holds the `--font` card, the sizes and the
+  text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
+  has that font, decided by measuring the text with the value in front of each generic family against the generic
+  family alone. The input is the component's `fontInput` (`x-model`), which the specimen's style and the status
+  derive from. Nothing is requested from the server.
+- **Alpha slider:** the `--background-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider
+  under its copy button. Dragging it gives that alpha to the token's color of the theme shown and declares the whole
+  value inline on the root element, so the page repaints with it until it is reloaded; nothing is stored. The color
+  is written in relative color syntax, which keeps it as declared, inside the token's `light-dark()` pair, whose other
+  color is left alone (`light-dark(rgb(from #363636 r g b / 0.6), #363636)` after a drag in the light theme); the card
+  shows the value, and Copy value copies it for pasting into `core.css`. The slider starts at the alpha the token's
+  color has in the theme shown, and a color that already is such a replacement has its alpha replaced rather than
+  wrapped again. A drag made in one theme survives a switch to the other: the tokens are resolved again from the inline
+  declaration. A token card is therefore a `div` holding the copy
+  button and, for that token, the slider row: an input cannot sit inside a button.
+
+The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates.
+
 ## Key Files
 
 | File | Purpose |
@@ -872,6 +967,8 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
+| `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
+| `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
