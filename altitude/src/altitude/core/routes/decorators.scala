@@ -2,8 +2,10 @@ package altitude.core.routes
 import cask.model.Response
 import cask.model.Response.Raw
 import cask.router.Result
+import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.lang.System.currentTimeMillis
+import java.time.Instant
 import java.util.zip.GZIPOutputStream
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -13,16 +15,21 @@ import scala.jdk.CollectionConverters._
 
 import altitude.core.App
 import altitude.core.RequestContext
+import altitude.core.models.AccountType
 import altitude.core.models.User
 import altitude.core.routes.web.SessionController
+import altitude.core.util.MurmurHash
 import altitude.core.util.Util
 
 object decorators:
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * cask's gzip decorator, except for a response that offers byte ranges: a stored original is a compressed format already, and a
-   * range names its raw bytes, which a compressed body would not match.
+   * cask's gzip decorator, except for a response that offers byte ranges and for an image. A stored original is a compressed
+   * format already, and a range names its raw bytes, which a compressed body would not match. An image is deflated already, so a
+   * gzip costs CPU on both ends, saves nothing, and discards its Content-Length. Whether a response is gzipped depends on the
+   * request's Accept-Encoding, so a response that may be says so in `Vary`: a cache keeps a copy per coding rather than handing a
+   * gzipped body to a client that cannot read it. A 304 has no body to code, but varies as its 200 does.
    */
   class compress extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -34,19 +41,26 @@ object decorators:
         .exists(_.equalsIgnoreCase("gzip"))
 
       delegate(req, Map()).transform {
-        case v: Raw if acceptsGzip && !v.headers.contains(RangeStreaming.ACCEPT_RANGES) =>
-          val gzipped = new Response.Data {
-            override def write(out: OutputStream): Unit =
-              val wrap = new GZIPOutputStream(out)
-              v.data.write(wrap)
-              wrap.flush()
-              wrap.close()
-            // The compressed length is not known ahead of time
-            override def headers: Seq[(String, String)] = v.data.headers.filter(_._1 != "Content-Length")
-          }
-          Response(gzipped, v.statusCode, v.headers :+ ("Content-Encoding" -> "gzip"), v.cookies)
+        case v: Raw if !v.headers.contains(RangeStreaming.ACCEPT_RANGES) && !isImage(v) =>
+          val varied = v.copy(headers = v.headers :+ ("Vary" -> "Accept-Encoding"))
+          if acceptsGzip && v.statusCode != 304 then gzip(varied) else varied
         case v: Raw => v
       }
+
+    private def gzip(v: Raw): Raw =
+      val gzipped = new Response.Data {
+        override def write(out: OutputStream): Unit =
+          val wrap = new GZIPOutputStream(out)
+          v.data.write(wrap)
+          wrap.flush()
+          wrap.close()
+        // The compressed length is not known ahead of time
+        override def headers: Seq[(String, String)] = v.data.headers.filter(_._1 != "Content-Length")
+      }
+      Response(gzipped, v.statusCode, v.headers :+ ("Content-Encoding" -> "gzip"), v.cookies)
+
+    private def isImage(response: Raw): Boolean =
+      response.headers.exists((name, value) => name.equalsIgnoreCase("Content-Type") && value.startsWith("image/"))
 
   private val AUTH_HEADER_NAME = "Authorization"
   private val BEARER_PREFIX = "Bearer "
@@ -62,6 +76,28 @@ object decorators:
         val cookies = req.exchange.getRequestCookies
         Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
     }
+
+  // An API request (one that accepts JSON, or an /api/ path) is answered in JSON
+  private def isApiRequest(req: cask.Request): Boolean =
+    Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
+      req.exchange.getRequestPath.startsWith("/api/")
+
+  /** Runs `endpoint` unless the path names a repository that does not exist (`repoContext` found none), answered as not found */
+  private def existingRepositoryOnly(req: cask.Request)(endpoint: => Result[Raw]): Result[Raw] =
+    if RequestContext.repository.value.isEmpty && RepoPath.matches(req.exchange.getRequestPath) then
+      logger.debug(s"No repository found for [${req.exchange.getRequestURI}]")
+      handleNotFound(req)
+    else endpoint
+
+  private def handleNotFound(req: cask.Request): Result[Raw] =
+    if isApiRequest(req) then
+      Result.Success(
+        Response(
+          """{"error": "Not Found", "message": "Repository not found"}""",
+          statusCode = 404,
+          headers = Seq("Content-Type" -> "application/json")
+        ))
+    else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
    * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized
@@ -102,25 +138,7 @@ object decorators:
         case Some(repo) if repo.ownerAccountId != user.persistedId =>
           logger.warn(s"User [${user.persistedId}] denied repository [${repo.persistedId}] they do not own")
           handleNotFound(req)
-        case None if RepoPath.matches(req.exchange.getRequestPath) =>
-          logger.debug(s"No repository found for [${req.exchange.getRequestPath}]")
-          handleNotFound(req)
-        case _ => endpoint
-
-    private def handleNotFound(req: cask.Request): Result[Raw] =
-      if isApiRequest(req) then
-        Result.Success(
-          Response(
-            """{"error": "Not Found", "message": "Repository not found"}""",
-            statusCode = 404,
-            headers = Seq("Content-Type" -> "application/json")
-          ))
-      else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
-
-    // An API request (one that accepts JSON, or an /api/ path) is answered in JSON
-    private def isApiRequest(req: cask.Request): Boolean =
-      Option(req.exchange.getRequestHeaders.getFirst("Accept")).getOrElse("").contains("application/json") ||
-        req.exchange.getRequestPath.startsWith("/api/")
+        case _ => existingRepositoryOnly(req)(endpoint)
 
     private def handleUnauthenticated(req: cask.Request): Result[Raw] =
       if isApiRequest(req) then
@@ -143,10 +161,108 @@ object decorators:
             headers = Seq("Location" -> s"/login?redirect=$originalUrl")
           ))
 
+  /**
+   * Decorator for an endpoint that a signed URL may open without a login. A request with both `exp` and `sig` query parameters is
+   * answered by the signature alone: one that [[altitude.core.service.ContentSigner.verify]] accepts for the request path is
+   * served whoever owns the repository, since the signature is the grant, unless the repository does not exist (a 404, as for
+   * `requireLogin`), and any other is a plain-text 403 (a share-link holder has no account to log in to). Any other request,
+   * including one with only one of the two parameters, is `requireLogin`'s, so the logged-in UI builds plain URLs to the same
+   * route.
+   */
+  class requireLoginOrSignature extends cask.RawDecorator:
+    private val login = requireLogin()
+
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      def param(name: String): Option[String] = req.queryParams.get(name).flatMap(_.headOption)
+
+      (param("exp"), param("sig")) match
+        case (Some(exp), Some(sig)) => signedOnly(req, exp, sig)(delegate(req, Map("request" -> req)))
+        case _ => login.wrapFunction(req, delegate)
+
+    private def signedOnly(req: cask.Request, exp: String, sig: String)(endpoint: => Result[Raw]): Result[Raw] =
+      val path = req.exchange.getRequestPath
+      // The path as requested, still percent-encoded, is what is logged: the decoded one may carry a line break that forges a
+      // log line, and `:repoId` binds any text
+      val requested = req.exchange.getRequestURI
+      val now = Instant.now
+
+      if App.altitude.service.contentSigner.verify(path, exp, sig, now) then
+        logger.trace(s"Signed URL accepted for [$requested]")
+        existingRepositoryOnly(req)(endpoint)
+      else
+        // The answer does not say why; the log does, never with the signature. An expired link is the routine end of one, so DEBUG
+        // whatever its signature. A signature that does not match, with an expiry still ahead or a malformed one, is a tampered or
+        // forged link, or one signed under a key the server no longer holds, so WARN, as an invalid login token is.
+        if exp.toLongOption.exists(_ <= now.getEpochSecond) then
+          logger.debug(s"Signed URL for [$requested] refused: expired at [$exp]")
+        else logger.warn(s"Signed URL for [$requested] refused: the signature does not match")
+        Result.Success(
+          Response(
+            "Forbidden: the link is invalid or has expired",
+            statusCode = 403,
+            headers = Seq("Content-Type" -> "text/plain")))
+
+  /**
+   * Decorator for an Admin-only endpoint, applied after `requireLogin`, which has put the account in the context. A User or a
+   * Guest is answered with 403, JSON for an API request and plain text otherwise; there is nowhere to redirect them to.
+   */
+  class requireAdmin extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      val user = RequestContext.account.value.getOrElse(
+        throw IllegalStateException(s"requireAdmin on ${req.exchange.getRequestPath} ran without requireLogin before it"))
+
+      // The innermost decorator's map fills the endpoint's extra parameter list, so the request travels on from here too
+      if user.accountType == AccountType.Admin then delegate(req, Map("request" -> req))
+      else
+        logger.warn(s"Account [${user.persistedId}] (${user.accountType}) refused ${req.exchange.getRequestPath}: Admin only")
+        if isApiRequest(req) then
+          Result.Success(
+            Response(
+              """{"error": "Forbidden", "message": "Admin only"}""",
+              statusCode = 403,
+              headers = Seq("Content-Type" -> "application/json")))
+        else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
+
+  /**
+   * For files under content-hashed names: the bytes under a name never change, so a found file may be cached by anyone for
+   * good. A miss carries no Cache-Control, since the name may be served once a build produces that content again.
+   */
+  class cachedForever extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      delegate(req, Map()).transform {
+        case v: Raw if v.statusCode == 200 =>
+          v.copy(headers = v.headers :+ ("Cache-Control" -> "public, max-age=31536000, immutable"))
+        case v: Raw => v
+      }
+
+  /**
+   * For files whose names stay when their content changes (the vendored libraries, the fonts and the JS modules under
+   * /static/): the browser keeps a file but asks before each use (`no-cache`), and an unchanged one answers 304 with no body.
+   * The ETag is a hash of the bytes, taken on every request, so a file refreshed under a running dev server is never answered
+   * as unchanged. It is weak, since `compress` may send the same bytes gzipped.
+   */
+  class revalidated extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      delegate(req, Map()).transform {
+        case v: Raw if v.statusCode == 200 =>
+          val out = ByteArrayOutputStream()
+          v.data.write(out)
+          val bytes = out.toByteArray
+          val etag = s"W/\"${Integer.toHexString(MurmurHash.hash32(bytes))}-${bytes.length}\""
+          val headers = v.headers ++ Seq("ETag" -> etag, "Cache-Control" -> "no-cache")
+          // A comma-separated list of the ETags the browser holds
+          val held = Option(req.exchange.getRequestHeaders.getFirst("If-None-Match")).toSeq.flatMap(_.split(",")).map(_.trim)
+
+          if held.contains(etag) then Response("", 304, headers)
+          else v.copy(data = bytes, headers = headers)
+        case v: Raw => v
+      }
+
   class requestResponseLogger extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
 
-      if req.exchange.getRequestPath.startsWith("/static/") || req.exchange.getRequestPath.startsWith("/content") then
+      val path = req.exchange.getRequestPath
+      if path.startsWith("/static/") || path.startsWith("/assets/") || path.startsWith("/content") then
         // skip logging for static file requests
         return delegate(req, Map())
 
@@ -185,7 +301,7 @@ object decorators:
       path match {
         case RepoPath(id) =>
           App.altitude.service.repository.setContextFromRequest(Some(id))
-          logger.trace("Set repository context to: " + id)
+          logger.trace(s"Repository context from [${req.exchange.getRequestURI}]")
         case _ => // println("No repository context found in path: " + path)
       }
 

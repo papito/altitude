@@ -5,6 +5,7 @@ import org.scalatest.Suites
 import altitude.core.unit.ApiValidatorTests
 import altitude.core.unit.BaseControllerTests
 import altitude.core.unit.CaptureDateResolverTests
+import altitude.core.unit.ContentSignerTests
 import altitude.core.unit.CoreModelTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
@@ -13,6 +14,7 @@ import altitude.core.unit.FaceClusteringTests
 import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
+import altitude.core.unit.ImageUtilTests
 import altitude.core.unit.MurmurHashTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RangeStreamingTests
@@ -55,7 +57,9 @@ abstract class AllUnitTestSuites
     new EnvironmentTests,
     new MurmurHashTests,
     new VideoServiceTests,
+    new ImageUtilTests,
     new RangeStreamingTests,
+    new ContentSignerTests,
     new TransactionBoundaryTests,
     new SqlExplainerTests,
     new StyleGuideScanTests

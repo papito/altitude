@@ -12,8 +12,6 @@ import altitude.core.models.Face
 
 abstract class FaceDao(override val config: Config) extends BaseDao[Face] with altitude.core.dao.FaceDao:
 
-  def searchClosestFaceMatches(features: Array[Float]): List[Face]
-
   final override val tableName = "face"
 
   final override type Row[T[_]] = FaceRow[T]

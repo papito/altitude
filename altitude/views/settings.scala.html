@@ -1,0 +1,37 @@
+@import altitude.core.models.Stats
+@import play.twirl.api.Html
+
+@(stats: Stats, form: Html)
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <title>ALTITUDE</title>
+
+    @includes.html.header_common()
+    <script src="/static/js/lib/json-enc.js" defer></script>
+  </head>
+
+  <body>
+    <nav>
+      @includes.html.nav(stats = stats)
+    </nav>
+
+    <main>
+      @form
+    </main>
+
+    <footer></footer>
+
+    @includes.html.html_common()
+
+    <script type="module" src="/static/js/settings-page.js"></script>
+
+    <script type="module">
+      import { highlightNav } from "/static/js/common/navigation.js"
+
+      highlightNav("settings")
+    </script>
+  </body>
+</html>

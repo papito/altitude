@@ -14,6 +14,14 @@ import { runSearch } from "./search.js"
  * The detail modal loads pages the same way, through `loadNextPage`, when it steps past the last
  * loaded cell (js/search-results/detail-navigator.js).
  *
+ * The grid holds a window of pages (js/search-results/page-window.js): a page far above the
+ * viewport is folded into a spacer and reloaded as a continuation when it comes near again, and a
+ * page far below is dropped. So a cell carrying a cursor is observed only when nothing follows it
+ * in the grid - a reloaded page's last cell carries one too, but the page it leads to is there
+ * already - and the window puts the cursor back on the last cell when the page after it is
+ * dropped. The window learns which cursor an arriving page was requested with from the request in
+ * flight here, keyed by the cell it was requested from.
+ *
  * A continuation continues the grid as it was rendered: the layout and grouping its results fragment
  * carries (`data-results-layout`, `data-results-group-by`, `data-results-group-direction`) are sent
  * for that one request, whatever the store now says. For the main grid they are the store's own
@@ -25,8 +33,9 @@ import { runSearch } from "./search.js"
 // page still to be loaded is ever picked up
 const CONTINUATION_SELECTOR = ".last-cell[data-app-search-after]"
 
-// The page request in flight per last cell: a second caller while it is in flight - the modal
-// stepping past the cell the scroll is already loading, or the reverse - shares it
+// The page request in flight per last cell, with the cursor it asked for: a second caller while it
+// is in flight - the modal stepping past the cell the scroll is already loading, or the reverse -
+// shares it, and the page window reads the cursor off it when the page settles
 const pendingPageLoads = new WeakMap()
 
 let nextPageObserver = null
@@ -39,7 +48,7 @@ let nextPageObserver = null
 export function loadNextPage(lastCellEl) {
     const pending = pendingPageLoads.get(lastCellEl)
     if (pending) {
-        return pending
+        return pending.request
     }
 
     const after = lastCellEl.dataset.appSearchAfter
@@ -63,13 +72,18 @@ export function loadNextPage(lastCellEl) {
         swap: "afterend",
     }).finally(() => pendingPageLoads.delete(lastCellEl))
 
-    pendingPageLoads.set(lastCellEl, request)
+    pendingPageLoads.set(lastCellEl, { after, request })
 
     return request
 }
 
+/** The cursor of the page `lastCellEl` is loading, or undefined when none is in flight */
+export function pendingCursorOf(lastCellEl) {
+    return pendingPageLoads.get(lastCellEl)?.after
+}
+
 /** The layout and grouping the grid holding `cellEl` was rendered with, from its results fragment */
-function renderedGridParamsOf(cellEl) {
+export function renderedGridParamsOf(cellEl) {
     const fragment = cellEl.closest('[data-app-fragment="search-results"]')
     if (!fragment) {
         return {}
@@ -96,7 +110,8 @@ export function bindInfiniteScroll({ assetsElement }) {
     if (assetsElement.dataset.appInfiniteScrollBound !== "true") {
         assetsElement.dataset.appInfiniteScrollBound = "true"
 
-        // Fires once per swap with the nodes htmx inserted - the next page's own last cell among them
+        // Fires once per swap with the nodes htmx inserted: the next page, with its own last cell
+        // among them, or a page reloaded above the window, whose last cell nothing continues from
         assetsElement.addEventListener("htmx:after:settle", (event) => {
             event.detail.newContent.forEach((node) => {
                 observeLastCell({ root: node, observer })
@@ -109,18 +124,32 @@ export function bindInfiniteScroll({ assetsElement }) {
     observeLastCell({ root: assetsElement, observer })
 }
 
+/**
+ * Watches `cellEl`, the grid's last cell again now that the page after it was dropped. It fires
+ * at once if the cell is already in view.
+ */
+export function observeContinuationCell(cellEl) {
+    getNextPageObserver().observe(cellEl)
+}
+
+/**
+ * Observes the continuation cells under `root` that nothing follows in the grid: a reloaded
+ * page's last cell carries a cursor too, but the page it leads to is loaded already.
+ */
 function observeLastCell({ root, observer }) {
     if (!(root instanceof Element)) {
         return
     }
 
-    if (root.matches(CONTINUATION_SELECTOR)) {
-        observer.observe(root)
-    }
+    const cellEls = root.matches(CONTINUATION_SELECTOR)
+        ? [root]
+        : root.querySelectorAll(CONTINUATION_SELECTOR)
 
-    root.querySelectorAll(CONTINUATION_SELECTOR).forEach((cellEl) =>
-        observer.observe(cellEl),
-    )
+    cellEls.forEach((cellEl) => {
+        if (!cellEl.nextElementSibling) {
+            observer.observe(cellEl)
+        }
+    })
 }
 
 function getNextPageObserver() {

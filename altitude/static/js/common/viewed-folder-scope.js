@@ -1,7 +1,7 @@
 /**
  * The viewed folder scope: the folder whose assets, together with those of its whole subtree,
  * the displayed search results belong to. The folder tree colors that folder's icon and every
- * descendant's icon green (see the CSS in `views/htmx/folders.scala.html`), except when the
+ * descendant's icon green (see the CSS in `static/css/htmx/folders.css`), except when the
  * folder is root: its results are the whole repository, and the tree shows nothing for that.
  *
  * The scope follows the results that are actually displayed. `fragments/search-results.js` sets

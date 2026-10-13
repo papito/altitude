@@ -1,0 +1,285 @@
+#searchControl {
+  margin: var(--control-vertical-space);
+  padding: 5px;
+  border: 1px solid var(--background-tertiary-color);
+  border-radius: 5px;
+  display: grid;
+  grid-template-columns: .5fr 1fr 1fr 1fr auto;
+}
+
+/* In map layout the fragment is a column that hands the map every pixel under the controls
+   (js/map/map-view.js sizes the map to it) */
+[data-app-fragment="search-results"].map-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The grid / map layout toggle, a .toggle-group of core.css */
+#layoutToggle {
+  padding: 0 10px;
+}
+
+/* The "Map area" chip (a .filter-chip): the bbox scope of the crowded-pin panel, set off from the total */
+#bboxScope {
+  margin-left: 10px;
+}
+
+/* Direct children only: as a descendant selector this would also match the View control's popover
+   panel, and an ID selector outranks `.context-menu:popover-open`, so the closed panel would be
+   forced back to display: grid and stay on screen. */
+#searchControl > div {
+  display: grid;
+  place-items: center;
+}
+
+#searchControl .total div {
+  display: block;
+}
+
+#assets .cell {
+  margin: 3px;
+  border: var(--result-border);
+  touch-action: none;
+}
+
+#assets .cell img {
+  display: block;
+  cursor: pointer;
+}
+
+/* Hidden until at least one field is shown: the grid carries one `show-<field>` class per visible field
+   (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
+#assets .cell .metadata {
+  display: none;
+  background-color: var(--background-tertiary-color);
+  width: 100%;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  grid-auto-rows: auto;
+  row-gap: 3px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--font-color);
+  box-shadow: var(--result-metadata-shadow);
+}
+
+/* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail:
+   the target a box selection hit-tests against (js/search-results/box-selection.js) */
+#assets .drag-drop {
+  position: relative;
+  cursor: pointer;
+}
+
+/* The box-selection rectangle. Viselect draws it inside its own fixed, clipped container on
+   <body>; only its look is styled here */
+.selection-area {
+  border: var(--result-border);
+  pointer-events: none;
+}
+
+#assets .cell .drag-drop.selected .checkmark::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--selection-color);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: var(--selection-shadow);
+}
+
+#assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-duration, .show-fileSize) .cell .metadata {
+  display: grid;
+}
+
+#assets.show-fileName .metadata > .fileName,
+#assets.show-originalCreatedAt .metadata > .originalCreatedAt,
+#assets.show-importedAt .metadata > .importedAt,
+#assets.show-dimensions .metadata > .dimensions,
+#assets.show-duration .metadata > .duration,
+#assets.show-fileSize .metadata > .fileSize {
+  display: block;
+}
+
+#assets .cell .metadata div {
+  display: none;
+  padding: 0 5px 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#assets .cell .metadata span {
+  color: var(--faded-font-color);
+  letter-spacing: 1px;
+}
+
+#assets {
+  padding: 0 10px 10px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  /* Cells fill each row from the left, so a group's short last row lines up under the rest of it
+     and under its header rather than floating in the middle of the pane */
+  justify-content: flex-start;
+  /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
+  isolation: isolate;
+  /* The page window (js/search-results/page-window.js) folds, reloads and drops pages above and below the viewport
+     and corrects the scroll position itself, so the browser's own anchoring must not correct it a second time */
+  overflow-anchor: none;
+}
+
+/* A page folded above the window: a full row of about the page's height, carrying the page's cursor */
+#assets .page-spacer {
+  flex-basis: 100%;
+}
+
+/* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
+   pane. Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives -
+   which reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+#assets .result-group {
+  flex-basis: 100%;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  font-weight: bold;
+  font-size: 1.1em;
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+}
+
+/* The gap between groups. It hangs off the header rather than the cells above it, so the first
+   group still starts flush against the controls, and a group continued onto the next page - which
+   repeats no header - gains no gap in its middle */
+#assets .result-group:not(:first-child) {
+  margin-top: 20px;
+}
+
+/* A Location group's category, dimmed before the › */
+#assets .result-group .category {
+  color: var(--faded-font-color);
+  font-weight: normal;
+}
+
+#assets .result-group .count {
+  color: var(--faded-font-color);
+  font-weight: normal;
+  font-size: smaller;
+}
+
+/* Selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
+#assets .result-group .group-checkmark {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--success-background-color);
+}
+
+#assets .cell {
+  display: grid;
+  /* --preview-box is the preview size, set on #assets by includes/search_results.scala.html */
+  width: calc(var(--preview-box) + 10px);
+  place-items: center;
+  grid-template-rows: calc(var(--preview-box) + 10px) auto;
+}
+
+#assets .cell div.selected.masked {
+  opacity: 30%;
+}
+
+.sort-dropdown {
+  padding: 5px 25px 5px 5px;
+  background-color: var(--background-secondary-color);
+  border: 1px solid var(--background-tertiary-color);
+  border-radius: 5px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  font-size: smaller;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+}
+
+#searchControl .sort-dropdown:hover {
+  background-color: var(--background-tertiary-color);
+}
+
+#searchControl .sort-dropdown:focus {
+  box-shadow: var(--dropdown-focus-shadow);
+}
+
+#searchControl .sort-dropdown span {
+  font-size: 1.2em;
+}
+
+#searchControl .total strong {
+  color: var(--faded-font-color);
+}
+
+/* The Preview of an asset that plays (a Video, an animated GIF) wears a play badge, so a still and a clip tell apart */
+#assets .cell .drag-drop .play-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--on-fill-color);
+  background-color: var(--scrim-color);
+  font-size: 18px;
+  pointer-events: none;
+}
+
+#assets .cell .drag-drop .triage-marker,
+#assets .cell .drag-drop .no-date-marker {
+  position: absolute;
+  bottom: 8px;
+  color: var(--on-fill-color);
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+
+#assets .cell .drag-drop .triage-marker {
+  right: 8px;
+  background-color: var(--success-background-color);
+}
+
+#assets .cell .drag-drop .no-date-marker {
+  left: 8px;
+  background-color: var(--warning-background-color);
+}
+
+/* Hide triage marker when in triage view (all items are triaged there) */
+#content.triage #assets .cell .drag-drop .triage-marker {
+  display: none;
+}
+
+/* Hide cell badges while the cell is being dragged, and while the move it
+   triggered is still in flight - otherwise it blinks back on a successful drop */
+#assets .cell .drag-drop.dragging .triage-marker,
+#assets .cell.move-pending .drag-drop .triage-marker,
+#assets .cell .drag-drop.dragging .no-date-marker,
+#assets .cell.move-pending .drag-drop .no-date-marker {
+  display: none;
+}

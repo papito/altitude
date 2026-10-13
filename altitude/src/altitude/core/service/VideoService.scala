@@ -1,6 +1,5 @@
 package altitude.core.service
 
-import com.typesafe.config.Config
 import java.nio.file.Path
 import org.bytedeco.ffmpeg.global.avformat
 import org.bytedeco.ffmpeg.global.avutil
@@ -14,8 +13,8 @@ import org.opencv.imgproc.Imgproc
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import altitude.core.Const
 import altitude.core.VideoException
+import altitude.core.models.Settings
 import altitude.core.models.VideoInfo
 
 object VideoService:
@@ -54,17 +53,13 @@ object VideoService:
  * OpenCV images, rotated upright, for the Preview and for face detection. A grabber is opened per call and nothing is shared
  * across threads.
  */
-class VideoService(config: Config):
+class VideoService(settings: () => Settings):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   // The org.opencv API is used on the frames, whose natives the bytedeco loader links; see FaceDetectionService
   Loader.load(classOf[opencv_java])
   // FFmpeg reports every stream it opens on stderr at its default level
   avutil.av_log_set_level(avutil.AV_LOG_ERROR)
-
-  private val sampleIntervalMs: Long = config.getLong(Const.Conf.VIDEO_FACES_SAMPLE_INTERVAL_MS)
-  private val maxSampledFrames: Int = config.getInt(Const.Conf.VIDEO_FACES_MAX_SAMPLED_FRAMES)
-  private val previewMinLuminance: Double = config.getDouble(Const.Conf.VIDEO_PREVIEW_MIN_LUMINANCE)
 
   def probe(path: Path): VideoInfo = withGrabber(path) {
     grabber =>
@@ -83,9 +78,11 @@ class VideoService(config: Config):
       info
   }
 
-  /** The Frame times of the Video's Sampled frames for a duration, see [[VideoService.sampleTimes]] */
-  def sampleTimes(durationMs: Long): Seq[Long] =
-    VideoService.sampleTimes(durationMs, sampleIntervalMs, maxSampledFrames)
+  /** The Frame times of the Video's Sampled frames for a duration, see [[VideoService.sampleTimes]]; the spacing is Settings */
+  def sampleTimes(durationMs: Long): Seq[Long] = sampleTimes(durationMs, settings())
+
+  private def sampleTimes(durationMs: Long, settings: Settings): Seq[Long] =
+    VideoService.sampleTimes(durationMs, settings.videoFacesSampleIntervalMs, settings.videoFacesMaxSampledFrames)
 
   /**
    * Opens the Video once and hands `consume` a decoder: given Frame times, it decodes the frame at each, in order, as an iterator
@@ -126,9 +123,10 @@ class VideoService(config: Config):
    */
   def previewFrame(path: Path, durationMs: Long): VideoService.SampledFrame = withFrames(path) {
     decode =>
-      val bright = decode(sampleTimes(durationMs)).find {
+      val current = settings()
+      val bright = decode(sampleTimes(durationMs, current)).find {
         frame =>
-          VideoService.meanLuminance(frame.image) >= previewMinLuminance || {
+          VideoService.meanLuminance(frame.image) >= current.videoPreviewMinLuminance || {
             frame.image.release()
             false
           }

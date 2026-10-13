@@ -1,11 +1,11 @@
 package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.be
-import org.scalatest.matchers.should.Matchers.should
+import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
 import altitude.core.NotFoundException
+import altitude.core.models.MimedPreviewData
 
 @DoNotDiscover class FileStoreServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -18,12 +18,13 @@ import altitude.core.NotFoundException
      *
      * Assertions:
      *
-     * The file store holds a non-empty preview and a non-empty file for it.
+     * The file store holds a non-empty WebP preview and a non-empty file for it.
      */
     val asset = testContext.persistAsset()
 
     val assetPreview = testApp.service.fileStore.getPreviewById(asset.persistedId)
     assetPreview.data.length should be > 0
+    assetPreview.mimeType shouldBe MimedPreviewData.MIME_TYPE
 
     val assetData = testApp.service.fileStore.getAssetById(asset.persistedId)
     assetData.data.length should be > 0

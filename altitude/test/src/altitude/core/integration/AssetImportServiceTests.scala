@@ -2,11 +2,10 @@ package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
-import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDateTime
-import javax.imageio.ImageIO
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
@@ -200,17 +199,42 @@ import altitude.core.models.MimedPreviewData
      *
      * Assertions:
      *
-     * The stored preview decodes as an image filling the square preview box.
+     * The stored preview is a WebP (a RIFF container of the WEBP form) that decodes as an image filling the square preview box.
+     * The image is square, so nothing of the box is transparent and the WebP carries no alpha plane: three channels.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("images/1.jpg")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     val preview: MimedPreviewData = testApp.service.asset.getPreview(asset.persistedId)
 
-    // ImageIO returns null for bytes no reader recognizes
-    val image = Option(ImageIO.read(new ByteArrayInputStream(preview.data))).value
-    image.getWidth shouldBe Const.AssetView.PREVIEW_BOX_PIXELS
-    image.getHeight shouldBe Const.AssetView.PREVIEW_BOX_PIXELS
+    new String(preview.data.take(4), StandardCharsets.US_ASCII) shouldBe "RIFF"
+    new String(preview.data.slice(8, 12), StandardCharsets.US_ASCII) shouldBe "WEBP"
+    val image = IntegrationTestUtil.decodePreview(preview.data)
+    val box = Const.AssetView.PREVIEW_BOX_PIXELS
+    (image.cols, image.rows, image.channels) shouldBe (box, box, 3)
+  }
+
+  test("A portrait image's preview is centered in the box on a transparent border") {
+
+    /**
+     * Setup:
+     *
+     * A 640 by 724 JPEG (images/2.jpg) imported; scaled to fit the 200-pixel box it is 177 wide, leaving 23 columns of border.
+     *
+     * Assertions:
+     *
+     * The preview has an alpha channel. The image fills the box's height and is centered horizontally with the odd column of the
+     * border after it: columns 0 to 10 and 188 to 199 are transparent, columns 11 to 187 opaque.
+     */
+    val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
+    val image = IntegrationTestUtil.decodePreview(testApp.service.asset.getPreview(imported.persistedId).data)
+    val box = Const.AssetView.PREVIEW_BOX_PIXELS
+    (image.cols, image.rows, image.channels) shouldBe (box, box, 4)
+
+    def alpha(row: Int, col: Int): Double = image.get(row, col)(3)
+    (alpha(100, 0), alpha(100, 10), alpha(100, 11)) shouldBe (0.0, 0.0, 255.0)
+    (alpha(100, 187), alpha(100, 188), alpha(100, 199)) shouldBe (255.0, 0.0, 0.0)
+    (alpha(0, 100), alpha(199, 100)) shouldBe (255.0, 255.0)
   }
 
   test("Imported image is triaged") {

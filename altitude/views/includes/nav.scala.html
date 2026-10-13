@@ -1,6 +1,7 @@
 @import altitude.core.Api
 @import altitude.core.Const
 @import altitude.core.Environment
+@import altitude.core.models.AccountType
 @import altitude.core.models.Stats
 @import altitude.core.RequestContext
 
@@ -44,6 +45,13 @@
         </i><span>Import</span>
     </a>
 </div>
+
+@* Settings are an Admin's alone; every nav is rendered behind a login, so the account is always here *@
+@if(RequestContext.account.value.exists(_.accountType == AccountType.Admin)) {
+<div class="menu settings">
+    <a href="/settings/r/@repoId"><i class="fas fa-cog"></i><span>Settings</span></a>
+</div>
+}
 
 @* Dev only, like the routes behind it (StyleGuideController) *@
 @if(Environment.isDev) {

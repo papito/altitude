@@ -34,7 +34,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
       Path.of(Environment.ROOT_PATH, "altitude", "views")
 
   // The vendored icon font, and the guide itself: its specimens would count as uses of what they demonstrate
-  private val excludedFiles = Set("font-awesome.min.css", "style_guide.scala.html", "style-guide.js")
+  private val excludedFiles = Set("font-awesome.min.css", "style_guide.scala.html", "style_guide.css", "style-guide.js")
 
   private val nameScrubber = DataScrubber(trim = List(Field.NAME))
   private val nameValidator = ApiRequestValidator(required = List(Field.NAME))

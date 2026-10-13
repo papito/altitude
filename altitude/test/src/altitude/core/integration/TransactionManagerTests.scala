@@ -14,6 +14,7 @@ import altitude.core.QueryTimeoutException
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
+import altitude.core.models.Settings
 
 /**
  * What a transaction is on each engine: a read sees one snapshot, a SQLite write holds the write lock from its start, every
@@ -24,18 +25,6 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
   private val isSqlite = testApp.dataSourceType == Const.DbEngineName.SQLITE
 
   private def countAssets: Int = query("SELECT count(*) AS n FROM asset").head("n").toString.toInt
-
-  /** Runs `f` on a thread of its own, outside the caller's transaction, and waits for it to finish */
-  private def onAnotherThread(f: => Unit): Unit = {
-    var failure: Option[Throwable] = None
-    val thread = new Thread(
-      () =>
-        try f
-        catch { case ex: Throwable => failure = Some(ex) })
-    thread.start()
-    thread.join()
-    failure.foreach(throw _)
-  }
 
   test("A read transaction reads one snapshot, whatever another transaction commits meanwhile") {
 
@@ -53,7 +42,9 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 
     val (before, after) = testApp.txManager.asReadOnly {
       val before = countAssets
-      onAnotherThread(testContext.persistAsset())
+      val (thread, failure) = onAnotherThread(testContext.persistAsset(): Unit)
+      thread.join()
+      failure.get.foreach(throw _)
       (before, countAssets)
     }
 
@@ -190,7 +181,8 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
       /**
        * Setup:
        *
-       * A read transaction that reads the JIT and plan cache settings, then a read statement that sleeps for three seconds.
+       * A read transaction that reads the JIT and plan cache settings, then, with the read statement timeout saved as one second,
+       * a read statement that sleeps for two.
        *
        * Assertions:
        *
@@ -204,9 +196,10 @@ import altitude.core.dao.sql.dialects.AltitudePostgresDialect
           List("off", "force_custom_plan")
       }
 
-      // The test configuration's limit is two seconds
-      intercept[QueryTimeoutException] {
-        testApp.txManager.asReadOnly(Db.read(AltitudePostgresDialect)(_.runSql[Int](sql"SELECT 1 FROM pg_sleep(3)")))
+      withSetting(Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT, "1") {
+        intercept[QueryTimeoutException] {
+          testApp.txManager.asReadOnly(Db.read(AltitudePostgresDialect)(_.runSql[Int](sql"SELECT 1 FROM pg_sleep(2)")))
+        }
       }
     }
   }

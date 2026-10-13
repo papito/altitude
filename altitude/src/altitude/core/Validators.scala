@@ -10,6 +10,8 @@ object Validators:
     """^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""".r
   private val uuidRegex: Regex = """^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$""".r
 
+  def isUuid(value: String): Boolean = uuidRegex.matches(value)
+
   case class ApiRequestValidator(
       required: List[String] = List(),
       maxLengths: Map[String, Int] = Map.empty,
@@ -47,9 +49,7 @@ object Validators:
 
       uuid.foreach {
         field =>
-          if isStillValid(ex, field, json) &&
-            !uuidRegex.matches(json(field).str)
-          then ex.errors += (field -> C.Msg.Err.VALUE_NOT_A_UUID)
+          if isStillValid(ex, field, json) && !isUuid(json(field).str) then ex.errors += (field -> C.Msg.Err.VALUE_NOT_A_UUID)
       }
 
       ex.trigger()

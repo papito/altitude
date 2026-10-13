@@ -1,6 +1,5 @@
 package altitude.core.service
 
-import com.typesafe.config.Config
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -13,10 +12,10 @@ import org.slf4j.LoggerFactory
 
 import scala.util.Try
 
-import altitude.core.Const
 import altitude.core.GeocoderException
 import altitude.core.IllegalOperationException
 import altitude.core.models.GeocoderResult
+import altitude.core.models.Settings
 
 object GeocoderService:
   private val TIMEOUT: Duration = Duration.ofSeconds(5)
@@ -31,22 +30,21 @@ object GeocoderService:
  * party. The endpoint (`map.geocoder.url`) is Nominatim-compatible: `?q=&format=json&limit=` answered with a list of places
  * carrying `display_name`, `lat` and `lon`.
  */
-class GeocoderService(config: Config):
+class GeocoderService(settings: () => Settings):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
-
-  val isEnabled: Boolean = config.getBoolean(Const.Conf.MAP_GEOCODER_ENABLED)
-  private val url: String = config.getString(Const.Conf.MAP_GEOCODER_URL)
 
   private lazy val client: HttpClient =
     HttpClient.newBuilder().connectTimeout(GeocoderService.TIMEOUT).followRedirects(HttpClient.Redirect.NORMAL).build()
 
   /** The places matching the text, best first; nothing for blank text. Refused when the geocoder is disabled. */
   def search(text: String): List[GeocoderResult] =
-    if !isEnabled then throw IllegalOperationException("The geocoder is disabled (map.geocoder.enabled)")
+    val current = settings()
+    if !current.mapGeocoderEnabled then throw IllegalOperationException("The geocoder is disabled (map.geocoder.enabled)")
 
     val query = text.trim
     if query.isEmpty then return Nil
 
+    val url = current.mapGeocoderUrl
     val parameters = s"q=${URLEncoder.encode(query, StandardCharsets.UTF_8)}&format=json&limit=${GeocoderService.RESULT_LIMIT}"
     val uri = URI.create(url + (if url.contains("?") then "&" else "?") + parameters)
     val request = HttpRequest

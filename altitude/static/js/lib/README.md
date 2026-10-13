@@ -25,11 +25,15 @@ pages with JSON forms, `hx-ws.js` by the import pipeline page. The app uses no m
 `hx-alpine-compat.js` extension is not loaded: Alpine's own mutation observer initializes swapped-in
 markup.
 
-Leaflet is loaded as a plain script (`window.L`, like interact.js) by `index.scala.html`, for the
-Location pin editor (`js/fragments/location-editor.js`) and the map view; supercluster (`window.Supercluster`)
-the same way, for the map view's on-screen clustering (`js/map/map-view.js`). media-chrome is loaded as a
-plain script by `index.scala.html` too, where it defines the `<media-*>` custom elements of asset
-detail's video player; no module imports it.
+The plain scripts the pages link are `defer`, except `htmx.min.js`: run while the page is still parsing, htmx
+starts on DOMContentLoaded, after its deferred extensions and the modules, where a deferred htmx would start
+before them. Leaflet is a plain script (`window.L`, like interact.js) for the Location pin editor
+(`js/fragments/location-editor.js`) and the map view, and supercluster (`window.Supercluster`) for the map
+view's on-screen clustering (`js/map/map-view.js`); `js/common/vendor-loader.js` loads them, with
+`static/css/leaflet.css`, when the first editor or map asks. media-chrome, a plain script defining the
+`<media-*>` custom elements of asset detail's video player, is loaded the same way by the first Video shown
+(`js/search-results/detail-navigator.js`); the player's markup is on the page before and upgrades then. No module
+imports these three.
 
 The focus plugin is registered with `Alpine.plugin(focus)` in `static/js/app.js` before Alpine starts;
 the modal hosts in `views/includes/html_common.scala.html` rely on its `x-trap` directive.
@@ -38,3 +42,29 @@ released or its element is removed, preventing a closed dialog from intercepting
 passes `tabbableOptions: { getShadowRoot: true }` to every trap, so controls inside open shadow
 roots count as inside it: without it Tab cannot enter the sliders of asset detail's video player,
 whose inputs are in shadow DOM, and focus is pulled back to the control before them.
+
+## Adding a library
+
+1. Copy the upstream release file unchanged, renaming it only so it is served as JavaScript (`.mjs` → `.js`),
+   and add its row to the table with the tarball path it came from. Its license goes next to it as
+   `<name>.LICENSE` unless the file's own header carries it. A local patch is described in this README.
+2. Prefer the library's ES module build, and load it by where it is needed:
+   - by modules on every page that uses it: a static `import` from `lib/` (Alpine, Viselect);
+   - by some views only: `await import("../lib/<file>.js")` where the view first needs it, so no page
+     waits for it and the browser fetches and runs it once.
+3. A plain script (one that defines a global) is loaded by where it is needed:
+   - at startup: a `defer` `<script>` in the templates of the pages that use it, or in
+     `views/includes/header_common.scala.html` for every page (axios, interact.js);
+   - by some views only: a `load…()` export in `js/common/vendor-loader.js` (Leaflet, supercluster,
+     media-chrome), awaited by the view.
+
+   Either way, its global goes in `eslint.config.js`. An htmx extension is a `defer` script on the pages that
+   use it, which runs before htmx starts.
+4. A library's stylesheet is copied unchanged to `static/css/<name>.css` and linked on its own, or loaded with
+   the script through `vendor-loader.js` (`leaflet.css`). It is never `@import`ed into `static/css/app.css`: the
+   bundle is served from `/assets/`, where the stylesheet's relative URLs (fonts, images under `static/`) would
+   not resolve, and it would no longer match its source.
+5. Caching needs nothing: files under `/static/` keep their upstream names and are revalidated on every use, so a
+   replaced file is picked up on the next load.
+6. Add the library to the list under **Stack** in `views/AGENTS.md`, and a new `vendor-loader.js` export to that
+   file's row there.

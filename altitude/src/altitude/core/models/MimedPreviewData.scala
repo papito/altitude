@@ -6,8 +6,8 @@ import altitude.core.FieldConst
 import altitude.core.util.JsonCodec
 
 object MimedPreviewData:
-  final val MIME_TYPE = "image/png"
-  final val FILE_EXTENSION = "png"
+  final val MIME_TYPE = "image/webp"
+  final val FILE_EXTENSION = "webp"
 
   given JsonCodec.ReadWriter[MimedPreviewData] = JsonCodec
     .readwriter[ujson.Value]

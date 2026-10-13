@@ -10,7 +10,9 @@
    holds the asset more than once (a Location grouping passes `asset-<id>-in-<locationId>`); `data-asset-id` on the
    thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; the cell of an
    asset that plays, a Video or an animated GIF, wears a play badge over its Preview and shows its duration among the
-   metadata. *@
+   metadata. The thumbnail names its preview URL in `data-src` for js/search-results/lazy-images.js, which loads and
+   releases it by its distance from the viewport; a first page's cell (`isContinuousScroll` false) also names it in `src`,
+   so the first viewport paints before any script runs. *@
 @(asset: Asset, isContinuousScroll: Boolean, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
 @defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
@@ -44,7 +46,8 @@
              hx-trigger="click[!event.shiftKey]"
              hx-target="#imageDetailModalContent"
              hx-get="/htmx/asset/r/@{RequestContext.getRepository.persistedId}/modals/asset-detail/@{asset.persistedId}"
-             @if(isContinuousScroll) {data-src="@{imgUrl}"} else {src="@{imgUrl}"}
+             @if(!isContinuousScroll) {src="@{imgUrl}"}
+             data-src="@{imgUrl}"
              alt="@{ asset.fileName }"
              class="responsive-image">
 

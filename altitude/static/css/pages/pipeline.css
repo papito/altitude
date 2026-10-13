@@ -1,0 +1,30 @@
+/* The pipeline page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
+   :where() adds no specificity, so they win and lose exactly as they did inline */
+
+:where(body.pipeline) main {
+  display: grid;
+  grid-template-rows: max-content auto;
+  row-gap: var(--section-vertical-space);
+}
+
+#importOptions {
+  padding-top: calc(var(--section-vertical-space) * 2);
+  display: grid;
+  align-items: start;
+  grid-template-columns: 1fr auto 1fr;
+}
+
+#browseForFiles {
+  grid-column: 2;
+  width: 100%;
+  display: grid;
+  padding: 20px;
+  border: var(--form-border);
+  border-radius: 5px;
+  place-items: center;
+  background-color: var(--background-form-color);
+}
+
+#importLog {
+  border-top: var(--form-border);
+}

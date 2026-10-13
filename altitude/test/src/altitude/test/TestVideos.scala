@@ -26,10 +26,10 @@ object TestVideos {
   val FPS = 10
 
   /**
-   * Gaussian sigmas, in pixels, that put a face between the two quality thresholds of reference.conf (match-only) or below the
-   * floor (dropped). Blur only counts relative to the face: FRAME_BLUR is about 8% of the 160 px face of `affleck.jpg` once
-   * letterboxed into a frame (`personFrame`, `frameStill`, `person`), HEAVY_BLUR about 9% of the 79 px face of `meme-ben.jpg` at
-   * its own size (`still`). Both keep the detector above its confidence floor.
+   * Gaussian sigmas, in pixels, that put a face between the two quality thresholds, the `face.quality.*` Settings (match-only),
+   * or below the floor (dropped). Blur only counts relative to the face: FRAME_BLUR is about 8% of the 160 px face of
+   * `affleck.jpg` once letterboxed into a frame (`personFrame`, `frameStill`, `person`), HEAVY_BLUR about 9% of the 79 px face of
+   * `meme-ben.jpg` at its own size (`still`). Both keep the detector above its confidence floor.
    */
   val FRAME_BLUR = 12.0
   val HEAVY_BLUR = 7.0

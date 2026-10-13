@@ -2,8 +2,6 @@ package altitude.core.service
 
 import java.io.IOException
 import javax.imageio.ImageIO
-import org.opencv.core.MatOfByte
-import org.opencv.imgcodecs.Imgcodecs
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
@@ -92,14 +90,10 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       case "image" =>
         makeImageThumbnail(dataAsset.bytes, C.AssetView.PREVIEW_BOX_PIXELS)
       case "video" =>
-        // The Preview of a Video is one of its Sampled frames, thumbnailed like an image
+        // The Preview of a Video is one of its Sampled frames, upright already, thumbnailed like a decoded image
         val frame = app.service.video.previewFrame(dataAsset.path, videoDuration(dataAsset))
-        val png = new MatOfByte()
-        Imgcodecs.imencode(".png", frame.image, png)
-        frame.image.release()
-        val bytes = png.toArray
-        png.release()
-        makeImageThumbnail(bytes, C.AssetView.PREVIEW_BOX_PIXELS)
+        try makeImageThumbnail(frame.image, orientation = 1, C.AssetView.PREVIEW_BOX_PIXELS)
+        finally frame.image.release()
       case _ => new Array[Byte](0)
 
   /**

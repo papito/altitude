@@ -4,7 +4,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import altitude.core.Altitude
-import altitude.core.Const
 import altitude.core.dao.FaceDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
@@ -64,15 +63,6 @@ class FaceRecognitionService(val app: Altitude):
   protected val txManager: TransactionManager = app.txManager
   private val faceDao: FaceDao = app.DAO.face
 
-  /** Number of nearest-neighbor results to retrieve for majority-vote matching. */
-  private val matchCount: Int = app.config.getInt(Const.Conf.FACE_RECOGNITION_MATCH_COUNT)
-
-  /** Two detections closer than this are the same person, both in the vector index and within one Video */
-  private val cosineDistanceThreshold: Double = app.config.getDouble(Const.Conf.FACE_RECOGNITION_COSINE_DISTANCE_THRESHOLD)
-
-  /** A face seen in fewer Sampled frames of a Video is match-only there */
-  private val minClusterFrames: Int = app.config.getInt(Const.Conf.VIDEO_FACES_MIN_CLUSTER_FRAMES)
-
   /**
    * The faces of an asset, found without touching the database; [[recognizeAndStore]] matches and stores them. An animated image,
    * an image with a duration, is not searched for faces.
@@ -122,9 +112,14 @@ class FaceRecognitionService(val app: Altitude):
     }
     logger.debug(s"Detected ${detections.size} faces across ${times.size} Sampled frames of ${dataAsset.asset}")
 
+    // Two detections closer than the distance threshold are the same person; a cluster seen in fewer than the minimum frames is
+    // match-only. Both are Settings, read per Video.
+    val settings = app.settings.current
+    val distanceThreshold = settings.faceRecognitionCosineDistanceThreshold
+    val minClusterFrames = settings.videoFacesMinClusterFrames
+
     val features = (detection: (Face, FaceImages)) => detection._1.features
-    val clusters =
-      mergeClusters(cluster(detections, features, _._1.quality, cosineDistanceThreshold), features, cosineDistanceThreshold)
+    val clusters = mergeClusters(cluster(detections, features, _._1.quality, distanceThreshold), features, distanceThreshold)
     logger.trace(s"${clusters.size} distinct faces in ${dataAsset.asset}")
 
     DetectedFaces(clusters.map {
@@ -204,8 +199,13 @@ class FaceRecognitionService(val app: Altitude):
     require(detectedFace.id.isEmpty, "Face object must not be persisted yet")
     require(detectedFace.personId.isEmpty, "Face object must not be associated with a person yet")
 
+    // The nearest candidates that vote, and how close one must be: Settings, read per face
+    val settings = app.settings.current
+    val matchCount = settings.faceRecognitionMatchCount
+    val distanceThreshold = settings.faceRecognitionCosineDistanceThreshold
+
     txManager.withFaceVector {
-      val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features)
+      val faceMatches: List[Face] = faceDao.searchClosestFaceMatches(detectedFace.features, matchCount, distanceThreshold)
 
       if faceMatches.nonEmpty then
         // The matches are in distance order, so the first index of a group is its closest face

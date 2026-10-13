@@ -10,39 +10,9 @@
     <title>ALTITUDE</title>
 
     @includes.html.header_common()
-
-    <style>
-      main {
-        display: grid;
-        grid-template-rows: max-content auto;
-        row-gap: var(--section-vertical-space);
-      }
-
-      #importOptions {
-        padding-top: calc(var(--section-vertical-space) * 2);
-        display: grid;
-        align-items: start;
-        grid-template-columns: 1fr auto 1fr;
-      }
-
-      #browseForFiles {
-        grid-column: 2;
-        width: 100%;
-        display: grid;
-        padding: 20px;
-        border: var(--form-border);
-        border-radius: 5px;
-        place-items: center;
-        background-color: var(--background-form-color);
-      }
-
-      #importLog {
-        border-top: var(--form-border);
-      }
-    </style>
   </head>
 
-  <body>
+  <body class="pipeline">
     <nav>
       @includes.html.nav(stats = stats)
     </nav>
@@ -72,7 +42,7 @@
          hx-target="nav"
          hx-swap="innerHTML"></div>
 
-    <script src="/static/js/lib/hx-ws.js"></script>
+    <script src="/static/js/lib/hx-ws.js" defer></script>
     <script type="module" src="/static/js/upload-form-page.js"></script>
 
     <script type="module">

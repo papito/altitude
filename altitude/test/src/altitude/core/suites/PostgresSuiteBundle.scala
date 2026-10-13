@@ -9,20 +9,7 @@ import altitude.core.Const as C
 object PostgresSuiteBundle {
   val testApp: Altitude = new Altitude(dbEngineOverride = Some(C.DbEngineName.POSTGRES))
 
-  def setup(testApp: Altitude): Unit = {
-    val conn = testApp.txManager.connection(readOnly = false)
-    val stmt = conn.createStatement()
-
-    try {
-      stmt.executeUpdate("DROP SCHEMA IF EXISTS \"public\" CASCADE; CREATE SCHEMA \"public\";")
-      conn.commit()
-    } finally {
-      stmt.close()
-      conn.close()
-    }
-
-    testApp.service.migrationService.migrate()
-  }
+  def setup(testApp: Altitude): Unit = TestDatabase.reset(testApp)
 }
 
 class PostgresSuiteBundle

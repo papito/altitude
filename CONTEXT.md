@@ -113,3 +113,28 @@ How strongly an asset matches the Search text: each Search term counts for the
 most important Search source it matched (Person, then Location, Category, folder
 or album, Search document), and the terms add up.
 _Avoid_: Rank, Score, Weight in user-facing text.
+
+**Admin**:
+The account type that set the system up. It owns the repositories and alone
+may change Settings.
+_Avoid_: Owner, Superuser, Root.
+
+**Setting**:
+A system-wide tunable value with a default, changed by an Admin on the Settings
+screen. It is either a Live setting or a Restart setting.
+_Avoid_: Config, Option, Preference, Parameter, Tunable.
+
+**Live setting**:
+A Setting whose new value is used from the next operation that reads it, with
+no restart.
+_Avoid_: Hot setting, Dynamic setting.
+
+**Restart setting**:
+A Setting whose new value is used only after the next server start. Until then
+it has both a saved value and a running value.
+_Avoid_: Static setting, Boot setting.
+
+**View settings**:
+Which details the grid shows under each asset, chosen per browser tab in the
+⚙ View popover. They are not Settings.
+_Avoid_: Display options, Grid options.

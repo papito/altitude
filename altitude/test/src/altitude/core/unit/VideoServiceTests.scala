@@ -1,8 +1,8 @@
 package altitude.core.unit
 
 import altitude.test.TestFocus
+import altitude.test.TestSettings
 import altitude.test.TestVideos
-import com.typesafe.config.ConfigFactory
 import org.opencv.core.Scalar
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite.AnyFunSuite
@@ -11,10 +11,10 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.VideoException
 import altitude.core.service.VideoService
 
-/** Decoding through [[VideoService]] over clips synthesized by [[TestVideos]], with the shipped `reference.conf` defaults */
+/** Decoding through [[VideoService]] over clips synthesized by [[TestVideos]], with the seeded Settings */
 @DoNotDiscover class VideoServiceTests extends AnyFunSuite with TestFocus {
 
-  private val service = VideoService(ConfigFactory.defaultReference())
+  private val service = VideoService(() => TestSettings())
 
   test("A probe reports the duration, the encoded size, the frame rate and the absence of audio") {
 
@@ -59,7 +59,7 @@ import altitude.core.service.VideoService
      * Setup:
      *
      * Durations from zero to two hours, given to the schedule both with an explicit one-second interval and 120-frame maximum and
-     * through a service that reads the same values from the shipped config.
+     * through a service that reads the same values from the seeded Settings.
      *
      * Assertions:
      *
@@ -76,7 +76,7 @@ import altitude.core.service.VideoService
     VideoService.sampleTimes(20 * 60 * 1000 + 1, 1000, 120) should have size 120
     VideoService.sampleTimes(0, 1000, 120) shouldEqual Seq(0L)
 
-    // The instance reads the interval and the maximum from the config
+    // The instance reads the interval and the maximum from its Settings
     service.sampleTimes(3000) shouldEqual Seq(0L, 1000L, 2000L)
     service.sampleTimes(2 * 60 * 60 * 1000) should have size 120
   }

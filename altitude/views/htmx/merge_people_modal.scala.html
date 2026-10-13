@@ -5,39 +5,6 @@
 
 @(title: String, mergeSourcePerson: Person, mergeDestPerson: Person)
 
-<style>
-    #mergePeople {
-        display: grid;
-        grid-auto-rows: auto;
-        place-items: center;
-        row-gap: var(--control-vertical-space);
-    }
-
-    #mergePeople .people-to-merge {
-        display: grid;
-        grid-template-columns: 1fr 80px 1fr;
-        place-items: center;
-    }
-
-    #mergePeople .person-to-merge, #mergePeople .person-info {
-        display: grid;
-        grid-template-rows: auto auto;
-        row-gap: 8px;
-        place-items: center;
-    }
-
-    #mergePeople .merge-arrow {
-        display: grid;
-        font-size: 2em;
-        place-items: center;
-    }
-
-    #mergePeople .person-to-merge span {
-        font-size: 0.9em;
-        color: var(--font-color-dim);
-    }
-</style>
-
 <form action="#"
       id="mergePeople"
       data-app-fragment="modal"

@@ -1,6 +1,7 @@
 package altitude.core.service
 
 import java.sql.SQLException
+import java.util.concurrent.atomic.AtomicReference
 
 import altitude.core._
 import altitude.core.dao.UserDao
@@ -107,11 +108,30 @@ class UserService(val app: Altitude) extends BaseService[User]:
       dao.updateById(user.persistedId, Map(FieldConst.User.LAST_ACTIVE_REPO_ID -> repoId))
     }
 
+  // The dev user's ID once its password has checked out: every request asks for the dev user, a page of thumbnails included,
+  // and a password check is a deliberately slow bcrypt
+  private val verifiedDevUserId = AtomicReference[Option[String]](None)
+
+  /**
+   * The user that `dev.user` and `dev.password` log in, made the request's account, or None when they are not set or do not log
+   * in. The password is checked until it first succeeds; after that the user is read by ID, so a change to it (its last active
+   * repository) is seen, and a user that is gone is logged in again.
+   */
   def getDevUser: Option[User] =
     val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)
     val devPassword: String = App.altitude.config.getString(Const.Conf.DEV_PASSWORD)
 
-    if devEmail.nonEmpty && devPassword.nonEmpty then
-      val devUserRes = App.altitude.service.user.loginAndSetUser(devEmail, devPassword)
-      devUserRes.map(_._1)
-    else None
+    if devEmail.isEmpty || devPassword.isEmpty then return None
+
+    val verified = verifiedDevUserId.get.flatMap(
+      id =>
+        try Some(getById(id))
+        catch case _: NotFoundException => None)
+    verified match
+      case Some(user) =>
+        switchContextToUser(user)
+        Some(user)
+      case None =>
+        val user = loginAndSetUser(devEmail, devPassword).map(_._1)
+        verifiedDevUserId.set(user.map(_.persistedId))
+        user

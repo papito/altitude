@@ -10,11 +10,10 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.jdk.DurationConverters._
+import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
 import altitude.core.AltitudeActorSystem
-import altitude.core.Const
 import altitude.core.pipeline.PipelineTypes.TAssetWithContext
 import altitude.core.pipeline.QueuedPipeline
 import altitude.core.pipeline.flows._
@@ -43,7 +42,7 @@ class PurgePipelineService(app: Altitude):
     describe = asset => s"asset [${asset._1.persistedId}]",
     bufferSize = app.parallelism * 2,
     maxConcurrentOffers = app.parallelism,
-    shutdownTimeout = app.config.getDuration(Const.Conf.PIPELINE_SHUTDOWN_TIMEOUT).toScala,
+    shutdownTimeout = () => app.settings.current.pipelineShutdownTimeout.seconds,
     restartOnFailure = app.isPipelineRestartEnabled
   )
 

@@ -1,20 +1,5 @@
 @import altitude.core.RequestContext
 
-<style>
-    #purgeRecycleBin {
-        display: grid;
-        grid-template-columns: 1fr;
-        place-items: center;
-        margin-top: var(--control-vertical-space);
-    }
-
-    #purgeRecycleBinConfirm {
-        display: grid;
-        place-items: center;
-        row-gap: var(--control-vertical-space);
-    }
-</style>
-
 @* The button opens the confirmation below in the modal host without a request (js/fragments/dialog-openers.js);
    the confirmation is a modal dialog like any fetched one, and its success announces the purge *@
 <div id="purgeRecycleBin">

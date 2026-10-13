@@ -1,0 +1,9 @@
+#addToLocation {
+  display: grid;
+  row-gap: var(--control-vertical-space);
+}
+
+#addToLocation select {
+  width: 100%;
+  box-sizing: border-box;
+}

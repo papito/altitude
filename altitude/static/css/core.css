@@ -621,10 +621,11 @@ form input.error, form input.error:focus {
 /* NAVIGATION */
 /*            */
 
+/* One row: the brand, the entries sharing what is left equally whatever their number (it varies with the account
+   type and the environment), and the Search form */
 nav {
-     display: grid;
-     grid-template-columns: 120px repeat(5, 1fr) 220px;
-     grid-column-gap: 10px;
+     display: flex;
+     column-gap: 10px;
      background: var(--background-secondary-color);
      color: var(--font-color);
      align-items: center;
@@ -640,6 +641,10 @@ nav span, nav a {
     font-family: var(--font);
     text-transform: uppercase;
 }
+nav .brand {
+    flex: 0 0 120px;
+}
+
 nav .brand a {
     letter-spacing: .15em;
     text-transform: uppercase;
@@ -656,6 +661,10 @@ nav div {
 }
 
 nav .menu {
+    /* Equal widths, never narrower than the entry's own text. The sides are as wide as the active entry's border, which
+       would otherwise widen that one entry and shift the others as the page changes */
+    flex: 1 1 0;
+    border-inline: 2px solid transparent;
     letter-spacing: .10em;
     color: var(--navbar-menu-color);
     padding: 6px;
@@ -680,15 +689,22 @@ nav input {
     padding: 5px;
     background-color: var(--input-background-color);
     width: 90%;
-    /* a flex item's min-width:auto would keep the input from shrinking to fit the fixed last column */
+    /* a flex item's min-width:auto would keep the input from shrinking to fit the form's fixed width */
     min-width: 0;
 }
 
-/* The Search input and its button, side by side, in the nav's right-most cell */
+/* The Search input and its button, side by side, at the nav's right end */
 nav form {
+    flex: 0 0 220px;
     display: flex;
     align-items: center;
-    grid-column: -2 / -1;
+}
+
+/* A page without the Search form keeps its place, so the entries stand where they do on the main page. The brand-only
+   nav of the setup page has no entries and no place to keep */
+nav:has(.menu):not(:has(form))::after {
+    content: "";
+    flex: 0 0 220px;
 }
 
 nav input::placeholder {

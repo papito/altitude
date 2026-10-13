@@ -1,0 +1,22 @@
+/* The brand bar, which only the setup page shows. Its rules would otherwise restyle every page's navigation bar, so they
+   are scoped to that page as its own rules are (pages/setup.css) */
+
+:where(body.setup) nav {
+    display: grid;
+    grid-template-columns: 1fr;
+    place-items: center;
+    background: var(--background-secondary-color);
+    color: var(--font-color);
+    box-shadow: var(--box-shadow);
+    border-bottom: var(--navbar-border);
+    text-shadow: var(--navbar-text-shadow);
+    height: 100%;
+}
+:where(body.setup) nav .brand a {
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--brand-color);
+    font-weight: bold;
+    font-size: 1.4em;
+}

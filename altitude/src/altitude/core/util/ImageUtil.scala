@@ -3,15 +3,9 @@ package altitude.core.util
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.exif.ExifDirectoryBase
 import com.drew.metadata.exif.ExifIFD0Directory
-import java.awt.AlphaComposite
-import java.awt.Color
-import java.awt.Graphics2D
-import java.awt.geom.AffineTransform
-import java.awt.image.AffineTransformOp
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import javax.imageio.ImageIO
 import javax.imageio.ImageReader
@@ -21,10 +15,12 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfByte
 import org.opencv.core.MatOfInt
+import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 
+import altitude.core.Const
 import altitude.core.ImageException
 
 object ImageUtil:
@@ -92,90 +88,109 @@ object ImageUtil:
     val scaleY = targetHeight.toDouble / sourceHeight
     Math.min(scaleX, scaleY)
 
+  /** The EXIF orientation of an image's bytes; an image without the tag, or without EXIF at all, is upright (1) */
+  private def exifOrientation(data: Array[Byte]): Int =
+    val exifDirectory =
+      ImageMetadataReader.readMetadata(new ByteArrayInputStream(data)).getFirstDirectoryOfType(classOf[ExifIFD0Directory])
+    try exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
+    catch case _: Exception => 1
+
+  /**
+   * The Preview of an image's bytes: decoded with its alpha channel, turned upright by its EXIF orientation and fitted into the
+   * square box by the `Mat` overload.
+   *
+   * https://sirv.com/help/articles/rotate-photos-to-be-upright/
+   */
   def makeImageThumbnail(data: Array[Byte], previewBoxSize: Int): Array[Byte] =
-    val mt: com.drew.metadata.Metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(data))
-    val exifDirectory = mt.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
-    // val jpegDirectory = mt.getFirstDirectoryOfType(classOf[JpegDirectory])
+    val image = decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION, keepAlpha = true)
+    try makeImageThumbnail(image, exifOrientation(data), previewBoxSize)
+    finally image.release()
 
-    val orientation: Int =
-      try exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
-      catch case _: Exception => 1
+  /**
+   * The Preview of a decoded image, which stays the caller's to release: scaled to fit the box with `INTER_AREA`, turned upright
+   * by its EXIF `orientation` (1 for an image that is upright already, such as a Video frame), centered in the square box on a
+   * transparent border and encoded by [[encodePreview]]. The box being square, the image is scaled before it is turned, when it
+   * is smallest.
+   */
+  def makeImageThumbnail(image: Mat, orientation: Int, previewBoxSize: Int): Array[Byte] =
+    val scale = determineImageScale(image.width(), image.height(), previewBoxSize, previewBoxSize)
+    val scaled = new Mat()
+    Imgproc.resize(image, scaled, new Size(), scale, scale, Imgproc.INTER_AREA)
+    val upright = orient(scaled, orientation)
+    scaled.release()
+    val box = letterbox(upright, previewBoxSize)
+    upright.release()
+    try encodePreview(box)
+    finally box.release()
 
-    /**
-     * Rotate the image if necessary
-     *
-     * https://sirv.com/help/articles/rotate-photos-to-be-upright/
-     * https://stackoverflow.com/questions/5905868/how-to-rotate-jpeg-images-based-on-the-orientation-metadata
-     */
-    val imageMat = decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION, keepAlpha = true)
-    val scaleFactor = determineImageScale(imageMat.width(), imageMat.height(), previewBoxSize, previewBoxSize)
-
-    val resizedMat = new Mat()
-    Imgproc.resize(imageMat, resizedMat, new Size(), scaleFactor, scaleFactor, Imgproc.INTER_AREA)
-
-    val mob = new MatOfByte
-    Imgcodecs.imencode(".png", resizedMat, mob)
-    val scaledImage = ImageIO.read(new ByteArrayInputStream(mob.toArray))
-
-    val width = scaledImage.getWidth
-    val height = scaledImage.getHeight
-
-    val transform: AffineTransform = new AffineTransform()
+  /**
+   * `image` turned upright for its EXIF `orientation`, as a new image, the input left to the caller: 2 is mirrored across the
+   * vertical axis, 3 turned around, 4 mirrored across the horizontal axis, 5 transposed, 6 turned a quarter clockwise, 7
+   * transposed across the other diagonal (transposed, then turned around), 8 turned a quarter counter-clockwise. 1, and a value
+   * the tag cannot hold, is a copy.
+   */
+  def orient(image: Mat, orientation: Int): Mat =
+    val upright = new Mat()
     orientation match
-      case 1 =>
-      case 2 =>
-        transform.scale(-1.0, 1.0);
-        transform.translate(-width, 0);
-      case 3 =>
-        transform.translate(width, height);
-        transform.rotate(Math.PI);
-      case 4 =>
-        transform.scale(1.0, -1.0);
-        transform.translate(0, -height);
-      case 5 =>
-        transform.rotate(-Math.PI / 2);
-        transform.scale(-1.0, 1.0);
-      case 6 =>
-        transform.translate(height, 0);
-        transform.rotate(Math.PI / 2);
+      case 2 => Core.flip(image, upright, 1)
+      case 3 => Core.rotate(image, upright, Core.ROTATE_180)
+      case 4 => Core.flip(image, upright, 0)
+      case 5 => Core.transpose(image, upright)
+      case 6 => Core.rotate(image, upright, Core.ROTATE_90_CLOCKWISE)
       case 7 =>
-        transform.scale(-1.0, 1.0);
-        transform.translate(-height, 0);
-        transform.translate(0, width);
-        transform.rotate(3 * Math.PI / 2);
-      case 8 =>
-        transform.translate(0, width);
-        transform.rotate(3 * Math.PI / 2);
-      case _ =>
+        val transposed = new Mat()
+        Core.transpose(image, transposed)
+        Core.rotate(transposed, upright, Core.ROTATE_180)
+        transposed.release()
+      case 8 => Core.rotate(image, upright, Core.ROTATE_90_COUNTERCLOCKWISE)
+      case _ => image.copyTo(upright)
+    upright
 
-    val op = new AffineTransformOp(transform, AffineTransformOp.TYPE_BICUBIC)
+  /**
+   * `image` as a new image in 8-bit BGRA, what [[encodePreview]] takes: a BGR or a gray image gains an opaque alpha channel, and
+   * a 16-bit one keeps the high byte of each sample, since WebP holds 8-bit samples only.
+   */
+  def toBgra(image: Mat): Mat =
+    val bgra = new Mat()
+    image.channels() match
+      case 4 => image.copyTo(bgra)
+      case 3 => Imgproc.cvtColor(image, bgra, Imgproc.COLOR_BGR2BGRA)
+      case 1 => Imgproc.cvtColor(image, bgra, Imgproc.COLOR_GRAY2BGRA)
+      case channels => throw ImageException(s"An image of $channels channels has no preview")
+    if bgra.depth() == CvType.CV_16U then bgra.convertTo(bgra, CvType.CV_8U, 1.0 / 256)
+    bgra
 
-    val destinationImage = op.createCompatibleDestImage(scaledImage, null)
+  /**
+   * `image` centered in a square box of `boxSize` a side on a transparent border, a new image in 8-bit BGRA ([[toBgra]]). A
+   * portrait image is centered horizontally and a landscape one vertically, the odd pixel of the border after the image.
+   */
+  private def letterbox(image: Mat, boxSize: Int): Mat =
+    val bgra = toBgra(image)
+    val left = (boxSize - bgra.width()) / 2
+    val top = (boxSize - bgra.height()) / 2
+    val box = new Mat()
+    Core.copyMakeBorder(
+      bgra,
+      box,
+      top,
+      boxSize - bgra.height() - top,
+      left,
+      boxSize - bgra.width() - left,
+      Core.BORDER_CONSTANT,
+      new Scalar(0, 0, 0, 0))
+    bgra.release()
+    box
 
-    val graphics = destinationImage.createGraphics()
-    graphics.setBackground(Color.WHITE)
-    graphics.clearRect(0, 0, destinationImage.getWidth, destinationImage.getHeight)
-    val rotationCorrectScaledImage = op.filter(scaledImage, destinationImage)
-
-    val compositeImage: BufferedImage =
-      new BufferedImage(previewBoxSize, previewBoxSize, BufferedImage.TYPE_INT_ARGB)
-    val G2D: Graphics2D = compositeImage.createGraphics
-
-    val x: Int =
-      if rotationCorrectScaledImage.getHeight > rotationCorrectScaledImage.getWidth then
-        (previewBoxSize - rotationCorrectScaledImage.getWidth) / 2
-      else 0
-    val y: Int =
-      if rotationCorrectScaledImage.getHeight < rotationCorrectScaledImage.getWidth then
-        (previewBoxSize - rotationCorrectScaledImage.getHeight()) / 2
-      else 0
-
-    G2D.setComposite(AlphaComposite.Clear)
-    G2D.fillRect(0, 0, previewBoxSize, previewBoxSize)
-    G2D.setComposite(AlphaComposite.Src)
-    G2D.drawImage(rotationCorrectScaledImage, x, y, null)
-    val byteArray: ByteArrayOutputStream = new ByteArrayOutputStream
-    ImageIO.write(compositeImage, "png", byteArray)
-    graphics.dispose()
-
-    byteArray.toByteArray
+  /**
+   * A Preview's bytes: `box`, an 8-bit BGRA image, as a lossy WebP at [[Const.AssetView.PREVIEW_WEBP_QUALITY]], its alpha plane
+   * kept exact.
+   */
+  def encodePreview(box: Mat): Array[Byte] =
+    val buffer = new MatOfByte()
+    val quality = new MatOfInt(Imgcodecs.IMWRITE_WEBP_QUALITY, Const.AssetView.PREVIEW_WEBP_QUALITY)
+    try
+      if !Imgcodecs.imencode(".webp", box, buffer, quality) then throw ImageException("The preview cannot be encoded as WebP")
+      buffer.toArray
+    finally
+      buffer.release()
+      quality.release()
