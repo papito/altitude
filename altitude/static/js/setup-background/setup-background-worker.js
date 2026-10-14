@@ -47,8 +47,9 @@ const OUTLINE = 1
 const JET_SHADOW = { x: -54, y: 54, alpha: 0.3 }
 
 // The lights, in seconds: the navigation lights are on for `on` of every `period`; the strobe flashes twice every
-// `period`, each flash `flash` long, the second starting `gap` after the first. A dot's radius is a fraction of the
-// jet's length and its halo reaches HALO times that
+// `period`, each flash `flash` long, the second starting `gap` after the first. A lamp's radius is a fraction of the
+// jet's length and its glow reaches HALO times that; the lamp itself stays on the wingtip between blinks, dimmed
+// halfway to the outline ink, so the tips keep their shape
 const NAV_LIGHT = { period: 1, on: 0.5 }
 const STROBE = { period: 1.2, flash: 0.06, gap: 0.12 }
 const LIGHT_RADIUS = 0.02
@@ -90,6 +91,11 @@ function integer(min, max) {
 /** The CSS color of the palette's `[r, g, b]` channels at `alpha`, in the comma form every browser parses */
 function rgba([r, g, b], alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+/** The channels halfway between two of the palette's colors: a lamp that is not lit, its color toward the ink */
+function halfway(a, b) {
+    return a.map((channel, i) => Math.round((channel + b[i]) / 2))
 }
 
 /** Runs `paint` with the origin moved to (x, y), the context restored after */
@@ -407,21 +413,36 @@ function litLights() {
     return { nav, strobe: flash(0) || flash(STROBE.gap) }
 }
 
-/** The lit lights, in the jet's frame: the navigation lights red to port and green to starboard, the strobe white */
+/**
+ * The wingtip lamps, in the jet's frame: each tip carries its lamp at all times, a dimmed dot of the navigation
+ * light's color with the skin's outline, so the tips keep their shape between blinks; a lit lamp glows over it, red
+ * to port and green to starboard, and the strobe's white over both
+ */
 function drawLights() {
     const { nav, strobe } = litLights()
+    drawLamp(jet.left, colors.lampLeft)
+    drawLamp(jet.right, colors.lampRight)
     if (nav) {
-        drawLight(jet.left, jet.halos.left)
-        drawLight(jet.right, jet.halos.right)
+        drawGlow(jet.left, jet.halos.left)
+        drawGlow(jet.right, jet.halos.right)
     }
     if (strobe) {
-        drawLight(jet.left, jet.halos.strobe)
-        drawLight(jet.right, jet.halos.strobe)
+        drawGlow(jet.left, jet.halos.strobe)
+        drawGlow(jet.right, jet.halos.strobe)
     }
 }
 
-/** A light at `[x, y]` of the jet's frame: its halo's square moved there */
-function drawLight([x, y], halo) {
+/** A lamp's housing at `[x, y]` of the jet's frame: a dot of `color`, outlined as the skin is */
+function drawLamp([x, y], color) {
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.arc(x, y, LIGHT_RADIUS, 0, TAU)
+    ctx.fill()
+    ctx.stroke()
+}
+
+/** A lit lamp's glow at `[x, y]` of the jet's frame: its halo's square moved there */
+function drawGlow([x, y], halo) {
     const reach = LIGHT_RADIUS * HALO
     placed(x, y, () => {
         ctx.fillStyle = halo
@@ -533,6 +554,8 @@ function onInit(message) {
         jet: rgba(palette.jet, 1),
         jetOutline: rgba(palette.jetOutline, 1),
         jetShadow: rgba(palette.cloudShadow, JET_SHADOW.alpha),
+        lampLeft: rgba(halfway(palette.lightLeft, palette.jetOutline), 1),
+        lampRight: rgba(halfway(palette.lightRight, palette.jetOutline), 1),
     }
     sizeBitmap()
     generateScene()

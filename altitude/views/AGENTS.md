@@ -914,10 +914,12 @@ only their fronts show ahead of the leading edge), a tailplane, and the fin as a
 The skin is `jet`, filled and outlined with `jetOutline` at 1 px (the line width divided by the scale), part over part
 so each covers the outline under it, with the intakes as dots of `jetOutline`. It is drawn under a transform,
 translated to the anchor and scaled to the length, and holds still: the scenery moves under it. The lights are drawn
-last, in the same frame: a red `lightLeft` dot on the left wingtip and a
-green `lightRight` one on the right, on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flashes
-starting 120 ms apart every 1.2 s. A lit dot is a radial gradient cached at the origin per color: solid out to its
-radius, 2 % of the length, then a halo fading to nothing at three times it. A frame's draw order is road fill →
+last, in the same frame. Each wingtip carries its lamp at all times, a dot 2 % of the length in the light's color
+halfway to the outline ink, outlined as the skin is, so the tips keep their shape between blinks; a lit lamp glows
+over it with a radial gradient cached at the origin per color, solid in the full color out to the dot's radius, then
+a halo fading to nothing at three times it: red `lightLeft` on the left wingtip and green `lightRight` on the right,
+on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flashes starting 120 ms apart every
+1.2 s. A frame's draw order is road fill →
 cells → cloud shadows → jet shadow → clouds → jet → lights.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
