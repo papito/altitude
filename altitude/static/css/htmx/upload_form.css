@@ -1,7 +1,7 @@
 #uploadForm {
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: calc(var(--control-vertical-space) * 1.5);
+    grid-row-gap: var(--space-8);
 }
 
 #uploadForm div {
@@ -13,13 +13,13 @@
 }
 
 #uploadForm input[type="file"] {
-    background-color: var(--background-form-color);
+    background-color: var(--background-color);
     color: var(--font-color);
 }
 
 #uploadForm input::file-selector-button {
     color: var(--font-color);
-    background-color: var(--background-form-color);
+    background-color: var(--background-color);
 }
 
 #uploadForm button {
@@ -32,7 +32,7 @@
     display: none;
     color: var(--success-font-color);
     font-weight: bold;
-    padding: 10px;
+    padding: var(--space-5);
     font-size: 1.1em;
 }
 

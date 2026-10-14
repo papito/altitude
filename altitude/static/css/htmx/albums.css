@@ -1,12 +1,8 @@
+/* The rows take the explorer lists' shared row and cell gaps (core.css) */
 #albumList {
-    /* One vertical rhythm between album rows */
-    --album-row-gap: 8px;
-    /* Horizontal gap between the cells of a row (⋯ button, icon, name, count) */
-    --album-control-gap: 6px;
-
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: var(--album-row-gap);
+    grid-row-gap: var(--list-row-gap);
 }
 
 #albumList .album .controls {
@@ -15,7 +11,7 @@
        name directly and a row without a count ends at its name */
     display: grid;
     grid-template-columns: max-content max-content auto 1fr;
-    column-gap: var(--album-control-gap);
+    column-gap: var(--list-control-gap);
     align-items: center;
     touch-action: none;
 }
@@ -50,5 +46,5 @@
 }
 
 #albumActions .action-button span, #noAlbums .action-button span {
-    margin-left: 5px;
+    margin-left: var(--space-3);
 }

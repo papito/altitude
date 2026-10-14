@@ -63,7 +63,8 @@ whose inputs are in shadow DOM, and focus is pulled back to the control before t
 4. A library's stylesheet is copied unchanged to `static/css/<name>.css` and linked on its own, or loaded with
    the script through `vendor-loader.js` (`leaflet.css`). It is never `@import`ed into `static/css/app.css`: the
    bundle is served from `/assets/`, where the stylesheet's relative URLs (fonts, images under `static/`) would
-   not resolve, and it would no longer match its source.
+   not resolve, and it would no longer match its source. Its file name goes in `StyleGuideController.excludedFiles`,
+   so the style guide's token audit does not list its color literals as the app's.
 5. Caching needs nothing: files under `/static/` keep their upstream names and are revalidated on every use, so a
    replaced file is picked up on the next load.
 6. Add the library to the list under **Stack** in `views/AGENTS.md`, and a new `vendor-loader.js` export to that

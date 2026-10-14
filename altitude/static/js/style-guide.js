@@ -4,11 +4,21 @@
  * The server scans the source tree (`StyleGuideScan`) and embeds what it found as JSON: the tokens
  * and where they are declared and referenced, the color literals and the icons. The `styleGuide`
  * Alpine component holds what the page's templates render from it: each `:root` token resolved
- * against the stylesheets the browser actually loaded and sorted by the kind of value it holds, the
- * icons and the token audit. It is also the state of the theme switcher, of the font tester of the
- * Typography section and of the alpha slider of the `--background-color` card, and what the page's
- * buttons call. The live menu and dialog specimens are no template: `initStyleGuide` builds them
- * through the modules the explorer lists use.
+ * against the stylesheets the browser actually loaded, sorted by the kind of value it holds and
+ * placed in a group, the icons and the token audit. It is also the state of the theme switcher, of
+ * the font tester of the Typography section and of the alpha slider of the `--background-color`
+ * card, and what the page's buttons call. The live menu and dialog specimens are no template:
+ * `initStyleGuide` builds them through the modules the explorer lists use.
+ *
+ * The groups: a color token is one of the five theme colors (`--theme-*`), which hold the palette,
+ * a status color or `--shadow-color`, which stand apart from them, or derived. A length is a step
+ * of the spacing scale (`--space-*`), a role that references a step, or a size. A token whose
+ * declaration references other tokens is shown as declared, a recipe, with the tokens it comes
+ * from; any other as it resolves. A color, border or shadow token outside the theme, status and
+ * shadow colors that writes a color literal is flagged off palette. Two tokens of one kind that
+ * resolve to the same value (a color to the same color in both themes) are flagged as the same
+ * value, unless both take their color from the same tokens: the aliases of one color share it by
+ * design, while two recipes computing one color should be one token.
  */
 import {
     buildContextMenuCtrl,
@@ -27,9 +37,10 @@ const BORDER_STYLES =
 
 /**
  * The kinds of token value, in the order they are tested: the first whose test passes is the
- * token's kind. The order matters because the tests overlap (a color is also a valid border).
- * A token's sample is drawn with the token itself: its `var()` reference is the value of each of
- * `sampleProperties`, over `sampleText` for a kind that shows on text.
+ * token's kind. The order matters because the tests overlap (a color is also a valid border, and
+ * lengths separated by spaces a valid shadow). A kind may have more than one entry, each drawing
+ * its sample its own way. A token's sample is drawn with the token itself: its `var()` reference
+ * is the value of each of `sampleProperties`, over `sampleText` for a kind that shows on text.
  */
 const TOKEN_KINDS = [
     {
@@ -41,6 +52,16 @@ const TOKEN_KINDS = [
         kind: "length",
         test: (value) => CSS.supports("width", value),
         sampleProperties: ["width"],
+    },
+    {
+        // Lengths separated by spaces, such as a padding, which no one bar can draw: they pad a text
+        kind: "length",
+        test: (value) =>
+            splitOutsideParentheses(value, " ")
+                .filter((part) => part !== "")
+                .every((part) => CSS.supports("width", part)),
+        sampleProperties: ["padding"],
+        sampleText: "Padding",
     },
     {
         kind: "border",
@@ -68,6 +89,41 @@ const OTHER_KIND = { kind: "other", sampleProperties: [] }
 
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
+// The kinds whose value carries a color, the only ones that can be off palette: a word of any
+// other value that the browser takes for a color (`background` in a transition) names none there
+const COLOR_KINDS = ["color", "border", "shadow"]
+
+// The color groups, by token name: the five theme colors, and the status colors and the ink of
+// shadows, which stand apart from them. Every other token takes its colors from these.
+const THEME_COLOR = /^--theme-/
+const STATUS_OR_SHADOW_COLOR =
+    /^--(?:(?:success|warning|error)-.+|shadow-color)$/
+// A step of the spacing scale. A length that references one is a role, any other length a size.
+const SPACING_STEP = /^--space-/
+
+// A reference to another token: the group is its name
+const TOKEN_REFERENCE = /var\(\s*(--[a-zA-Z][\w-]*)\s*\)/g
+
+// The color literals: a hex color (as the scan finds them), a color function with its channels
+// written out, which the relative form `rgb(from …)` is not, and a named color, which is a word
+const HEX_COLOR = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/i
+const CHANNEL_FUNCTIONS = "rgba?|hsla?|hwb|lab|lch|oklab|oklch|color"
+const LITERAL_COLOR_FUNCTION = new RegExp(
+    `(?<![\\w-])(?:${CHANNEL_FUNCTIONS})\\((?!\\s*from\\b)`,
+    "i",
+)
+const WORD = /(?<![\w-])[a-z][\w-]*/gi
+// The words the browser takes for a color that name none: the color of the text, and the CSS-wide
+// keywords, which are valid for every property
+const NOT_A_NAMED_COLOR =
+    /^(?:currentcolor|inherit|initial|unset|revert|revert-layer)$/i
+// Quoted text, such as a font family name, holds no color
+const QUOTED_TEXT = /"[^"]*"|'[^']*'/g
+// Any color function: with its channels written out, or computing a color from others
+const COLOR_FUNCTION = new RegExp(
+    `(?<![\\w-])(?:${CHANNEL_FUNCTIONS}|color-mix|light-dark)\\(`,
+    "i",
+)
 
 // The themes, in the order `light-dark()` takes their colors
 const THEMES = ["light", "dark"]
@@ -108,7 +164,7 @@ function styleGuide() {
     applyTheme(theme)
     const rootTokens = resolveRootTokens(scan)
     const rootValues = new Map(
-        rootTokens.map(({ name, value }) => [name, value]),
+        rootTokens.map(({ name, resolved }) => [name, resolved]),
     )
 
     return {
@@ -124,8 +180,6 @@ function styleGuide() {
         literals: groupLiterals(scan.literals, rootTokens),
         // What is typed into the font tester
         fontInput: "",
-        // The alphas the sliders were dragged to in the theme shown, by token name
-        alphas: {},
 
         showSuccessSnackBar,
         showWarningSnackBar,
@@ -137,9 +191,10 @@ function styleGuide() {
 
         /**
          * Shows the page in `theme` and remembers it for the next visit. The tokens are resolved
-         * again, since the color a token holds depends on the theme. An alpha a slider was dragged
-         * to is by then part of its token's value, declared inline on the root element, so the
-         * sliders start over from what the tokens resolve to.
+         * again, since the color a token holds depends on the theme, and the new tokens are the one
+         * change the cards follow: a card reads nothing but its token. An alpha a slider was dragged
+         * to is by then part of its token's declaration, inline on the root element, so the new
+         * tokens' sliders start from what they resolve to, with no dragged alpha.
          */
         setTheme(theme) {
             this.theme = theme
@@ -148,18 +203,22 @@ function styleGuide() {
 
             this.rootTokens = resolveRootTokens(scan)
             this.literals = groupLiterals(scan.literals, this.rootTokens)
-            this.alphas = {}
         },
 
         /**
-         * The `:root` tokens of `kinds` (space-separated), one kind after another and in source
-         * order within a kind, so kinds sharing a grid are not interleaved
+         * The `:root` tokens of `kinds` (space-separated) in `group` (`groupOf`), or in every group
+         * when none is given, one kind after another and in source order within a kind, so kinds
+         * sharing a grid are not interleaved
          */
-        tokensOf(kinds) {
+        tokensOf(kinds, group = "") {
             return kinds
                 .split(" ")
                 .flatMap((kind) =>
-                    this.rootTokens.filter((token) => token.kind === kind),
+                    this.rootTokens.filter(
+                        (token) =>
+                            token.kind === kind &&
+                            (group === "" || token.group === group),
+                    ),
                 )
         },
 
@@ -187,29 +246,29 @@ function styleGuide() {
          * shown, until it is dragged
          */
         alphaOf(token) {
-            return this.alphas[token.name] ?? token.alpha
+            return token.draggedAlpha ?? token.alpha
         },
 
-        /**
-         * A token's value: as declared, or with the alpha its slider was dragged to on its color
-         * of the theme shown
-         */
+        /** A token's value as its card shows it: with the alpha its slider was dragged to, if any */
         currentValue(token) {
-            const alpha = this.alphaOf(token)
-            return alpha === token.alpha
-                ? token.value
-                : withAlpha(token.value, alpha, this.theme)
+            return token.draggedValue ?? token.value
         },
 
         /**
-         * Gives the token `alpha` for as long as the page is open: the value is declared inline on
-         * the root element, where it wins over the stylesheet's
+         * Gives the token `alpha` on its color of the theme shown, for as long as the page is
+         * open: the value is declared inline on the root element, where it wins over the
+         * stylesheet's. The alpha and the value are kept on the token, so its card depends on the
+         * token alone.
          */
         setAlpha(token, alpha) {
-            this.alphas[token.name] = alpha
+            token.draggedAlpha = alpha
+            token.draggedValue =
+                alpha === token.alpha
+                    ? token.value
+                    : withAlpha(token.value, alpha, this.theme)
             document.documentElement.style.setProperty(
                 token.name,
-                this.currentValue(token),
+                token.draggedValue,
             )
         },
 
@@ -272,8 +331,8 @@ function applyTheme(theme) {
 }
 
 /**
- * The color `value` paints in the theme the page is shown in, in the browser's one serialization,
- * so spellings of a color compare equal
+ * The color `value` paints in the theme the page is shown in (another while `inTheme` resolves),
+ * in the browser's one serialization, so spellings of a color compare equal
  */
 function resolveColor(value) {
     const probeEl = document.createElement("span")
@@ -315,25 +374,37 @@ function withAlpha(value, alpha, theme) {
  * its own (`rgb(54, 54, 54)`).
  */
 function themeColorsOf(value) {
-    const [, colors = ""] = value.match(LIGHT_DARK) ?? []
-    let depth = 0
+    const [, colors] = value.match(LIGHT_DARK) ?? []
+    const parts =
+        colors === undefined ? [] : splitOutsideParentheses(colors, ",")
 
-    for (let index = 0; index < colors.length; index++) {
-        const char = colors[index]
+    return parts.length === THEMES.length ? parts : null
+}
+
+/**
+ * `text` split at each `separator` outside every parenthesis, each part trimmed, so a part may hold
+ * the separator inside a function of its own (`rgb(54, 54, 54)`, `calc(2px * 3)`)
+ */
+function splitOutsideParentheses(text, separator) {
+    const parts = []
+    let depth = 0
+    let start = 0
+
+    for (let index = 0; index < text.length; index++) {
+        const char = text[index]
 
         if (char === "(") {
             depth++
         } else if (char === ")") {
             depth--
-        } else if (char === "," && depth === 0) {
-            return [
-                colors.slice(0, index).trim(),
-                colors.slice(index + 1).trim(),
-            ]
+        } else if (char === separator && depth === 0) {
+            parts.push(text.slice(start, index).trim())
+            start = index + 1
         }
     }
 
-    return null
+    parts.push(text.slice(start).trim())
+    return parts
 }
 
 /**
@@ -347,36 +418,67 @@ function withColorAlpha(color, alpha) {
 }
 
 /**
- * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind and
- * sample, their reference count, the names of the other tokens of that kind with the same value,
- * and for a color its alpha. Two colors are the same, and a color has its alpha, in the theme the
- * page is shown in. A token the scan found in the source but the served stylesheet does not have
- * yet resolves to nothing (`value` is empty, `kind` is "other").
+ * The `:root` tokens of the scan with the value the loaded stylesheets give them, their kind, group
+ * and sample, the tokens they reference, their reference count, whether they are off palette, the
+ * names of the other tokens of that kind with the same value, and for a color its alpha. A token
+ * the scan found in the source but the served stylesheet does not have yet resolves to nothing
+ * (`value` is empty, `kind` is "other").
+ *
+ * A token's declaration is the source's, or the one an alpha slider declared inline on the root
+ * element, which wins over it. Two colors are the same value when they are in both themes; a color
+ * has its alpha, and names the literals of its color, in the theme the page is shown in.
  */
 function resolveRootTokens(scan) {
-    const rootStyle = getComputedStyle(document.documentElement)
+    const rootEl = document.documentElement
+    const rootStyle = getComputedStyle(rootEl)
+    const declarations = new Map(
+        scan.rootTokens.map(({ name, value }) => [
+            name,
+            rootEl.style.getPropertyValue(name).trim() || value,
+        ]),
+    )
+    const colorSources = colorSourcesOf(declarations)
 
     const tokens = scan.rootTokens.map(({ name, note }) => {
-        const value = rootStyle.getPropertyValue(name).trim()
+        const declaration = declarations.get(name)
+        // The declaration with each reference replaced by the referenced token's value
+        const resolved = rootStyle.getPropertyValue(name).trim()
         const {
             kind,
             sampleProperties,
             sampleText = "",
-        } = value ? kindOf(value) : OTHER_KIND
+        } = resolved ? kindOf(resolved) : OTHER_KIND
+        const referencedNames = referencedNamesOf(declaration)
         const references = referencesOf(scan, name)
         const isColor = kind === "color"
-        // What two tokens must share to be duplicates of each other
-        const identity = isColor ? resolveColor(value) : value
+        // The color in the theme shown
+        const color = isColor ? resolveColor(resolved) : undefined
 
         return {
             name,
             note,
-            value,
+            // What the card shows: a recipe as declared, any other value as it resolves
+            value: resolved && referencedNames.length ? declaration : resolved,
+            resolved,
             kind,
-            identity,
-            // The alpha of a color, in the theme shown
-            alpha: isColor ? alphaOfColor(identity) : undefined,
+            group: groupOf(name, kind, referencedNames),
+            derivedFrom: referencedNames.length
+                ? `From ${referencedNames.join(", ")}`
+                : "",
+            isOffPalette:
+                COLOR_KINDS.includes(kind) &&
+                paletteGroupOf(name) === "derived" &&
+                holdsColorLiteral(ownPartOf(declaration)),
+            // What two tokens must share to be duplicates of each other; a color's is set below
+            identity: resolved,
+            // The tokens it takes its color from, in one string
+            colorSources: colorSources.get(name).toSorted().join(" "),
+            color,
+            alpha: isColor ? alphaOfColor(color) : undefined,
             hasAlphaSlider: isColor && name === ALPHA_SLIDER_TOKEN,
+            // The alpha its slider was dragged to in the theme shown, and the value that gives it
+            draggedAlpha: undefined,
+            draggedValue: undefined,
             references,
             usage: usageLabel(references),
             sampleStyle: Object.fromEntries(
@@ -386,6 +488,19 @@ function resolveRootTokens(scan) {
         }
     })
 
+    // A color's identity is its color in each theme, so colors equal in one theme only differ
+    const colorTokens = tokens.filter(({ kind }) => kind === "color")
+    const colorsByTheme = THEMES.map((theme) =>
+        inTheme(theme, () =>
+            colorTokens.map(({ resolved }) => resolveColor(resolved)),
+        ),
+    )
+    colorTokens.forEach((token, index) => {
+        token.identity = colorsByTheme
+            .map((colors) => colors[index])
+            .join(" | ")
+    })
+
     tokens.forEach((token) => {
         token.duplicates = tokens
             .filter(
@@ -393,7 +508,11 @@ function resolveRootTokens(scan) {
                     other !== token &&
                     DUPLICATE_KINDS.includes(token.kind) &&
                     other.kind === token.kind &&
-                    other.identity === token.identity,
+                    other.identity === token.identity &&
+                    // The aliases of one color share it by design; a value without a color has
+                    // no sources, so it is compared by its value alone
+                    (token.colorSources === "" ||
+                        other.colorSources !== token.colorSources),
             )
             .map((other) => other.name)
     })
@@ -402,9 +521,113 @@ function resolveRootTokens(scan) {
 }
 
 /**
+ * The names of the tokens each token takes its color from, by token name. A token whose
+ * declaration writes a color of its own, a literal or one computed in place (`color-mix()`,
+ * `light-dark()`, the relative form), is its own source, even when it computes it from other
+ * tokens. Any other is an alias, whose sources are those of the tokens it references. A token that
+ * carries no color, such as a length, has none.
+ */
+function colorSourcesOf(declarations) {
+    const sources = new Map()
+
+    const sourcesOf = (name) => {
+        if (!sources.has(name)) {
+            // None until found, so a cycle of references (which leaves its tokens without a
+            // value) ends
+            sources.set(name, [])
+            const declaration = declarations.get(name) ?? ""
+            const found = holdsColor(ownPartOf(declaration))
+                ? [name]
+                : referencedNamesOf(declaration).flatMap(sourcesOf)
+            sources.set(name, [...new Set(found)])
+        }
+        return sources.get(name)
+    }
+
+    declarations.forEach((_, name) => sourcesOf(name))
+    return sources
+}
+
+/**
+ * The group a token is shown in: a length's from its name and the tokens it references (a step of
+ * the spacing scale, a role that references a step, or a size), any other token's from its name
+ * (`paletteGroupOf`)
+ */
+function groupOf(name, kind, referencedNames) {
+    if (kind !== "length") {
+        return paletteGroupOf(name)
+    }
+    if (SPACING_STEP.test(name)) {
+        return "scale"
+    }
+    return referencedNames.some((referenced) => SPACING_STEP.test(referenced))
+        ? "role"
+        : "size"
+}
+
+/** The color group a token's name places it in: "theme", "status-and-shadow", or else "derived" */
+function paletteGroupOf(name) {
+    if (THEME_COLOR.test(name)) {
+        return "theme"
+    }
+    return STATUS_OR_SHADOW_COLOR.test(name) ? "status-and-shadow" : "derived"
+}
+
+/** The names of the tokens `declaration` references, each once, in the order they first appear */
+function referencedNamesOf(declaration) {
+    const names = Array.from(
+        declaration.matchAll(TOKEN_REFERENCE),
+        ([, name]) => name,
+    )
+    return [...new Set(names)]
+}
+
+/** `declaration` without its references to other tokens: what it writes itself */
+function ownPartOf(declaration) {
+    return declaration.replace(TOKEN_REFERENCE, " ")
+}
+
+/**
+ * Whether `text` writes a color literal: a hex color, a color function with its channels written
+ * out, or a named color. A word is a named color when the browser takes it for a color, as it does
+ * `transparent`, unless it is `currentcolor` or a CSS-wide keyword.
+ */
+function holdsColorLiteral(text) {
+    const unquoted = text.replace(QUOTED_TEXT, " ")
+
+    return (
+        HEX_COLOR.test(unquoted) ||
+        LITERAL_COLOR_FUNCTION.test(unquoted) ||
+        (unquoted.match(WORD) ?? []).some(
+            (word) =>
+                !NOT_A_NAMED_COLOR.test(word) && CSS.supports("color", word),
+        )
+    )
+}
+
+/** Whether `text` writes a color: a literal, or a color function computing one from others */
+function holdsColor(text) {
+    return COLOR_FUNCTION.test(text) || holdsColorLiteral(text)
+}
+
+/**
+ * What `resolve` returns while the root element declares the scheme of `theme`, which every
+ * `light-dark()` color follows. The theme shown is declared again after, before the browser paints.
+ */
+function inTheme(theme, resolve) {
+    const rootStyle = document.documentElement.style
+    const shownScheme = rootStyle.colorScheme
+
+    applyTheme(theme)
+    const result = resolve()
+    rootStyle.colorScheme = shownScheme
+    return result
+}
+
+/**
  * The color literals, one entry per color: the spellings of a color (`#fff`, `#FFF`, `#FFFFFF`)
- * are grouped by what they resolve to, most used first. A color a `:root` token already holds
- * names that token as the replacement.
+ * are grouped by what they resolve to, most used first. A color a `:root` token already holds in
+ * the theme shown names that token as the replacement.
  */
 function groupLiterals(literals, rootTokens) {
     const colorTokens = rootTokens.filter(({ kind }) => kind === "color")
@@ -417,7 +640,7 @@ function groupLiterals(literals, rootTokens) {
             spellings: [],
             locations: [],
             tokens: colorTokens
-                .filter(({ identity }) => identity === color)
+                .filter((token) => token.color === color)
                 .map(({ name }) => name),
         }
         group.spellings.push(value)

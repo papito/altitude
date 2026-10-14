@@ -19,22 +19,26 @@ object StyleGuideController:
   object Field:
     val NAME = "name"
 
+  /** Where styles are written, under the `altitude` module directory */
+  def scanRoots(moduleDir: Path): Seq[Path] =
+    Seq("css", "js").map(moduleDir.resolve("static").resolve(_)) :+ moduleDir.resolve("views")
+
+  // The vendored stylesheets (the icon font, Leaflet's), whose literals are no app's to tokenize, and the guide itself: its
+  // specimens would count as uses of what they demonstrate
+  val excludedFiles: Set[String] =
+    Set("font-awesome.min.css", "leaflet.css", "style_guide.scala.html", "style_guide.css", "style-guide.js")
+
 /**
  * The style guide: a page of the design tokens, the shared primitives and a live sample dialog. `App` registers it in dev only,
  * so in any other environment these routes do not exist.
  */
 class StyleGuideController(using logger: Logger) extends BaseController:
-  import StyleGuideController.Field
+  import StyleGuideController.{ excludedFiles, scanRoots, Field }
 
   private val prefix = "htmx/style-guide"
 
-  /** Where styles are written, under the working directory of a dev run (the repository root) */
-  private val scanRoots: Seq[Path] =
-    Seq("css", "js").map(Path.of(Environment.ROOT_PATH, "altitude", "static", _)) :+
-      Path.of(Environment.ROOT_PATH, "altitude", "views")
-
-  // The vendored icon font, and the guide itself: its specimens would count as uses of what they demonstrate
-  private val excludedFiles = Set("font-awesome.min.css", "style_guide.scala.html", "style_guide.css", "style-guide.js")
+  // The working directory of a dev run is the repository root
+  private val moduleDir = Path.of(Environment.ROOT_PATH, "altitude")
 
   private val nameScrubber = DataScrubber(trim = List(Field.NAME))
   private val nameValidator = ApiRequestValidator(required = List(Field.NAME))
@@ -43,7 +47,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get("/style-guide/r/:repoId")
   def styleGuide(repoId: String): Response[String] =
-    val scan = StyleGuideScan.scan(scanRoots, excludedFiles)
+    val scan = StyleGuideScan.scan(scanRoots(moduleDir), excludedFiles)
     logger.debug(s"Style guide scanned ${scan.filesScanned} source files")
 
     // Embedded in a script element, which a "</" in a scanned value would otherwise be able to close

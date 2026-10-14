@@ -10,7 +10,8 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css` holding a `light-dark(light, dark)` pair. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors and `--shadow-color` hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -133,8 +134,9 @@ last child gets a plain icon. The latest viewed scope is reapplied independently
 It calls `htmx.process(container)` after insertion; Alpine's mutation observer initializes the new
 subtree. Do not also call `Alpine.initTree`, which duplicates initialization and listeners.
 
-Folder indentation comes from each non-root node's `--depth` and the `--folder-indent` variable
-in `htmx/folders.scala.html`. The `.trace` grid cell indents the icon and name while `.menu-ctrl`
+Folder indentation comes from each non-root node's `--depth` and `--list-indent`, the indentation
+step of the explorer lists, which `core.css` declares and the Location list shares. The `.trace` grid
+cell (`static/css/htmx/folders.css`) indents the icon and name while `.menu-ctrl`
 stays flush left at every depth; the root row omits the trace cell. Keep renderer markup and
 these grid rules in sync.
 
@@ -245,7 +247,7 @@ share it, and the component (`js/style-guide.js`,
 registered when the page's module script imports it, before `initApp()` starts Alpine) holds the data
 and the logic that needs the browser. Keep the expressions in such a template to property reads and
 single method calls: nothing lints them, so anything longer belongs in the component. A card or row
-repeated across sections is a Twirl reusable block (`@tokenCards(kinds)` in `style_guide.scala.html`),
+repeated across sections is a Twirl reusable block (`@tokenCards(kinds, group)` in `style_guide.scala.html`),
 since Alpine has no template reuse of its own. Twirl reads `@` as its own, so Alpine's shorthand is
 written `@@click`. The explorer lists (folder tree, albums, Locations) are still rendered by their
 JavaScript modules.
@@ -274,16 +276,17 @@ broadcast for such an edit to cancel. General dialogs ignore backdrop clicks, as
 are anchored below the row's ⋯ trigger, or the Add button. Their request buttons declare
 `data-app-modal-anchor` with that control's selector; `modal.js` preserves it through validation,
 repositions on content/viewport/explorer resizing and scrolling, and releases its observers on close
-or replacement. `common/anchored-panel.js` supplies placement shared with context menus: below and
-left-aligned normally, flipping above or capping height on the roomier side when necessary, with
-horizontal placement constrained to the viewport. The box is hidden until measured to avoid a
+or replacement. `placeAnchoredPanel` (`common/anchored-panel.js`) supplies placement shared with
+context menus: below and left-aligned normally, flipping above or capping height on the roomier side
+when necessary, with horizontal placement constrained to the viewport and the panel kept
+`--viewport-gap` (10 px) from every viewport edge. The box is hidden until measured to avoid a
 flash at the default position. Anchored forms use natural content width in `core.css`, keeping
 inputs at their existing width and only the standard padding at the right. The Location map editor
 retains its explicitly declared width. Other general dialogs retain `--modal-content-width` and the
 host's centered placement; asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host. Opening any modal closes an open context menu first, so a
 modal never appears over one.
 
-Both modal hosts use `.close-modal` in `core.css`: the X stays white (`--modal-close-color`)
+Both modal hosts use `.close-modal` in `core.css`: the X keeps the text color (`--font-color`)
 at rest, on hover, and on focus, with no focus outline (the modal may focus it on open).
 Folder, album, Location, and category dialogs use the general modal host and its close control.
 
@@ -417,7 +420,8 @@ before the first click; the comment on `_bindBranchGestures` explains why. Initi
 root and its direct children with every branch collapsed; nothing is persisted.
 
 An expanded branch and its visible descendants form a **group**, set off from the rows around it:
-between any two consecutive visible rows the space is the row gap (`--folder-row-gap`, 8px) or twice
+between any two consecutive visible rows the space is the row gap (`--list-row-gap`, 8px, declared in
+`core.css` and shared with the albums and the Locations) or twice
 that where a group starts or ends, never more, whether groups end together, one expanded branch directly
 follows another, or an expanded first child follows its parent's row. The tree's top and bottom get no
 extra space, and root is not a group. The CSS in `static/css/htmx/folders.css` implements it as a block
@@ -854,17 +858,33 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 
 **Themes** — The app has a light and a dark theme and is shown in the dark one: `:root` in `core.css` declares
 `color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
-switcher declares another scheme, on that page. Every color is a `:root` token of `core.css` whose value is a
-`light-dark(light, dark)` pair, which the browser resolves by the scheme in force, so no rule is written once per theme.
-A token holding a border or a shadow pairs only the color inside it (`--menu-border: 1px solid light-dark(gray, gray)`).
-The light colors are placeholders equal to the dark ones, except that of `--background-color`.
+switcher declares another scheme, on that page. Every color is a `:root` token of `core.css`. `:root` opens with the
+five theme colors: `--theme-base` (the app's surface), `--theme-raised` (a surface lifted off the base),
+`--theme-muted` (secondary text and the lines between surfaces), `--theme-text` (text on the app's own surfaces) and
+`--theme-accent` (the one hue: selection, drop targets, chips and pins). Each is a `light-dark(light, dark)` pair, which
+the browser resolves by the scheme in force, so no rule is written once per theme. Every other color token derives
+from them by a recipe: a `var()` alias (`--selection-color: var(--theme-accent)`), a mix
+(`--background-secondary-color: color-mix(in oklab, var(--theme-raised) 20%, var(--theme-base))`), or relative color
+syntax for an alpha (`--tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05)`). A derived color
+follows the pairs of the tokens it comes from, so editing a theme color moves everything derived from it. A token
+holding a border or a shadow derives only the color inside it
+(`--form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base))`). Two kinds of color stand
+apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which
+tokens of another meaning may alias (`--trashbin-color` and `--person-unknown-color` are `var(--warning-font-color)`),
+and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
+(`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`; the button label's shadow is a gray derived from the
+theme colors instead). `--line-color` is the edge between surfaces, the color of `--menu-border`, `--result-border` and
+`--modal-border`. A light theme is therefore five pairs plus the status colors and `--shadow-color`. Their light colors
+are placeholders equal to the dark ones; `--background-color` is the one derived token with a pair, whose light color
+is `rgb(from var(--theme-base) r g b / 0.88)`.
 
 Stylesheets reference the tokens and write no color literal, named colors included. A new
-color is a new token, with a comment above it, or an existing token whose meaning fits, not merely one that holds the
-same value. Two tokens hold white: `--font-color` is text on the app's own surfaces, and `--on-fill-color` is what is
-drawn on a colored fill or over an image (the label of a button or a marker, the snackbar's text and edge, a pin's
-frame), which stays light in either theme. A color derived from a token is written in relative color syntax, so it
-follows the token's pair: the tints of the triage and trash views are
+color is a new token, with a comment above it, derived from a theme color, or an existing token whose meaning fits, not
+merely one that holds the same value. Two tokens alias `--theme-text`: `--font-color` is text on the app's own surfaces,
+and `--on-fill-color` is what is drawn on a colored fill or over an image (the label of a button or a marker, the
+snackbar's text and edge, a pin's frame), which stays light in either theme, also once the light theme has real
+values. A color a rule derives from a token is written in relative color syntax too, so it follows the token's pair:
+the tints of the triage and trash views are
 `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--trashbin-color) r g b / 0.05)`. The two
 SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a dropdown) carry
 their fill as a literal, because a data URI cannot read a token.
@@ -878,12 +898,26 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 - **Discovered, nothing to maintain:** the tokens and the icons. The server's source scan is embedded as JSON
   (`#styleGuideScan`); the `styleGuide` Alpine component (`js/style-guide.js`) reads it, and the page's `x-for`
   templates render what the component holds (see **Rendering a page's own data** above): each `:root` token resolved
-  against the loaded stylesheets and placed by the kind of its value (`@tokenCards("border shadow")` asks the
-  component for those kinds, one after another, so borders and shadows share one grid), with its note (the comment
-  directly above its declaration), reference count, an "Unused" flag, and the tokens sharing its value; a click
-  copies its `var()` reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
+  against the loaded stylesheets and placed by the kind of its value and its group (`@tokenCards("border shadow")` asks
+  the component for those kinds, one after another, so borders and shadows share one grid;
+  `@tokenCards("color", "theme")` asks for the colors of one group), with its note (the comment directly above its
+  declaration), reference count, an "Unused" flag, an "Off palette" flag, and the tokens sharing its value ("Same
+  value as"); a click copies its `var()` reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
   replaces), the ones only set from JavaScript, and the color literals grouped by resolved color, each naming the
-  token that already holds that color.
+  token that already holds that color in the theme shown.
+- **Token cards:** a token whose declaration references other tokens, a recipe, shows the declaration as written (or
+  the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
+  resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
+  **Theme colors** (`--theme-*`), **Status and shadow** (`--success-*`, `--warning-*`, `--error-*` and
+  `--shadow-color`) and **Derived** (every other). The lengths are **Scale** (`--space-*`), **Roles** (a length
+  referencing a step, which its From line names) and **Sizes** (any other length, such as a width or a radius); a
+  value of space-separated lengths, such as a padding shorthand, is a length, drawn as a padded "Padding" sample.
+  "Off palette" marks a color, border or shadow token outside the Theme colors and Status and shadow groups whose
+  declaration writes a color literal (a hex color, a color function with its channels written out, or a named color),
+  which keeps the palette at the five. "Same value as" names the tokens of the same kind (color, border, shadow or
+  font) that resolve to the same value (a color to the same color in both themes). Two tokens that take their color
+  from the same tokens are not flagged, since the aliases of one color share it by design, while two recipes computing
+  one color are, as they should be one token; a token without a color is compared by its value alone.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
@@ -900,9 +934,9 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 - **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
   stays on screen. `setTheme` declares `color-scheme` inline on the root element, which every `light-dark()` token
   follows, remembers the choice in `localStorage` (`Const.localStore.styleGuideTheme`), and resolves the tokens again:
-  the color a token holds, the tokens sharing it and its alpha are those of the theme shown. The page opens in the
-  remembered theme, else in the stylesheet's. Only the style guide reads the choice; the rest of the app stays in the
-  stylesheet's theme.
+  the color a token holds and its alpha are those of the theme shown, while the tokens sharing its value are compared
+  in both themes. The page opens in the remembered theme, else in the stylesheet's. Only the style guide reads the
+  choice; the rest of the app stays in the stylesheet's theme.
 - **Font tester:** the Typography section's right half (its left half holds the `--font` card, the sizes and the
   text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
   has that font, decided by measuring the text with the value in front of each generic family against the generic
@@ -910,16 +944,20 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   derive from. Nothing is requested from the server.
 - **Alpha slider:** the `--background-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider
   under its copy button. Dragging it gives that alpha to the token's color of the theme shown and declares the whole
-  value inline on the root element, so the page repaints with it until it is reloaded; nothing is stored. The color
-  is written in relative color syntax, which keeps it as declared, inside the token's `light-dark()` pair, whose other
-  color is left alone (`light-dark(rgb(from #363636 r g b / 0.6), #363636)` after a drag in the light theme); the card
-  shows the value, and Copy value copies it for pasting into `core.css`. The slider starts at the alpha the token's
-  color has in the theme shown, and a color that already is such a replacement has its alpha replaced rather than
-  wrapped again. A drag made in one theme survives a switch to the other: the tokens are resolved again from the inline
-  declaration. A token card is therefore a `div` holding the copy
+  value inline on the root element, so the page repaints with it until it is reloaded; nothing is stored. It works on
+  the declaration as written: the color is written in relative color syntax, which keeps it as declared, inside the
+  token's `light-dark()` pair, whose other color is left alone
+  (`light-dark(rgb(from var(--theme-base) r g b / 0.88), rgb(from var(--theme-base) r g b / 0.6))` after a drag in the
+  dark theme); the card shows the value, and Copy value copies it for pasting into `core.css`. The slider starts at the
+  alpha the token's color has in the theme shown, and a color that already is such a replacement has its alpha
+  replaced rather than wrapped again. The dragged alpha and the value it gives live on the token, so a card follows
+  its token alone. A drag made in one theme survives a switch to the other: the tokens are resolved again from the
+  inline declaration, and the cards re-render from the new tokens. A token card is therefore a `div` holding the copy
   button and, for that token, the slider row: an input cannot sit inside a button.
 
-The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates.
+The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates, and the
+vendored stylesheets of `static/css` (`font-awesome.min.css`, `leaflet.css`), whose literals are not the app's to
+tokenize; both are listed in `StyleGuideController.excludedFiles`.
 
 ## Key Files
 

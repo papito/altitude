@@ -67,9 +67,6 @@ export function closeOpenContextMenu({
         returnFocus,
     })
 }
-// Minimum distance kept between the panel and the viewport edges when it has to be shifted,
-// flipped, or shrunk
-const VIEWPORT_GAP = 8
 
 export function contextMenu() {
     // The request loading a dialog into this panel, from `htmx:before:request` until its response
@@ -193,7 +190,6 @@ export function contextMenu() {
          */
         place() {
             placeAnchoredPanel(this.$refs.panel, this.$refs.trigger, {
-                gap: VIEWPORT_GAP,
                 center: this.$root.dataset.menuAlign === "center",
             })
         },

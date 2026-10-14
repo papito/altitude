@@ -7,19 +7,23 @@
    the real classes of core.css and tabs.css; the guide's own layout is static/css/pages/style_guide.css. *@
 @(stats: Stats, scanJson: String)
 
-@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another. A card
-   is mostly a button: clicking it copies the token's var() reference. The card of a token with an alpha slider
+@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another, in
+   `group` when one is given (the groups are named in js/style-guide.js). A card is mostly a button: clicking it copies
+   the token's var() reference. A token whose declaration references other tokens shows it as written, with the tokens
+   it comes from; any other shows the value it resolves to. The card of a token with an alpha slider
    (js/style-guide.js) has the slider below the button, and a button that copies the value the slider gives it. *@
-@tokenCards(kinds: String) = {
+@tokenCards(kinds: String, group: String = "") = {
   <div class="sg-tokens">
-    <template x-for="token in tokensOf('@kinds')">
+    <template x-for="token in tokensOf('@kinds', '@group')">
       <div class="sg-token">
         <button type="button" @@click="copyReference(token.name)">
           <div class="sg-sample" :class="token.kind" :style="token.sampleStyle" x-text="token.sampleText"></div>
           <code x-text="token.name"></code>
           <span :class="{ 'sg-flag': !token.value }" x-text="currentValue(token) || 'Not served yet: restart the dev server'"></span>
+          <span class="sg-dim" x-show="token.derivedFrom" x-text="token.derivedFrom"></span>
           <span class="sg-dim" x-show="token.note" x-text="token.note"></span>
           <span :class="token.references ? 'sg-dim' : 'sg-flag'" x-text="token.usage"></span>
+          <span class="sg-flag" x-show="token.isOffPalette">Off palette</span>
           <span class="sg-flag" x-show="token.duplicates.length" x-text="'Same value as ' + token.duplicates.join(', ')"></span>
         </button>
         <template x-if="token.hasAlphaSlider">
@@ -80,13 +84,21 @@
       <div>
         <section id="colors">
           <h2>Colors</h2>
-          <p>Every color token of <code>:root</code> in <code>core.css</code>, each a
-             <code>light-dark(light, dark)</code> pair. The app is dark; the Light / Dark switch above the contents shows
-             this page in either theme and is remembered in this browser. Click a token to copy its
-             <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
-             under Token audit. The slider of <code>--background-color</code> repaints this page with the token's color
-             of the theme shown at another alpha, until the page is reloaded.</p>
-          @tokenCards("color")
+          <p>Every color token of <code>:root</code> in <code>core.css</code>. The five theme colors hold the palette as
+             <code>light-dark(light, dark)</code> pairs, and every other color token derives from them, or from a status
+             color: use a theme color or a role token, and derive any new color from a theme color. The status colors
+             and <code>--shadow-color</code> stand apart, with pairs of their own. A derived card shows its recipe and
+             the tokens it comes from; Off palette marks a token that writes a color literal, and the literals written
+             past the tokens are listed under Token audit. The app is dark; the Light / Dark switch above the contents
+             shows this page in either theme and is remembered in this browser. Click a token to copy its
+             <code>var()</code> reference. The slider of <code>--background-color</code> repaints this page with the
+             token's color of the theme shown at another alpha, until the page is reloaded.</p>
+          <h3>Theme colors</h3>
+          @tokenCards("color", "theme")
+          <h3>Status and shadow</h3>
+          @tokenCards("color", "status-and-shadow")
+          <h3>Derived</h3>
+          @tokenCards("color", "derived")
         </section>
 
         <section id="typography">
@@ -111,7 +123,6 @@
               <div class="sg-row">
                 <span style="color: var(--font-color)">--font-color</span>
                 <span style="color: var(--on-fill-color); background-color: var(--success-background-color)">--on-fill-color</span>
-                <span style="color: var(--font-color-dim)">--font-color-dim</span>
                 <span style="color: var(--faded-font-color)">--faded-font-color</span>
                 <span style="color: var(--success-font-color)">--success-font-color</span>
                 <span style="color: var(--warning-font-color)">--warning-font-color</span>
@@ -138,9 +149,16 @@
 
         <section id="spacing">
           <h2>Spacing &amp; sizing</h2>
-          <p>Use the section space between large areas, such as panels and page paddings, and the control spaces between
-             individual elements and list rows.</p>
-          @tokenCards("length")
+          <p>Gaps (paddings, margins, gaps and insets) use a step of the <code>--space-*</code> scale, or a role token
+             over it. Use the section space between large areas, such as panels and page paddings, and the control
+             spaces between individual elements and list rows. A role card names the step it takes; the sizes are the
+             lengths that are no gap, such as widths and heights.</p>
+          <h3>Scale</h3>
+          @tokenCards("length", "scale")
+          <h3>Roles</h3>
+          @tokenCards("length", "role")
+          <h3>Sizes</h3>
+          @tokenCards("length", "size")
         </section>
 
         <section id="borders-shadows">
@@ -155,14 +173,6 @@
              <code>--panel-padding</code>; its text carries the navbar's text shadow. Lay pages out with CSS Grid and
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
-
-          <h3>Spacing rhythm</h3>
-          <div class="sg-space" style="width: var(--section-vertical-space)"></div>
-          <span class="sg-dim">--section-vertical-space</span>
-          <div class="sg-space" style="width: var(--control-vertical-space)"></div>
-          <span class="sg-dim">--control-vertical-space</span>
-          <div class="sg-space" style="width: var(--control-horizontal-space)"></div>
-          <span class="sg-dim">--control-horizontal-space</span>
         </section>
 
         <section id="icons">

@@ -17,7 +17,7 @@
 }
 
 #styleGuideToc a {
-  color: var(--font-color-dim);
+  color: var(--faded-font-color);
   text-decoration: none;
 }
 
@@ -37,7 +37,7 @@
 
 /* Usage notes */
 :where(body.style-guide) main section p {
-  color: var(--font-color-dim);
+  color: var(--faded-font-color);
 }
 
 /* A row of specimens */
@@ -65,7 +65,7 @@
 .sg-token, .sg-token > button {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  row-gap: calc(var(--control-vertical-space) / 3);
+  row-gap: var(--space-3);
   align-content: start;
 }
 
@@ -105,6 +105,12 @@
   max-width: 100%;
 }
 
+/* Lengths separated by spaces (a padding) pad the sample's text instead of setting its width, so it hugs the text */
+.sg-sample.length:not(:empty) {
+  width: fit-content;
+  height: auto;
+}
+
 .sg-sample.shadow {
   display: grid;
   align-items: center;
@@ -130,7 +136,7 @@
 }
 
 .sg-dim {
-  color: var(--font-color-dim);
+  color: var(--faded-font-color);
 }
 
 .sg-flag {
@@ -154,7 +160,7 @@
 }
 
 :where(body.style-guide) main th, :where(body.style-guide) main td {
-  padding: calc(var(--control-vertical-space) / 3) var(--panel-padding);
+  padding: var(--space-3) var(--panel-padding);
   border-bottom: 1px solid var(--panel-border-color);
   text-align: left;
   vertical-align: top;
@@ -173,12 +179,6 @@
   box-shadow: var(--box-shadow);
   text-shadow: var(--navbar-text-shadow);
   padding: var(--panel-padding);
-}
-
-/* The spacing rhythm: each bar is as long as the token it names */
-.sg-space {
-  height: var(--control-vertical-space);
-  background-color: var(--dnd-drop-target-color);
 }
 
 /* The error form is taller than the fields beside it; line the fields up on their bottoms */

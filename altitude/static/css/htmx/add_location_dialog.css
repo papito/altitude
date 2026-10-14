@@ -11,7 +11,7 @@
 
 #addLocation label {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 
 #addLocation input[type="text"], #addLocation input[type="search"], #addLocation select {
@@ -24,14 +24,14 @@
 }
 
 #locationPinReadout {
-  color: var(--font-color-dim);
+  color: var(--faded-font-color);
   font-size: .9em;
 }
 
 #addLocation .geocode-row {
   display: grid;
   grid-template-columns: 1fr max-content;
-  column-gap: 6px;
+  column-gap: var(--space-3);
   align-items: center;
 }
 
@@ -41,7 +41,7 @@
 }
 
 #locationGeocodeResults button {
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   border: 0;
   background: none;
   color: inherit;

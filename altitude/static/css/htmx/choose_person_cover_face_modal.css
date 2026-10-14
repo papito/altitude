@@ -7,7 +7,7 @@
 #faceSelector .info {
     display: grid;
     font-size: 1.1em;
-    color: var(--font-color-dim);
+    color: var(--faded-font-color);
     font-weight: 500;
     letter-spacing: 1px;
     place-items: center;

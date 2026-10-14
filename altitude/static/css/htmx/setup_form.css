@@ -8,7 +8,7 @@
     display: block;
     font-weight: bold;
     text-transform: uppercase;
-    margin-bottom: 5px;
+    margin-bottom: var(--space-3);
     font-size: 1.2em;
 }
 
@@ -29,13 +29,13 @@
 }
 
 #setupForm .action-button {
-    padding: 10px 36px;
+    padding: var(--space-5) var(--space-9);
     font-size: 1.3em;
 }
 
 #setupForm div.error {
-    padding: 5px;
-    margin-top: 2px;
+    padding: var(--space-3);
+    margin-top: var(--space-1);
     background-color: var(--message-background-color);
     color: var(--font-color);
     border: 1px solid var(--error-color);

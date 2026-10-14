@@ -2,89 +2,133 @@
     /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    --background-color: light-dark(rgb(from #363636 r g b / 0.88), #363636);
-    --background-form-color: light-dark(#363535, #363535);
-    --background-secondary-color: light-dark(rgb(56, 56, 65), rgb(56, 56, 65));
-    --background-tertiary-color: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
+    /* The five theme colors. Every other color token derives from them or from a status color; only the status colors
+       and --shadow-color hold values of their own. Base is the app's surface */
+    --theme-base: light-dark(#363636, #363636);
+    /* A surface lifted off the base */
+    --theme-raised: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
+    /* Secondary text and the lines between surfaces */
+    --theme-muted: light-dark(#b0acac, #b0acac);
+    /* Text on the app's own surfaces */
+    --theme-text: light-dark(#fff, #fff);
+    /* The one hue, used for selection, drop targets, chips and pins */
+    --theme-accent: light-dark(rgb(109, 140, 253), rgb(109, 140, 253));
+    /* The ink of shadows and scrims, not a theme color */
+    --shadow-color: light-dark(#000, #000);
 
-    --form-border: 2px solid light-dark(#646161, #646161);
+    --background-color: light-dark(rgb(from var(--theme-base) r g b / 0.88), var(--theme-base));
+    --background-secondary-color: color-mix(in oklab, var(--theme-raised) 20%, var(--theme-base));
+    --background-tertiary-color: var(--theme-raised);
+    /* The edge between surfaces: a menu's, a result cell's, a dialog's */
+    --line-color: color-mix(in oklab, var(--theme-muted) 64%, var(--theme-base));
+
+    --form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base));
 
     /* The edge of an input or a textarea */
-    --input-border: 2px solid light-dark(#ccc, #ccc);
+    --input-border: 2px solid color-mix(in oklab, var(--theme-text) 39%, var(--theme-muted));
     /* The text typed into an input or a textarea */
-    --input-font-color: light-dark(#2C3E50, #2C3E50);
+    --input-font-color: color-mix(in oklab, var(--theme-accent) 10%, var(--theme-base));
     /* The field of an input or a textarea */
-    --input-background-color: light-dark(#f6f6f6, #f6f6f6);
+    --input-background-color: color-mix(in oklab, var(--theme-text) 96%, var(--theme-base));
     /* The field of an input that cannot be edited */
-    --input-readonly-background-color: light-dark(#ada8a8, #ada8a8);
+    --input-readonly-background-color: var(--theme-muted);
 
     /* The face of an action button that signals no outcome */
-    --button-background-color: light-dark(rgb(76, 75, 75), rgb(76, 75, 75));
+    --button-background-color: var(--theme-raised);
     /* The edge of an action button */
-    --button-border: 2px solid light-dark(#bdbbbb, #bdbbbb);
+    --button-border: 2px solid color-mix(in oklab, var(--theme-text) 18%, var(--theme-muted));
     /* Under the label of an action button */
-    --button-text-shadow: light-dark(rgba(72, 70, 70, 0.55), rgba(72, 70, 70, 0.55)) 4px 4px 4px;
+    --button-text-shadow: rgb(from color-mix(in oklab, var(--theme-muted) 15%, var(--theme-base)) r g b / 0.55) 4px 4px 4px;
 
     --modal-border-width: 2px;
-    --modal-border: var(--modal-border-width) solid light-dark(rgba(129, 128, 128, 0.98), rgba(129, 128, 128, 0.98));
-    --modal-background-color: light-dark(#3b3b3b, #3b3b3b);
-    --modal-close-color: light-dark(#fff, #fff);
+    --modal-border: var(--modal-border-width) solid var(--line-color);
     /* Lifts a general dialog off the page */
-    --modal-box-shadow: light-dark(rgba(10, 0, 0, 0.66), rgba(10, 0, 0, 0.66)) 6px 6px 6px;
+    --modal-box-shadow: rgb(from var(--shadow-color) r g b / 0.6) 6px 6px 6px;
     /* Behind the asset detail, all but hiding the page */
-    --asset-detail-backdrop-color: light-dark(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.9));
+    --asset-detail-backdrop-color: rgb(from var(--shadow-color) r g b / 0.9);
     /* Dims what is behind it: the page under a general dialog, the Preview under a play badge or a pin's count */
-    --scrim-color: light-dark(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45));
-    /* General dialogs: content width on wide screens, and the gap kept to the viewport edges on narrow ones */
+    --scrim-color: rgb(from var(--shadow-color) r g b / 0.45);
+    /* General dialogs: content width on wide screens */
     --modal-content-width: 400px;
-    --modal-content-padding: 15px;
-    --modal-viewport-gap: 10px;
+    /* Around a dialog's content, and the View settings popover's */
+    --modal-content-padding: var(--space-6);
+    /* The gap kept between the viewport's edges and a dialog or a menu */
+    --viewport-gap: var(--space-5);
     --modal-toolbar-height: 30px;
 
     /* The edge of a context menu and the divider between its actions */
-    --menu-border: 1px solid light-dark(gray, gray);
+    --menu-border: 1px solid var(--line-color);
 
-    --result-border: 1px solid light-dark(#837c7c, #837c7c);
+    --result-border: 1px solid var(--line-color);
     /* Sets a cell's metadata off from the Preview above it */
-    --result-metadata-shadow: 0 -2px 2px 0 light-dark(rgba(44, 43, 43, 0.75), rgba(44, 43, 43, 0.75));
-    /* The checkmark of a selected asset */
-    --selection-color: light-dark(#4CAF50, #4CAF50);
+    --result-metadata-shadow: 0 -2px 2px 0 rgb(from var(--shadow-color) r g b / 0.15);
+    /* The checkmark of a selected asset and the checkbox of a group header */
+    --selection-color: var(--theme-accent);
     /* Under the checkmark of a selected asset */
-    --selection-shadow: 0 2px 4px light-dark(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2));
+    --selection-shadow: 0 2px 4px rgb(from var(--shadow-color) r g b / 0.2);
     /* Around a focused dropdown */
-    --dropdown-focus-shadow: 0 0 2px 2px light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1));
+    --dropdown-focus-shadow: 0 0 2px 2px rgb(from var(--shadow-color) r g b / 0.1);
 
     --form-error-border: 2px solid var(--error-color);
-    --navbar-border: 1px solid light-dark(#272727, #272727);
-    --navbar-text-shadow: light-dark(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)) 0 1px;
+    --navbar-border: 1px solid color-mix(in oklab, var(--shadow-color) 18%, var(--theme-base));
+    --navbar-text-shadow: rgb(from var(--shadow-color) r g b / 0.75) 0 1px;
     /* The brand name in the nav */
-    --brand-color: light-dark(#979393, #979393);
+    --brand-color: color-mix(in oklab, var(--theme-muted) 80%, var(--theme-base));
     /* The base color of a nav entry, under the color of its link and label */
-    --navbar-menu-color: light-dark(#9399b4, #9399b4);
+    --navbar-menu-color: color-mix(in oklab, color-mix(in oklab, var(--theme-accent) 27%, var(--theme-muted)) 90%, var(--theme-base));
     /* The edge of the nav's Search input */
-    --navbar-input-border: 2px groove light-dark(#5a5855, #5a5855);
-    --box-shadow: light-dark(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) 0 1px 0;
+    --navbar-input-border: 2px groove color-mix(in oklab, var(--theme-muted) 31%, var(--theme-base));
+    --box-shadow: rgb(from var(--theme-text) r g b / 0.07) 0 1px 0;
     /* Under a tab the pointer is over */
-    --tab-hover-background-color: light-dark(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
-    --font-color-dim: light-dark(#b0acac, #b0acac);
+    --tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05);
+
+    /* The spacing scale: every padding, margin, gap and inset is a step of it, or a role token that names one. This
+       step: hairline gaps, such as between toggle buttons or tabs, and the vertical padding of a chip or a marker */
+    --space-1: 2px;
+    /* Tight gaps: between grid cells and metadata lines, and under a field's label */
+    --space-2: 4px;
+    /* Icon-to-label gaps and small paddings */
+    --space-3: 6px;
+    /* Input and button paddings, explorer list rows, and the insets of a cell's markers */
+    --space-4: 8px;
+    /* Around the grid, the map and a panel's content, and between the entries of a bar */
+    --space-5: 10px;
+    /* Between controls, and inside a dialog or a menu action */
+    --space-6: 15px;
+    /* One indentation step of a nested list row, and between result groups */
+    --space-7: 20px;
+    /* Between controls side by side, and between the upload form's rows */
+    --space-8: 25px;
+    /* Between the large areas of a page */
+    --space-9: 35px;
 
     /* Larger spacing for larger app areas, like panels and page paddings */
-    --section-vertical-space: 35px;
+    --section-vertical-space: var(--space-9);
 
     /* Standard spacing for individual elements and lists */
-    --control-vertical-space: 15px;
-    --control-horizontal-space: 25px;
+    --control-vertical-space: var(--space-6);
+    /* Standard horizontal spacing between controls side by side, such as a label and its field */
+    --control-horizontal-space: var(--space-8);
+
+    /* One vertical rhythm for a whole explorer list (folders, albums, Locations): the same gap separates sibling rows
+       and separates a row from its children, so nesting never tightens the spacing */
+    --list-row-gap: var(--space-4);
+    /* The horizontal gap between the cells of an explorer list's row (⋯ button, trace, icon, name, count). The trace
+       subtracts it, so both uses must be the same value */
+    --list-control-gap: var(--space-3);
+    /* One step of indentation of a nested explorer list row, drawn by its `.trace` cell */
+    --list-indent: var(--space-7);
 
     --footer-height: 44px;
 
     /* font colors */
 
     /* Text on the app's own surfaces */
-    --font-color: light-dark(#fff, #fff);
-    /* What is drawn on a colored fill or over an image, light in either theme: the label of a button or a marker,
-       the snackbar's text and edge, a pin's frame */
-    --on-fill-color: light-dark(#fff, #fff);
-    --faded-font-color: light-dark(#b0acac, #b0acac);
+    --font-color: var(--theme-text);
+    /* What is drawn on a colored fill or over an image, light in either theme even once the light theme has real
+       values: the label of a button or a marker, the snackbar's text and edge, a pin's frame */
+    --on-fill-color: var(--theme-text);
+    --faded-font-color: var(--theme-muted);
     --success-font-color: light-dark(#82da5f, #82da5f);
     --success-background-color: light-dark(#377a1c, #377a1c);
     --warning-font-color: light-dark(#dca051, #dca051);
@@ -93,34 +137,35 @@
     --error-background-color: light-dark(#a80404, #a80404);
     --error-color: light-dark(#fc1e1e, #fc1e1e);
     /* The name of a person who has not been named yet */
-    --person-unknown-color: light-dark(#fdda63, #fdda63);
+    --person-unknown-color: var(--warning-font-color);
 
     /* Panels */
-    --panel-border-color: light-dark(#464646, #464646);
-    --panel-padding: 12px;
+    --panel-border-color: color-mix(in oklab, var(--theme-raised) 70%, var(--theme-base));
+    /* Inside a panel: a tab panel, and the sides of its tab list */
+    --panel-padding: var(--space-5);
     /* The root folder's icon */
-    --folder-root-icon-color: light-dark(#f8c98f, #f8c98f);
+    --folder-root-icon-color: var(--theme-muted);
 
     /* Dragon Drop */
-    --dnd-can-drop-color: light-dark(#377a1c, #377a1c);
-    --dnd-drop-target-color: light-dark(rgb(109, 140, 253), rgb(109, 140, 253));
-    --dnd-draggable-border: 1px solid light-dark(#b0acac, #b0acac);
+
+    --dnd-drop-target-color: var(--theme-accent);
+    --dnd-draggable-border: 1px solid var(--theme-muted);
     /* Behind an element while it is dragged */
-    --dnd-dragging-background-color: light-dark(rgba(129, 128, 128, 0.48), rgba(129, 128, 128, 0.48));
+    --dnd-dragging-background-color: rgb(from var(--line-color) r g b / 0.48);
     /* The trash: its nav entry as a drop target and, faintly, the tint of its view */
-    --trashbin-color: light-dark(#ce7d0a, #ce7d0a);
+    --trashbin-color: var(--warning-font-color);
 
     /* Under what sits on a map: an asset pin's frame, a Location pin's glyph, a pin's count */
-    --pin-shadow: light-dark(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)) 0 1px 4px;
+    --pin-shadow: rgb(from var(--shadow-color) r g b / 0.6) 0 1px 4px;
     /* Lifts the crowded-pin panel off the map to its left */
-    --map-panel-shadow: light-dark(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)) -4px 0 8px;
+    --map-panel-shadow: rgb(from var(--shadow-color) r g b / 0.5) -4px 0 8px;
 
     /* Chips: a dismissable scope the results are narrowed to, such as the map area */
-    --chip-padding: 2px 8px;
+    --chip-padding: var(--space-1) var(--space-4);
     --chip-border-radius: 10px;
 
     /* For messages such as form validation and server response status */
-    --message-background-color: light-dark(#2f2e2e, #2f2e2e);
+    --message-background-color: color-mix(in oklab, var(--shadow-color) 9%, var(--theme-base));
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
 }
 
@@ -145,7 +190,7 @@ body {
 }
 
 footer {
-    padding: 5px;
+    padding: var(--space-3);
     color: var(--font-color);
     bottom: 0;
     display: grid;
@@ -177,7 +222,7 @@ footer {
 /*       */
 
 input, textarea {
-    padding: 8px;
+    padding: var(--space-4);
     border: var(--input-border);
     border-radius: 4px;
     color: var(--input-font-color);
@@ -191,7 +236,7 @@ input.readonly {
 
 form div.error {
     color: var(--error-font-color);
-    padding: 5px;
+    padding: var(--space-3);
 }
 
 form input.error, form input.error:focus {
@@ -210,7 +255,7 @@ form input.error, form input.error:focus {
     border: var(--button-border);
     border-radius: 4px;
     cursor: pointer;
-    padding: 7px;
+    padding: var(--space-4);
     text-decoration: none;
     text-shadow: var(--button-text-shadow);
     font-size: 1em;
@@ -241,18 +286,18 @@ form input.error, form input.error:focus {
 }
 
 .action-button.small span {
-    margin-left: 5px;
+    margin-left: var(--space-3);
 }
 
 /* A set of choices of which one is current: its buttons side by side, the current one `aria-pressed="true"`
    in the tertiary background */
 .toggle-group {
     display: flex;
-    gap: 2px;
+    gap: var(--space-1);
 }
 
 .toggle-group button {
-    padding: 5px 10px;
+    padding: var(--space-3) var(--space-5);
     background-color: var(--background-secondary-color);
     border: 1px solid var(--background-tertiary-color);
     color: var(--faded-font-color);
@@ -309,7 +354,7 @@ form input.error, form input.error:focus {
     border: var(--menu-border);
     border-radius: 5px;
     color: inherit;
-    background-color: var(--modal-background-color);
+    background-color: var(--background-secondary-color);
     text-shadow: none;
     grid-template-columns: 1fr;
     gap: 0;
@@ -337,7 +382,7 @@ form input.error, form input.error:focus {
 
 .context-menu .actions button {
     display: flex;
-    padding: 10px 15px;
+    padding: var(--space-5) var(--space-6);
     cursor: pointer;
     border: none;
     background: none;
@@ -370,7 +415,7 @@ form input.error, form input.error:focus {
    name directly; zero counts render empty (js/common/asset-count.js) */
 .asset-count {
     justify-self: start;
-    color: var(--font-color-dim);
+    color: var(--faded-font-color);
     font-size: .9em;
     white-space: nowrap;
 }
@@ -395,7 +440,7 @@ form input.error, form input.error:focus {
     color: var(--font-color);
     background-color: var(--message-background-color);
     border: 1px solid var(--error-color);
-    padding: 8px;
+    padding: var(--space-4);
     font-size: 1.1em;
 }
 
@@ -409,7 +454,7 @@ form input.error, form input.error:focus {
     color: var(--on-fill-color);
     text-align: center;
     border-radius: 2px;
-    padding: 16px;
+    padding: var(--space-6);
     position: fixed;
     z-index: 1;
     left: 50%;
@@ -446,8 +491,8 @@ form input.error, form input.error:focus {
 /*             */
 
 .dragging {
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
     border: var(--dnd-draggable-border);
     border-radius: 4px;
     background-color: var(--dnd-dragging-background-color);
@@ -510,11 +555,11 @@ form input.error, form input.error:focus {
 }
 
 /* Default content width, shrunk on narrow viewports so the box (content + its border) keeps
-   --modal-viewport-gap to each viewport edge; the box itself is sized by its content */
+   --viewport-gap to each viewport edge; the box itself is sized by its content */
 #modalContent {
     box-sizing: border-box;
     width: calc(var(--modal-content-width) + 2 * var(--modal-content-padding));
-    max-width: calc(100vw - 2 * (var(--modal-viewport-gap) + var(--modal-border-width)));
+    max-width: calc(100vw - 2 * (var(--viewport-gap) + var(--modal-border-width)));
     padding: var(--modal-content-padding);
 }
 
@@ -554,22 +599,22 @@ form input.error, form input.error:focus {
     border-bottom: 1px solid var(--background-tertiary-color);
 }
 
-/* Keep the X white without an outline, including when the modal focuses it on open. */
+/* Keep the X in the text color without an outline, including when the modal focuses it on open. */
 .close-modal {
     background: none;
     border: 0;
     outline: none;
-    color: var(--modal-close-color);
+    color: var(--font-color);
     font: inherit;
     font-size: 1.6em;
     font-weight: bold;
     line-height: 1;
-    padding: 0 .4em 0 0;
+    padding: 0 var(--space-4) 0 0;
     cursor: pointer;
 }
 
 .modal-title {
-    padding-left: .7em;
+    padding-left: var(--space-5);
     font-size: 1.1em;
     font-weight: bold;
     text-transform: capitalize;
@@ -613,7 +658,7 @@ form input.error, form input.error:focus {
     display: grid;
     place-items: center;
     font-size: 3em;
-    color: var(--font-color-dim);
+    color: var(--faded-font-color);
     pointer-events: none;
 }
 
@@ -625,7 +670,7 @@ form input.error, form input.error:focus {
    type and the environment), and the Search form */
 nav {
      display: flex;
-     column-gap: 10px;
+     column-gap: var(--space-5);
      background: var(--background-secondary-color);
      color: var(--font-color);
      align-items: center;
@@ -667,12 +712,12 @@ nav .menu {
     border-inline: 2px solid transparent;
     letter-spacing: .10em;
     color: var(--navbar-menu-color);
-    padding: 6px;
+    padding: var(--space-3);
     cursor: pointer;
 }
 
 nav .menu span {
-    margin-left: .5em;
+    margin-left: var(--space-3);
 }
 
 nav .menu.active {
@@ -686,7 +731,7 @@ nav .menu.active {
 nav input {
     border-radius: 3px;
     border: var(--navbar-input-border);
-    padding: 5px;
+    padding: var(--space-3);
     background-color: var(--input-background-color);
     width: 90%;
     /* a flex item's min-width:auto would keep the input from shrinking to fit the form's fixed width */

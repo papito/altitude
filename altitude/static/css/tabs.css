@@ -3,7 +3,7 @@
 [role="tablist"] {
     display: flex;
     align-items: flex-end;
-    gap: 0.15em;
+    gap: var(--space-1);
     overflow: visible;
     border-bottom: 1px solid var(--panel-border-color);
     padding: 0 var(--panel-padding);
@@ -15,8 +15,8 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0.4em;
-    padding: 0.6em 0.8em;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
     margin: 0;
     border-bottom: 2px solid transparent;
     color: var(--faded-font-color);

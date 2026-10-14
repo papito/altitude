@@ -8,6 +8,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers._
 
+import altitude.core.routes.web.StyleGuideController
 import altitude.core.util.StyleGuideScan
 
 @DoNotDiscover class StyleGuideScanTests extends funsuite.AnyFunSuite with TestFocus {
@@ -243,5 +244,29 @@ import altitude.core.util.StyleGuideScan
     result.icons shouldBe empty
 
     scan().filesScanned shouldBe 0
+  }
+
+  test("The style guide's scan of the source tree leaves the vendored stylesheets out") {
+
+    /**
+     * Setup:
+     *
+     * The application's own source tree, scanned from the style guide's roots with its exclusions, as the page scans it.
+     *
+     * Assertions:
+     *
+     * The vendored stylesheets in `static/css` (Font Awesome's and Leaflet's) are present, and none of their color literals or
+     * tokens is in the scan.
+     */
+    // Tests run in a sandbox: the sources are found through the directory build.mill hands them
+    val moduleDir = Path.of(sys.env("ALTITUDE_SOURCE_DIR")).getParent
+    val vendored = Seq("font-awesome.min.css", "leaflet.css")
+    vendored.foreach(name => Files.exists(moduleDir.resolve(s"static/css/$name")) shouldBe true)
+
+    val result = StyleGuideScan.scan(StyleGuideController.scanRoots(moduleDir), StyleGuideController.excludedFiles)
+    val locations = result.literals.flatMap(_.locations) ++ (result.rootTokens ++ result.scopedTokens).map(_.location)
+
+    result.filesScanned should be > 0
+    vendored.foreach(name => locations.filter(_.startsWith(s"css/$name")) shouldBe empty)
   }
 }

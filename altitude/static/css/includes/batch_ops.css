@@ -21,7 +21,7 @@
 }
 
 #batchOps i {
-    margin-right: 10px;
+    margin-right: var(--space-5);
 }
 
 #batchOps .batch-mover button {

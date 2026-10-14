@@ -1,7 +1,7 @@
 #person {
     display: grid;
-    margin: 5px;
-    padding: 5px;
+    margin: var(--space-3);
+    padding: var(--space-3);
     border-bottom: 1px solid var(--background-tertiary-color);
     grid-template-columns: 100px 300px 1fr;
 }
@@ -33,7 +33,7 @@
 }
 
 #person .name span i {
-    padding-left: 10px;
+    padding-left: var(--space-5);
 }
 
 #person .visibility-controls {
@@ -58,5 +58,5 @@
 }
 
 #person .visibility-controls i {
-    padding-right: 5px;
+    padding-right: var(--space-3);
 }

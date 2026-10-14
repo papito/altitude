@@ -355,12 +355,7 @@ function bindAnchoredPlacement(openId) {
             resetAnchoredPlacement()
             return
         }
-        const gap = parseFloat(
-            getComputedStyle(container).getPropertyValue(
-                "--modal-viewport-gap",
-            ),
-        )
-        placeAnchoredPanel(box, currentAnchor, { gap })
+        placeAnchoredPanel(box, currentAnchor)
         box.style.visibility = ""
     }
 

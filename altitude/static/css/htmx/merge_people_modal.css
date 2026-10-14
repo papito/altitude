@@ -14,7 +14,7 @@
 #mergePeople .person-to-merge, #mergePeople .person-info {
     display: grid;
     grid-template-rows: auto auto;
-    row-gap: 8px;
+    row-gap: var(--space-4);
     place-items: center;
 }
 
@@ -26,5 +26,5 @@
 
 #mergePeople .person-to-merge span {
     font-size: 0.9em;
-    color: var(--font-color-dim);
+    color: var(--faded-font-color);
 }

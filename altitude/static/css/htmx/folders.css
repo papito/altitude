@@ -1,17 +1,9 @@
-#rootFolderList {
-    --folder-indent: 20px;
-    /* One vertical rhythm for the whole tree: the same gap separates sibling rows and separates
-       a folder's own row from its children, so nesting never tightens the spacing */
-    --folder-row-gap: 8px;
-    /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name, count). The trace
-       subtracts it, so both uses must be the same value */
-    --folder-control-gap: 6px;
-}
-
+/* The tree's spacing is the explorer lists' shared one (core.css): one row gap between sibling rows and between a
+   folder's own row and its children, so nesting never tightens the spacing */
 #rootFolderList .folder.root, .folder-list .children {
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: var(--folder-row-gap);
+    grid-row-gap: var(--list-row-gap);
 }
 
 #rootFolderList .folder .children {
@@ -24,12 +16,12 @@
     grid-auto-columns: auto;
     /* The rows here are this folder's controls and its children block; a collapsed or empty
        children block is `display: none`, so it is not a grid item and adds no gap */
-    grid-row-gap: var(--folder-row-gap);
+    grid-row-gap: var(--list-row-gap);
 }
 
 #rootFolderList .folder .controls {
     display: grid;
-    column-gap: var(--folder-control-gap);
+    column-gap: var(--list-control-gap);
     align-items: center;
     touch-action: none;
 }
@@ -51,7 +43,7 @@
    items do not collapse margins, so the cases below cancel the margin where the neighbouring
    group's margin already doubles the gap. Root is always expanded and is not a group */
 #rootFolderList .folder:not(.root)[data-expanded] {
-    margin-block: var(--folder-row-gap);
+    margin-block: var(--list-row-gap);
 }
 
 /* An expanded folder directly after an expanded sibling: the sibling's bottom margin already
@@ -69,7 +61,7 @@
 #rootFolderList .trace {
     /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name sit where a
        plain margin-left indent would put them while the ⋯ stays flush left */
-    width: calc(var(--depth) * var(--folder-indent) - var(--folder-control-gap));
+    width: calc(var(--depth) * var(--list-indent) - var(--list-control-gap));
     border-top: 2px double var(--panel-border-color);
 }
 
@@ -133,15 +125,15 @@
 }
 
 #folderActions .action-button span {
-    margin-left: 5px;
+    margin-left: var(--space-3);
 }
 
 #folderNavWarning {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-4);
     margin-bottom: var(--control-vertical-space);
-    padding: 8px;
+    padding: var(--space-4);
     border-radius: 5px;
     background-color: var(--warning-background-color);
     color: var(--warning-font-color);

@@ -1,9 +1,14 @@
 /**
  * Places a viewport-positioned panel below its anchor, left-aligned unless `center` is set.
  * Flip above when needed; if neither side fits, use the roomier side with internal scrolling.
+ * When shifted, flipped or shrunk, the panel keeps `--viewport-gap` (core.css), read from its
+ * own computed style, from each viewport edge.
  * Callers provide the positioning/overflow CSS and ensure the panel's ancestors are displayed.
  */
-export function placeAnchoredPanel(panel, anchor, { gap, center = false }) {
+export function placeAnchoredPanel(panel, anchor, { center = false } = {}) {
+    const gap = parseFloat(
+        getComputedStyle(panel).getPropertyValue("--viewport-gap"),
+    )
     const trigger = anchor.getBoundingClientRect()
     const viewportWidth = document.documentElement.clientWidth
     const viewportHeight = document.documentElement.clientHeight
