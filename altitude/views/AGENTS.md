@@ -80,7 +80,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
-| `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`) and the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`); see **Setup background** |
+| `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
@@ -887,8 +887,12 @@ would otherwise stay stretched or blank.
 The ground scrolls down at 50 px/s (the view flies up). The whole canvas is painted road color, then the cells over it:
 a band is 60–220 px tall and cut into cells 60–320 px wide for the current width, each cell's rectangle 3 px short
 on the right and at the bottom, so a road runs between cells and between bands. A cell's color is one of the six field
-colors and never its left neighbour's (a pick among the other five). The band list, topmost first, holds every band
-that overlaps the viewport plus one wholly above the top edge; a band whose top passes the bottom edge is dropped and
+colors and never its left neighbour's (a pick among the other five), and one of ten textures at random, painted over
+its color in translucent dark and light ink from the cell's corner so it scrolls with the cell
+(`js/setup-background/setup-background-textures.js`: furrows across, down and on the diagonal, crop rows, tramlines,
+strip crops inside a headland, an orchard, mottled pasture, contour strips and a centre pivot; most are 128 px tiles
+repeated by a `CanvasPattern`, the headland and the pivot are drawn to the cell). The band list, topmost first,
+holds every band that overlaps the viewport plus one wholly above the top edge; a band whose top passes the bottom edge is dropped and
 new ones are generated above the topmost, so nothing repeats. On resize the bands are regenerated when the width grows
 (the cells are cut for the width) and kept otherwise: bands are dropped or added above as the height asks, and added
 below the lowest when a taller viewport uncovers ground under it. Cloud shadows come next, on the ground: each cloud's
@@ -1089,6 +1093,7 @@ tokenize; both are listed in `StyleGuideController.excludedFiles`.
 | `static/js/setup-page.js` | the setup page module: starts the background scene on `#setupBackground`, nothing else |
 | `static/js/setup-background/setup-background.js` | the page side of the setup background: `startSetupBackground` (feature detection with no fallback, the palette probed to `[r, g, b]` channels, the module Worker and the transferred canvas, `resize`, `visible` and `motion` posted as they change, `.ready` on the Worker's first frame) |
 | `static/js/setup-background/setup-background-worker.js` | the Worker of the setup background: the scene on the OffscreenCanvas (the ground's bands and cells, the clouds and their shadows, the jet and its lights), the clamped clock with one pending frame, the first frame drawn before `ready`, the still under reduced motion and the pause of a hidden tab, the refit on `resize` |
+| `static/js/setup-background/setup-background-textures.js` | the ten textures of the fields, each painting a cell from its corner: tiles repeated by a pattern (furrows, crop rows, tramlines, strip crops, an orchard, pasture, contours) and the headland and the centre pivot drawn to the cell |
 | `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the brand bar, the message hosts, `main` with the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card and the footer are `static/css/pages/setup.css` |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |

@@ -5,8 +5,10 @@
  * protocol is under **Setup background** in views/AGENTS.md); everything else, the ground's bands, the clouds, the jet,
  * the clock and the frame loop, is here. All sizes are CSS px: the context is scaled by the pixel ratio, capped at 2,
  * so a 3× phone does not triple the fill rate. The scene is random (Math.random, through `between`) and never repeats:
- * what scrolls off the bottom is dropped, and new ground and clouds are generated above the top edge.
+ * what scrolls off the bottom is dropped, and new ground and clouds are generated above the top edge. The fields'
+ * textures are setup-background-textures.js's, one per cell at random.
  */
+import { buildFieldTextures } from "./setup-background-textures.js"
 
 const TAU = 2 * Math.PI
 
@@ -73,10 +75,12 @@ let frame = 0
 let last = null
 let t = 0
 
-// The scene: the ground's bands, topmost first; the clouds; the jet with its paths, its length and its anchor
+// The scene: the ground's bands, topmost first; the clouds; the jet with its paths, its length and its anchor; the
+// fields' textures, built once the context exists
 let bands = []
 let clouds = []
 let jet = null
+let textures = []
 
 /** A random number from `min` up to `max`: the scene's one call of Math.random */
 function between(min, max) {
@@ -132,7 +136,7 @@ function pickField(previous) {
 
 /**
  * A band from `top` to `bottom`, cut into cells across the current width, each a field color unlike its left
- * neighbour's
+ * neighbour's, with a texture at random and a seed for what the texture varies by cell
  */
 function makeBand(top, bottom) {
     const cells = []
@@ -141,7 +145,14 @@ function makeBand(top, bottom) {
     while (x < width) {
         const cellWidth = between(CELL_WIDTH.min, CELL_WIDTH.max)
         const field = pickField(previous)
-        cells.push({ x, width: cellWidth, field })
+        const texture = integer(0, textures.length - 1)
+        cells.push({
+            x,
+            width: cellWidth,
+            field,
+            texture,
+            seed: between(0, TAU),
+        })
         x += cellWidth
         previous = field
     }
@@ -172,15 +183,27 @@ function recycleBands() {
     }
 }
 
-/** The road under everything, then every cell, each leaving the gap to its right and below it */
+/**
+ * The road under everything, then every cell, each leaving the gap to its right and below it: its color, then its
+ * texture painted over it from its corner
+ */
 function drawGround() {
     ctx.fillStyle = colors.road
     ctx.fillRect(0, 0, width, height)
     for (const band of bands) {
         const cellHeight = band.bottom - band.top - ROAD
         for (const cell of band.cells) {
+            const cellWidth = cell.width - ROAD
             ctx.fillStyle = colors.fields[cell.field]
-            ctx.fillRect(cell.x, band.top, cell.width - ROAD, cellHeight)
+            ctx.fillRect(cell.x, band.top, cellWidth, cellHeight)
+            placed(cell.x, band.top, () => {
+                textures[cell.texture].paint(
+                    ctx,
+                    cellWidth,
+                    cellHeight,
+                    cell.seed,
+                )
+            })
         }
     }
 }
@@ -558,6 +581,10 @@ function onInit(message) {
         lampRight: rgba(halfway(palette.lightRight, palette.jetOutline), 1),
     }
     sizeBitmap()
+    textures = buildFieldTextures(ctx, {
+        dark: (alpha) => rgba(palette.cloudShadow, alpha),
+        light: (alpha) => rgba(palette.cloud, alpha),
+    })
     generateScene()
     draw()
     self.postMessage({ type: "ready" })
