@@ -40,13 +40,12 @@ const CLOUD_SHADOW = { x: -40, y: 40, alpha: 0.28 }
 // than the threshold, where it is smaller. It rises out of the bottom edge, the nearest thing in the scene: the edge
 // cuts it TAIL_CUT of its length behind its centre (nose at -0.5, tail at 0.5), so the nose, the wings and the engines
 // show and the tailplane and the fin stay below it. It holds still: the scenery moves under it. Then the outline's
-// width in px, and the shadow's offset in px and its alpha
+// width in px
 const JET_WIDE = { length: 420, x: 0.18 }
 const JET_NARROW = { length: 270, x: 0.14 }
 const NARROW_VIEWPORT = 600
 const TAIL_CUT = 0.28
 const OUTLINE = 1
-const JET_SHADOW = { x: -54, y: 54, alpha: 0.3 }
 
 // The lights, in seconds: the navigation lights are on for `on` of every `period`; the strobe flashes twice every
 // `period`, each flash `flash` long, the second starting `gap` after the first. A lamp's radius is a fraction of the
@@ -302,17 +301,14 @@ function polygon(points) {
     return path
 }
 
-/**
- * `points` of the right side and their mirror on the left as one path of two polygons, the mirror's points reversed
- * so both run the same way round (a part of the silhouette must, or the union would hole where parts overlap)
- */
+/** `points` of the right side and their mirror on the left as one path of two polygons */
 function mirrored(points) {
     const path = polygon(points)
-    path.addPath(polygon(points.map(([x, y]) => [-x, y]).reverse()))
+    path.addPath(polygon(points.map(([x, y]) => [-x, y])))
     return path
 }
 
-/** A rectangle with corners rounded by `r`, clockwise, added to `path` */
+/** A rectangle with corners rounded by `r`, added to `path` */
 function roundedRect(path, x, y, w, h, r) {
     path.moveTo(x + r, y)
     path.arcTo(x + w, y, x + w, y + h, r)
@@ -352,9 +348,8 @@ function haloGradient(color) {
  * They are drawn under a scale of the length, so one builder serves both sizes and everything is built once. The
  * proportions are a twin-engine wide-body's seen from above: a tube a tenth of the length wide with an ogive nose and
  * a tapered tail, wings spanning the length tip to tip and swept 32°, their trailing edge kinked inboard, two pods
- * ahead of the leading edge on pylons, a tailplane and a fin. Every part of the silhouette, the union the shadow
- * fills, runs clockwise, so no overlap holes it. The markings (slats, flaps, fairings, pylons, the pods' intake lip,
- * mouth and exhaust, the cockpit glazing, the windows and the doors) sit on the parts and are not in the silhouette.
+ * ahead of the leading edge on pylons, a tailplane and a fin. The markings (slats, flaps, fairings, pylons, the pods'
+ * intake lip, mouth and exhaust, the cockpit glazing, the windows and the doors) sit on the parts.
  */
 function buildJet() {
     // The wing, right side: the leading edge runs from the root to the tip, the trailing edge from the root to a
@@ -491,19 +486,6 @@ function buildJet() {
     const fin = new Path2D()
     fin.rect(-0.008, 0.3, 0.016, 0.18)
 
-    const silhouette = new Path2D()
-    for (const part of [
-        wings,
-        fairings,
-        pylons,
-        ...pods.map((pod) => pod.path),
-        tailplane,
-        fuselage,
-        fin,
-    ]) {
-        silhouette.addPath(part)
-    }
-
     return {
         wings,
         wingShade: tubeShade(-TIP, TIP, 0.12),
@@ -523,7 +505,6 @@ function buildJet() {
         doors,
         tailplane,
         fin,
-        silhouette,
         // The wingtips, where the lamps sit
         left: [-TIP, 0.17],
         right: [TIP, 0.17],
@@ -551,14 +532,6 @@ function inJetFrame(dx, dy, paint) {
     placed(jet.x + dx, jet.y + dy, () => {
         ctx.scale(jet.length, jet.length)
         paint()
-    })
-}
-
-/** The jet's shadow on the ground: the silhouette in the translucent shadow ink, offset down-left */
-function drawJetShadow() {
-    inJetFrame(JET_SHADOW.x, JET_SHADOW.y, () => {
-        ctx.fillStyle = colors.jetShadow
-        ctx.fill(jet.silhouette)
     })
 }
 
@@ -695,11 +668,10 @@ function advance(dt) {
     recycleClouds()
 }
 
-/** One frame, in the order the layers stack: road, cells, cloud shadows, jet shadow, clouds, jet, lights */
+/** One frame, in the order the layers stack: road, cells, cloud shadows, clouds, jet, lights */
 function draw() {
     drawGround()
     drawCloudShadows()
-    drawJetShadow()
     drawClouds()
     drawJet()
 }
@@ -771,7 +743,6 @@ function onInit(message) {
         cloudShadow: rgba(palette.cloudShadow, CLOUD_SHADOW.alpha),
         jet: rgba(palette.jet, 1),
         jetOutline: rgba(palette.jetOutline, 1),
-        jetShadow: rgba(palette.cloudShadow, JET_SHADOW.alpha),
         lampLeft: rgba(halfway(palette.lightLeft, palette.jetOutline), 1),
         lampRight: rgba(halfway(palette.lightRight, palette.jetOutline), 1),
         // The jet's markings: its outline softened, the glazing and the doors in the outline ink, the rest in the

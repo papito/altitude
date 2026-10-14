@@ -897,9 +897,7 @@ new ones are generated above the topmost, so nothing repeats. On resize the band
 (the cells are cut for the width) and kept otherwise: bands are dropped or added above as the height asks, and added
 below the lowest when a taller viewport uncovers ground under it. Cloud shadows come next, on the ground: each cloud's
 circles as one path, filled with `cloudShadow` at alpha 0.28 and offset (−40, +40) px from the cloud, so the light
-comes from the upper right; then the jet's shadow, its silhouette (the union of its parts, so no overlap doubles the
-ink) filled with `cloudShadow` at alpha 0.3 and offset (−54, +54) px, before the clouds, as it falls on the ground far
-below. The clouds scroll at 80 px/s, 1.6 × the ground. A cloud is 4–8 circles of radius 30–90 px whose centres fall
+comes from the upper right. The clouds scroll at 80 px/s, 1.6 × the ground. A cloud is 4–8 circles of radius 30–90 px whose centres fall
 within an ellipse of 220 × 120 px around its centre (a uniform angle and a square-rooted distance spread them over its
 area), each a radial gradient of `cloud` from alpha 0.6 at the centre to 0 at the rim, built once at the origin when
 the cloud is made and drawn under a translate, so no frame builds a gradient (and no `ctx.filter`, slow in Safari).
@@ -921,15 +919,14 @@ dark along the sides and light along the crown, so the fuselage and the pods rea
 toward the root. The markings are translucent cloud and shadow ink over the skin: slats along the leading edge, flaps
 along the trailing edge with four fairings a wing, the rear spar's line, the pylons, and each pod's intake lip, mouth
 and exhaust (clipped to the pod); the cockpit glazing, the cabin windows and four doors a side are the outline ink.
-Only the silhouette, the union of the parts, casts the shadow. It is drawn under a transform,
-translated to the anchor and scaled to the length, and holds still: the scenery moves under it. The lights are drawn
+The jet casts no shadow. It is drawn under a transform, translated to the anchor and scaled to the length, and holds
+still: the scenery moves under it. The lights are drawn
 last, in the same frame. Each wingtip carries its lamp at all times, a dot 2 % of the length in the light's color
 halfway to the outline ink, outlined as the skin is, so the tips keep their shape between blinks; a lit lamp glows
 over it with a radial gradient cached at the origin per color, solid in the full color out to the dot's radius, then
 a halo fading to nothing at three times it: red `lightLeft` on the left wingtip and green `lightRight` on the right,
 on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flashes starting 120 ms apart every
-1.2 s. A frame's draw order is road fill →
-cells → cloud shadows → jet shadow → clouds → jet → lights.
+1.2 s. A frame's draw order is road fill → cells → cloud shadows → clouds → jet → lights.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
