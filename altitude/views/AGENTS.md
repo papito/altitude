@@ -912,11 +912,16 @@ bottom edge, which cuts it 28 % of its length behind its centre, so the nose, th
 tailplane and the fin stay below the edge; on a viewport narrower than 600 px it is 270 px long at 14 % of the width,
 where its right wing may show through the frosted card. Its parts are `Path2D`s built once, in units of the length
 (centreline x = 0, nose at −0.5, tail at 0.5) and drawn under a scale of the length, so one builder serves both
-sizes: a fuselage 9 % of the length wide with an ogive nose and a tapered tail cone, wings swept back from 40 % of the
-way back and spanning 85 % of the length tip to tip, two engine pods under the wings near the fuselage (drawn first, so
-only their fronts show ahead of the leading edge), a tailplane, and the fin as a thin centreline strip near the tail.
-The skin is `jet`, filled and outlined with `jetOutline` at 1 px (the line width divided by the scale), part over part
-so each covers the outline under it, with the intakes as dots of `jetOutline`. It is drawn under a transform,
+sizes, in the proportions of a twin-engine wide-body seen from above: a fuselage a tenth of the length wide with an
+ogive nose and a tapered tail cone, wings spanning the length tip to tip and swept 32° with the trailing edge kinked
+inboard, two pods ahead of the leading edge on pylons that widen back over the wing, a tailplane, and the fin as a thin
+centreline strip near the tail. The skin is `jet` with a soft `jetOutline` at 1 px (the line width divided by the
+scale), part over part so each covers what is under it, and it is shaded by linear gradients built in the same units,
+dark along the sides and light along the crown, so the fuselage and the pods read as tubes and the wings lighten
+toward the root. The markings are translucent cloud and shadow ink over the skin: slats along the leading edge, flaps
+along the trailing edge with four fairings a wing, the rear spar's line, the pylons, and each pod's intake lip, mouth
+and exhaust (clipped to the pod); the cockpit glazing, the cabin windows and four doors a side are the outline ink.
+Only the silhouette, the union of the parts, casts the shadow. It is drawn under a transform,
 translated to the anchor and scaled to the length, and holds still: the scenery moves under it. The lights are drawn
 last, in the same frame. Each wingtip carries its lamp at all times, a dot 2 % of the length in the light's color
 halfway to the outline ink, outlined as the skin is, so the tips keep their shape between blinks; a lit lamp glows

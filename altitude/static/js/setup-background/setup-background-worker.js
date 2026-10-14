@@ -54,7 +54,7 @@ const JET_SHADOW = { x: -54, y: 54, alpha: 0.3 }
 // halfway to the outline ink, so the tips keep their shape
 const NAV_LIGHT = { period: 1, on: 0.5 }
 const STROBE = { period: 1.2, flash: 0.06, gap: 0.12 }
-const LIGHT_RADIUS = 0.02
+const LIGHT_RADIUS = 0.014
 const HALO = 3
 
 // The canvas, its context and CSS size, and the preferences, as `init` and the messages after it set them
@@ -100,6 +100,16 @@ function rgba([r, g, b], alpha) {
 /** The channels halfway between two of the palette's colors: a lamp that is not lit, its color toward the ink */
 function halfway(a, b) {
     return a.map((channel, i) => Math.round((channel + b[i]) / 2))
+}
+
+/** The shadow ink at `alpha`: what darkens a field's texture or a part of the jet */
+function dark(alpha) {
+    return rgba(palette.cloudShadow, alpha)
+}
+
+/** The cloud white at `alpha`: what lightens them */
+function light(alpha) {
+    return rgba(palette.cloud, alpha)
 }
 
 /** Runs `paint` with the origin moved to (x, y), the context restored after */
@@ -292,6 +302,40 @@ function polygon(points) {
     return path
 }
 
+/**
+ * `points` of the right side and their mirror on the left as one path of two polygons, the mirror's points reversed
+ * so both run the same way round (a part of the silhouette must, or the union would hole where parts overlap)
+ */
+function mirrored(points) {
+    const path = polygon(points)
+    path.addPath(polygon(points.map(([x, y]) => [-x, y]).reverse()))
+    return path
+}
+
+/** A rectangle with corners rounded by `r`, clockwise, added to `path` */
+function roundedRect(path, x, y, w, h, r) {
+    path.moveTo(x + r, y)
+    path.arcTo(x + w, y, x + w, y + h, r)
+    path.arcTo(x + w, y + h, x, y + h, r)
+    path.arcTo(x, y + h, x, y, r)
+    path.arcTo(x, y, x + w, y, r)
+    path.closePath()
+}
+
+/**
+ * The shading that makes a tube from x0 to x1 read as round: dark along both sides, a light along the crown, at
+ * `strength` of alpha. Built in the jet's units, like its paths, and painted under the same scale.
+ */
+function tubeShade(x0, x1, strength) {
+    const gradient = ctx.createLinearGradient(x0, 0, x1, 0)
+    gradient.addColorStop(0, dark(strength))
+    gradient.addColorStop(0.25, dark(0))
+    gradient.addColorStop(0.5, light(strength))
+    gradient.addColorStop(0.75, light(0))
+    gradient.addColorStop(1, dark(strength))
+    return gradient
+}
+
 /** A light's halo, at the origin: the solid dot out to its radius, then a glow fading to nothing at HALO times it */
 function haloGradient(color) {
     const reach = LIGHT_RADIUS * HALO
@@ -304,78 +348,185 @@ function haloGradient(color) {
 }
 
 /**
- * The jet's paths, nose up, in units of its length: centreline x = 0, nose at y = -0.5, tail at y = 0.5. They are
- * drawn under a scale of the length, so one builder serves both sizes and the paths are built once. Every part runs
- * clockwise (the planforms as listed, the pods and the fin as Path2D draws them), so their union, the silhouette the
- * shadow fills, has no hole where parts overlap.
+ * The jet's paths and shading, nose up, in units of its length: centreline x = 0, nose at y = -0.5, tail at y = 0.5.
+ * They are drawn under a scale of the length, so one builder serves both sizes and everything is built once. The
+ * proportions are a twin-engine wide-body's seen from above: a tube a tenth of the length wide with an ogive nose and
+ * a tapered tail, wings spanning the length tip to tip and swept 32°, their trailing edge kinked inboard, two pods
+ * ahead of the leading edge on pylons, a tailplane and a fin. Every part of the silhouette, the union the shadow
+ * fills, runs clockwise, so no overlap holes it. The markings (slats, flaps, fairings, pylons, the pods' intake lip,
+ * mouth and exhaust, the cockpit glazing, the windows and the doors) sit on the parts and are not in the silhouette.
  */
 function buildJet() {
-    // A slim body, 9 % of the length wide, with an ogive nose and a tapered tail cone
-    const fuselage = new Path2D()
-    fuselage.moveTo(0, -0.5)
-    fuselage.quadraticCurveTo(0.045, -0.48, 0.045, -0.36)
-    fuselage.lineTo(0.045, 0.32)
-    fuselage.lineTo(0.02, 0.49)
-    fuselage.quadraticCurveTo(0, 0.5, -0.02, 0.49)
-    fuselage.lineTo(-0.045, 0.32)
-    fuselage.lineTo(-0.045, -0.36)
-    fuselage.quadraticCurveTo(-0.045, -0.48, 0, -0.5)
-    fuselage.closePath()
+    // The wing, right side: the leading edge runs from the root to the tip, the trailing edge from the root to a
+    // kink and on to the tip, as functions of x
+    const ROOT = 0.05
+    const TIP = 0.5
+    const KINK = 0.18
+    const leadingEdge = (x) => -0.13 + ((x - ROOT) / (TIP - ROOT)) * 0.285
+    const trailingEdge = (x) =>
+        x <= KINK
+            ? 0.075 + ((x - ROOT) / (KINK - ROOT)) * 0.025
+            : 0.1 + ((x - KINK) / (TIP - KINK)) * 0.085
 
-    // Swept back from 40 % of the way back, 85 % of the length tip to tip; the root chord runs under the fuselage
     const wings = polygon([
-        [-0.425, 0.17], // left tip, leading edge
-        [-0.04, -0.1], // root, leading edge
-        [0.04, -0.1],
-        [0.425, 0.17], // right tip, leading edge
-        [0.425, 0.22], // right tip, trailing edge
-        [0.04, 0.12], // root, trailing edge
-        [-0.04, 0.12],
-        [-0.425, 0.22], // left tip, trailing edge
+        [-TIP, 0.155],
+        [-ROOT, -0.13],
+        [ROOT, -0.13],
+        [TIP, 0.155],
+        [TIP, 0.185],
+        [KINK, 0.1],
+        [ROOT, 0.075],
+        [-ROOT, 0.075],
+        [-KINK, 0.1],
+        [-TIP, 0.185],
     ])
-
-    // The tailplane: the wings' shape in small, at the tail
-    const tailplane = polygon([
-        [-0.15, 0.44],
-        [-0.03, 0.36],
-        [0.03, 0.36],
-        [0.15, 0.44],
-        [0.15, 0.47],
-        [0.03, 0.46],
-        [-0.03, 0.46],
-        [-0.15, 0.47],
+    // The slats along the leading edge, the flaps along the trailing edge inboard and outboard of the kink
+    const slats = mirrored([
+        [ROOT, -0.13],
+        [TIP, 0.155],
+        [0.49, 0.168],
+        [ROOT, -0.108],
     ])
-
-    // The engine pods under the wings, near the fuselage: drawn before the wings, so only their fronts show ahead of
-    // the leading edge, each with its intake as a dot of the outline ink. moveTo first, so the stroke draws no line
-    // from one pod to the other
-    const engines = new Path2D()
-    const intakes = new Path2D()
-    for (const x of [-0.14, 0.14]) {
-        engines.moveTo(x + 0.028, -0.04)
-        engines.ellipse(x, -0.04, 0.028, 0.11, 0, 0, TAU)
-        intakes.moveTo(x + 0.014, -0.12)
-        intakes.arc(x, -0.12, 0.014, 0, TAU)
+    const flaps = mirrored([
+        [ROOT, 0.075],
+        [KINK, 0.1],
+        [KINK, 0.072],
+        [ROOT, 0.047],
+    ])
+    flaps.addPath(
+        mirrored([
+            [KINK, 0.1],
+            [TIP, 0.185],
+            [TIP, 0.165],
+            [KINK, 0.082],
+        ]),
+    )
+    // The rear spar's panel line, root to tip, and the flap track fairings hanging off the trailing edge
+    const spars = new Path2D()
+    const fairings = new Path2D()
+    for (const side of [-1, 1]) {
+        spars.moveTo(side * ROOT, -0.02)
+        spars.lineTo(side * TIP, 0.168)
+        for (const x of [0.11, 0.17, 0.27, 0.37]) {
+            const y = trailingEdge(x) + 0.002
+            fairings.moveTo(side * x + 0.005, y)
+            fairings.ellipse(side * x, y, 0.005, 0.022, 0, 0, TAU)
+        }
     }
 
-    // The fin, seen from above: a thin strip on the centreline near the tail
-    const fin = new Path2D()
-    fin.rect(-0.01, 0.3, 0.02, 0.18)
+    // The pods, their fronts well ahead of the leading edge, each shaded as a tube; the pylons from inside a pod's
+    // tail back over the wing, widening as they go; the intake lip, the mouth behind it and the exhaust as bands
+    // across every pod
+    const POD = { x: 0.115, y: -0.175, w: 0.08, h: 0.095, r: 0.022 }
+    const pods = [-1, 1].map((side) => {
+        const x = side === 1 ? POD.x : -POD.x - POD.w
+        const path = new Path2D()
+        roundedRect(path, x, POD.y, POD.w, POD.h, POD.r)
+        return { path, shade: tubeShade(x, x + POD.w, 0.4), x }
+    })
+    const lips = new Path2D()
+    const mouths = new Path2D()
+    const exhausts = new Path2D()
+    const pylons = new Path2D()
+    for (const { x } of pods) {
+        lips.rect(x, POD.y, POD.w, 0.01)
+        mouths.rect(x, POD.y + 0.01, POD.w, 0.012)
+        exhausts.rect(x, POD.y + POD.h - 0.008, POD.w, 0.008)
+        const centre = x + POD.w / 2
+        const top = POD.y + POD.h - 0.012
+        const bottom = leadingEdge(Math.abs(centre)) + 0.09
+        pylons.addPath(
+            polygon([
+                [centre - 0.009, top],
+                [centre + 0.009, top],
+                [centre + 0.016, bottom],
+                [centre - 0.016, bottom],
+            ]),
+        )
+    }
 
-    // The skin's order: each later part covers the outline of the one under it where they meet
-    const parts = [engines, wings, tailplane, fuselage, fin]
+    // The fuselage: an ogive nose, a tube, a tail cone; the cockpit glazing across the nose; a door and a line of
+    // windows along each side, the windows giving way at the doors
+    const fuselage = new Path2D()
+    fuselage.moveTo(0, -0.5)
+    fuselage.bezierCurveTo(0.035, -0.5, 0.05, -0.46, 0.05, -0.4)
+    fuselage.lineTo(0.05, 0.3)
+    fuselage.bezierCurveTo(0.05, 0.4, 0.02, 0.47, 0.012, 0.5)
+    fuselage.lineTo(-0.012, 0.5)
+    fuselage.bezierCurveTo(-0.02, 0.47, -0.05, 0.4, -0.05, 0.3)
+    fuselage.lineTo(-0.05, -0.4)
+    fuselage.bezierCurveTo(-0.05, -0.46, -0.035, -0.5, 0, -0.5)
+    fuselage.closePath()
+    const cockpit = polygon([
+        [-0.028, -0.447],
+        [-0.016, -0.468],
+        [0.016, -0.468],
+        [0.028, -0.447],
+        [0.02, -0.44],
+        [-0.02, -0.44],
+    ])
+    const DOORS = [-0.37, -0.14, 0.08, 0.27]
+    const windows = new Path2D()
+    const doors = new Path2D()
+    for (const side of [-1, 1]) {
+        const x = side * 0.042
+        for (const y of DOORS) {
+            doors.rect(x - 0.006, y - 0.011, 0.012, 0.022)
+        }
+        for (let y = -0.4; y <= 0.3; y += 0.014) {
+            if (DOORS.every((door) => Math.abs(y - door) > 0.016)) {
+                windows.moveTo(x + 0.0025, y)
+                windows.arc(x, y, 0.0025, 0, TAU)
+            }
+        }
+    }
+
+    // The tailplane, and the fin seen from above: a thin strip on the centreline near the tail
+    const tailplane = mirrored([
+        [0.03, 0.34],
+        [0.17, 0.44],
+        [0.17, 0.46],
+        [0.03, 0.455],
+    ])
+    const fin = new Path2D()
+    fin.rect(-0.008, 0.3, 0.016, 0.18)
+
     const silhouette = new Path2D()
-    for (const part of parts) {
+    for (const part of [
+        wings,
+        fairings,
+        pylons,
+        ...pods.map((pod) => pod.path),
+        tailplane,
+        fuselage,
+        fin,
+    ]) {
         silhouette.addPath(part)
     }
 
     return {
-        parts,
+        wings,
+        wingShade: tubeShade(-TIP, TIP, 0.12),
+        slats,
+        flaps,
+        spars,
+        fairings,
+        pylons,
+        pods,
+        lips,
+        mouths,
+        exhausts,
+        fuselage,
+        fuselageShade: tubeShade(-0.05, 0.05, 0.35),
+        cockpit,
+        windows,
+        doors,
+        tailplane,
+        fin,
         silhouette,
-        intakes,
-        // The wingtips, where the lights sit
-        left: [-0.425, 0.195],
-        right: [0.425, 0.195],
+        // The wingtips, where the lamps sit
+        left: [-TIP, 0.17],
+        right: [TIP, 0.17],
         halos: {
             left: haloGradient(palette.lightLeft),
             right: haloGradient(palette.lightRight),
@@ -411,19 +562,63 @@ function drawJetShadow() {
     })
 }
 
-/** The jet's skin, every part filled and outlined in order, then the intakes, then its lights */
+/** A part of the jet's skin: its color, its `shade` over it when it has one, and the soft outline */
+function skin(path, shade = null) {
+    ctx.fillStyle = colors.jet
+    ctx.fill(path)
+    if (shade) {
+        ctx.fillStyle = shade
+        ctx.fill(path)
+    }
+    ctx.stroke(path)
+}
+
+/** A marking on the skin: `path` filled with `color`, no outline */
+function marking(path, color) {
+    ctx.fillStyle = color
+    ctx.fill(path)
+}
+
+/** A line on the skin: `path` stroked in `color`, the outline's width */
+function line(path, color) {
+    ctx.save()
+    ctx.strokeStyle = color
+    ctx.stroke(path)
+    ctx.restore()
+}
+
+/**
+ * The jet's skin, part over part so each covers what is under it: the wings with their slats, flaps, spar line and
+ * fairings, the pylons, the pods with their bands kept inside their rounded corners, the tailplane, the fuselage
+ * over all of them with its glazing, windows and doors, the fin, then the lights
+ */
 function drawJet() {
     inJetFrame(0, 0, () => {
-        ctx.fillStyle = colors.jet
-        ctx.strokeStyle = colors.jetOutline
         // The frame is scaled to the length, so the outline is divided by it to stay about a pixel
         ctx.lineWidth = OUTLINE / jet.length
-        for (const part of jet.parts) {
-            ctx.fill(part)
-            ctx.stroke(part)
+        ctx.strokeStyle = colors.jetOutlineSoft
+        skin(jet.wings, jet.wingShade)
+        marking(jet.slats, colors.slats)
+        marking(jet.flaps, colors.flaps)
+        line(jet.spars, colors.spars)
+        skin(jet.fairings)
+        skin(jet.pylons)
+        marking(jet.pylons, colors.pylons)
+        for (const pod of jet.pods) {
+            skin(pod.path, pod.shade)
+            ctx.save()
+            ctx.clip(pod.path)
+            marking(jet.lips, colors.lips)
+            marking(jet.mouths, colors.mouths)
+            marking(jet.exhausts, colors.exhausts)
+            ctx.restore()
         }
-        ctx.fillStyle = colors.jetOutline
-        ctx.fill(jet.intakes)
+        skin(jet.tailplane)
+        skin(jet.fuselage, jet.fuselageShade)
+        marking(jet.cockpit, colors.glass)
+        marking(jet.windows, colors.glass)
+        line(jet.doors, colors.doors)
+        skin(jet.fin)
         drawLights()
     })
 }
@@ -579,12 +774,21 @@ function onInit(message) {
         jetShadow: rgba(palette.cloudShadow, JET_SHADOW.alpha),
         lampLeft: rgba(halfway(palette.lightLeft, palette.jetOutline), 1),
         lampRight: rgba(halfway(palette.lightRight, palette.jetOutline), 1),
+        // The jet's markings: its outline softened, the glazing and the doors in the outline ink, the rest in the
+        // shadow and cloud inks over the skin
+        jetOutlineSoft: rgba(palette.jetOutline, 0.6),
+        glass: rgba(palette.jetOutline, 0.85),
+        doors: rgba(palette.jetOutline, 0.5),
+        slats: light(0.25),
+        flaps: dark(0.1),
+        spars: dark(0.18),
+        pylons: dark(0.12),
+        lips: light(0.5),
+        mouths: dark(0.3),
+        exhausts: dark(0.3),
     }
     sizeBitmap()
-    textures = buildFieldTextures(ctx, {
-        dark: (alpha) => rgba(palette.cloudShadow, alpha),
-        light: (alpha) => rgba(palette.cloud, alpha),
-    })
+    textures = buildFieldTextures(ctx, { dark, light })
     generateScene()
     draw()
     self.postMessage({ type: "ready" })
