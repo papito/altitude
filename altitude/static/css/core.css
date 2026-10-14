@@ -139,6 +139,19 @@
     /* The name of a person who has not been named yet */
     --person-unknown-color: var(--warning-font-color);
 
+    --setup-background-field-1: light-dark(#3f5a3a, #3f5a3a);
+    --setup-background-field-2: light-dark(#5a6b3c, #5a6b3c);
+    --setup-background-field-3: light-dark(#7a6a3c, #7a6a3c);
+    --setup-background-field-4: light-dark(#8a7a4a, #8a7a4a);
+    --setup-background-field-5: light-dark(#5c4a3a, #5c4a3a);
+    --setup-background-field-6: light-dark(#4a5a4a, #4a5a4a);
+    --setup-background-road: color-mix(in oklab, var(--shadow-color) 40%, var(--theme-base));
+    --setup-background-cloud: var(--theme-text);
+    --setup-background-cloud-shadow: var(--shadow-color);
+    --setup-background-jet: color-mix(in oklab, var(--theme-text) 80%, var(--theme-muted));
+    --setup-background-jet-outline: var(--theme-base);
+    --setup-background-card-color: rgb(from var(--theme-base) r g b / 0.85);
+
     /* Panels */
     --panel-border-color: color-mix(in oklab, var(--theme-raised) 70%, var(--theme-base));
     /* Inside a panel: a tab panel, and the sides of its tab list */

@@ -10,7 +10,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors and `--shadow-color` hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors, `--shadow-color` and the setup background's field tokens (`--setup-background-field-*`) hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -79,6 +79,8 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
+| `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
+| `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`) and the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`); see **Setup background** |
 | `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session) |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
@@ -827,6 +829,97 @@ is the partial's own file, `static/css/htmx/settings_form.css`, over `core.css` 
 `--faded-font-color`, `--warning-font-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
+**Setup background** — `setup.scala.html` (`/setup`, `SetupController`; the index redirects here until the repository
+exists) runs a full-screen animated scene behind the page, a top-down view of a jet over clouds and farmland. Its canvas,
+`<canvas id="setupBackground">`, is the first element of the body; `static/css/pages/setup.css` fixes it over the whole
+viewport at `z-index: -1` (above the root's background, below every element of the page, so the markup is otherwise
+untouched), `pointer-events: none`, and `opacity: 0` with a 600 ms transition to `.ready`, so the form never sits on a
+flash of blank canvas. The form's container (`:where(body.setup) main > div`) is a frosted card:
+`--setup-background-card-color` over `backdrop-filter: blur(12px)` (a radius, not a spacing, so a literal),
+`--form-border`, `--section-vertical-space` padding. The brand bar stays opaque; the footer loses its background and
+takes the nav's text shadow (`--navbar-text-shadow`), so the scenery runs under it. The page module, `js/setup-page.js`,
+only calls `startSetupBackground(canvas)` of `js/setup-background/setup-background.js`: the form submits through htmx
+and `json-enc.js`, which the page loads as plain scripts, so there is nothing else to register. The page side returns at
+once where `canvas.transferControlToOffscreen` is not a function: no fallback, the canvas stays empty and the page looks
+as it does without a scene. Otherwise it resolves the palette, since a Worker has no stylesheet: each token is probed by
+setting `canvas.style.color = "var(--token)"` and reading `getComputedStyle(canvas).color`, which resolves
+`light-dark()`, `color-mix()` and relative colors against the theme; the computed string (`rgb()`, `color(srgb …)` or
+`oklab(…)`, by recipe and browser) is painted into a 1 × 1 scratch 2D context and read back with `getImageData`, so
+every color reaches the Worker as sRGB channels `[r, g, b]` (integers 0–255), to which the Worker applies alphas of its
+own (gradient stops, shadows). The palette's keys are `fields` (six, `--setup-background-field-1` … `-6`, in order),
+`road`, `cloud`, `cloudShadow`, `jet`, `jetOutline` (the `--setup-background-*` tokens of those names), `lightLeft`
+(`--error-color`, the red navigation light on the left wingtip), `lightRight` (`--success-font-color`, the green one on
+the right) and `strobe` (`--theme-text`, the white strobe). It then reads the canvas's CSS size from
+`getBoundingClientRect()` and `devicePixelRatio`, starts the module Worker,
+`new Worker(new URL("./setup-background-worker.js", import.meta.url), { type: "module" })`, and posts `init` with the
+canvas transferred (`transferControlToOffscreen()`, in the transfer list). Every message is a plain object with a
+`type`:
+
+| Direction | Message | Fields | When |
+|---|---|---|---|
+| page → Worker | `init` | `canvas` (the transferred OffscreenCanvas), `width`, `height`, `dpr`, `palette`, `reduced`, `hidden` (`document.hidden`: a page opened in a background tab draws its first frame and waits to be shown) | once, on start |
+| page → Worker | `resize` | `width`, `height`, `dpr` | a `ResizeObserver` on the canvas (the entry's `contentRect`, CSS px; its first notification repeats `init`'s size), and a change of `devicePixelRatio`, caught by a `matchMedia("(resolution: …dppx)")` query for the current ratio, re-armed for the new one each time it fires |
+| page → Worker | `visible` | `hidden` (`document.hidden`) | `document`'s `visibilitychange` |
+| page → Worker | `motion` | `reduced` | the `(prefers-reduced-motion: reduce)` query's `change` |
+| Worker → page | `ready` | none | after the Worker's first frame is drawn; the page adds `.ready` to the canvas, which fades it in |
+
+Reduced motion is watched live, so switching it on or off while the page is open stops or starts the scene; under it the
+fade transition is dropped (`transition: none`), so the still frame appears at once. A Worker that does not load (the
+file missing, a browser without module Workers) or throws fires the Worker's `error` event: the page logs one line
+naming the feature and does nothing else, so the canvas stays transparent. The scene itself, the clock, the ground, the
+clouds, the jet and the draw order, is the Worker's, `js/setup-background/setup-background-worker.js`.
+
+The Worker draws in CSS px: the bitmap is `width × dpr` by `height × dpr` with `dpr` capped at 2 and the context
+scaled to match, so a 3× phone does not triple the fill rate; the context is opaque (`alpha: false`), as the road fill
+covers it every frame. The clock is `requestAnimationFrame` (a Worker owning an OffscreenCanvas has it): a frame
+advances the scene by `min(timestamp − last, 100 ms)`, so a resumed tab or a stalled frame moves it one short step,
+and the scene keeps a running time `t` in seconds, which the lights read. One frame handle is pending at
+most: a start requests a frame only when none is pending, a stop cancels it. On `init` the Worker sizes the bitmap,
+generates the scene, draws the first frame synchronously (the page's fade-in waits on `ready`, and a hidden document
+gets no frame callbacks), posts `ready`, then starts the loop unless `reduced` or `hidden`. `visible { hidden: true }`
+cancels the pending frame; `visible { hidden: false }` resets the clock (the next frame's `last` is its own timestamp,
+so nothing jumps) and starts the loop unless `reduced`; `motion` does the same for `reduced`, and `reduced: true`
+leaves the frame drawn last as the still. A `resize` equal to the current size and ratio is a no-op (the observer's
+first notification is one); a new ratio alone resizes the bitmap; a new size also refits the scene; either draws one
+frame at once, since sizing the bitmap clears it and the blank would reach the page before the next frame, and a still
+would otherwise stay stretched or blank.
+
+The ground scrolls down at 50 px/s (the view flies up). The whole canvas is painted road color, then the cells over it:
+a band is 60–220 px tall and cut into cells 60–320 px wide for the current width, each cell's rectangle 3 px short
+on the right and at the bottom, so a road runs between cells and between bands. A cell's color is one of the six field
+colors and never its left neighbour's (a pick among the other five). The band list, topmost first, holds every band
+that overlaps the viewport plus one wholly above the top edge; a band whose top passes the bottom edge is dropped and
+new ones are generated above the topmost, so nothing repeats. On resize the bands are regenerated when the width grows
+(the cells are cut for the width) and kept otherwise: bands are dropped or added above as the height asks, and added
+below the lowest when a taller viewport uncovers ground under it. Cloud shadows come next, on the ground: each cloud's
+circles as one path, filled with `cloudShadow` at alpha 0.28 and offset (−40, +40) px from the cloud, so the light
+comes from the upper right; then the jet's shadow, its silhouette (the union of its parts, so no overlap doubles the
+ink) filled with `cloudShadow` at alpha 0.3 and offset (−54, +54) px, before the clouds, as it falls on the ground far
+below. The clouds scroll at 80 px/s, 1.6 × the ground. A cloud is 4–8 circles of radius 30–90 px whose centres fall
+within an ellipse of 220 × 120 px around its centre (a uniform angle and a square-rooted distance spread them over its
+area), each a radial gradient of `cloud` from alpha 0.6 at the centre to 0 at the rim, built once at the origin when
+the cloud is made and drawn under a translate, so no frame builds a gradient (and no `ctx.filter`, slow in Safari).
+There are 4–8 clouds, the count picked once at init; a cloud whose top edge passes the bottom edge is replaced by one
+spawned above the top at a random x, its top edge 0–400 px above the viewport, so the sky is never evenly spaced. A
+resize leaves the clouds where they are: one now past the right edge scrolls off and is replaced as usual.
+
+The jet is the nearest thing in the scene: 420 px long, nose up, anchored at 18 % of the width and rising out of the
+bottom edge, which cuts it 28 % of its length behind its centre, so the nose, the wings and the engines show and the
+tailplane and the fin stay below the edge; on a viewport narrower than 600 px it is 270 px long at 14 % of the width,
+where its right wing may show through the frosted card. Its parts are `Path2D`s built once, in units of the length
+(centreline x = 0, nose at −0.5, tail at 0.5) and drawn under a scale of the length, so one builder serves both
+sizes: a fuselage 9 % of the length wide with an ogive nose and a tapered tail cone, wings swept back from 40 % of the
+way back and spanning 85 % of the length tip to tip, two engine pods under the wings near the fuselage (drawn first, so
+only their fronts show ahead of the leading edge), a tailplane, and the fin as a thin centreline strip near the tail.
+The skin is `jet`, filled and outlined with `jetOutline` at 1 px (the line width divided by the scale), part over part
+so each covers the outline under it, with the intakes as dots of `jetOutline`. It is drawn under a transform,
+translated to the anchor and scaled to the length, and holds still: the scenery moves under it. The lights are drawn
+last, in the same frame: a red `lightLeft` dot on the left wingtip and a
+green `lightRight` one on the right, on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flashes
+starting 120 ms apart every 1.2 s. A lit dot is a radial gradient cached at the origin per color: solid out to its
+radius, 2 % of the length, then a halo fading to nothing at three times it. A frame's draw order is road fill →
+cells → cloud shadows → jet shadow → clouds → jet → lights.
+
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
 calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
@@ -868,15 +961,18 @@ from them by a recipe: a `var()` alias (`--selection-color: var(--theme-accent)`
 syntax for an alpha (`--tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05)`). A derived color
 follows the pairs of the tokens it comes from, so editing a theme color moves everything derived from it. A token
 holding a border or a shadow derives only the color inside it
-(`--form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base))`). Two kinds of color stand
-apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which
-tokens of another meaning may alias (`--trashbin-color` and `--person-unknown-color` are `var(--warning-font-color)`),
-and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
+(`--form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base))`). Three kinds of color
+stand apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which tokens of
+another meaning may alias (`--trashbin-color` and `--person-unknown-color` are `var(--warning-font-color)`);
+`--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
 (`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`; the button label's shadow is a gray derived from the
-theme colors instead). `--line-color` is the edge between surfaces, the color of `--menu-border`, `--result-border` and
-`--modal-border`. A light theme is therefore five pairs plus the status colors and `--shadow-color`. Their light colors
-are placeholders equal to the dark ones; `--background-color` is the one derived token with a pair, whose light color
-is `rgb(from var(--theme-base) r g b / 0.88)`.
+theme colors instead); and the fields of the setup page's background scene (`--setup-background-field-1` … `-6`),
+which are illustration, not chrome, and whose companion tokens (`--setup-background-road`, `-cloud`, `-cloud-shadow`,
+`-jet`, `-jet-outline` and `-card-color`) derive from the theme and shadow tokens. `--line-color` is the edge between
+surfaces, the color of `--menu-border`, `--result-border` and `--modal-border`. A light theme is therefore five pairs
+plus the status colors, `--shadow-color` and the six field pairs. Their light colors are placeholders equal to the dark
+ones; `--background-color` is the one derived token with a pair, whose light color is
+`rgb(from var(--theme-base) r g b / 0.88)`.
 
 Stylesheets reference the tokens and write no color literal, named colors included. A new
 color is a new token, with a comment above it, derived from a theme color, or an existing token whose meaning fits, not
@@ -909,15 +1005,16 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
   **Theme colors** (`--theme-*`), **Status and shadow** (`--success-*`, `--warning-*`, `--error-*` and
-  `--shadow-color`) and **Derived** (every other). The lengths are **Scale** (`--space-*`), **Roles** (a length
-  referencing a step, which its From line names) and **Sizes** (any other length, such as a width or a radius); a
-  value of space-separated lengths, such as a padding shorthand, is a length, drawn as a padded "Padding" sample.
-  "Off palette" marks a color, border or shadow token outside the Theme colors and Status and shadow groups whose
-  declaration writes a color literal (a hex color, a color function with its channels written out, or a named color),
-  which keeps the palette at the five. "Same value as" names the tokens of the same kind (color, border, shadow or
-  font) that resolve to the same value (a color to the same color in both themes). Two tokens that take their color
-  from the same tokens are not flagged, since the aliases of one color share it by design, while two recipes computing
-  one color are, as they should be one token; a token without a color is compared by its value alone.
+  `--shadow-color`), **Setup background** (`--setup-background-*`) and **Derived** (every other). The lengths are
+  **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
+  length, such as a width or a radius); a value of space-separated lengths, such as a padding shorthand, is a length,
+  drawn as a padded "Padding" sample. "Off palette" marks a color, border or shadow token outside the Theme colors,
+  Status and shadow and Setup background groups whose declaration writes a color literal (a hex color, a color
+  function with its channels written out, or a named color), which keeps the palette at the five. "Same value as"
+  names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
+  same color in both themes). Two tokens that take their color from the same tokens are not flagged, since the
+  aliases of one color share it by design, while two recipes computing one color are, as they should be one token; a
+  token without a color is compared by its value alone.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
@@ -987,6 +1084,10 @@ tokenize; both are listed in `StyleGuideController.excludedFiles`.
 | `static/js/listeners/settings.js` | `SETTINGS_SAVED_EVENT` → the success snackbar |
 | `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
 | `views/htmx/settings_form.scala.html` | The one Settings form: sections per group, a field per applicable Setting with Reset, error, restart notice and help |
+| `static/js/setup-page.js` | the setup page module: starts the background scene on `#setupBackground`, nothing else |
+| `static/js/setup-background/setup-background.js` | the page side of the setup background: `startSetupBackground` (feature detection with no fallback, the palette probed to `[r, g, b]` channels, the module Worker and the transferred canvas, `resize`, `visible` and `motion` posted as they change, `.ready` on the Worker's first frame) |
+| `static/js/setup-background/setup-background-worker.js` | the Worker of the setup background: the scene on the OffscreenCanvas (the ground's bands and cells, the clouds and their shadows, the jet and its lights), the clamped clock with one pending frame, the first frame drawn before `ready`, the still under reduced motion and the pause of a hidden tab, the refit on `resize` |
+| `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the brand bar, the message hosts, `main` with the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card and the footer are `static/css/pages/setup.css` |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |
