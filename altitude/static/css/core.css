@@ -145,7 +145,10 @@
     --setup-background-field-4: light-dark(#8a7a4a, #8a7a4a);
     --setup-background-field-5: light-dark(#5c4a3a, #5c4a3a);
     --setup-background-field-6: light-dark(#4a5a4a, #4a5a4a);
-    --setup-background-road: color-mix(in oklab, var(--shadow-color) 40%, var(--theme-base));
+    /* The line between two fields, a hedge or a ditch seen from above, and a road's verges */
+    --setup-background-field-edge: color-mix(in oklab, var(--shadow-color) 40%, var(--theme-base));
+    /* A road's surface, pale against the fields */
+    --setup-background-road: color-mix(in oklab, var(--theme-muted) 55%, var(--theme-base));
     --setup-background-cloud: var(--theme-text);
     --setup-background-cloud-shadow: var(--shadow-color);
     --setup-background-jet: color-mix(in oklab, var(--theme-text) 80%, var(--theme-muted));

@@ -46,6 +46,7 @@ function resolvePalette(canvas) {
 
     return {
         fields: [1, 2, 3, 4, 5, 6].map(field),
+        fieldEdge: probe("--setup-background-field-edge"),
         road: probe("--setup-background-road"),
         cloud: probe("--setup-background-cloud"),
         cloudShadow: probe("--setup-background-cloud-shadow"),

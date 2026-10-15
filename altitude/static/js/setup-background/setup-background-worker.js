@@ -2,8 +2,8 @@
  * The setup page's background scene, drawn by this module Worker on the OffscreenCanvas the page side,
  * setup-background.js, hands it: a top-down view of a jet over clouds and farmland that scroll down the screen, the
  * view flying up. The page posts the palette, the size, the tab's visibility and the reduced-motion preference (the
- * protocol is under **Setup background** in views/AGENTS.md); everything else, the ground's bands, the clouds, the jet,
- * the clock and the frame loop, is here. All sizes are CSS px: the context is scaled by the pixel ratio, capped at 2,
+ * protocol is under **Setup background** in views/AGENTS.md); everything else, the ground's blocks of fields with their
+ * roads and vehicles, the clouds, the jet, the clock and the frame loop, is here. All sizes are CSS px: the context is scaled by the pixel ratio, capped at 2,
  * so a 3× phone does not triple the fill rate. The scene is random (Math.random, through `between`) and never repeats:
  * what scrolls off the bottom is dropped, and new ground and clouds are generated above the top edge. The fields'
  * textures are setup-background-textures.js's, one per cell at random.
@@ -17,12 +17,29 @@ const MAX_DPR = 2
 // The longest step a frame advances the scene by, in ms: a resumed tab or a stalled frame moves it one short step
 const MAX_STEP = 100
 
-// The ground: its speed in px/s, the ranges of a band's height and a cell's width, and the gap of road color between
-// cells and between bands
+// The ground: its speed in px/s, the ranges of a band's height and a field's width, the line of field-edge color
+// between cells and between bands (and along each side of a road, its verges), and a road's width
 const GROUND_SPEED = 50
 const BAND_HEIGHT = { min: 60, max: 220 }
 const CELL_WIDTH = { min: 60, max: 320 }
-const ROAD = 3
+const EDGE = 3
+const ROAD = 10
+
+// The roads: a block of ground, from one road across to the next, is this many bands tall, and the roads down a block
+// stand this many fields apart (a span between two is the sum of that many field widths, and each band cuts it into
+// as many cells)
+const BLOCK_BANDS = { min: 2, max: 5 }
+const SPAN_FIELDS = { min: 2, max: 5 }
+
+// The vehicles: their size along and across the road, their speed over the ground in px/s, how many a block's road
+// across starts with, the chance that a road down a block starts with one, and the chance that one turns at a junction
+// it passes. A vehicle's road is ACROSS, the block's road across, or the index of a road down the block
+const VEHICLE = { length: 5, width: 3 }
+const VEHICLE_SPEED = { min: 15, max: 35 }
+const VEHICLES_ACROSS = { min: 0, max: 2 }
+const VEHICLE_CHANCE = 0.5
+const TURN_CHANCE = 0.35
+const ACROSS = -1
 
 // The clouds: their speed (1.6 × the ground's, so they read as nearer), how many are on screen, the circles of one and
 // the ellipse their centres fall in (its half-axes), the gradient's alpha at a circle's centre, how far above the top
@@ -74,9 +91,9 @@ let frame = 0
 let last = null
 let t = 0
 
-// The scene: the ground's bands, topmost first; the clouds; the jet with its paths, its length and its anchor; the
-// fields' textures, built once the context exists
-let bands = []
+// The scene: the ground's blocks, topmost first, each with its bands, its roads and its vehicles; the clouds; the jet
+// with its paths, its length and its anchor; the fields' textures, built once the context exists
+let blocks = []
 let clouds = []
 let jet = null
 let textures = []
@@ -89,6 +106,11 @@ function between(min, max) {
 /** A random integer from `min` to `max`, both included */
 function integer(min, max) {
     return Math.floor(between(min, max + 1))
+}
+
+/** Whether a chance of `probability` comes off */
+function chance(probability) {
+    return between(0, 1) < probability
 }
 
 /** The CSS color of the palette's `[r, g, b]` channels at `alpha`, in the comma form every browser parses */
@@ -144,65 +166,154 @@ function pickField(previous) {
 }
 
 /**
- * A band from `top` to `bottom`, cut into cells across the current width, each a field color unlike its left
- * neighbour's, with a texture at random and a seed for what the texture varies by cell
+ * A band's cells: every span between a block's roads cut into 2–5 cells, as many as the field widths let it (no
+ * narrower than the min, and no more than the max would need), each the min plus a random share of what the span has
+ * over that, with a field color unlike its left neighbour's, a texture at random and a seed for what the texture
+ * varies by cell. A cell's width includes the edge to its right, so a span's last cell ends an edge short of the road.
  */
-function makeBand(top, bottom) {
+function cutCells(spans) {
     const cells = []
-    let x = 0
     let previous = null
-    while (x < width) {
-        const cellWidth = between(CELL_WIDTH.min, CELL_WIDTH.max)
-        const field = pickField(previous)
-        const texture = integer(0, textures.length - 1)
-        cells.push({
-            x,
-            width: cellWidth,
-            field,
-            texture,
-            seed: between(0, TAU),
-        })
-        x += cellWidth
-        previous = field
+    for (const [from, to] of spans) {
+        const span = to - from
+        const count = Math.min(
+            Math.max(
+                integer(SPAN_FIELDS.min, SPAN_FIELDS.max),
+                Math.ceil(span / CELL_WIDTH.max),
+            ),
+            Math.floor(span / CELL_WIDTH.min),
+        )
+        const weights = Array.from({ length: count }, () => between(1, 2))
+        const total = weights.reduce((sum, weight) => sum + weight, 0)
+        const slack = span - count * CELL_WIDTH.min
+        let x = from
+        for (const weight of weights) {
+            const cellWidth = CELL_WIDTH.min + (slack * weight) / total
+            const field = pickField(previous)
+            cells.push({
+                x,
+                width: cellWidth,
+                field,
+                texture: integer(0, textures.length - 1),
+                seed: between(0, TAU),
+            })
+            x += cellWidth
+            previous = field
+        }
     }
-    return { top, bottom, cells }
-}
-
-/** A band's random height */
-function bandHeight() {
-    return between(BAND_HEIGHT.min, BAND_HEIGHT.max)
+    return cells
 }
 
 /**
- * Drops the bands whose top has passed the bottom edge and keeps the ground covered: bands are added above the topmost
- * until one lies wholly above the top edge (from the bottom edge up when the ground is empty: at init, and after the
+ * A block of ground: the road across its top, and under it 2–5 bands of cells cut between the roads down the block,
+ * which stand 2–5 fields apart and run from the road across to the block's bottom, where the next block's road across
+ * is. The spans between the roads are cut for the current width: the first starts up to a field's width left of the
+ * edge, so a road can fall anywhere across the viewport, the edge included, and the last runs past the right edge,
+ * where no road is kept. Its bands and its vehicles are placed from its top, which the caller sets.
+ */
+function makeBlock() {
+    const roads = []
+    const spans = []
+    let x = -between(0, CELL_WIDTH.max)
+    while (x < width) {
+        let end = x
+        const fields = integer(SPAN_FIELDS.min, SPAN_FIELDS.max)
+        for (let i = 0; i < fields; i++) {
+            end += between(CELL_WIDTH.min, CELL_WIDTH.max)
+        }
+        spans.push([x, end])
+        if (end < width) {
+            roads.push(end)
+        }
+        x = end + ROAD + EDGE
+    }
+
+    const bands = []
+    const count = integer(BLOCK_BANDS.min, BLOCK_BANDS.max)
+    // The first band starts below the road across and its verge
+    let top = ROAD + EDGE
+    for (let i = 0; i < count; i++) {
+        const bottom = top + between(BAND_HEIGHT.min, BAND_HEIGHT.max)
+        bands.push({ top, bottom, cells: cutCells(spans) })
+        top = bottom
+    }
+
+    const block = { top: 0, height: top, bands, roads, vehicles: [] }
+    const across = integer(VEHICLES_ACROSS.min, VEHICLES_ACROSS.max)
+    for (let i = 0; i < across; i++) {
+        block.vehicles.push(makeVehicle(ACROSS, between(0, width)))
+    }
+    roads.forEach((_, road) => {
+        if (chance(VEHICLE_CHANCE)) {
+            const at = between(ROAD / 2, block.height + ROAD / 2)
+            block.vehicles.push(makeVehicle(road, at))
+        }
+    })
+    return block
+}
+
+/** A block's bottom edge, where the block below's road across runs */
+function bottomOf(block) {
+    return block.top + block.height
+}
+
+/**
+ * Drops the blocks whose top has passed the bottom edge and keeps the ground covered: blocks are added above the
+ * topmost until it covers the top edge (from the bottom edge up when the ground is empty: at init, and after the
  * width grows), and below the lowest when a viewport grown taller has uncovered ground under it.
  */
-function recycleBands() {
-    while (bands.length > 0 && bands[bands.length - 1].top >= height) {
-        bands.pop()
+function recycleBlocks() {
+    while (blocks.length > 0 && blocks[blocks.length - 1].top >= height) {
+        blocks.pop()
     }
-    while (bands.length === 0 || bands[0].bottom > 0) {
-        const bottom = bands.length === 0 ? height : bands[0].top
-        bands.unshift(makeBand(bottom - bandHeight(), bottom))
+    while (blocks.length === 0 || blocks[0].top > 0) {
+        const block = makeBlock()
+        const bottom = blocks.length === 0 ? height : blocks[0].top
+        block.top = bottom - block.height
+        blocks.unshift(block)
     }
-    while (bands[bands.length - 1].bottom < height) {
-        const top = bands[bands.length - 1].bottom
-        bands.push(makeBand(top, top + bandHeight()))
+    while (bottomOf(blocks[blocks.length - 1]) < height) {
+        const block = makeBlock()
+        block.top = bottomOf(blocks[blocks.length - 1])
+        blocks.push(block)
     }
 }
 
 /**
- * The road under everything, then every cell, each leaving the gap to its right and below it: its color, then its
- * texture painted over it from its corner
+ * The field-edge color under everything, then every block in its frame, the origin at its top: its cells, its roads
+ * over them and its vehicles over those
  */
 function drawGround() {
-    ctx.fillStyle = colors.road
+    ctx.fillStyle = colors.fieldEdge
     ctx.fillRect(0, 0, width, height)
-    for (const band of bands) {
-        const cellHeight = band.bottom - band.top - ROAD
+    for (const block of blocks) {
+        placed(0, block.top, () => {
+            drawCells(block)
+            drawRoads(block)
+            drawVehicles(block)
+        })
+    }
+}
+
+/**
+ * A block's cells, each leaving the edge to its right and below it: its color, then its texture painted over it from
+ * its corner. A band wholly past the top or the bottom edge is skipped, and so is a cell wholly past a side: a block
+ * may stand mostly above the viewport, and its last span runs past the right edge.
+ */
+function drawCells(block) {
+    for (const band of block.bands) {
+        if (block.top + band.bottom <= 0 || block.top + band.top >= height) {
+            continue
+        }
+        const cellHeight = band.bottom - band.top - EDGE
         for (const cell of band.cells) {
-            const cellWidth = cell.width - ROAD
+            if (cell.x >= width) {
+                break
+            }
+            if (cell.x + cell.width <= 0) {
+                continue
+            }
+            const cellWidth = cell.width - EDGE
             ctx.fillStyle = colors.fields[cell.field]
             ctx.fillRect(cell.x, band.top, cellWidth, cellHeight)
             placed(cell.x, band.top, () => {
@@ -214,6 +325,151 @@ function drawGround() {
                 )
             })
         }
+    }
+}
+
+/**
+ * A block's roads: the one across its top, the width of the viewport, and the ones down it, from that road to the
+ * block's bottom, so each meets the next block's road across
+ */
+function drawRoads(block) {
+    ctx.fillStyle = colors.road
+    ctx.fillRect(0, 0, width, ROAD)
+    for (const x of block.roads) {
+        ctx.fillRect(x, 0, ROAD, block.height)
+    }
+}
+
+/**
+ * A vehicle on `road` of a block (ACROSS, or the index of a road down it), `at` along it (an x on the road across, an
+ * offset from the block's top on a road down), heading either way at a speed of its own over the ground, light or dark
+ */
+function makeVehicle(road, at) {
+    return {
+        road,
+        at,
+        dir: chance(0.5) ? 1 : -1,
+        speed: between(VEHICLE_SPEED.min, VEHICLE_SPEED.max),
+        light: chance(0.5),
+    }
+}
+
+/** Where a vehicle is in its block's frame, keeping to the right of its road: [x, y] */
+function vehiclePlace(block, { road, at, dir }) {
+    if (road === ACROSS) {
+        // Eastbound on the south side, westbound on the north
+        return [at, ROAD * (dir === 1 ? 0.75 : 0.25)]
+    }
+    // Southbound on the west side, northbound on the east
+    return [block.roads[road] + ROAD * (dir === 1 ? 0.25 : 0.75), at]
+}
+
+/** A block's vehicles: each a rectangle the long way along its road, centred where it is */
+function drawVehicles(block) {
+    for (const vehicle of block.vehicles) {
+        const [x, y] = vehiclePlace(block, vehicle)
+        const [w, h] =
+            vehicle.road === ACROSS
+                ? [VEHICLE.length, VEHICLE.width]
+                : [VEHICLE.width, VEHICLE.length]
+        ctx.fillStyle = vehicle.light ? colors.vehicleLight : colors.vehicleDark
+        ctx.fillRect(x - w / 2, y - h / 2, w, h)
+    }
+}
+
+/** Whether a step from `from` to `to` along a road passes the junction at `centre` */
+function passes(from, to, centre) {
+    return from < centre ? to >= centre : from > centre && to <= centre
+}
+
+/** Turns a vehicle onto the road across at `x`, either way at random */
+function turnAcross(vehicle, x) {
+    vehicle.road = ACROSS
+    vehicle.at = x
+    vehicle.dir = chance(0.5) ? 1 : -1
+}
+
+/** Turns a vehicle down `road`, `at` along it, heading `dir` */
+function turnDown(vehicle, road, at, dir) {
+    vehicle.road = road
+    vehicle.at = at
+    vehicle.dir = dir
+}
+
+/**
+ * A vehicle on a road down block `i` after its step: the block it is in, which is the block below once it has turned
+ * at the junction at the bottom, or null when it has left the scene, there being no block below, since that junction
+ * is then past the bottom edge. At the junction at either end it turns onto the road across there, this block's at
+ * the top, the block below's at the bottom.
+ */
+function driveDown(i, vehicle) {
+    const block = blocks[i]
+    const x = block.roads[vehicle.road] + ROAD / 2
+    if (vehicle.at < ROAD / 2) {
+        turnAcross(vehicle, x)
+        return block
+    }
+    if (vehicle.at > block.height + ROAD / 2) {
+        if (i === blocks.length - 1) {
+            return null
+        }
+        turnAcross(vehicle, x)
+        return blocks[i + 1]
+    }
+    return block
+}
+
+/**
+ * A vehicle on block `i`'s road across after its step from `from`: the block it is in, which is the block above once
+ * it has turned up one of that block's roads. At a junction it passes it turns, by TURN_CHANCE, down this block's road
+ * or up the block above's, which ends at this road; past either side of the viewport it comes round the other, the
+ * road running on past both.
+ */
+function driveAcross(i, vehicle, from) {
+    const block = blocks[i]
+    const junction = (roads) =>
+        roads.findIndex((x) => passes(from, vehicle.at, x + ROAD / 2))
+    const down = junction(block.roads)
+    if (down !== -1 && chance(TURN_CHANCE)) {
+        turnDown(vehicle, down, ROAD / 2, 1)
+        return block
+    }
+    const above = i > 0 ? blocks[i - 1] : null
+    const up = above === null ? -1 : junction(above.roads)
+    if (up !== -1 && chance(TURN_CHANCE)) {
+        turnDown(vehicle, up, above.height + ROAD / 2, -1)
+        return above
+    }
+    if (vehicle.at > width + VEHICLE.length) {
+        vehicle.at = -VEHICLE.length
+    } else if (vehicle.at < -VEHICLE.length) {
+        vehicle.at = width + VEHICLE.length
+    }
+    return block
+}
+
+/**
+ * Moves every vehicle on by `dt` seconds along its road, and moves the ones that turned into another block to that
+ * block's list once every block has been stepped, so none is stepped twice in a frame
+ */
+function advanceVehicles(dt) {
+    const arrivals = []
+    blocks.forEach((block, i) => {
+        block.vehicles = block.vehicles.filter((vehicle) => {
+            const from = vehicle.at
+            vehicle.at += vehicle.dir * vehicle.speed * dt
+            const now =
+                vehicle.road === ACROSS
+                    ? driveAcross(i, vehicle, from)
+                    : driveDown(i, vehicle)
+            if (now !== block && now !== null) {
+                arrivals.push([now, vehicle])
+            }
+            return now === block
+        })
+    })
+    for (const [block, vehicle] of arrivals) {
+        block.vehicles.push(vehicle)
     }
 }
 
@@ -643,8 +899,8 @@ function drawGlow([x, y], halo) {
 
 /** The scene from scratch for the current size: the ground, the clouds spread over the viewport, the jet */
 function generateScene() {
-    bands = []
-    recycleBands()
+    blocks = []
+    recycleBlocks()
     clouds = []
     const count = integer(CLOUD_COUNT.min, CLOUD_COUNT.max)
     for (let i = 0; i < count; i++) {
@@ -654,21 +910,21 @@ function generateScene() {
     placeJet()
 }
 
-/** Moves the scene on by `dt` seconds and replaces what has scrolled off the bottom */
+/** Moves the scene on by `dt` seconds, replaces what has scrolled off the bottom and drives the vehicles */
 function advance(dt) {
     t += dt
-    for (const band of bands) {
-        band.top += GROUND_SPEED * dt
-        band.bottom += GROUND_SPEED * dt
+    for (const block of blocks) {
+        block.top += GROUND_SPEED * dt
     }
     for (const cloud of clouds) {
         cloud.y += CLOUD_SPEED * dt
     }
-    recycleBands()
+    recycleBlocks()
     recycleClouds()
+    advanceVehicles(dt)
 }
 
-/** One frame, in the order the layers stack: road, cells, cloud shadows, clouds, jet, lights */
+/** One frame, in the order the layers stack: field edges, cells, roads, vehicles, cloud shadows, clouds, jet, lights */
 function draw() {
     drawGround()
     drawCloudShadows()
@@ -727,7 +983,7 @@ function syncLoop() {
  */
 function onInit(message) {
     canvas = message.canvas
-    // Opaque: the road fill covers the bitmap every frame, so the browser composites it without blending
+    // Opaque: the field-edge fill covers the bitmap every frame, so the browser composites it without blending
     ctx = canvas.getContext("2d", { alpha: false })
     width = message.width
     height = message.height
@@ -736,7 +992,11 @@ function onInit(message) {
     hidden = message.hidden
     palette = message.palette
     colors = {
+        fieldEdge: rgba(palette.fieldEdge, 1),
         road: rgba(palette.road, 1),
+        // The vehicles: light ones in the cloud white, dark ones in the shadow ink, each a little translucent
+        vehicleLight: light(0.9),
+        vehicleDark: dark(0.7),
         fields: palette.fields.map((field) => rgba(field, 1)),
         cloudCore: rgba(palette.cloud, CLOUD_ALPHA),
         cloudRim: rgba(palette.cloud, 0),
@@ -768,8 +1028,8 @@ function onInit(message) {
 
 /**
  * A new size or pixel ratio. The observer's first notification repeats init's size: a no-op. A new ratio alone
- * resizes the bitmap; a new size also refits the scene: the ground is regenerated when the width grows, as its cells
- * are cut for the width, and kept otherwise, with bands dropped or added as the height asks; a cloud now past an edge
+ * resizes the bitmap; a new size also refits the scene: the ground is regenerated when the width grows, as its roads
+ * and cells are cut for the width, and kept otherwise, with blocks dropped or added as the height asks; a cloud now past an edge
  * scrolls off and is replaced as usual; the jet is anchored again. A frame is drawn at once in every case: sizing the
  * bitmap clears it, and the blank bitmap would reach the page at the end of this task, a flash before the next frame
  * fills it, while a still (reduced or hidden) would otherwise stay blank or stretched.
@@ -786,9 +1046,9 @@ function onResize(message) {
     sizeBitmap()
     if (!sameSize) {
         if (wider) {
-            bands = []
+            blocks = []
         }
-        recycleBands()
+        recycleBlocks()
         recycleClouds()
         placeJet()
     }

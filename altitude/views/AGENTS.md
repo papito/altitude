@@ -847,7 +847,8 @@ setting `canvas.style.color = "var(--token)"` and reading `getComputedStyle(canv
 `oklab(…)`, by recipe and browser) is painted into a 1 × 1 scratch 2D context and read back with `getImageData`, so
 every color reaches the Worker as sRGB channels `[r, g, b]` (integers 0–255), to which the Worker applies alphas of its
 own (gradient stops, shadows). The palette's keys are `fields` (six, `--setup-background-field-1` … `-6`, in order),
-`road`, `cloud`, `cloudShadow`, `jet`, `jetOutline` (the `--setup-background-*` tokens of those names), `lightLeft`
+`fieldEdge` (`--setup-background-field-edge`), `road`, `cloud`, `cloudShadow`, `jet`, `jetOutline` (the
+`--setup-background-*` tokens of those names), `lightLeft`
 (`--error-color`, the red navigation light on the left wingtip), `lightRight` (`--success-font-color`, the green one on
 the right) and `strobe` (`--theme-text`, the white strobe). It then reads the canvas's CSS size from
 `getBoundingClientRect()` and `devicePixelRatio`, starts the module Worker,
@@ -870,8 +871,8 @@ naming the feature and does nothing else, so the canvas stays transparent. The s
 clouds, the jet and the draw order, is the Worker's, `js/setup-background/setup-background-worker.js`.
 
 The Worker draws in CSS px: the bitmap is `width × dpr` by `height × dpr` with `dpr` capped at 2 and the context
-scaled to match, so a 3× phone does not triple the fill rate; the context is opaque (`alpha: false`), as the road fill
-covers it every frame. The clock is `requestAnimationFrame` (a Worker owning an OffscreenCanvas has it): a frame
+scaled to match, so a 3× phone does not triple the fill rate; the context is opaque (`alpha: false`), as the
+field-edge fill covers it every frame. The clock is `requestAnimationFrame` (a Worker owning an OffscreenCanvas has it): a frame
 advances the scene by `min(timestamp − last, 100 ms)`, so a resumed tab or a stalled frame moves it one short step,
 and the scene keeps a running time `t` in seconds, which the lights read. One frame handle is pending at
 most: a start requests a frame only when none is pending, a stop cancels it. On `init` the Worker sizes the bitmap,
@@ -884,18 +885,42 @@ first notification is one); a new ratio alone resizes the bitmap; a new size als
 frame at once, since sizing the bitmap clears it and the blank would reach the page before the next frame, and a still
 would otherwise stay stretched or blank.
 
-The ground scrolls down at 50 px/s (the view flies up). The whole canvas is painted road color, then the cells over it:
-a band is 60–220 px tall and cut into cells 60–320 px wide for the current width, each cell's rectangle 3 px short
-on the right and at the bottom, so a road runs between cells and between bands. A cell's color is one of the six field
-colors and never its left neighbour's (a pick among the other five), and one of ten textures at random, painted over
-its color in translucent dark and light ink from the cell's corner so it scrolls with the cell
-(`js/setup-background/setup-background-textures.js`: furrows across, down and on the diagonal, crop rows, tramlines,
-strip crops inside a headland, an orchard, mottled pasture, contour strips and a centre pivot; most are 128 px tiles
-repeated by a `CanvasPattern`, the headland and the pivot are drawn to the cell). The band list, topmost first,
-holds every band that overlaps the viewport plus one wholly above the top edge; a band whose top passes the bottom edge is dropped and
-new ones are generated above the topmost, so nothing repeats. On resize the bands are regenerated when the width grows
-(the cells are cut for the width) and kept otherwise: bands are dropped or added above as the height asks, and added
-below the lowest when a taller viewport uncovers ground under it. Cloud shadows come next, on the ground: each cloud's
+The ground scrolls down at 50 px/s (the view flies up). It is a list of blocks, topmost first, each the ground from one
+road across to the next: a road 10 px wide along the block's top, the width of the viewport, and under it 2–5 bands,
+each 60–220 px tall, cut into cells between the block's roads down, which run from the road across to the block's
+bottom, where the next block's road across is, so the roads down one block end at a road across and the next block's
+start past it at positions of its own (T-junctions, not a grid). The roads down a block stand 2–5 fields apart: each
+span between two is the sum of that many field widths of 60–320 px, the first span starting up to 320 px left of the
+edge and the last running past the right edge, and every band cuts each span into 2–5 cells (as many as the field
+widths let it), each 60 px plus a random share of the rest. The whole canvas is painted `fieldEdge`, then each block in
+a frame at its top: its cells, each 3 px short on the right and at the bottom, so a field edge runs between cells and
+between bands and along each side of a road as its verges (the first band starts a road and an edge below the block's
+top, and a span's last cell ends an edge short of the road); then its roads in `road` over them; then its vehicles. A
+cell's color is one of the six field colors and never its left neighbour's (a pick among the other five, across a
+road too), and one of ten textures at random, painted over its color in translucent dark and light ink from the cell's
+corner so it scrolls with the cell (`js/setup-background/setup-background-textures.js`: furrows across, down and on the
+diagonal, crop rows, tramlines, strip crops inside a headland, an orchard, mottled pasture, contour strips and a centre
+pivot; most are 128 px tiles repeated by a `CanvasPattern`, the headland and the pivot are drawn to the cell); a band
+or a cell wholly outside the viewport is skipped. The block list holds every block that overlaps the viewport (the
+topmost covers the top edge); a block whose top passes the bottom edge is dropped with its vehicles, and new ones are
+generated above the topmost, so nothing repeats. On resize the blocks are regenerated when the width grows (the roads
+and the cells are cut for the width) and kept otherwise: blocks are dropped or added above as the height asks, and
+added below the lowest when a taller viewport uncovers ground under it.
+
+The vehicles are 3 × 5 px rectangles the long way along their road, half of them in the cloud white at alpha 0.9 and
+half in the shadow ink at 0.7, keeping to the right of the road (eastbound on the south side, southbound on the west),
+each at a speed of its own of 15–35 px/s over the ground, so a northbound one still scrolls down the screen, slower
+than the fields. A block starts with 0–2 on its road across at random x and, by a chance of 0.5 per road, one on
+each road down it; they belong to the block (a vehicle's road is the block's road across or the index of one down it,
+and its position an x on the road across or an offset from the block's top on a road down, so the ground's scrolling
+moves it for nothing). A vehicle reaching the end of a road down turns onto the road across there, either way at
+random: this block's at the top, the block below's at the bottom, where it moves to that block's list, or leaves the
+scene when there is no block below, that junction being past the bottom edge. One on a road across turns, by a chance
+of 0.35 at each junction it passes, down this block's road or up the block above's, and past either side of the
+viewport comes round the other, the road running on past both. The vehicles are stepped after the blocks are recycled,
+and a vehicle that changed block is moved once every block has been stepped, so none is stepped twice in a frame.
+
+Cloud shadows come next, on the ground: each cloud's
 circles as one path, filled with `cloudShadow` at alpha 0.28 and offset (−40, +40) px from the cloud, so the light
 comes from the upper right. The clouds scroll at 80 px/s, 1.6 × the ground. A cloud is 4–8 circles of radius 30–90 px whose centres fall
 within an ellipse of 220 × 120 px around its centre (a uniform angle and a square-rooted distance spread them over its
@@ -926,7 +951,8 @@ halfway to the outline ink, outlined as the skin is, so the tips keep their shap
 over it with a radial gradient cached at the origin per color, solid in the full color out to the dot's radius, then
 a halo fading to nothing at three times it: red `lightLeft` on the left wingtip and green `lightRight` on the right,
 on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flashes starting 120 ms apart every
-1.2 s. A frame's draw order is road fill → cells → cloud shadows → clouds → jet → lights.
+1.2 s. A frame's draw order is field-edge fill → each block's cells, roads and vehicles → cloud shadows → clouds →
+jet → lights.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
