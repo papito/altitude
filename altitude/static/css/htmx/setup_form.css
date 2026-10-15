@@ -1,3 +1,6 @@
+/* The setup form's carve-out: its fields, labels and submit button take the `--setup-form-*` tokens of core.css, a
+   palette of the form's own, apart from the theme the rest of the app derives from */
+
 #setupForm {
     display: grid;
     grid-auto-rows: min-content;
@@ -6,31 +9,70 @@
 
 #setupForm label {
     display: block;
-    font-weight: bold;
-    text-transform: uppercase;
     margin-bottom: var(--space-3);
-    font-size: 1.2em;
+    color: var(--setup-form-label-color);
+    /* 13px of the 14px body */
+    font-size: 0.93em;
+    font-weight: 500;
 }
 
-#setupForm input:not([type="submit"]) {
-    width: 100%
+#setupForm input {
+    width: 100%;
+    padding: var(--space-5) var(--space-6);
+    background-color: var(--setup-form-field-color);
+    color: var(--font-color);
+    border: var(--setup-form-field-border);
+    border-radius: 6px;
+    font-size: 1em;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+#setupForm input::placeholder {
+    color: var(--setup-form-placeholder-color);
+}
+
+#setupForm input:hover:not(.readonly) {
+    border-color: var(--setup-form-field-hover-border-color);
+}
+
+#setupForm input:focus {
+    border-color: var(--setup-form-accent);
+    box-shadow: var(--setup-form-focus-shadow);
+}
+
+/* The database type, which cannot be edited: flat on the card, in the placeholder's gray */
+#setupForm input.readonly {
+    background-color: var(--setup-form-base);
+    color: var(--setup-form-placeholder-color);
+}
+
+/* A field in error keeps its 1px edge, in the error color, focused too; after the focus rule, so it wins at equal
+   specificity */
+#setupForm input.error, #setupForm input.error:focus {
+    border-color: var(--error-color);
+    box-shadow: none;
+}
+
+/* The submit button fills the card's width: a grid cell stretches it */
 #setupForm .submit {
     margin-top: var(--control-vertical-space);
     display: grid;
-    place-items: center;
-}
-
-#setupForm input[type="submit"] {
-    line-height: 1.3em;
-    font-size: 1.2em;
-    width: 50%
 }
 
 #setupForm .action-button {
-    padding: var(--space-5) var(--space-9);
-    font-size: 1.3em;
+    padding: var(--space-5);
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--setup-form-base);
+    background: var(--setup-form-accent);
+    border: var(--setup-form-card-border);
+    border-radius: 6px;
+    text-shadow: none;
+}
+
+#setupForm .action-button:hover, #setupForm .action-button:focus-visible {
+    box-shadow: var(--setup-form-focus-shadow);
 }
 
 #setupForm div.error {

@@ -86,8 +86,9 @@
           <h2>Colors</h2>
           <p>Every color token of <code>:root</code> in <code>core.css</code>. The five theme colors hold the palette as
              <code>light-dark(light, dark)</code> pairs, and every other color token derives from them, or from a status
-             color: use a theme color or a role token, and derive any new color from a theme color. The status colors
-             and <code>--shadow-color</code> stand apart, with pairs of their own. A derived card shows its recipe and
+             color: use a theme color or a role token, and derive any new color from a theme color. The status colors,
+             <code>--shadow-color</code> and the setup page's colors (the fields of its scene and its form's carve-out)
+             stand apart, with pairs of their own. A derived card shows its recipe and
              the tokens it comes from; Off palette marks a token that writes a color literal, and the literals written
              past the tokens are listed under Token audit. The app is dark; the Light / Dark switch above the contents
              shows this page in either theme and is remembered in this browser. Click a token to copy its
@@ -97,6 +98,8 @@
           @tokenCards("color", "theme")
           <h3>Status and shadow</h3>
           @tokenCards("color", "status-and-shadow")
+          <h3>Setup page</h3>
+          @tokenCards("color", "setup")
           <h3>Derived</h3>
           @tokenCards("color", "derived")
         </section>

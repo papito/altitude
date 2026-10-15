@@ -10,7 +10,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors, `--shadow-color` and the setup background's field tokens (`--setup-background-field-*`) hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors, `--shadow-color` and the setup page's stand-apart tokens (the fields of its scene, `--setup-background-field-*`, and its form's carve-out, `--setup-form-base`, `-muted` and `-accent`) hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -834,10 +834,16 @@ exists) runs a full-screen animated scene behind the page, a top-down view of a 
 `<canvas id="setupBackground">`, is the first element of the body; `static/css/pages/setup.css` fixes it over the whole
 viewport at `z-index: -1` (above the root's background, below every element of the page, so the markup is otherwise
 untouched), `pointer-events: none`, and `opacity: 0` with a 600 ms transition to `.ready`, so the form never sits on a
-flash of blank canvas. The form's container (`:where(body.setup) main > div`) is a frosted card:
-`--setup-background-card-color` over `backdrop-filter: blur(12px)` (a radius, not a spacing, so a literal),
-`--form-border`, `--section-vertical-space` padding. The brand bar stays opaque; the footer loses its background and
-takes the nav's text shadow (`--navbar-text-shadow`), so the scenery runs under it. The page module, `js/setup-page.js`,
+flash of blank canvas. The form's container (`:where(body.setup) main > div`) is a frosted card: a radial gradient
+from `--setup-form-base`, opaque at the center, to `--setup-form-card-edge-color`, the same color at zero alpha, at
+the corners, over `backdrop-filter: blur(12px)`, so the center is solid and the edges frost into the scene;
+`--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
+literal, as is the blur's); `--section-vertical-space` padding. The card and the form on it are a carve-out from the
+theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus, read-only and error
+states, the labels and the full-width submit button from the `--setup-form-*` tokens alone (see **Themes**), so the
+form keeps its palette whatever the theme colors become. The brand bar stays opaque; the footer loses its
+background and takes the nav's text shadow (`--navbar-text-shadow`), so the scenery runs under it. The page module,
+`js/setup-page.js`,
 only calls `startSetupBackground(canvas)` of `js/setup-background/setup-background.js`: the form submits through htmx
 and `json-enc.js`, which the page loads as plain scripts, so there is nothing else to register. The page side returns at
 once where `canvas.transferControlToOffscreen` is not a function: no fallback, the canvas stays empty and the page looks
@@ -995,17 +1001,21 @@ from them by a recipe: a `var()` alias (`--selection-color: var(--theme-accent)`
 syntax for an alpha (`--tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05)`). A derived color
 follows the pairs of the tokens it comes from, so editing a theme color moves everything derived from it. A token
 holding a border or a shadow derives only the color inside it
-(`--form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base))`). Three kinds of color
+(`--form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base))`). Four kinds of color
 stand apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which tokens of
 another meaning may alias (`--trashbin-color` and `--person-unknown-color` are `var(--warning-font-color)`);
 `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
 (`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`; the button label's shadow is a gray derived from the
-theme colors instead); and the fields of the setup page's background scene (`--setup-background-field-1` … `-6`),
-which are illustration, not chrome, and whose companion tokens (`--setup-background-road`, `-cloud`, `-cloud-shadow`,
-`-jet`, `-jet-outline` and `-card-color`) derive from the theme and shadow tokens. `--line-color` is the edge between
+theme colors instead); the fields of the setup page's background scene (`--setup-background-field-1` … `-6`), which
+are illustration, not chrome, and whose companion tokens (`--setup-background-road`, `-cloud`, `-cloud-shadow`, `-jet`
+and `-jet-outline`) derive from the theme and shadow tokens; and the setup form's carve-out, a surface, a line color
+and a hue of its own (`--setup-form-base`, `-muted` and `-accent`), from which the form's other tokens
+(`-card-edge-color`, `-card-border`, `-field-color`, `-field-border`, `-field-hover-border-color`, `-focus-shadow`,
+`-placeholder-color` and `-label-color`) derive, so the form on the setup page keeps the look of its design whatever
+the theme colors become; it is the one place with a second hue. `--line-color` is the edge between
 surfaces, the color of `--menu-border`, `--result-border` and `--modal-border`. A light theme is therefore five pairs
-plus the status colors, `--shadow-color` and the six field pairs. Their light colors are placeholders equal to the dark
-ones; `--background-color` is the one derived token with a pair, whose light color is
+plus the status colors, `--shadow-color` and the setup page's nine pairs. Their light colors are placeholders equal to
+the dark ones; `--background-color` is the one derived token with a pair, whose light color is
 `rgb(from var(--theme-base) r g b / 0.88)`.
 
 Stylesheets reference the tokens and write no color literal, named colors included. A new
@@ -1039,11 +1049,12 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
   **Theme colors** (`--theme-*`), **Status and shadow** (`--success-*`, `--warning-*`, `--error-*` and
-  `--shadow-color`), **Setup background** (`--setup-background-*`) and **Derived** (every other). The lengths are
+  `--shadow-color`), **Setup page** (`--setup-*`: the fields of its scene and its form's carve-out) and **Derived**
+  (every other). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
   length, such as a width or a radius); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. "Off palette" marks a color, border or shadow token outside the Theme colors,
-  Status and shadow and Setup background groups whose declaration writes a color literal (a hex color, a color
+  Status and shadow and Setup page groups whose declaration writes a color literal (a hex color, a color
   function with its channels written out, or a named color), which keeps the palette at the five. "Same value as"
   names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
   same color in both themes). Two tokens that take their color from the same tokens are not flagged, since the

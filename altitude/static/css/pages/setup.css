@@ -39,9 +39,13 @@ body:where(.setup) {
     grid-auto-rows: min-content;
     grid-row-gap: var(--section-vertical-space);
     padding: var(--section-vertical-space);
-    background: var(--setup-background-card-color);
+    /* Solid at the center and clear at the corners, while the blur frosts the scene under the whole card */
+    background: radial-gradient(ellipse at center,
+        var(--setup-form-base) 55%,
+        var(--setup-form-card-edge-color) 100%);
     backdrop-filter: blur(12px);
-    border: var(--form-border);
+    border: var(--setup-form-card-border);
+    border-radius: 6px;
 }
 
 :where(body.setup) footer {
