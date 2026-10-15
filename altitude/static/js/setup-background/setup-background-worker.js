@@ -42,13 +42,15 @@ const TURN_CHANCE = 0.35
 const ACROSS = -1
 
 // The clouds: their speed (1.6 × the ground's, so they read as nearer), how many are on screen, the circles of one and
-// the ellipse their centres fall in (its half-axes), the gradient's alpha at a circle's centre, how far above the top
-// edge a new cloud's top may spawn, and the shadow's offset and alpha
+// the ellipse their centres fall in (its half-axes), the scales a cloud is drawn at (one picked per cloud, applied to
+// the radii and the ellipse), the gradient's alpha at a circle's centre, how far above the top edge a new cloud's top
+// may spawn, and the shadow's offset and alpha
 const CLOUD_SPEED = 80
 const CLOUD_COUNT = { min: 4, max: 8 }
 const CLOUD_CIRCLES = { min: 4, max: 8 }
 const CLOUD_RADIUS = { min: 30, max: 90 }
 const CLOUD_SPREAD = { x: 110, y: 60 }
+const CLOUD_SCALES = [1, 2, 3]
 const CLOUD_ALPHA = 0.6
 const CLOUD_GAP = 400
 const CLOUD_SHADOW = { x: -40, y: 40, alpha: 0.28 }
@@ -482,22 +484,24 @@ function cloudGradient(radius) {
 }
 
 /**
- * A cloud centred at (x, y): circles whose centres fall within the ellipse, each with its gradient built here, so no
- * frame builds one; `outline` holds the circles as one path, for the shadow; `up` is the reach from the centre to the
- * top edge, which tells when the cloud has left the viewport and how far above it a new one spawns.
+ * A cloud centred at (x, y), at one of the scales: circles whose centres fall within the ellipse, each with its
+ * gradient built here, so no frame builds one; `outline` holds the circles as one path, for the shadow; `up` is the
+ * reach from the centre to the top edge, which tells when the cloud has left the viewport and how far above it a new
+ * one spawns.
  */
 function makeCloud(x, y) {
     const circles = []
     const outline = new Path2D()
     let up = 0
+    const scale = CLOUD_SCALES[integer(0, CLOUD_SCALES.length - 1)]
     const count = integer(CLOUD_CIRCLES.min, CLOUD_CIRCLES.max)
     for (let i = 0; i < count; i++) {
         // A uniform angle and a square-rooted distance spread the centres evenly over the ellipse's area
         const angle = between(0, TAU)
         const distance = Math.sqrt(between(0, 1))
-        const dx = Math.cos(angle) * CLOUD_SPREAD.x * distance
-        const dy = Math.sin(angle) * CLOUD_SPREAD.y * distance
-        const radius = between(CLOUD_RADIUS.min, CLOUD_RADIUS.max)
+        const dx = Math.cos(angle) * CLOUD_SPREAD.x * distance * scale
+        const dy = Math.sin(angle) * CLOUD_SPREAD.y * distance * scale
+        const radius = between(CLOUD_RADIUS.min, CLOUD_RADIUS.max) * scale
         circles.push({ dx, dy, radius, gradient: cloudGradient(radius) })
         // moveTo first, so the path joins the circles with no line between them
         outline.moveTo(dx + radius, dy)
