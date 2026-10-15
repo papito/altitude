@@ -32,7 +32,9 @@
     color: var(--setup-form-placeholder-color);
 }
 
-#setupForm input:hover:not(.readonly) {
+/* `:where()` keeps the hover rule at the focus rule's specificity, so a focused field under the pointer keeps its
+   accent edge */
+#setupForm input:hover:where(:not(.readonly)) {
     border-color: var(--setup-form-field-hover-border-color);
 }
 

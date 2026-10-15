@@ -29,7 +29,7 @@ body:where(.setup) {
 :where(body.setup) main {
     padding-top: calc(var(--section-vertical-space) * 2);
     display: grid;
-    grid-template-columns: 1fr 400px 1fr;
+    grid-template-columns: 1fr 560px 1fr;
 }
 
 :where(body.setup) main > div {

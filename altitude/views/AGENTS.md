@@ -930,7 +930,7 @@ Cloud shadows come next, on the ground: each cloud's
 circles as one path, filled with `cloudShadow` at alpha 0.28 and offset (−40, +40) px from the cloud, so the light
 comes from the upper right. The clouds scroll at 80 px/s, 1.6 × the ground. A cloud is 4–8 circles of radius 30–90 px whose centres fall
 within an ellipse of 220 × 120 px around its centre (a uniform angle and a square-rooted distance spread them over its
-area), the radii and the ellipse at a scale of 1, 2 or 3 picked per cloud, each circle a radial gradient of `cloud` from alpha 0.6 at the centre to 0 at the rim, built once at the origin when
+area), the radii and the ellipse at a scale of 1 or 2 picked per cloud, each circle a radial gradient of `cloud` from alpha 0.6 at the centre to 0 at the rim, built once at the origin when
 the cloud is made and drawn under a translate, so no frame builds a gradient (and no `ctx.filter`, slow in Safari).
 There are 4–8 clouds, the count picked once at init; a cloud whose top edge passes the bottom edge is replaced by one
 spawned above the top at a random x, its top edge 0–400 px above the viewport, so the sky is never evenly spaced. A
