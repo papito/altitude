@@ -12,7 +12,7 @@
     margin-bottom: var(--space-3);
     color: var(--setup-form-label-color);
     /* 13px of the 14px body */
-    font-size: 0.93em;
+    font-size: 1rem;
     font-weight: 500;
 }
 
