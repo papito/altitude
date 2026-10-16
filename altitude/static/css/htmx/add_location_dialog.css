@@ -1,6 +1,6 @@
 /* The editor needs room for the map: widen the general modal for this dialog only */
 #modalContent:has(.location-editor) {
-  --modal-content-width: 720px;
+  --modal-content-width: 45rem;
 }
 
 /* One field per row; the map, its readout and the place search take rows of their own */

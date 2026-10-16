@@ -11,7 +11,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors, `--shadow-color` and the setup page's stand-apart tokens (the fields of its scene, `--setup-background-field-*`, and its form's carve-out, `--setup-form-base`, `-muted` and `-accent`) hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -281,7 +281,7 @@ repositions on content/viewport/explorer resizing and scrolling, and releases it
 or replacement. `placeAnchoredPanel` (`common/anchored-panel.js`) supplies placement shared with
 context menus: below and left-aligned normally, flipping above or capping height on the roomier side
 when necessary, with horizontal placement constrained to the viewport and the panel kept
-`--viewport-gap` (10 px) from every viewport edge. The box is hidden until measured to avoid a
+`--viewport-gap` (`0.625rem`, 10px at the default root) from every viewport edge. The box is hidden until measured to avoid a
 flash at the default position. Anchored forms use natural content width in `core.css`, keeping
 inputs at their existing width and only the standard padding at the right. The Location map editor
 retains its explicitly declared width. Other general dialogs retain `--modal-content-width` and the
@@ -422,7 +422,7 @@ before the first click; the comment on `_bindBranchGestures` explains why. Initi
 root and its direct children with every branch collapsed; nothing is persisted.
 
 An expanded branch and its visible descendants form a **group**, set off from the rows around it:
-between any two consecutive visible rows the space is the row gap (`--list-row-gap`, 8px, declared in
+between any two consecutive visible rows the space is the row gap (`--list-row-gap`, `0.5rem`, declared in
 `core.css` and shared with the albums and the Locations) or twice
 that where a group starts or ends, never more, whether groups end together, one expanded branch directly
 follows another, or an expanded first child follows its parent's row. The tree's top and bottom get no
