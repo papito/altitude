@@ -27,7 +27,7 @@
   flex-direction: column;
   border-left: var(--panel-border);
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-base);
-  box-shadow: var(--lift-shadow);
+  box-shadow: var(--drop-shadow);
 }
 
 #mapPanel header {
@@ -61,7 +61,7 @@
   border: 2px solid var(--theme-text);
   border-radius: var(--radius);
   background-color: var(--theme-base);
-  box-shadow: var(--marker-shadow);
+  box-shadow: var(--drop-shadow);
   cursor: pointer;
 }
 
@@ -87,7 +87,7 @@
   height: 100%;
   color: var(--theme-text);
   background-color: var(--scrim-color);
-  text-shadow: var(--marker-shadow);
+  text-shadow: var(--drop-shadow);
 }
 
 /* A Location's pin: the glyph with the Location's path beside it */

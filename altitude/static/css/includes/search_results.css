@@ -61,7 +61,6 @@
   margin-top: var(--space-2);
   font-size: 11px;
   color: var(--theme-text);
-  box-shadow: var(--result-metadata-shadow);
 }
 
 /* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail:
@@ -91,7 +90,7 @@
   background-size: 16px 16px;
   background-position: center;
   background-repeat: no-repeat;
-  box-shadow: var(--marker-shadow);
+  box-shadow: var(--drop-shadow);
 }
 
 #assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-duration, .show-fileSize) .cell .metadata {

@@ -1018,7 +1018,7 @@ as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow
 its width and style with its color, which is a theme color (`--control-border: 1px solid var(--theme-raised)`,
 `--list-trace-border`; `--border-thin` and `--border-thick` are solid `--theme-muted`) or `--shadow-color` at an alpha
 (`--panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`, the edge of a chrome panel and the divider
-inside one; the shadows: `--text-shadow`, `--marker-shadow`, `--lift-shadow`, `--result-metadata-shadow`, and
+inside one; the shadows: `--drop-shadow`, the one shadow under a dialog, a panel, a pin or the checkmark, `--text-shadow`, and
 `--box-shadow`, `--theme-text` at 0.07). No two border or shadow tokens hold one value: a rule that needs an edge or a
 shadow writes the token that has it, and a new one is a new look, with a comment above it. What is drawn on a colored fill or over an image (the label of a button or a marker, the
 snackbar's text and edge, a pin's frame) reads `--theme-text` like other text, and gets a token of its own when the

@@ -39,12 +39,10 @@
     /* The corners of a badge: a cell's markers, a pin's path label and inner image */
     --radius-small: 0.1875rem;
 
-    /* Lifts a dialog or the crowded-pin panel off the page, with no sideways offset so it serves a centered box and a
-       panel on the viewport's edge alike */
-    --lift-shadow: 0 2px 8px rgb(from var(--shadow-color) r g b / 0.6);
-    /* Under what sits on an image or a map: an asset pin's frame, a Location pin's glyph, a pin's count, the
-       checkmark of a selected asset */
-    --marker-shadow: 0 1px 4px rgb(from var(--shadow-color) r g b / 0.6);
+    /* The one drop shadow: under a dialog, the crowded-pin panel, an asset pin's frame, a Location pin's glyph, a
+       pin's count and the checkmark of a selected asset. No sideways offset, so it serves a centered box and a panel
+       on the viewport's edge alike */
+    --drop-shadow: 0 1px 6px rgb(from var(--shadow-color) r g b / 0.6);
     /* Under the chrome's text: the nav, the explorer, the content area and an action button's label */
     --text-shadow: rgb(from var(--shadow-color) r g b / 0.75) 0 1px;
     /* A one-pixel light line under a panel's edge, and the hover and focus look of a button or the sort dropdown */
@@ -60,9 +58,6 @@
     /* The gap kept between the viewport's edges and a dialog or a menu */
     --viewport-gap: var(--space-5);
     --modal-toolbar-height: 1.875rem;
-
-    /* Sets a cell's metadata off from the Preview above it */
-    --result-metadata-shadow: 0 -2px 2px 0 rgb(from var(--shadow-color) r g b / 0.15);
     /* Under a tab the pointer is over */
     --tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05);
 
@@ -509,7 +504,7 @@ form input.error, form input.error:focus {
     font-size: 28px;
     line-height: 1;
     text-align: center;
-    text-shadow: var(--marker-shadow);
+    text-shadow: var(--drop-shadow);
 }
 
 /*       */
@@ -564,7 +559,7 @@ form input.error, form input.error:focus {
     width: fit-content;
     border: var(--border-thick);
     border-radius: var(--radius);
-    box-shadow: var(--lift-shadow);
+    box-shadow: var(--drop-shadow);
 }
 
 .modal-toolbar {
