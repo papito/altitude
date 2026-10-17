@@ -10,7 +10,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-*`, `--warning-*`, `--error-*`) or `--shadow-color` by its token (`color: var(--theme-text)`). These, with the setup page's stand-apart tokens (the fields of its scene, `--setup-background-field-*`, and its form's carve-out, `--setup-form-base`, `-muted` and `-accent`), hold the `light-dark(light, dark)` pairs. The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, and the color inside a border or shadow token is a theme color or one of those at an alpha too; no token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-color`, `--warning-color`, `--error-color`) or `--shadow-color` by its token (`color: var(--theme-text)`). These, with the setup page's stand-apart tokens (the fields of its scene, `--setup-background-field-*`, and its form's carve-out, `--setup-form-base`, `-muted` and `-accent`), hold the `light-dark(light, dark)` pairs. The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the three status fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`), each its status color darkened by one recipe; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -431,7 +431,7 @@ margin on `.folder[data-expanded]` (grid items do not collapse margins), cancell
 sibling precedes or where the branch is its parent's last child; expansion already toggles the
 attribute, so the renderer plays no part.
 
-Green (`--success-font-color`) marks the **viewed scope**: the folder whose results are displayed
+Green (`--success-color`) marks the **viewed scope**: the folder whose results are displayed
 and all its descendants, because the results cover that subtree. It has nothing to do with
 expansion. `js/common/viewed-folder-scope.js` keeps the scope of the displayed results and marks
 that one folder node with `data-viewed-scope`; the CSS in `static/css/htmx/folders.css` colors every
@@ -826,7 +826,7 @@ delegated click listener in the page module that fills the input from the row's 
 back as a validation replacement (`HX-Retarget: this`, see above) with the submitted values kept and each error beside its
 field, so no success event fires; a save answers the saved form and `SETTINGS_SAVED_EVENT` shows "Settings saved". The CSS
 is the partial's own file, `static/css/htmx/settings_form.css`, over `core.css` variables (`--section-vertical-space`, `--control-*-space`,
-`--theme-muted`, `--warning-font-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
+`--theme-muted`, `--warning-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
 **Setup background** — `setup.scala.html` (`/setup`, `SetupController`; the index redirects here until the repository
@@ -855,7 +855,7 @@ every color reaches the Worker as sRGB channels `[r, g, b]` (integers 0–255), 
 own (gradient stops, shadows). The palette's keys are `fields` (six, `--setup-background-field-1` … `-6`, in order),
 `fieldEdge` (`--setup-background-field-edge`), `road`, `cloud`, `cloudShadow`, `jet`, `jetOutline` (the
 `--setup-background-*` tokens of those names), `lightLeft`
-(`--error-color`, the red navigation light on the left wingtip), `lightRight` (`--success-font-color`, the green one on
+(`--error-color`, the red navigation light on the left wingtip), `lightRight` (`--success-color`, the green one on
 the right) and `strobe` (`--theme-text`, the white strobe). It then reads the canvas's CSS size from
 `getBoundingClientRect()` and `devicePixelRatio`, starts the module Worker,
 `new Worker(new URL("./setup-background-worker.js", import.meta.url), { type: "module" })`, and posts `init` with the
@@ -998,8 +998,11 @@ five theme colors: `--theme-base` (the app's surface), `--theme-raised` (a surfa
 the browser resolves by the scheme in force, so no rule is written once per theme. A rule writes a theme color by its
 token (`color: var(--theme-text)`, `border: 1px solid var(--theme-muted)`); no token aliases a theme color under
 another name or mixes one at a percentage, so editing a theme color moves every rule that writes it. Four kinds of
-color stand apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which a rule
-writes directly too (an unnamed person's name and the trash entry of the nav are `--warning-font-color`);
+color stand apart, with pairs of their own: the three status colors (`--success-color`, `--warning-color`,
+`--error-color`), the text, icon and edge of a status, which a rule writes directly too (an unnamed person's name and the
+trash entry of the nav are `--warning-color`), and from which the status fills derive by the chrome's one recipe
+(`--success-background-color: oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h)`: the color 0.29 darker
+in OKLab lightness at 80% of its chroma, the same for the three);
 `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
 (`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`); the fields of the setup page's background scene
 (`--setup-background-field-1` … `-6`), which are illustration, not chrome, and whose companion tokens
@@ -1019,7 +1022,7 @@ its width and style with its color, which is a theme color (`--form-border: 2px 
 `--theme-raised` at 0.55). What is drawn on a colored fill or over an image (the label of a button or a marker, the
 snackbar's text and edge, a pin's frame) reads `--theme-text` like other text, and gets a token of its own when the
 light theme gets real values, as it must stay light while the text darkens. A light theme is therefore five pairs plus
-the status colors, `--shadow-color` and the setup page's nine pairs, and no other token has a pair. Their light colors
+the three status colors, `--shadow-color` and the setup page's nine pairs, and no other token has a pair. Their light colors
 are placeholders equal to the dark ones.
 
 Stylesheets reference the tokens and write no color literal, named colors included. A new color is a theme color
@@ -1027,7 +1030,7 @@ written in the rule, or a new veil token, with a comment above it, when it must 
 value is a new token with a meaning, or an existing token whose meaning fits rather than one that merely holds the same
 value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
 alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
-are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-font-color) r g b / 0.05)`.
+are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-color) r g b / 0.05)`.
 The two SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a
 dropdown) carry their fill as a literal, because a data URI cannot read a token.
 
@@ -1050,7 +1053,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 - **Token cards:** a token whose declaration references other tokens, a recipe, shows the declaration as written (or
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
-  **Theme colors** (`--theme-*`), **Status and shadow** (`--success-*`, `--warning-*`, `--error-*` and
+  **Theme colors** (`--theme-*`), **Status and shadow** (the status colors, their fills and
   `--shadow-color`), **Setup page** (`--setup-*`: the fields of its scene and its form's carve-out) and **Derived**
   (the veils, `--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color` and
   `--dnd-dragging-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are

@@ -11,7 +11,8 @@
  * `initStyleGuide` builds them through the modules the explorer lists use.
  *
  * The groups: a color token is one of the five theme colors (`--theme-*`), which hold the palette,
- * a status color or `--shadow-color`, which stand apart from them, a color of the setup page
+ * a status color (or a status fill, derived from its color) or `--shadow-color`, which stand
+ * apart from them, a color of the setup page
  * (`--setup-*`: the fields of its scene and its form's carve-out, which stand apart too), or
  * derived: a veil, a theme color or `--shadow-color` at an alpha. A length is a step of the
  * spacing scale (`--space-*`), a role that references a step, or a size. A token whose

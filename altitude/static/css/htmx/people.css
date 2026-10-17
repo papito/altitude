@@ -47,7 +47,7 @@
 }
 
 #people .cell a.unknown {
-    color: var(--warning-font-color);
+    color: var(--warning-color);
 }
 
 #peopleTypeFilter .radio-group {

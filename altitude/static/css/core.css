@@ -4,8 +4,8 @@
 
     /* The five theme colors. They hold the light-dark pairs, with the status colors, --shadow-color and the setup
        page's tokens; a rule writes a theme or status color directly. The only other color tokens are the veils, a theme
-       color or --shadow-color at an alpha, and the colors inside the border and shadow tokens. Base is the app's
-       surface */
+       color or --shadow-color at an alpha, the colors inside the border and shadow tokens, and the three status fills,
+       the one recipe. Base is the app's surface */
     --theme-base: light-dark(#363636, #363636);
     /* A surface lifted off the base */
     --theme-raised: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
@@ -106,15 +106,19 @@
 
     --footer-height: 2.75rem;
 
-    /* font colors */
-
-    --success-font-color: light-dark(#82da5f, #82da5f);
-    --success-background-color: light-dark(#377a1c, #377a1c);
-    --warning-font-color: light-dark(#dca051, #dca051);
-    --warning-background-color: light-dark(#7c4802, #7c4802);
-    --error-font-color: light-dark(#fc1e1e, #fc1e1e);
-    --error-background-color: light-dark(#a80404, #a80404);
+    /* The three status colors, each a pair of its own: the text of a status, its icon and its edge. Success */
+    --success-color: light-dark(#82da5f, #82da5f);
+    /* Warning: also the trash, and a person not named yet */
+    --warning-color: light-dark(#dca051, #dca051);
+    /* Error: also a form's error edge and the red navigation light of the setup scene */
     --error-color: light-dark(#fc1e1e, #fc1e1e);
+    /* The fill of a status: its color 0.29 darker in OKLab lightness at 80% of its chroma. The one recipe among the
+       chrome's tokens, so the three fills follow their colors by one rule. Success */
+    --success-background-color: oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h);
+    /* Warning */
+    --warning-background-color: oklch(from var(--warning-color) calc(l - 0.29) calc(c * 0.8) h);
+    /* Error */
+    --error-background-color: oklch(from var(--error-color) calc(l - 0.29) calc(c * 0.8) h);
 
     --setup-background-field-1: light-dark(#3f5a3a, #3f5a3a);
     --setup-background-field-2: light-dark(#5a6b3c, #5a6b3c);
@@ -226,7 +230,7 @@ footer {
 }
 
 #content.trashbin {
-    --view-tint: rgb(from var(--warning-font-color) r g b / 0.05);
+    --view-tint: rgb(from var(--warning-color) r g b / 0.05);
     background-color: var(--view-tint);
 }
 
@@ -249,7 +253,7 @@ input.readonly {
 }
 
 form div.error {
-    color: var(--error-font-color);
+    color: var(--error-color);
     padding: var(--space-3);
 }
 
@@ -518,7 +522,7 @@ form input.error, form input.error:focus {
 }
 
 #trash.drop-target {
-    background-color: var(--warning-font-color);
+    background-color: var(--warning-color);
 }
 
 .draggable {
@@ -771,11 +775,11 @@ nav input::placeholder {
 }
 
 nav .menu.triage i, nav .menu.triage span {
-    color: var(--success-font-color);
+    color: var(--success-color);
 }
 
 nav .menu.trashbin i, nav .menu.trashbin span {
-    color: var(--warning-font-color);
+    color: var(--warning-color);
 }
 
 

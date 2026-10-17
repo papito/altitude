@@ -30,14 +30,14 @@
 /* These elements are served by the server via websocket */
 #statusText {
     display: none;
-    color: var(--success-font-color);
+    color: var(--success-color);
     font-weight: bold;
     padding: var(--space-5);
     font-size: 1.1em;
 }
 
 #statusText.warning {
-    color: var(--warning-font-color);
+    color: var(--warning-color);
 }
 
 #statusText span {

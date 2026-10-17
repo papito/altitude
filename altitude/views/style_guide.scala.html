@@ -88,8 +88,9 @@
              <code>light-dark(light, dark)</code> pairs, and a rule writes a theme color or a status color directly. The
              Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha: the only other color
              tokens. A new color is a theme color written in the rule, or a new veil when it must be translucent. The
-             status colors, <code>--shadow-color</code> and the setup page's colors (the fields of its scene and its
-             form's carve-out) stand apart, with pairs of their own. A derived card shows its recipe and the tokens it
+             three status colors, <code>--shadow-color</code> and the setup page's colors (the fields of its scene and
+             its form's carve-out) stand apart, with pairs of their own; a status fill is its status color darkened by
+             one recipe. A derived card shows its recipe and the tokens it
              comes from; Off palette marks a token that writes a color literal, and the literals written past the
              tokens are listed under Token audit. The app is dark; the Light / Dark switch above the contents shows
              this page in either theme and is remembered in this browser. Click a token to copy its
@@ -127,9 +128,9 @@
               <div class="sg-row">
                 <span style="color: var(--theme-text)">--theme-text</span>
                 <span style="color: var(--theme-muted)">--theme-muted</span>
-                <span style="color: var(--success-font-color)">--success-font-color</span>
-                <span style="color: var(--warning-font-color)">--warning-font-color</span>
-                <span style="color: var(--error-font-color)">--error-font-color</span>
+                <span style="color: var(--success-color)">--success-color</span>
+                <span style="color: var(--warning-color)">--warning-color</span>
+                <span style="color: var(--error-color)">--error-color</span>
                 <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
               </div>
             </div>

@@ -34,7 +34,7 @@
 }
 
 #settingsForm .pending {
-  color: var(--warning-font-color);
+  color: var(--warning-color);
 }
 
 #settingsForm > button {

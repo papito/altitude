@@ -134,7 +134,7 @@
    Only that row's own icon: the marker sits on a Location row, never on a category node, and a
    category is never colored for a Location inside it */
 #locationList .location[data-viewed-scope] > .controls .location-icon {
-    color: var(--success-font-color);
+    color: var(--success-color);
 }
 
 /* The two add buttons sit centered at the top of the explorer. Both rules are scoped to the shown

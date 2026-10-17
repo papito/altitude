@@ -97,7 +97,7 @@
    rule covers branches and leaves in the subtree, and never an icon in a menu or dialog. Root is
    never marked: its results are the whole repository, and nothing turns green for that */
 #rootFolderList .folder[data-viewed-scope] .folder-icon {
-    color: var(--success-font-color);
+    color: var(--success-color);
 }
 
 #rootFolderList .folder-name, #rootFolderList .folder.root i {
@@ -136,9 +136,9 @@
     padding: var(--space-4);
     border-radius: 5px;
     background-color: var(--warning-background-color);
-    color: var(--warning-font-color);
+    color: var(--warning-color);
     line-height: 1.4;
-    border: 1px solid var(--warning-font-color);
+    border: 1px solid var(--warning-color);
     text-shadow: none;
 }
 

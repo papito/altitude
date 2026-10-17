@@ -27,7 +27,7 @@
 
 /* Green marks the viewed album: the one whose results are displayed (see js/common/album-list.js) */
 #albumList .album[data-viewed-scope] .album-icon {
-    color: var(--success-font-color);
+    color: var(--success-color);
 }
 
 /* The add button sits centered at the top of the explorer. Both rules are scoped to the shown
