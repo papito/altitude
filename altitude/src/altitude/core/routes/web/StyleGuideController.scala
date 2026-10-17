@@ -23,10 +23,11 @@ object StyleGuideController:
   def scanRoots(moduleDir: Path): Seq[Path] =
     Seq("css", "js").map(moduleDir.resolve("static").resolve(_)) :+ moduleDir.resolve("views")
 
-  // The vendored stylesheets (the icon font, Leaflet's), whose literals are no app's to tokenize, and the guide itself: its
-  // specimens would count as uses of what they demonstrate
+  // The vendored stylesheets (the icon font, Leaflet's), whose literals are no app's to tokenize; the guide itself, whose
+  // specimens would count as uses of what they demonstrate; and the setup page's stylesheet, whose `--setup-*` palette is
+  // that page's own, not a token of the app
   val excludedFiles: Set[String] =
-    Set("font-awesome.min.css", "leaflet.css", "style_guide.scala.html", "style_guide.css", "style-guide.js")
+    Set("font-awesome.min.css", "leaflet.css", "style_guide.scala.html", "style_guide.css", "style-guide.js", "setup.css")
 
 /**
  * The style guide: a page of the design tokens, the shared primitives and a live sample dialog. `App` registers it in dev only,

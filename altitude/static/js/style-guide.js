@@ -12,13 +12,11 @@
  *
  * The groups: a color token is one of the five theme colors (`--theme-*`), which hold the palette,
  * a status color (or a status fill, derived from its color) or `--shadow-color`, which stand
- * apart from them, a color of the setup page
- * (`--setup-*`: the fields of its scene and its form's carve-out, which stand apart too), or
- * derived: a veil, a theme color or `--shadow-color` at an alpha. A length is a step of the
+ * apart from them, or derived: a veil, a theme color or `--shadow-color` at an alpha. A length is a step of the
  * spacing scale (`--space-*`), a role that references a step, or a size. A token whose
  * declaration references other tokens is shown as declared, a recipe, with the tokens it comes
  * from; any other as it resolves. A color, border or shadow token outside
- * the theme, status and shadow and setup page colors that writes a color literal is flagged off
+ * the theme, status and shadow colors that writes a color literal is flagged off
  * palette. Two tokens of one kind that
  * resolve to the same value (a color to the same color in both themes) are flagged as the same
  * value, unless both take their color from the same tokens: the aliases of one color share it by
@@ -97,14 +95,11 @@ const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
 // other value that the browser takes for a color (`background` in a transition) names none there
 const COLOR_KINDS = ["color", "border", "shadow"]
 
-// The color groups, by token name: the five theme colors; the status colors and the ink of
-// shadows, which stand apart from them; and the setup page's colors, the fields of its scene and
-// its form's carve-out, which hold pairs of their own too. Every other token takes its colors
-// from these.
+// The color groups, by token name: the five theme colors, and the status colors and the ink of
+// shadows, which stand apart from them. Every other token takes its colors from these.
 const THEME_COLOR = /^--theme-/
 const STATUS_OR_SHADOW_COLOR =
     /^--(?:(?:success|warning|error)-.+|shadow-color)$/
-const SETUP_COLOR = /^--setup-/
 // A step of the spacing scale. A length that references one is a role, any other length a size.
 const SPACING_STEP = /^--space-/
 
@@ -572,7 +567,7 @@ function groupOf(name, kind, referencedNames) {
         : "size"
 }
 
-/** The color group a token's name places it in: "theme", "status-and-shadow", "setup", or else "derived" */
+/** The color group a token's name places it in: "theme", "status-and-shadow", or else "derived" */
 function paletteGroupOf(name) {
     if (THEME_COLOR.test(name)) {
         return "theme"
@@ -580,7 +575,7 @@ function paletteGroupOf(name) {
     if (STATUS_OR_SHADOW_COLOR.test(name)) {
         return "status-and-shadow"
     }
-    return SETUP_COLOR.test(name) ? "setup" : "derived"
+    return "derived"
 }
 
 /** The names of the tokens `declaration` references, each once, in the order they first appear */

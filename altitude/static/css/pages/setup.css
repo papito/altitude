@@ -1,4 +1,50 @@
-/* The setup page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
+/* The page's palette. The setup page is an illustration and a form in a look of its own, so its colors are the page's:
+   declared here on its body (zero specificity, inherited by the scene's canvas and by the form), not :root tokens of
+   core.css, and literals with no light-dark() pair, since the page keeps this look in either theme. The style guide's
+   scan leaves this file out (StyleGuideController.excludedFiles). Besides these the scene reads three tokens of
+   core.css: --error-color and --success-color for the jet's navigation lights, --theme-text for its strobe. The six
+   fields of the farmland, seen from above */
+body:where(.setup) {
+    --setup-background-field-1: #3f5a3a;
+    --setup-background-field-2: #5a6b3c;
+    --setup-background-field-3: #7a6a3c;
+    --setup-background-field-4: #8a7a4a;
+    --setup-background-field-5: #5c4a3a;
+    --setup-background-field-6: #4a5a4a;
+    /* The line between two fields, a hedge or a ditch seen from above, and a road's verges */
+    --setup-background-field-edge: #161616;
+    /* A road's surface, pale against the fields */
+    --setup-background-road: #767474;
+    --setup-background-cloud: #fff;
+    --setup-background-cloud-shadow: #000;
+    --setup-background-jet: #efeeee;
+    --setup-background-jet-outline: #363636;
+    /* The form's carve-out: a surface, a line color and a hue, from which the form's other colors follow. The card's
+       surface */
+    --setup-form-base: #181c24;
+    /* The edges of the form's fields */
+    --setup-form-muted: #636a78;
+    /* The form's one hue: the card's outline, a focused field's edge and the submit button */
+    --setup-form-accent: #e17f33;
+    /* The card at its edges, where it fades into the frosted scene */
+    --setup-form-card-edge-color: rgb(from var(--setup-form-base) r g b / 0);
+    /* The card's outline, and the submit button's edge */
+    --setup-form-card-border: 1px solid var(--setup-form-accent);
+    /* A field of the form, a shade under the card */
+    --setup-form-field-color: #151820;
+    /* The edge of a field */
+    --setup-form-field-border: 1px solid var(--setup-form-muted);
+    /* The edge of a field under the pointer */
+    --setup-form-field-hover-border-color: #979ba5;
+    /* Around a focused field, and around the submit button under the pointer */
+    --setup-form-focus-shadow: 0 0 0 2px rgb(from var(--setup-form-accent) r g b / 0.15);
+    /* A field's placeholder, and the text of a field that cannot be edited */
+    --setup-form-placeholder-color: #9ea3ac;
+    /* A field's label */
+    --setup-form-label-color: #e7e8e9;
+}
+
+/* The page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
    :where() adds no specificity, so they win and lose exactly as they did inline */
 
 body:where(.setup) {

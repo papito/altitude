@@ -2,8 +2,8 @@
     /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    /* The five theme colors. They hold the light-dark pairs, with the status colors, --shadow-color and the setup
-       page's tokens; a rule writes a theme or status color directly. The only other color tokens are the veils, a theme
+    /* The five theme colors. They hold the light-dark pairs, with the status colors and --shadow-color; a rule
+       writes a theme or status color directly. The only other color tokens are the veils, a theme
        color or --shadow-color at an alpha, the colors inside the border and shadow tokens, and the three status fills,
        the one recipe. Base is the app's surface */
     --theme-base: light-dark(#363636, #363636);
@@ -119,44 +119,6 @@
     --warning-background-color: oklch(from var(--warning-color) calc(l - 0.29) calc(c * 0.8) h);
     /* Error */
     --error-background-color: oklch(from var(--error-color) calc(l - 0.29) calc(c * 0.8) h);
-
-    --setup-background-field-1: light-dark(#3f5a3a, #3f5a3a);
-    --setup-background-field-2: light-dark(#5a6b3c, #5a6b3c);
-    --setup-background-field-3: light-dark(#7a6a3c, #7a6a3c);
-    --setup-background-field-4: light-dark(#8a7a4a, #8a7a4a);
-    --setup-background-field-5: light-dark(#5c4a3a, #5c4a3a);
-    --setup-background-field-6: light-dark(#4a5a4a, #4a5a4a);
-    /* The line between two fields, a hedge or a ditch seen from above, and a road's verges */
-    --setup-background-field-edge: color-mix(in oklab, var(--shadow-color) 40%, var(--theme-base));
-    /* A road's surface, pale against the fields */
-    --setup-background-road: color-mix(in oklab, var(--theme-muted) 55%, var(--theme-base));
-    --setup-background-cloud: var(--theme-text);
-    --setup-background-cloud-shadow: var(--shadow-color);
-    --setup-background-jet: color-mix(in oklab, var(--theme-text) 80%, var(--theme-muted));
-    --setup-background-jet-outline: var(--theme-base);
-    /* The setup form's carve-out: the card and the form on it keep a palette of their own, apart from the theme as the
-       fields above are. These three hold pairs; the form's other colors derive from them. The card's surface */
-    --setup-form-base: light-dark(#181c24, #181c24);
-    /* The edges of the form's fields */
-    --setup-form-muted: light-dark(#636a78, #636a78);
-    /* The form's one hue: the card's outline, a focused field's edge and the submit button */
-    --setup-form-accent: light-dark(#e17f33, #e17f33);
-    /* The card at its edges, where it fades into the frosted scene */
-    --setup-form-card-edge-color: rgb(from var(--setup-form-base) r g b / 0);
-    /* The card's outline, and the submit button's edge */
-    --setup-form-card-border: 1px solid var(--setup-form-accent);
-    /* A field of the form, a shade under the card */
-    --setup-form-field-color: color-mix(in oklab, var(--shadow-color) 7%, var(--setup-form-base));
-    /* The edge of a field */
-    --setup-form-field-border: 1px solid var(--setup-form-muted);
-    /* The edge of a field under the pointer */
-    --setup-form-field-hover-border-color: color-mix(in oklab, var(--theme-text) 35%, var(--setup-form-muted));
-    /* Around a focused field, and around the submit button under the pointer */
-    --setup-form-focus-shadow: 0 0 0 2px rgb(from var(--setup-form-accent) r g b / 0.15);
-    /* A field's placeholder, and the text of a field that cannot be edited */
-    --setup-form-placeholder-color: color-mix(in oklab, var(--theme-text) 40%, var(--setup-form-muted));
-    /* A field's label */
-    --setup-form-label-color: color-mix(in oklab, var(--theme-text) 91%, var(--setup-form-base));
 
     /* Panels */
     /* Inside a panel: a tab panel, and the sides of its tab list */
