@@ -5,7 +5,7 @@
     align-items: flex-end;
     gap: var(--space-1);
     overflow: visible;
-    border-bottom: 1px solid var(--panel-border-color);
+    border-bottom: 1px solid var(--theme-raised);
     padding: 0 var(--panel-padding);
 }
 
@@ -19,7 +19,7 @@
     padding: var(--space-4) var(--space-5);
     margin: 0;
     border-bottom: 2px solid transparent;
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
     text-decoration: none;
     text-transform: capitalize;
     letter-spacing: 0.04em;
@@ -31,21 +31,21 @@
 }
 
 [role="tab"]:hover {
-    color: var(--font-color);
+    color: var(--theme-text);
     background: var(--tab-hover-background-color);
 }
 
 /* ACTIVE TAB */
 
 [role="tab"][aria-selected="true"] {
-    color: var(--font-color);
+    color: var(--theme-text);
     border-bottom: 2px solid var(--success-font-color);
     background: transparent;
 }
 
 [role="tab"]:focus,
 [role="tab"]:active {
-    color: var(--font-color);
+    color: var(--theme-text);
     outline: 0;
 }
 

@@ -30,24 +30,24 @@
     width: 100%;
     height: 100%;
     place-items: center;
-    background-color: var(--background-tertiary-color);
+    background-color: var(--theme-raised);
 }
 
 #people .name span {
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
     font-size: .9em;
 }
 
 #people .cell a {
     text-decoration: none;
     font-size: .9em;
-    color: var(--font-color);
+    color: var(--theme-text);
     font-family: -apple-system, "system-ui", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     letter-spacing: 1px;
 }
 
 #people .cell a.unknown {
-    color: var(--person-unknown-color);
+    color: var(--warning-font-color);
 }
 
 #peopleTypeFilter .radio-group {

@@ -20,7 +20,7 @@
     width: 100%;
     padding: var(--space-5) var(--space-6);
     background-color: var(--setup-form-field-color);
-    color: var(--font-color);
+    color: var(--theme-text);
     border: var(--setup-form-field-border);
     border-radius: 6px;
     font-size: 1em;
@@ -80,8 +80,8 @@
 #setupForm div.error {
     padding: var(--space-3);
     margin-top: var(--space-1);
-    background-color: var(--message-background-color);
-    color: var(--font-color);
+    background-color: var(--theme-base);
+    color: var(--theme-text);
     border: 1px solid var(--error-color);
     border-bottom: 2px solid var(--error-color);
     letter-spacing: 1px;

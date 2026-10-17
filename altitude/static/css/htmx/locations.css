@@ -72,12 +72,12 @@
     /* Spans the indent minus the grid gap on its icon side, so the icon/name sit where a plain
        margin-left indent would put them while the ⋯ stays flush left */
     width: calc(var(--depth) * var(--list-indent) - var(--list-control-gap));
-    border-top: 2px double var(--panel-border-color);
+    border-top: 2px double var(--theme-raised);
 }
 
 #locationList .location i {
     font-size: 1.2em;
-    color: var(--font-color);
+    color: var(--theme-text);
 }
 
 /* A category's expand control is a real button (Enter/Space work, no page jump) that keeps only
@@ -119,7 +119,7 @@
     bottom: -0.35em;
     padding: 0.15em;
     border-radius: 50%;
-    background-color: var(--background-color);
+    background-color: var(--theme-base);
 }
 
 #locationList .location.category[data-expanded] .expand-ctrl .location-icon::after {

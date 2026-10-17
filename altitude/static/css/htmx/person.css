@@ -2,7 +2,7 @@
     display: grid;
     margin: var(--space-3);
     padding: var(--space-3);
-    border-bottom: 1px solid var(--background-tertiary-color);
+    border-bottom: 1px solid var(--theme-raised);
     grid-template-columns: 100px 300px 1fr;
 }
 

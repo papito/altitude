@@ -1,7 +1,7 @@
 #searchControl {
   margin: var(--control-vertical-space);
   padding: var(--space-3);
-  border: 1px solid var(--background-tertiary-color);
+  border: 1px solid var(--theme-raised);
   border-radius: 5px;
   display: grid;
   grid-template-columns: .5fr 1fr 1fr 1fr auto;
@@ -52,7 +52,7 @@
    (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
 #assets .cell .metadata {
   display: none;
-  background-color: var(--background-tertiary-color);
+  background-color: var(--theme-raised);
   width: 100%;
   padding-top: var(--space-3);
   padding-bottom: var(--space-3);
@@ -60,7 +60,7 @@
   row-gap: var(--space-2);
   margin-top: var(--space-2);
   font-size: 11px;
-  color: var(--font-color);
+  color: var(--theme-text);
   box-shadow: var(--result-metadata-shadow);
 }
 
@@ -86,7 +86,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background-color: var(--selection-color);
+  background-color: var(--theme-accent);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
   background-size: 16px 16px;
   background-position: center;
@@ -118,7 +118,7 @@
 }
 
 #assets .cell .metadata span {
-  color: var(--faded-font-color);
+  color: var(--theme-muted);
   letter-spacing: 1px;
 }
 
@@ -156,7 +156,7 @@
   padding: var(--space-4) var(--space-3);
   font-weight: bold;
   font-size: 1.1em;
-  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-base);
 }
 
 /* The gap between groups. It hangs off the header rather than the cells above it, so the first
@@ -168,12 +168,12 @@
 
 /* A Location group's category, dimmed before the › */
 #assets .result-group .category {
-  color: var(--faded-font-color);
+  color: var(--theme-muted);
   font-weight: normal;
 }
 
 #assets .result-group .count {
-  color: var(--faded-font-color);
+  color: var(--theme-muted);
   font-weight: normal;
   font-size: smaller;
 }
@@ -184,7 +184,7 @@
   height: 16px;
   margin: 0;
   cursor: pointer;
-  accent-color: var(--selection-color);
+  accent-color: var(--theme-accent);
 }
 
 #assets .cell {
@@ -203,8 +203,8 @@
    left padding's step in from the edge */
 .sort-dropdown {
   padding: var(--space-3) var(--space-8) var(--space-3) var(--space-3);
-  background-color: var(--background-secondary-color);
-  border: 1px solid var(--background-tertiary-color);
+  background-color: var(--theme-base);
+  border: 1px solid var(--theme-raised);
   border-radius: 5px;
   cursor: pointer;
   letter-spacing: 1px;
@@ -217,7 +217,7 @@
 }
 
 #searchControl .sort-dropdown:hover {
-  background-color: var(--background-tertiary-color);
+  background-color: var(--theme-raised);
 }
 
 #searchControl .sort-dropdown:focus {
@@ -229,7 +229,7 @@
 }
 
 #searchControl .total strong {
-  color: var(--faded-font-color);
+  color: var(--theme-muted);
 }
 
 /* The Preview of an asset that plays (a Video, an animated GIF) wears a play badge, so a still and a clip tell apart */
@@ -243,7 +243,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--on-fill-color);
+  color: var(--theme-text);
   background-color: var(--scrim-color);
   font-size: 18px;
   pointer-events: none;
@@ -253,7 +253,7 @@
 #assets .cell .drag-drop .no-date-marker {
   position: absolute;
   bottom: var(--space-4);
-  color: var(--on-fill-color);
+  color: var(--theme-text);
   font-size: 10px;
   font-weight: bold;
   text-transform: uppercase;

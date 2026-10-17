@@ -18,7 +18,7 @@
 
 #albumList .album i {
     font-size: 1.2em;
-    color: var(--font-color);
+    color: var(--theme-text);
 }
 
 #albumList .album-name, #albumList .album-icon {

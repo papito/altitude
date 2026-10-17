@@ -6,16 +6,17 @@
  * Alpine component holds what the page's templates render from it: each `:root` token resolved
  * against the stylesheets the browser actually loaded, sorted by the kind of value it holds and
  * placed in a group, the icons and the token audit. It is also the state of the theme switcher, of
- * the font tester of the Typography section and of the alpha slider of the `--background-color`
- * card, and what the page's buttons call. The live menu and dialog specimens are no template:
+ * the font tester of the Typography section and of the alpha slider of the `--scrim-color` card,
+ * and what the page's buttons call. The live menu and dialog specimens are no template:
  * `initStyleGuide` builds them through the modules the explorer lists use.
  *
  * The groups: a color token is one of the five theme colors (`--theme-*`), which hold the palette,
  * a status color or `--shadow-color`, which stand apart from them, a color of the setup page
  * (`--setup-*`: the fields of its scene and its form's carve-out, which stand apart too), or
- * derived. A length is a step of the spacing scale (`--space-*`), a role that references a step,
- * or a size. A token whose declaration references other tokens is shown as declared, a recipe,
- * with the tokens it comes from; any other as it resolves. A color, border or shadow token outside
+ * derived: a veil, a theme color or `--shadow-color` at an alpha. A length is a step of the
+ * spacing scale (`--space-*`), a role that references a step, or a size. A token whose
+ * declaration references other tokens is shown as declared, a recipe, with the tokens it comes
+ * from; any other as it resolves. A color, border or shadow token outside
  * the theme, status and shadow and setup page colors that writes a color literal is flagged off
  * palette. Two tokens of one kind that
  * resolve to the same value (a color to the same color in both themes) are flagged as the same
@@ -136,7 +137,7 @@ const THEMES = ["light", "dark"]
 const LIGHT_DARK = /^light-dark\((.*)\)$/s
 
 // The token whose card has an alpha slider
-const ALPHA_SLIDER_TOKEN = "--background-color"
+const ALPHA_SLIDER_TOKEN = "--scrim-color"
 // A color with its alpha replaced, as `withAlpha` writes it: the first group is the color
 const ALPHA_REPLACEMENT = /^rgb\(from (.+) r g b \/ [\d.]+\)$/
 

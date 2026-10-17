@@ -30,7 +30,7 @@
 }
 
 #settingsForm .help {
-  color: var(--faded-font-color);
+  color: var(--theme-muted);
 }
 
 #settingsForm .pending {

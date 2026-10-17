@@ -10,7 +10,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: every color is a `:root` token of `core.css`. The five theme colors (`--theme-*`), the status colors, `--shadow-color` and the setup page's stand-apart tokens (the fields of its scene, `--setup-background-field-*`, and its form's carve-out, `--setup-form-base`, `-muted` and `-accent`) hold the `light-dark(light, dark)` pairs, and every other color token derives from them. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-*`, `--warning-*`, `--error-*`) or `--shadow-color` by its token (`color: var(--theme-text)`). These, with the setup page's stand-apart tokens (the fields of its scene, `--setup-background-field-*`, and its form's carve-out, `--setup-form-base`, `-muted` and `-accent`), hold the `light-dark(light, dark)` pairs. The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, and the color inside a border or shadow token is a theme color or one of those at an alpha too; no token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -288,7 +288,7 @@ retains its explicitly declared width. Other general dialogs retain `--modal-con
 host's centered placement; asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host. Opening any modal closes an open context menu first, so a
 modal never appears over one.
 
-Both modal hosts use `.close-modal` in `core.css`: the X keeps the text color (`--font-color`)
+Both modal hosts use `.close-modal` in `core.css`: the X keeps the text color (`--theme-text`)
 at rest, on hover, and on focus, with no focus outline (the modal may focus it on open).
 Folder, album, Location, and category dialogs use the general modal host and its close control.
 
@@ -826,7 +826,7 @@ delegated click listener in the page module that fills the input from the row's 
 back as a validation replacement (`HX-Retarget: this`, see above) with the submitted values kept and each error beside its
 field, so no success event fires; a save answers the saved form and `SETTINGS_SAVED_EVENT` shows "Settings saved". The CSS
 is the partial's own file, `static/css/htmx/settings_form.css`, over `core.css` variables (`--section-vertical-space`, `--control-*-space`,
-`--faded-font-color`, `--warning-font-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
+`--theme-muted`, `--warning-font-color`); the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
 **Setup background** — `setup.scala.html` (`/setup`, `SetupController`; the index redirects here until the repository
@@ -995,39 +995,41 @@ switcher declares another scheme, on that page. Every color is a `:root` token o
 five theme colors: `--theme-base` (the app's surface), `--theme-raised` (a surface lifted off the base),
 `--theme-muted` (secondary text and the lines between surfaces), `--theme-text` (text on the app's own surfaces) and
 `--theme-accent` (the one hue: selection, drop targets, chips and pins). Each is a `light-dark(light, dark)` pair, which
-the browser resolves by the scheme in force, so no rule is written once per theme. Every other color token derives
-from them by a recipe: a `var()` alias (`--selection-color: var(--theme-accent)`), a mix
-(`--background-secondary-color: color-mix(in oklab, var(--theme-raised) 20%, var(--theme-base))`), or relative color
-syntax for an alpha (`--tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05)`). A derived color
-follows the pairs of the tokens it comes from, so editing a theme color moves everything derived from it. A token
-holding a border or a shadow derives only the color inside it
-(`--form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base))`). Four kinds of color
-stand apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which tokens of
-another meaning may alias (`--trashbin-color` and `--person-unknown-color` are `var(--warning-font-color)`);
+the browser resolves by the scheme in force, so no rule is written once per theme. A rule writes a theme color by its
+token (`color: var(--theme-text)`, `border: 1px solid var(--theme-muted)`); no token aliases a theme color under
+another name or mixes one at a percentage, so editing a theme color moves every rule that writes it. Four kinds of
+color stand apart, with pairs of their own: the status colors (`--success-*`, `--warning-*`, `--error-*`), which a rule
+writes directly too (an unnamed person's name and the trash entry of the nav are `--warning-font-color`);
 `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
-(`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`; the button label's shadow is a gray derived from the
-theme colors instead); the fields of the setup page's background scene (`--setup-background-field-1` … `-6`), which
-are illustration, not chrome, and whose companion tokens (`--setup-background-road`, `-cloud`, `-cloud-shadow`, `-jet`
-and `-jet-outline`) derive from the theme and shadow tokens; and the setup form's carve-out, a surface, a line color
-and a hue of its own (`--setup-form-base`, `-muted` and `-accent`), from which the form's other tokens
+(`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`); the fields of the setup page's background scene
+(`--setup-background-field-1` … `-6`), which are illustration, not chrome, and whose companion tokens
+(`--setup-background-road`, `-cloud`, `-cloud-shadow`, `-jet` and `-jet-outline`) derive from the theme and shadow
+tokens; and the setup form's carve-out, a surface, a line color and a hue of its own (`--setup-form-base`, `-muted`
+and `-accent`), from which the form's other tokens
 (`-card-edge-color`, `-card-border`, `-field-color`, `-field-border`, `-field-hover-border-color`, `-focus-shadow`,
 `-placeholder-color` and `-label-color`) derive, so the form on the setup page keeps the look of its design whatever
-the theme colors become; it is the one place with a second hue. `--line-color` is the edge between
-surfaces, the color of `--menu-border`, `--result-border` and `--modal-border`. A light theme is therefore five pairs
-plus the status colors, `--shadow-color` and the setup page's nine pairs. Their light colors are placeholders equal to
-the dark ones; `--background-color` is the one derived token with a pair, whose light color is
-`rgb(from var(--theme-base) r g b / 0.88)`.
+the theme colors become; it is the one place with a second hue. The only other color tokens are the veils, a theme
+color or `--shadow-color` at an alpha in relative color syntax, tokens because a translucent color cannot be written
+as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9),
+`--tab-hover-background-color` (`rgb(from var(--theme-text) r g b / 0.05)`) and `--dnd-dragging-background-color`
+(`--theme-muted` at 0.48); a veil follows the pair of the color it reads. A token holding a border or a shadow keeps
+its width and style with its color, which is a theme color (`--form-border: 2px solid var(--theme-raised)`;
+`--menu-border`, `--modal-border` and `--result-border` are solid `--theme-muted`) or one of those at an alpha
+(`--navbar-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`, the shadows, the button label's shadow of
+`--theme-raised` at 0.55). What is drawn on a colored fill or over an image (the label of a button or a marker, the
+snackbar's text and edge, a pin's frame) reads `--theme-text` like other text, and gets a token of its own when the
+light theme gets real values, as it must stay light while the text darkens. A light theme is therefore five pairs plus
+the status colors, `--shadow-color` and the setup page's nine pairs, and no other token has a pair. Their light colors
+are placeholders equal to the dark ones.
 
-Stylesheets reference the tokens and write no color literal, named colors included. A new
-color is a new token, with a comment above it, derived from a theme color, or an existing token whose meaning fits, not
-merely one that holds the same value. Two tokens alias `--theme-text`: `--font-color` is text on the app's own surfaces,
-and `--on-fill-color` is what is drawn on a colored fill or over an image (the label of a button or a marker, the
-snackbar's text and edge, a pin's frame), which stays light in either theme, also once the light theme has real
-values. A color a rule derives from a token is written in relative color syntax too, so it follows the token's pair:
-the tints of the triage and trash views are
-`rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--trashbin-color) r g b / 0.05)`. The two
-SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a dropdown) carry
-their fill as a literal, because a data URI cannot read a token.
+Stylesheets reference the tokens and write no color literal, named colors included. A new color is a theme color
+written in the rule, or a new veil token, with a comment above it, when it must be translucent. The rule that a new
+value is a new token with a meaning, or an existing token whose meaning fits rather than one that merely holds the same
+value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
+alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
+are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-font-color) r g b / 0.05)`.
+The two SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a
+dropdown) carry their fill as a literal, because a data URI cannot read a token.
 
 **Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`,
 `StyleGuideController`; the nav shows its button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
@@ -1050,15 +1052,16 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
   **Theme colors** (`--theme-*`), **Status and shadow** (`--success-*`, `--warning-*`, `--error-*` and
   `--shadow-color`), **Setup page** (`--setup-*`: the fields of its scene and its form's carve-out) and **Derived**
-  (every other). The lengths are
+  (the veils, `--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color` and
+  `--dnd-dragging-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
   length, such as a width or a radius); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. "Off palette" marks a color, border or shadow token outside the Theme colors,
   Status and shadow and Setup page groups whose declaration writes a color literal (a hex color, a color
   function with its channels written out, or a named color), which keeps the palette at the five. "Same value as"
   names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
-  same color in both themes). Two tokens that take their color from the same tokens are not flagged, since the
-  aliases of one color share it by design, while two recipes computing one color are, as they should be one token; a
+  same color in both themes). Two tokens that take their color from the same tokens are not flagged, since two
+  tokens reading one color share it by design, while two recipes computing one color are, as they should be one token; a
   token without a color is compared by its value alone.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
@@ -1084,15 +1087,14 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   has that font, decided by measuring the text with the value in front of each generic family against the generic
   family alone. The input is the component's `fontInput` (`x-model`), which the specimen's style and the status
   derive from. Nothing is requested from the server.
-- **Alpha slider:** the `--background-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider
-  under its copy button. Dragging it gives that alpha to the token's color of the theme shown and declares the whole
-  value inline on the root element, so the page repaints with it until it is reloaded; nothing is stored. It works on
-  the declaration as written: the color is written in relative color syntax, which keeps it as declared, inside the
-  token's `light-dark()` pair, whose other color is left alone
-  (`light-dark(rgb(from var(--theme-base) r g b / 0.88), rgb(from var(--theme-base) r g b / 0.6))` after a drag in the
-  dark theme); the card shows the value, and Copy value copies it for pasting into `core.css`. The slider starts at the
-  alpha the token's color has in the theme shown, and a color that already is such a replacement has its alpha
-  replaced rather than wrapped again. The dragged alpha and the value it gives live on the token, so a card follows
+- **Alpha slider:** the `--scrim-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider under its
+  copy button. Dragging it replaces the alpha of the token's relative color (`rgb(from var(--shadow-color) r g b / 0.6)`
+  after a drag) and declares the whole value inline on the root element, so the page repaints with it until it is
+  reloaded; nothing is stored. It works on the declaration as written, which keeps the color as declared, and should a
+  token hold a `light-dark()` pair, only the color of the theme shown changes and the other is left alone; the card
+  shows the value, and Copy value copies it for pasting into `core.css`. The slider starts at the alpha the token's
+  color has in the theme shown, and a color that already is such a replacement has its alpha replaced rather than
+  wrapped again. The dragged alpha and the value it gives live on the token, so a card follows
   its token alone. A drag made in one theme survives a switch to the other: the tokens are resolved again from the
   inline declaration, and the cards re-render from the new tokens. A token card is therefore a `div` holding the copy
   button and, for that token, the slider row: an input cannot sit inside a button.

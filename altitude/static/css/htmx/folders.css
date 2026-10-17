@@ -62,7 +62,7 @@
     /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name sit where a
        plain margin-left indent would put them while the ⋯ stays flush left */
     width: calc(var(--depth) * var(--list-indent) - var(--list-control-gap));
-    border-top: 2px double var(--panel-border-color);
+    border-top: 2px double var(--theme-raised);
 }
 
 #rootFolderList .folder i {
@@ -70,11 +70,11 @@
 }
 
 #rootFolderList .folder.root i {
-    color: var(--folder-root-icon-color);
+    color: var(--theme-muted);
 }
 
 #rootFolderList .folder:not(.root) i {
-    color: var(--font-color);
+    color: var(--theme-text);
 }
 
 /* The icon control is a real button (Enter/Space work, no page jump) that keeps only the icon's look and
@@ -106,7 +106,7 @@
 
 #rootFolderList .folder-name.disabled {
     cursor: default;
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
     pointer-events: none;
 }
 

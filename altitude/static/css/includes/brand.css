@@ -5,8 +5,8 @@
     display: grid;
     grid-template-columns: 1fr;
     place-items: center;
-    background: var(--background-secondary-color);
-    color: var(--font-color);
+    background: var(--theme-base);
+    color: var(--theme-text);
     box-shadow: var(--box-shadow);
     border-bottom: var(--navbar-border);
     text-shadow: var(--navbar-text-shadow);
@@ -16,7 +16,7 @@
     letter-spacing: .15em;
     text-transform: uppercase;
     text-decoration: none;
-    color: var(--brand-color);
+    color: var(--theme-muted);
     font-weight: bold;
     font-size: 1.4em;
 }

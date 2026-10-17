@@ -2,8 +2,10 @@
     /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    /* The five theme colors. Every other color token derives from them or from a status color; only the status colors
-       and --shadow-color hold values of their own. Base is the app's surface */
+    /* The five theme colors. They hold the light-dark pairs, with the status colors, --shadow-color and the setup
+       page's tokens; a rule writes a theme or status color directly. The only other color tokens are the veils, a theme
+       color or --shadow-color at an alpha, and the colors inside the border and shadow tokens. Base is the app's
+       surface */
     --theme-base: light-dark(#363636, #363636);
     /* A surface lifted off the base */
     --theme-raised: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
@@ -13,35 +15,22 @@
     --theme-text: light-dark(#fff, #fff);
     /* The one hue, used for selection, drop targets, chips and pins */
     --theme-accent: light-dark(rgb(109, 140, 253), rgb(109, 140, 253));
-    /* The ink of shadows and scrims, not a theme color */
+    /* The ink of shadows and scrims, not a theme color. It holds a pair like the five, and the veils and the shadow
+       tokens take it at an alpha */
     --shadow-color: light-dark(#000, #000);
 
-    --background-color: light-dark(rgb(from var(--theme-base) r g b / 0.88), var(--theme-base));
-    --background-secondary-color: color-mix(in oklab, var(--theme-raised) 20%, var(--theme-base));
-    --background-tertiary-color: var(--theme-raised);
-    /* The edge between surfaces: a menu's, a result cell's, a dialog's */
-    --line-color: color-mix(in oklab, var(--theme-muted) 64%, var(--theme-base));
-
-    --form-border: 2px solid color-mix(in oklab, var(--theme-muted) 39%, var(--theme-base));
+    --form-border: 2px solid var(--theme-raised);
 
     /* The edge of an input or a textarea */
-    --input-border: 2px solid color-mix(in oklab, var(--theme-text) 39%, var(--theme-muted));
-    /* The text typed into an input or a textarea */
-    --input-font-color: color-mix(in oklab, var(--theme-accent) 10%, var(--theme-base));
-    /* The field of an input or a textarea */
-    --input-background-color: color-mix(in oklab, var(--theme-text) 96%, var(--theme-base));
-    /* The field of an input that cannot be edited */
-    --input-readonly-background-color: var(--theme-muted);
+    --input-border: 2px solid var(--theme-muted);
 
-    /* The face of an action button that signals no outcome */
-    --button-background-color: var(--theme-raised);
     /* The edge of an action button */
-    --button-border: 2px solid color-mix(in oklab, var(--theme-text) 18%, var(--theme-muted));
+    --button-border: 2px solid var(--theme-muted);
     /* Under the label of an action button */
-    --button-text-shadow: rgb(from color-mix(in oklab, var(--theme-muted) 15%, var(--theme-base)) r g b / 0.55) 4px 4px 4px;
+    --button-text-shadow: rgb(from var(--theme-raised) r g b / 0.55) 4px 4px 4px;
 
     --modal-border-width: 2px;
-    --modal-border: var(--modal-border-width) solid var(--line-color);
+    --modal-border: var(--modal-border-width) solid var(--theme-muted);
     /* Lifts a general dialog off the page */
     --modal-box-shadow: rgb(from var(--shadow-color) r g b / 0.6) 6px 6px 6px;
     /* Behind the asset detail, all but hiding the page */
@@ -57,27 +46,22 @@
     --modal-toolbar-height: 1.875rem;
 
     /* The edge of a context menu and the divider between its actions */
-    --menu-border: 1px solid var(--line-color);
+    --menu-border: 1px solid var(--theme-muted);
 
-    --result-border: 1px solid var(--line-color);
+    --result-border: 1px solid var(--theme-muted);
     /* Sets a cell's metadata off from the Preview above it */
     --result-metadata-shadow: 0 -2px 2px 0 rgb(from var(--shadow-color) r g b / 0.15);
-    /* The checkmark of a selected asset and the checkbox of a group header */
-    --selection-color: var(--theme-accent);
     /* Under the checkmark of a selected asset */
     --selection-shadow: 0 2px 4px rgb(from var(--shadow-color) r g b / 0.2);
     /* Around a focused dropdown */
     --dropdown-focus-shadow: 0 0 2px 2px rgb(from var(--shadow-color) r g b / 0.1);
 
     --form-error-border: 2px solid var(--error-color);
-    --navbar-border: 1px solid color-mix(in oklab, var(--shadow-color) 18%, var(--theme-base));
+    /* The nav's sunken edge, shadow ink at an alpha, against a page of the same color */
+    --navbar-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18);
     --navbar-text-shadow: rgb(from var(--shadow-color) r g b / 0.75) 0 1px;
-    /* The brand name in the nav */
-    --brand-color: color-mix(in oklab, var(--theme-muted) 80%, var(--theme-base));
-    /* The base color of a nav entry, under the color of its link and label */
-    --navbar-menu-color: color-mix(in oklab, color-mix(in oklab, var(--theme-accent) 27%, var(--theme-muted)) 90%, var(--theme-base));
     /* The edge of the nav's Search input */
-    --navbar-input-border: 2px groove color-mix(in oklab, var(--theme-muted) 31%, var(--theme-base));
+    --navbar-input-border: 2px groove var(--theme-raised);
     --box-shadow: rgb(from var(--theme-text) r g b / 0.07) 0 1px 0;
     /* Under a tab the pointer is over */
     --tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05);
@@ -124,12 +108,6 @@
 
     /* font colors */
 
-    /* Text on the app's own surfaces */
-    --font-color: var(--theme-text);
-    /* What is drawn on a colored fill or over an image, light in either theme even once the light theme has real
-       values: the label of a button or a marker, the snackbar's text and edge, a pin's frame */
-    --on-fill-color: var(--theme-text);
-    --faded-font-color: var(--theme-muted);
     --success-font-color: light-dark(#82da5f, #82da5f);
     --success-background-color: light-dark(#377a1c, #377a1c);
     --warning-font-color: light-dark(#dca051, #dca051);
@@ -137,8 +115,6 @@
     --error-font-color: light-dark(#fc1e1e, #fc1e1e);
     --error-background-color: light-dark(#a80404, #a80404);
     --error-color: light-dark(#fc1e1e, #fc1e1e);
-    /* The name of a person who has not been named yet */
-    --person-unknown-color: var(--warning-font-color);
 
     --setup-background-field-1: light-dark(#3f5a3a, #3f5a3a);
     --setup-background-field-2: light-dark(#5a6b3c, #5a6b3c);
@@ -179,20 +155,14 @@
     --setup-form-label-color: color-mix(in oklab, var(--theme-text) 91%, var(--setup-form-base));
 
     /* Panels */
-    --panel-border-color: color-mix(in oklab, var(--theme-raised) 70%, var(--theme-base));
     /* Inside a panel: a tab panel, and the sides of its tab list */
     --panel-padding: var(--space-5);
-    /* The root folder's icon */
-    --folder-root-icon-color: var(--theme-muted);
 
     /* Dragon Drop */
 
-    --dnd-drop-target-color: var(--theme-accent);
     --dnd-draggable-border: 1px solid var(--theme-muted);
     /* Behind an element while it is dragged */
-    --dnd-dragging-background-color: rgb(from var(--line-color) r g b / 0.48);
-    /* The trash: its nav entry as a drop target and, faintly, the tint of its view */
-    --trashbin-color: var(--warning-font-color);
+    --dnd-dragging-background-color: rgb(from var(--theme-muted) r g b / 0.48);
 
     /* Under what sits on a map: an asset pin's frame, a Location pin's glyph, a pin's count */
     --pin-shadow: rgb(from var(--shadow-color) r g b / 0.6) 0 1px 4px;
@@ -203,8 +173,6 @@
     --chip-padding: var(--space-1) var(--space-4);
     --chip-border-radius: 0.625rem;
 
-    /* For messages such as form validation and server response status */
-    --message-background-color: color-mix(in oklab, var(--shadow-color) 9%, var(--theme-base));
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
 }
 
@@ -225,8 +193,8 @@
 body {
     font-size: 14px;
     margin: 0;
-    background-color: var(--background-color);
-    color: var(--font-color);
+    background-color: var(--theme-base);
+    color: var(--theme-text);
     font-family: var(--font);
     display: grid;
     grid-template-rows: [header]  auto
@@ -237,12 +205,12 @@ body {
 
 footer {
     padding: var(--space-3);
-    color: var(--font-color);
+    color: var(--theme-text);
     bottom: 0;
     display: grid;
     font-size: .9em;
     align-items: center;
-    background: var(--background-secondary-color);
+    background: var(--theme-base);
     border-top: var(--navbar-border);
     box-shadow: var(--box-shadow);
 }
@@ -258,7 +226,7 @@ footer {
 }
 
 #content.trashbin {
-    --view-tint: rgb(from var(--trashbin-color) r g b / 0.05);
+    --view-tint: rgb(from var(--warning-font-color) r g b / 0.05);
     background-color: var(--view-tint);
 }
 
@@ -271,13 +239,13 @@ input, textarea {
     padding: var(--space-4);
     border: var(--input-border);
     border-radius: 4px;
-    color: var(--input-font-color);
+    color: var(--theme-base);
     font-size: 1.2em;
-    background-color: var(--input-background-color);
+    background-color: var(--theme-text);
 }
 
 input.readonly {
-    background-color: var(--input-readonly-background-color);
+    background-color: var(--theme-muted);
 }
 
 form div.error {
@@ -295,9 +263,9 @@ form input.error, form input.error:focus {
 /*         */
 
 .action-button {
-    background: var(--button-background-color);
+    background: var(--theme-raised);
     font-weight: bold;
-    color: var(--on-fill-color);
+    color: var(--theme-text);
     border: var(--button-border);
     border-radius: 4px;
     cursor: pointer;
@@ -327,8 +295,8 @@ form input.error, form input.error:focus {
 
 .action-button.small {
     font-size: 0.8em;
-    background: var(--background-secondary-color);
-    border: 1px solid var(--background-tertiary-color);
+    background: var(--theme-base);
+    border: 1px solid var(--theme-raised);
 }
 
 .action-button.small span {
@@ -336,7 +304,7 @@ form input.error, form input.error:focus {
 }
 
 /* A set of choices of which one is current: its buttons side by side, the current one `aria-pressed="true"`
-   in the tertiary background */
+   on the raised surface */
 .toggle-group {
     display: flex;
     gap: var(--space-1);
@@ -344,9 +312,9 @@ form input.error, form input.error:focus {
 
 .toggle-group button {
     padding: var(--space-3) var(--space-5);
-    background-color: var(--background-secondary-color);
-    border: 1px solid var(--background-tertiary-color);
-    color: var(--faded-font-color);
+    background-color: var(--theme-base);
+    border: 1px solid var(--theme-raised);
+    color: var(--theme-muted);
     cursor: pointer;
 }
 
@@ -359,8 +327,8 @@ form input.error, form input.error:focus {
 }
 
 .toggle-group button[aria-pressed="true"] {
-    color: var(--font-color);
-    background-color: var(--background-tertiary-color);
+    color: var(--theme-text);
+    background-color: var(--theme-raised);
 }
 
 /*                                             */
@@ -383,7 +351,7 @@ form input.error, form input.error:focus {
     font: inherit;
     font-size: 1.3em;
     line-height: 1;
-    color: var(--font-color);
+    color: var(--theme-text);
     cursor: pointer;
 }
 
@@ -400,7 +368,7 @@ form input.error, form input.error:focus {
     border: var(--menu-border);
     border-radius: 5px;
     color: inherit;
-    background-color: var(--background-secondary-color);
+    background-color: var(--theme-base);
     text-shadow: none;
     grid-template-columns: 1fr;
     gap: 0;
@@ -461,19 +429,19 @@ form input.error, form input.error:focus {
    name directly; zero counts render empty (js/common/asset-count.js) */
 .asset-count {
     justify-self: start;
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
     font-size: .9em;
     white-space: nowrap;
 }
 
-/* A dismissable scope chip, in the drop-target blue: the whole chip is the button that clears the scope it names
+/* A dismissable scope chip, in the accent: the whole chip is the button that clears the scope it names
    (its text, then ×), so it carries no separate close control */
 .filter-chip {
     padding: var(--chip-padding);
-    border: 1px solid var(--dnd-drop-target-color);
+    border: 1px solid var(--theme-accent);
     border-radius: var(--chip-border-radius);
     background: none;
-    color: var(--dnd-drop-target-color);
+    color: var(--theme-accent);
     font-size: smaller;
     cursor: pointer;
 }
@@ -483,8 +451,8 @@ form input.error, form input.error:focus {
 /*          */
 
 #serverError {
-    color: var(--font-color);
-    background-color: var(--message-background-color);
+    color: var(--theme-text);
+    background-color: var(--theme-base);
     border: 1px solid var(--error-color);
     padding: var(--space-4);
     font-size: 1.1em;
@@ -497,7 +465,7 @@ form input.error, form input.error:focus {
     visibility: hidden;
     min-width: 500px;
     margin-left: -250px;
-    color: var(--on-fill-color);
+    color: var(--theme-text);
     text-align: center;
     border-radius: 2px;
     padding: var(--space-6);
@@ -506,7 +474,7 @@ form input.error, form input.error:focus {
     left: 50%;
     top: 50px;
     height: 30px;
-    border: 1px solid var(--on-fill-color);
+    border: 1px solid var(--theme-text);
 }
 
 #snackbar.show {
@@ -546,11 +514,11 @@ form input.error, form input.error:focus {
 
 .drop-target {
     border-radius: 6px;
-    background-color: var(--dnd-drop-target-color);
+    background-color: var(--theme-accent);
 }
 
 #trash.drop-target {
-    background-color: var(--trashbin-color);
+    background-color: var(--warning-font-color);
 }
 
 .draggable {
@@ -575,7 +543,7 @@ form input.error, form input.error:focus {
 /* A Location's pin, in the pin editor of the Add location dialog and on the map view: a Leaflet div icon, so no marker
    images are needed (see static/js/lib/README.md) */
 .location-pin {
-    color: var(--dnd-drop-target-color);
+    color: var(--theme-accent);
     font-size: 28px;
     line-height: 1;
     text-align: center;
@@ -629,7 +597,7 @@ form input.error, form input.error:focus {
 .modal-box {
     display: grid;
     grid-template-rows: var(--modal-toolbar-height) auto;
-    background-color: var(--background-secondary-color);
+    background-color: var(--theme-base);
     margin: auto;
     width: fit-content;
     border: var(--modal-border);
@@ -641,8 +609,8 @@ form input.error, form input.error:focus {
     display: grid;
     align-items: center;
     grid-template-columns: 1fr minmax(auto, max-content);
-    background-color: var(--background-secondary-color);
-    border-bottom: 1px solid var(--background-tertiary-color);
+    background-color: var(--theme-base);
+    border-bottom: 1px solid var(--theme-raised);
 }
 
 /* Keep the X in the text color without an outline, including when the modal focuses it on open. */
@@ -650,7 +618,7 @@ form input.error, form input.error:focus {
     background: none;
     border: 0;
     outline: none;
-    color: var(--font-color);
+    color: var(--theme-text);
     font: inherit;
     font-size: 1.6em;
     font-weight: bold;
@@ -704,7 +672,7 @@ form input.error, form input.error:focus {
     display: grid;
     place-items: center;
     font-size: 3em;
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
     pointer-events: none;
 }
 
@@ -717,15 +685,15 @@ form input.error, form input.error:focus {
 nav {
      display: flex;
      column-gap: var(--space-5);
-     background: var(--background-secondary-color);
-     color: var(--font-color);
+     background: var(--theme-base);
+     color: var(--theme-text);
      align-items: center;
      border-bottom: var(--navbar-border);
      text-shadow: var(--navbar-text-shadow);
  }
 
 nav span, nav a {
-    color: var(--font-color);
+    color: var(--theme-text);
     text-decoration: none;
     font-size: 10px;
     font-weight: bold;
@@ -740,7 +708,7 @@ nav .brand a {
     letter-spacing: .15em;
     text-transform: uppercase;
     text-decoration: none;
-    color: var(--brand-color);
+    color: var(--theme-muted);
     font-weight: bold;
     font-size: 16px;
 }
@@ -757,7 +725,7 @@ nav .menu {
     flex: 1 1 0;
     border-inline: 2px solid transparent;
     letter-spacing: .10em;
-    color: var(--navbar-menu-color);
+    color: var(--theme-muted);
     padding: var(--space-3);
     cursor: pointer;
 }
@@ -767,8 +735,8 @@ nav .menu span {
 }
 
 nav .menu.active {
-    background-color: var(--background-tertiary-color);
-    color: var(--font-color);
+    background-color: var(--theme-raised);
+    color: var(--theme-text);
     border: 2px solid var(--warning-background-color);
     border-radius: 5px;
     font-weight: bold;
@@ -778,7 +746,7 @@ nav input {
     border-radius: 3px;
     border: var(--navbar-input-border);
     padding: var(--space-3);
-    background-color: var(--input-background-color);
+    background-color: var(--theme-text);
     width: 90%;
     /* a flex item's min-width:auto would keep the input from shrinking to fit the form's fixed width */
     min-width: 0;
@@ -799,7 +767,7 @@ nav:has(.menu):not(:has(form))::after {
 }
 
 nav input::placeholder {
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
 }
 
 nav .menu.triage i, nav .menu.triage span {
@@ -815,7 +783,7 @@ nav .menu.triage.empty i,
 nav .menu.triage.empty span,
 nav .menu.trashbin.empty i,
 nav .menu.trashbin.empty span {
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
     font-size: 10px;
     cursor: default;
 }

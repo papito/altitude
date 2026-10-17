@@ -26,5 +26,5 @@
 
 #mergePeople .person-to-merge span {
     font-size: 0.9em;
-    color: var(--faded-font-color);
+    color: var(--theme-muted);
 }
