@@ -10,8 +10,8 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-color`, `--warning-color`, `--error-color`) or `--shadow-color` by its token (`color: var(--theme-text)`). These hold the `light-dark(light, dark)` pairs. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the three status fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`), each its status color darkened by one recipe; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-color`, `--warning-color`, `--error-color`) or `--shadow-color` by its token (`color: var(--theme-text)`), and an edge or a shadow by its token (`border: var(--panel-border)`), never restating one a token holds. These hold the `light-dark(light, dark)` pairs. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the three status fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`), each its status color darkened by one recipe; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a badge with `--radius-small`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -846,9 +846,9 @@ palette whatever the theme colors become. The page's palette, the scene's `--set
 `:root` tokens of `core.css`, literals with no `light-dark()` pair (the form's edge, border, focus and field tokens
 follow its three colors, base, muted and accent), inherited by the canvas and the form. The style guide's scan
 leaves `setup.css` out (`StyleGuideController.excludedFiles`), so the palette is on no card and in no audit; its
-uses of core tokens are the spacing steps, `--navbar-text-shadow`, and the error box's `--theme-base`, `--error-color`
+uses of core tokens are the spacing steps, `--text-shadow`, and the error box's `--theme-base`, `--error-color`
 and `--theme-text`. The brand bar stays opaque; the footer loses its
-background and takes the nav's text shadow (`--navbar-text-shadow`), so the scenery runs under it. The page module,
+background and takes the chrome's text shadow (`--text-shadow`), so the scenery runs under it. The page module,
 `js/setup-page.js`,
 only calls `startSetupBackground(canvas)` of `js/setup-background/setup-background.js`: the form submits through htmx
 and `json-enc.js`, which the page loads as plain scripts, so there is nothing else to register. The page side returns at
@@ -999,7 +999,7 @@ coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, wh
 `color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
 switcher declares another scheme, on that page. Every color is a `:root` token of `core.css`. `:root` opens with the
 five theme colors: `--theme-base` (the app's surface), `--theme-raised` (a surface lifted off the base),
-`--theme-muted` (secondary text and the lines between surfaces), `--theme-text` (text on the app's own surfaces) and
+`--theme-muted` (secondary text and the edge of a control or a cell), `--theme-text` (text on the app's own surfaces) and
 `--theme-accent` (the one hue: selection, drop targets, chips and pins). Each is a `light-dark(light, dark)` pair, which
 the browser resolves by the scheme in force, so no rule is written once per theme. A rule writes a theme color by its
 token (`color: var(--theme-text)`, `border: 1px solid var(--theme-muted)`); no token aliases a theme color under
@@ -1015,10 +1015,12 @@ color or `--shadow-color` at an alpha in relative color syntax, tokens because a
 as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9),
 `--tab-hover-background-color` (`rgb(from var(--theme-text) r g b / 0.05)`) and `--dnd-dragging-background-color`
 (`--theme-muted` at 0.48); a veil follows the pair of the color it reads. A token holding a border or a shadow keeps
-its width and style with its color, which is a theme color (`--form-border: 2px solid var(--theme-raised)`;
-`--menu-border`, `--modal-border` and `--result-border` are solid `--theme-muted`) or one of those at an alpha
-(`--navbar-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`, the shadows, the button label's shadow of
-`--theme-raised` at 0.55). What is drawn on a colored fill or over an image (the label of a button or a marker, the
+its width and style with its color, which is a theme color (`--control-border: 1px solid var(--theme-raised)`,
+`--list-trace-border`; `--border-thin` and `--border-thick` are solid `--theme-muted`) or `--shadow-color` at an alpha
+(`--panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`, the edge of a chrome panel and the divider
+inside one; the shadows: `--text-shadow`, `--marker-shadow`, `--lift-shadow`, `--result-metadata-shadow`, and
+`--box-shadow`, `--theme-text` at 0.07). No two border or shadow tokens hold one value: a rule that needs an edge or a
+shadow writes the token that has it, and a new one is a new look, with a comment above it. What is drawn on a colored fill or over an image (the label of a button or a marker, the
 snackbar's text and edge, a pin's frame) reads `--theme-text` like other text, and gets a token of its own when the
 light theme gets real values, as it must stay light while the text darkens. A light theme is therefore five pairs plus
 the three status colors and `--shadow-color`, and no other token has a pair. The setup page's palette is no `:root`
@@ -1059,7 +1061,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   (the veils, `--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color` and
   `--dnd-dragging-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
-  length, such as a width or a radius); a value of space-separated lengths, such as a padding shorthand, is a length,
+  length, such as a width or the two radii, `--radius` and `--radius-small`); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. "Off palette" marks a color, border or shadow token outside the Theme colors
   and Status and shadow groups whose declaration writes a color literal (a hex color, a color
   function with its channels written out, or a named color), which keeps the palette at the five. "Same value as"

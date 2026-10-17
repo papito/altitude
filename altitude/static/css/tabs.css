@@ -5,7 +5,7 @@
     align-items: flex-end;
     gap: var(--space-1);
     overflow: visible;
-    border-bottom: 1px solid var(--theme-raised);
+    border-bottom: var(--panel-border);
     padding: 0 var(--panel-padding);
 }
 

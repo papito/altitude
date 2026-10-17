@@ -98,7 +98,7 @@ body:where(.setup) {
     background: none;
     border-top: 0;
     box-shadow: none;
-    text-shadow: var(--navbar-text-shadow);
+    text-shadow: var(--text-shadow);
 }
 
 /* A reduced-motion user gets the scene's still frame at once, without the fade */

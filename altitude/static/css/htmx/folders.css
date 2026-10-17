@@ -62,7 +62,7 @@
     /* Spans this depth's indent minus the grid gap on its icon side, so the icon/name sit where a
        plain margin-left indent would put them while the ⋯ stays flush left */
     width: calc(var(--depth) * var(--list-indent) - var(--list-control-gap));
-    border-top: 2px double var(--theme-raised);
+    border-top: var(--list-trace-border);
 }
 
 #rootFolderList .folder i {
@@ -134,7 +134,7 @@
     gap: var(--space-4);
     margin-bottom: var(--control-vertical-space);
     padding: var(--space-4);
-    border-radius: 5px;
+    border-radius: var(--radius);
     background-color: var(--warning-background-color);
     color: var(--warning-color);
     line-height: 1.4;

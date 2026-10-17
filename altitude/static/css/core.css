@@ -9,7 +9,7 @@
     --theme-base: light-dark(#363636, #363636);
     /* A surface lifted off the base */
     --theme-raised: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
-    /* Secondary text and the lines between surfaces */
+    /* Secondary text and the edge of a control or a cell */
     --theme-muted: light-dark(#b0acac, #b0acac);
     /* Text on the app's own surfaces */
     --theme-text: light-dark(#fff, #fff);
@@ -19,20 +19,36 @@
        tokens take it at an alpha */
     --shadow-color: light-dark(#000, #000);
 
-    --form-border: 2px solid var(--theme-raised);
+    /* The edges. Thin: a context menu's edge and its dividers, a result cell, a people cell, the box-selection
+       rectangle and the drag ghost */
+    --border-thin: 1px solid var(--theme-muted);
+    /* The width of the thick edge, which the modal's width calc reads */
+    --border-thick-width: 2px;
+    /* Thick: an input or textarea, an action button and a dialog's box */
+    --border-thick: var(--border-thick-width) solid var(--theme-muted);
+    /* The edge of a chrome panel and the divider inside one: shadow ink at an alpha, a sunken line against a page of
+       the same color. The nav, the footer, the explorer and content edges, the modal toolbar, the tab list, the map
+       panel and its header, the person header */
+    --panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18);
+    /* The edge of a quiet control or box on the base surface: the small button, the toggle buttons, the sort dropdown,
+       the search control's box and the pipeline form */
+    --control-border: 1px solid var(--theme-raised);
 
-    /* The edge of an input or a textarea */
-    --input-border: 2px solid var(--theme-muted);
+    /* The corners of every rectangular box and control */
+    --radius: 0.3125rem;
+    /* The corners of a badge: a cell's markers, a pin's path label and inner image */
+    --radius-small: 0.1875rem;
 
-    /* The edge of an action button */
-    --button-border: 2px solid var(--theme-muted);
-    /* Under the label of an action button */
-    --button-text-shadow: rgb(from var(--theme-raised) r g b / 0.55) 4px 4px 4px;
-
-    --modal-border-width: 2px;
-    --modal-border: var(--modal-border-width) solid var(--theme-muted);
-    /* Lifts a general dialog off the page */
-    --modal-box-shadow: rgb(from var(--shadow-color) r g b / 0.6) 6px 6px 6px;
+    /* Lifts a dialog or the crowded-pin panel off the page, with no sideways offset so it serves a centered box and a
+       panel on the viewport's edge alike */
+    --lift-shadow: 0 2px 8px rgb(from var(--shadow-color) r g b / 0.6);
+    /* Under what sits on an image or a map: an asset pin's frame, a Location pin's glyph, a pin's count, the
+       checkmark of a selected asset */
+    --marker-shadow: 0 1px 4px rgb(from var(--shadow-color) r g b / 0.6);
+    /* Under the chrome's text: the nav, the explorer, the content area and an action button's label */
+    --text-shadow: rgb(from var(--shadow-color) r g b / 0.75) 0 1px;
+    /* A one-pixel light line under a panel's edge, and the hover and focus look of a button or the sort dropdown */
+    --box-shadow: rgb(from var(--theme-text) r g b / 0.07) 0 1px 0;
     /* Behind the asset detail, all but hiding the page */
     --asset-detail-backdrop-color: rgb(from var(--shadow-color) r g b / 0.9);
     /* Dims what is behind it: the page under a general dialog, the Preview under a play badge or a pin's count */
@@ -45,24 +61,8 @@
     --viewport-gap: var(--space-5);
     --modal-toolbar-height: 1.875rem;
 
-    /* The edge of a context menu and the divider between its actions */
-    --menu-border: 1px solid var(--theme-muted);
-
-    --result-border: 1px solid var(--theme-muted);
     /* Sets a cell's metadata off from the Preview above it */
     --result-metadata-shadow: 0 -2px 2px 0 rgb(from var(--shadow-color) r g b / 0.15);
-    /* Under the checkmark of a selected asset */
-    --selection-shadow: 0 2px 4px rgb(from var(--shadow-color) r g b / 0.2);
-    /* Around a focused dropdown */
-    --dropdown-focus-shadow: 0 0 2px 2px rgb(from var(--shadow-color) r g b / 0.1);
-
-    --form-error-border: 2px solid var(--error-color);
-    /* The nav's sunken edge, shadow ink at an alpha, against a page of the same color */
-    --navbar-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18);
-    --navbar-text-shadow: rgb(from var(--shadow-color) r g b / 0.75) 0 1px;
-    /* The edge of the nav's Search input */
-    --navbar-input-border: 2px groove var(--theme-raised);
-    --box-shadow: rgb(from var(--theme-text) r g b / 0.07) 0 1px 0;
     /* Under a tab the pointer is over */
     --tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05);
 
@@ -103,6 +103,8 @@
     --list-control-gap: var(--space-3);
     /* One step of indentation of a nested explorer list row, drawn by its `.trace` cell */
     --list-indent: var(--space-7);
+    /* The trace a nested explorer list row draws across its indentation */
+    --list-trace-border: 2px double var(--theme-raised);
 
     --footer-height: 2.75rem;
 
@@ -126,14 +128,8 @@
 
     /* Dragon Drop */
 
-    --dnd-draggable-border: 1px solid var(--theme-muted);
     /* Behind an element while it is dragged */
     --dnd-dragging-background-color: rgb(from var(--theme-muted) r g b / 0.48);
-
-    /* Under what sits on a map: an asset pin's frame, a Location pin's glyph, a pin's count */
-    --pin-shadow: rgb(from var(--shadow-color) r g b / 0.6) 0 1px 4px;
-    /* Lifts the crowded-pin panel off the map to its left */
-    --map-panel-shadow: rgb(from var(--shadow-color) r g b / 0.5) -4px 0 8px;
 
     /* Chips: a dismissable scope the results are narrowed to, such as the map area */
     --chip-padding: var(--space-1) var(--space-4);
@@ -177,7 +173,7 @@ footer {
     font-size: .9em;
     align-items: center;
     background: var(--theme-base);
-    border-top: var(--navbar-border);
+    border-top: var(--panel-border);
     box-shadow: var(--box-shadow);
 }
 
@@ -203,8 +199,8 @@ footer {
 
 input, textarea {
     padding: var(--space-4);
-    border: var(--input-border);
-    border-radius: 4px;
+    border: var(--border-thick);
+    border-radius: var(--radius);
     color: var(--theme-base);
     font-size: 1.2em;
     background-color: var(--theme-text);
@@ -220,7 +216,7 @@ form div.error {
 }
 
 form input.error, form input.error:focus {
-    border: var(--form-error-border);
+    border-color: var(--error-color);
     outline: none !important;
 }
 
@@ -232,12 +228,12 @@ form input.error, form input.error:focus {
     background: var(--theme-raised);
     font-weight: bold;
     color: var(--theme-text);
-    border: var(--button-border);
-    border-radius: 4px;
+    border: var(--border-thick);
+    border-radius: var(--radius);
     cursor: pointer;
     padding: var(--space-4);
     text-decoration: none;
-    text-shadow: var(--button-text-shadow);
+    text-shadow: var(--text-shadow);
     font-size: 1em;
 }
 
@@ -262,7 +258,7 @@ form input.error, form input.error:focus {
 .action-button.small {
     font-size: 0.8em;
     background: var(--theme-base);
-    border: 1px solid var(--theme-raised);
+    border: var(--control-border);
 }
 
 .action-button.small span {
@@ -279,17 +275,17 @@ form input.error, form input.error:focus {
 .toggle-group button {
     padding: var(--space-3) var(--space-5);
     background-color: var(--theme-base);
-    border: 1px solid var(--theme-raised);
+    border: var(--control-border);
     color: var(--theme-muted);
     cursor: pointer;
 }
 
 .toggle-group button:first-child {
-    border-radius: 5px 0 0 5px;
+    border-radius: var(--radius) 0 0 var(--radius);
 }
 
 .toggle-group button:last-child {
-    border-radius: 0 5px 5px 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 .toggle-group button[aria-pressed="true"] {
@@ -331,8 +327,8 @@ form input.error, form input.error:focus {
     width: max-content;
     /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
     padding: 0;
-    border: var(--menu-border);
-    border-radius: 5px;
+    border: var(--border-thin);
+    border-radius: var(--radius);
     color: inherit;
     background-color: var(--theme-base);
     text-shadow: none;
@@ -378,7 +374,7 @@ form input.error, form input.error:focus {
 
 /* Divider between rows only, never above the first or below the last */
 .context-menu .actions button + button {
-    border-top: var(--menu-border);
+    border-top: var(--border-thin);
 }
 
 /* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
@@ -433,7 +429,7 @@ form input.error, form input.error:focus {
     margin-left: -250px;
     color: var(--theme-text);
     text-align: center;
-    border-radius: 2px;
+    border-radius: var(--radius);
     padding: var(--space-6);
     position: fixed;
     z-index: 1;
@@ -473,13 +469,13 @@ form input.error, form input.error:focus {
 .dragging {
     padding-left: var(--space-2);
     padding-right: var(--space-2);
-    border: var(--dnd-draggable-border);
-    border-radius: 4px;
+    border: var(--border-thin);
+    border-radius: var(--radius);
     background-color: var(--dnd-dragging-background-color);
 }
 
 .drop-target {
-    border-radius: 6px;
+    border-radius: var(--radius);
     background-color: var(--theme-accent);
 }
 
@@ -498,7 +494,7 @@ form input.error, form input.error:focus {
     justify-content: center;
     font-size: 16px;
     font-weight: bold;
-    border-radius: 4px;
+    border-radius: var(--radius);
     pointer-events: none;
 }
 
@@ -513,7 +509,7 @@ form input.error, form input.error:focus {
     font-size: 28px;
     line-height: 1;
     text-align: center;
-    text-shadow: var(--pin-shadow);
+    text-shadow: var(--marker-shadow);
 }
 
 /*       */
@@ -539,7 +535,7 @@ form input.error, form input.error:focus {
 #modalContent {
     box-sizing: border-box;
     width: calc(var(--modal-content-width) + 2 * var(--modal-content-padding));
-    max-width: calc(100vw - 2 * (var(--viewport-gap) + var(--modal-border-width)));
+    max-width: calc(100vw - 2 * (var(--viewport-gap) + var(--border-thick-width)));
     padding: var(--modal-content-padding);
 }
 
@@ -566,9 +562,9 @@ form input.error, form input.error:focus {
     background-color: var(--theme-base);
     margin: auto;
     width: fit-content;
-    border: var(--modal-border);
-    border-radius: 5px;
-    box-shadow: var(--modal-box-shadow);
+    border: var(--border-thick);
+    border-radius: var(--radius);
+    box-shadow: var(--lift-shadow);
 }
 
 .modal-toolbar {
@@ -576,7 +572,7 @@ form input.error, form input.error:focus {
     align-items: center;
     grid-template-columns: 1fr minmax(auto, max-content);
     background-color: var(--theme-base);
-    border-bottom: 1px solid var(--theme-raised);
+    border-bottom: var(--panel-border);
 }
 
 /* Keep the X in the text color without an outline, including when the modal focuses it on open. */
@@ -654,8 +650,8 @@ nav {
      background: var(--theme-base);
      color: var(--theme-text);
      align-items: center;
-     border-bottom: var(--navbar-border);
-     text-shadow: var(--navbar-text-shadow);
+     border-bottom: var(--panel-border);
+     text-shadow: var(--text-shadow);
  }
 
 nav span, nav a {
@@ -704,13 +700,13 @@ nav .menu.active {
     background-color: var(--theme-raised);
     color: var(--theme-text);
     border: 2px solid var(--warning-background-color);
-    border-radius: 5px;
+    border-radius: var(--radius);
     font-weight: bold;
 }
 
 nav input {
-    border-radius: 3px;
-    border: var(--navbar-input-border);
+    border-radius: var(--radius);
+    border: var(--border-thick);
     padding: var(--space-3);
     background-color: var(--theme-text);
     width: 90%;

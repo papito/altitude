@@ -129,7 +129,7 @@
                 <span style="color: var(--success-color)">--success-color</span>
                 <span style="color: var(--warning-color)">--warning-color</span>
                 <span style="color: var(--error-color)">--error-color</span>
-                <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
+                <span style="text-shadow: var(--text-shadow)">--text-shadow</span>
               </div>
             </div>
 
@@ -166,14 +166,19 @@
 
         <section id="borders-shadows">
           <h2>Borders &amp; shadows</h2>
-          <p>A border token carries width, style and color together; use it whole rather than restating its parts.</p>
+          <p>A border token carries width, style and color together; use it whole rather than restating its parts.
+             <code>--panel-border</code> is the edge of a chrome panel and the divider inside one;
+             <code>--control-border</code> the edge of a quiet control on the base surface; <code>--border-thin</code>
+             and <code>--border-thick</code> the muted edges of a cell or a menu, and of an input, a button or a dialog.
+             A rectangular box or control rounds its corners with <code>--radius</code>, a badge with
+             <code>--radius-small</code>; a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")
         </section>
 
         <section id="panels-layout">
           <h2>Panels &amp; layout</h2>
-          <p>A panel is edged with <code>--theme-raised</code>, lit by <code>--box-shadow</code> and padded by
-             <code>--panel-padding</code>; its text carries the navbar's text shadow. Lay pages out with CSS Grid and
+          <p>A panel is edged with <code>--panel-border</code>, lit by <code>--box-shadow</code> and padded by
+             <code>--panel-padding</code>; its text carries <code>--text-shadow</code>. Lay pages out with CSS Grid and
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
         </section>

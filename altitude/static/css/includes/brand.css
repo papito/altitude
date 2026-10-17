@@ -8,8 +8,8 @@
     background: var(--theme-base);
     color: var(--theme-text);
     box-shadow: var(--box-shadow);
-    border-bottom: var(--navbar-border);
-    text-shadow: var(--navbar-text-shadow);
+    border-bottom: var(--panel-border);
+    text-shadow: var(--text-shadow);
     height: 100%;
 }
 :where(body.setup) nav .brand a {

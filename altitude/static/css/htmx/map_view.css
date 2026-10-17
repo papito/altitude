@@ -25,9 +25,9 @@
   width: min(60%, 700px);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--theme-raised);
+  border-left: var(--panel-border);
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-base);
-  box-shadow: var(--map-panel-shadow);
+  box-shadow: var(--lift-shadow);
 }
 
 #mapPanel header {
@@ -35,7 +35,7 @@
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--theme-raised);
+  border-bottom: var(--panel-border);
 }
 
 #mapPanel header .count {
@@ -59,9 +59,9 @@
 .asset-pin {
   box-sizing: border-box;
   border: 2px solid var(--theme-text);
-  border-radius: 4px;
+  border-radius: var(--radius);
   background-color: var(--theme-base);
-  box-shadow: var(--pin-shadow);
+  box-shadow: var(--marker-shadow);
   cursor: pointer;
 }
 
@@ -76,7 +76,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: var(--radius-small);
 }
 
 /* A pin standing for several plotted points: the count badge over the representative thumbnail */
@@ -87,7 +87,7 @@
   height: 100%;
   color: var(--theme-text);
   background-color: var(--scrim-color);
-  text-shadow: var(--pin-shadow);
+  text-shadow: var(--marker-shadow);
 }
 
 /* A Location's pin: the glyph with the Location's path beside it */
@@ -108,7 +108,7 @@
   line-height: 1.2;
   white-space: nowrap;
   padding: var(--space-1) var(--space-3);
-  border-radius: 3px;
+  border-radius: var(--radius-small);
   color: var(--theme-text);
   background-color: var(--theme-accent);
 }

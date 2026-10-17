@@ -175,9 +175,9 @@
 }
 
 .sg-panel {
-  border: 1px solid var(--theme-raised);
+  border: var(--panel-border);
   box-shadow: var(--box-shadow);
-  text-shadow: var(--navbar-text-shadow);
+  text-shadow: var(--text-shadow);
   padding: var(--panel-padding);
 }
 
@@ -191,5 +191,5 @@
   position: relative;
   width: var(--section-vertical-space);
   height: var(--section-vertical-space);
-  border: var(--dnd-draggable-border);
+  border: var(--border-thin);
 }

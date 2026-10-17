@@ -16,9 +16,8 @@ import altitude.core.{ App, Assets }
      *
      * Assertions:
      *
-     * The bundle the pages link answers 200 as CSS, carries the rules of `core.css`, and may be cached forever: its name
-     * changes with its content. A cache keeps a copy per Accept-Encoding, since the body is gzipped only for a client that
-     * accepts it.
+     * The bundle the pages link answers 200 as CSS, carries the rules of `core.css`, and may be cached forever: its name changes
+     * with its content. A cache keeps a copy per Accept-Encoding, since the body is gzipped only for a client that accepts it.
      */
     withServer(App) {
       host =>
@@ -41,9 +40,9 @@ import altitude.core.{ App, Assets }
      *
      * Assertions:
      *
-     * A name that is not the current bundle, such as a page open across a restart asking for the previous one, answers 404
-     * with no Cache-Control: the name may be served once the bundle with that content is built again. So does the prefix
-     * itself, which names no file.
+     * A name that is not the current bundle, such as a page open across a restart asking for the previous one, answers 404 with
+     * no Cache-Control: the name may be served once the bundle with that content is built again. So does the prefix itself, which
+     * names no file.
      */
     withServer(App) {
       host =>

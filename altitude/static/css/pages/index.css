@@ -14,20 +14,20 @@ body:where(.index) {
 }
 
 #explorer {
-  border-right: 1px solid var(--theme-raised);
+  border-right: var(--panel-border);
   box-shadow: var(--box-shadow);
-  text-shadow: var(--navbar-text-shadow);
+  text-shadow: var(--text-shadow);
   padding-top: var(--control-vertical-space);
 }
 
 #explorerViews {
-  text-shadow: var(--navbar-text-shadow);
+  text-shadow: var(--text-shadow);
 }
 
 #content {
-  border-left: 1px solid var(--theme-raised);
+  border-left: var(--panel-border);
   box-shadow: var(--box-shadow);
-  text-shadow: var(--navbar-text-shadow);
+  text-shadow: var(--text-shadow);
   overflow-y: scroll;
   max-width: 100%;
 }
