@@ -7,7 +7,7 @@
 
 #mergePeople .people-to-merge {
     display: grid;
-    grid-template-columns: 1fr 80px 1fr;
+    grid-template-columns: 1fr var(--merge-arrow-column) 1fr;
     place-items: center;
 }
 
@@ -25,6 +25,6 @@
 }
 
 #mergePeople .person-to-merge span {
-    font-size: 0.9em;
+    font-size: var(--font-size-small);
     color: var(--theme-muted);
 }

@@ -2,7 +2,7 @@ package altitude.core.controller
 
 import cask.router.Decorator
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, fullyMatch, include, regex, should, shouldBe, startWith }
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -35,7 +35,8 @@ object DevApp extends cask.Main:
     "token-audit"
   )
 
-  test("Outside dev the style guide does not exist: its routes answer 404 and the nav has no button for it") {
+  test(
+    "Outside dev the style guide and the design tweaks panel do not exist: the routes answer 404 and the pages carry neither") {
 
     /**
      * Setup:
@@ -44,8 +45,9 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The page, the sample dialog and the sample submission each answer 404, and neither the main page's nav nor a nav reload
-     * carries the Style Guide button.
+     * The page, the scan JSON, the sample dialog and the sample submission each answer 404, and neither the main page's nav nor a
+     * nav reload carries the Style Guide button or the Tweaks button. The main page loads no design tweaks script and holds no
+     * pre-paint script reading the tweaks.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -56,6 +58,7 @@ object DevApp extends cask.Main:
         def get(path: String) = requests.get(s"$host/$path", cookies = testContext.cookies, check = false)
 
         get(s"style-guide/r/$repoId").statusCode shouldBe 404
+        get("style-guide/scan.json").statusCode shouldBe 404
         get(s"htmx/style-guide/r/$repoId/dialogs/sample").statusCode shouldBe 404
         requests
           .post(
@@ -70,7 +73,54 @@ object DevApp extends cask.Main:
         val index = get(s"r/$repoId")
         index.statusCode shouldBe 200
         index.text().contains("menu style-guide") shouldBe false
-        get(s"htmx/nav/r/$repoId").text().contains("menu style-guide") shouldBe false
+        index.text().contains("menu design-tweaks") shouldBe false
+        index.text().contains("design-tweaks") shouldBe false
+        index.text().contains("designTweaks") shouldBe false
+        val nav = get(s"htmx/nav/r/$repoId").text()
+        nav.contains("menu style-guide") shouldBe false
+        nav.contains("menu design-tweaks") shouldBe false
+    }
+  }
+
+  test("The scan JSON route answers the source scan as JSON, with the tokens, the literals and the length literals") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user, and the app with the style guide's routes registered, as in dev.
+     *
+     * Assertions:
+     *
+     * The route answers 200 as JSON in the scan's shape: the root tokens, each with a name, a value and a location, the color
+     * literals and the length literals, each with a property, a value and locations, and the icons. The tests run in a sandbox
+     * whose working directory holds no sources, so the scan is empty there; `StyleGuideScanTests` scans the real tree.
+     */
+    testContext.persistRepository()
+    login()
+
+    withServer(DevApp) {
+      host =>
+        val response = requests.get(s"$host/style-guide/scan.json", cookies = testContext.cookies, check = false)
+
+        response.statusCode shouldBe 200
+        response.headers("content-type").head should include("application/json")
+
+        val scan = ujson.read(response.text())
+        scan("rootTokens").arr.foreach {
+          t =>
+            t("name").str should startWith("--")
+            t("value").str.nonEmpty shouldBe true
+            t("location").str should include(":")
+        }
+        scan("literals").arr.foreach(l => l("locations").arr.nonEmpty shouldBe true)
+        scan("lengthLiterals").arr.foreach {
+          l =>
+            l("property").str.nonEmpty shouldBe true
+            (l("value").str should fullyMatch).regex("\\d*\\.?\\d+(?:px|rem|em)")
+            l("locations").arr.nonEmpty shouldBe true
+        }
+        scan("icons").obj.values.foreach(_.num should be >= 1.0)
+        scan("references").obj.values.foreach(_.num should be >= 1.0)
     }
   }
 

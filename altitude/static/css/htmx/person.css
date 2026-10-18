@@ -3,7 +3,7 @@
     margin: var(--space-3);
     padding: var(--space-3);
     border-bottom: var(--panel-border);
-    grid-template-columns: 100px 300px 1fr;
+    grid-template-columns: var(--person-avatar-column) var(--person-meta-column) 1fr;
 }
 
 #person img {
@@ -25,7 +25,7 @@
 }
 
 #person .meta .name {
-    font-size: 1.1em;
+    font-size: var(--font-size-medium);
 }
 
 #person .name span  {

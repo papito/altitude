@@ -20,12 +20,12 @@
 }
 
 #locationEditorMap {
-  height: 300px;
+  height: var(--location-editor-map-height);
 }
 
 #locationPinReadout {
   color: var(--theme-muted);
-  font-size: .9em;
+  font-size: var(--font-size-small);
 }
 
 #addLocation .geocode-row {

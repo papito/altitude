@@ -22,7 +22,7 @@
   right: 0;
   bottom: 0;
   z-index: 1;
-  width: min(60%, 700px);
+  width: var(--map-panel-width);
   display: flex;
   flex-direction: column;
   border-left: var(--panel-border);
@@ -40,7 +40,7 @@
 
 #mapPanel header .count {
   flex: 1;
-  font-weight: bold;
+  font-weight: var(--font-weight-bold);
 }
 
 #mapPanelContent {
@@ -103,9 +103,9 @@
 }
 
 .location-pin.on-map .path {
-  font-size: 12px;
-  font-weight: bold;
-  line-height: 1.2;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-text);
   white-space: nowrap;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-small);

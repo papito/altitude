@@ -99,6 +99,10 @@ export const Const = {
         resultsLayout: "resultsLayout",
         // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
         styleGuideTheme: "styleGuideTheme",
+        // The design tweaks panel's state (js/design-tweaks/tweaks-store.js): the active tweak set, the
+        // snapshots, the theme and the panel's dock and open state. The pre-paint script of
+        // includes/header_common reads the key by name
+        designTweaks: "designTweaks",
     },
 
     sessionStore: {

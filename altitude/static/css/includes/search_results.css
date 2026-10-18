@@ -59,7 +59,7 @@
   grid-auto-rows: auto;
   row-gap: var(--space-2);
   margin-top: var(--space-2);
-  font-size: 11px;
+  font-size: var(--font-size-small);
   color: var(--theme-text);
 }
 
@@ -82,8 +82,8 @@
   position: absolute;
   top: var(--space-4);
   right: var(--space-4);
-  width: 20px;
-  height: 20px;
+  width: var(--marker-size);
+  height: var(--marker-size);
   border-radius: 50%;
   background-color: var(--theme-accent);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
@@ -118,7 +118,7 @@
 
 #assets .cell .metadata span {
   color: var(--theme-muted);
-  letter-spacing: 1px;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 #assets {
@@ -153,8 +153,8 @@
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-3);
-  font-weight: bold;
-  font-size: 1.1em;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-medium);
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-base);
 }
 
@@ -174,13 +174,13 @@
 #assets .result-group .count {
   color: var(--theme-muted);
   font-weight: normal;
-  font-size: smaller;
+  font-size: var(--font-size-small);
 }
 
 /* Selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
 #assets .result-group .group-checkmark {
-  width: 16px;
-  height: 16px;
+  width: var(--marker-size-small);
+  height: var(--marker-size-small);
   margin: 0;
   cursor: pointer;
   accent-color: var(--theme-accent);
@@ -206,8 +206,8 @@
   border: var(--control-border);
   border-radius: var(--radius);
   cursor: pointer;
-  letter-spacing: 1px;
-  font-size: smaller;
+  letter-spacing: var(--letter-spacing-wide);
+  font-size: var(--font-size-small);
   outline: none;
   appearance: none;
   background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
@@ -224,7 +224,7 @@
 }
 
 #searchControl .sort-dropdown span {
-  font-size: 1.2em;
+  font-size: var(--font-size-medium);
 }
 
 #searchControl .total strong {
@@ -236,15 +236,15 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
+  width: var(--play-badge-size);
+  height: var(--play-badge-size);
+  margin: calc(var(--play-badge-size) / -2) 0 0 calc(var(--play-badge-size) / -2);
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--theme-text);
   background-color: var(--scrim-color);
-  font-size: 18px;
+  font-size: var(--font-size-large);
   pointer-events: none;
 }
 
@@ -253,12 +253,12 @@
   position: absolute;
   bottom: var(--space-4);
   color: var(--theme-text);
-  font-size: 10px;
-  font-weight: bold;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-small);
-  letter-spacing: 1px;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 #assets .cell .drag-drop .triage-marker {

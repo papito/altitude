@@ -13,10 +13,10 @@
     height: 100%;
 }
 :where(body.setup) nav .brand a {
-    letter-spacing: .15em;
+    letter-spacing: var(--letter-spacing-wide);
     text-transform: uppercase;
     text-decoration: none;
     color: var(--theme-muted);
-    font-weight: bold;
-    font-size: 1.4em;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-medium);
 }

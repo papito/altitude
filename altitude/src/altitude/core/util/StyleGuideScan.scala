@@ -7,8 +7,9 @@ import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
 /**
- * What the dev-only style guide knows about the styles as they are written in the source tree: the design tokens (CSS custom
- * properties) and where they are declared and referenced, the color literals written past them, and the icons in use.
+ * What the dev-only style guide and the design tweaks panel know about the styles as they are written in the source tree: the
+ * design tokens (CSS custom properties) and where they are declared and referenced, the color and length literals written past
+ * them, and the icons in use.
  *
  * A location is `<root directory name>/<path under the root>:<line>`.
  */
@@ -23,12 +24,16 @@ object StyleGuideScan:
   /** A color literal, as spelled, outside any token declaration */
   case class Literal(value: String, locations: Seq[String])
 
+  /** A length literal (px, rem or em), as spelled, in a sizing property (`SIZING_PROPERTY`) outside any token declaration */
+  case class LengthLiteral(property: String, value: String, locations: Seq[String])
+
   case class Result(
       rootTokens: Seq[Declaration],
       scopedTokens: Seq[Declaration],
       runtimeTokens: Seq[RuntimeToken],
       references: Map[String, Int],
       literals: Seq[Literal],
+      lengthLiterals: Seq[LengthLiteral],
       icons: Map[String, Int],
       filesScanned: Int):
 
@@ -48,6 +53,9 @@ object StyleGuideScan:
         "runtimeTokens" -> runtimeTokens.map(t => ujson.Obj("name" -> t.name, "locations" -> t.locations)),
         "references" -> ujson.Obj.from(references.view.mapValues(ujson.Num(_))),
         "literals" -> literals.map(l => ujson.Obj("value" -> l.value, "locations" -> l.locations)),
+        "lengthLiterals" -> lengthLiterals.map {
+          l => ujson.Obj("property" -> l.property, "value" -> l.value, "locations" -> l.locations)
+        },
         "icons" -> ujson.Obj.from(icons.view.mapValues(ujson.Num(_)))
       )
 
@@ -65,6 +73,12 @@ object StyleGuideScan:
   private val SET_OR_REMOVE = """(?:set|remove)Property\(\s*["'](--[a-zA-Z][\w-]*)["']""".r
   private val SET_PROPERTY = """setProperty\(\s*["'](--[a-zA-Z][\w-]*)["']""".r
   private val COLOR_LITERAL = """#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])|rgba?\([^)]*\)""".r
+  // The properties whose px, rem and em values should be tokens: a text size, a box's size and bounds, a grid's tracks and
+  // an inset. A property starts a declaration like a token does; `-width` inside `border-width` or a token name does not
+  private val SIZING_PROPERTY = "font-size|width|height|min-[a-z-]+|max-[a-z-]+|grid-template-[a-z-]+|top|left|right|bottom"
+  private val SIZING_DECLARATION = s"""(?<=^|[;{"'\\s])($SIZING_PROPERTY)\\s*:\\s*([^;}]+)""".r
+  // A length with a unit a token could hold; `0` has none, and a number inside a name or a decimal is no length
+  private val LENGTH_LITERAL = """(?<![\w.-])\d*\.?\d+(?:px|rem|em)(?![\w-])""".r
   private val ICON = """(?<![\w-])fa-[a-z0-9-]+""".r
   private val ICON_MODIFIER = """fa-(?:spin|pulse|fw|lg|xs|sm|\d+x)""".r
 
@@ -106,6 +120,13 @@ object StyleGuideScan:
       .sortBy(_._1)
       .map(Literal(_, _))
 
+    val lengthLiterals = declared
+      .flatMap((source, found) => lengthLiteralsIn(source, found.map(_._3)))
+      .groupMap((property, value, _) => (property, value))(_._3)
+      .toSeq
+      .sortBy(_._1)
+      .map((key, locations) => LengthLiteral(key._1, key._2, locations))
+
     val icons = sources
       .filterNot(_.isStylesheet)
       .flatMap(source => ICON.findAllIn(source.text))
@@ -118,6 +139,7 @@ object StyleGuideScan:
       runtimeTokens = runtimeTokens,
       references = references,
       literals = literals,
+      lengthLiterals = lengthLiterals,
       icons = icons,
       filesScanned = sources.length
     )
@@ -212,4 +234,19 @@ object StyleGuideScan:
             (source.text.substring(lineStart, m.start).contains(':') && !source.text.substring(m.end, lineEnd).contains('{'))
         }
         .map(m => m.matched -> source.location(m.start))
+        .toSeq
+
+  /**
+   * The length literals of a stylesheet or a template: each px, rem or em value of a sizing property outside the token
+   * declarations, as (property, literal, location)
+   */
+  private def lengthLiteralsIn(source: Source, declarationSpans: Seq[Range]): Seq[(String, String, String)] =
+    if source.isScript then Seq.empty
+    else
+      SIZING_DECLARATION
+        .findAllMatchIn(source.text)
+        .filterNot(m => declarationSpans.exists(_.contains(m.start)))
+        .flatMap {
+          m => LENGTH_LITERAL.findAllMatchIn(m.group(2)).map(l => (m.group(1), l.matched, source.location(m.start(2) + l.start)))
+        }
         .toSeq

@@ -12,6 +12,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-color`, `--warning-color`, `--error-color`) or `--shadow-color` by its token (`color: var(--theme-text)`), and an edge or a shadow by its token (`border: var(--panel-border)`), never restating one a token holds. These hold the `light-dark(light, dark)` pairs. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the three status fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`), each its status color darkened by one recipe; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a badge with `--radius-small`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, and the leading of text that wraps is `--line-height-text`. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -81,7 +82,8 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session) |
+| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, shared by the style guide and the design tweaks panel), font-availability (whether the browser has a font) |
+| `js/design-tweaks/` | the dev-only design tweaks panel `includes/header_common` loads on every page: the entry (`design-tweaks.js`), the store and the adopted sheet (`tweaks-store.js`), the controls per kind (`controls.js`), Inspect (`inspect.js`), the exports (`exports.js`) and the panel's own stylesheet (`panel.css.js`); see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
 
@@ -1051,8 +1053,11 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   `@tokenCards("color", "theme")` asks for the colors of one group), with its note (the comment directly above its
   declaration), reference count, an "Unused" flag, an "Off palette" flag, and the tokens sharing its value ("Same
   value as"); a click copies its `var()` reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
-  replaces), the ones only set from JavaScript, and the color literals grouped by resolved color, each naming the
-  token that already holds that color in the theme shown.
+  replaces), the ones only set from JavaScript, the color literals grouped by resolved color, each naming the
+  token that already holds that color in the theme shown, and the length literals (the px, rem and em values of a
+  font size, a width or height, a bound, a grid's tracks or an inset), each with its property and locations. The
+  kinds and the groups (`TOKEN_KINDS`, `kindOf`, `groupOf`) are `js/common/token-kinds.js`'s, which the design tweaks
+  panel imports too, so the two place a token in the same section.
 - **Token cards:** a token whose declaration references other tokens, a recipe, shows the declaration as written (or
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
@@ -1062,7 +1067,9 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   `--dnd-dragging-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
   length, such as a width or the two radii, `--radius` and `--radius-small`); a value of space-separated lengths, such as a padding shorthand, is a length,
-  drawn as a padded "Padding" sample. "Off palette" marks a color, border or shadow token outside the Theme colors
+  drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
+  `--line-height-*`) are a kind by name rather than by value, since a font size is a length and a weight a bare
+  number, each drawn on sample text in the Typography section (`@tokenCards("typography")`). "Off palette" marks a color, border or shadow token outside the Theme colors
   and Status and shadow groups whose declaration writes a color literal (a hex color, a color
   function with its channels written out, or a named color), which keeps the palette at the five. "Same value as"
   names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
@@ -1084,14 +1091,16 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   a snackbar. Nothing is persisted.
 - **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
   stays on screen. `setTheme` declares `color-scheme` inline on the root element, which every `light-dark()` token
-  follows, remembers the choice in `localStorage` (`Const.localStore.styleGuideTheme`), and resolves the tokens again:
+  follows (`applyTheme` and `rememberedTheme` of `js/common/theme.js`, shared with the design tweaks panel's toggle),
+  remembers the choice in `localStorage` (`Const.localStore.styleGuideTheme`), and resolves the tokens again:
   the color a token holds and its alpha are those of the theme shown, while the tokens sharing its value are compared
   in both themes. The page opens in the remembered theme, else in the stylesheet's. Only the style guide reads the
   choice; the rest of the app stays in the stylesheet's theme.
-- **Font tester:** the Typography section's right half (its left half holds the `--font` card, the sizes and the
-  text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
+- **Font tester:** the Typography section's right half (its left half holds the `--font` card, the type scale's
+  cards, the sizes on the real components and the text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
   has that font, decided by measuring the text with the value in front of each generic family against the generic
-  family alone. The input is the component's `fontInput` (`x-model`), which the specimen's style and the status
+  family alone (`isFontAvailable` in `js/common/font-availability.js`, which the design tweaks panel's family control
+  shares). The input is the component's `fontInput` (`x-model`), which the specimen's style and the status
   derive from. Nothing is requested from the server.
 - **Alpha slider:** the `--scrim-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider under its
   copy button. Dragging it replaces the alpha of the token's relative color (`rgb(from var(--shadow-color) r g b / 0.6)`
@@ -1107,8 +1116,72 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 
 The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates, and the
 vendored stylesheets of `static/css` (`font-awesome.min.css`, `leaflet.css`), whose literals are not the app's to
-tokenize, and `pages/setup.css`, whose `--setup-*` palette is the setup page's own; all are listed in
-`StyleGuideController.excludedFiles`.
+tokenize, `pages/setup.css`, whose `--setup-*` palette is the setup page's own, and the design tweaks panel's modules,
+which name tokens to edit them and declare a palette of their own; all are listed in
+`StyleGuideController.excludedFiles`. The same scan is served as JSON by `GET /style-guide/scan.json` (dev only) for
+the panel.
+
+**Design tweaks** — A dev-only panel (`js/design-tweaks/`, loaded by `includes/header_common` inside
+`@if(Environment.isDev)`, like the nav's Style Guide button) that changes the value of any `:root` token of the bundle
+live, on the real markup and data of the running app, so the look of every page, dialog and htmx fragment can be
+explored without touching a rule. The nav's Tweaks entry (`#designTweaksBtn`, a `div.menu` like the empty Triage
+entry, so it needs no style of its own; the module listens for it on the document, since the nav is reloaded) and
+`Ctrl+Alt+T` toggle it. Nothing of it ships outside dev: the script and the button are behind `Environment.isDev`, and
+its stylesheet is `panel.css.js`, a constructable sheet, not part of the bundle (`StyleGuideControllerTests` asserts
+the index of a non-dev app carries neither).
+
+- **How an override applies:** one `CSSStyleSheet` in `document.adoptedStyleSheets` (`tweaks-store.js`) holding one
+  `:root` rule with every tweaked token, rewritten on every change. Adopted sheets cascade after the document's, so
+  they win over the bundle at equal specificity, with no `!important` and no `@layer`. The two tokens the server sets
+  inline on their containers, `--preview-box` on `#assets` and `--face-box` on `#people`, are written `!important` on
+  those containers in the same sheet. The explorer's width is no token: the panel's slider calls `setExplorerSizes`
+  of `js/common/explorer-split.js`, which owns the main page's Split.js instance and its remembered sizes
+  (`index.scala.html` calls its `initExplorerSplit(view)`, which in the trash bin hides the explorer and makes no
+  split).
+- **No flash on load:** the store keeps the sheet's text (`css`) and the theme in its `localStorage` key
+  (`Const.localStore.designTweaks`), and a small inline script in `header_common` adopts the text and declares the
+  theme before the first paint; the module, deferred as every module is, takes that sheet over
+  (`window.designTweaksSheet`).
+- **The panel itself:** a `popover="manual"` host (`#designTweaks`) in the top layer, above the asset detail and
+  every dialog without a z-index, holding a shadow root with `panel.css.js`. Every custom property the panel reads
+  (`--dt-*`) and the inherited text properties are declared on the host, so tweaking the app's tokens never restyles
+  the panel. It docks left, right or bottom and collapses to a strip showing the count of changed tokens and the active
+  snapshot's name (`*` when modified since); dock, open and collapsed state are remembered. The modal's focus trap
+  marks the host inert like everything outside the dialog; a `MutationObserver` removes the attribute, so the panel
+  stays usable while a dialog is open, though the trap still returns focus to the dialog from the panel's text fields.
+- **Tokens:** every custom property declared on `:root` in the bundle (the stylesheet whose href is under
+  `/assets/`), read from the CSSOM with its declared text (a `light-dark()` pair and a `var()` reference as written)
+  and any `@property` registration; the notes, locations and source values come from the scan JSON. The sections are
+  the style guide's, through `js/common/token-kinds.js`: Theme colors, Status and shadow, Derived; Typography; Scale,
+  Roles, Sizes; Borders and shadows; Panels (the explorer width and the two container tokens); Other. Each card has a
+  reset, a dot while changed, and its current text; a section has a reset; the toolbar has Reset all, a search over
+  names and notes, and a Changed-only filter.
+- **Controls per kind** (`controls.js`): a color that writes its channels gets OKLCH lightness, chroma and hue
+  sliders, a hex field and the native picker, all through the browser (`oklch(from <color> l c h)` and
+  `rgb(from …)` round trips over `getComputedStyle`, no color library), and is written back as hex; a recipe over
+  tokens (a veil, a status fill) keeps its text, with an alpha slider when it ends in one. A rem length gets a slider
+  and a number; a role token a select of the spacing steps with "custom (detach)"; a border its width, style and
+  color; a shadow its offsets, blur and color, where the color of a border or a shadow is a select over the color
+  tokens at an alpha. `--font` is text with the font tester's availability check; a font size a rem slider; a weight,
+  a tracking and a line height numbers; and the Typography section writes every `--font-size-*` step from a base size
+  and a modular-scale ratio. Theme colors has a Seed: one accent hue, one base lightness and one chroma derive the
+  five theme colors for the theme shown, as resolved literals.
+- **Themes:** the Light / Dark toggle sets `document.documentElement.style.colorScheme` through `js/common/theme.js`,
+  as the style guide's switcher does, remembered with the tweaks. Editing a color edits the side of its
+  `light-dark()` pair for the theme shown (`withThemeColor`); the export writes the full pair.
+- **Inspect** (`inspect.js`): the crosshair button; the next click on the page is consumed (its pointer events too),
+  the element is outlined from the top layer, and the panel is filtered to the tokens referenced by the bundle's rules
+  whose selector matches the element or an ancestor (pseudo-elements and state pseudo-classes stripped), and the
+  tokens those reference in turn; Escape or the button leaves the mode, the chip's × clears the filter.
+- **Snapshots:** save-as, load, rename, duplicate, delete, export as a JSON file and import from pasted JSON or a file,
+  and an A/B pair flipped between. A snapshot holds the tweak set, the explorer width and the theme.
+- **Export:** a Prompt (only the tokens that differ, grouped as the panel groups them, each with a qualitative phrase
+  and the exact value, the pair's side named, the explorer width and the two sizes named as the Split sizes,
+  `Const.AssetView.PREVIEW_BOX_PIXELS` and `FaceDetectionService.faceDetectionBoxPx`), the CSS (the before and after
+  declaration lines for `core.css`, each with the file and line from the scan) and the snapshot JSON, each with a copy
+  button, regenerated on every change while the tab is shown.
+- **Not reachable:** the scan's color literals and length literals, each with its file and line, as the style guide's
+  audit lists them.
 
 ## Key Files
 
@@ -1163,6 +1236,16 @@ tokenize, and `pages/setup.css`, whose `--setup-*` palette is the setup page's o
 | `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
 | `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
 | `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
+| `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), shared by the style guide and the design tweaks panel |
+| `static/js/common/theme.js` | the two themes: `applyTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
+| `static/js/common/font-availability.js` | `isFontAvailable` and `asFontFamily`, the font tester's check, shared with the design tweaks panel |
+| `static/js/common/explorer-split.js` | the main page's Split.js instance over the explorer and the content area: `initExplorerSplit(view)`, the remembered sizes, `setExplorerSizes(percent)` for the design tweaks panel |
+| `static/js/design-tweaks/design-tweaks.js` | the design tweaks panel's entry: the bundle's `:root` tokens and `@property` rules, the scan fetch, the panel (header, tabs, cards, filters), the nav button and `Ctrl+Alt+T` |
+| `static/js/design-tweaks/tweaks-store.js` | the tweak set, the snapshots, the theme and the panel state under `Const.localStore.designTweaks`; the adopted sheet and its rewrite on every change |
+| `static/js/design-tweaks/controls.js` | one control builder per kind (color through OKLCH round trips, length, role, border, shadow, font, number), the type scale and the seed controls |
+| `static/js/design-tweaks/inspect.js` | the pick-element mode and the matched-rule walk (`tokensReferencedBy`) |
+| `static/js/design-tweaks/exports.js` | the prompt, the `core.css` before/after lines, the snapshot JSON |
+| `static/js/design-tweaks/panel.css.js` | the panel's stylesheet as a constructable sheet, with its own `--dt-*` palette on the host |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |

@@ -6,10 +6,10 @@
 
 #faceSelector .info {
     display: grid;
-    font-size: 1.1em;
+    font-size: var(--font-size-medium);
     color: var(--theme-muted);
-    font-weight: 500;
-    letter-spacing: 1px;
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--letter-spacing-wide);
     place-items: center;
 }
 

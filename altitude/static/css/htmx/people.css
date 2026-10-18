@@ -35,15 +35,15 @@
 
 #people .name span {
     color: var(--theme-muted);
-    font-size: .9em;
+    font-size: var(--font-size-small);
 }
 
 #people .cell a {
     text-decoration: none;
-    font-size: .9em;
+    font-size: var(--font-size-small);
     color: var(--theme-text);
     font-family: -apple-system, "system-ui", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    letter-spacing: 1px;
+    letter-spacing: var(--letter-spacing-wide);
 }
 
 #people .cell a.unknown {

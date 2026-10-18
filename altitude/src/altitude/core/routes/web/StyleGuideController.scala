@@ -24,14 +24,27 @@ object StyleGuideController:
     Seq("css", "js").map(moduleDir.resolve("static").resolve(_)) :+ moduleDir.resolve("views")
 
   // The vendored stylesheets (the icon font, Leaflet's), whose literals are no app's to tokenize; the guide itself, whose
-  // specimens would count as uses of what they demonstrate; and the setup page's stylesheet, whose `--setup-*` palette is
-  // that page's own, not a token of the app
-  val excludedFiles: Set[String] =
-    Set("font-awesome.min.css", "leaflet.css", "style_guide.scala.html", "style_guide.css", "style-guide.js", "setup.css")
+  // specimens would count as uses of what they demonstrate; the setup page's stylesheet, whose `--setup-*` palette is that
+  // page's own, not a token of the app; and the design tweaks panel's modules (static/js/design-tweaks), which name tokens
+  // to edit them, not to use them, and declare a palette of their own
+  val excludedFiles: Set[String] = Set(
+    "font-awesome.min.css",
+    "leaflet.css",
+    "style_guide.scala.html",
+    "style_guide.css",
+    "style-guide.js",
+    "setup.css",
+    "design-tweaks.js",
+    "tweaks-store.js",
+    "controls.js",
+    "inspect.js",
+    "exports.js",
+    "panel.css.js"
+  )
 
 /**
- * The style guide: a page of the design tokens, the shared primitives and a live sample dialog. `App` registers it in dev only,
- * so in any other environment these routes do not exist.
+ * The style guide: a page of the design tokens, the shared primitives and a live sample dialog, and the source scan as JSON for
+ * the design tweaks panel. `App` registers it in dev only, so in any other environment these routes do not exist.
  */
 class StyleGuideController(using logger: Logger) extends BaseController:
   import StyleGuideController.{ excludedFiles, scanRoots, Field }
@@ -56,6 +69,17 @@ class StyleGuideController(using logger: Logger) extends BaseController:
     val stats = App.altitude.service.stats.getStats
     val payload = "<!doctype html>" + html.style_guide(stats = stats, scanJson = scanJson)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+
+  /**
+   * The source scan as JSON, for the design tweaks panel (static/js/design-tweaks), which shows every page's tokens with their
+   * notes and the literals it cannot reach. The tokens themselves it reads from the served stylesheet.
+   */
+  @requireLogin()
+  @cask.get("/style-guide/scan.json")
+  def scanJson(): Response[String] =
+    val scan = StyleGuideScan.scan(scanRoots(moduleDir), excludedFiles)
+    logger.debug(s"Style guide scanned ${scan.filesScanned} source files for the design tweaks panel")
+    cask.Response(ujson.write(scan.toJson), 200, Seq(("Content-Type", "application/json")))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/sample")

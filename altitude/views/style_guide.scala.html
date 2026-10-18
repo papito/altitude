@@ -106,20 +106,27 @@
 
         <section id="typography">
           <h2>Typography</h2>
-          <p>One font stack, <code>--font</code>, at a 14px base on <code>body</code>. Other sizes are relative to it and
-             belong to a component, shown here on the real ones. The tester previews any font this browser has
-             installed.</p>
+          <p>One font stack, <code>--font</code>, and a scale of sizes in rem, <code>--font-size-xs</code> to
+             <code>--font-size-display</code>, with <code>--font-size-base</code> on <code>body</code>: a font size is a
+             step of the scale, never a literal. A weight is <code>--font-weight-bold</code> or
+             <code>--font-weight-medium</code>, spaced-out text takes <code>--letter-spacing-wide</code> and text that
+             wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
+             category's badge) stay in its rule. The Sizes row shows the steps on the real components. The tester
+             previews any font this browser has installed.</p>
           <div class="sg-halves">
             <div>
               @tokenCards("font")
 
+              <h3>Scale</h3>
+              @tokenCards("typography")
+
               <h3>Sizes</h3>
               <div class="sg-row">
-                <span>Body text, 14px</span>
-                <button type="button" class="action-button small">Small button, 0.8em</button>
-                <span class="asset-count">Asset count, 0.9em</span>
-                <input type="text" value="Input, 1.2em" aria-label="Input size specimen">
-                <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, 1.3em</span>
+                <span>Body text, --font-size-base</span>
+                <button type="button" class="action-button small">Small button, --font-size-small</button>
+                <span class="asset-count">Asset count, --font-size-small</span>
+                <input type="text" value="Input, --font-size-medium" aria-label="Input size specimen">
+                <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, --font-size-large</span>
               </div>
 
               <h3>Text colors</h3>
@@ -349,6 +356,28 @@
                   </details>
                 </td>
                 <td x-text="literal.tokens.join(', ')"></td>
+              </tr>
+            </template>
+          </table>
+
+          <h3>Length literals</h3>
+          <p>Sizes written as px, rem or em literals in a font size, a width or height, a bound, a grid's tracks or an
+             inset, which no token reaches: the glyph sizes that stay in their rules, and anything that should be a step
+             or a size token. The design tweaks panel lists the same under Not reachable.</p>
+          <table>
+            <tr><th>Property</th><th>Literal</th><th>Uses</th></tr>
+            <template x-for="literal in lengthLiterals">
+              <tr>
+                <td x-text="literal.property"></td>
+                <td x-text="literal.value"></td>
+                <td>
+                  <details>
+                    <summary x-text="literal.locations.length"></summary>
+                    <template x-for="location in literal.locations">
+                      <div x-text="location"></div>
+                    </template>
+                  </details>
+                </td>
               </tr>
             </template>
           </table>

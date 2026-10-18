@@ -199,6 +199,49 @@ import altitude.core.util.StyleGuideScan
     )
   }
 
+  test("Length literals are the px, rem and em values of the sizing properties, outside token declarations") {
+
+    /**
+     * Setup:
+     *
+     * A stylesheet with lengths in a font size, a width inside `calc()`, a min-width, a grid's tracks and an inset; lengths in
+     * properties that are not sizing ones (a padding, a border width, a letter spacing, a line height); a token declaration
+     * holding a length; a zero and a viewport unit; a commented-out size; and a template with an inline width.
+     *
+     * Assertions:
+     *
+     * The literals are those of the sizing properties, grouped by property and value, each with its locations, in property and
+     * value order.
+     *
+     * Edge cases:
+     *
+     * `--snackbar-width` is a token declaration and `border-width` is not `width`, so neither counts. A unitless zero, a `vh`
+     * length, a number inside a decimal or a name, and a length in a comment are not literals.
+     */
+    val result = scan(
+      "css/core.css" ->
+        """:root { --snackbar-width: 31.25rem; }
+          |/* height: 99px */
+          |#snackbar { font-size: 12px; width: calc(var(--snackbar-width) + 10px); min-width: 5rem; }
+          |#person { grid-template-columns: 100px 1fr; top: 50px; height: 0; max-height: 80vh; }
+          |.cell { padding: 10px; border-width: 2px; letter-spacing: 1px; line-height: 1.4; font-size: 0.9em }
+          |.other { font-size: 12px; left: 1.5rem }
+          |""".stripMargin,
+      "views/htmx/people.scala.html" -> """<div style="width: 20px; --face-box: 80px"></div>"""
+    )
+
+    result.lengthLiterals.map(l => (l.property, l.value, l.locations)) shouldEqual Seq(
+      ("font-size", "0.9em", Seq("css/core.css:5")),
+      ("font-size", "12px", Seq("css/core.css:3", "css/core.css:6")),
+      ("grid-template-columns", "100px", Seq("css/core.css:4")),
+      ("left", "1.5rem", Seq("css/core.css:6")),
+      ("min-width", "5rem", Seq("css/core.css:3")),
+      ("top", "50px", Seq("css/core.css:4")),
+      ("width", "10px", Seq("css/core.css:3")),
+      ("width", "20px", Seq("views/htmx/people.scala.html:1"))
+    )
+  }
+
   test("Icons are the Font Awesome icon names of templates and scripts, without the modifier classes") {
 
     /**
@@ -241,6 +284,7 @@ import altitude.core.util.StyleGuideScan
     result.runtimeTokens shouldBe empty
     result.references shouldBe empty
     result.literals shouldBe empty
+    result.lengthLiterals shouldBe empty
     result.icons shouldBe empty
 
     scan().filesScanned shouldBe 0

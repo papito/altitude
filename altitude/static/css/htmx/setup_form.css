@@ -1,5 +1,5 @@
-/* The setup form's carve-out: its fields, labels and submit button take the `--setup-form-*` tokens of core.css, a
-   palette of the form's own, apart from the theme the rest of the app derives from */
+/* The setup form's carve-out: its fields, labels and submit button take the `--setup-form-*` tokens of pages/setup.css,
+   a palette of the form's own, apart from the theme the rest of the app derives from */
 
 #setupForm {
     display: grid;
@@ -11,9 +11,8 @@
     display: block;
     margin-bottom: var(--space-3);
     color: var(--setup-form-label-color);
-    /* 13px of the 14px body */
-    font-size: 1rem;
-    font-weight: 500;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-medium);
 }
 
 #setupForm input {
@@ -23,7 +22,7 @@
     color: var(--theme-text);
     border: var(--setup-form-field-border);
     border-radius: 6px;
-    font-size: 1em;
+    font-size: var(--font-size-base);
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -64,8 +63,8 @@
 
 #setupForm .action-button {
     padding: var(--space-5);
-    font-size: 1.1em;
-    font-weight: 600;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
     color: var(--setup-form-base);
     background: var(--setup-form-accent);
     border: var(--setup-form-card-border);
@@ -84,5 +83,5 @@
     color: var(--theme-text);
     border: 1px solid var(--error-color);
     border-bottom: 2px solid var(--error-color);
-    letter-spacing: 1px;
+    letter-spacing: var(--letter-spacing-wide);
 }

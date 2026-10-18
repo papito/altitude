@@ -53,10 +53,14 @@
 </div>
 }
 
-@* Dev only, like the routes behind it (StyleGuideController) *@
+@* Dev only, like the routes behind it (StyleGuideController). Tweaks toggles the design tweaks panel (js/design-tweaks),
+   which listens for the button by its ID on the document, so a nav reload keeps it working *@
 @if(Environment.isDev) {
     <div class="menu style-guide">
         <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
+    </div>
+    <div class="menu design-tweaks" id="designTweaksBtn" role="button" tabindex="0" title="Design tweaks (Ctrl+Alt+T)">
+        <i class="fas fa-sliders-h"></i><span>Tweaks</span>
     </div>
 }
 

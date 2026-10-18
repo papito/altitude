@@ -55,8 +55,8 @@
   gap: var(--control-vertical-space);
 }
 
-/* One font token, one column: a text specimen wants the width */
-#typography .sg-tokens {
+/* One font token, one column: a text specimen wants the width. The type scale's cards keep the grid */
+#typography .sg-tokens:has(.sg-sample.font) {
   grid-template-columns: 1fr;
 }
 
@@ -117,8 +117,8 @@
   padding: 0 var(--panel-padding);
 }
 
-/* A line of text, as tall as the font stack makes it */
-.sg-sample.font {
+/* A line of text, as tall as the font stack, or the size, weight, tracking or leading drawn on it, makes it */
+.sg-sample.font, .sg-sample.typography {
   height: auto;
 }
 

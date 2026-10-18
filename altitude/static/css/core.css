@@ -103,6 +103,28 @@
 
     --footer-height: 2.75rem;
 
+    /* The sizes written once, each the one site named. The snackbar's width: its min-width, and the half of it its
+       margin-left centers it by */
+    --snackbar-width: 31.25rem;
+    /* The snackbar's height */
+    --snackbar-height: 1.875rem;
+    /* The person header's avatar column (htmx/person.css) */
+    --person-avatar-column: 6.25rem;
+    /* The person header's name and controls column (htmx/person.css) */
+    --person-meta-column: 18.75rem;
+    /* The arrow column between the two people of the Merge people dialog (htmx/merge_people_modal.css) */
+    --merge-arrow-column: 5rem;
+    /* The crowded-pin panel over the map's right edge (htmx/map_view.css) */
+    --map-panel-width: min(60%, 43.75rem);
+    /* The pin editor's map in the Add location dialog (htmx/add_location_dialog.css) */
+    --location-editor-map-height: 18.75rem;
+    /* A group header's checkmark in the results grid (includes/search_results.css) */
+    --marker-size-small: 1rem;
+    /* The checkmark of a selected cell in the results grid (includes/search_results.css) */
+    --marker-size: 1.25rem;
+    /* The play badge over a Preview that plays (includes/search_results.css) */
+    --play-badge-size: 2.75rem;
+
     /* The three status colors, each a pair of its own: the text of a status, its icon and its edge. Success */
     --success-color: light-dark(#82da5f, #82da5f);
     /* Warning: also the trash, and a person not named yet */
@@ -130,7 +152,34 @@
     --chip-padding: var(--space-1) var(--space-4);
     --chip-border-radius: 0.625rem;
 
-    --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
+    --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+
+    /* The type scale: every font size is a step of it, in rem like the spacing scale, so the text follows the
+       browser's default size. A glyph's own size (the spinner, the merge arrow, a category's +/− badge) stays in its
+       rule. This step: the nav's labels, the empty-trash label and a cell's no-date marker */
+    --font-size-xs: 0.625rem;
+    /* Secondary text: a cell's metadata, the small button, a count, a chip, the sort dropdown, a pin's path, the
+       footer and a person's name in the People grid */
+    --font-size-small: 0.75rem;
+    /* The body's text, and every control that would not inherit it (a button, a menu action) */
+    --font-size-base: 0.875rem;
+    /* A step up: inputs, a dialog's title, a group header, an explorer row's icon, a status line, a badge's count */
+    --font-size-medium: 1rem;
+    /* The ⋯ menu trigger and the play badge's glyph */
+    --font-size-large: 1.125rem;
+    /* The × that closes a dialog */
+    --font-size-xl: 1.375rem;
+    /* A Location's pin glyph on a map */
+    --font-size-display: 1.75rem;
+    /* Emphasis: a button's label, a title, a heading, a badge and the nav's labels */
+    --font-weight-bold: 700;
+    /* A label set apart without emphasis: the face selector's hint and the setup form's labels */
+    --font-weight-medium: 500;
+    /* The one tracking of spaced-out text: the nav's entries and brand, uppercase markers and labels, the metadata
+       values, the sort dropdown and the tabs */
+    --letter-spacing-wide: 0.1em;
+    /* The leading of running text that wraps: the folder warning and a pin's path */
+    --line-height-text: 1.4;
 }
 
 /* Registered as a length so its computed value is in px: anchored-panel.js reads it as a number of pixels */
@@ -148,7 +197,7 @@
 /* DEFAULT CORE */
 /*              */
 body {
-    font-size: 14px;
+    font-size: var(--font-size-base);
     margin: 0;
     background-color: var(--theme-base);
     color: var(--theme-text);
@@ -165,7 +214,7 @@ footer {
     color: var(--theme-text);
     bottom: 0;
     display: grid;
-    font-size: .9em;
+    font-size: var(--font-size-small);
     align-items: center;
     background: var(--theme-base);
     border-top: var(--panel-border);
@@ -197,7 +246,7 @@ input, textarea {
     border: var(--border-thick);
     border-radius: var(--radius);
     color: var(--theme-base);
-    font-size: 1.2em;
+    font-size: var(--font-size-medium);
     background-color: var(--theme-text);
 }
 
@@ -221,7 +270,7 @@ form input.error, form input.error:focus {
 
 .action-button {
     background: var(--theme-raised);
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
     color: var(--theme-text);
     border: var(--border-thick);
     border-radius: var(--radius);
@@ -229,7 +278,7 @@ form input.error, form input.error:focus {
     padding: var(--space-4);
     text-decoration: none;
     text-shadow: var(--text-shadow);
-    font-size: 1em;
+    font-size: var(--font-size-base);
 }
 
 /* `:focus-visible`, not `:focus`: a control that opens a dialog takes focus back when it closes, and
@@ -251,7 +300,7 @@ form input.error, form input.error:focus {
 }
 
 .action-button.small {
-    font-size: 0.8em;
+    font-size: var(--font-size-small);
     background: var(--theme-base);
     border: var(--control-border);
 }
@@ -306,7 +355,7 @@ form input.error, form input.error:focus {
     outline: none;
     background: none;
     font: inherit;
-    font-size: 1.3em;
+    font-size: var(--font-size-large);
     line-height: 1;
     color: var(--theme-text);
     cursor: pointer;
@@ -359,7 +408,7 @@ form input.error, form input.error:focus {
     background: none;
     color: inherit;
     font: inherit;
-    font-size: 1em;
+    font-size: var(--font-size-base);
     text-align: left;
 }
 
@@ -387,7 +436,7 @@ form input.error, form input.error:focus {
 .asset-count {
     justify-self: start;
     color: var(--theme-muted);
-    font-size: .9em;
+    font-size: var(--font-size-small);
     white-space: nowrap;
 }
 
@@ -399,7 +448,7 @@ form input.error, form input.error:focus {
     border-radius: var(--chip-border-radius);
     background: none;
     color: var(--theme-accent);
-    font-size: smaller;
+    font-size: var(--font-size-small);
     cursor: pointer;
 }
 
@@ -412,7 +461,7 @@ form input.error, form input.error:focus {
     background-color: var(--theme-base);
     border: 1px solid var(--error-color);
     padding: var(--space-4);
-    font-size: 1.1em;
+    font-size: var(--font-size-medium);
 }
 
 #snackbar {
@@ -420,8 +469,8 @@ form input.error, form input.error:focus {
     align-items: center;
     justify-content: center;
     visibility: hidden;
-    min-width: 500px;
-    margin-left: -250px;
+    min-width: var(--snackbar-width);
+    margin-left: calc(var(--snackbar-width) / -2);
     color: var(--theme-text);
     text-align: center;
     border-radius: var(--radius);
@@ -430,7 +479,7 @@ form input.error, form input.error:focus {
     z-index: 1;
     left: 50%;
     top: 50px;
-    height: 30px;
+    height: var(--snackbar-height);
     border: 1px solid var(--theme-text);
 }
 
@@ -487,8 +536,8 @@ form input.error, form input.error:focus {
     position: absolute;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    font-weight: bold;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
     border-radius: var(--radius);
     pointer-events: none;
 }
@@ -501,7 +550,7 @@ form input.error, form input.error:focus {
    images are needed (see static/js/lib/README.md) */
 .location-pin {
     color: var(--theme-accent);
-    font-size: 28px;
+    font-size: var(--font-size-display);
     line-height: 1;
     text-align: center;
     text-shadow: var(--drop-shadow);
@@ -577,8 +626,8 @@ form input.error, form input.error:focus {
     outline: none;
     color: var(--theme-text);
     font: inherit;
-    font-size: 1.6em;
-    font-weight: bold;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
     line-height: 1;
     padding: 0 var(--space-4) 0 0;
     cursor: pointer;
@@ -586,8 +635,8 @@ form input.error, form input.error:focus {
 
 .modal-title {
     padding-left: var(--space-5);
-    font-size: 1.1em;
-    font-weight: bold;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
     text-transform: capitalize;
 }
 
@@ -652,8 +701,8 @@ nav {
 nav span, nav a {
     color: var(--theme-text);
     text-decoration: none;
-    font-size: 10px;
-    font-weight: bold;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
     font-family: var(--font);
     text-transform: uppercase;
 }
@@ -662,12 +711,12 @@ nav .brand {
 }
 
 nav .brand a {
-    letter-spacing: .15em;
+    letter-spacing: var(--letter-spacing-wide);
     text-transform: uppercase;
     text-decoration: none;
     color: var(--theme-muted);
-    font-weight: bold;
-    font-size: 16px;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-medium);
 }
 
 nav div {
@@ -681,7 +730,7 @@ nav .menu {
        would otherwise widen that one entry and shift the others as the page changes */
     flex: 1 1 0;
     border-inline: 2px solid transparent;
-    letter-spacing: .10em;
+    letter-spacing: var(--letter-spacing-wide);
     color: var(--theme-muted);
     padding: var(--space-3);
     cursor: pointer;
@@ -696,7 +745,7 @@ nav .menu.active {
     color: var(--theme-text);
     border: 2px solid var(--warning-background-color);
     border-radius: var(--radius);
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
 }
 
 nav input {
@@ -741,7 +790,7 @@ nav .menu.triage.empty span,
 nav .menu.trashbin.empty i,
 nav .menu.trashbin.empty span {
     color: var(--theme-muted);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     cursor: default;
 }
 

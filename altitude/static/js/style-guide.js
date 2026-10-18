@@ -4,18 +4,16 @@
  * The server scans the source tree (`StyleGuideScan`) and embeds what it found as JSON: the tokens
  * and where they are declared and referenced, the color literals and the icons. The `styleGuide`
  * Alpine component holds what the page's templates render from it: each `:root` token resolved
- * against the stylesheets the browser actually loaded, sorted by the kind of value it holds and
- * placed in a group, the icons and the token audit. It is also the state of the theme switcher, of
- * the font tester of the Typography section and of the alpha slider of the `--scrim-color` card,
- * and what the page's buttons call. The live menu and dialog specimens are no template:
+ * against the stylesheets the browser actually loaded, sorted by the kind of value it holds (or,
+ * for a typography token, by its name) and placed in a group, the icons and the token audit. It
+ * is also the state of the theme switcher, of the font tester of the Typography section and of
+ * the alpha slider of the `--scrim-color` card, and what the page's buttons call. The live menu and dialog specimens are no template:
  * `initStyleGuide` builds them through the modules the explorer lists use.
  *
- * The groups: a color token is one of the five theme colors (`--theme-*`), which hold the palette,
- * a status color (or a status fill, derived from its color) or `--shadow-color`, which stand
- * apart from them, or derived: a veil, a theme color or `--shadow-color` at an alpha. A length is a step of the
- * spacing scale (`--space-*`), a role that references a step, or a size. A token whose
- * declaration references other tokens is shown as declared, a recipe, with the tokens it comes
- * from; any other as it resolves. A color, border or shadow token outside
+ * The kinds and the groups are `common/token-kinds.js`'s, shared with the design tweaks panel, so
+ * both place a token in the same section; the themes are `common/theme.js`'s. A
+ * token whose declaration references other tokens is shown as declared, a recipe, with the tokens
+ * it comes from; any other as it resolves. A color, border or shadow token outside
  * the theme, status and shadow colors that writes a color literal is flagged off
  * palette. Two tokens of one kind that
  * resolve to the same value (a color to the same color in both themes) are flagged as the same
@@ -31,80 +29,32 @@ import {
     showSuccessSnackBar,
     showWarningSnackBar,
 } from "./common/snackbar.js"
+import { asFontFamily, isFontAvailable } from "./common/font-availability.js"
+import {
+    applyTheme,
+    inTheme,
+    rememberedTheme,
+    resolveColor,
+    THEMES,
+    themeColorsOf,
+    withThemeColor,
+} from "./common/theme.js"
+import {
+    groupOf,
+    kindOf,
+    OTHER_KIND,
+    paletteGroupOf,
+    referencedNamesOf,
+    TOKEN_REFERENCE,
+} from "./common/token-kinds.js"
 import { Const } from "./constants.js"
 import { Alpine } from "./lib/alpine.esm.min.js"
-
-const BORDER_STYLES =
-    /\b(solid|dashed|dotted|double|groove|ridge|inset|outset)\b/
-
-/**
- * The kinds of token value, in the order they are tested: the first whose test passes is the
- * token's kind. The order matters because the tests overlap (a color is also a valid border, and
- * lengths separated by spaces a valid shadow). A kind may have more than one entry, each drawing
- * its sample its own way. A token's sample is drawn with the token itself: its `var()` reference
- * is the value of each of `sampleProperties`, over `sampleText` for a kind that shows on text.
- */
-const TOKEN_KINDS = [
-    {
-        kind: "color",
-        test: (value) => CSS.supports("color", value),
-        sampleProperties: ["backgroundColor"],
-    },
-    {
-        kind: "length",
-        test: (value) => CSS.supports("width", value),
-        sampleProperties: ["width"],
-    },
-    {
-        // Lengths separated by spaces, such as a padding, which no one bar can draw: they pad a text
-        kind: "length",
-        test: (value) =>
-            splitOutsideParentheses(value, " ")
-                .filter((part) => part !== "")
-                .every((part) => CSS.supports("width", part)),
-        sampleProperties: ["padding"],
-        sampleText: "Padding",
-    },
-    {
-        kind: "border",
-        test: (value) =>
-            BORDER_STYLES.test(value) && CSS.supports("border", value),
-        sampleProperties: ["border"],
-    },
-    {
-        kind: "shadow",
-        test: (value) => CSS.supports("box-shadow", value),
-        // The shadow tokens are used for both boxes and text
-        sampleProperties: ["boxShadow", "textShadow"],
-        sampleText: "Shadow",
-    },
-    {
-        kind: "font",
-        test: (value) => CSS.supports("font-family", value),
-        sampleProperties: ["fontFamily"],
-        sampleText: "The quick brown fox jumps over the lazy dog",
-    },
-]
-
-// The kind of a value none of the tests pass, and of a token without a value
-const OTHER_KIND = { kind: "other", sampleProperties: [] }
 
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
 const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
 // The kinds whose value carries a color, the only ones that can be off palette: a word of any
 // other value that the browser takes for a color (`background` in a transition) names none there
 const COLOR_KINDS = ["color", "border", "shadow"]
-
-// The color groups, by token name: the five theme colors, and the status colors and the ink of
-// shadows, which stand apart from them. Every other token takes its colors from these.
-const THEME_COLOR = /^--theme-/
-const STATUS_OR_SHADOW_COLOR =
-    /^--(?:(?:success|warning|error)-.+|shadow-color)$/
-// A step of the spacing scale. A length that references one is a role, any other length a size.
-const SPACING_STEP = /^--space-/
-
-// A reference to another token: the group is its name
-const TOKEN_REFERENCE = /var\(\s*(--[a-zA-Z][\w-]*)\s*\)/g
 
 // The color literals: a hex color (as the scan finds them), a color function with its channels
 // written out, which the relative form `rgb(from …)` is not, and a named color, which is a word
@@ -127,21 +77,10 @@ const COLOR_FUNCTION = new RegExp(
     "i",
 )
 
-// The themes, in the order `light-dark()` takes their colors
-const THEMES = ["light", "dark"]
-// A `light-dark()` value: the group is its two colors
-const LIGHT_DARK = /^light-dark\((.*)\)$/s
-
 // The token whose card has an alpha slider
 const ALPHA_SLIDER_TOKEN = "--scrim-color"
 // A color with its alpha replaced, as `withAlpha` writes it: the first group is the color
 const ALPHA_REPLACEMENT = /^rgb\(from (.+) r g b \/ [\d.]+\)$/
-
-// Wide glyphs and digits, so two fonts seldom measure the same
-const FONT_PROBE_TEXT = "mmmmmmmmmmlliWWW0123456789"
-// The typed value is tried in front of each generic family: a font that is the default of one of
-// them measures the same as that fallback, and the others tell it apart
-const FONT_PROBE_FALLBACKS = ["monospace", "sans-serif", "serif"]
 
 // Referenced as `x-data="styleGuide"` by the style guide page, whose module script imports this
 // module, and so registers the component, before it starts the app
@@ -180,6 +119,8 @@ function styleGuide() {
         scopedTokens: scan.scopedTokens,
         runtimeTokens: scan.runtimeTokens,
         literals: groupLiterals(scan.literals, rootTokens),
+        // The px, rem and em literals of the sizing properties, each with its property and locations
+        lengthLiterals: scan.lengthLiterals ?? [],
         // What is typed into the font tester
         fontInput: "",
 
@@ -296,10 +237,6 @@ function styleGuide() {
     }
 }
 
-function kindOf(value) {
-    return TOKEN_KINDS.find(({ test }) => test(value)) ?? OTHER_KIND
-}
-
 function referencesOf(scan, name) {
     return scan.references[name] ?? 0
 }
@@ -318,33 +255,6 @@ function usageLabel(references) {
     return references === 1 ? "1 reference" : `${references} references`
 }
 
-/** The theme chosen on an earlier visit, else the one the stylesheet declares */
-function rememberedTheme() {
-    const theme = localStorage.getItem(Const.localStore.styleGuideTheme)
-
-    return THEMES.includes(theme)
-        ? theme
-        : getComputedStyle(document.documentElement).colorScheme
-}
-
-/** Shows the page in `theme`: the root element declares the scheme every `light-dark()` color follows */
-function applyTheme(theme) {
-    document.documentElement.style.colorScheme = theme
-}
-
-/**
- * The color `value` paints in the theme the page is shown in (another while `inTheme` resolves),
- * in the browser's one serialization, so spellings of a color compare equal
- */
-function resolveColor(value) {
-    const probeEl = document.createElement("span")
-    probeEl.style.color = value
-    document.body.appendChild(probeEl)
-    const color = getComputedStyle(probeEl).color
-    probeEl.remove()
-    return color
-}
-
 /**
  * The alpha of a color in the browser's serialization (`resolveColor`): the fourth component of
  * `rgba(r, g, b, a)`, or what follows the slash of `color(srgb r g b / a)`. A color serialized
@@ -361,52 +271,8 @@ function alphaOfColor(color) {
  */
 function withAlpha(value, alpha, theme) {
     const colors = themeColorsOf(value)
-    if (!colors) {
-        return withColorAlpha(value, alpha)
-    }
-
-    const index = THEMES.indexOf(theme)
-    colors[index] = withColorAlpha(colors[index], alpha)
-    return `light-dark(${colors.join(", ")})`
-}
-
-/**
- * The two colors of a `light-dark()` value, in the order of `THEMES`, or nothing for any other
- * value. They are split at the comma outside every parenthesis, since a color may hold commas of
- * its own (`rgb(54, 54, 54)`).
- */
-function themeColorsOf(value) {
-    const [, colors] = value.match(LIGHT_DARK) ?? []
-    const parts =
-        colors === undefined ? [] : splitOutsideParentheses(colors, ",")
-
-    return parts.length === THEMES.length ? parts : null
-}
-
-/**
- * `text` split at each `separator` outside every parenthesis, each part trimmed, so a part may hold
- * the separator inside a function of its own (`rgb(54, 54, 54)`, `calc(2px * 3)`)
- */
-function splitOutsideParentheses(text, separator) {
-    const parts = []
-    let depth = 0
-    let start = 0
-
-    for (let index = 0; index < text.length; index++) {
-        const char = text[index]
-
-        if (char === "(") {
-            depth++
-        } else if (char === ")") {
-            depth--
-        } else if (char === separator && depth === 0) {
-            parts.push(text.slice(start, index).trim())
-            start = index + 1
-        }
-    }
-
-    parts.push(text.slice(start).trim())
-    return parts
+    const color = colors ? colors[THEMES.indexOf(theme)] : value
+    return withThemeColor(value, theme, withColorAlpha(color, alpha))
 }
 
 /**
@@ -449,7 +315,7 @@ function resolveRootTokens(scan) {
             kind,
             sampleProperties,
             sampleText = "",
-        } = resolved ? kindOf(resolved) : OTHER_KIND
+        } = resolved ? kindOf(name, resolved) : OTHER_KIND
         const referencedNames = referencedNamesOf(declaration)
         const references = referencesOf(scan, name)
         const isColor = kind === "color"
@@ -550,43 +416,6 @@ function colorSourcesOf(declarations) {
     return sources
 }
 
-/**
- * The group a token is shown in: a length's from its name and the tokens it references (a step of
- * the spacing scale, a role that references a step, or a size), any other token's from its name
- * (`paletteGroupOf`)
- */
-function groupOf(name, kind, referencedNames) {
-    if (kind !== "length") {
-        return paletteGroupOf(name)
-    }
-    if (SPACING_STEP.test(name)) {
-        return "scale"
-    }
-    return referencedNames.some((referenced) => SPACING_STEP.test(referenced))
-        ? "role"
-        : "size"
-}
-
-/** The color group a token's name places it in: "theme", "status-and-shadow", or else "derived" */
-function paletteGroupOf(name) {
-    if (THEME_COLOR.test(name)) {
-        return "theme"
-    }
-    if (STATUS_OR_SHADOW_COLOR.test(name)) {
-        return "status-and-shadow"
-    }
-    return "derived"
-}
-
-/** The names of the tokens `declaration` references, each once, in the order they first appear */
-function referencedNamesOf(declaration) {
-    const names = Array.from(
-        declaration.matchAll(TOKEN_REFERENCE),
-        ([, name]) => name,
-    )
-    return [...new Set(names)]
-}
-
 /** `declaration` without its references to other tokens: what it writes itself */
 function ownPartOf(declaration) {
     return declaration.replace(TOKEN_REFERENCE, " ")
@@ -613,20 +442,6 @@ function holdsColorLiteral(text) {
 /** Whether `text` writes a color: a literal, or a color function computing one from others */
 function holdsColor(text) {
     return COLOR_FUNCTION.test(text) || holdsColorLiteral(text)
-}
-
-/**
- * What `resolve` returns while the root element declares the scheme of `theme`, which every
- * `light-dark()` color follows. The theme shown is declared again after, before the browser paints.
- */
-function inTheme(theme, resolve) {
-    const rootStyle = document.documentElement.style
-    const shownScheme = rootStyle.colorScheme
-
-    applyTheme(theme)
-    const result = resolve()
-    rootStyle.colorScheme = shownScheme
-    return result
 }
 
 /**
@@ -693,26 +508,4 @@ function mountMenuSpecimens() {
 
     // Alpine's mutation observer initializes the new controls; htmx needs to be told
     htmx.process(hostEl)
-}
-
-/** Whether the browser renders `family` (a family, a stack or a generic keyword) with a font it has */
-function isFontAvailable(family) {
-    const context = document.createElement("canvas").getContext("2d")
-    const widthIn = (fontFamily) => {
-        context.font = `72px ${fontFamily}`
-        return context.measureText(FONT_PROBE_TEXT).width
-    }
-    return FONT_PROBE_FALLBACKS.some(
-        (fallback) => widthIn(`${family}, ${fallback}`) !== widthIn(fallback),
-    )
-}
-
-/**
- * The typed value as a `font-family` value: as written when it parses (a family, a stack or a
- * generic keyword), else quoted as one family name (a name with a digit, such as "Neue Haas 55").
- * It is made parseable before it is measured because the canvas font setter ignores a value it
- * cannot parse and keeps the previous font.
- */
-function asFontFamily(value) {
-    return CSS.supports("font-family", value) ? value : JSON.stringify(value)
 }

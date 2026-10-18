@@ -1,3 +1,7 @@
+@import altitude.core.Environment
+
+@()
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -12,3 +16,29 @@
 <script src="/static/js/lib/htmx.min.js"></script>
 <script src="/static/js/lib/axios.min.js" defer></script>
 <script type="module" src="/static/js/global.js"></script>
+@* Dev only, like the routes behind it (StyleGuideController): the design tweaks panel (js/design-tweaks). The inline script
+   adopts the stylesheet of the stored tweaks before the first paint, so a page never flashes the untweaked look, and shows the
+   page in the remembered theme; the module, deferred as every module is, takes the sheet over and builds the panel. The
+   key and the `css` and `theme` fields are tweaks-store.js's. *@
+@if(Environment.isDev) {
+<script>
+  (() => {
+      try {
+          const state = JSON.parse(localStorage.getItem("designTweaks"))
+          if (!state) {
+              return
+          }
+          const sheet = new CSSStyleSheet()
+          sheet.replaceSync(state.css ?? "")
+          document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+          window.designTweaksSheet = sheet
+          if (state.theme) {
+              document.documentElement.style.colorScheme = state.theme
+          }
+      } catch (error) {
+          console.warn("The stored design tweaks were not applied", error)
+      }
+  })()
+</script>
+<script type="module" src="/static/js/design-tweaks/design-tweaks.js"></script>
+}

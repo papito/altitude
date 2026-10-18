@@ -491,3 +491,12 @@ Sources: [UrlService](../altitude/src/altitude/core/service/UrlService.scala). E
 - [ ] Verify an empty trailing `#` produces no fragment, including an empty query-parameter sequence. [EDGE]
 - [ ] Test Unicode/reserved characters, repeated parameter keys, and a fragment containing additional `#` characters. [EDGE]
 - [ ] Verify the repository path comes from the current request context rather than a different repository embedded in `browserUrl`; isolate the fixture's request context explicitly. [MINOR]
+
+## Style guide scan and dev routes
+
+Sources: [StyleGuideScan](../altitude/src/altitude/core/util/StyleGuideScan.scala), [StyleGuideController](../altitude/src/altitude/core/routes/web/StyleGuideController.scala). Evidence: [StyleGuideScanTests](../altitude/test/src/altitude/core/unit/StyleGuideScanTests.scala), [StyleGuideControllerTests](../altitude/test/src/altitude/core/controller/StyleGuideControllerTests.scala).
+
+- ✅ `:root` tokens in source order with their notes, scoped and runtime tokens, reference counts, color literals as values only (not selectors, fragment links, comments or token declarations), icons without modifiers, and the `lib` and excluded-file skips.
+- ✅ Length literals: the px, rem and em values of `font-size`, `width`, `height`, `min-*`, `max-*`, `grid-template-*` and the four insets, outside token declarations, grouped by property and value with locations; a token declaration, `border-width`, a padding, a unitless zero, a viewport unit and a commented-out size are not counted.
+- ✅ Dev routes: the page renders every section with the embedded scan; `GET /style-guide/scan.json` answers the scan as JSON with the tokens, the literals and the length literals; outside dev the page, the scan JSON and the sample dialog answer 404 and the index carries neither the Style Guide nor the Tweaks button nor the design tweaks script.
+- [ ] Test a sizing declaration split across lines and a `calc()` holding two literals, and a template attribute with several declarations. [EDGE]
