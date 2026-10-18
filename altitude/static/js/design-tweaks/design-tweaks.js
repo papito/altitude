@@ -4,8 +4,8 @@
  *
  * The entry reads the tokens from the served bundle (the `CSSStyleSheet` whose href is under
  * `/assets/`: every custom property its `:root` rules declare, with its declared text, and the
- * `@property` registrations), fetches the source scan for the notes and the literals
- * (`GET /style-guide/scan.json`), builds the panel in a shadow root on a `popover="manual"` host,
+ * `@property` registrations), fetches the source scan for the declarations' locations and the
+ * literals (`GET /style-guide/scan.json`), builds the panel in a shadow root on a `popover="manual"` host,
  * in the top layer above every dialog, and applies the stored tweak set, which the store adopted
  * before the first paint (`tweaks-store.js`). The nav's Tweaks button and `Ctrl+Alt+T` toggle it.
  *
@@ -80,14 +80,8 @@ const SECTIONS = [
 // The two tokens the server sets inline, with the server constants' values, for a page without
 // their containers; a page that has one reads the inline value instead
 const CONTAINER_DEFAULTS = {
-    "--preview-box": {
-        value: "200px",
-        note: "The Preview size of a results cell: Const.AssetView.PREVIEW_BOX_PIXELS, set on #assets",
-    },
-    "--face-box": {
-        value: "80px",
-        note: "The face box of the People grid: FaceDetectionService.faceDetectionBoxPx, set on #people",
-    },
+    "--preview-box": "200px",
+    "--face-box": "80px",
 }
 
 const EXPLORER_DEFAULT = 25
@@ -174,7 +168,7 @@ async function fetchScan() {
         return (await http.get("/style-guide/scan.json")).data
     } catch (error) {
         console.warn(
-            "The source scan was not fetched: no notes and no literals",
+            "The source scan was not fetched: no locations and no literals",
             error,
         )
         return { rootTokens: [], literals: [], lengthLiterals: [] }
@@ -183,7 +177,7 @@ async function fetchScan() {
 
 /**
  * The tokens of the bundle's `:root` rules, each with its declared text, its kind and group, its
- * `@property` registration, and its note, location and source value from the scan; then the two
+ * `@property` registration, and its location and source value from the scan; then the two
  * container tokens
  */
 function readTokens(bundle, scan) {
@@ -226,13 +220,12 @@ function readTokens(bundle, scan) {
             kind,
             group: groupOf(name, kind, referencedNamesOf(text)),
             registration: registrations.get(name),
-            note: scanned?.note ?? "",
             location: scanned?.location,
             sourceValue: scanned?.value,
         }
     })
 
-    Object.entries(CONTAINER_DEFAULTS).forEach(([name, { value, note }]) =>
+    Object.entries(CONTAINER_DEFAULTS).forEach(([name, value]) =>
         tokens.push({
             name,
             declared:
@@ -242,7 +235,6 @@ function readTokens(bundle, scan) {
                     .trim() || value,
             kind: "container",
             group: "container",
-            note,
         }),
     )
     return tokens
@@ -385,13 +377,6 @@ class Panel {
                         event.target,
                     ),
             }),
-            el("button", {
-                type: "button",
-                class: "quiet",
-                title: "Close",
-                text: "×",
-                onclick: () => this.close(),
-            }),
         )
 
         this.tabButtons = new Map(
@@ -426,7 +411,7 @@ class Panel {
     buildTokensTab() {
         this.searchInput = el("input", {
             type: "text",
-            placeholder: "Search tokens and notes",
+            placeholder: "Search tokens",
             "aria-label": "Search tokens",
             oninput: () => {
                 this.filters.search = this.searchInput.value
@@ -535,7 +520,6 @@ class Panel {
                     onclick: () => this.store.reset(token.name),
                 }),
             ),
-            token.note ? el("div", { class: "note", text: token.note }) : null,
             value,
             control.el,
         )
@@ -608,8 +592,10 @@ class Panel {
             "changed",
             this.store.explorer !== null,
         )
-        this.explorerCard.querySelector(".note").textContent = live
-            ? "The Split.js sizes of the explorer and the content area (js/common/explorer-split.js), remembered as a drag is"
+        const note = this.explorerCard.querySelector(".note")
+        note.hidden = live
+        note.textContent = live
+            ? ""
             : "Set on the main page, where the explorer is"
     }
 
@@ -985,9 +971,7 @@ class Panel {
             section.tokens.forEach((token) => {
                 const { card } = this.cards.get(token.name)
                 const visible =
-                    (search === "" ||
-                        token.name.includes(search) ||
-                        token.note.toLowerCase().includes(search)) &&
+                    (search === "" || token.name.includes(search)) &&
                     (!changedOnly || this.store.isChanged(token.name)) &&
                     (inspect === null || inspect.has(token.name))
                 card.hidden = !visible

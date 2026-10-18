@@ -1151,11 +1151,11 @@ the index of a non-dev app carries neither).
   stays usable while a dialog is open, though the trap still returns focus to the dialog from the panel's text fields.
 - **Tokens:** every custom property declared on `:root` in the bundle (the stylesheet whose href is under
   `/assets/`), read from the CSSOM with its declared text (a `light-dark()` pair and a `var()` reference as written)
-  and any `@property` registration; the notes, locations and source values come from the scan JSON. The sections are
+  and any `@property` registration; the locations and source values come from the scan JSON. The sections are
   the style guide's, through `js/common/token-kinds.js`: Theme colors, Status and shadow, Derived; Typography; Scale,
   Roles, Sizes; Borders and shadows; Panels (the explorer width and the two container tokens); Other. Each card has a
-  reset, a dot while changed, and its current text; a section has a reset; the toolbar has Reset all, a search over
-  names and notes, and a Changed-only filter.
+  reset, a dot while changed, and its current text, and no note: where a token is used is the style guide's to tell; a
+  section has a reset; the toolbar has Reset all, a search over names, and a Changed-only filter.
 - **Controls per kind** (`controls.js`): a color that writes its channels gets OKLCH lightness, chroma and hue
   sliders, a hex field and the native picker, all through the browser (`oklch(from <color> l c h)` and
   `rgb(from …)` round trips over `getComputedStyle`, no color library), and is written back as hex; a recipe over
