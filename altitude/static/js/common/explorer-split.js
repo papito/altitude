@@ -1,9 +1,9 @@
 /**
  * The split between the explorer and the content area of the main page (`views/index.scala.html`),
  * a Split.js instance over `#explorer` and `#content` whose sizes this browser remembers
- * (`Const.localStore.horizontalSplitSizes`). The design tweaks panel's explorer slider sets the
- * sizes through `setExplorerSizes`, so the width is explored like a token and reported as the Split
- * sizes it is.
+ * (`Const.localStore.horizontalSplitSizes`). The adapter `js/design-tweaks.js` passes
+ * `setExplorerSizes` to the design tweaks panel as an extra control, so the width is explored like a
+ * token and reported as the Split sizes it is.
  *
  * see: https://github.com/nathancahill/split/
  */

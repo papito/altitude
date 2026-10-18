@@ -1,6 +1,5 @@
 /**
- * Whether the browser has a font: the style guide's font tester and the design tweaks panel's
- * family control both say so about what is typed into them.
+ * Whether the browser has a font: the style guide's font tester says so about what is typed into it.
  */
 
 // Wide glyphs and digits, so two fonts seldom measure the same

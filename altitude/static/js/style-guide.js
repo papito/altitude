@@ -10,8 +10,8 @@
  * the alpha slider of the `--scrim-color` card, and what the page's buttons call. The live menu and dialog specimens are no template:
  * `initStyleGuide` builds them through the modules the explorer lists use.
  *
- * The kinds and the groups are `common/token-kinds.js`'s, shared with the design tweaks panel, so
- * both place a token in the same section; the themes are `common/theme.js`'s. A
+ * The kinds and the groups are `common/token-kinds.js`'s (the design tweaks panel's adapter,
+ * `js/design-tweaks.js`, configures the same sections); the themes are `common/theme.js`'s. A
  * token whose declaration references other tokens is shown as declared, a recipe, with the tokens
  * it comes from; any other as it resolves. A color, border or shadow token outside
  * the theme, status and shadow colors that writes a color literal is flagged off

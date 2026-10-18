@@ -48,6 +48,8 @@ object StyleGuideScan:
       }
 
       ujson.Obj(
+        // The sources schema version the tokentweak package (the design tweaks panel) reads this as
+        "version" -> 1,
         "rootTokens" -> declarations(rootTokens),
         "scopedTokens" -> declarations(scopedTokens),
         "runtimeTokens" -> runtimeTokens.map(t => ujson.Obj("name" -> t.name, "locations" -> t.locations)),

@@ -18,6 +18,14 @@ this table whenever a file is replaced. `.prettierignore` excludes this director
 | `supercluster.min.js` | supercluster                      | 9.1.0                  | `dist/supercluster.min.js` in https://registry.npmjs.org/supercluster/-/supercluster-9.1.0.tgz, byte-identical (kdbush is bundled); its ISC license is `supercluster.LICENSE` |
 | `viselect.esm.js`     | Viselect (`@viselect/vanilla`)    | 3.9.0                  | `dist/viselect.mjs` in https://registry.npmjs.org/@viselect/vanilla/-/vanilla-3.9.0.tgz, byte-identical; renamed to `.js` so it is served as JavaScript. Its MIT license is `viselect.LICENSE` |
 | `media-chrome.js`     | media-chrome                      | 4.19.2                 | `dist/iife/index.js` in https://registry.npmjs.org/media-chrome/-/media-chrome-4.19.2.tgz, byte-identical, renamed; its MIT license is `media-chrome.LICENSE` |
+| `tokentweak.js`       | tokentweak                        | 0.1.0                  | `dist/tokentweak.js` in `tokentweak-0.1.0.tgz` (`npm pack` of the author's own package, built from `~/projects/tokentweak`; not on the registry yet), byte-identical; its MIT license is `tokentweak.LICENSE` |
+| `tokentweak-boot.js`  | tokentweak boot script            | 0.1.0                  | `dist/boot.js` in the same tarball, byte-identical, renamed                                                      |
+
+`tokentweak.js` and `tokentweak-boot.js` are dev only: `views/includes/header_common.scala.html` references them
+inside `@if(Environment.isDev)` and nothing else does. The boot file is a plain blocking script for the head, not
+`defer`: it reads the storage key from the `data-key` of its own script tag and adopts the stored override
+stylesheet before the first paint, so a page never flashes the untweaked look. The module is imported by the
+adapter `js/design-tweaks.js`, which configures the panel for Altitude (see **Design tweaks** in `views/AGENTS.md`).
 
 htmx configuration lives in the `htmx-config` meta tag in `views/includes/header_common.scala.html`.
 Extensions activate by script inclusion (`hx-ext` no longer exists): `json-enc.js` is loaded by the

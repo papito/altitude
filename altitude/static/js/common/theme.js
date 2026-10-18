@@ -1,7 +1,7 @@
 /**
  * The two themes of the app, as `light-dark()` pairs resolve them: which one is shown, and the
- * two colors of a pair. The style guide's theme switcher and the design tweaks panel's toggle both
- * show the page in a theme through `applyTheme`; the rest of the app stays in the stylesheet's.
+ * two colors of a pair. The style guide's theme switcher shows the page in a theme through
+ * `applyTheme`; the rest of the app stays in the stylesheet's.
  */
 import { Const } from "../constants.js"
 import { splitOutsideParentheses } from "./token-kinds.js"

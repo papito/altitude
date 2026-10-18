@@ -99,9 +99,9 @@ export const Const = {
         resultsLayout: "resultsLayout",
         // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
         styleGuideTheme: "styleGuideTheme",
-        // The design tweaks panel's state (js/design-tweaks/tweaks-store.js): the active tweak set, the
-        // snapshots, the theme and the panel's dock and open state. The pre-paint script of
-        // includes/header_common reads the key by name
+        // The design tweaks panel's state (the tokentweak package, configured by js/design-tweaks.js): the
+        // active tweak set, the snapshots, the theme, the panel's dock and open state and the adopted
+        // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`
         designTweaks: "designTweaks",
     },
 

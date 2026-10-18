@@ -1,7 +1,6 @@
 /**
- * What kind of value a `:root` token of `core.css` holds, and the group it is shown in. The style
- * guide (`js/style-guide.js`) and the design tweaks panel (`js/design-tweaks/`) both place the
- * tokens by these, so their sections are the same.
+ * What kind of value a `:root` token of `core.css` holds, and the group it is shown in: the style
+ * guide (`js/style-guide.js`) places the tokens by these.
  *
  * The groups: a color token is one of the five theme colors (`--theme-*`), which hold the palette,
  * a status color (or a status fill, derived from its color) or `--shadow-color`, which stand

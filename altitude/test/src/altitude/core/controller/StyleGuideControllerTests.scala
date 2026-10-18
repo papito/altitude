@@ -46,8 +46,8 @@ object DevApp extends cask.Main:
      * Assertions:
      *
      * The page, the scan JSON, the sample dialog and the sample submission each answer 404, and neither the main page's nav nor a
-     * nav reload carries the Style Guide button or the Tweaks button. The main page loads no design tweaks script and holds no
-     * pre-paint script reading the tweaks.
+     * nav reload carries the Style Guide button or the Tweaks button. The main page loads neither the panel's adapter nor the
+     * vendored tokentweak package nor its boot script, and holds no pre-paint script reading the tweaks.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -76,9 +76,11 @@ object DevApp extends cask.Main:
         index.text().contains("menu design-tweaks") shouldBe false
         index.text().contains("design-tweaks") shouldBe false
         index.text().contains("designTweaks") shouldBe false
+        index.text().contains("tokentweak") shouldBe false
         val nav = get(s"htmx/nav/r/$repoId").text()
         nav.contains("menu style-guide") shouldBe false
         nav.contains("menu design-tweaks") shouldBe false
+        nav.contains("tokentweak") shouldBe false
     }
   }
 
@@ -91,9 +93,10 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The route answers 200 as JSON in the scan's shape: the root tokens, each with a name, a value and a location, the color
-     * literals and the length literals, each with a property, a value and locations, and the icons. The tests run in a sandbox
-     * whose working directory holds no sources, so the scan is empty there; `StyleGuideScanTests` scans the real tree.
+     * The route answers 200 as JSON in the scan's shape, the design tweaks panel's sources: `version` 1 (the sources schema the
+     * tokentweak package reads), the root tokens, each with a name, a value and a location, the color literals and the length
+     * literals, each with a property, a value and locations, and the icons. The tests run in a sandbox whose working directory
+     * holds no sources, so the scan is empty there; `StyleGuideScanTests` scans the real tree.
      */
     testContext.persistRepository()
     login()
@@ -106,6 +109,7 @@ object DevApp extends cask.Main:
         response.headers("content-type").head should include("application/json")
 
         val scan = ujson.read(response.text())
+        scan("version").num shouldBe 1
         scan("rootTokens").arr.foreach {
           t =>
             t("name").str should startWith("--")

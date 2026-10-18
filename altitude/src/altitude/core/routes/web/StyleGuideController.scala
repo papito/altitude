@@ -25,8 +25,9 @@ object StyleGuideController:
 
   // The vendored stylesheets (the icon font, Leaflet's), whose literals are no app's to tokenize; the guide itself, whose
   // specimens would count as uses of what they demonstrate; the setup page's stylesheet, whose `--setup-*` palette is that
-  // page's own, not a token of the app; and the design tweaks panel's modules (static/js/design-tweaks), which name tokens
-  // to edit them, not to use them, and declare a palette of their own
+  // page's own, not a token of the app; and the design tweaks panel's adapter (static/js/design-tweaks.js), which names
+  // tokens to configure the panel (its sections, scale and seed targets), not to use them. The panel itself is the vendored
+  // tokentweak package under static/js/lib, which the scan skips with every other library
   val excludedFiles: Set[String] = Set(
     "font-awesome.min.css",
     "leaflet.css",
@@ -34,12 +35,7 @@ object StyleGuideController:
     "style_guide.css",
     "style-guide.js",
     "setup.css",
-    "design-tweaks.js",
-    "tweaks-store.js",
-    "controls.js",
-    "inspect.js",
-    "exports.js",
-    "panel.css.js"
+    "design-tweaks.js"
   )
 
 /**
@@ -71,8 +67,10 @@ class StyleGuideController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * The source scan as JSON, for the design tweaks panel (static/js/design-tweaks), which shows every page's tokens with their
-   * notes and the literals it cannot reach. The tokens themselves it reads from the served stylesheet.
+   * The source scan as JSON: the sources of the design tweaks panel (the tokentweak package, `static/js/lib/tokentweak.js`, which
+   * the adapter `static/js/design-tweaks.js` points here). The package reads its sources schema v1 from it, `version`,
+   * `rootTokens` (each token's location and note for the CSS export), `literals` and `lengthLiterals` (the Not reachable tab);
+   * the other keys are the style guide's and ignored. The tokens themselves the panel reads from the served stylesheet.
    */
   @requireLogin()
   @cask.get("/style-guide/scan.json")
