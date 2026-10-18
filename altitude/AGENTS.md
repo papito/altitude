@@ -309,6 +309,7 @@ make test-controllers     # safe: controller-only tests
 make test-psql            # integration tests against the Postgres test container (docker compose, port 5433)
 make test-focused-sqlite  # run tests tagged `Focused` against SQLite only
 make publish              # fat JAR → target/
+make vendor-tokentweak    # refresh the vendored tokentweak package in static/js/lib (TOKENTWEAK=<version|tarball|checkout>)
 ```
 
 The application's stylesheet is built, not served from source: `cssBundle` in `build.mill` inlines the `@import` lines of `static/css/app.css` (recursively, failing the build on a missing file, a file outside `static/css`, a cycle, or any other `@import` form) into `assets/app.<hash>.css` on the classpath, and `assetManifest` generates `altitude.core.Assets.appCss`, its URL, which `includes/header_common` links. `StaticController` serves only that one name under `/assets/`, cached for good; `/static/` serves the vendored stylesheets, webfonts and JS modules under their own names, revalidated on every use (`@revalidated`). The hash is compiled in, so a CSS edit needs a recompile and a restart, which `make watch` does; `mill altitude.resources` alone leaves the running server linking the old name, which now answers 404.
