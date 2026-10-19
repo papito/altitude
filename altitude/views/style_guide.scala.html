@@ -94,8 +94,8 @@
              semantic color directly. The Derived cards are the veils, a theme color or <code>--shadow-color</code> at an
              alpha: the only other color tokens. A new color is a new theme role as a hex pair, or a new veil when it
              must be translucent. The four semantic colors (success, warning, error, info) and
-             <code>--shadow-color</code> stand apart, with pairs of their own; a semantic fill is its color darkened
-             (lightened, in the light theme). The setup page's palette is that page's own, in
+             <code>--shadow-color</code> stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
+             color per scheme, shown with its From line. The setup page's palette is that page's own, in
              <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows it and the tokens it comes
              from; Off palette marks a token that writes a color literal, and the literals written past the tokens are
              listed under Token audit. The app ships dark; the Light / Dark switch above the contents shows this page

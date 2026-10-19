@@ -74,10 +74,10 @@
     --warning-color: light-dark(#976212, #ebb16b);
     --error-color: light-dark(#be2229, #f88a81);
     --info-color: light-dark(#0e6a9b, #69c1fb);
-    --success-background-color: light-dark(#cfe6c9, #3d762f);
-    --warning-background-color: light-dark(#fae8d3, #865c26);
-    --error-background-color: light-dark(#fedbd6, #9b2728);
-    --info-background-color: light-dark(#c4e3f9, #216791);
+    --success-background-color: light-dark(hsl(from var(--success-color) h calc(s * 0.7) 90%), hsl(from var(--success-color) h calc(s * 0.6) 35%));
+    --warning-background-color: light-dark(hsl(from var(--warning-color) h calc(s * 0.7) 90%), hsl(from var(--warning-color) h calc(s * 0.6) 35%));
+    --error-background-color: light-dark(hsl(from var(--error-color) h calc(s * 0.7) 90%), hsl(from var(--error-color) h calc(s * 0.6) 35%));
+    --info-background-color: light-dark(hsl(from var(--info-color) h calc(s * 0.7) 90%), hsl(from var(--info-color) h calc(s * 0.6) 35%));
 
     --panel-padding: var(--space-5);
 
