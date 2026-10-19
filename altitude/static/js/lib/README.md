@@ -18,8 +18,8 @@ this table whenever a file is replaced. `.prettierignore` excludes this director
 | `supercluster.min.js` | supercluster                      | 9.1.0                  | `dist/supercluster.min.js` in https://registry.npmjs.org/supercluster/-/supercluster-9.1.0.tgz, byte-identical (kdbush is bundled); its ISC license is `supercluster.LICENSE` |
 | `viselect.esm.js`     | Viselect (`@viselect/vanilla`)    | 3.9.0                  | `dist/viselect.mjs` in https://registry.npmjs.org/@viselect/vanilla/-/vanilla-3.9.0.tgz, byte-identical; renamed to `.js` so it is served as JavaScript. Its MIT license is `viselect.LICENSE` |
 | `media-chrome.js`     | media-chrome                      | 4.19.2                 | `dist/iife/index.js` in https://registry.npmjs.org/media-chrome/-/media-chrome-4.19.2.tgz, byte-identical, renamed; its MIT license is `media-chrome.LICENSE` |
-| `tokentweak.js`       | tokentweak                        | 0.2.0                  | `dist/tokentweak.js` in `tokentweak-0.2.0.tgz` (`npm pack` of the author's own package, built from `~/projects/tokentweak`; not on the registry yet), byte-identical; its MIT license is `tokentweak.LICENSE`. Refreshed by `make vendor-tokentweak`, below |
-| `tokentweak-boot.js`  | tokentweak boot script            | 0.2.0                  | `dist/boot.js` in the same tarball, byte-identical, renamed                                                      |
+| `tokentweak.js`       | tokentweak                        | 0.3.0                  | `dist/tokentweak.js` in `tokentweak-0.3.0.tgz` (`npm pack` of the author's own package, built from `~/projects/tokentweak`; not on the registry yet), byte-identical; its MIT license is `tokentweak.LICENSE`. Refreshed by `make vendor-tokentweak`, below |
+| `tokentweak-boot.js`  | tokentweak boot script            | 0.3.0                  | `dist/boot.js` in the same tarball, byte-identical, renamed                                                      |
 
 `tokentweak.js` and `tokentweak-boot.js` are dev only: `views/includes/header_common.scala.html` references them
 inside `@if(Environment.isDev)` and nothing else does. The boot file is a plain blocking script for the head, not
@@ -31,8 +31,8 @@ These two files and the license are the one library with a make target, `make ve
 (`scripts/vendor-tokentweak.sh`), because the package is the author's own and changes with the app. It unpacks a
 tarball in a temporary directory and copies `dist/tokentweak.js`, `dist/boot.js` and `LICENSE` here under their
 vendored names, leaving a file alone when it is already identical; nothing is installed. `TOKENTWEAK` says which
-tarball: a registry version (`make vendor-tokentweak TOKENTWEAK=0.2.0`; the default is `latest`), an `npm pack`
-tarball (`TOKENTWEAK=../tokentweak/tokentweak-0.2.0.tgz`), or a checkout (`TOKENTWEAK=../tokentweak`), which is
+tarball: a registry version (`make vendor-tokentweak TOKENTWEAK=0.3.0`; the default is `latest`), an `npm pack`
+tarball (`TOKENTWEAK=../tokentweak/tokentweak-0.3.0.tgz`), or a checkout (`TOKENTWEAK=../tokentweak`), which is
 packed as it stands, so run `npm run build` there first. The target then says whether the two rows above already
 record the version it vendored; updating them is still by hand, as for every other library.
 

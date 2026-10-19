@@ -1143,11 +1143,14 @@ as JSON by `GET /style-guide/scan.json` (dev only) as the panel's sources.
 **Design tweaks** — A dev-only panel (`includes/header_common` loads it inside `@if(Environment.isDev)`, like the nav's
 Style Guide button) that changes the value of any `:root` token of the bundle live, on the real markup and data of the
 running app, so the look of every page, dialog and htmx fragment can be explored without touching a rule. The panel is
-the vendored **tokentweak** package (`lib/tokentweak.js`, 0.2.0, `lib/README.md`), a framework-free token editor:
-sections of cards with a control per kind of value, a Light / Dark toggle, Inspect (pick an element, filter to the
-tokens its rules reference), snapshots (save, load, rename, duplicate, A/B, import and export as JSON) and the exports
-(a prompt of the changes, the CSS before/after lines, the snapshot JSON). The package's README documents every option;
-this entry covers what Altitude passes it. `js/design-tweaks.js`, the adapter, is the only Altitude code of the panel.
+the vendored **tokentweak** package (`lib/tokentweak.js`, 0.3.0, `lib/README.md`), a framework-free token editor:
+sections of cards with a control per kind of value (a color written as a recipe over another token gets the recipe
+view: a swatch of the resolved color, a select for the source token, a mode select per channel and a slider in the
+modes that write a number, the alpha slider, a detach that writes the resolved hex, and the text field as the escape
+hatch), a Light / Dark toggle, Inspect (pick an element, filter to the tokens its rules reference), snapshots (save,
+load, rename, duplicate, A/B, import and export as JSON) and the exports (a prompt of the changes, the CSS before/after
+lines, the snapshot JSON). The package's README documents every option; this entry covers what Altitude passes it.
+`js/design-tweaks.js`, the adapter, is the only Altitude code of the panel.
 
 - **What the adapter configures:** `storageKey: Const.localStore.designTweaks` and `hostId: "designTweaks"`; the
   stylesheet to read, `"/assets/"` (the bundle, by href substring); the trigger `#designTweaksBtn` (the nav's Tweaks
@@ -1158,13 +1161,16 @@ this entry covers what Altitude passes it. `js/design-tweaks.js`, the adapter, i
   Derived, the other colors; Typography, the fonts and the typography kinds; Scale, the steps; Roles, the lengths that
   reference a step; Sizes, the other lengths; Borders and shadows; Panels; what none claims goes to the automatic
   Other); the spacing scale `--space-<n>`; the type scale, `--font-size-{xs,small,base,medium,large,xl,display}` from
-  `--font-size-base`; no seed control, since the two seeds have the full sliders and the stylesheet derives the other
-  theme colors from them, which the panel shows as recipes; the two tokens the server sets inline on their
-  containers as scoped tokens, `--preview-box` on `#assets` (200px, labeled `Const.AssetView.PREVIEW_BOX_PIXELS` in
-  the exports) and `--face-box` on `#people` (80px, `FaceDetectionService.faceDetectionBoxPx`), 40..600 by 10, in
-  Panels; the explorer width as an extra control in Panels (no token: `explorerPercent`, `setExplorerSizes` and
-  `hasExplorerSplit` of `js/common/explorer-split.js`, 10..70 %, default 25, "Set on the main page, where the explorer
-  is" elsewhere, phrased as the Split sizes in the prompt); and `exports: { fileName: "core.css" }`.
+  `--font-size-base`; no `seed`: the package's seed is a formula-driven control (a configuration names the hue and
+  lightness tokens its sliders start from and, per target token, a formula from the seed), which Altitude does not
+  configure, since the two seeds have the full sliders and the stylesheet derives the other theme colors from them,
+  which the panel edits as recipes, channel by channel, the source as well, or detaches to a literal; the two tokens
+  the server sets inline on their containers as scoped tokens, `--preview-box` on `#assets` (200px, labeled
+  `Const.AssetView.PREVIEW_BOX_PIXELS` in the exports) and `--face-box` on `#people` (80px,
+  `FaceDetectionService.faceDetectionBoxPx`), 40..600 by 10, in Panels; the explorer width as an extra control in
+  Panels (no token: `explorerPercent`, `setExplorerSizes` and `hasExplorerSplit` of `js/common/explorer-split.js`,
+  10..70 %, default 25, "Set on the main page, where the explorer is" elsewhere, phrased as the Split sizes in the
+  prompt); and `exports: { fileName: "core.css" }`.
 - **How an override applies:** one `CSSStyleSheet` in `document.adoptedStyleSheets`, rewritten on every change: a
   marker rule first, `:root { --tokentweak: designTweaks }` (the storage key), then one `:root` rule with every tweaked
   token, then one `!important` rule per scoped token on its container. Adopted sheets cascade after the document's, so

@@ -148,6 +148,34 @@ function scopedControlOf(token) {
   const value = parseFloat(token.default);
   return { min: 0, max: Number.isNaN(value) ? 0 : value * 3, step: 1 };
 }
+function resolveSeed(seed, tokens) {
+  if (!seed) {
+    return null;
+  }
+  if (!isSeedShaped(seed)) {
+    console.warn(
+      'tokentweak: the seed is not of the 0.3.0 shape, { hue, lightness, targets: { "--token": (seed) => string } }; the seed control is hidden'
+    );
+    return null;
+  }
+  const names = new Set(
+    tokens.filter((token) => token.kind !== "scoped").map((token) => token.name)
+  );
+  const missing = [
+    .../* @__PURE__ */ new Set([seed.hue, seed.lightness, ...Object.keys(seed.targets)])
+  ].filter((name) => !names.has(name));
+  if (missing.length === 0) {
+    return seed;
+  }
+  console.warn(
+    `tokentweak: no root token named ${missing.join(", ")}; the seed control is hidden`
+  );
+  return null;
+}
+function isSeedShaped(seed) {
+  const { hue, lightness, targets } = seed;
+  return typeof hue === "string" && typeof lightness === "string" && typeof targets === "object" && targets !== null && Object.values(targets).every((formula) => typeof formula === "function");
+}
 function resolveConfig(config = {}) {
   const fileName = config.exports?.fileName ?? DEFAULT_FILE_NAME;
   return {
@@ -176,6 +204,282 @@ function resolveConfig(config = {}) {
     },
     sources: config.sources ?? null
   };
+}
+
+// src/recipe.ts
+var RELATIVE_FNS = [
+  "rgb",
+  "hsl",
+  "hwb",
+  "lab",
+  "lch",
+  "oklab",
+  "oklch"
+];
+var FACTOR_SPAN = { min: 0, max: 3, step: 0.05 };
+var MIX_SPAN = { min: 0, max: 100, step: 1 };
+var NUMBER = /^(-?\d*\.?\d+(?:e[+-]?\d+)?)(%?)$/i;
+var CALC = /^calc\(\s*([a-z]+)\s*([+\-*])\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)(%?)\s*\)$/;
+var RELATIVE = /^(rgb|hsl|hwb|lab|lch|oklab|oklch)\(\s*from\s+(.*)\)$/;
+var MIX = /^color-mix\(\s*in\s+(.*)\)$/;
+var TOKEN = /^var\(\s*(--[\w-]+)\s*\)$/;
+var CHANNELS = {
+  rgb: [
+    ["r", { min: 0, max: 255, step: 1 }, false],
+    ["g", { min: 0, max: 255, step: 1 }, false],
+    ["b", { min: 0, max: 255, step: 1 }, false]
+  ],
+  hsl: [
+    ["h", { min: 0, max: 360, step: 1 }, false],
+    ["s", { min: 0, max: 100, step: 0.5 }, true],
+    ["l", { min: 0, max: 100, step: 0.5 }, true]
+  ],
+  hwb: [
+    ["h", { min: 0, max: 360, step: 1 }, false],
+    ["w", { min: 0, max: 100, step: 0.5 }, true],
+    ["b", { min: 0, max: 100, step: 0.5 }, true]
+  ],
+  lab: [
+    ["l", { min: 0, max: 100, step: 0.5 }, false],
+    ["a", { min: -125, max: 125, step: 1 }, false],
+    ["b", { min: -125, max: 125, step: 1 }, false]
+  ],
+  lch: [
+    ["l", { min: 0, max: 100, step: 0.5 }, false],
+    ["c", { min: 0, max: 150, step: 0.5 }, false],
+    ["h", { min: 0, max: 360, step: 1 }, false]
+  ],
+  oklab: [
+    ["l", { min: 0, max: 1, step: 5e-3 }, false],
+    ["a", { min: -0.4, max: 0.4, step: 2e-3 }, false],
+    ["b", { min: -0.4, max: 0.4, step: 2e-3 }, false]
+  ],
+  oklch: [
+    ["l", { min: 0, max: 1, step: 5e-3 }, false],
+    ["c", { min: 0, max: 0.4, step: 2e-3 }, false],
+    ["h", { min: 0, max: 360, step: 1 }, false]
+  ]
+};
+function parseRecipe(text) {
+  const whole = text.trim().replace(/\s+/g, " ").replace(/\s*\/\s*/g, " / ");
+  if (splitOutsideParentheses(whole, " ").length !== 1) {
+    return null;
+  }
+  const [, fn, body] = whole.match(RELATIVE) ?? [];
+  if (fn !== void 0 && body !== void 0) {
+    return parseRelative(fn, body);
+  }
+  const [, mixBody] = whole.match(MIX) ?? [];
+  return mixBody === void 0 ? null : parseMix(mixBody);
+}
+function parseRelative(fn, body) {
+  const parts = splitOutsideParentheses(body.trim(), " ").filter(Boolean);
+  const [source, ...rest] = parts;
+  if (source === void 0 || rest.length !== 3 && rest.length !== 5) {
+    return null;
+  }
+  let alpha = null;
+  if (rest.length === 5) {
+    const [, alphaText, percent] = rest[4].match(NUMBER) ?? [];
+    if (rest[3] !== "/" || alphaText === void 0 || percent !== "") {
+      return null;
+    }
+    alpha = Number(alphaText);
+  }
+  const channels = CHANNELS[fn].map(
+    ([keyword], index) => parseChannel(rest[index], keyword)
+  );
+  if (!channels.every((channel) => channel !== null)) {
+    return null;
+  }
+  return {
+    kind: "relative",
+    fn,
+    source,
+    channels,
+    alpha
+  };
+}
+function parseChannel(text, keyword) {
+  if (text === keyword) {
+    return { keyword, mode: "inherits", value: null, percent: false };
+  }
+  const [, number, percent] = text.match(NUMBER) ?? [];
+  if (number !== void 0) {
+    return {
+      keyword,
+      mode: "absolute",
+      value: Number(number),
+      percent: percent === "%"
+    };
+  }
+  const [, own, operator, operand, operandPercent] = text.match(CALC) ?? [];
+  if (own !== keyword || operand === void 0) {
+    return null;
+  }
+  const value = Number(operand);
+  return {
+    keyword,
+    mode: operator === "*" ? "factor" : "offset",
+    value: operator === "-" ? -value : value,
+    percent: operandPercent === "%"
+  };
+}
+function parseMix(body) {
+  const parts = splitOutsideParentheses(body, ",");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [space, first, b] = parts;
+  const firstParts = splitOutsideParentheses(first, " ").filter(Boolean);
+  const percentText = firstParts.pop();
+  const a = firstParts.join(" ");
+  const [, percent, sign] = percentText?.match(NUMBER) ?? [];
+  if (space === "" || a === "" || b === "" || sign !== "%") {
+    return null;
+  }
+  const bLast = splitOutsideParentheses(b, " ").at(-1) ?? "";
+  if (bLast.match(NUMBER)?.[2] === "%") {
+    return null;
+  }
+  return { kind: "mix", space, a, percent: Number(percent), b };
+}
+function serializeRecipe(recipe) {
+  if (recipe.kind === "mix") {
+    return `color-mix(in ${recipe.space}, ${recipe.a} ${round(recipe.percent)}%, ${recipe.b})`;
+  }
+  const channels = recipe.channels.map(serializeChannel).join(" ");
+  const alpha = recipe.alpha === null ? "" : ` / ${round(recipe.alpha)}`;
+  return `${recipe.fn}(from ${recipe.source} ${channels}${alpha})`;
+}
+function serializeChannel({ keyword, mode, value, percent }) {
+  const number = `${round(Math.abs(value ?? 0))}${percent ? "%" : ""}`;
+  switch (mode) {
+    case "inherits":
+      return keyword;
+    case "absolute":
+      return `${(value ?? 0) < 0 ? "-" : ""}${number}`;
+    case "offset":
+      return `calc(${keyword} ${(value ?? 0) < 0 ? "-" : "+"} ${number})`;
+    case "factor":
+      return `calc(${keyword} * ${(value ?? 0) < 0 ? "-" : ""}${number})`;
+  }
+}
+function channelRanges(fn) {
+  return CHANNELS[fn].map(([keyword, absolute, percent]) => {
+    const width = absolute.max - absolute.min;
+    return {
+      label: keyword.toUpperCase(),
+      keyword,
+      percent,
+      absolute,
+      offset: { min: -width, max: width, step: absolute.step },
+      factor: FACTOR_SPAN
+    };
+  });
+}
+function withChannel(recipe, index, channel) {
+  const channels = [...recipe.channels];
+  channels[index] = {
+    ...channel,
+    keyword: recipe.channels[index].keyword
+  };
+  return { ...recipe, channels };
+}
+function channelInMode(range, mode, resolved) {
+  const { keyword } = range;
+  switch (mode) {
+    case "inherits":
+      return { keyword, mode, value: null, percent: false };
+    case "absolute":
+      return { keyword, mode, value: resolved, percent: range.percent };
+    case "offset":
+      return { keyword, mode, value: 0, percent: false };
+    case "factor":
+      return { keyword, mode, value: 1, percent: false };
+  }
+}
+function withSource(recipe, source) {
+  return { ...recipe, source };
+}
+function withAlpha(recipe, alpha) {
+  return { ...recipe, alpha };
+}
+function withPercent(mix, percent) {
+  return { ...mix, percent };
+}
+function withMixColor(mix, which, color) {
+  return { ...mix, [which]: color };
+}
+function recipePhrase(before, after) {
+  const a = parseRecipe(before);
+  const b = parseRecipe(after);
+  if (!a || !b || a.kind !== b.kind) {
+    return null;
+  }
+  const moved = [];
+  if (a.kind === "mix" && b.kind === "mix") {
+    if (a.space !== b.space) {
+      moved.push(`in ${a.space} \u2192 ${b.space}`);
+    }
+    if (a.a !== b.a) {
+      moved.push(`first ${sourceName(a.a)} \u2192 ${sourceName(b.a)}`);
+    }
+    if (a.b !== b.b) {
+      moved.push(`second ${sourceName(a.b)} \u2192 ${sourceName(b.b)}`);
+    }
+    if (round(a.percent) !== round(b.percent)) {
+      moved.push(`mix ${plain(a.percent)}% \u2192 ${plain(b.percent)}%`);
+    }
+  } else if (a.kind === "relative" && b.kind === "relative") {
+    if (a.fn !== b.fn) {
+      return null;
+    }
+    if (a.source !== b.source) {
+      moved.push(`from ${sourceName(a.source)} \u2192 ${sourceName(b.source)}`);
+    }
+    a.channels.forEach((channel, index) => {
+      const other = b.channels[index];
+      if (!sameChannel(channel, other)) {
+        moved.push(channelPhrase(channel, other));
+      }
+    });
+    if (round(a.alpha ?? 1) !== round(b.alpha ?? 1)) {
+      moved.push(`alpha ${plain(a.alpha ?? 1)} \u2192 ${plain(b.alpha ?? 1)}`);
+    }
+  }
+  return moved.length ? moved.join(", ") : null;
+}
+function sameChannel(a, b) {
+  return a.mode === b.mode && a.percent === b.percent && round(a.value ?? 0) === round(b.value ?? 0);
+}
+function channelPhrase(a, b) {
+  const label = a.keyword.toUpperCase();
+  if (a.mode === b.mode && a.mode !== "inherits") {
+    return `${label} ${a.mode} ${channelNumber(a)} \u2192 ${channelNumber(b)}`;
+  }
+  return `${label} ${channelText(a)} \u2192 ${channelText(b)}`;
+}
+function channelText(channel) {
+  return channel.mode === "inherits" ? "inherits" : `${channel.mode} ${channelNumber(channel)}`;
+}
+function channelNumber({ mode, value, percent }) {
+  const number = mode === "offset" ? signed(value ?? 0) : plain(value ?? 0);
+  return `${number}${percent ? "%" : ""}`;
+}
+function sourceName(source) {
+  const [, name] = source.match(TOKEN) ?? [];
+  return name ?? source;
+}
+function plain(value) {
+  return String(round(value)).replace("-", "\u2212");
+}
+function signed(value) {
+  const rounded = round(value);
+  return rounded < 0 ? plain(rounded) : `+${rounded}`;
+}
+function round(value) {
+  return Math.round(value * 1e4) / 1e4;
 }
 
 // src/theme.ts
@@ -229,6 +533,8 @@ function inTheme(theme, resolve) {
 // src/color.ts
 var OKLCH = /^oklch\(([\d.e-]+%?) ([\d.e-]+%?) ([\d.e-]+|none)(?: \/ ([\d.e-]+%?))?\)$/;
 var RGB = /^(color\(srgb|rgba?\()\s*([^)]+)\)$/;
+var FN_BODY = /^[a-z]+\((.*)\)$/;
+var HEX = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i;
 function oklchOf(color) {
   const computed = resolveColor(`oklch(from ${color} l c h / alpha)`);
   const [, l, c, h, alpha = "1"] = computed.match(OKLCH) ?? [];
@@ -250,6 +556,44 @@ function hexOf(color) {
   const channel = (value, factor = scale) => Math.round(Math.min(255, Math.max(0, Number(value) * factor))).toString(16).padStart(2, "0");
   const hex = `#${channel(r)}${channel(g)}${channel(b)}`;
   return Number(alpha) < 1 ? `${hex}${channel(alpha, 255)}` : hex;
+}
+function channelsOf(fn, color) {
+  const ranges = channelRanges(fn);
+  if (fn === "rgb" || fn === "hsl" || fn === "hwb") {
+    const [, r = "0", g = "0", b = "0"] = hexOf(color).match(HEX) ?? [];
+    const rgb = [parseInt(r, 16), parseInt(g, 16), parseInt(b, 16)];
+    return fn === "rgb" ? rgb : fn === "hsl" ? hslOf(rgb) : hwbOf(rgb);
+  }
+  const keywords = ranges.map((range) => range.keyword).join(" ");
+  const computed = resolveColor(`${fn}(from ${color} ${keywords})`);
+  const [, body = ""] = computed.match(FN_BODY) ?? [];
+  const parts = (body.split("/")[0] ?? "").trim().split(/\s+/);
+  return ranges.map((range, index) => {
+    const part = parts[index] ?? "none";
+    return part === "none" ? 0 : fraction(part, range.absolute.max);
+  });
+}
+function hslOf(rgb) {
+  const max = Math.max(...rgb) / 255;
+  const min = Math.min(...rgb) / 255;
+  const l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  return [hueOf(rgb), s * 100, l * 100];
+}
+function hwbOf(rgb) {
+  const max = Math.max(...rgb) / 255;
+  const min = Math.min(...rgb) / 255;
+  return [hueOf(rgb), min * 100, (1 - max) * 100];
+}
+function hueOf([r, g, b]) {
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) {
+    return 0;
+  }
+  const h = max === r ? (g - b) / d % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
 }
 function isColor(text) {
   return typeof CSS !== "undefined" && CSS.supports("color", text);
@@ -523,11 +867,9 @@ var BORDER_STYLES2 = [
   "none"
 ];
 var PX = /^(-?\d*\.?\d+)px$/;
-var NUMBER = /^-?\d*\.?\d+$/;
-var TOKEN_AT_ALPHA = /^rgb\(from var\((--[\w-]+)\) r g b \/ ([\d.]+)\)$/;
+var NUMBER2 = /^-?\d*\.?\d+$/;
 var TOKEN_ONLY = /^var\((--[\w-]+)\)$/;
 var OWN_COLOR = /^(#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|hwb\(|color\()(?!\s*from\b)|^[a-z]+$/i;
-var RECIPE_ALPHA = /\/\s*([\d.]+)\s*\)$/;
 var DEFAULT_REM = { min: 0, max: 4, step: 0.0625, unit: "rem" };
 function buildControl(token, ctx) {
   switch (token.kind) {
@@ -549,12 +891,46 @@ function buildControl(token, ctx) {
       return buildTextControl(token, ctx);
   }
 }
+var CHANNEL_MODES = [
+  "inherits",
+  "absolute",
+  "offset",
+  "factor"
+];
+var PERCENT_SPAN = { min: 0, max: 100, step: 0.5 };
+var PERCENT_OFFSET_SPAN = {
+  min: -PERCENT_SPAN.max,
+  max: PERCENT_SPAN.max,
+  step: PERCENT_SPAN.step
+};
 function buildColorControl(token, ctx) {
   const sideOf = () => themeSideOf(ctx.value(), ctx.theme());
   const write = (color) => ctx.set(withThemeColor(ctx.value(), ctx.theme(), color));
-  if (!OWN_COLOR.test(sideOf())) {
-    return buildRecipeColorControl(token, sideOf, write);
-  }
+  const views = { sideOf, write, refreshViews: () => refresh() };
+  const literal = buildLiteralColorView(token, views);
+  const wrapper = el("div", { class: "control color" }, literal.el);
+  let recipe = null;
+  const refresh = () => {
+    const own = OWN_COLOR.test(sideOf());
+    literal.el.hidden = !own;
+    if (own) {
+      if (recipe) {
+        recipe.el.hidden = true;
+      }
+      literal.refresh();
+      return;
+    }
+    if (recipe === null) {
+      recipe = buildRecipeColorView(token, ctx, views);
+      wrapper.append(recipe.el);
+    }
+    recipe.el.hidden = false;
+    recipe.refresh();
+  };
+  refresh();
+  return { el: wrapper, refresh };
+}
+function buildLiteralColorView(token, { sideOf, write, refreshViews }) {
   const swatch = el("span", { class: "swatch" });
   const hex = el("input", {
     type: "text",
@@ -608,20 +984,19 @@ function buildColorControl(token, ctx) {
   hex.addEventListener("change", () => {
     if (isColor(hex.value.trim())) {
       write(hex.value.trim());
-      refresh();
+      refreshViews();
     } else {
       hex.value = sideOf();
     }
   });
   picker.addEventListener("input", () => {
     write(picker.value);
-    refresh();
+    refreshViews();
   });
-  refresh();
   return {
     el: el(
       "div",
-      { class: "control" },
+      { class: "view literal" },
       el("div", { class: "row" }, swatch, hex, picker),
       channelRow("L", sliders.l, readouts.l),
       channelRow("C", sliders.c, readouts.c),
@@ -630,48 +1005,296 @@ function buildColorControl(token, ctx) {
     refresh
   };
 }
-function buildRecipeColorControl(token, sideOf, write) {
+function buildRecipeColorView(token, ctx, { sideOf, write, refreshViews }) {
+  const relativeOf = () => relativeRecipeOf(sideOf());
+  const mixOf = () => {
+    const recipe = parseRecipe(sideOf());
+    return recipe?.kind === "mix" ? recipe : null;
+  };
+  const writeRecipe = (recipe) => write(serializeRecipe(recipe));
   const text = el("input", {
     type: "text",
     "aria-label": `${token.name} value`
-  });
-  const alpha = slider(0, 1, 0.01);
-  const readout = el("span", { class: "v" });
-  const alphaRow = channelRow("\u03B1", alpha, readout);
-  const refresh = () => {
-    const value = sideOf();
-    text.value = value;
-    const current = alphaOfRecipe(value);
-    alphaRow.hidden = current === null;
-    if (current !== null) {
-      alpha.value = String(current);
-      readout.textContent = current.toFixed(2);
-    }
-  };
-  alpha.addEventListener("input", () => {
-    readout.textContent = Number(alpha.value).toFixed(2);
-    write(sideOf().replace(RECIPE_ALPHA, `/ ${alpha.value})`));
   });
   text.addEventListener("change", () => {
     if (isColor(text.value.trim())) {
       write(text.value.trim());
     }
-    refresh();
+    refreshViews();
   });
-  refresh();
+  const swatch = el("span", { class: "swatch" });
+  const oklch = el("span", { class: "oklch" });
+  const detach = el("button", {
+    type: "button",
+    class: "quiet detach",
+    title: "Write the resolved color as a literal",
+    text: "detach",
+    onclick: () => {
+      write(hexOf(sideOf()));
+      refreshViews();
+    }
+  });
+  const paintResolved = () => {
+    const side = sideOf();
+    text.value = side;
+    swatch.style.background = hexOf(side);
+    const { l, c, h } = oklchOf(side);
+    oklch.textContent = `${l.toFixed(3)} ${c.toFixed(3)} ${Math.round(h)}\xB0`;
+  };
+  const fn = el("span", { class: "fn" });
+  const source = sourceSelect(
+    token,
+    ctx,
+    `${token.name} source`,
+    (picked) => {
+      const recipe = relativeOf();
+      if (recipe && picked !== null) {
+        writeRecipe(withSource(recipe, picked));
+      }
+      refreshViews();
+    }
+  );
+  const channels = [0, 1, 2].map((index) => {
+    const label = el("span", { class: "k" });
+    const mode = el("select", { class: "mode" });
+    CHANNEL_MODES.forEach(
+      (name) => mode.append(el("option", { value: name, text: name }))
+    );
+    const slide = slider(0, 1, 0.01);
+    const readout = el("span", { class: "v" });
+    const show = (range, channel) => {
+      label.textContent = range.label;
+      mode.setAttribute("aria-label", `${token.name} ${range.label} mode`);
+      slide.setAttribute("aria-label", `${token.name} ${range.label}`);
+      mode.value = channel.mode;
+      const span = spanOf(range, channel);
+      slide.hidden = span === null;
+      readout.hidden = span === null;
+      if (span) {
+        slide.min = String(span.min);
+        slide.max = String(span.max);
+        slide.step = String(span.step);
+        slide.value = String(channel.value ?? 0);
+        readout.textContent = channelReadout(channel, span.step);
+      }
+    };
+    mode.addEventListener("change", () => {
+      const recipe = relativeOf();
+      if (recipe) {
+        const range = channelRanges(recipe.fn)[index];
+        const resolved = channelsOf(recipe.fn, sideOf())[index];
+        const channel = channelInMode(
+          range,
+          mode.value,
+          resolved
+        );
+        writeRecipe(withChannel(recipe, index, channel));
+      }
+      refreshViews();
+    });
+    slide.addEventListener("input", () => {
+      const recipe = relativeOf();
+      if (recipe) {
+        const channel = {
+          ...recipe.channels[index],
+          value: Number(slide.value)
+        };
+        readout.textContent = channelReadout(
+          channel,
+          Number(slide.step)
+        );
+        writeRecipe(withChannel(recipe, index, channel));
+        paintResolved();
+      }
+    });
+    return {
+      el: el(
+        "div",
+        { class: "row channel" },
+        label,
+        mode,
+        slide,
+        readout
+      ),
+      show
+    };
+  });
+  const alpha = slider(0, 1, 0.01);
+  const alphaReadout = el("span", { class: "v" });
+  const alphaRow = channelRow("\u03B1", alpha, alphaReadout);
+  alphaRow.classList.add("alpha");
+  alpha.addEventListener("input", () => {
+    const recipe = relativeOf();
+    if (recipe) {
+      alphaReadout.textContent = Number(alpha.value).toFixed(2);
+      writeRecipe(withAlpha(recipe, Number(alpha.value)));
+      paintResolved();
+    }
+  });
+  const mixLabel = el("span", { class: "fn" });
+  const mixColor = (which, label) => sourceSelect(token, ctx, `${token.name} ${label}`, (picked) => {
+    const mix = mixOf();
+    if (mix && picked !== null) {
+      writeRecipe(withMixColor(mix, which, picked));
+    }
+    refreshViews();
+  });
+  let mixRows = null;
+  const mixRowsOf = () => {
+    if (mixRows === null) {
+      const first = mixColor("a", "first color");
+      const second = mixColor("b", "second color");
+      mixRows = {
+        first,
+        second,
+        rows: [
+          el("div", { class: "row mix" }, mixLabel, first.el),
+          el(
+            "div",
+            { class: "row mix" },
+            el("span", { class: "fn", text: "with" }),
+            second.el
+          )
+        ]
+      };
+      percentRow.before(...mixRows.rows);
+    }
+    return mixRows;
+  };
+  const percent = slider(MIX_SPAN.min, MIX_SPAN.max, MIX_SPAN.step);
+  const percentReadout = el("span", { class: "v" });
+  const percentRow = channelRow("%", percent, percentReadout);
+  percentRow.classList.add("percent");
+  percent.addEventListener("input", () => {
+    const mix = mixOf();
+    if (mix) {
+      percentReadout.textContent = `${percent.value}%`;
+      writeRecipe(withPercent(mix, Number(percent.value)));
+      paintResolved();
+    }
+  });
+  const resolvedRow = el(
+    "div",
+    { class: "row resolved" },
+    swatch,
+    oklch,
+    detach
+  );
+  const sourceRow = el("div", { class: "row source" }, fn, source.el);
+  const refresh = () => {
+    const value = sideOf();
+    const recipe = parseRecipe(value);
+    const relative = recipe?.kind === "relative" ? recipe : null;
+    const mix = recipe?.kind === "mix" ? recipe : null;
+    text.value = value;
+    resolvedRow.hidden = recipe === null;
+    sourceRow.hidden = relative === null;
+    channels.forEach((channel) => {
+      channel.el.hidden = relative === null;
+    });
+    alphaRow.hidden = (relative?.alpha ?? null) === null;
+    percentRow.hidden = mix === null;
+    if (mix === null) {
+      mixRows?.rows.forEach((row) => {
+        row.hidden = true;
+      });
+    }
+    if (recipe) {
+      paintResolved();
+    }
+    if (relative) {
+      fn.textContent = `${relative.fn} from`;
+      source.show(relative.source);
+      const ranges = channelRanges(relative.fn);
+      channels.forEach(
+        (channel, index) => channel.show(ranges[index], relative.channels[index])
+      );
+      if (relative.alpha !== null) {
+        alpha.value = String(relative.alpha);
+        alphaReadout.textContent = relative.alpha.toFixed(2);
+      }
+    }
+    if (mix) {
+      const { first, second, rows } = mixRowsOf();
+      rows.forEach((row) => {
+        row.hidden = false;
+      });
+      mixLabel.textContent = `mix in ${mix.space}`;
+      first.show(mix.a);
+      second.show(mix.b);
+      percent.value = String(mix.percent);
+      percentReadout.textContent = `${mix.percent}%`;
+    }
+  };
   return {
     el: el(
       "div",
-      { class: "control" },
-      el("div", { class: "row" }, text),
-      alphaRow
+      { class: "view recipe" },
+      resolvedRow,
+      sourceRow,
+      ...channels.map((channel) => channel.el),
+      alphaRow,
+      percentRow,
+      el("div", { class: "row text" }, text)
     ),
     refresh
   };
 }
-function alphaOfRecipe(value) {
-  const [, alpha] = value.match(RECIPE_ALPHA) ?? [];
-  return alpha === void 0 ? null : Number(alpha);
+function sourceSelect(token, ctx, label, onPick) {
+  const names = ctx.colorSources.map((source) => source.name).filter((name) => name !== token.name);
+  const select = el("select", { class: "source", "aria-label": label });
+  select.append(el("option", { value: "", text: "(as written)" }));
+  names.forEach(
+    (name) => select.append(el("option", { value: name, text: name }))
+  );
+  select.addEventListener(
+    "change",
+    () => onPick(select.value === "" ? null : `var(${select.value})`)
+  );
+  return {
+    el: select,
+    show: (source) => {
+      const [, name] = source.match(TOKEN_ONLY) ?? [];
+      select.value = name !== void 0 && names.includes(name) ? name : "";
+    }
+  };
+}
+function spanOf(range, channel) {
+  if (channel.mode === "inherits") {
+    return null;
+  }
+  if (channel.percent && !range.percent) {
+    if (channel.mode === "absolute") {
+      return PERCENT_SPAN;
+    }
+    if (channel.mode === "offset") {
+      return PERCENT_OFFSET_SPAN;
+    }
+  }
+  return range[channel.mode];
+}
+function channelReadout({ mode, value, percent }, step) {
+  const number = (value ?? 0).toFixed(decimalsOf(step));
+  if (mode === "factor") {
+    return `\xD7${number}`;
+  }
+  const signed2 = mode === "offset" && (value ?? 0) >= 0 ? `+${number}` : number;
+  return `${signed2}${percent ? "%" : ""}`;
+}
+function decimalsOf(step) {
+  return String(step).split(".")[1]?.length ?? 0;
+}
+function relativeRecipeOf(value) {
+  const recipe = parseRecipe(value);
+  return recipe?.kind === "relative" ? recipe : null;
+}
+function tokenAtAlpha(value) {
+  const recipe = relativeRecipeOf(value);
+  const [, token] = recipe?.source.match(TOKEN_ONLY) ?? [];
+  if (!recipe || recipe.fn !== "rgb" || recipe.alpha === null || token === void 0 || !recipe.channels.every((channel) => channel.mode === "inherits")) {
+    return null;
+  }
+  return { token, alpha: recipe.alpha };
 }
 function buildColorSourceControl(ctx, { read, write }) {
   const names = ctx.colorSources.map((source) => source.name);
@@ -685,10 +1308,13 @@ function buildColorSourceControl(ctx, { read, write }) {
   const text = el("input", { type: "text", "aria-label": "Color" });
   const parse = () => {
     const color = read();
-    const [, atAlpha, alphaValue] = color.match(TOKEN_AT_ALPHA) ?? [];
+    const atAlpha = tokenAtAlpha(color);
     const [, only] = color.match(TOKEN_ONLY) ?? [];
-    const token = atAlpha ?? only ?? "";
-    return { token, alpha: token ? Number(alphaValue ?? 1) : 1, color };
+    return {
+      token: atAlpha?.token ?? only ?? "",
+      alpha: atAlpha?.alpha ?? 1,
+      color
+    };
   };
   const compose = (token, alphaValue) => Number(alphaValue) >= 1 ? `var(${token})` : `rgb(from var(${token}) r g b / ${alphaValue})`;
   const refresh = () => {
@@ -766,8 +1392,8 @@ function buildRemControl(token, ctx, range) {
     paint(rem);
   };
   const write = (rem) => {
-    ctx.set(`${round(rem)}rem`);
-    paint(round(rem));
+    ctx.set(`${round2(rem)}rem`);
+    paint(round2(rem));
   };
   slide.addEventListener("input", () => write(Number(slide.value)));
   number.addEventListener("change", () => write(Number(number.value)));
@@ -1010,7 +1636,7 @@ function buildScopedControl(token, ctx) {
   return buildNumberControl(token, ctx, { ...control, unit: "px" });
 }
 function buildNumberControl(token, ctx, { min, max, step, unit }) {
-  const pattern = unit === "" ? NUMBER : new RegExp(`^(-?\\d*\\.?\\d+)${escape(unit)}$`);
+  const pattern = unit === "" ? NUMBER2 : new RegExp(`^(-?\\d*\\.?\\d+)${escape(unit)}$`);
   const slide = slider(min, max, step);
   const number = el("input", {
     type: "number",
@@ -1028,8 +1654,8 @@ function buildNumberControl(token, ctx, { min, max, step, unit }) {
     paint(value === void 0 ? min : Number(value));
   };
   const write = (value) => {
-    ctx.set(`${round(value)}${unit}`);
-    paint(round(value));
+    ctx.set(`${round2(value)}${unit}`);
+    paint(round2(value));
   };
   slide.addEventListener("input", () => write(Number(slide.value)));
   number.addEventListener("change", () => write(Number(number.value)));
@@ -1101,7 +1727,7 @@ function buildTypeScaleControl(typeScale, ctx) {
     refresh
   };
 }
-function buildSeedControl(targets, ctx) {
+function buildSeedControl(seed, ctx) {
   const hue = slider(0, 360, 1);
   const lightness = slider(0.1, 0.95, 0.01);
   const chroma = slider(0, 0.2, 5e-3);
@@ -1116,33 +1742,33 @@ function buildSeedControl(targets, ctx) {
     readouts[2].textContent = Number(chroma.value).toFixed(3);
   };
   const refresh = () => {
-    const { h, c } = oklchOf(
-      themeSideOf(ctx.value(targets.accent), ctx.theme())
+    const { h, c } = oklchOf(themeSideOf(ctx.value(seed.hue), ctx.theme()));
+    const { l } = oklchOf(
+      themeSideOf(ctx.value(seed.lightness), ctx.theme())
     );
-    const { l } = oklchOf(themeSideOf(ctx.value(targets.base), ctx.theme()));
     hue.value = String(h);
     lightness.value = String(l);
     chroma.value = String(Math.min(0.2, c));
     paint();
   };
   const apply = () => {
-    const h = Number(hue.value);
     const l = Number(lightness.value);
-    const c = Number(chroma.value);
-    const dark = l < 0.5;
-    const colors = {
-      [targets.base]: `oklch(${l} ${c * 0.15} ${h})`,
-      [targets.raised]: `oklch(${dark ? l + 0.08 : l - 0.06} ${c * 0.2} ${h})`,
-      [targets.muted]: `oklch(${dark ? 0.75 : 0.45} ${c * 0.15} ${h})`,
-      [targets.text]: `oklch(${dark ? 0.98 : 0.18} ${c * 0.05} ${h})`,
-      [targets.accent]: `oklch(0.7 ${Math.max(c, 0.15)} ${h})`
+    const values = {
+      h: Number(hue.value),
+      l,
+      c: Number(chroma.value),
+      dark: l < 0.5
     };
     ctx.setMany(
       Object.fromEntries(
-        Object.entries(colors).map(([name, color]) => [
-          name,
-          withThemeColor(ctx.value(name), ctx.theme(), hexOf(color))
-        ])
+        Object.entries(seed.targets).map(([name, formula]) => {
+          const color = formula(values);
+          const text = OWN_COLOR.test(color) ? hexOf(color) : color;
+          return [
+            name,
+            withThemeColor(ctx.value(name), ctx.theme(), text)
+          ];
+        })
       )
     );
   };
@@ -1162,7 +1788,7 @@ function buildSeedControl(targets, ctx) {
         { class: "row" },
         el("button", {
           type: "button",
-          text: "Seed the five theme colors",
+          text: `Seed ${Object.keys(seed.targets).length} tokens`,
           onclick: apply
         })
       )
@@ -1268,7 +1894,7 @@ function channelRow(label, input, readout) {
     readout
   );
 }
-function round(value) {
+function round2(value) {
   return Math.round(value * 1e4) / 1e4;
 }
 function escape(text) {
@@ -1420,7 +2046,7 @@ function phraseFor(token, before, after, sides, color) {
     const index = theme ? THEMES.indexOf(theme) : -1;
     const from = index === -1 ? before : themeColorsOf(before)?.[index] ?? before;
     const to = index === -1 ? after : themeColorsOf(after)?.[index] ?? after;
-    return colorPhrase(from, to, color);
+    return recipePhrase(from, to) ?? colorPhrase(from, to, color);
   }
   if (token.kind === "length" || token.kind === "typography") {
     return lengthPhrase(before, after);
@@ -1788,6 +2414,12 @@ section.group[hidden] { display: none; }
 .row > span.v { font-family: var(--tt-mono); font-size: 11px; width: 4.5em; }
 .row > input[type="text"] { flex: 1 1 6em; }
 .swatch { width: 1.6em; height: 1.6em; border-radius: var(--tt-radius); border: 1px solid var(--tt-border); flex: none; }
+/* The color control's two views: the rows of the shown one lay out in the control's own grid */
+.control.color > .view { display: contents; }
+.row > span.fn, .row > span.oklch { font-family: var(--tt-mono); font-size: 11px; color: var(--tt-muted); white-space: nowrap; }
+.row > select.mode { flex: none; padding: 1px 2px; font-size: 11px; }
+.row > select.source { flex: 1 1 8em; }
+.row > button.detach { margin-left: auto; }
 .sample {
     background: var(--tt-bg-raised);
     border-radius: var(--tt-radius);
@@ -1883,6 +2515,7 @@ var Panel = class {
   sections;
   scale;
   typeScale;
+  seed;
   config;
   sources;
   sheets;
@@ -1918,6 +2551,7 @@ var Panel = class {
     this.sections = options.sections;
     this.scale = options.scale;
     this.typeScale = options.typeScale;
+    this.seed = options.seed;
     this.config = config;
     this.sources = options.sources;
     this.sheets = options.sheets;
@@ -2116,12 +2750,9 @@ var Panel = class {
       })
     );
     const children = [heading];
-    const seed = this.config.seed;
-    if (seed && names.includes(seed.targets.accent)) {
-      const control = buildSeedControl(
-        seed.targets,
-        this.contextFor(null)
-      );
+    const seed = this.seed;
+    if (seed && names.includes(seed.hue)) {
+      const control = buildSeedControl(seed, this.contextFor(null));
       this.refreshers.push(control.refresh);
       children.push(
         el(
@@ -2182,7 +2813,10 @@ var Panel = class {
           class: "quiet reset",
           title: "Reset to the stylesheet's value",
           text: "\u21BA",
-          onclick: () => this.store.reset(token.name)
+          onclick: () => {
+            this.store.reset(token.name);
+            control.refresh();
+          }
         })
       ),
       value,
@@ -2543,6 +3177,34 @@ var Panel = class {
     this.refreshers.forEach((refresh) => refresh());
     this.extraCards.forEach((card) => card.refresh());
   }
+  /**
+   * Re-reads the controls of the tokens whose value derives from `name`, transitively: a
+   * recipe over the changed token resolves to another color, which its swatch and readout show
+   * at once rather than at the next whole-set refresh. The changed card itself is left alone,
+   * since its control wrote the change and may be mid-drag.
+   */
+  refreshDerivedFrom(name) {
+    const references = /* @__PURE__ */ new Map();
+    this.cards.forEach((_, cardName) => {
+      if (cardName !== name) {
+        references.set(
+          cardName,
+          referencedNamesOf(this.valueOf(cardName) ?? "")
+        );
+      }
+    });
+    const derived = /* @__PURE__ */ new Set();
+    const queue = [name];
+    for (let next = queue.shift(); next !== void 0; next = queue.shift()) {
+      references.forEach((names, cardName) => {
+        if (!derived.has(cardName) && names.includes(next)) {
+          derived.add(cardName);
+          queue.push(cardName);
+          this.cards.get(cardName)?.control.refresh();
+        }
+      });
+    }
+  }
   updateStrip() {
     const name = this.store.activeSnapshot;
     const parts = [`${this.store.changedCount} changed`];
@@ -2585,6 +3247,7 @@ var Panel = class {
       if (entry) {
         this.paintCard(entry);
       }
+      this.refreshDerivedFrom(change.name);
     } else if (change.kind === "tweaks" || change.kind === "theme") {
       if (change.kind === "tweaks") {
         this.applyExtras();
@@ -3434,7 +4097,7 @@ function containerOf(selector) {
 }
 
 // src/index.ts
-var VERSION = "0.2.0";
+var VERSION = "0.3.0";
 var MODIFIERS = {
   ctrl: "ctrl",
   control: "ctrl",
@@ -3647,6 +4310,7 @@ function build(config, store, sheets, sources) {
   const scale = inferScale(read, config.scale);
   const tokens = withScaleRoles(read, scale);
   const typeScale = inferTypeScale(tokens, config.typeScale);
+  const seed = resolveSeed(config.seed, tokens);
   const sections = inferSections(tokens, config);
   const panel = new Panel({
     store,
@@ -3654,6 +4318,7 @@ function build(config, store, sheets, sources) {
     sections,
     scale,
     typeScale,
+    seed,
     config,
     sources,
     sheets
@@ -3689,12 +4354,15 @@ export {
   DEFAULT_TITLE,
   DEFAULT_TYPOGRAPHY_NAMES,
   DOCKS,
+  FACTOR_SPAN,
   Inspector,
   LIGHT_DARK,
   MARKER_PROPERTY,
+  MIX_SPAN,
   OTHER_SECTION,
   PANEL_CSS,
   Panel,
+  RELATIVE_FNS,
   STATE_VERSION,
   THEMES,
   TOKEN_REFERENCE,
@@ -3705,6 +4373,9 @@ export {
   buildCss,
   buildPrompt,
   buildSnapshotJson,
+  channelInMode,
+  channelRanges,
+  channelsOf,
   colorSources,
   copyName,
   createTokenTweaks,
@@ -3733,20 +4404,24 @@ export {
   matchesToken,
   normalizeSources,
   oklchOf,
+  parseRecipe,
   parseShortcut,
   qualifyingSheets,
   rangeFor,
   readSnapshot,
   readState,
   readTokens,
+  recipePhrase,
   referencedNamesOf,
   remOf,
   resolveColor,
   resolveConfig,
+  resolveSeed,
   rootRulesOf,
   scaleRoleOf,
   scopedControlOf,
   selectStylesheets,
+  serializeRecipe,
   sheetText,
   shownTheme,
   splitOutsideParentheses,
@@ -3756,6 +4431,11 @@ export {
   themeSideOf,
   tokensReferencedBy,
   typeScaleValues,
+  withAlpha,
+  withChannel,
+  withMixColor,
+  withPercent,
   withScaleRoles,
+  withSource,
   withThemeColor
 };
