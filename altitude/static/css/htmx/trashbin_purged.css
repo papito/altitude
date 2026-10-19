@@ -6,5 +6,5 @@
     font-size: var(--font-size-medium);
     letter-spacing: var(--letter-spacing-wide);
     font-weight: var(--font-weight-bold);
-    color: var(--theme-muted);
+    color: var(--theme-neutral-3);
 }

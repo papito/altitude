@@ -1,7 +1,7 @@
 #searchControl {
   margin: var(--control-vertical-space);
   padding: var(--space-3);
-  border: var(--control-border);
+  border: var(--border-thin);
   border-radius: var(--radius);
   display: grid;
   grid-template-columns: .5fr 1fr 1fr 1fr auto;
@@ -52,7 +52,7 @@
    (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
 #assets .cell .metadata {
   display: none;
-  background-color: var(--theme-raised);
+  background-color: var(--theme-secondary);
   width: 100%;
   padding-top: var(--space-3);
   padding-bottom: var(--space-3);
@@ -60,7 +60,7 @@
   row-gap: var(--space-2);
   margin-top: var(--space-2);
   font-size: var(--font-size-small);
-  color: var(--theme-text);
+  color: var(--theme-neutral-4);
 }
 
 /* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail:
@@ -85,9 +85,9 @@
   width: var(--marker-size);
   height: var(--marker-size);
   border-radius: 50%;
-  /* The accent disc, with the check cut out of --theme-on-accent through a mask: a data URI cannot read a token, a
+  /* The primary disc, with the check cut out of --theme-on-primary through a mask: a data URI cannot read a token, a
      mask lets the fill be one */
-  background: var(--theme-accent);
+  background: var(--theme-primary);
   box-shadow: var(--drop-shadow);
 }
 
@@ -98,7 +98,7 @@
   right: var(--space-4);
   width: var(--marker-size);
   height: var(--marker-size);
-  background-color: var(--theme-on-accent);
+  background-color: var(--theme-on-primary);
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
   mask-size: 16px 16px;
   mask-position: center;
@@ -129,7 +129,7 @@
 }
 
 #assets .cell .metadata span {
-  color: var(--theme-muted);
+  color: var(--theme-neutral-3);
   letter-spacing: var(--letter-spacing-wide);
 }
 
@@ -167,7 +167,7 @@
   padding: var(--space-4) var(--space-3);
   font-weight: var(--font-weight-bold);
   font-size: var(--font-size-medium);
-  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-base);
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
 /* The gap between groups. It hangs off the header rather than the cells above it, so the first
@@ -179,12 +179,12 @@
 
 /* A Location group's category, dimmed before the › */
 #assets .result-group .category {
-  color: var(--theme-muted);
+  color: var(--theme-neutral-3);
   font-weight: normal;
 }
 
 #assets .result-group .count {
-  color: var(--theme-muted);
+  color: var(--theme-neutral-3);
   font-weight: normal;
   font-size: var(--font-size-small);
 }
@@ -195,7 +195,7 @@
   height: var(--marker-size-small);
   margin: 0;
   cursor: pointer;
-  accent-color: var(--theme-accent);
+  accent-color: var(--theme-primary);
 }
 
 #assets .cell {
@@ -214,8 +214,8 @@
    left padding's step in from the edge */
 .sort-dropdown {
   padding: var(--space-3) var(--space-8) var(--space-3) var(--space-3);
-  background-color: var(--theme-base);
-  border: var(--control-border);
+  background-color: var(--theme-neutral-2);
+  border: var(--border-thin);
   border-radius: var(--radius);
   cursor: pointer;
   letter-spacing: var(--letter-spacing-wide);
@@ -227,7 +227,7 @@
 }
 
 #searchControl .sort-dropdown:hover {
-  background-color: var(--theme-raised);
+  background-color: var(--theme-secondary);
 }
 
 #searchControl .sort-dropdown span {
@@ -235,7 +235,7 @@
 }
 
 #searchControl .total strong {
-  color: var(--theme-muted);
+  color: var(--theme-neutral-3);
 }
 
 /* The Preview of an asset that plays (a Video, an animated GIF) wears a play badge, so a still and a clip tell apart */
@@ -249,7 +249,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--theme-text);
+  color: var(--theme-neutral-4);
   background-color: var(--scrim-color);
   font-size: var(--font-size-large);
   pointer-events: none;
@@ -259,7 +259,7 @@
 #assets .cell .drag-drop .no-date-marker {
   position: absolute;
   bottom: var(--space-4);
-  color: var(--theme-text);
+  color: var(--theme-neutral-4);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;

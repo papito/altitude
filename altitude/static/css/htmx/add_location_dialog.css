@@ -24,7 +24,7 @@
 }
 
 #locationPinReadout {
-  color: var(--theme-muted);
+  color: var(--theme-neutral-3);
   font-size: var(--font-size-small);
 }
 
@@ -51,5 +51,5 @@
 }
 
 #locationGeocodeResults button:hover, #locationGeocodeResults button:focus-visible {
-  background-color: var(--theme-raised);
+  background-color: var(--theme-secondary);
 }

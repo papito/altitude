@@ -19,7 +19,7 @@
     width: 100%;
     padding: var(--space-5) var(--space-6);
     background-color: var(--setup-form-field-color);
-    color: var(--theme-text);
+    color: var(--theme-neutral-4);
     border: var(--setup-form-field-border);
     border-radius: 6px;
     font-size: var(--font-size-base);
@@ -78,8 +78,8 @@
 #setupForm div.error {
     padding: var(--space-3);
     margin-top: var(--space-1);
-    background-color: var(--theme-base);
-    color: var(--theme-text);
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
     border: 1px solid var(--error-color);
     border-bottom: 2px solid var(--error-color);
     letter-spacing: var(--letter-spacing-wide);

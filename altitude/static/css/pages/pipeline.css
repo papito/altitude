@@ -19,12 +19,12 @@
   width: 100%;
   display: grid;
   padding: var(--space-7);
-  border: var(--control-border);
+  border: var(--border-thin);
   border-radius: var(--radius);
   place-items: center;
-  background-color: var(--theme-base);
+  background-color: var(--theme-neutral-2);
 }
 
 #importLog {
-  border-top: var(--control-border);
+  border-top: var(--border-thin);
 }

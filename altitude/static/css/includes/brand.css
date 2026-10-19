@@ -5,8 +5,8 @@
     display: grid;
     grid-template-columns: 1fr;
     place-items: center;
-    background: var(--theme-base);
-    color: var(--theme-text);
+    background: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
     box-shadow: var(--box-shadow);
     border-bottom: var(--panel-border);
     text-shadow: var(--text-shadow);
@@ -16,7 +16,7 @@
     letter-spacing: var(--letter-spacing-wide);
     text-transform: uppercase;
     text-decoration: none;
-    color: var(--theme-muted);
+    color: var(--theme-neutral-3);
     font-weight: var(--font-weight-bold);
     font-size: var(--font-size-medium);
 }

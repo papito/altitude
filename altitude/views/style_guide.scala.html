@@ -84,18 +84,22 @@
       <div>
         <section id="colors">
           <h2>Colors</h2>
-          <p>Every color token of <code>:root</code> in <code>core.css</code>. Two seeds, <code>--theme-base</code> and
-             <code>--theme-accent</code>, hold the palette's literals as <code>light-dark(light, dark)</code> pairs; every
-             other theme color is a recipe over one of them in OKLCH, per scheme, shown with its From line, so the
-             neutrals are one hue and editing a seed moves the whole chrome. A rule writes a theme color or a status
-             color directly. The Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha:
-             the only other color tokens. A new color is a new theme role with a recipe, or a new veil when it must be
-             translucent. The three status colors and <code>--shadow-color</code> stand apart, with pairs of their own;
-             a status fill is its status color darkened (lightened, in the light theme) by one recipe. The setup page's
-             palette is that page's own, in <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows
-             it and the tokens it comes from; Off palette marks a token that writes a color literal, and the literals
-             written past the tokens are listed under Token audit. The app ships dark; the Light / Dark switch above
-             the contents shows this page in either theme, both real, and is remembered in this browser. Click a token to copy its
+          <p>Every color token of <code>:root</code> in <code>core.css</code>, each theme and semantic color a literal
+             <code>light-dark(light, dark)</code> pair of hex values. The Theme colors are the brand colors
+             (<code>--theme-primary</code>, the one hue of the chrome, with its text and on-color;
+             <code>--theme-secondary</code>, the supporting surface; <code>--theme-accent</code>, the call-to-action
+             color, with its on-color), the neutral scale (<code>--theme-neutral-1</code> to <code>-4</code>, from the
+             lightest surface to the darkest text in the light theme: the field, the page, lines and secondary text,
+             text) and <code>--theme-on-field</code>, the text typed into a field. A rule writes a theme color or a
+             semantic color directly. The Derived cards are the veils, a theme color or <code>--shadow-color</code> at an
+             alpha: the only other color tokens. A new color is a new theme role as a hex pair, or a new veil when it
+             must be translucent. The four semantic colors (success, warning, error, info) and
+             <code>--shadow-color</code> stand apart, with pairs of their own; a semantic fill is its color darkened
+             (lightened, in the light theme). The setup page's palette is that page's own, in
+             <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows it and the tokens it comes
+             from; Off palette marks a token that writes a color literal, and the literals written past the tokens are
+             listed under Token audit. The app ships dark; the Light / Dark switch above the contents shows this page
+             in either theme, both real, and is remembered in this browser. Click a token to copy its
              <code>var()</code> reference. The slider of <code>--scrim-color</code> repaints this page with the
              token's color of the theme shown at another alpha, until the page is reloaded.</p>
           <h3>Theme colors</h3>
@@ -133,11 +137,12 @@
 
               <h3>Text colors</h3>
               <div class="sg-row">
-                <span style="color: var(--theme-text)">--theme-text</span>
-                <span style="color: var(--theme-muted)">--theme-muted</span>
+                <span style="color: var(--theme-neutral-4)">--theme-neutral-4</span>
+                <span style="color: var(--theme-neutral-3)">--theme-neutral-3</span>
                 <span style="color: var(--success-color)">--success-color</span>
                 <span style="color: var(--warning-color)">--warning-color</span>
                 <span style="color: var(--error-color)">--error-color</span>
+                <span style="color: var(--info-color)">--info-color</span>
                 <span style="text-shadow: var(--text-shadow)">--text-shadow</span>
               </div>
             </div>
@@ -177,8 +182,8 @@
           <h2>Borders &amp; shadows</h2>
           <p>A border token carries width, style and color together; use it whole rather than restating its parts.
              <code>--panel-border</code> is the edge of a chrome panel and the divider inside one;
-             <code>--control-border</code> the edge of a quiet control on the base surface; <code>--border-thin</code>
-             and <code>--border-thick</code> the muted edges of a cell or a menu, and of an input, a button or a dialog.
+             <code>--border-thin</code> and <code>--border-thick</code> the edges of a cell, a menu or a quiet control,
+             and of an input, a button or a dialog.
              A rectangular box or control rounds its corners with <code>--radius</code>, a badge with
              <code>--radius-small</code>; a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")

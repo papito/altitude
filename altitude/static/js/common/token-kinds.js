@@ -2,10 +2,10 @@
  * What kind of value a `:root` token of `core.css` holds, and the group it is shown in: the style
  * guide (`js/style-guide.js`) places the tokens by these.
  *
- * The groups: a color token is a theme color (`--theme-*`: the two seeds, Base and Accent, and the
- * recipes over them, which together hold the palette), a status color (or a status fill, derived
- * from its color) or `--shadow-color`, which stand apart from them, or derived: a veil, a theme
- * color or `--shadow-color` at an alpha. A length is a
+ * The groups: a color token is a theme color (`--theme-*`: the primary, secondary and accent
+ * colors, the neutral scale and the on-colors, which together hold the palette), a semantic color
+ * (success, warning, error, info, or one of their fills) or `--shadow-color`, which stand apart
+ * from them, or derived: a veil, a theme color or `--shadow-color` at an alpha. A length is a
  * step of the spacing scale (`--space-*`), a role that references a step, or a size. The typography
  * tokens, a step of the type scale (`--font-size-*`), a weight, a tracking or a line height, are a
  * kind by name, since a size is a length and a weight a bare number.
@@ -86,12 +86,11 @@ export const TOKEN_KINDS = [
 // The kind of a value none of the tests pass, and of a token without a value
 export const OTHER_KIND = { kind: "other", sampleProperties: [] }
 
-// The color groups, by token name: the theme colors (the seeds and the recipes over them), and the
-// status colors and the ink of shadows, which stand apart from them. Every other token takes its
-// colors from these.
+// The color groups, by token name: the theme colors (the palette), and the semantic colors and the
+// ink of shadows, which stand apart from them. Every other token takes its colors from these.
 const THEME_COLOR = /^--theme-/
 const STATUS_OR_SHADOW_COLOR =
-    /^--(?:(?:success|warning|error)-.+|shadow-color)$/
+    /^--(?:(?:success|warning|error|info)-.+|shadow-color)$/
 // A step of the spacing scale. A length that references one is a role, any other length a size.
 export const SPACING_STEP = /^--space-/
 

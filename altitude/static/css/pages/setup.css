@@ -2,7 +2,7 @@
    declared here on its body (zero specificity, inherited by the scene's canvas and by the form), not :root tokens of
    core.css, and literals with no light-dark() pair, since the page keeps this look in either theme. The style guide's
    scan leaves this file out (StyleGuideController.excludedFiles). Besides these the scene reads three tokens of
-   core.css: --error-color and --success-color for the jet's navigation lights, --theme-text for its strobe. The six
+   core.css: --error-color and --success-color for the jet's navigation lights, --theme-neutral-4 for its strobe. The six
    fields of the farmland, seen from above */
 body:where(.setup) {
     --setup-background-field-1: #3f5a3a;

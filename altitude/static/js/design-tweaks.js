@@ -34,7 +34,7 @@ createTokenTweaks({
         {
             id: "status",
             title: "Status and shadow",
-            match: /^--(?:(?:success|warning|error)-.+|shadow-color)$/,
+            match: /^--(?:(?:success|warning|error|info)-.+|shadow-color)$/,
         },
         { id: "derived", title: "Derived", kinds: ["color"] },
         {

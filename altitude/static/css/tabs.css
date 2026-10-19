@@ -19,7 +19,7 @@
     padding: var(--space-4) var(--space-5);
     margin: 0;
     border-bottom: 2px solid transparent;
-    color: var(--theme-muted);
+    color: var(--theme-neutral-3);
     text-decoration: none;
     text-transform: capitalize;
     letter-spacing: var(--letter-spacing-wide);
@@ -29,15 +29,15 @@
 }
 
 [role="tab"]:hover {
-    color: var(--theme-text);
-    background: var(--theme-hover);
+    color: var(--theme-neutral-4);
+    background: var(--theme-secondary);
 }
 
 /* ACTIVE TAB */
 
 [role="tab"][aria-selected="true"] {
-    color: var(--theme-text);
-    border-bottom: 2px solid var(--theme-accent);
+    color: var(--theme-neutral-4);
+    border-bottom: 2px solid var(--theme-primary);
     background: transparent;
 }
 

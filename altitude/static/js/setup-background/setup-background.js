@@ -54,7 +54,7 @@ function resolvePalette(canvas) {
         jetOutline: probe("--setup-background-jet-outline"),
         lightLeft: probe("--error-color"),
         lightRight: probe("--success-color"),
-        strobe: probe("--theme-text"),
+        strobe: probe("--theme-neutral-4"),
     }
 }
 
