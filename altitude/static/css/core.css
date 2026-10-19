@@ -2,20 +2,41 @@
     /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    /* The five theme colors. They hold the light-dark pairs, with the status colors and --shadow-color; a rule
-       writes a theme or status color directly. The only other color tokens are the veils, a theme
-       color or --shadow-color at an alpha, the colors inside the border and shadow tokens, and the three status fills,
-       the one recipe. Base is the app's surface */
-    --theme-base: light-dark(#363636, #363636);
+    /* The theme colors: two seeds and the recipes over them. The seeds, Base and Accent, are the only literal
+       colors of the chrome, each a light-dark(light, dark) pair; every other theme color is a relative-color recipe
+       in OKLCH over one of them, per scheme, so the neutrals are one hue and editing a seed moves the whole chrome.
+       A rule writes a theme color by its token; the only other color tokens are the status colors and --shadow-color,
+       which hold pairs of their own, the veils (a theme color or --shadow-color at an alpha), the colors inside the
+       border and shadow tokens, and the three status fills, recipes over their status colors. Base is the app's
+       surface, and its hue is the neutrals': the accent's, at a low chroma */
+    --theme-base: light-dark(oklch(0.97 0.004 270), oklch(0.333 0.006 270));
+    /* The one hue, used for selection, drop targets, chips and pins; as a fill, its text is --theme-on-accent, and as
+       text or a thin edge on a surface it is --theme-accent-text */
+    --theme-accent: light-dark(oklch(0.52 0.19 270), oklch(0.67 0.17 270));
+    /* A surface below the base: a read-only field */
+    --theme-sunken: light-dark(oklch(from var(--theme-base) calc(l - 0.035) c h), oklch(from var(--theme-base) calc(l - 0.045) c h));
+    /* Under a tab or a row the pointer is over */
+    --theme-hover: light-dark(oklch(from var(--theme-base) calc(l - 0.03) c h), oklch(from var(--theme-base) calc(l + 0.04) calc(c * 1.5) h));
     /* A surface lifted off the base */
-    --theme-raised: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
-    /* Secondary text and the edge of a control or a cell */
-    --theme-muted: light-dark(#b0acac, #b0acac);
+    --theme-raised: light-dark(oklch(from var(--theme-base) calc(l - 0.06) calc(c * 2) h), oklch(from var(--theme-base) calc(l + 0.08) calc(c * 2) h));
+    /* The faintest thing still seen, 3:1 against the base: the edge of a quiet control, and the text of a disabled
+       control */
+    --theme-faint: light-dark(oklch(from var(--theme-base) 0.64 0.012 h), oklch(from var(--theme-base) 0.6 0.012 h));
+    /* Secondary text and the edge of a control or a cell; 4.5:1 on the raised surface too */
+    --theme-muted: light-dark(oklch(from var(--theme-base) 0.47 0.02 h), oklch(from var(--theme-base) 0.8 0.012 h));
     /* Text on the app's own surfaces */
-    --theme-text: light-dark(#fff, #fff);
-    /* The one hue, used for selection, drop targets, chips and pins */
-    --theme-accent: light-dark(rgb(109, 140, 253), rgb(109, 140, 253));
-    /* The ink of shadows and scrims, not a theme color. It holds a pair like the five, and the veils and the shadow
+    --theme-text: light-dark(oklch(from var(--theme-base) 0.2 0.02 h), oklch(from var(--theme-base) 0.98 0.004 h));
+    /* An input's field: the lightest surface in either theme, so the dark theme's fields stay light */
+    --theme-field: light-dark(oklch(from var(--theme-base) 0.995 0.002 h), oklch(from var(--theme-base) 0.98 0.004 h));
+    /* The text typed into a field: the text's dark in the light theme, the base in the dark one */
+    --theme-on-field: light-dark(oklch(from var(--theme-base) 0.2 0.02 h), oklch(from var(--theme-base) l c h));
+    /* The accent as text or a thin edge on a surface: the filter chip. 4.5:1 on the base and the raised surface, which
+       the accent itself is not */
+    --theme-accent-text: light-dark(oklch(from var(--theme-accent) 0.5 0.17 h), oklch(from var(--theme-accent) 0.8 0.1 h));
+    /* Text and glyphs on the accent fill: a pin's path, a drop target's row, the checkmark of a selected cell. Dark
+       in the dark theme, since the accent at its lightness cannot carry light text */
+    --theme-on-accent: light-dark(oklch(from var(--theme-accent) 0.98 0.004 h), oklch(from var(--theme-accent) 0.2 0.02 h));
+    /* The ink of shadows and scrims, not a theme color. It holds a pair like the seeds, and the veils and the shadow
        tokens take it at an alpha */
     --shadow-color: light-dark(#000, #000);
 
@@ -32,7 +53,10 @@
     --panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18);
     /* The edge of a quiet control or box on the base surface: the small button, the toggle buttons, the sort dropdown,
        the search control's box and the pipeline form */
-    --control-border: 1px solid var(--theme-raised);
+    --control-border: 1px solid var(--theme-faint);
+    /* The ring of a focused control, drawn as its outline by the one :focus-visible rule, which the browser withholds
+       after a pointer. The setup page sets it to its own accent */
+    --focus-ring: 2px solid var(--theme-accent);
 
     /* The corners of every rectangular box and control */
     --radius: 0.3125rem;
@@ -43,9 +67,10 @@
        pin's count and the checkmark of a selected asset. No sideways offset, so it serves a centered box and a panel
        on the viewport's edge alike */
     --drop-shadow: 0 1px 6px rgb(from var(--shadow-color) r g b / 0.6);
-    /* Under the chrome's text: the nav, the explorer, the content area and an action button's label */
-    --text-shadow: rgb(from var(--shadow-color) r g b / 0.75) 0 1px;
-    /* A one-pixel light line under a panel's edge, and the hover and focus look of a button or the sort dropdown */
+    /* Under the chrome's text: the nav, the explorer, the content area and an action button's label. Only in the dark
+       theme: its light side is the ink at alpha 0, since a dark halo has no place under dark text */
+    --text-shadow: light-dark(rgb(from var(--shadow-color) r g b / 0), rgb(from var(--shadow-color) r g b / 0.75)) 0 1px;
+    /* A one-pixel light line under a panel's edge, and the hover look of a button or the sort dropdown */
     --box-shadow: rgb(from var(--theme-text) r g b / 0.07) 0 1px 0;
     /* Behind the asset detail, all but hiding the page */
     --asset-detail-backdrop-color: rgb(from var(--shadow-color) r g b / 0.9);
@@ -58,8 +83,6 @@
     /* The gap kept between the viewport's edges and a dialog or a menu */
     --viewport-gap: var(--space-5);
     --modal-toolbar-height: 1.875rem;
-    /* Under a tab the pointer is over */
-    --tab-hover-background-color: rgb(from var(--theme-text) r g b / 0.05);
 
     /* The spacing scale: every padding, margin, gap and inset is a step of it, or a role token that names one. The
        steps are in rem, so they follow the root font size: 16px unless the user changes the browser's default. This
@@ -125,19 +148,22 @@
     /* The play badge over a Preview that plays (includes/search_results.css) */
     --play-badge-size: 2.75rem;
 
-    /* The three status colors, each a pair of its own: the text of a status, its icon and its edge. Success */
-    --success-color: light-dark(#82da5f, #82da5f);
+    /* The three status colors, each a pair of its own: the text of a status, its icon and its edge. All three share
+       one lightness per theme, so they weigh the same, and each is at least 4.5:1 on the base. Success */
+    --success-color: light-dark(oklch(0.5 0.15 140), oklch(0.8 0.15 140));
     /* Warning: also the trash, and a person not named yet */
-    --warning-color: light-dark(#dca051, #dca051);
-    /* Error: also a form's error edge and the red navigation light of the setup scene */
-    --error-color: light-dark(#fc1e1e, #fc1e1e);
-    /* The fill of a status: its color 0.29 darker in OKLab lightness at 80% of its chroma. The one recipe among the
-       chrome's tokens, so the three fills follow their colors by one rule. Success */
-    --success-background-color: oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h);
+    --warning-color: light-dark(oklch(0.54 0.11 70), oklch(0.8 0.13 70));
+    /* Error: also a form's error edge and the red navigation light of the setup scene. Its chroma is the highest in
+       sRGB gamut at its lightness */
+    --error-color: light-dark(oklch(0.52 0.19 25), oklch(0.75 0.14 25));
+    /* The fill of a status, one recipe for the three: in the dark theme its color 0.29 darker in OKLab lightness at
+       80% of its chroma; in the light theme 0.40 lighter at 30%. A fill carries --theme-text in either theme, and its
+       status color only as an edge. Success */
+    --success-background-color: light-dark(oklch(from var(--success-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h));
     /* Warning */
-    --warning-background-color: oklch(from var(--warning-color) calc(l - 0.29) calc(c * 0.8) h);
+    --warning-background-color: light-dark(oklch(from var(--warning-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--warning-color) calc(l - 0.29) calc(c * 0.8) h));
     /* Error */
-    --error-background-color: oklch(from var(--error-color) calc(l - 0.29) calc(c * 0.8) h);
+    --error-background-color: light-dark(oklch(from var(--error-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--error-color) calc(l - 0.29) calc(c * 0.8) h));
 
     /* Panels */
     /* Inside a panel: a tab panel, and the sides of its tab list */
@@ -209,6 +235,14 @@ body {
     min-height: 100vh;
 }
 
+/* The one focus ring: every focused control draws it as its outline, outside its edge. `:focus-visible`, not `:focus`,
+   so the browser withholds it after a pointer, including the focus a closing dialog returns to the control that
+   opened it; no rule removes an outline */
+:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+}
+
 footer {
     padding: var(--space-3);
     color: var(--theme-text);
@@ -245,13 +279,14 @@ input, textarea {
     padding: var(--space-4);
     border: var(--border-thick);
     border-radius: var(--radius);
-    color: var(--theme-base);
+    color: var(--theme-on-field);
     font-size: var(--font-size-medium);
-    background-color: var(--theme-text);
+    background-color: var(--theme-field);
 }
 
 input.readonly {
-    background-color: var(--theme-muted);
+    background-color: var(--theme-sunken);
+    color: var(--theme-muted);
 }
 
 form div.error {
@@ -261,7 +296,6 @@ form div.error {
 
 form input.error, form input.error:focus {
     border-color: var(--error-color);
-    outline: none !important;
 }
 
 /*         */
@@ -281,9 +315,8 @@ form input.error, form input.error:focus {
     font-size: var(--font-size-base);
 }
 
-/* `:focus-visible`, not `:focus`: a control that opens a dialog takes focus back when it closes, and
-   a plain `:focus` glow would be left sitting on the button the user clicked with a mouse */
-.action-button:hover, .action-button:focus-visible {
+/* Focus draws the ring; hover draws the light line */
+.action-button:hover {
     box-shadow: var(--box-shadow);
 }
 
@@ -347,12 +380,10 @@ form input.error, form input.error:focus {
     place-items: center;
 }
 
-/* The ⋯ trigger keeps the look of a plain link. It never shows a focus ring: dialogs return focus
-   here when they close, and the ring that marked would read as a stray highlight in the list */
+/* The ⋯ trigger keeps the look of a plain link */
 .menu-trigger {
     padding: 0;
     border: 0;
-    outline: none;
     background: none;
     font: inherit;
     font-size: var(--font-size-large);
@@ -392,12 +423,6 @@ form input.error, form input.error:focus {
    dialog, so it stays invisible until the dialog has arrived rather than showing an empty box */
 .context-menu.dialog-only:not(:has(.dialog:not([hidden]))) {
     visibility: hidden;
-}
-
-/* A button that opens a dialog-only panel takes focus back when the dialog closes; like the ⋯
-   trigger it shows no ring for that */
-.dialog-trigger-ctrl > button {
-    outline: none;
 }
 
 .context-menu .actions button {
@@ -444,10 +469,10 @@ form input.error, form input.error:focus {
    (its text, then ×), so it carries no separate close control */
 .filter-chip {
     padding: var(--chip-padding);
-    border: 1px solid var(--theme-accent);
+    border: 1px solid var(--theme-accent-text);
     border-radius: var(--chip-border-radius);
     background: none;
-    color: var(--theme-accent);
+    color: var(--theme-accent-text);
     font-size: var(--font-size-small);
     cursor: pointer;
 }
@@ -521,10 +546,13 @@ form input.error, form input.error:focus {
 .drop-target {
     border-radius: var(--radius);
     background-color: var(--theme-accent);
+    color: var(--theme-on-accent);
 }
 
+/* The warning fill, not the warning color, so the row's text stays readable on it */
 #trash.drop-target {
-    background-color: var(--warning-color);
+    background-color: var(--warning-background-color);
+    color: var(--theme-text);
 }
 
 .draggable {
@@ -619,11 +647,10 @@ form input.error, form input.error:focus {
     border-bottom: var(--panel-border);
 }
 
-/* Keep the X in the text color without an outline, including when the modal focuses it on open. */
+/* The X in the text color, a plain glyph */
 .close-modal {
     background: none;
     border: 0;
-    outline: none;
     color: var(--theme-text);
     font: inherit;
     font-size: var(--font-size-xl);
@@ -743,7 +770,7 @@ nav .menu span {
 nav .menu.active {
     background-color: var(--theme-raised);
     color: var(--theme-text);
-    border: 2px solid var(--warning-background-color);
+    border: 2px solid var(--theme-accent);
     border-radius: var(--radius);
     font-weight: var(--font-weight-bold);
 }
@@ -752,7 +779,7 @@ nav input {
     border-radius: var(--radius);
     border: var(--border-thick);
     padding: var(--space-3);
-    background-color: var(--theme-text);
+    background-color: var(--theme-field);
     width: 90%;
     /* a flex item's min-width:auto would keep the input from shrinking to fit the form's fixed width */
     min-width: 0;
@@ -772,8 +799,9 @@ nav:has(.menu):not(:has(form))::after {
     flex: 0 0 220px;
 }
 
+/* The field's text at an alpha: the muted text is for the app's surfaces, and reads 1.8:1 on a light field */
 nav input::placeholder {
-    color: var(--theme-muted);
+    color: rgb(from var(--theme-on-field) r g b / 0.6);
 }
 
 nav .menu.triage i, nav .menu.triage span {

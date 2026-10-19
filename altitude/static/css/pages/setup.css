@@ -42,6 +42,8 @@ body:where(.setup) {
     --setup-form-placeholder-color: #9ea3ac;
     /* A field's label */
     --setup-form-label-color: #e7e8e9;
+    /* The focus ring of core.css, in the form's own hue so it matches the focus glow */
+    --focus-ring: 2px solid var(--setup-form-accent);
 }
 
 /* The page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;

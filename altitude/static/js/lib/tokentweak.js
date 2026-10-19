@@ -507,7 +507,7 @@ function typeScaleValues(typeScale, baseRem, ratio) {
   );
 }
 function colorSources(tokens) {
-  return tokens.filter((token) => token.kind === "color" && !isRecipe(token.declared)).map((token) => ({ name: token.name, value: token.declared }));
+  return tokens.filter((token) => token.kind === "color").map((token) => ({ name: token.name, value: token.declared }));
 }
 
 // src/controls.ts
@@ -3434,7 +3434,7 @@ function containerOf(selector) {
 }
 
 // src/index.ts
-var VERSION = "0.1.0";
+var VERSION = "0.2.0";
 var MODIFIERS = {
   ctrl: "ctrl",
   control: "ctrl",

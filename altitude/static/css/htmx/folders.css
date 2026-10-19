@@ -106,7 +106,7 @@
 
 #rootFolderList .folder-name.disabled {
     cursor: default;
-    color: var(--theme-muted);
+    color: var(--theme-faint);
     pointer-events: none;
 }
 
@@ -136,7 +136,8 @@
     padding: var(--space-4);
     border-radius: var(--radius);
     background-color: var(--warning-background-color);
-    color: var(--warning-color);
+    /* The text, not the warning color: on the fill the warning color reads 3:1, the text 5.5:1 */
+    color: var(--theme-text);
     line-height: var(--line-height-text);
     border: 1px solid var(--warning-color);
     text-shadow: none;

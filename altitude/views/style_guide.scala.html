@@ -84,16 +84,18 @@
       <div>
         <section id="colors">
           <h2>Colors</h2>
-          <p>Every color token of <code>:root</code> in <code>core.css</code>. The five theme colors hold the palette as
-             <code>light-dark(light, dark)</code> pairs, and a rule writes a theme color or a status color directly. The
-             Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha: the only other color
-             tokens. A new color is a theme color written in the rule, or a new veil when it must be translucent. The
-             three status colors and <code>--shadow-color</code> stand apart, with pairs of their own; a status fill is
-             its status color darkened by one recipe. The setup page's palette is that page's own, in
-             <code>pages/setup.css</code>, and is not scanned. A derived card shows its recipe and the tokens it
-             comes from; Off palette marks a token that writes a color literal, and the literals written past the
-             tokens are listed under Token audit. The app is dark; the Light / Dark switch above the contents shows
-             this page in either theme and is remembered in this browser. Click a token to copy its
+          <p>Every color token of <code>:root</code> in <code>core.css</code>. Two seeds, <code>--theme-base</code> and
+             <code>--theme-accent</code>, hold the palette's literals as <code>light-dark(light, dark)</code> pairs; every
+             other theme color is a recipe over one of them in OKLCH, per scheme, shown with its From line, so the
+             neutrals are one hue and editing a seed moves the whole chrome. A rule writes a theme color or a status
+             color directly. The Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha:
+             the only other color tokens. A new color is a new theme role with a recipe, or a new veil when it must be
+             translucent. The three status colors and <code>--shadow-color</code> stand apart, with pairs of their own;
+             a status fill is its status color darkened (lightened, in the light theme) by one recipe. The setup page's
+             palette is that page's own, in <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows
+             it and the tokens it comes from; Off palette marks a token that writes a color literal, and the literals
+             written past the tokens are listed under Token audit. The app ships dark; the Light / Dark switch above
+             the contents shows this page in either theme, both real, and is remembered in this browser. Click a token to copy its
              <code>var()</code> reference. The slider of <code>--scrim-color</code> repaints this page with the
              token's color of the theme shown at another alpha, until the page is reloaded.</p>
           <h3>Theme colors</h3>

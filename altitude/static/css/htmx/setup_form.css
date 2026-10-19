@@ -23,7 +23,6 @@
     border: var(--setup-form-field-border);
     border-radius: 6px;
     font-size: var(--font-size-base);
-    outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -72,7 +71,7 @@
     text-shadow: none;
 }
 
-#setupForm .action-button:hover, #setupForm .action-button:focus-visible {
+#setupForm .action-button:hover {
     box-shadow: var(--setup-form-focus-shadow);
 }
 

@@ -85,12 +85,24 @@
   width: var(--marker-size);
   height: var(--marker-size);
   border-radius: 50%;
-  background-color: var(--theme-accent);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-  background-size: 16px 16px;
-  background-position: center;
-  background-repeat: no-repeat;
+  /* The accent disc, with the check cut out of --theme-on-accent through a mask: a data URI cannot read a token, a
+     mask lets the fill be one */
+  background: var(--theme-accent);
   box-shadow: var(--drop-shadow);
+}
+
+#assets .cell .drag-drop.selected .checkmark::after {
+  content: '';
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: var(--marker-size);
+  height: var(--marker-size);
+  background-color: var(--theme-on-accent);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+  mask-size: 16px 16px;
+  mask-position: center;
+  mask-repeat: no-repeat;
 }
 
 #assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-duration, .show-fileSize) .cell .metadata {
@@ -208,7 +220,6 @@
   cursor: pointer;
   letter-spacing: var(--letter-spacing-wide);
   font-size: var(--font-size-small);
-  outline: none;
   appearance: none;
   background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
   background-repeat: no-repeat;
@@ -217,10 +228,6 @@
 
 #searchControl .sort-dropdown:hover {
   background-color: var(--theme-raised);
-}
-
-#searchControl .sort-dropdown:focus-visible {
-  box-shadow: var(--box-shadow);
 }
 
 #searchControl .sort-dropdown span {

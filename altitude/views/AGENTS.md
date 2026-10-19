@@ -10,7 +10,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes one of the five theme colors (`--theme-*`), a status color (`--success-color`, `--warning-color`, `--error-color`) or `--shadow-color` by its token (`color: var(--theme-text)`), and an edge or a shadow by its token (`border: var(--panel-border)`), never restating one a token holds. These hold the `light-dark(light, dark)` pairs. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the three status fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`), each its status color darkened by one recipe; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, or a new veil token when it must be translucent. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the two seeds, `--theme-base` and `--theme-accent`, or one of the roles derived from them), a status color (`--success-color`, `--warning-color`, `--error-color`) or `--shadow-color` by its token (`color: var(--theme-text)`), and an edge or a shadow by its token (`border: var(--panel-border)`), never restating one a token holds. The seeds, the status colors and `--shadow-color` hold literal `light-dark(light, dark)` pairs; every other theme color is a `light-dark()` pair of OKLCH relative-color recipes over a seed, one per scheme. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the three status fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`), each its status color darkened (lightened, in the light theme) by one recipe; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role with a recipe over a seed when no role fits, or a new veil token when it must be translucent. Keyboard focus is the one `--focus-ring`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a badge with `--radius-small`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, and the leading of text that wraps is `--line-height-text`. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
@@ -998,38 +998,54 @@ Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules ca
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 
-**Themes** — The app has a light and a dark theme and is shown in the dark one: `:root` in `core.css` declares
+**Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
 `color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
-switcher declares another scheme, on that page. Every color is a `:root` token of `core.css`. `:root` opens with the
-five theme colors: `--theme-base` (the app's surface), `--theme-raised` (a surface lifted off the base),
-`--theme-muted` (secondary text and the edge of a control or a cell), `--theme-text` (text on the app's own surfaces) and
-`--theme-accent` (the one hue: selection, drop targets, chips and pins). Each is a `light-dark(light, dark)` pair, which
-the browser resolves by the scheme in force, so no rule is written once per theme. A rule writes a theme color by its
-token (`color: var(--theme-text)`, `border: 1px solid var(--theme-muted)`); no token aliases a theme color under
-another name or mixes one at a percentage, so editing a theme color moves every rule that writes it. Two kinds of
-color stand apart, with pairs of their own: the three status colors (`--success-color`, `--warning-color`,
-`--error-color`), the text, icon and edge of a status, which a rule writes directly too (an unnamed person's name and the
-trash entry of the nav are `--warning-color`), and from which the status fills derive by the chrome's one recipe
-(`--success-background-color: oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h)`: the color 0.29 darker
-in OKLab lightness at 80% of its chroma, the same for the three);
-`--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
-(`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`). The only other color tokens are the veils, a theme
-color or `--shadow-color` at an alpha in relative color syntax, tokens because a translucent color cannot be written
-as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9),
-`--tab-hover-background-color` (`rgb(from var(--theme-text) r g b / 0.05)`) and `--dnd-dragging-background-color`
+switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Every color is a `:root` token
+of `core.css`. `:root` opens with the theme colors: two seeds, `--theme-base` (the app's surface, whose hue is the
+neutrals': the accent's at a low chroma) and `--theme-accent` (the one hue: selection, drop targets, chips and pins),
+each a literal `light-dark(light, dark)` pair, and the roles derived from them, each a `light-dark()` pair of two OKLCH
+relative-color recipes, one per scheme, so the browser resolves the pair by the scheme in force and no rule is written
+once per theme. From the base: `--theme-sunken` (a surface below it: a read-only field), `--theme-hover` (under a tab
+or a row the pointer is over), `--theme-raised` (a surface lifted off the base), `--theme-faint` (the faintest thing
+still seen, 3:1 on the base: a quiet control's edge, disabled text), `--theme-muted` (secondary text and the edge of a
+control or a cell, 4.5:1 on the raised surface too), `--theme-text` (text on the app's own surfaces), `--theme-field`
+and `--theme-on-field` (an input's field, the lightest surface in either theme, and the text typed into it). From the
+accent: `--theme-accent-text` (the accent as text or a thin edge on a surface, 4.5:1 where the accent itself is not:
+the filter chip) and `--theme-on-accent` (text and glyphs on the accent fill: a pin's path, a drop target's row, the
+checkmark of a selected cell; dark in the dark theme, since the accent cannot carry light text). Each recipe sets a
+lightness per role and takes the seed's hue, so editing a seed moves the whole chrome and the neutrals stay one hue. A
+rule writes a theme color by its token (`color: var(--theme-text)`, `border: 1px solid var(--theme-muted)`); no token
+aliases a theme color under another name or mixes one at a percentage outside `:root`. Two kinds of color stand
+apart, with literal pairs of their own: the three status colors (`--success-color`, `--warning-color`,
+`--error-color`), the text, icon and edge of a status, at one lightness per theme and at least 4.5:1 on the base,
+which a rule writes directly too (an unnamed person's name and the trash entry of the nav are `--warning-color`), and
+from which the status fills derive by the chrome's one recipe (`--success-background-color: light-dark(oklch(from
+var(--success-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h))`:
+in the dark theme the color 0.29 darker in OKLab lightness at 80% of its chroma, in the light theme 0.40 lighter at
+30%; a fill carries `--theme-text` in either theme and its status color only as an edge, since the color on its own
+fill reads about 3:1; the same for the three); `--shadow-color`, the ink
+of the shadows and scrims, each at the alpha it needs (`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`).
+The only other color tokens are the veils, a theme color or `--shadow-color` at an alpha in relative color syntax,
+tokens because a translucent color cannot be written as a theme color: `--scrim-color` and
+`--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9) and `--dnd-dragging-background-color`
 (`--theme-muted` at 0.48); a veil follows the pair of the color it reads. A token holding a border or a shadow keeps
-its width and style with its color, which is a theme color (`--control-border: 1px solid var(--theme-raised)`,
-`--list-trace-border`; `--border-thin` and `--border-thick` are solid `--theme-muted`) or `--shadow-color` at an alpha
-(`--panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`, the edge of a chrome panel and the divider
-inside one; the shadows: `--drop-shadow`, the one shadow under a dialog, a panel, a pin or the checkmark, `--text-shadow`, and
-`--box-shadow`, `--theme-text` at 0.07). No two border or shadow tokens hold one value: a rule that needs an edge or a
-shadow writes the token that has it, and a new one is a new look, with a comment above it. What is drawn on a colored fill or over an image (the label of a button or a marker, the
-snackbar's text and edge, a pin's frame) reads `--theme-text` like other text, and gets a token of its own when the
-light theme gets real values, as it must stay light while the text darkens. A light theme is therefore five pairs plus
-the three status colors and `--shadow-color`, and no other token has a pair. The setup page's palette is no `:root`
-token: `pages/setup.css` declares the `--setup-*` tokens on `body:where(.setup)`, as literals with no pairs, since the
-page is an illustration and a form in a look of its own, which it keeps in either theme (see **Setup background**). Their light colors
-are placeholders equal to the dark ones.
+its width and style with its color, which is a theme color (`--control-border: 1px solid var(--theme-faint)`,
+`--focus-ring: 2px solid var(--theme-accent)`, `--list-trace-border`; `--border-thin` and `--border-thick` are solid
+`--theme-muted`) or `--shadow-color` at an alpha (`--panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`,
+the edge of a chrome panel and the divider inside one; the shadows: `--drop-shadow`, the one shadow under a dialog, a
+panel, a pin or the checkmark, `--text-shadow`, whose light side is the ink at alpha 0 since a dark halo has no place
+under dark text, and `--box-shadow`, `--theme-text` at 0.07, the light line under a panel's edge and a button's hover
+look). No two border or shadow tokens hold one value: a rule that needs an edge or a shadow writes the token that has
+it, and a new one is a new look, with a comment above it. What is drawn on a status fill or over an image (the label
+of a button or a marker, the snackbar's text, a pin's frame) reads `--theme-text`; what is drawn on the accent fill
+reads `--theme-on-accent`. A light theme is therefore the two seeds' light sides, the light recipe of each role, and
+the light sides of the three status colors and `--shadow-color`; both sides are real, and the style guide's switch
+shows either. Keyboard focus is one ring: `:focus-visible { outline: var(--focus-ring); outline-offset: 2px }` in
+`core.css`, on every element, inset (`outline-offset: -2px`) where a panel clips its rows; the browser withholds it
+after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline. The setup
+page's palette is no `:root` token: `pages/setup.css` declares the `--setup-*` tokens on `body:where(.setup)`, as
+literals with no pairs, since the page is an illustration and a form in a look of its own, which it keeps in either
+theme (see **Setup background**), and sets `--focus-ring` there to the form's accent.
 
 Stylesheets reference the tokens and write no color literal, named colors included. A new color is a theme color
 written in the rule, or a new veil token, with a comment above it, when it must be translucent. The rule that a new
@@ -1062,17 +1078,17 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
 - **Token cards:** a token whose declaration references other tokens, a recipe, shows the declaration as written (or
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
-  **Theme colors** (`--theme-*`), **Status and shadow** (the status colors, their fills and
-  `--shadow-color`) and **Derived**
-  (the veils, `--scrim-color`, `--asset-detail-backdrop-color`, `--tab-hover-background-color` and
-  `--dnd-dragging-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
+  **Theme colors** (`--theme-*`: the two seeds as literal pairs, the roles as recipes with their From line),
+  **Status and shadow** (the status colors, their fills and `--shadow-color`) and **Derived**
+  (the veils, `--scrim-color`, `--asset-detail-backdrop-color` and `--dnd-dragging-background-color`, each a theme
+  color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
   length, such as a width or the two radii, `--radius` and `--radius-small`); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
   `--line-height-*`) are a kind by name rather than by value, since a font size is a length and a weight a bare
   number, each drawn on sample text in the Typography section (`@tokenCards("typography")`). "Off palette" marks a color, border or shadow token outside the Theme colors
   and Status and shadow groups whose declaration writes a color literal (a hex color, a color
-  function with its channels written out, or a named color), which keeps the palette at the five. "Same value as"
+  function with its channels written out, or a named color), which keeps the palette at the seeds and the recipes over them; a relative-color recipe is no literal. "Same value as"
   names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
   same color in both themes). Two tokens that take their color from the same tokens are not flagged, since two
   tokens reading one color share it by design, while two recipes computing one color are, as they should be one token; a
@@ -1125,7 +1141,7 @@ as JSON by `GET /style-guide/scan.json` (dev only) as the panel's sources.
 **Design tweaks** — A dev-only panel (`includes/header_common` loads it inside `@if(Environment.isDev)`, like the nav's
 Style Guide button) that changes the value of any `:root` token of the bundle live, on the real markup and data of the
 running app, so the look of every page, dialog and htmx fragment can be explored without touching a rule. The panel is
-the vendored **tokentweak** package (`lib/tokentweak.js`, 0.1.0, `lib/README.md`), a framework-free token editor:
+the vendored **tokentweak** package (`lib/tokentweak.js`, 0.2.0, `lib/README.md`), a framework-free token editor:
 sections of cards with a control per kind of value, a Light / Dark toggle, Inspect (pick an element, filter to the
 tokens its rules reference), snapshots (save, load, rename, duplicate, A/B, import and export as JSON) and the exports
 (a prompt of the changes, the CSS before/after lines, the snapshot JSON). The package's README documents every option;
@@ -1140,7 +1156,8 @@ this entry covers what Altitude passes it. `js/design-tweaks.js`, the adapter, i
   Derived, the other colors; Typography, the fonts and the typography kinds; Scale, the steps; Roles, the lengths that
   reference a step; Sizes, the other lengths; Borders and shadows; Panels; what none claims goes to the automatic
   Other); the spacing scale `--space-<n>`; the type scale, `--font-size-{xs,small,base,medium,large,xl,display}` from
-  `--font-size-base`; the seed targets, the five `--theme-*` colors; the two tokens the server sets inline on their
+  `--font-size-base`; no seed control, since the two seeds have the full sliders and the stylesheet derives the other
+  theme colors from them, which the panel shows as recipes; the two tokens the server sets inline on their
   containers as scoped tokens, `--preview-box` on `#assets` (200px, labeled `Const.AssetView.PREVIEW_BOX_PIXELS` in
   the exports) and `--face-box` on `#people` (80px, `FaceDetectionService.faceDetectionBoxPx`), 40..600 by 10, in
   Panels; the explorer width as an extra control in Panels (no token: `explorerPercent`, `setExplorerSizes` and
@@ -1229,7 +1246,7 @@ this entry covers what Altitude passes it. `js/design-tweaks.js`, the adapter, i
 | `static/js/common/theme.js` | the two themes: `applyTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
 | `static/js/common/font-availability.js` | `isFontAvailable` and `asFontFamily`, the font tester's check |
 | `static/js/common/explorer-split.js` | the main page's Split.js instance over the explorer and the content area: `initExplorerSplit(view)`, the remembered sizes, `setExplorerSizes(percent)`, which the design tweaks adapter passes as an extra control |
-| `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, seed targets, the two scoped tokens, the explorer control and the export file name |
+| `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
 | `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |

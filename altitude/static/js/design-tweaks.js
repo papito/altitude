@@ -6,7 +6,7 @@
  * keeps under `Const.localStore.designTweaks` so the boot script (`lib/tokentweak-boot.js`, the same
  * key in its `data-key`) adopts it again before the first paint. This module only passes what the
  * package cannot infer: the sections in the style guide's order, the spacing scale, the type scale,
- * the seed targets, the two tokens the server sets inline on their containers, the explorer width
+ * the two tokens the server sets inline on their containers, the explorer width
  * (no token: a Split.js size `js/common/explorer-split.js` owns), the scan the server serves and
  * the file the exports name. The nav's Tweaks button is the trigger; `Ctrl+Alt+T` toggles too.
  */
@@ -73,15 +73,6 @@ createTokenTweaks({
             "--font-size-display",
         ],
         base: "--font-size-base",
-    },
-    seed: {
-        targets: {
-            base: "--theme-base",
-            raised: "--theme-raised",
-            muted: "--theme-muted",
-            text: "--theme-text",
-            accent: "--theme-accent",
-        },
     },
     // The two tokens the server sets inline, with the server constants' values for a page without
     // their containers; a page that has one reads the inline value instead
