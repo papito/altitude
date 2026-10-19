@@ -1036,7 +1036,7 @@ the edge of a chrome panel and the divider inside one; the shadows: `--drop-shad
 panel, a pin or the checkmark, `--text-shadow`, whose light side is the ink at alpha 0 since a dark halo has no place
 under dark text, and `--box-shadow`, `--theme-text` at 0.07, the light line under a panel's edge and a button's hover
 look). No two border or shadow tokens hold one value: a rule that needs an edge or a shadow writes the token that has
-it, and a new one is a new look, with a comment above it. What is drawn on a status fill or over an image (the label
+it, and a new one is a new look, described here. What is drawn on a status fill or over an image (the label
 of a button or a marker, the snackbar's text, a pin's frame) reads `--theme-text`; what is drawn on the accent fill
 reads `--theme-on-accent`. A light theme is therefore the two seeds' light sides, the light recipe of each role, and
 the light sides of the three status colors and `--shadow-color`; both sides are real, and the style guide's switch
@@ -1048,7 +1048,7 @@ literals with no pairs, since the page is an illustration and a form in a look o
 theme (see **Setup background**), and sets `--focus-ring` there to the form's accent.
 
 Stylesheets reference the tokens and write no color literal, named colors included. A new color is a theme color
-written in the rule, or a new veil token, with a comment above it, when it must be translucent. The rule that a new
+written in the rule, or a new veil token, described here, when it must be translucent. The rule that a new
 value is a new token with a meaning, or an existing token whose meaning fits rather than one that merely holds the same
 value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
 alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
@@ -1099,7 +1099,9 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
   - A changed size, font, or icon set updates the values the specimens state in text.
-  - A new `:root` token gets a comment directly above its declaration; the guide shows it as the token's note.
+  - `core.css` carries no comments beyond its boxed section headings (`/* NAVIGATION */` and the like): a token or a
+    rule is documented in this guide and in the style guide's prose, never beside its declaration, so the two cannot
+    drift. The guide would show a comment directly above a `:root` token as its note; `core.css` has none, by design.
   - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
 - **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
   (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup), both

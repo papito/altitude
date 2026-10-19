@@ -1,227 +1,120 @@
+/*        */
+/* TOKENS */
+/*        */
+
 :root {
-    /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    /* The theme colors: two seeds and the recipes over them. The seeds, Base and Accent, are the only literal
-       colors of the chrome, each a light-dark(light, dark) pair; every other theme color is a relative-color recipe
-       in OKLCH over one of them, per scheme, so the neutrals are one hue and editing a seed moves the whole chrome.
-       A rule writes a theme color by its token; the only other color tokens are the status colors and --shadow-color,
-       which hold pairs of their own, the veils (a theme color or --shadow-color at an alpha), the colors inside the
-       border and shadow tokens, and the three status fills, recipes over their status colors. Base is the app's
-       surface, and its hue is the neutrals': the accent's, at a low chroma */
     --theme-base: light-dark(oklch(0.97 0.004 270), oklch(0.333 0.006 270));
-    /* The one hue, used for selection, drop targets, chips and pins; as a fill, its text is --theme-on-accent, and as
-       text or a thin edge on a surface it is --theme-accent-text */
     --theme-accent: light-dark(oklch(0.52 0.19 270), oklch(0.67 0.17 270));
-    /* A surface below the base: a read-only field */
     --theme-sunken: light-dark(oklch(from var(--theme-base) calc(l - 0.035) c h), oklch(from var(--theme-base) calc(l - 0.045) c h));
-    /* Under a tab or a row the pointer is over */
     --theme-hover: light-dark(oklch(from var(--theme-base) calc(l - 0.03) c h), oklch(from var(--theme-base) calc(l + 0.04) calc(c * 1.5) h));
-    /* A surface lifted off the base */
     --theme-raised: light-dark(oklch(from var(--theme-base) calc(l - 0.06) calc(c * 2) h), oklch(from var(--theme-base) calc(l + 0.08) calc(c * 2) h));
-    /* The faintest thing still seen, 3:1 against the base: the edge of a quiet control, and the text of a disabled
-       control */
     --theme-faint: light-dark(oklch(from var(--theme-base) 0.64 0.012 h), oklch(from var(--theme-base) 0.6 0.012 h));
-    /* Secondary text and the edge of a control or a cell; 4.5:1 on the raised surface too */
     --theme-muted: light-dark(oklch(from var(--theme-base) 0.47 0.02 h), oklch(from var(--theme-base) 0.8 0.012 h));
-    /* Text on the app's own surfaces */
     --theme-text: light-dark(oklch(from var(--theme-base) 0.2 0.02 h), oklch(from var(--theme-base) 0.98 0.004 h));
-    /* An input's field: the lightest surface in either theme, so the dark theme's fields stay light */
     --theme-field: light-dark(oklch(from var(--theme-base) 0.995 0.002 h), oklch(from var(--theme-base) 0.98 0.004 h));
-    /* The text typed into a field: the text's dark in the light theme, the base in the dark one */
     --theme-on-field: light-dark(oklch(from var(--theme-base) 0.2 0.02 h), oklch(from var(--theme-base) l c h));
-    /* The accent as text or a thin edge on a surface: the filter chip. 4.5:1 on the base and the raised surface, which
-       the accent itself is not */
     --theme-accent-text: light-dark(oklch(from var(--theme-accent) 0.5 0.17 h), oklch(from var(--theme-accent) 0.8 0.1 h));
-    /* Text and glyphs on the accent fill: a pin's path, a drop target's row, the checkmark of a selected cell. Dark
-       in the dark theme, since the accent at its lightness cannot carry light text */
     --theme-on-accent: light-dark(oklch(from var(--theme-accent) 0.98 0.004 h), oklch(from var(--theme-accent) 0.2 0.02 h));
-    /* The ink of shadows and scrims, not a theme color. It holds a pair like the seeds, and the veils and the shadow
-       tokens take it at an alpha */
     --shadow-color: light-dark(#000, #000);
 
-    /* The edges. Thin: a context menu's edge and its dividers, a result cell, a people cell, the box-selection
-       rectangle and the drag ghost */
     --border-thin: 1px solid var(--theme-muted);
-    /* The width of the thick edge, which the modal's width calc reads */
     --border-thick-width: 2px;
-    /* Thick: an input or textarea, an action button and a dialog's box */
     --border-thick: var(--border-thick-width) solid var(--theme-muted);
-    /* The edge of a chrome panel and the divider inside one: shadow ink at an alpha, a sunken line against a page of
-       the same color. The nav, the footer, the explorer and content edges, the modal toolbar, the tab list, the map
-       panel and its header, the person header */
     --panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18);
-    /* The edge of a quiet control or box on the base surface: the small button, the toggle buttons, the sort dropdown,
-       the search control's box and the pipeline form */
     --control-border: 1px solid var(--theme-faint);
-    /* The ring of a focused control, drawn as its outline by the one :focus-visible rule, which the browser withholds
-       after a pointer. The setup page sets it to its own accent */
     --focus-ring: 2px solid var(--theme-accent);
 
-    /* The corners of every rectangular box and control */
     --radius: 0.3125rem;
-    /* The corners of a badge: a cell's markers, a pin's path label and inner image */
     --radius-small: 0.1875rem;
 
-    /* The one drop shadow: under a dialog, the crowded-pin panel, an asset pin's frame, a Location pin's glyph, a
-       pin's count and the checkmark of a selected asset. No sideways offset, so it serves a centered box and a panel
-       on the viewport's edge alike */
     --drop-shadow: 0 1px 6px rgb(from var(--shadow-color) r g b / 0.6);
-    /* Under the chrome's text: the nav, the explorer, the content area and an action button's label. Only in the dark
-       theme: its light side is the ink at alpha 0, since a dark halo has no place under dark text */
     --text-shadow: light-dark(rgb(from var(--shadow-color) r g b / 0), rgb(from var(--shadow-color) r g b / 0.75)) 0 1px;
-    /* A one-pixel light line under a panel's edge, and the hover look of a button or the sort dropdown */
     --box-shadow: rgb(from var(--theme-text) r g b / 0.07) 0 1px 0;
-    /* Behind the asset detail, all but hiding the page */
     --asset-detail-backdrop-color: rgb(from var(--shadow-color) r g b / 0.9);
-    /* Dims what is behind it: the page under a general dialog, the Preview under a play badge or a pin's count */
     --scrim-color: rgb(from var(--shadow-color) r g b / 0.45);
-    /* General dialogs: content width on wide screens */
     --modal-content-width: 25rem;
-    /* Around a dialog's content, and the View settings popover's */
     --modal-content-padding: var(--space-6);
-    /* The gap kept between the viewport's edges and a dialog or a menu */
     --viewport-gap: var(--space-5);
     --modal-toolbar-height: 1.875rem;
 
-    /* The spacing scale: every padding, margin, gap and inset is a step of it, or a role token that names one. The
-       steps are in rem, so they follow the root font size: 16px unless the user changes the browser's default. This
-       step: hairline gaps, such as between toggle buttons or tabs, and the vertical padding of a chip or a marker */
     --space-1: 0.125rem;
-    /* Tight gaps: between grid cells and metadata lines, and under a field's label */
     --space-2: 0.25rem;
-    /* Icon-to-label gaps and small paddings */
     --space-3: 0.375rem;
-    /* Input and button paddings, explorer list rows, and the insets of a cell's markers */
     --space-4: 0.5rem;
-    /* Around the grid, the map and a panel's content, and between the entries of a bar */
     --space-5: 0.625rem;
-    /* Between controls, and inside a dialog or a menu action */
     --space-6: 1rem;
-    /* One indentation step of a nested list row, and between result groups */
     --space-7: 1.25rem;
-    /* Between controls side by side, and between the upload form's rows */
     --space-8: 1.5rem;
-    /* Between the large areas of a page */
     --space-9: 2.25rem;
 
-    /* Larger spacing for larger app areas, like panels and page paddings */
     --section-vertical-space: var(--space-9);
 
-    /* Standard spacing for individual elements and lists */
     --control-vertical-space: var(--space-6);
-    /* Standard horizontal spacing between controls side by side, such as a label and its field */
     --control-horizontal-space: var(--space-8);
 
-    /* One vertical rhythm for a whole explorer list (folders, albums, Locations): the same gap separates sibling rows
-       and separates a row from its children, so nesting never tightens the spacing */
     --list-row-gap: var(--space-4);
-    /* The horizontal gap between the cells of an explorer list's row (⋯ button, trace, icon, name, count). The trace
-       subtracts it, so both uses must be the same value */
     --list-control-gap: var(--space-3);
-    /* One step of indentation of a nested explorer list row, drawn by its `.trace` cell */
     --list-indent: var(--space-7);
-    /* The trace a nested explorer list row draws across its indentation */
     --list-trace-border: 2px double var(--theme-raised);
 
     --footer-height: 2.75rem;
 
-    /* The sizes written once, each the one site named. The snackbar's width: its min-width, and the half of it its
-       margin-left centers it by */
     --snackbar-width: 31.25rem;
-    /* The snackbar's height */
     --snackbar-height: 1.875rem;
-    /* The person header's avatar column (htmx/person.css) */
     --person-avatar-column: 6.25rem;
-    /* The person header's name and controls column (htmx/person.css) */
     --person-meta-column: 18.75rem;
-    /* The arrow column between the two people of the Merge people dialog (htmx/merge_people_modal.css) */
     --merge-arrow-column: 5rem;
-    /* The crowded-pin panel over the map's right edge (htmx/map_view.css) */
     --map-panel-width: min(60%, 43.75rem);
-    /* The pin editor's map in the Add location dialog (htmx/add_location_dialog.css) */
     --location-editor-map-height: 18.75rem;
-    /* A group header's checkmark in the results grid (includes/search_results.css) */
     --marker-size-small: 1rem;
-    /* The checkmark of a selected cell in the results grid (includes/search_results.css) */
     --marker-size: 1.25rem;
-    /* The play badge over a Preview that plays (includes/search_results.css) */
     --play-badge-size: 2.75rem;
 
-    /* The three status colors, each a pair of its own: the text of a status, its icon and its edge. All three share
-       one lightness per theme, so they weigh the same, and each is at least 4.5:1 on the base. Success */
     --success-color: light-dark(oklch(0.5 0.15 140), oklch(0.8 0.15 140));
-    /* Warning: also the trash, and a person not named yet */
     --warning-color: light-dark(oklch(0.54 0.11 70), oklch(0.8 0.13 70));
-    /* Error: also a form's error edge and the red navigation light of the setup scene. Its chroma is the highest in
-       sRGB gamut at its lightness */
     --error-color: light-dark(oklch(0.52 0.19 25), oklch(0.75 0.14 25));
-    /* The fill of a status, one recipe for the three: in the dark theme its color 0.29 darker in OKLab lightness at
-       80% of its chroma; in the light theme 0.40 lighter at 30%. A fill carries --theme-text in either theme, and its
-       status color only as an edge. Success */
     --success-background-color: light-dark(oklch(from var(--success-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--success-color) calc(l - 0.29) calc(c * 0.8) h));
-    /* Warning */
     --warning-background-color: light-dark(oklch(from var(--warning-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--warning-color) calc(l - 0.29) calc(c * 0.8) h));
-    /* Error */
     --error-background-color: light-dark(oklch(from var(--error-color) calc(l + 0.4) calc(c * 0.3) h), oklch(from var(--error-color) calc(l - 0.29) calc(c * 0.8) h));
 
-    /* Panels */
-    /* Inside a panel: a tab panel, and the sides of its tab list */
     --panel-padding: var(--space-5);
 
-    /* Dragon Drop */
-
-    /* Behind an element while it is dragged */
     --dnd-dragging-background-color: rgb(from var(--theme-muted) r g b / 0.48);
 
-    /* Chips: a dismissable scope the results are narrowed to, such as the map area */
     --chip-padding: var(--space-1) var(--space-4);
     --chip-border-radius: 0.625rem;
 
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
 
-    /* The type scale: every font size is a step of it, in rem like the spacing scale, so the text follows the
-       browser's default size. A glyph's own size (the spinner, the merge arrow, a category's +/− badge) stays in its
-       rule. This step: the nav's labels, the empty-trash label and a cell's no-date marker */
     --font-size-xs: 0.625rem;
-    /* Secondary text: a cell's metadata, the small button, a count, a chip, the sort dropdown, a pin's path, the
-       footer and a person's name in the People grid */
     --font-size-small: 0.75rem;
-    /* The body's text, and every control that would not inherit it (a button, a menu action) */
     --font-size-base: 0.875rem;
-    /* A step up: inputs, a dialog's title, a group header, an explorer row's icon, a status line, a badge's count */
     --font-size-medium: 1rem;
-    /* The ⋯ menu trigger and the play badge's glyph */
     --font-size-large: 1.125rem;
-    /* The × that closes a dialog */
     --font-size-xl: 1.375rem;
-    /* A Location's pin glyph on a map */
     --font-size-display: 1.75rem;
-    /* Emphasis: a button's label, a title, a heading, a badge and the nav's labels */
     --font-weight-bold: 700;
-    /* A label set apart without emphasis: the face selector's hint and the setup form's labels */
     --font-weight-medium: 500;
-    /* The one tracking of spaced-out text: the nav's entries and brand, uppercase markers and labels, the metadata
-       values, the sort dropdown and the tabs */
     --letter-spacing-wide: 0.1em;
-    /* The leading of running text that wraps: the folder warning and a pin's path */
     --line-height-text: 1.4;
 }
 
-/* Registered as a length so its computed value is in px: anchored-panel.js reads it as a number of pixels */
 @property --viewport-gap {
     syntax: "<length>";
     inherits: true;
     initial-value: 0px;
 }
 
+/*              */
+/* DEFAULT CORE */
+/*              */
+
 * {
     box-sizing: border-box;
 }
 
-/*              */
-/* DEFAULT CORE */
-/*              */
 body {
     font-size: var(--font-size-base);
     margin: 0;
@@ -235,13 +128,131 @@ body {
     min-height: 100vh;
 }
 
-/* The one focus ring: every focused control draws it as its outline, outside its edge. `:focus-visible`, not `:focus`,
-   so the browser withholds it after a pointer, including the focus a closing dialog returns to the control that
-   opened it; no rule removes an outline */
 :focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
 }
+
+/*            */
+/* NAVIGATION */
+/*            */
+
+nav {
+    display: flex;
+    column-gap: var(--space-5);
+    background: var(--theme-base);
+    color: var(--theme-text);
+    align-items: center;
+    border-bottom: var(--panel-border);
+    text-shadow: var(--text-shadow);
+}
+
+nav span, nav a {
+    color: var(--theme-text);
+    text-decoration: none;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    font-family: var(--font);
+    text-transform: uppercase;
+}
+nav .brand {
+    flex: 0 0 120px;
+}
+
+nav .brand a {
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--theme-muted);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-medium);
+}
+
+nav div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+nav .menu {
+    flex: 1 1 0;
+    border-inline: 2px solid transparent;
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--theme-muted);
+    padding: var(--space-3);
+    cursor: pointer;
+}
+
+nav .menu span {
+    margin-left: var(--space-3);
+}
+
+nav .menu.active {
+    background-color: var(--theme-raised);
+    color: var(--theme-text);
+    border: 2px solid var(--theme-accent);
+    border-radius: var(--radius);
+    font-weight: var(--font-weight-bold);
+}
+
+nav input {
+    border-radius: var(--radius);
+    border: var(--border-thick);
+    padding: var(--space-3);
+    background-color: var(--theme-field);
+    width: 90%;
+    min-width: 0;
+}
+
+nav form {
+    flex: 0 0 220px;
+    display: flex;
+    align-items: center;
+}
+
+nav:has(.menu):not(:has(form))::after {
+    content: "";
+    flex: 0 0 220px;
+}
+
+nav input::placeholder {
+    color: rgb(from var(--theme-on-field) r g b / 0.6);
+}
+
+nav .menu.triage i, nav .menu.triage span {
+    color: var(--success-color);
+}
+
+nav .menu.trashbin i, nav .menu.trashbin span {
+    color: var(--warning-color);
+}
+
+nav .menu.triage.empty i,
+nav .menu.triage.empty span,
+nav .menu.trashbin.empty i,
+nav .menu.trashbin.empty span {
+    color: var(--theme-muted);
+    font-size: var(--font-size-xs);
+    cursor: default;
+}
+
+/*         */
+/* CONTENT */
+/*         */
+
+#content.triage {
+    --view-tint: rgb(from var(--success-background-color) r g b / 0.07);
+    background-color: var(--view-tint);
+}
+
+#content.trashbin {
+    --view-tint: rgb(from var(--warning-color) r g b / 0.05);
+    background-color: var(--view-tint);
+}
+
+/*        */
+/* FOOTER */
+/*        */
 
 footer {
     padding: var(--space-3);
@@ -254,22 +265,6 @@ footer {
     border-top: var(--panel-border);
     box-shadow: var(--box-shadow);
 }
-
-/*         */
-/* CONTENT */
-/*         */
-
-/* The tint is a variable so the sticky date headers of the results grid can paint the same one over the page background */
-#content.triage {
-    --view-tint: rgb(from var(--success-background-color) r g b / 0.07);
-    background-color: var(--view-tint);
-}
-
-#content.trashbin {
-    --view-tint: rgb(from var(--warning-color) r g b / 0.05);
-    background-color: var(--view-tint);
-}
-
 
 /*       */
 /* FORMS */
@@ -315,7 +310,6 @@ form input.error, form input.error:focus {
     font-size: var(--font-size-base);
 }
 
-/* Focus draws the ring; hover draws the light line */
 .action-button:hover {
     box-shadow: var(--box-shadow);
 }
@@ -342,8 +336,6 @@ form input.error, form input.error:focus {
     margin-left: var(--space-3);
 }
 
-/* A set of choices of which one is current: its buttons side by side, the current one `aria-pressed="true"`
-   on the raised surface */
 .toggle-group {
     display: flex;
     gap: var(--space-1);
@@ -370,17 +362,40 @@ form input.error, form input.error:focus {
     background-color: var(--theme-raised);
 }
 
-/*                                             */
-/* CONTEXT MENUS (folders, albums, Locations, and View settings)  */
-/*                                             */
+/*       */
+/* CHIPS */
+/*       */
 
-/* The ⋯ cell built by js/common/context-menu-markup.js: the trigger and its native popover panel */
+.filter-chip {
+    padding: var(--chip-padding);
+    border: 1px solid var(--theme-accent-text);
+    border-radius: var(--chip-border-radius);
+    background: none;
+    color: var(--theme-accent-text);
+    font-size: var(--font-size-small);
+    cursor: pointer;
+}
+
+/*          */
+/* EXPLORER */
+/*          */
+
+.asset-count {
+    justify-self: start;
+    color: var(--theme-muted);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+}
+
+/*               */
+/* CONTEXT MENUS */
+/*               */
+
 .menu-ctrl {
     display: grid;
     place-items: center;
 }
 
-/* The ⋯ trigger keeps the look of a plain link */
 .menu-trigger {
     padding: 0;
     border: 0;
@@ -392,15 +407,11 @@ form input.error, form input.error:focus {
     cursor: pointer;
 }
 
-/* The menu is a native popover in the top layer, so it takes no room in the list and is not
-   clipped by the explorer. The browser centers popovers with auto margins and `inset: 0`; both
-   are reset so the coordinates the contextMenu component measures apply as-is. */
 .context-menu {
     position: fixed;
     margin: 0;
     inset: auto;
     width: max-content;
-    /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
     padding: 0;
     border: var(--border-thin);
     border-radius: var(--radius);
@@ -409,18 +420,13 @@ form input.error, form input.error:focus {
     text-shadow: none;
     grid-template-columns: 1fr;
     gap: 0;
-    /* Actions scroll inside the panel when the component caps its height */
     overflow-y: auto;
 }
 
-/* Only the open state may set a display: the popover's hidden state relies on display: none.
-   (The component sets the same display inline for a moment to measure the panel before it opens.) */
 .context-menu:popover-open {
     display: grid;
 }
 
-/* A panel holding only a dialog (the View settings control) opens on the click that requests the
-   dialog, so it stays invisible until the dialog has arrived rather than showing an empty box */
 .context-menu.dialog-only:not(:has(.dialog:not([hidden]))) {
     visibility: hidden;
 }
@@ -441,40 +447,16 @@ form input.error, form input.error:focus {
     display: grid;
 }
 
-/* Divider between rows only, never above the first or below the last */
 .context-menu .actions button + button {
     border-top: var(--border-thin);
 }
 
-/* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
 .context-menu .actions button:focus-visible {
     outline-offset: -2px;
 }
 
-/* The View settings popover uses the same content padding as the modal. */
 .context-menu .dialog {
     padding: var(--modal-content-padding);
-}
-
-/* Asset count on a folder, album or Location row, in the track after the name, so it follows the
-   name directly; zero counts render empty (js/common/asset-count.js) */
-.asset-count {
-    justify-self: start;
-    color: var(--theme-muted);
-    font-size: var(--font-size-small);
-    white-space: nowrap;
-}
-
-/* A dismissable scope chip, in the accent: the whole chip is the button that clears the scope it names
-   (its text, then ×), so it carries no separate close control */
-.filter-chip {
-    padding: var(--chip-padding);
-    border: 1px solid var(--theme-accent-text);
-    border-radius: var(--chip-border-radius);
-    background: none;
-    color: var(--theme-accent-text);
-    font-size: var(--font-size-small);
-    cursor: pointer;
 }
 
 /*          */
@@ -530,7 +512,6 @@ form input.error, form input.error:focus {
     to {bottom: 30px; opacity: 1;}
 }
 
-
 /*             */
 /* DRAGON DROP */
 /*             */
@@ -549,7 +530,6 @@ form input.error, form input.error:focus {
     color: var(--theme-on-accent);
 }
 
-/* The warning fill, not the warning color, so the row's text stays readable on it */
 #trash.drop-target {
     background-color: var(--warning-background-color);
     color: var(--theme-text);
@@ -574,8 +554,6 @@ form input.error, form input.error:focus {
 /* MAPS */
 /*      */
 
-/* A Location's pin, in the pin editor of the Add location dialog and on the map view: a Leaflet div icon, so no marker
-   images are needed (see static/js/lib/README.md) */
 .location-pin {
     color: var(--theme-accent);
     font-size: var(--font-size-display);
@@ -588,8 +566,6 @@ form input.error, form input.error:focus {
 /* MODAL */
 /*       */
 
-/* Both hosts start hidden inline and are shown by Alpine (`x-show`). Without an anchor, the general
-   host centers the box horizontally (`.modal-box` margin) with this padding from the top. */
 #modalContainer {
     position: fixed;
     z-index: 4;
@@ -602,8 +578,6 @@ form input.error, form input.error:focus {
     background-color: var(--scrim-color);
 }
 
-/* Default content width, shrunk on narrow viewports so the box (content + its border) keeps
-   --viewport-gap to each viewport edge; the box itself is sized by its content */
 #modalContent {
     box-sizing: border-box;
     width: calc(var(--modal-content-width) + 2 * var(--modal-content-padding));
@@ -611,13 +585,10 @@ form input.error, form input.error:focus {
     padding: var(--modal-content-padding);
 }
 
-/* Explorer forms keep their controls' natural widths; the box shrinks around them. The Location
-   map editor declares its own width and already fills it with its map and fields. */
 #modalContainer.anchored #modalContent:not(:has(.location-editor)) {
     width: max-content;
 }
 
-/* Preserve natural control widths, only constraining them when the viewport is narrower. */
 #modalContainer.anchored input, #modalContainer.anchored select {
     max-width: 100%;
 }
@@ -647,7 +618,6 @@ form input.error, form input.error:focus {
     border-bottom: var(--panel-border);
 }
 
-/* The X in the text color, a plain glyph */
 .close-modal {
     background: none;
     border: 0;
@@ -679,9 +649,6 @@ form input.error, form input.error:focus {
     background-color: var(--asset-detail-backdrop-color);
 }
 
-/* The asset's stored size (--asset-width, --asset-height, from setAssetDetailSize) fitted into the viewport below the
-   toolbar, 5 px from each side and never enlarged. Until a size is set, --fit-width and --fit-height are undefined
-   and the box spans the viewport, which is what the host shows while the first asset loads. */
 #imageDetailModalContainer .modal-box {
     --fit-width: min(var(--asset-width) * 1px, 100dvw - 10px,
                      (100dvh - var(--modal-toolbar-height)) * var(--asset-width) / var(--asset-height));
@@ -694,7 +661,6 @@ form input.error, form input.error:focus {
     border-radius: 0;
 }
 
-/* The fragment's image has no source until the coordinator loads it */
 #imageDetailModalContent img[src=""] {
     visibility: hidden;
 }
@@ -709,120 +675,10 @@ form input.error, form input.error:focus {
     pointer-events: none;
 }
 
-/*            */
-/* NAVIGATION */
-/*            */
+/*           */
+/* UTILITIES */
+/*           */
 
-/* One row: the brand, the entries sharing what is left equally whatever their number (it varies with the account
-   type and the environment), and the Search form */
-nav {
-     display: flex;
-     column-gap: var(--space-5);
-     background: var(--theme-base);
-     color: var(--theme-text);
-     align-items: center;
-     border-bottom: var(--panel-border);
-     text-shadow: var(--text-shadow);
- }
-
-nav span, nav a {
-    color: var(--theme-text);
-    text-decoration: none;
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    font-family: var(--font);
-    text-transform: uppercase;
-}
-nav .brand {
-    flex: 0 0 120px;
-}
-
-nav .brand a {
-    letter-spacing: var(--letter-spacing-wide);
-    text-transform: uppercase;
-    text-decoration: none;
-    color: var(--theme-muted);
-    font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-medium);
-}
-
-nav div {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-nav .menu {
-    /* Equal widths, never narrower than the entry's own text. The sides are as wide as the active entry's border, which
-       would otherwise widen that one entry and shift the others as the page changes */
-    flex: 1 1 0;
-    border-inline: 2px solid transparent;
-    letter-spacing: var(--letter-spacing-wide);
-    color: var(--theme-muted);
-    padding: var(--space-3);
-    cursor: pointer;
-}
-
-nav .menu span {
-    margin-left: var(--space-3);
-}
-
-nav .menu.active {
-    background-color: var(--theme-raised);
-    color: var(--theme-text);
-    border: 2px solid var(--theme-accent);
-    border-radius: var(--radius);
-    font-weight: var(--font-weight-bold);
-}
-
-nav input {
-    border-radius: var(--radius);
-    border: var(--border-thick);
-    padding: var(--space-3);
-    background-color: var(--theme-field);
-    width: 90%;
-    /* a flex item's min-width:auto would keep the input from shrinking to fit the form's fixed width */
-    min-width: 0;
-}
-
-/* The Search input and its button, side by side, at the nav's right end */
-nav form {
-    flex: 0 0 220px;
-    display: flex;
-    align-items: center;
-}
-
-/* A page without the Search form keeps its place, so the entries stand where they do on the main page. The brand-only
-   nav of the setup page has no entries and no place to keep */
-nav:has(.menu):not(:has(form))::after {
-    content: "";
-    flex: 0 0 220px;
-}
-
-/* The field's text at an alpha: the muted text is for the app's surfaces, and reads 1.8:1 on a light field */
-nav input::placeholder {
-    color: rgb(from var(--theme-on-field) r g b / 0.6);
-}
-
-nav .menu.triage i, nav .menu.triage span {
-    color: var(--success-color);
-}
-
-nav .menu.trashbin i, nav .menu.trashbin span {
-    color: var(--warning-color);
-}
-
-
-nav .menu.triage.empty i,
-nav .menu.triage.empty span,
-nav .menu.trashbin.empty i,
-nav .menu.trashbin.empty span {
-    color: var(--theme-muted);
-    font-size: var(--font-size-xs);
-    cursor: default;
-}
-
-/* For Alpine x-cloak prop */
 [x-cloak] {
     display: none !important;
 }
