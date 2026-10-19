@@ -1147,7 +1147,7 @@ tokenize, `pages/setup.css`, whose `--setup-*` palette is the setup page's own, 
 as JSON by `GET /style-guide/scan.json` (dev only) as the panel's sources.
 
 **Design tweaks** — A dev-only panel (`includes/header_common` loads it inside `@if(Environment.isDev)`, like the nav's
-Style Guide button) that changes the value of any `:root` token of the bundle live, on the real markup and data of the
+Style Guide button; `Ctrl+Alt+T` toggles it, there is no nav entry) that changes the value of any `:root` token of the bundle live, on the real markup and data of the
 running app, so the look of every page, dialog and htmx fragment can be explored without touching a rule. The panel is
 the vendored **tokentweak** package (`lib/tokentweak.js`, 0.3.0, `lib/README.md`), a framework-free token editor:
 sections of cards with a control per kind of value (a color written as a recipe over another token gets the recipe
@@ -1159,9 +1159,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 `js/design-tweaks.js`, the adapter, is the only Altitude code of the panel.
 
 - **What the adapter configures:** `storageKey: Const.localStore.designTweaks` and `hostId: "designTweaks"`; the
-  stylesheet to read, `"/assets/"` (the bundle, by href substring); the trigger `#designTweaksBtn` (the nav's Tweaks
-  entry, a `div.menu` like the empty Triage entry, so it needs no style of its own; the package listens for it on the
-  document, so a reloaded nav keeps working) and the shortcut `Ctrl+Alt+T`; `sources: "/style-guide/scan.json"`, the
+  stylesheet to read, `"/assets/"` (the bundle, by href substring); no `trigger` (the panel has no nav entry) and the
+  shortcut `Ctrl+Alt+T`, the only way to toggle it; `sources: "/style-guide/scan.json"`, the
   server's scan (locations and notes for the CSS export, the literals for the Not reachable tab); the sections in the
   style guide's order (Theme colors `--theme-*`; Status and shadow, the semantic colors, fills and `--shadow-color`;
   Derived, the other colors; Typography, the fonts and the typography kinds; Scale, the steps; Roles, the lengths that
@@ -1198,7 +1197,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
   remembered with the tweaks. Editing a color edits the side of its `light-dark()` pair for the theme shown; the
   export writes the full pair. `js/common/theme.js` is not involved: the two keep separate copies of the pair logic.
 - **Dev only:** nothing of the panel ships outside dev. The boot script and the adapter are behind
-  `Environment.isDev` in `header_common`, the button in `nav`, and the panel's stylesheet is constructed in the
+  `Environment.isDev` in `header_common`, and the panel's stylesheet is constructed in the
   shadow root, not part of the bundle. The vendored files are served under `/static/` like every lib but referenced
   nowhere else. `StyleGuideControllerTests` asserts the index and the nav of a non-dev app carry none of
   `design-tweaks`, `designTweaks` and `tokentweak`.

@@ -46,8 +46,8 @@ object DevApp extends cask.Main:
      * Assertions:
      *
      * The page, the scan JSON, the sample dialog and the sample submission each answer 404, and neither the main page's nav nor a
-     * nav reload carries the Style Guide button or the Tweaks button. The main page loads neither the panel's adapter nor the
-     * vendored tokentweak package nor its boot script, and holds no pre-paint script reading the tweaks.
+     * nav reload carries the Style Guide button. The main page loads neither the panel's adapter nor the vendored tokentweak
+     * package nor its boot script, and holds no pre-paint script reading the tweaks.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -73,13 +73,11 @@ object DevApp extends cask.Main:
         val index = get(s"r/$repoId")
         index.statusCode shouldBe 200
         index.text().contains("menu style-guide") shouldBe false
-        index.text().contains("menu design-tweaks") shouldBe false
         index.text().contains("design-tweaks") shouldBe false
         index.text().contains("designTweaks") shouldBe false
         index.text().contains("tokentweak") shouldBe false
         val nav = get(s"htmx/nav/r/$repoId").text()
         nav.contains("menu style-guide") shouldBe false
-        nav.contains("menu design-tweaks") shouldBe false
         nav.contains("tokentweak") shouldBe false
     }
   }

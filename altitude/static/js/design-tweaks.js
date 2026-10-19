@@ -8,7 +8,7 @@
  * package cannot infer: the sections in the style guide's order, the spacing scale, the type scale,
  * the two tokens the server sets inline on their containers, the explorer width
  * (no token: a Split.js size `js/common/explorer-split.js` owns), the scan the server serves and
- * the file the exports name. The nav's Tweaks button is the trigger; `Ctrl+Alt+T` toggles too.
+ * the file the exports name. `Ctrl+Alt+T` toggles the panel; there is no trigger element.
  */
 import {
     explorerPercent,
@@ -25,7 +25,6 @@ createTokenTweaks({
     storageKey: Const.localStore.designTweaks,
     hostId: "designTweaks",
     stylesheet: "/assets/",
-    trigger: "#designTweaksBtn",
     shortcut: "Ctrl+Alt+T",
     sources: "/style-guide/scan.json",
     // The style guide's sections, in its order; what none claims goes to the automatic Other
