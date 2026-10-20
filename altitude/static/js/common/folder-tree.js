@@ -445,11 +445,6 @@ function _buildFolderNameEl(folder, label) {
     const el = document.createElement("span")
     el.id = `folderName-${folder.id}`
     el.className = "folder-name"
-    el.setAttribute("x-data", "")
-    el.setAttribute(
-        ":class",
-        "{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }",
-    )
     _makeSearchTrigger(el, folder.id)
     el.textContent = label
     return el

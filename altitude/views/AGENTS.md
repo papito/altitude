@@ -837,9 +837,10 @@ exists) runs a full-screen animated scene behind the page, a top-down view of a 
 `<canvas id="setupBackground">`, is the first element of the body; `static/css/pages/setup.css` fixes it over the whole
 viewport at `z-index: -1` (above the root's background, below every element of the page, so the markup is otherwise
 untouched), `pointer-events: none`, and `opacity: 0` with a 600 ms transition to `.ready`, so the form never sits on a
-flash of blank canvas. The form's container (`:where(body.setup) main > div`) is a frosted card: a radial gradient
-from `--setup-form-base`, opaque at the center, to `--setup-form-card-edge-color`, the same color at zero alpha, at
-the corners, over `backdrop-filter: blur(12px)`, so the center is solid and the edges frost into the scene;
+flash of blank canvas. The form's container (`:where(body.setup) main > div`) is centered vertically in `main`, which
+fills the viewport between the brand bar and the footer and pads its top and bottom alike. It is a frosted card: a
+radial gradient from `--setup-form-base`, opaque at the center, to `--setup-form-card-edge-color`, the same color at
+zero alpha, at the corners, over `backdrop-filter: blur(12px)`, so the center is solid and the edges frost into the scene;
 `--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
 literal, as is the blur's); `--section-vertical-space` padding. The card and the form on it are a carve-out from the
 theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
