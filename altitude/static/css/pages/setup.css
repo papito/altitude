@@ -74,15 +74,17 @@ body:where(.setup) {
     opacity: 1;
 }
 
+/* The content row stretches to fill the viewport, and the card centers in it; the padding is the same at the top and
+   the bottom, so the card is centered exactly and still clears the brand bar and the footer on a short viewport */
 :where(body.setup) main {
-    padding-top: calc(var(--section-vertical-space) * 2);
+    padding-block: calc(var(--section-vertical-space) * 2);
     display: grid;
     grid-template-columns: 1fr 560px 1fr;
 }
 
 :where(body.setup) main > div {
     grid-column: 2;
-    align-self: start;
+    align-self: center;
     display: grid;
     grid-auto-rows: min-content;
     grid-row-gap: var(--section-vertical-space);
