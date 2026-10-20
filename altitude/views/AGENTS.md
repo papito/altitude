@@ -978,7 +978,8 @@ at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped
 on hover) in a `--nav-brand-width` slot, then one `.menu` per entry (lowercase `--font-nav` at `--font-size-large`,
 `--font-weight-medium`, `--theme-neutral-3`; Triage in `--success-color` and Trash in `--warning-color`, each with its
 count as a `.count` pill inside the label, `--theme-secondary` on the chip tokens; an entry with nothing behind it is
-`.empty`, `--theme-neutral-3`, "(0)" in its label and not a link), then the Search form (**Search input**) or, without
+`.empty`, `--theme-neutral-3`, "(0)" in its label and not a link; a linked entry's link glows in the entry's own
+color, `currentColor`, while the entry is hovered, so an empty one does not react), then the Search form (**Search input**) or, without
 one, a `::after` spacer of its width, `--nav-search-width`, so the entries sit alike on every page. The bar is
 `--theme-primary` at 0.1 alpha over the page. The entry of the page shown carries `aria-current="page"`, which the
 server renders from the include's `current` parameter, a `Const.NavEntry` key: the main page's three views
@@ -1079,7 +1080,8 @@ value is a new token with a meaning, or an existing token whose meaning fits rat
 value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
 alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
 are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-color) r g b / 0.05)`, the
-nav bar is the primary at 0.1, the current nav entry the accent at 0.16, and the brand's hover glow the primary at 0.8.
+nav bar is the primary at 0.1, the current nav entry the accent at 0.16, the brand's hover glow the primary at 0.8, and
+an entry's hover glow its own text color at 0.8, written over `currentColor` in the same syntax.
 The two SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a
 dropdown) carry their fill as a literal, because a data URI cannot read a token.
 

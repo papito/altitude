@@ -194,6 +194,14 @@ nav .menu, nav .menu a {
     gap: var(--space-6);
 }
 
+nav .menu a {
+    transition: filter 0.25s ease;
+}
+
+nav .menu:hover a {
+    filter: drop-shadow(0 0 8px hsl(from currentColor h s l / 0.8));
+}
+
 nav .menu {
     flex: 1 1 0;
     padding: var(--space-5) var(--space-3);
