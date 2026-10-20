@@ -1,3 +1,4 @@
+@import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.Stats
 
@@ -14,7 +15,7 @@
 
   <body class="pipeline">
     <nav>
-      @includes.html.nav(stats = stats)
+      @includes.html.nav(stats = stats, current = Const.NavEntry.IMPORT)
     </nav>
 
     <main>
@@ -36,20 +37,14 @@
 
     <footer></footer>
 
-    @* Keeps the nav counts fresh while imports run, only while the page is visible *@
-    <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}"
+    @* Keeps the nav counts fresh while imports run, only while the page is visible; `current` keeps this page's entry marked *@
+    <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}?current=@{Const.NavEntry.IMPORT}"
          hx-trigger="every 5s [document.visibilityState === 'visible']"
          hx-target="nav"
          hx-swap="innerHTML"></div>
 
     <script src="/static/js/lib/hx-ws.js" defer></script>
     <script type="module" src="/static/js/upload-form-page.js"></script>
-
-    <script type="module">
-      import { highlightNav } from "/static/js/common/navigation.js"
-
-      highlightNav("import")
-    </script>
 
     <script type="module">
       htmx.on("htmx:ws:after:connection", function () {

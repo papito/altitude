@@ -58,6 +58,8 @@
     --list-trace-border: 2px double var(--theme-secondary);
 
     --footer-height: 2.75rem;
+    --nav-brand-width: 12.5rem;
+    --nav-search-width: 13.75rem;
 
     --snackbar-width: 31.25rem;
     --snackbar-height: 1.875rem;
@@ -87,6 +89,7 @@
     --chip-border-radius: 0.625rem;
 
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+    --font-nav: ui-monospace,"SF Mono","JetBrains Mono","Fira Code","DejaVu Sans Mono",monospace;
 
     --font-size-xs: 0.625rem;
     --font-size-small: 0.75rem;
@@ -97,6 +100,7 @@
     --font-size-display: 1.75rem;
     --font-weight-bold: 700;
     --font-weight-medium: 500;
+    --letter-spacing-medium: 0.05em;
     --letter-spacing-wide: 0.1em;
     --line-height-text: 1.4;
 }
@@ -140,32 +144,42 @@ body {
 nav {
     display: flex;
     column-gap: var(--space-5);
-    background: var(--theme-neutral-2);
+    background: hsl(from var(--theme-primary) h s l / 0.1);
     color: var(--theme-neutral-4);
     align-items: center;
     border-bottom: var(--panel-border);
-    text-shadow: var(--text-shadow);
 }
 
-nav span, nav a {
-    color: var(--theme-neutral-4);
+nav a {
+    color: inherit;
     text-decoration: none;
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    font-family: var(--font);
-    text-transform: uppercase;
 }
+
 nav .brand {
-    flex: 0 0 120px;
+    flex: 0 0 var(--nav-brand-width);
 }
 
 nav .brand a {
-    letter-spacing: var(--letter-spacing-wide);
-    text-transform: uppercase;
-    text-decoration: none;
-    color: var(--theme-neutral-3);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-xl);
     font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-medium);
+    letter-spacing: var(--letter-spacing-medium);
+    text-transform: lowercase;
+    background: linear-gradient(90deg, var(--theme-primary), var(--theme-accent));
+    background-clip: text;
+    color: transparent;
+    transition: filter 0.25s ease;
+}
+
+nav .brand a:hover {
+    filter: drop-shadow(0 0 8px hsl(from var(--theme-primary) h s l / 0.8));
+}
+
+nav .brand i {
+    color: var(--theme-accent);
 }
 
 nav div {
@@ -174,24 +188,49 @@ nav div {
     justify-content: center;
 }
 
+nav .menu, nav .menu a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+}
+
 nav .menu {
     flex: 1 1 0;
-    border-inline: 2px solid transparent;
-    letter-spacing: var(--letter-spacing-wide);
+    padding: var(--space-5) var(--space-3);
+    border-radius: var(--radius);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-large);
+    font-weight: var(--font-weight-medium);
+    text-transform: lowercase;
     color: var(--theme-neutral-3);
-    padding: var(--space-3);
     cursor: pointer;
 }
 
-nav .menu span {
+nav .menu .count {
     margin-left: var(--space-3);
-}
-
-nav .menu.active {
+    padding: var(--chip-padding);
+    border-radius: var(--chip-border-radius);
     background-color: var(--theme-secondary);
     color: var(--theme-neutral-4);
-    border: 2px solid var(--theme-primary);
-    border-radius: var(--radius);
+    font-size: var(--font-size-base);
+}
+
+nav .menu.triage {
+    color: var(--success-color);
+}
+
+nav .menu.trashbin {
+    color: var(--warning-color);
+}
+
+nav .menu.empty {
+    color: var(--theme-neutral-3);
+    cursor: default;
+}
+
+nav .menu[aria-current="page"] {
+    background-color: hsl(from var(--theme-accent) h s l / 0.16);
+    color: var(--theme-accent);
     font-weight: var(--font-weight-bold);
 }
 
@@ -205,35 +244,18 @@ nav input {
 }
 
 nav form {
-    flex: 0 0 220px;
+    flex: 0 0 var(--nav-search-width);
     display: flex;
     align-items: center;
 }
 
 nav:has(.menu):not(:has(form))::after {
     content: "";
-    flex: 0 0 220px;
+    flex: 0 0 var(--nav-search-width);
 }
 
 nav input::placeholder {
     color: rgb(from var(--theme-on-field) r g b / 0.6);
-}
-
-nav .menu.triage i, nav .menu.triage span {
-    color: var(--success-color);
-}
-
-nav .menu.trashbin i, nav .menu.trashbin span {
-    color: var(--warning-color);
-}
-
-nav .menu.triage.empty i,
-nav .menu.triage.empty span,
-nav .menu.trashbin.empty i,
-nav .menu.trashbin.empty span {
-    color: var(--theme-neutral-3);
-    font-size: var(--font-size-xs);
-    cursor: default;
 }
 
 /*         */

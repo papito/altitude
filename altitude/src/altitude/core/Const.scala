@@ -81,6 +81,18 @@ object Const:
       val TRIAGE = "triage"
       val TRASHBIN = "trashbin"
 
+  /**
+   * The entries of the shared nav (`includes/nav`), by the key a page marks its own entry with (`current`): the main page's three
+   * views, then a page each.
+   */
+  object NavEntry:
+    val BROWSE: String = Search.View.DEFAULT
+    val TRIAGE: String = Search.View.TRIAGE
+    val TRASH: String = Search.View.TRASHBIN
+    val IMPORT = "import"
+    val SETTINGS = "settings"
+    val STYLE_GUIDE = "style-guide"
+
   object Security:
     val MEMBER_ME_COOKIE_EXPIRATION_DAYS = 7
 

@@ -7,22 +7,12 @@ import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
 import altitude.core.App
 import altitude.core.models.AccountType
 import altitude.core.models.Settings
-import altitude.core.models.User
 
 /**
  * The Settings screen: an Admin's page and save, a User's and a Guest's 403, the admin-only nav link, a validation replacement
  * that writes nothing, a save that announces its success event, and the PostgreSQL-only Settings absent on SQLite.
  */
 @DoNotDiscover class SettingsControllerTests extends ControllerTestCore {
-
-  /** A repository owned by an account of `accountType`, logged in */
-  private def loginAs(accountType: AccountType): String = {
-    val model = if (accountType == AccountType.Admin) testContext.makeAdminUser() else testContext.makeUser()
-    val account: User = testContext.persistUser(Some(model.copy(accountType = accountType)))
-    testContext.persistRepository(Some(account))
-    login()
-    testContext.repository.persistedId
-  }
 
   private def pageUrl(host: String, repoId: String) = s"$host/settings/r/$repoId"
   private def saveUrl(host: String, repoId: String) = s"$host/htmx/settings/r/$repoId"

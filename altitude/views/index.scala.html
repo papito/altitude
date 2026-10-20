@@ -1,7 +1,8 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Stats
 
-@(stats: Stats)
+@* `current` is the nav entry of the view shown (a `Const.NavEntry` key) *@
+@(stats: Stats, current: String)
 
 <!DOCTYPE html>
 
@@ -16,7 +17,7 @@
 
   <body class="index">
     <nav>
-      @includes.html.nav(stats = stats, search = true)
+      @includes.html.nav(stats = stats, search = true, current = current)
     </nav>
 
     <main>
@@ -87,7 +88,6 @@
       "use strict"
 
       import { initExplorerSplit } from "/static/js/common/explorer-split.js"
-      import { highlightNav } from "/static/js/common/navigation.js"
       import { Const } from "/static/js/constants.js"
       import { initApp } from "/static/js/app.js"
       import { runSearch } from "/static/js/search-results/search.js"
@@ -107,7 +107,6 @@
           searchParams.seedFromLocation()
 
           const view = searchParams.view
-          highlightNav(view)
           Alpine.store(Const.state.currentView).setViewName(view)
 
           /**

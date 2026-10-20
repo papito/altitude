@@ -1,3 +1,4 @@
+@import altitude.core.Const
 @import altitude.core.models.Stats
 @import play.twirl.api.Html
 
@@ -15,7 +16,7 @@
 
   <body>
     <nav>
-      @includes.html.nav(stats = stats)
+      @includes.html.nav(stats = stats, current = Const.NavEntry.SETTINGS)
     </nav>
 
     <main>
@@ -27,11 +28,5 @@
     @includes.html.html_common()
 
     <script type="module" src="/static/js/settings-page.js"></script>
-
-    <script type="module">
-      import { highlightNav } from "/static/js/common/navigation.js"
-
-      highlightNav("settings")
-    </script>
   </body>
 </html>

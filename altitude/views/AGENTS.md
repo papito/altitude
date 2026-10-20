@@ -12,7 +12,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), and an edge or a shadow by its token (`border: var(--panel-border)`), never restating one a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is the one `--focus-ring`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a badge with `--radius-small`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, and the leading of text that wraps is `--line-height-text`. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand and entries, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -183,7 +183,8 @@ Two-layer event bus, both on `document.body`:
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
-  `hx-trigger="every 5s [document.visibilityState === 'visible']"`.
+  `hx-trigger="every 5s [document.visibilityState === 'visible']"` (its `hx-get` carries `current=import`, so the
+  swap marks the page's entry again; see **Nav**).
 - Global config (`defaultTimeout`, `noSwap`) is the `htmx-config` meta tag in
   `views/includes/header_common.scala.html`; 4xx/5xx bodies are not swapped, listeners report them.
 - The file upload (`js/fragments/upload-form.js`) is **not** an HTMX request: it posts through the
@@ -815,7 +816,7 @@ on `#assets`, and the CSS in `static/css/includes/search_results.css` shows the 
 **Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, an Admin's page, `SettingsController`) is shaped like
 the import page: `header_common`, the shared nav, one `main`, `html_common` for the snackbar, `json-enc.js`, and the page
 module `js/settings-page.js`, which registers the htmx request rule with a minimal app and the save listener
-(`js/listeners/settings.js`), and `highlightNav("settings")`. `main` holds the one form, `htmx/settings_form.scala.html`
+(`js/listeners/settings.js`); the template passes `Const.NavEntry.SETTINGS` as the nav's `current`. `main` holds the one form, `htmx/settings_form.scala.html`
 (`#settingsForm`), rendered by `SettingsFormController.form` for the page and again by its save, `POST
 /htmx/settings/r/:repoId`: `hx-target="this"`, `hx-swap="outerHTML settle:0"`, `hx-json-enc`,
 `data-app-success-event="SETTINGS_SAVED_EVENT"`. Its sections are the Setting groups, each a grid of label and control
@@ -971,18 +972,33 @@ on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flash
 1.2 s. A frame's draw order is field-edge fill → each block's cells, roads and vehicles → cloud shadows → clouds →
 jet → lights.
 
+**Nav** — `includes/nav` is the bar of every page behind a login, inside the page's `<nav>`, styled by the NAVIGATION
+block of `core.css`: the `.brand` (the `fa-chevron-up` mark in `--theme-accent` and the name, lowercase, in `--font-nav`
+at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped to the text, which glows in the primary
+on hover) in a `--nav-brand-width` slot, then one `.menu` per entry (lowercase `--font-nav` at `--font-size-large`,
+`--font-weight-medium`, `--theme-neutral-3`; Triage in `--success-color` and Trash in `--warning-color`, each with its
+count as a `.count` pill inside the label, `--theme-secondary` on the chip tokens; an entry with nothing behind it is
+`.empty`, `--theme-neutral-3`, "(0)" in its label and not a link), then the Search form (**Search input**) or, without
+one, a `::after` spacer of its width, `--nav-search-width`, so the entries sit alike on every page. The bar is
+`--theme-primary` at 0.1 alpha over the page. The entry of the page shown carries `aria-current="page"`, which the
+server renders from the include's `current` parameter, a `Const.NavEntry` key: the main page's three views
+(`IndexController` passes the `view` query parameter, `repository` by default, the same value the client seeds its
+search from), and `import`, `settings` and `style-guide`, which those templates pass as constants. The marked entry is
+`--theme-accent` text, bold, on the accent at 0.16 alpha. Nothing marks an entry client-side, so a reload of the nav
+passes `current` again (below); the style guide's navigation section holds the specimen.
+
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
 calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
-from event listeners; it loads the nav fragment with:
+from event listeners; it loads the nav fragment with the view shown, read from the search parameter store:
 ```js
-htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?search=true`, { swap: "innerHTML", target: "nav" })
+htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?search=true&current=${view}`, { swap: "innerHTML", target: "nav" })
 ```
 
 `includes/nav` renders the Search input only when its `search` parameter is true: `index.scala.html`
 passes it, and `search=true` asks `NavController` for it on a reload, so the main page's nav keeps
-its input while the import page's nav (and its polling reload) has none. The form is `hx-preserve`,
-so the swap keeps the element itself, with its listeners and the text being typed.
+its input while the import page's nav (and its polling reload, which passes `current=import`) has none. The form is
+`hx-preserve`, so the swap keeps the element itself, with its listeners and the text being typed.
 
 Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 `app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
@@ -1006,12 +1022,14 @@ switcher and the design tweaks panel's toggle declare another scheme, on the pag
 of `core.css`, and every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, one per
 scheme, so the browser resolves the pair by the scheme in force, no rule is written once per theme, and an editor shows
 a swatch on each line. `:root` opens with the theme colors, in three groups. The brand colors: `--theme-primary` (the
-one hue, indigo: the current nav entry and tab, the focus ring, selection, drop targets, chips and pins), with
+one hue, indigo: the selected tab, the focus ring, selection, drop targets, chips and pins, the start of the brand's
+gradient and the tint of the nav bar), with
 `--theme-primary-text` (the primary as text or a thin edge on a surface, 4.5:1 where the primary itself is not: the
 filter chip) and `--theme-on-primary` (text and glyphs on the primary fill: a pin's path, a drop target's row, the
 checkmark of a selected cell; dark in the dark theme, since the primary cannot carry light text); `--theme-secondary`
-(the supporting surface, lifted off the page: a button, a hovered tab or row, the active nav entry,
-a pressed toggle); and `--theme-accent` (the call-to-action color, teal, reserved for a primary action button or a
+(the supporting surface, lifted off the page: a button, a hovered tab or row, a count pill in the nav,
+a pressed toggle); and `--theme-accent` (teal: where you are and what to do next. The current nav entry's text and
+its tint, the brand's mark and the end of its gradient, and the call-to-action color for a primary action button or a
 critical link, which no rule draws yet) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
 The neutral scale, `--theme-neutral-1` to `--theme-neutral-4`, ordered from the lightest surface to the darkest text in
 the light theme: `-1` an input's field, the lightest surface in either theme; `-2` the page surface; `-3` lines and
@@ -1060,7 +1078,8 @@ written in the rule, or a new veil token, described here, when it must be transl
 value is a new token with a meaning, or an existing token whose meaning fits rather than one that merely holds the same
 value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
 alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
-are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-color) r g b / 0.05)`.
+are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-color) r g b / 0.05)`, the
+nav bar is the primary at 0.1, the current nav entry the accent at 0.16, and the brand's hover glow the primary at 0.8.
 The two SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a
 dropdown) carry their fill as a literal, because a data URI cannot read a token.
 

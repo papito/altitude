@@ -2,9 +2,10 @@ package altitude.core.controller
 
 import java.net.URLEncoder
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
 
 import altitude.core.App
+import altitude.core.models.AccountType
 
 @DoNotDiscover class IndexControllerTests extends ControllerTestCore {
 
@@ -73,6 +74,44 @@ import altitude.core.App
         // The main page reloads its nav with the form, the import page's refresh without
         get(s"htmx/nav/r/$repoId", Map("search" -> "true")) should include(searchForm)
         get(s"htmx/nav/r/$repoId").contains(searchForm) shouldBe false
+    }
+  }
+
+  test("The nav marks the entry of the page shown, and a nav reload marks the entry it is asked for") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in Admin's repository (an Admin, so the Settings page answers).
+     *
+     * Assertions:
+     *
+     * The main page marks Browse, or the view its URL asks for; the import and settings pages mark their own entries; a nav
+     * reload marks the entry passed as `current`, and no entry without one.
+     */
+    val repoId = loginAs(AccountType.Admin)
+
+    withServer(App) {
+      host =>
+        def get(path: String, params: Map[String, String] = Map.empty): String = {
+          val response = requests.get(s"$host/$path", params = params, cookies = testContext.cookies, check = false)
+          response.statusCode shouldBe 200
+          response.text()
+        }
+        // The entry class of the one element carrying aria-current (an empty Triage or Trash entry can carry it too)
+        val currentEntry = """class="menu ([a-z-]+)(?: empty)?" aria-current="page"""".r
+        def current(page: String): Option[String] = {
+          val marked = currentEntry.findAllMatchIn(page).map(_.group(1)).toList
+          marked.size should be <= 1
+          marked.headOption
+        }
+
+        current(get(s"r/$repoId")) shouldBe Some("repository")
+        current(get(s"r/$repoId", Map("view" -> "triage"))) shouldBe Some("triage")
+        current(get(s"pipeline/r/$repoId")) shouldBe Some("import")
+        current(get(s"settings/r/$repoId")) shouldBe Some("settings")
+        current(get(s"htmx/nav/r/$repoId", Map("current" -> "trashbin"))) shouldBe Some("trashbin")
+        current(get(s"htmx/nav/r/$repoId")) shouldBe None
     }
   }
 }

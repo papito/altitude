@@ -1,3 +1,4 @@
+@import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.Stats
 
@@ -54,7 +55,7 @@
 
   <body class="style-guide">
     <nav>
-      @includes.html.nav(stats = stats)
+      @includes.html.nav(stats = stats, current = Const.NavEntry.STYLE_GUIDE)
     </nav>
 
     <main x-data="styleGuide">
@@ -112,11 +113,12 @@
 
         <section id="typography">
           <h2>Typography</h2>
-          <p>One font stack, <code>--font</code>, and a scale of sizes in rem, <code>--font-size-xs</code> to
+          <p>One font stack, <code>--font</code>, and the nav's monospace one, <code>--font-nav</code> (the brand and the
+             entries), and a scale of sizes in rem, <code>--font-size-xs</code> to
              <code>--font-size-display</code>, with <code>--font-size-base</code> on <code>body</code>: a font size is a
              step of the scale, never a literal. A weight is <code>--font-weight-bold</code> or
-             <code>--font-weight-medium</code>, spaced-out text takes <code>--letter-spacing-wide</code> and text that
-             wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
+             <code>--font-weight-medium</code>, spaced-out text takes <code>--letter-spacing-wide</code> (the brand the
+             narrower <code>--letter-spacing-medium</code>) and text that wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
              category's badge) stay in its rule. The Sizes row shows the steps on the real components. The tester
              previews any font this browser has installed.</p>
           <div class="sg-halves">
@@ -249,13 +251,17 @@
 
         <section id="navigation-tabs">
           <h2>Navigation &amp; tabs</h2>
-          <p>The nav above is the live one. A nav entry is <code>.menu</code>; the page marks its own entry
-             <code>active</code>, and an entry with nothing behind it is <code>empty</code> and not a link. A tab is the
-             link itself, selected through <code>aria-selected</code>.</p>
+          <p>The nav above is the live one. The brand is the chevron and the name on a primary-to-accent gradient, in
+             <code>--font-nav</code> at <code>--font-size-xl</code>. A nav entry is <code>.menu</code>, at
+             <code>--font-size-large</code>; the server marks the entry of the page shown with
+             <code>aria-current="page"</code> (the include's <code>current</code>, which a nav reload passes again), a
+             count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
+             <code>empty</code> and not a link. A tab is the link itself, selected through <code>aria-selected</code>.</p>
           <nav aria-label="Navigation specimen">
-            <div class="brand"><a href="#navigation-tabs">Altitude</a></div>
+            <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
             <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
-            <div class="menu active"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu.active</span></a></div>
+            <div class="menu" aria-current="page"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>aria-current</span></a></div>
+            <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
           </nav>
 
@@ -397,7 +403,6 @@
 
     <script type="module">
       import { initApp } from "/static/js/app.js"
-      import { highlightNav } from "/static/js/common/navigation.js"
       // Importing the module registers the `styleGuide` component, before `initApp()` starts Alpine
       import { initStyleGuide } from "/static/js/style-guide.js"
 
@@ -406,7 +411,6 @@
       // Set once: the repository cannot change without a full page load
       window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
-      highlightNav("style-guide")
       initStyleGuide()
     </script>
   </body>
