@@ -10,6 +10,9 @@ import { runSearch } from "./search.js"
  * never holds state of its own: its value follows `searchParams.q`, so a URL with `q` fills it on
  * load and a folder, person, album or Location, which clear `q` (see `stores/search-params.js`),
  * empty it.
+ *
+ * The form is in every page's nav. A page without this module (import, settings) submits it
+ * natively: a GET of Browse with the text as `q`, which the main page seeds its search from.
  */
 export function bindSearchInput() {
     const formEl = document.getElementById("searchForm")

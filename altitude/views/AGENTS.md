@@ -975,13 +975,13 @@ jet → lights.
 **Nav** — `includes/nav` is the bar of every page behind a login, inside the page's `<nav>`, styled by the NAVIGATION
 block of `core.css`: the `.brand` (the `fa-chevron-up` mark in `--theme-accent` and the name, lowercase, in `--font-nav`
 at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped to the text, which glows in the primary
-on hover) in a `--nav-brand-width` slot, then one `.menu` per entry, all of one width (lowercase `--font-nav` at `--font-size-large`,
+on hover) in a `--nav-brand-width` slot, then one `.menu` per entry, all of one width (lowercase `--font-nav` at `--font-size-medium`,
 `--font-weight-medium`, `--theme-neutral-3`; Triage in `--success-color` and Trash in `--warning-color`, each with its
 count as a `.count` pill inside the label, `--theme-secondary` on the chip tokens; an entry with nothing behind it is
 `.empty`, `--theme-neutral-3`, "(0)" in its label and not a link; a linked entry's link glows in the entry's own
 color, `currentColor`, while the entry is hovered, so an empty one does not react). Between Browse and Triage sits the
-`.search` cell, as wide as an entry on every page, so the entries sit alike whether or not it holds the quick search
-form (**Search input**), centred in it at `--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
+`.search` cell, as wide as an entry, holding the quick search form (**Search input**) centred in it at
+`--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
 `--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, and a
 `.clear` (`fa-times`) control shown while there is text. While the field has focus the form widens to
 `--nav-search-focus-width` and glows in `--theme-accent` (a 1px ring and a 14px halo at 0.55 alpha); that glow is the
@@ -998,13 +998,11 @@ Folder deletion also recycles assets throughout its subtree, so the `folderDelet
 calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
 from event listeners; it loads the nav fragment with the view shown, read from the search parameter store:
 ```js
-htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?search=true&current=${view}`, { swap: "innerHTML", target: "nav" })
+htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?current=${view}`, { swap: "innerHTML", target: "nav" })
 ```
 
-`includes/nav` renders the Search input only when its `search` parameter is true: `index.scala.html`
-passes it, and `search=true` asks `NavController` for it on a reload, so the main page's nav keeps
-its input while the import page's nav (and its polling reload, which passes `current=import`) has an empty `.search`
-slot. The form is `hx-preserve`, so the swap keeps the element itself, with its listeners and the text being typed.
+`includes/nav` renders the Search input on every page (the import page's polling reload passes `current=import`).
+The form is `hx-preserve`, so a swap keeps the element itself, with its listeners and the text being typed.
 
 Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 `app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
@@ -1341,9 +1339,11 @@ its default is left out of the request, so a default is never spelled out on bot
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
 The Search input is `#searchForm` in `includes/nav` (`role="search"`: an `<input type="search" name="q">`
-labelled "quick search" by its placeholder, and a `.clear` button; no submit button), rendered in the main page's
-nav only (see **Nav refresh**) and bound once by `bindSearchInput()` (`js/search-results/search-input.js`) from
-`FrontendApp.start()`. Enter submits the form, which runs `runSearch({ params: { q } })` with the trimmed value; the
+labelled "quick search" by its placeholder, and a `.clear` button; no submit button), rendered in every page's nav
+(see **Nav refresh**) and bound once by `bindSearchInput()` (`js/search-results/search-input.js`) from
+`FrontendApp.start()` on the pages that run it (the main page and the style guide); on the others (import, settings)
+the form's own `action`, a GET of `/r/:repoId`, opens Browse with the text as `q`, which seeds the search there.
+On the main page Enter submits the form, which runs `runSearch({ params: { q } })` with the trimmed value; the
 clear control (which empties the input and submits), the input's native clear (Escape: the `search` event with an
 empty value; the stylesheet hides the native button) and an empty submit clear `q` the same way, and an
 empty submit with no `q` in the store does nothing, so it never leaves the folder or view being looked

@@ -207,7 +207,7 @@ nav .menu {
     flex: 1 1 0;
     padding: var(--space-5) var(--space-3);
     font-family: var(--font-nav);
-    font-size: var(--font-size-large);
+    font-size: var(--font-size-medium);
     font-weight: var(--font-weight-medium);
     text-transform: lowercase;
     color: var(--theme-neutral-3);
@@ -242,8 +242,8 @@ nav .menu[aria-current="page"] {
     font-weight: var(--font-weight-bold);
 }
 
-/* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form, at its own
-   width, on the main page only, so the entries sit alike on every page */
+/* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form at its own
+   width */
 nav .search {
     flex: 1 1 0;
     padding: 0 var(--space-3);

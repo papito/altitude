@@ -5,9 +5,9 @@
 @import altitude.core.models.Stats
 @import altitude.core.RequestContext
 
-@* `search` adds the Search input, which only the main page has: its results are that page's grid. `current` is the
-   entry of the page shown (a `Const.NavEntry` key), which carries `aria-current="page"`; a nav reload passes it again. *@
-@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, search: Boolean = false, current: String = "")
+@* `current` is the entry of the page shown (a `Const.NavEntry` key), which carries `aria-current="page"`; a nav reload
+   passes it again. *@
+@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, current: String = "")
 
 @currentAttr(entry: String) = {@if(entry == current){ aria-current="page"}}
 
@@ -18,17 +18,16 @@
       <a href="/"><i class="fas fa-database"></i><span>Browse</span></a>
 </div>
 
-@* The quick search cell is as wide as an entry on every page, so the entries sit alike whether or not the form is in it. The
-   form is bound by js/search-results/search-input.js; `hx-preserve` keeps this very element, and with it the text being
-   typed, when the nav is reloaded for fresh counts. Enter submits; the clear (×) control empties the text. *@
+@* The quick search is on every page. Where js/search-results/search-input.js binds it (the main page), Enter searches
+   in place or navigates to Browse; elsewhere the form's own submit opens Browse with the text as `q`. `hx-preserve`
+   keeps this very element, and with it the text being typed, when the nav is reloaded for fresh counts. The clear (×)
+   control empties the text. *@
 <div class="search">
-  @if(search) {
-    <form id="searchForm" role="search" hx-preserve>
-      <i class="fas fa-search"></i>
-      <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Quick search" placeholder="quick search" autocomplete="off">
-      <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
-    </form>
-  }
+  <form id="searchForm" role="search" method="get" action="/r/@repoId" hx-preserve>
+    <i class="fas fa-search"></i>
+    <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Quick search" placeholder="quick search" autocomplete="off">
+    <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
+  </form>
 </div>
 
 @if(stats.getTriageAssetCount > 0) {
