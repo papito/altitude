@@ -57,7 +57,7 @@ const DUPLICATE_KINDS = ["color", "border", "shadow", "font"]
 const COLOR_KINDS = ["color", "border", "shadow"]
 
 // The color literals: a hex color (as the scan finds them), a color function with its channels
-// written out, which the relative form `rgb(from …)` is not, and a named color, which is a word
+// written out, which the relative form `hsl(from …)` is not, and a named color, which is a word
 const HEX_COLOR = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/i
 const CHANNEL_FUNCTIONS = "rgba?|hsla?|hwb|lab|lch|oklab|oklch|color"
 const LITERAL_COLOR_FUNCTION = new RegExp(
@@ -79,8 +79,9 @@ const COLOR_FUNCTION = new RegExp(
 
 // The token whose card has an alpha slider
 const ALPHA_SLIDER_TOKEN = "--scrim-color"
-// A color with its alpha replaced, as `withAlpha` writes it: the first group is the color
-const ALPHA_REPLACEMENT = /^rgb\(from (.+) r g b \/ [\d.]+\)$/
+// A color with its alpha replaced, as `withAlpha` writes it: the groups are the function, the
+// color and the channels
+const ALPHA_REPLACEMENT = /^(rgb|hsl)\(from (.+) (r g b|h s l) \/ [\d.]+\)$/
 
 // Referenced as `x-data="styleGuide"` by the style guide page, whose module script imports this
 // module, and so registers the component, before it starts the app
@@ -276,13 +277,15 @@ function withAlpha(value, alpha, theme) {
 }
 
 /**
- * `color` with its alpha replaced, in relative color syntax, so the color itself stays as it is
- * written. A color that already is such a replacement (a slider's value pasted into the
- * stylesheet) gets the new alpha in place of its own, rather than a second wrapper.
+ * `color` with its alpha replaced, in HSL relative color syntax as the veils of `core.css` write
+ * it, so the color itself stays as it is written. A color that already is such a replacement, in
+ * HSL or RGB (a veil, or a slider's value pasted into the stylesheet), gets the new alpha in place
+ * of its own, in its own syntax, rather than a second wrapper.
  */
 function withColorAlpha(color, alpha) {
-    const [, base = color] = color.match(ALPHA_REPLACEMENT) ?? []
-    return `rgb(from ${base} r g b / ${alpha})`
+    const [, fn = "hsl", base = color, channels = "h s l"] =
+        color.match(ALPHA_REPLACEMENT) ?? []
+    return `${fn}(from ${base} ${channels} / ${alpha})`
 }
 
 /**

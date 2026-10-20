@@ -1032,14 +1032,14 @@ trash entry of the nav are `--warning-color`; nothing draws `--info-color` yet),
 the hue kept, the saturation at 70% or 60%, and the lightness set to 90% in the light theme and 35% in the dark one, so
 the four fills sit at one lightness; a fill carries `--theme-neutral-4` in either theme and its semantic color only as
 an edge, since the color on its own fill reads about 3:1); and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
-(`--scrim-color: rgb(from var(--shadow-color) r g b / 0.45)`). The only other color tokens are the veils, a theme
+(`--scrim-color: hsl(from var(--shadow-color) h s l / 0.45)`). The only other color tokens are the veils, a theme
 color or `--shadow-color` at an alpha in relative color syntax, tokens because a translucent color cannot be written
 as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9) and
 `--dnd-dragging-background-color` (`--theme-neutral-3` at 0.48); a veil follows the pair of the color it reads. A
 token holding a border or a shadow keeps its width and style with its color, which is a theme color (`--border-thin`
 and `--border-thick`, solid `--theme-neutral-3`, the edge of a cell, a menu or a quiet control, and of an input, a
 button or a dialog; `--focus-ring: 2px solid var(--theme-primary)`; `--list-trace-border`) or `--shadow-color` at an
-alpha (`--panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18)`, the edge of a chrome panel and the
+alpha (`--panel-border: 1px solid hsl(from var(--shadow-color) h s l / 0.18)`, the edge of a chrome panel and the
 divider inside one; the shadows: `--drop-shadow`, the one shadow under a dialog, a panel, a pin or the checkmark,
 `--text-shadow`, whose light side is the ink at alpha 0 since a dark halo has no place under dark text, and
 `--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge and a button's hover look). No two
@@ -1129,7 +1129,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   (`x-model`), which the specimen's style and the status
   derive from. Nothing is requested from the server.
 - **Alpha slider:** the `--scrim-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider under its
-  copy button. Dragging it replaces the alpha of the token's relative color (`rgb(from var(--shadow-color) r g b / 0.6)`
+  copy button. Dragging it replaces the alpha of the token's relative color (`hsl(from var(--shadow-color) h s l / 0.6)`
   after a drag) and declares the whole value inline on the root element, so the page repaints with it until it is
   reloaded; nothing is stored. It works on the declaration as written, which keeps the color as declared, and should a
   token hold a `light-dark()` pair, only the color of the theme shown changes and the other is left alone; the card

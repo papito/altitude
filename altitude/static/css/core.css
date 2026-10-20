@@ -21,17 +21,17 @@
     --border-thin: 1px solid var(--theme-neutral-3);
     --border-thick-width: 2px;
     --border-thick: var(--border-thick-width) solid var(--theme-neutral-3);
-    --panel-border: 1px solid rgb(from var(--shadow-color) r g b / 0.18);
+    --panel-border: 1px solid hsl(from var(--shadow-color) h s l / 0.18);
     --focus-ring: 2px solid var(--theme-primary);
 
     --radius: 0.3125rem;
     --radius-small: 0.1875rem;
 
-    --drop-shadow: 0 1px 6px rgb(from var(--shadow-color) r g b / 0.6);
-    --text-shadow: light-dark(rgb(from var(--shadow-color) r g b / 0), rgb(from var(--shadow-color) r g b / 0.75)) 0 1px;
-    --box-shadow: rgb(from var(--theme-neutral-4) r g b / 0.07) 0 1px 0;
-    --asset-detail-backdrop-color: rgb(from var(--shadow-color) r g b / 0.9);
-    --scrim-color: rgb(from var(--shadow-color) r g b / 0.45);
+    --drop-shadow: 0 1px 6px hsl(from var(--shadow-color) h s l / 0.6);
+    --text-shadow: light-dark(hsl(from var(--shadow-color) h s l / 0), hsl(from var(--shadow-color) h s l / 0.75)) 0 1px;
+    --box-shadow: hsl(from var(--theme-neutral-4) h s l / 0.07) 0 1px 0;
+    --asset-detail-backdrop-color: hsl(from var(--shadow-color) h s l / 0.9);
+    --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
     --modal-content-width: 25rem;
     --modal-content-padding: var(--space-6);
     --viewport-gap: var(--space-5);
@@ -81,7 +81,7 @@
 
     --panel-padding: var(--space-5);
 
-    --dnd-dragging-background-color: rgb(from var(--theme-neutral-3) r g b / 0.48);
+    --dnd-dragging-background-color: hsl(from var(--theme-neutral-3) h s l / 0.48);
 
     --chip-padding: var(--space-1) var(--space-4);
     --chip-border-radius: 0.625rem;
