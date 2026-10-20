@@ -279,11 +279,6 @@ input, textarea {
     background-color: var(--theme-neutral-1);
 }
 
-input.readonly {
-    background-color: var(--theme-secondary);
-    color: var(--theme-neutral-3);
-}
-
 form div.error {
     color: var(--error-color);
     padding: var(--space-3);

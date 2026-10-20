@@ -842,8 +842,8 @@ from `--setup-form-base`, opaque at the center, to `--setup-form-card-edge-color
 the corners, over `backdrop-filter: blur(12px)`, so the center is solid and the edges frost into the scene;
 `--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
 literal, as is the blur's); `--section-vertical-space` padding. The card and the form on it are a carve-out from the
-theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus, read-only and error
-states, the labels and the full-width submit button from the `--setup-form-*` tokens alone, so the form keeps its
+theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
+states, the labels, the database type line and the full-width submit button from the `--setup-form-*` tokens alone, so the form keeps its
 palette whatever the theme colors become. The page's palette, the scene's `--setup-background-*` tokens and the form's
 `--setup-form-*` tokens, is declared at the top of `pages/setup.css` on `body:where(.setup)`: the page's own, not
 `:root` tokens of `core.css`, literals with no `light-dark()` pair (the form's edge, border, focus and field tokens
@@ -1008,7 +1008,7 @@ one hue, indigo: the current nav entry and tab, the focus ring, selection, drop 
 `--theme-primary-text` (the primary as text or a thin edge on a surface, 4.5:1 where the primary itself is not: the
 filter chip) and `--theme-on-primary` (text and glyphs on the primary fill: a pin's path, a drop target's row, the
 checkmark of a selected cell; dark in the dark theme, since the primary cannot carry light text); `--theme-secondary`
-(the supporting surface, lifted off the page: a button, a hovered tab or row, a read-only field, the active nav entry,
+(the supporting surface, lifted off the page: a button, a hovered tab or row, the active nav entry,
 a pressed toggle); and `--theme-accent` (the call-to-action color, teal, reserved for a primary action button or a
 critical link, which no rule draws yet) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
 The neutral scale, `--theme-neutral-1` to `--theme-neutral-4`, ordered from the lightest surface to the darkest text in

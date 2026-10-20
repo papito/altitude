@@ -30,9 +30,8 @@
     color: var(--setup-form-placeholder-color);
 }
 
-/* `:where()` keeps the hover rule at the focus rule's specificity, so a focused field under the pointer keeps its
-   accent edge */
-#setupForm input:hover:where(:not(.readonly)) {
+/* Before the focus rule, so a focused field under the pointer keeps its accent edge */
+#setupForm input:hover {
     border-color: var(--setup-form-field-hover-border-color);
 }
 
@@ -41,9 +40,8 @@
     box-shadow: var(--setup-form-focus-shadow);
 }
 
-/* The database type, which cannot be edited: flat on the card, in the placeholder's gray */
-#setupForm input.readonly {
-    background-color: var(--setup-form-base);
+/* The database type, information rather than a field: plain text in the placeholder's gray */
+#dbEngine {
     color: var(--setup-form-placeholder-color);
 }
 

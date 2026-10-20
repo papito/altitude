@@ -235,10 +235,9 @@
         <section id="forms">
           <h2>Forms</h2>
           <p>A field in error takes the <code>error</code> class, with the message in a <code>div.error</code> above it
-             inside the form. Mark a field that cannot be edited with <code>readonly</code>.</p>
+             inside the form.</p>
           <div class="sg-row">
             <input type="text" placeholder="input" aria-label="Input specimen">
-            <input type="text" class="readonly" value="input.readonly" readonly aria-label="Read-only input specimen">
             <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
             @* A single-field form submits on Return; the error specimen has nowhere to submit to *@
             <form action="#" @@submit.prevent>

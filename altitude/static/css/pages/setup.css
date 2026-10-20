@@ -38,7 +38,7 @@ body:where(.setup) {
     --setup-form-field-hover-border-color: #979ba5;
     /* Around a focused field, and around the submit button under the pointer */
     --setup-form-focus-shadow: 0 0 0 2px rgb(from var(--setup-form-accent) r g b / 0.15);
-    /* A field's placeholder, and the text of a field that cannot be edited */
+    /* A field's placeholder, and the database type line */
     --setup-form-placeholder-color: #9ea3ac;
     /* A field's label */
     --setup-form-label-color: #e7e8e9;
