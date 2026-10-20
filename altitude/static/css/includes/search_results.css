@@ -1,8 +1,6 @@
 #searchControl {
   margin: var(--control-vertical-space);
   padding: var(--space-3);
-  border: var(--border-thin);
-  border-radius: var(--radius);
   display: grid;
   grid-template-columns: .5fr 1fr 1fr 1fr auto;
 }
