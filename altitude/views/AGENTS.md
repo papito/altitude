@@ -838,11 +838,12 @@ exists) runs a full-screen animated scene behind the page, a top-down view of a 
 viewport at `z-index: -1` (above the root's background, below every element of the page, so the markup is otherwise
 untouched), `pointer-events: none`, and `opacity: 0` with a 600 ms transition to `.ready`, so the form never sits on a
 flash of blank canvas. The form's container (`:where(body.setup) main > div`) is centered vertically in `main`, which
-fills the viewport between the brand bar and the footer and pads its top and bottom alike. It is a frosted card: a
+fills the viewport above the footer and pads its top and bottom alike. It is a frosted card: a
 radial gradient from `--setup-form-base`, opaque at the center, to `--setup-form-card-edge-color`, the same color at
 zero alpha, at the corners, over `backdrop-filter: blur(12px)`, so the center is solid and the edges frost into the scene;
 `--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
-literal, as is the blur's); `--section-vertical-space` padding. The card and the form on it are a carve-out from the
+literal, as is the blur's); `--section-vertical-space` padding. Its first row, above the form, is the page's title, `#setupTitle` ("Altitude",
+uppercase, centered, in `--setup-form-accent`, the outline's color). The card and the form on it are a carve-out from the
 theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
 states, the labels, the database type line and the full-width submit button from the `--setup-form-*` tokens alone, so the form keeps its
 palette whatever the theme colors become. The page's palette, the scene's `--setup-background-*` tokens and the form's
@@ -851,7 +852,7 @@ palette whatever the theme colors become. The page's palette, the scene's `--set
 follow its three colors, base, muted and accent), inherited by the canvas and the form. The style guide's scan
 leaves `setup.css` out (`StyleGuideController.excludedFiles`), so the palette is on no card and in no audit; its
 uses of core tokens are the spacing steps, `--text-shadow`, and the error box's `--theme-neutral-2`, `--error-color`
-and `--theme-neutral-4`. The brand bar stays opaque; the footer loses its
+and `--theme-neutral-4`. The page has no top bar; the footer loses its
 background and takes the chrome's text shadow (`--text-shadow`), so the scenery runs under it. The page module,
 `js/setup-page.js`,
 only calls `startSetupBackground(canvas)` of `js/setup-background/setup-background.js`: the form submits through htmx
@@ -1235,7 +1236,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/setup-background/setup-background.js` | the page side of the setup background: `startSetupBackground` (feature detection with no fallback, the palette probed to `[r, g, b]` channels, the module Worker and the transferred canvas, `resize`, `visible` and `motion` posted as they change, `.ready` on the Worker's first frame) |
 | `static/js/setup-background/setup-background-worker.js` | the Worker of the setup background: the scene on the OffscreenCanvas (the ground's bands and cells, the clouds and their shadows, the jet and its lights), the clamped clock with one pending frame, the first frame drawn before `ready`, the still under reduced motion and the pause of a hidden tab, the refit on `resize` |
 | `static/js/setup-background/setup-background-textures.js` | the ten textures of the fields, each painting a cell from its corner: tiles repeated by a pattern (furrows, crop rows, tramlines, strip crops, an orchard, pasture, contours) and the headland and the centre pivot drawn to the cell |
-| `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the brand bar, the message hosts, `main` with the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card and the footer are `static/css/pages/setup.css` |
+| `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the message hosts, `main` with the title and the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card, the title and the footer are `static/css/pages/setup.css` |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |

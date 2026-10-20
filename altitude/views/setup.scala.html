@@ -11,10 +11,6 @@
 
 <canvas id="setupBackground"></canvas>
 
-<div>
-    @includes.html.brand()
-</div>
-
 <div id="messages">
     <div id="serverError" hidden></div>
     <div id="serverWarning" hidden></div>
@@ -22,6 +18,7 @@
 
 <main>
     <div>
+        <h1 id="setupTitle">Altitude</h1>
         @htmx.html.setup_form()
     </div>
 </main>

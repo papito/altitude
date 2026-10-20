@@ -51,11 +51,9 @@ body:where(.setup) {
 
 body:where(.setup) {
     display: grid;
-    grid-template-rows: [header]  3em
-                        [messages] min-content
+    grid-template-rows: [messages] min-content
                         [content] auto
                         [footer]  2em;
-    min-height: 100vh;
 }
 
 #setupBackground {
@@ -75,7 +73,7 @@ body:where(.setup) {
 }
 
 /* The content row stretches to fill the viewport, and the card centers in it; the padding is the same at the top and
-   the bottom, so the card is centered exactly and still clears the brand bar and the footer on a short viewport */
+   the bottom, so the card is centered exactly and still clears the viewport's top and the footer on a short viewport */
 :where(body.setup) main {
     padding-block: calc(var(--section-vertical-space) * 2);
     display: grid;
@@ -96,6 +94,17 @@ body:where(.setup) {
     backdrop-filter: blur(12px);
     border: var(--setup-form-card-border);
     border-radius: 6px;
+}
+
+/* The card's first row, the product's name in the card's outline color */
+#setupTitle {
+    margin: 0;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--setup-form-accent);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-xl);
 }
 
 :where(body.setup) footer {
