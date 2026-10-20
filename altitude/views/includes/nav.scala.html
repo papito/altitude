@@ -18,6 +18,19 @@
       <a href="/"><i class="fas fa-database"></i><span>Browse</span></a>
 </div>
 
+@* The quick search cell is as wide as an entry on every page, so the entries sit alike whether or not the form is in it. The
+   form is bound by js/search-results/search-input.js; `hx-preserve` keeps this very element, and with it the text being
+   typed, when the nav is reloaded for fresh counts. Enter submits; the clear (×) control empties the text. *@
+<div class="search">
+  @if(search) {
+    <form id="searchForm" role="search" hx-preserve>
+      <i class="fas fa-search"></i>
+      <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Quick search" placeholder="quick search" autocomplete="off">
+      <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
+    </form>
+  }
+</div>
+
 @if(stats.getTriageAssetCount > 0) {
     <div class="menu triage"@currentAttr(Const.NavEntry.TRIAGE)>
         <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRIAGE}"><i class="fas fa-medkit"></i>
@@ -61,13 +74,4 @@
     <div class="menu style-guide"@currentAttr(Const.NavEntry.STYLE_GUIDE)>
         <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
     </div>
-}
-
-@* Bound by js/search-results/search-input.js. `hx-preserve` keeps this very element, and with it the text being typed, when
-   the nav is reloaded for fresh counts. *@
-@if(search) {
-  <form id="searchForm" role="search" hx-preserve>
-    <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Search" autocomplete="off">
-    <button type="submit" class="action-button small">Search</button>
-  </form>
 }

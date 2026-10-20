@@ -12,7 +12,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), and an edge or a shadow by its token (`border: var(--panel-border)`), never restating one a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a border or shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is the one `--focus-ring`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a badge with `--radius-small`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand and entries, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -975,12 +975,17 @@ jet → lights.
 **Nav** — `includes/nav` is the bar of every page behind a login, inside the page's `<nav>`, styled by the NAVIGATION
 block of `core.css`: the `.brand` (the `fa-chevron-up` mark in `--theme-accent` and the name, lowercase, in `--font-nav`
 at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped to the text, which glows in the primary
-on hover) in a `--nav-brand-width` slot, then one `.menu` per entry (lowercase `--font-nav` at `--font-size-large`,
+on hover) in a `--nav-brand-width` slot, then one `.menu` per entry, all of one width (lowercase `--font-nav` at `--font-size-large`,
 `--font-weight-medium`, `--theme-neutral-3`; Triage in `--success-color` and Trash in `--warning-color`, each with its
 count as a `.count` pill inside the label, `--theme-secondary` on the chip tokens; an entry with nothing behind it is
 `.empty`, `--theme-neutral-3`, "(0)" in its label and not a link; a linked entry's link glows in the entry's own
-color, `currentColor`, while the entry is hovered, so an empty one does not react), then the Search form (**Search input**) or, without
-one, a `::after` spacer of its width, `--nav-search-width`, so the entries sit alike on every page. The bar is
+color, `currentColor`, while the entry is hovered, so an empty one does not react). Between Browse and Triage sits the
+`.search` cell, as wide as an entry on every page, so the entries sit alike whether or not it holds the quick search
+form (**Search input**), centred in it at `--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
+`--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, and a
+`.clear` (`fa-times`) control shown while there is text. While the field has focus the form widens to
+`--nav-search-focus-width` and glows in `--theme-accent` (a 1px ring and a 14px halo at 0.55 alpha); that glow is the
+field's focus indicator, the one place a rule sets `outline: none` (see **Themes**). The bar is
 `--theme-primary` at 0.1 alpha over the page. The entry of the page shown carries `aria-current="page"`, which the
 server renders from the include's `current` parameter, a `Const.NavEntry` key: the main page's three views
 (`IndexController` passes the `view` query parameter, `repository` by default, the same value the client seeds its
@@ -998,8 +1003,8 @@ htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?search=true&current=${
 
 `includes/nav` renders the Search input only when its `search` parameter is true: `index.scala.html`
 passes it, and `search=true` asks `NavController` for it on a reload, so the main page's nav keeps
-its input while the import page's nav (and its polling reload, which passes `current=import`) has none. The form is
-`hx-preserve`, so the swap keeps the element itself, with its listeners and the text being typed.
+its input while the import page's nav (and its polling reload, which passes `current=import`) has an empty `.search`
+slot. The form is `hx-preserve`, so the swap keeps the element itself, with its listeners and the text being typed.
 
 Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 `app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
@@ -1069,7 +1074,9 @@ marker, the snackbar's text, a pin's frame) reads `--theme-neutral-4`; what is d
 `--theme-on-primary`, and on the accent fill `--theme-on-accent`. A light theme is therefore the light side of every
 pair; both sides are real, and the style guide's switch shows either. Keyboard focus is one ring: `:focus-visible { outline: var(--focus-ring); outline-offset: 2px }` in
 `core.css`, on every element, inset (`outline-offset: -2px`) where a panel clips its rows; the browser withholds it
-after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline. The setup
+after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline, with one
+exception: a text field shows the ring after a pointer too, and the nav's quick search input sets `outline: none`
+because its form's accent glow on `:focus-within` is that field's focus indicator (see **Nav**). The setup
 page's palette is no `:root` token: `pages/setup.css` declares the `--setup-*` tokens on `body:where(.setup)`, as
 literals with no pairs, since the page is an illustration and a form in a look of its own, which it keeps in either
 theme (see **Setup background**), and sets `--focus-ring` there to the form's accent.
@@ -1334,10 +1341,11 @@ its default is left out of the request, so a default is never spelled out on bot
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
 The Search input is `#searchForm` in `includes/nav` (`role="search"`: an `<input type="search" name="q">`
-and a Search button), rendered in the main page's nav only (see **Nav refresh**) and bound once by
-`bindSearchInput()` (`js/search-results/search-input.js`) from `FrontendApp.start()`. Enter and the
-button submit the form, which runs `runSearch({ params: { q } })` with the trimmed value; the input's
-native clear (the `search` event with an empty value) and an empty submit clear `q` the same way, and an
+labelled "quick search" by its placeholder, and a `.clear` button; no submit button), rendered in the main page's
+nav only (see **Nav refresh**) and bound once by `bindSearchInput()` (`js/search-results/search-input.js`) from
+`FrontendApp.start()`. Enter submits the form, which runs `runSearch({ params: { q } })` with the trimmed value; the
+clear control (which empties the input and submits), the input's native clear (Escape: the `search` event with an
+empty value; the stylesheet hides the native button) and an empty submit clear `q` the same way, and an
 empty submit with no `q` in the store does nothing, so it never leaves the folder or view being looked
 at. The input holds no state: an Alpine effect writes `searchParams.q` into it, so a URL with `q` fills
 it on load and choosing a folder, person, album, Location or view empties it. The page is laid out for

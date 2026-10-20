@@ -59,7 +59,8 @@
 
     --footer-height: 2.75rem;
     --nav-brand-width: 12.5rem;
-    --nav-search-width: 13.75rem;
+    --nav-search-width: 11.5rem;
+    --nav-search-focus-width: 15.5rem;
 
     --snackbar-width: 31.25rem;
     --snackbar-height: 1.875rem;
@@ -241,28 +242,69 @@ nav .menu[aria-current="page"] {
     font-weight: var(--font-weight-bold);
 }
 
-nav input {
-    border-radius: var(--radius);
-    border: var(--border-thick);
-    padding: var(--space-3);
-    background-color: var(--theme-neutral-1);
-    width: 90%;
-    min-width: 0;
+/* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form, at its own
+   width, on the main page only, so the entries sit alike on every page */
+nav .search {
+    flex: 1 1 0;
+    padding: 0 var(--space-3);
 }
 
 nav form {
-    flex: 0 0 var(--nav-search-width);
     display: flex;
     align-items: center;
+    width: var(--nav-search-width);
+    padding: var(--space-4);
+    color: var(--theme-neutral-4);
+    transition: width 0.2s ease, box-shadow 0.2s ease;
 }
 
-nav:has(.menu):not(:has(form))::after {
-    content: "";
-    flex: 0 0 var(--nav-search-width);
+/* The field widens while it has focus, and the glow is its one focus indicator, in place of the --focus-ring the
+   input would draw inside it (see Nav in views/AGENTS.md) */
+nav form:focus-within {
+    width: var(--nav-search-focus-width);
+    box-shadow: 0 0 0 1px var(--theme-accent), 0 0 14px hsl(from var(--theme-accent) h s l / 0.55);
 }
 
-nav input::placeholder {
-    color: rgb(from var(--theme-on-field) r g b / 0.6);
+nav form i {
+    color: rgb(from var(--theme-neutral-4) r g b / 0.6);
+}
+
+nav form input {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 var(--space-3);
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: var(--font-nav);
+    font-size: var(--font-size-base);
+    text-align: center;
+}
+
+nav form input:focus-visible {
+    outline: none;
+}
+
+nav form input::placeholder {
+    color: rgb(from var(--theme-neutral-4) r g b / 0.6);
+}
+
+/* The clear control stands in for the native one */
+nav form input::-webkit-search-cancel-button {
+    display: none;
+}
+
+nav form .clear {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    line-height: 1;
+}
+
+nav form:has(input:placeholder-shown) .clear {
+    display: none;
 }
 
 /*         */

@@ -256,11 +256,22 @@
              <code>--font-size-large</code>; the server marks the entry of the page shown with
              <code>aria-current="page"</code> (the include's <code>current</code>, which a nav reload passes again), a
              count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
-             <code>empty</code> and not a link. A tab is the link itself, selected through <code>aria-selected</code>.</p>
+             <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
+             entry on every page and holds the quick search form, at its own width, on the main page: no border, a
+             magnifier, a clear control while there is text, and an accent glow for focus. A tab is the link itself,
+             selected through
+             <code>aria-selected</code>.</p>
           <nav aria-label="Navigation specimen">
             <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
             <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
             <div class="menu" aria-current="page"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>aria-current</span></a></div>
+            <div class="search">
+              <form role="search" @@submit.prevent>
+                <i class="fas fa-search"></i>
+                <input type="search" aria-label="Quick search specimen" placeholder="quick search" autocomplete="off">
+                <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
+              </form>
+            </div>
             <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
           </nav>

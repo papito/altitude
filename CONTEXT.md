@@ -87,7 +87,7 @@ dropped when it matches nobody.
 _Avoid_: Weak face, Low-quality face in user-facing text.
 
 **Search text**:
-What the user types into the search input: Search terms, optionally joined by
+What the user types into the nav's quick search input: Search terms, optionally joined by
 `OR`, excluded with a leading `-`, or quoted into a phrase. It always searches
 the whole repository outside the trash.
 _Avoid_: Query, Keywords, Search string in user-facing text.

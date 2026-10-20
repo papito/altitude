@@ -3,13 +3,13 @@ import { Const } from "../constants.js"
 import { runSearch } from "./search.js"
 
 /**
- * The Search input of the nav.
+ * The quick search input of the nav.
  *
- * Enter and the Search button submit the form, which searches for the text; the input's native
- * clear (×) and a submit of an empty input clear the text of the current search. The input never
- * holds state of its own: its value follows `searchParams.q`, so a URL with `q` fills it on load
- * and a folder, person, album or Location, which clear `q` (see `stores/search-params.js`), empty
- * it.
+ * Enter submits the form, which searches for the text; the clear (×) control, the input's native
+ * clear (Escape) and a submit of an empty input clear the text of the current search. The input
+ * never holds state of its own: its value follows `searchParams.q`, so a URL with `q` fills it on
+ * load and a folder, person, album or Location, which clear `q` (see `stores/search-params.js`),
+ * empty it.
  */
 export function bindSearchInput() {
     const formEl = document.getElementById("searchForm")
@@ -39,8 +39,14 @@ export function bindSearchInput() {
         submit()
     })
 
-    // The native clear fires `search` and no submit. Enter fires it as well where the event exists
-    // (it is not standard), beside the submit, which is why only an emptied input is handled here.
+    formEl.querySelector(".clear").addEventListener("click", () => {
+        inputEl.value = ""
+        submit()
+    })
+
+    // The native clear (Escape; the stylesheet hides its button) fires `search` and no submit. Enter
+    // fires it as well where the event exists (it is not standard), beside the submit, which is why
+    // only an emptied input is handled here.
     inputEl.addEventListener("search", () => {
         if (inputEl.value === "") {
             submit()
