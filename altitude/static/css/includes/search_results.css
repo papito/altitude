@@ -38,7 +38,10 @@
 
 #assets .cell {
   margin: var(--space-2);
-  border: var(--border-hairline) var(--theme-neutral-3);
+  border: var(--border-hairline);
+  border-radius: var(--radius);
+  border-color: rgb(from var(--theme-neutral-3) r g b / 40%);
+  box-shadow: var(--soft-shadow);
   touch-action: none;
 }
 
@@ -51,7 +54,7 @@
    (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
 #assets .cell .metadata {
   display: none;
-  background-color: var(--theme-secondary);
+  background-color: rgb(from var(--theme-secondary) r g b / 40%);
   width: 100%;
   padding-top: var(--space-3);
   padding-bottom: var(--space-3);
