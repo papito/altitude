@@ -1162,7 +1162,8 @@ draw it. A border
 token holds a width and a style and no color: `--border-hairline` (`1px solid`), `--border-heavy` (`2px solid`, its
 width also `--border-heavy-width` for a size that clears the edge) and `--border-double` (`2px double`). A rule writes
 the edge's color after it, in place (`border: var(--border-hairline) var(--theme-neutral-3)`): `--theme-neutral-3`
-on a hairline around a cell, a menu or a quiet control and on a heavy edge around a modal dialog; at 0.45 on a
+on a hairline around a cell, a menu or a quiet control and on a heavy edge around a modal dialog; at 0.3 on the
+hairline dividing a context menu's actions; at 0.45 on a
 hairline around a button (a semantic or the accent button's edge is its own color); at 0.25 on a hairline around a
 field (`--theme-accent` while it has focus, `--error-color` in error); `--popover-border-color` on a hairline around a
 floating surface; `--theme-primary-text` at 0.4 on

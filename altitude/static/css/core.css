@@ -635,6 +635,10 @@ footer {
     background: var(--theme-secondary);
 }
 
+.context-menu .actions button + button {
+    border-top: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.3);
+}
+
 .context-menu .actions {
     display: grid;
 }
