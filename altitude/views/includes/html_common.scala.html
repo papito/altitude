@@ -2,9 +2,11 @@
 
 <div id="snackbar"></div>
 
-@* Modal hosts. Visibility, focus, and dismissal are owned by static/js/common/modal.js through the
-   Alpine `modal` store; `x-trap` comes from the @@alpinejs/focus plugin. General dialogs ignore
-   backdrop clicks; asset detail closes on them. *@
+@* Dialog hosts: the general modal, the popover dialog and asset detail. Visibility, focus, and
+   dismissal are owned by static/js/common/modal.js through the Alpine `modal` store; `x-trap` comes
+   from the @@alpinejs/focus plugin. General dialogs ignore backdrop clicks; asset detail closes on
+   them. The popover dialog is a native `<dialog popover="auto">` with no scrim and no trap: the
+   browser shows it below its anchor and dismisses it on an outside click. *@
 
 <div id="modalContainer"
      x-data
@@ -26,6 +28,15 @@
         </div>
     </div>
 </div>
+
+<dialog id="popoverDialog" popover="auto" tabindex="-1" aria-labelledby="popoverTitle">
+    <div class="popover-toolbar">
+        <div class="modal-title" id="popoverTitle" x-data x-text="$store.modal.title"></div>
+        <button type="button" class="close-modal" aria-label="Close" x-data
+                x-on:click="$store.modal.close()">&times;</button>
+    </div>
+    <div id="popoverContent"></div>
+</dialog>
 
 <div id="imageDetailModalContainer"
      x-data

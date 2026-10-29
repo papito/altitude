@@ -90,13 +90,6 @@
   cursor: pointer;
 }
 
-/* core.css gives every input the box of a text field */
-.sg-token input[type="range"] {
-  padding: 0;
-  border: 0;
-  background: none;
-}
-
 .sg-sample {
   height: var(--section-vertical-space);
 }
@@ -186,9 +179,15 @@
   padding: var(--panel-padding);
 }
 
-/* The error form is taller than the fields beside it; line the fields up on their bottoms */
+/* The error form holds its message under its field; line the fields up on their tops */
 #forms .sg-row {
-  align-items: end;
+  align-items: start;
+}
+
+/* The labelled fields specimen's dialog stacks its fields as the Add location dialog does */
+#styleGuideLabelledFields {
+  display: grid;
+  row-gap: var(--control-vertical-space);
 }
 
 /* The drag count badge positions itself absolutely over the dragged thumbnail */

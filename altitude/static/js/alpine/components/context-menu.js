@@ -7,8 +7,9 @@
  * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
  * siblings: opening one closes any other, exactly as required.
  *
- * Entity menus hold actions that open separate modals. Only View settings has a dialog host
- * (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh settings.
+ * Entity menus hold actions that open popover dialogs (`common/modal.js`). Only View settings has a
+ * dialog host (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh
+ * settings.
  *
  * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
  * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component

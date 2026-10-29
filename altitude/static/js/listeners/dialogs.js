@@ -1,4 +1,5 @@
 import {
+    bindPopoverHost,
     settleModalOpenRequest,
     trackModalOpenRequest,
 } from "../common/modal.js"
@@ -11,13 +12,15 @@ import {
 
 /**
  * HTMX lifecycle wiring for dialogs: requests that open a modal, and operations submitted from any
- * dialog.
+ * dialog. Also binds the popover dialog host's own dismissals (`common/modal.js`).
  *
  * Registered on `document` rather than `document.body`: htmx dispatches lifecycle events on the
  * document when the element that issued the request has already left the DOM, which is exactly
  * the case for a dialog that was closed or replaced while its operation was in flight.
  */
 export function registerDialogListeners(app) {
+    bindPopoverHost()
+
     document.addEventListener(
         "htmx:finally:request",
         finalizeDialogOperationRequest,

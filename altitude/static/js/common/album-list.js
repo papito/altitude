@@ -4,7 +4,7 @@
  * Public API:
  *   reloadAlbumList(repoId) — fetch every album from the server, re-render, restore focus, and
  *   show the right add control: the top "Add album" button normally, the centered empty-state
- *   button while there are no albums. Each add button opens a separate modal
+ *   button while there are no albums. Each add button opens a popover dialog below it
  *   (`buildModalTriggerCtrl`).
  *   refreshAlbumCounts(repoId) — fetch the list and patch only the asset counts in place; falls
  *   back to a full render when the list gained an album the DOM does not have.
@@ -152,7 +152,7 @@ function _render(albums, repoId) {
 
 /**
  * Builds the two add controls into their hosts on the first render after the tab loads. They are
- * shared modal-opening buttons; the hosts (`#albumActions`, `#noAlbums`) decide which one is shown.
+ * shared popover-opening buttons; the hosts (`#albumActions`, `#noAlbums`) decide which one is shown.
  */
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("albumActions")
@@ -276,7 +276,7 @@ function _makeSearchTrigger(el, albumId) {
 
 /**
  * The album's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete, each loading a
- * separate modal. `albumMenuCtrl-<id>` is the trigger the rename dialog
+ * popover dialog. `albumMenuCtrl-<id>` is the trigger the rename dialog
  * returns focus to.
  */
 function _buildMenuCtrl(album, repoId) {

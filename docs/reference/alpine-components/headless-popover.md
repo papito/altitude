@@ -50,5 +50,5 @@ The folder and album context menus do not use this plugin (`@alpinejs/ui` is not
 HTML `popover="auto"` panel opened by a `popovertarget` button, with a small core-Alpine component
 (`static/js/alpine/components/context-menu.js`) for placement, focus-out and scroll/resize
 dismissal, and cleanup; the browser provides the toggle, outside-click dismissal, and one-open-at-
-a-time behavior this component's group variant would otherwise supply. Folder, album, and Location actions request separate modals, which close the menu when they open.
+a-time behavior this component's group variant would otherwise supply. Folder, album, and Location actions request popover dialogs, placed below the ⋯ trigger, which close the menu when they open.
 Only the View settings control uses a popover containing an inline dialog.

@@ -9,11 +9,6 @@
   row-gap: var(--control-vertical-space);
 }
 
-#addLocation label {
-  display: block;
-  margin-bottom: var(--space-2);
-}
-
 #addLocation input[type="text"], #addLocation input[type="search"], #addLocation select {
   width: 100%;
   box-sizing: border-box;

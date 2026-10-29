@@ -1,18 +1,24 @@
 /**
- * The markup of the ⋯ menus for folders, albums, and Locations, their modal-opening Add buttons,
- * and the inline ⚙ View settings control.
+ * The markup of the ⋯ menus for folders, albums, and Locations, their Add buttons, and the inline
+ * ⚙ View settings control.
  *
  * A menu is a native `popover="auto"` panel next to its ⋯ trigger, built by `buildContextMenuCtrl`
- * for the folder tree (`common/folder-tree.js`) and the album list (`common/album-list.js`), and
- * coordinated by the `contextMenu` Alpine component (`alpine/components/context-menu.js`), which
- * also closes a menu from outside its component. The browser owns menu visibility: it is read from
- * `:popover-open` and changed only through the popover API, never through inline styles.
+ * for the folder tree (`common/folder-tree.js`), the album list (`common/album-list.js`) and the
+ * Location list (`common/location-list.js`), and coordinated by the `contextMenu` Alpine component
+ * (`alpine/components/context-menu.js`), which also closes a menu from outside its component. The
+ * browser owns menu visibility: it is read from `:popover-open` and changed only through the
+ * popover API, never through inline styles.
+ *
+ * The menus' actions and the Add buttons open popover dialogs, placed below the trigger that
+ * summoned them (`common/modal.js`); Add location, whose map editor needs the room, opens a modal.
+ * Every trigger built here carries `anchor-name: --<its id>` for that placement.
  */
+import { ModalHost } from "./modal.js"
 
 /**
  * Builds a menu cell: the ⋯ trigger button and the native popover panel it opens, holding the
- * action buttons. Each action requests its dialog into the shared modal host; opening the modal
- * closes the menu through `common/modal.js`. The stable trigger is also the modal's anchor.
+ * action buttons. Each action requests its dialog into the popover dialog host; opening the dialog
+ * closes the menu through `common/modal.js`. The stable trigger is also the dialog's anchor.
  *
  * `triggerId` and `panelId` must be stable across rebuilds: rebuilds restore focus by
  * ID, and the dialogs declare the trigger as their
@@ -46,8 +52,11 @@ export function buildContextMenuCtrl({
     actions.forEach(({ label, url, vals }) => {
         const actionEl = document.createElement("button")
         actionEl.type = "button"
-        _requestDialogOnClick(actionEl, { url, target: "#modalContent", vals })
-        actionEl.dataset.appModalAnchor = `#${triggerId}`
+        _requestPopoverDialogOnClick(actionEl, {
+            url,
+            vals,
+            anchorId: triggerId,
+        })
         actionEl.textContent = label
         actionsEl.appendChild(actionEl)
     })
@@ -58,7 +67,11 @@ export function buildContextMenuCtrl({
     return menuCtrlEl
 }
 
-/** Builds an Add button that anchors its separate modal and takes focus back on close. */
+/**
+ * Builds an Add button whose dialog takes focus back to it on close: a popover dialog anchored
+ * below the button (`host` `ModalHost.popover`, the default), or a centered modal (`host`
+ * `ModalHost.general`). Any other host is an error.
+ */
 export function buildModalTriggerCtrl({
     triggerId,
     label,
@@ -66,6 +79,7 @@ export function buildModalTriggerCtrl({
     url,
     vals = {},
     buttonClass,
+    host = ModalHost.popover,
 }) {
     const btnEl = _buildLabeledButton({
         triggerId,
@@ -73,8 +87,13 @@ export function buildModalTriggerCtrl({
         iconClass,
         buttonClass,
     })
-    _requestDialogOnClick(btnEl, { url, target: "#modalContent", vals })
-    btnEl.dataset.appModalAnchor = `#${triggerId}`
+    if (host === ModalHost.popover) {
+        _requestPopoverDialogOnClick(btnEl, { url, vals, anchorId: triggerId })
+    } else if (host === ModalHost.general) {
+        _requestDialogOnClick(btnEl, { url, target: "#modalContent", vals })
+    } else {
+        throw new Error(`Unsupported dialog host for ${triggerId}: ${host}`)
+    }
     return btnEl
 }
 
@@ -127,9 +146,7 @@ export function buildDialogTriggerCtrl({
 }
 
 function _buildLabeledButton({ triggerId, label, iconClass, buttonClass }) {
-    const btnEl = document.createElement("button")
-    btnEl.type = "button"
-    btnEl.id = triggerId
+    const btnEl = _buildButton(triggerId)
     btnEl.className = buttonClass
 
     const iconEl = document.createElement("i")
@@ -151,11 +168,22 @@ function _buildComponentRoot(className) {
 }
 
 function _buildTrigger({ id, panelId }) {
+    const btnEl = _buildButton(id)
+    btnEl.setAttribute("popovertarget", panelId)
+    btnEl.setAttribute("x-ref", "trigger")
+    return btnEl
+}
+
+/**
+ * A trigger button, named as an anchor after its ID: a popover dialog's request names the ID
+ * (`data-app-dialog-anchor`) and the host is placed against `--<id>`. The IDs are stable across
+ * rebuilds, so a trigger rendered again anchors an open dialog again.
+ */
+function _buildButton(id) {
     const btnEl = document.createElement("button")
     btnEl.type = "button"
     btnEl.id = id
-    btnEl.setAttribute("popovertarget", panelId)
-    btnEl.setAttribute("x-ref", "trigger")
+    btnEl.style.anchorName = `--${id}`
     return btnEl
 }
 
@@ -176,11 +204,17 @@ function _buildPanel({ panelId }) {
     return panelEl
 }
 
-// Both presentations use the same HTMX request attributes; only the target host differs.
+// Every presentation uses the same HTMX request attributes; only the target host differs.
 function _requestDialogOnClick(el, { url, target, vals = {} }) {
     el.setAttribute("hx-get", url)
     el.setAttribute("hx-target", target)
     el.setAttribute("hx-swap", "innerHTML")
     el.setAttribute("hx-trigger", "click")
     el.setAttribute("hx-vals", JSON.stringify(vals))
+}
+
+// A popover dialog's request also names the trigger the dialog is placed below
+function _requestPopoverDialogOnClick(el, { url, vals, anchorId }) {
+    _requestDialogOnClick(el, { url, target: "#popoverContent", vals })
+    el.dataset.appDialogAnchor = anchorId
 }

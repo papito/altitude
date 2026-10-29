@@ -1,9 +1,10 @@
 /**
  * Buttons that open a dialog the page already holds, with no request: `data-app-open-dialog`
  * names a `<template>` whose content is a `data-app-fragment="modal"` dialog (the purge
- * confirmation in `htmx/trashbin_header.scala.html`). A click copies the template into the modal
- * host, wires it for htmx, and hydrates it exactly as a dialog fetched from the server would be, so
- * it opens, submits, closes, and announces its success event through the same code.
+ * confirmation in `htmx/trashbin_header.scala.html`, and the style guide's Labelled fields
+ * specimen). A click copies the template into the general modal host, wires it for htmx, and
+ * hydrates it exactly as a dialog fetched from the server would be, so it opens, submits, closes,
+ * and announces its success event through the same code.
  */
 export function bindDialogOpeners({ root, hydrate }) {
     openerElements(root).forEach((openerEl) => {

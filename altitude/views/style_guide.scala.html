@@ -89,12 +89,12 @@
              <code>light-dark(light, dark)</code> pair of hex values. The Theme colors are the brand colors
              (<code>--theme-primary</code>, the one hue of the chrome, with its text and on-color;
              <code>--theme-secondary</code>, the supporting surface; <code>--theme-accent</code>, the call-to-action
-             color, with its on-color), the neutral scale (<code>--theme-neutral-1</code> to <code>-4</code>, from the
-             lightest surface to the darkest text in the light theme: the field, the page, lines and secondary text,
-             text) and <code>--theme-on-field</code>, the text typed into a field. A rule writes a theme color or a
-             semantic color directly. The Derived cards are the veils, a theme color or <code>--shadow-color</code> at an
-             alpha: the only other color tokens. A new color is a new theme role as a hex pair, or a new veil when it
-             must be translucent. The four semantic colors (success, warning, error, info) and
+             color, with its on-color) and the neutral scale (<code>--theme-neutral-1</code> to <code>-4</code>, from
+             the lightest color to the darkest text in the light theme: the light of a sheen, the page, lines and
+             secondary text, text, a field's included). A rule writes a theme color or a semantic color directly. The
+             Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha, such as a field's
+             fill and the popover dialog's surface and edge: the only other color tokens. A new color is a new theme
+             role as a hex pair, or a new veil when it must be translucent. The four semantic colors (success, warning, error, info) and
              <code>--shadow-color</code> stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
              color per scheme, shown with its From line. The setup page's palette is that page's own, in
              <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows it and the tokens it comes
@@ -185,14 +185,18 @@
           <p>A border token carries width and style; the rule writes the color after it, in place
              (<code>border: var(--border-hairline) var(--theme-neutral-3)</code>).
              <code>--border-hairline</code> edges a cell, a menu or a quiet control in <code>--theme-neutral-3</code>,
-             a button in <code>--theme-neutral-3</code> at 0.45 (or its semantic or accent color), a chip in
-             <code>--theme-primary-text</code> at 0.4, and a chrome panel or the divider inside one in
-             <code>--panel-border-color</code>; <code>--border-heavy</code> edges an input or a dialog in
-             <code>--theme-neutral-3</code>, and draws the focus ring in <code>--theme-primary</code>;
-             <code>--border-double</code> is a list's trace, in <code>--theme-secondary</code>. A button is lit from
+             a button in <code>--theme-neutral-3</code> at 0.45 (or its semantic or accent color), a field in
+             <code>--theme-neutral-3</code> at 0.25, a floating surface (the popover dialog, a select's picker) in
+             <code>--popover-border-color</code>, a chip in <code>--theme-primary-text</code> at 0.4, and a chrome
+             panel or the divider inside one in <code>--panel-border-color</code>; <code>--border-heavy</code> edges
+             a modal dialog in <code>--theme-neutral-3</code>, and draws the focus ring in
+             <code>--theme-primary</code>; <code>--border-double</code> is a list's trace, in
+             <code>--theme-secondary</code>. A button is lit from
              above by <code>--sheen-shadow</code> and sits on <code>--soft-shadow</code>, which it trades for
              <code>--lift-shadow</code> on hover (a small button rests on the sheen alone and takes the soft shadow on
-             hover); the pressed segment of a toggle group sits on <code>--soft-shadow</code>.
+             hover); the pressed segment of a toggle group sits on <code>--soft-shadow</code>. A floating surface is
+             lit by the sheen too and floats on <code>--float-shadow</code>; a focused field is ringed by
+             <code>--field-focus-shadow</code>, its edge in the accent.
              A rectangular box or control rounds its corners with <code>--radius</code>, a button and a toggle group's
              track with <code>--radius-large</code> (a segment inside the track with the track's radius less its
              padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>;
@@ -251,17 +255,58 @@
 
         <section id="forms">
           <h2>Forms</h2>
-          <p>A field in error takes the <code>error</code> class, with the message in a <code>div.error</code> above it
-             inside the form.</p>
+          <p>A text-like field (a text, search, email, password or file input, a textarea, a select) on every page but
+             the setup screen is a sunken fill, <code>--field-background-color</code>, carrying the page's text, in a
+             hairline of <code>--theme-neutral-3</code> at 0.25 with <code>--radius-small</code> and an accent caret;
+             with focus its edge turns <code>--theme-accent</code> inside <code>--field-focus-shadow</code>, in place
+             of the focus ring. Checkboxes, radios and ranges take none of it, nor do the nav's quick search field and
+             the grid toolbar's dropdowns. A select is a customizable select where the browser has one, its picker
+             drawn as the popover dialog's surface, and elsewhere a native select styled as a field. A field keeps the
+             width its page gives it; in a popover dialog the form is <code>--popover-form-width</code> wide, its
+             fields fill it, and its action sits <code>--space-5</code> below them. A label above a field in a dialog
+             is in small caps, <code>--space-2</code> above its field: the Labelled fields button opens a live one in the
+             modal host. A one-field popover dialog shows no label, only its placeholder, and names its input with
+             <code>aria-label</code>. A field in error takes the <code>error</code> class, the error fill and edge,
+             which it keeps with focus, with no ring, and its message is a <code>div.error</code>
+             <code>--space-2</code> under it inside the form.</p>
           <div class="sg-row">
             <input type="text" placeholder="input" aria-label="Input specimen">
             <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
+            <select aria-label="Select specimen">
+              <option>select</option>
+              <option>Another option</option>
+            </select>
             @* A single-field form submits on Return; the error specimen has nowhere to submit to *@
             <form action="#" @@submit.prevent>
-              <div class="error">This field is required</div>
               <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
+              <div class="error">This field is required</div>
             </form>
           </div>
+          @* The button opens the dialog below in the modal host without a request (js/fragments/dialog-openers.js), so
+             its labels take the dialog's small caps; the dialog has nothing to submit *@
+          <div class="sg-row">
+            <button type="button" id="styleGuideLabelledFieldsBtn" class="action-button"
+                    data-app-open-dialog="#styleGuideLabelledFieldsDialog">Labelled fields</button>
+          </div>
+          <template id="styleGuideLabelledFieldsDialog">
+            <div id="styleGuideLabelledFields"
+                 data-app-fragment="modal"
+                 data-app-modal-title="Labelled fields"
+                 data-app-dialog-autofocus-selector="#styleGuideLabelledName"
+                 data-app-dialog-return-focus="#styleGuideLabelledFieldsBtn">
+              <div>
+                <label for="styleGuideLabelledName">Name</label>
+                <input type="text" id="styleGuideLabelledName" placeholder="A labelled field" autocomplete="off">
+              </div>
+              <div>
+                <label for="styleGuideLabelledSelect">Category</label>
+                <select id="styleGuideLabelledSelect">
+                  <option>(none)</option>
+                  <option>A category</option>
+                </select>
+              </div>
+            </div>
+          </template>
         </section>
 
         <section id="navigation-tabs">
@@ -300,8 +345,10 @@
         <section id="menus-dialogs">
           <h2>Menus &amp; dialogs</h2>
           <p>Both controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
-             like an Add button, opens a separate modal anchored below its control. Submit the dialog blank to see the
-             validation state, or with a name to see a completed operation.</p>
+             like an Add button, opens a popover dialog anchored below its control and centered on it: a translucent,
+             frosted surface with no scrim, which an outside click, Escape, the × or Tab out of it dismisses. A
+             one-field dialog shows no label. Submit the dialog blank to see the validation state, or with a name to
+             see a completed operation.</p>
           @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
         </section>

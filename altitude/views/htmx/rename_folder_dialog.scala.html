@@ -20,17 +20,12 @@
       hx-trigger="submit"
       hx-json-enc>
 
-  @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
-    <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
-  }
-
   <div>
-    <label for="@{ Api.Field.Folder.NAME }"></label>
     <input type="text"
            id="field-@{ Api.Field.Folder.NAME }"
            name="@{ Api.Field.Folder.NAME }"
            autocomplete="off"
-           size="30"
+           aria-label="Folder name"
            placeholder="New folder name"
            maxlength="@{ Api.Constraints.MAX_FOLDER_NAME_LENGTH }"
            minlength="@{ Api.Constraints.MIN_FOLDER_NAME_LENGTH }"
@@ -38,6 +33,9 @@
            class="error"
         }
            value="@{ name.getOrElse(existingName.getOrElse("")) }">
+    @if(fieldErrors.contains(Api.Field.Folder.NAME)) {
+      <div class="error">@{ fieldErrors(Api.Field.Folder.NAME) }</div>
+    }
     <input type="hidden" name="@{ Api.Field.ID }" value="@{ id }">
   </div>
 </form>

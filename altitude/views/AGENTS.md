@@ -8,12 +8,12 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
 * Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified. The style guide (`views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions: read its usage notes before choosing a color, spacing, or component, and keep it current in the same change (the list is under **Style guide** below).
 * Always prefer CSS Grid and Flexbox.
-* The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
+* The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip with the pill `--chip-border-radius`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip with the pill `--chip-border-radius`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
-* Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
+* Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
 
@@ -39,7 +39,7 @@ views/
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
-Full pages include `@includes.html.html_common()` (provides both modal containers and `#snackbar`)
+Full pages include `@includes.html.html_common()` (provides the three dialog hosts and `#snackbar`)
 and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
@@ -74,7 +74,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
@@ -83,7 +83,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal, snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
@@ -160,7 +160,7 @@ Two-layer event bus, both on `document.body`:
    above goes to the snackbar with its path and status; a validation replacement, a 200 with
    `HX-Retarget: this`, is swapped in and announces nothing; any other successful one dispatches the
    declared success event and, for a tab, selects it; every swap hydrates the fragments it inserted) and by
-   `js/listeners/dialogs.js` for modal opens and dialog operations. There is no router keyed on
+   `js/listeners/dialogs.js` for dialog opens and dialog operations. There is no router keyed on
    request URLs.
 
 ### HTMX 4 conventions
@@ -263,41 +263,86 @@ those responsibilities stay with HTMX and the custom event bus.
 
 ## UI Patterns
 
-**Modals** — Two hosts live in `html_common.scala.html`: load into `#modalContent` for general
-dialogs and into `#imageDetailModalContent` for asset detail. `js/common/modal.js` is the single owner
-of both: which host is active (one at a time — a new open replaces the active modal), the title,
-initial focus (the fragment's autofocus selector, else the close control, never a destructive action),
+**Modals** — Three dialog hosts live in `html_common.scala.html`: load into `#modalContent` for the
+general modal, into `#popoverContent` for the popover dialog, and into `#imageDetailModalContent` for
+asset detail. `js/common/modal.js` is the single owner of all three: which host is active (one at a
+time — a new open replaces the active dialog, whatever its host), the title,
+initial focus (the fragment's autofocus selector, else the close control, else the popover host itself, never a destructive action),
 focus restoration on close (the fragment's `data-app-dialog-return-focus` selector, else the
 control that opened it, using the visible ⋯ trigger for a menu action), and identity: every displayed open has an `openId`
 (`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
-swaps once the user dismissed or replaced it. Visibility is bound through the Alpine `modal` store
+swaps once the user dismissed or replaced it. The two modal hosts' visibility is bound through the Alpine `modal` store
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
 `js/app.js` contains focus and hides the page from assistive tech; its documented local patches
 cancel delayed activation when a trap is released or removed, and count controls in open shadow
 roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes the
-active modal and any open context menu and is consumed by them, so a background inline edit
+active dialog and any open context menu and is consumed by them, which also keeps the browser's own
+Escape handling for the popover from running a second time, so a background inline edit
 survives; with neither open it closes the map view's crowded-pin panel, and with none of those it is
-broadcast for such an edit to cancel. General dialogs ignore backdrop clicks, asset detail closes on them. Explorer action dialogs
-are anchored below the row's ⋯ trigger, or the Add button. Their request buttons declare
-`data-app-modal-anchor` with that control's selector; `modal.js` preserves it through validation,
-repositions on content/viewport/explorer resizing and scrolling, and releases its observers on close
-or replacement. `placeAnchoredPanel` (`common/anchored-panel.js`) supplies placement shared with
-context menus: below and left-aligned normally, flipping above or capping height on the roomier side
-when necessary, with horizontal placement constrained to the viewport and the panel kept
-`--viewport-gap` (`0.625rem`, 10px at the default root) from every viewport edge. The box is hidden until measured to avoid a
-flash at the default position. Anchored forms use natural content width in `core.css`, keeping
-inputs at their existing width and only the standard padding at the right. The Location map editor
-retains its explicitly declared width. Other general dialogs retain `--modal-content-width` and the
-host's centered placement; asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host. Opening any modal closes an open context menu first, so a
-modal never appears over one.
+broadcast for such an edit to cancel. An open select picker's Escape is left to the picker, which closes itself and
+not the dialog holding it. General dialogs ignore backdrop clicks, asset detail closes on them. The general
+modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog declares a wider
+one); asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host.
+Switching hosts releases the active one in its own reactive flush before the next is activated, and hides the
+popover when it was the active one. Opening any dialog closes an open context menu first, so a
+dialog never appears over one. A host keeps its last fragment after it closes; opening the general modal or the
+popover dialog empties the other once it has faded out, so two dialogs never share a field ID (a `<label for>`, an
+autofocus selector). A validation replacement empties nothing.
 
-Both modal hosts use `.close-modal` in `core.css`: the X keeps the text color (`--theme-neutral-4`)
-at rest, on hover, and on focus, with no focus outline (the modal may focus it on open).
-Folder, album, Location, and category dialogs use the general modal host and its close control.
+The popover dialog (`#popoverDialog`) is a native `<dialog popover="auto">`, a dialog by its element rather than an
+ARIA role, with no scrim and no focus trap, so the page stays live. The browser owns its visibility (`:popover-open`; `modal.js` changes it only through `showPopover()` and
+`hidePopover()`, and nothing binds `x-show` to it); the store names it as the active host while it is open, for the
+shared title and the one-active-host rule. CSS anchor positioning places it, and no JS measures anything: every
+trigger `js/common/context-menu-markup.js` builds carries `anchor-name: --<its id>`, a popover request names its
+trigger's ID in `data-app-dialog-anchor`, and `openModal` sets the host's `position-anchor` to `--<that id>`. The
+trigger IDs are stable, so a list rebuild that renders the trigger again re-anchors an open popover with no observer.
+`openModal` also passes the trigger as `showPopover({ source })`, which puts the popover next in the Tab order after
+it, so Tab out of the popover goes on from the trigger; the implicit anchor that `source` creates is a reference to
+that one element, which a rebuild would leave behind, so the named `position-anchor` overrides it.
+`position-area: bottom` puts the popover below its trigger and centered on it, slid back inside the viewport at a side
+edge, `--popover-anchor-gap` (`0rem`, flush) from the trigger and `--viewport-gap` (`0.625rem`, 10px at the default
+root) from the viewport's edges, and at most the viewport's width less a `--viewport-gap` each side, its content
+wrapping anywhere (`overflow-wrap: anywhere`, so a long unbroken name wraps). When it does not fit below,
+`position-try-fallbacks: flip-block, --popover-capped, --popover-capped-above` under `position-try-order: most-height`
+tries the roomier side's options first (the base placement below is always tried first, and the order sorts only the
+fallbacks): `flip-block` puts it above when that side is roomy enough, and `@position-try --popover-capped` (below)
+or `--popover-capped-above` caps its height on the roomier side, its content scrolling; the capped-above option
+swaps the block margins as `flip-block` does, so the anchor gap faces the trigger and `--viewport-gap` the viewport's
+top. It follows its trigger as the explorer scrolls and the Split.js divider moves, and
+`position-visibility: anchors-visible` hides it while its row is clipped out of the explorer. An open whose trigger is gone or not displayed marks the host
+`data-unanchored`, placed like the general modal: 100px from the top, centered, its height capped at
+`--viewport-gap` from the bottom. A validation replacement re-hydrates into the open host and only refocuses: the
+popover is neither re-anchored, hidden nor shown again.
+
+The browser dismisses the popover on an outside click (light dismiss), dropping what was typed. Its `beforetoggle`
+listener (`bindPopoverHost()`, called by `registerDialogListeners` in `js/listeners/dialogs.js`) runs the close
+bookkeeping synchronously, before the click that dismissed it can request another dialog, so it never cancels the
+open that click requests; focus is restored only when it was still inside the host, so a click elsewhere keeps the
+focus it gave, or the body. Its `focusout` listener closes it when Tab, or Shift+Tab from the first control, moves
+focus to a control outside it, leaving focus there; a focus change with no related target (a click, a validation swap
+removing the focused field) is left to light dismiss. Escape, the × and a completed operation close it through
+`closeModal()` and restore focus as for a modal, unless focus already sits on a control outside the host. The host
+carries `tabindex="-1"`, as a context menu panel does, so a click on its title, a label or its padding moves focus to
+the host rather than the body and never reads as focus leaving. Closing a dialog leaves the store's title in place,
+so the popover keeps its title while it fades out; the next open sets its own.
+
+The popover is a translucent, frosted surface: `--popover-background-color` under `--popover-backdrop-filter`, a
+hairline of `--popover-border-color`, `--radius-large`, and `--sheen-shadow` over `--float-shadow`. Its title and
+close control sit at the top with no divider (`.popover-toolbar`), and it fades in and out over 150 ms under
+`prefers-reduced-motion: no-preference`. A form inside fills `--popover-form-width` (20rem, at most the popover's
+width), and its inputs and selects the form; the form's own action (Move's button, `#popoverContent form > button`)
+sits `--space-5` below its fields, while a label and an error stay `--space-2` from their field. The Delete
+confirmation has no form and keeps its button's width.
+
+Every dialog host uses `.close-modal` in `core.css`: the X keeps the text color (`--theme-neutral-4`)
+at rest, on hover, and on focus, with no focus outline (the modal may focus it on open). The popover's is quieter,
+`--font-size-large` in its text color at 0.6. Folder, album, Location, and category dialogs use the popover host and
+its close control; Add location uses the general modal host.
 
 A **dialog** is a server-rendered form that completes one user action, hydrated from its
-`data-app-fragment` kind; a **modal dialog** is one shown in the modal host. Attributes that describe
+`data-app-fragment` kind; a **modal dialog** is one shown in a modal host, a **popover dialog** one
+shown in the popover host. Attributes that describe
 the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), and `kind`, naming wiring a dialog needs beyond its
@@ -307,23 +352,25 @@ event is declared like any request element's, with `data-app-success-event` (+ `
 `-detail-target-attr-*`) on the fragment root. An outcome only the server knows (how many assets a
 membership change applied) arrives as JSON in the `App-Success-Detail` response header
 (`BaseController.dialogSuccessResponse`, `Const.http.successDetailHeader`), which
-`dialog-operations.js` merges over the declared detail. The one attribute that describes the modal host is
-`data-app-modal-title`. Folder, album, Location, and category actions, including the Add controls,
-are **modal dialogs**, as are the people dialogs and purge confirmation. Only View settings is an
+`dialog-operations.js` merges over the declared detail. The one attribute that describes the host is
+`data-app-modal-title`, the title either host shows. Folder, album, Location, and category actions, including the Add
+controls, are **popover dialogs**; Add location, Add to location, the people dialogs and the purge confirmation are
+**modal dialogs**. Only View settings is an
 **inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its checkboxes apply
 immediately without submitting an operation.
 
 A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"`
 names a `<template>` whose content is a `modal` fragment; `js/fragments/dialog-openers.js` copies
-it into the modal host, runs `htmx.process` on it, and hydrates it like a fetched dialog, so it
+it into the general modal host, runs `htmx.process` on it, and hydrates it like a fetched dialog, so it
 opens, submits, closes, and announces its success event through the same code. The purge
-confirmation in `htmx/trashbin_header.scala.html` is the one such dialog (`hx-confirm` is not
-used).
+confirmation in `htmx/trashbin_header.scala.html` is the one such dialog in the app (`hx-confirm` is not
+used); the style guide's labelled fields specimen is another.
 
 General HTMX modal fragments opt in with `data-app-fragment="modal"`; `js/fragments/modal.js` opens the
-host on hydration and registers the modal presentation with `js/fragments/dialog-operations.js`, which
+host the fragment was swapped into on hydration (the popover host for `#popoverContent`, else the general modal), so
+a `modal` fragment's presentation follows the host its request targets and the template does not say which. It registers the modal presentation with `js/fragments/dialog-operations.js`, which
 tracks each operation any dialog submits from `htmx:before:request` (capturing a handle to the dialog
-it belongs to - for a modal, its open - and its success metadata while the fragment is still in the
+it belongs to - for a modal or popover dialog, its open - and its success metadata while the fragment is still in the
 DOM; a repeated submission while one is pending is dropped). When the response arrives it dispatches
 the success event exactly once, lets normal page updates through even if the dialog was closed or
 replaced, and closes the initiating dialog if it is still active. Validation
@@ -353,10 +400,14 @@ the player, and does nothing on an image.
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
 for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
 `js/common/context-menu-markup.js` as the tree or list is rendered, so opening a menu sends no request.
-Each action requests its dialog into `#modalContent`; the modal owner closes the menu when the
-response opens. Menu panels contain only their action buttons, with no inline form or dialog host.
-`buildModalTriggerCtrl` builds the Add folder, Add album, Add location, and Add category buttons
-(including empty-state controls) as direct requests to the same modal host.
+Each action requests its dialog into the popover host (`#popoverContent`), naming the menu's ⋯ trigger in
+`data-app-dialog-anchor`; the modal owner closes the menu when the response opens (the browser would close it too,
+since neither popover is the other's ancestor). Menu panels contain only their action buttons, with no inline form or
+dialog host. `buildModalTriggerCtrl` builds the Add folder, Add album, Add location, and Add category buttons
+(including empty-state controls) as direct requests: into the popover host, anchored to the button itself (`host`
+`ModalHost.popover`, the default), or into the general modal host with no anchor (`host` `ModalHost.general`, which
+Add location and "Add your first location" pass); any other host throws. Every trigger the module builds carries `anchor-name: --<its id>` (`_buildButton`),
+the View settings button too, which nothing anchors to.
 
 The ⚙ View button above the results grid (`#viewSettingsBtn`, built by
 `js/search-results/view-settings-control.js` into `#viewSettingsActions`) uses
@@ -374,7 +425,7 @@ root); it closes the panel when focus leaves and on scroll, window resize, or ex
 it never tracks a moving trigger. The panel carries `tabindex="-1"`, so a click on a dialog's
 label or padding moves focus to the panel rather than out of it.
 `closeContextMenu` / `closeOpenContextMenu`, exported by the component module, close a menu from
-outside the component: Escape in `global.js` (focus returns to the trigger unless a modal was
+outside the component: Escape in `global.js` (focus returns to the trigger unless a dialog was
 closed too), the folder model when an ancestor collapses, and `openModal`; the trigger is found as the
 `[popovertarget]` button in the panel's cell, not by an ID convention. Removing the tree or list removes the open panel and, through the component's
 `destroy`, its listeners. Styling lives in `core.css`; CSS sets `display` only under
@@ -462,9 +513,9 @@ does not change, and the album counts are patched in place (`refreshAlbumCounts`
 While an album's results are displayed (`searchParams.albumId`, mirrored by `data-results-album-id`
 on the results fragment, which marks the row `data-viewed-scope` and colors its icon green) the batch
 footer offers "Remove from album", which deletes the memberships of the selected assets and removes
-their cells. Add is a separate modal (`add_album_dialog.scala.html`, submitted with Return) opened by the top `#addAlbumBtn` (centered above the list) or, while
+their cells. Add is a popover dialog (`add_album_dialog.scala.html`, submitted with Return) opened by the top `#addAlbumBtn` (centered above the list) or, while
 there are no albums, by the centered `#addFirstAlbumBtn`; the renderer builds both controls into
-their hosts and shows one or the other. Rename and Delete open separate modals from the album's menu; deleting the viewed album runs a
+their hosts and shows one or the other. Rename and Delete open popover dialogs from the album's menu; deleting the viewed album runs a
 search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDeleted` reload the
 list, which restores focus by ID, or to the visible add button when the dialog's return control
 was hidden by the change (`focusAddAlbumControlIfFocusLost`).
@@ -512,8 +563,8 @@ reports that through `assetActions.reportAddedToLocation`, the report a drop mak
 location" when nothing was new), then resets the selection and refreshes the counts.
 
 Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the pin editor below) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
-`#addFirstLocationBtn`; Add category also opens a modal from `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
-other. Rename, Delete and Move to category open separate modals from the row's menu (`#locationMenuCtrl-{id}`
+`#addFirstLocationBtn`, centered in the general modal host; Add category opens a popover dialog below `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
+other. Rename, Delete and Move to category open popover dialogs from the row's menu (`#locationMenuCtrl-{id}`
 is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
 away); deleting the viewed Location runs a search back to the whole repository, and deleting a
 category leaves its Locations at the top level, a viewed one still green. `locationAdded` /
@@ -614,19 +665,48 @@ resize as a move. Storage that cannot be read or written leaves the views in mem
 view, which the pin editor opens on.
 
 **Explorer action dialogs** — The folder, album, Location, and category forms declare
-`data-app-fragment="modal"` and `data-app-modal-title`; the shared host supplies their heading and
-close control. Add and Rename submit with Return and retain `hx-target="this"`, `hx-swap="none"`,
-and `hx-json-enc`, so validation replaces the active form with its submitted values and errors.
-The modal focuses the name field (selecting it for Rename), or the category selector for Move.
+`data-app-fragment="modal"` and `data-app-modal-title` and open as popover dialogs (Add location in the general
+modal host); the host supplies their heading and close control. Add and Rename submit with Return and retain
+`hx-target="this"`, `hx-swap="none"`, and `hx-json-enc`, so validation replaces the active form with its submitted
+values and errors. They hold one field with no label, only its placeholder, and the input carries an `aria-label`
+("Folder name", "Album name", "Category name", or "Location name" by kind for a Location row's Rename).
+The dialog focuses the name field (selecting it for Rename), or the category selector for Move.
 Delete leaves initial focus on the close control, so opening the confirmation cannot activate its
 destructive button. Rename and Move return focus to the row's ⋯ button; Delete names a control
 that survives the mutation (the parent folder's ⋯ or the list's Add button). Add returns to its
 opener; for a menu action the modal owner remembers the visible ⋯ trigger. Re-hydrating validation
-preserves that original return control and anchor. Escape and the host's X dismiss the dialog.
+preserves that original return control and leaves the popover where it is. Escape, the host's ×, an outside click
+and Tab out of the popover dismiss the dialog; Escape and the × return focus as above, while an outside click and
+Tab leave it where they put it.
 
 **Inline dialogs** — Only View settings uses `js/fragments/inline-dialog.js`, which gives it initial
 focus and binds its checkboxes. It has no operation lifecycle; dismissal follows the popover's
 rules and Escape returns focus to the trigger.
+
+**Forms** — Every text-like field on every page but the setup screen takes the one field style of the FORMS section
+of `core.css`: text, search, email, password and file inputs, textareas and selects. It is a sunken fill
+(`--field-background-color`) carrying the page's text (`--theme-neutral-4`), a hairline of `--theme-neutral-3` at
+0.25, `--radius-small`, `--space-4` × `--space-5` padding, `--font-size-medium` and an accent caret, and on focus the
+accent edge and ring in place of the focus ring (see **Themes**). Its selector sits inside `:where()`, so any page's
+own rule outranks it, and is written once: the focus rule is nested in the field rule (`&:focus-visible`), as the
+picker's rules are in the select's, while the options take a rule of their own. Checkboxes, radios, ranges, hidden and submit inputs take none of it, nor do the
+nav's quick search field and the grid toolbar's Group and Sort dropdowns (`.sort-dropdown`), which keep their own
+looks. Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
+`htmx/setup_form.css`'s alone; the login page loads no app stylesheet. The upload form's file input takes the field's
+box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
+except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
+(see **Modals**). A field in error carries the `error` class: the error fill
+(`--error-background-color`) with `--theme-neutral-4` text and the `--error-color` edge, which it keeps on focus,
+with no ring. Its message is a `div.error` under the field, in `--font-size-small` and `--error-color` with no box:
+the dialogs and the person name editor (`htmx/edit_person_name`) render it directly after the field, the Settings form
+under the row of the field and its Reset button. A label above a field in a dialog of either host (Move's Category,
+Add to location's Location, Add location's fields) is in small caps: `--font-size-xs`, semibold, uppercase,
+`--letter-spacing-wide`, its text color at 0.6 (`:is(#popoverContent, #modalContent) label`); the Settings rows keep
+their own labels. A one-field popover dialog (Add and Rename, the style guide's sample dialog) shows no label, only
+its placeholder, and its input carries an `aria-label`. A select is a customizable select (`appearance:
+base-select`, behind `@supports`, Chromium today), its picker drawn as the popover dialog's surface, an option tinted
+on hover (`--theme-neutral-4` at 0.08) and when checked (the accent at 0.2); a browser without it keeps the native
+select, styled as a field. `.sort-dropdown` keeps its native list.
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
@@ -986,7 +1066,7 @@ color, `currentColor`, while the entry is hovered, so an empty one does not reac
 `--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, and a
 `.clear` (`fa-times`) control shown while there is text. While the field has focus the form widens to
 `--nav-search-focus-width` and glows in `--theme-accent` (a 1px ring and a 14px halo at 0.55 alpha); that glow is the
-field's focus indicator, the one place a rule sets `outline: none` (see **Themes**). The bar is
+field's focus indicator, one of the two places a rule sets `outline: none` (see **Themes**). The bar is
 `--theme-primary` at 0.1 alpha over the page. The entry of the page shown carries `aria-current="page"`, which the
 server renders from the include's `current` parameter, a `Const.NavEntry` key: the main page's three views
 (`IndexController` passes the `view` query parameter, `repository` by default, the same value the client seeds its
@@ -1049,14 +1129,13 @@ nav, and at 0.5 the track of a toggle group); and `--theme-accent` (teal: where 
 its tint, the brand's mark and the end of its gradient, and the call to action: the fill of `.action-button.primary`,
 a dialog's or a form's main action) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
 The neutral scale, `--theme-neutral-1` to `--theme-neutral-4`, ordered from the lightest surface to the darkest text in
-the light theme: `-1` an input's field, the lightest surface in either theme, and at a low alpha the light of a sheen
-or a hover veil; `-2` the page surface, a small button's fill and the pressed segment of a toggle group; `-3` lines and
-secondary text (the edge of a cell, a menu, an input, a button or a quiet control, a tab at rest, a disabled entry, a
-muted label; 4.5:1 on the page and on the secondary surface); `-4` text on the app's own surfaces. The dark side of
-the scale is not in lightness order, since the field stays light there: `--theme-on-field`, the text typed into a
-field, is the darkest text in the light theme and the page surface's value in the dark one, so the field keeps its
-inverted look. Two tokens hold one value on one side by design (`-1` and `-4`, `--theme-on-field` and `-2`, in the
-dark theme); the style guide compares both sides and flags none of them. A rule writes a theme color by its token
+the light theme: `-1` the lightest color in either theme, which no rule draws as a surface: at a low alpha it is the
+light of a sheen or a hover veil; `-2` the page surface, a small button's fill, the pressed segment of a toggle group
+and, at 0.84, a floating surface (the popover dialog, an open select's picker); `-3` lines and secondary text (the edge of a cell, a menu, a field, a
+button or a quiet control, a tab at rest, a disabled entry, a muted label; 4.5:1 on the page and on the secondary
+surface); `-4` text on the app's own surfaces, the text typed into a field included. The dark side of the scale is not
+in lightness order, since `-1` stays light there, and `-1` and `-4` hold one value in the dark theme by design; the
+style guide compares both sides and flags neither. A rule writes a theme color by its token
 (`color: var(--theme-neutral-4)`, `border: var(--border-hairline) var(--theme-neutral-3)`); no token aliases a theme color under
 another name or mixes one at a percentage outside `:root`. Two kinds of color stand apart, with literal pairs of their
 own: the four semantic colors (`--success-color`, `--warning-color`, `--error-color`, `--info-color`: green, amber,
@@ -1072,20 +1151,29 @@ an edge, since the color on its own fill reads about 3:1; a success, warning or 
 color at 0.16 as its fill, with the color itself as its text and edge); and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
 (`--scrim-color: hsl(from var(--shadow-color) h s l / 0.45)`). The only other color tokens are the veils, a theme
 color or `--shadow-color` at an alpha in relative color syntax, tokens because a translucent color cannot be written
-as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9) and
-`--dnd-dragging-background-color` (`--theme-neutral-3` at 0.48), and `--panel-border-color` (`--shadow-color` at
-0.18, the edge of a chrome panel and the divider inside one); a veil follows the pair of the color it reads. A border
+as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9),
+`--dnd-dragging-background-color` (`--theme-neutral-3` at 0.48), `--panel-border-color` (`--shadow-color` at
+0.18, the edge of a chrome panel and the divider inside one), `--popover-background-color` and
+`--popover-border-color` (`--theme-neutral-2` at 0.84 and `--theme-neutral-3` at 0.3, the surface and the edge of a
+floating surface: the popover dialog and an open select's picker), and `--field-background-color` (`--shadow-color`
+at 0.23, a field's sunken fill); a veil follows the pair of the color it reads. The frost behind a floating surface is
+a token too, `--popover-backdrop-filter` (`blur(10px) saturate(200%)`), since the popover dialog and the picker both
+draw it. A border
 token holds a width and a style and no color: `--border-hairline` (`1px solid`), `--border-heavy` (`2px solid`, its
 width also `--border-heavy-width` for a size that clears the edge) and `--border-double` (`2px double`). A rule writes
 the edge's color after it, in place (`border: var(--border-hairline) var(--theme-neutral-3)`): `--theme-neutral-3`
-on a hairline around a cell, a menu or a quiet control and on a heavy edge around an input or a dialog; at 0.45 on a
-hairline around a button (a semantic or the accent button's edge is its own color); `--theme-primary-text` at 0.4 on
+on a hairline around a cell, a menu or a quiet control and on a heavy edge around a modal dialog; at 0.45 on a
+hairline around a button (a semantic or the accent button's edge is its own color); at 0.25 on a hairline around a
+field (`--theme-accent` while it has focus, `--error-color` in error); `--popover-border-color` on a hairline around a
+floating surface; `--theme-primary-text` at 0.4 on
 a hairline around a chip; `--panel-border-color` on a hairline around a chrome panel or dividing one; `--theme-secondary` on the double trace of
 a list; `--theme-primary` on the heavy focus ring. A token holding a shadow keeps its offsets with its color, which is
-a theme color or `--shadow-color` at an alpha: `--drop-shadow`, the one shadow under a dialog, a panel, a pin or the
-checkmark, `--text-shadow`, whose light side is the ink at alpha 0 since a dark halo has no place under dark text, and
-`--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge. Three more draw the buttons:
-`--sheen-shadow`, an inset 1px line of `--theme-neutral-1` at 0.08 along a button's top edge, on every button;
+a theme color or `--shadow-color` at an alpha: `--drop-shadow`, the one shadow under a modal dialog, a panel, a pin or
+the checkmark; `--float-shadow`, the ink at 0.45 at 12px/32px, the one shadow under a floating surface;
+`--field-focus-shadow`, a 2px spread of `--theme-accent` at 0.15, a focused field's ring; `--text-shadow`, whose light
+side is the ink at alpha 0 since a dark halo has no place under dark text; and `--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge. Three more draw the buttons:
+`--sheen-shadow`, an inset 1px line of `--theme-neutral-1` at 0.08 along a button's top edge, on every button and
+over `--float-shadow` on a floating surface;
 `--soft-shadow`, two layers of the ink (0.25 at 1px/2px, 0.15 at 2px/6px), under a button at rest, a small button on
 hover and the pressed segment of a toggle group; and `--lift-shadow`, the ink at 0.3 at 4px/12px, under a hovered
 button. A rule lists the ones it draws (`box-shadow: var(--sheen-shadow), var(--soft-shadow)`). No two
@@ -1095,9 +1183,12 @@ snackbar's text, a pin's frame) reads `--theme-neutral-4`; what is drawn on the 
 `--theme-on-primary`, and on the accent fill `--theme-on-accent`. A light theme is therefore the light side of every
 pair; both sides are real, and the style guide's switch shows either. Keyboard focus is one ring: `:focus-visible { outline: var(--border-heavy) var(--theme-primary); outline-offset: 2px }` in
 `core.css`, on every element, inset (`outline-offset: -2px`) where a panel clips its rows; the browser withholds it
-after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline, with one
-exception: a text field shows the ring after a pointer too, and the nav's quick search input sets `outline: none`
-because its form's accent glow on `:focus-within` is that field's focus indicator (see **Nav**). The setup
+after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline, with two
+exceptions, each a field that draws its own focus indicator in place of the ring: a text-like field (see **Forms**)
+sets `outline: none` on `:focus-visible`, which it matches after a pointer too, and turns its edge `--theme-accent`
+with `--field-focus-shadow` around it, while a field in error keeps its `--error-color` edge with no ring; and the
+nav's quick search input sets `outline: none` because its form's accent glow on `:focus-within` is that field's focus
+indicator (see **Nav**). The setup
 page's palette is no `:root` token: `pages/setup.css` declares the `--setup-*` tokens on `body:where(.setup)`, as
 literals with no pairs, since the page is an illustration and a form in a look of its own, which it keeps in either
 theme (see **Setup background**), and recolors the focus ring there to the form's accent
@@ -1144,8 +1235,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
   **Theme colors** (`--theme-*`: the brand colors, the neutral scale and the on-colors, each a literal hex pair),
   **Status and shadow** (the four semantic colors, their fills and `--shadow-color`) and **Derived**
-  (the veils, `--scrim-color`, `--asset-detail-backdrop-color` and `--dnd-dragging-background-color`, each a theme
-  color or `--shadow-color` at an alpha). The lengths are
+  (the veils, such as `--scrim-color`, `--asset-detail-backdrop-color`, `--popover-background-color` and
+  `--field-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
   length, such as a width or the radii, `--radius`, `--radius-small`, `--radius-large` and the pill `--chip-border-radius`); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
@@ -1163,15 +1254,20 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
   - A changed size, font, or icon set updates the values the specimens state in text.
-  - `core.css` carries no comments beyond its boxed section headings (`/* NAVIGATION */` and the like): a token or a
-    rule is documented in this guide and in the style guide's prose, never beside its declaration, so the two cannot
+  - `core.css` comments its boxed section headings (`/* NAVIGATION */` and the like) and, in a line or two, a rule
+    whose selector or values need a reason (the quick search form, the field and its focus rule, the popover dialog's
+    placement), pointing to this guide for the detail; it comments no `:root` token. A token, and what a rule draws,
+    is documented in this guide and in the style guide's prose, never beside its declaration, so the two cannot
     drift. The guide would show a comment directly above a `:root` token as its note; `core.css` has none, by design.
   - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
 - **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
   (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup), both
-  opening `htmx/style_guide_sample_dialog.scala.html` in the modal host. A blank name returns the validation
-  replacement; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
-  a snackbar. Nothing is persisted.
+  opening `htmx/style_guide_sample_dialog.scala.html` as a popover dialog below the control, a one-field popover with
+  no label (its input's `aria-label` is "Sample name"). A blank name returns the validation replacement, its error
+  under the field; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
+  a snackbar. Nothing is persisted. The Forms section's Labelled fields button (`data-app-open-dialog`, see
+  **Modals**) opens a page-held `<template>` dialog in the general modal host, a labelled input and a labelled select,
+  so its labels take the dialog's small caps; it requests and submits nothing, and the × or Escape closes it.
 - **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
   stays on screen. `setTheme` declares `color-scheme` inline on the root element, which every `light-dark()` token
   follows (`applyTheme` and `rememberedTheme` of `js/common/theme.js`),
@@ -1270,9 +1366,9 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | modal owner: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), explorer dialog anchoring, `setAssetDetailSize` |
+| `static/js/common/modal.js` | owner of the three dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` |
 | `static/js/common/video-playback.js` | the asset-detail Video beyond its element: `unloadVideo`, and the Media Session (`describeInMediaSession`, `clearMediaSession`) |
-| `static/js/common/anchored-panel.js` | viewport placement shared by popover menus and anchored explorer modals |
+| `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
 | `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
@@ -1293,9 +1389,9 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/setup-background/setup-background-worker.js` | the Worker of the setup background: the scene on the OffscreenCanvas (the ground's bands and cells, the clouds and their shadows, the jet and its lights), the clamped clock with one pending frame, the first frame drawn before `ready`, the still under reduced motion and the pause of a hidden tab, the refit on `resize` |
 | `static/js/setup-background/setup-background-textures.js` | the ten textures of the fields, each painting a cell from its corner: tiles repeated by a pattern (furrows, crop rows, tramlines, strip crops, an orchard, pasture, contours) and the headland and the centre pivot drawn to the cell |
 | `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the message hosts, `main` with the title and the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card, the title and the footer are `static/css/pages/setup.css` |
-| `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the modal host |
+| `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the general modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
-| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, modal open) |
+| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
@@ -1310,7 +1406,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
-| `views/includes/html_common.scala.html` | Snackbar + the two Alpine-bound modal hosts |
+| `views/includes/html_common.scala.html` | Snackbar + the three dialog hosts: the two Alpine-bound modal hosts and the popover dialog |
 | `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
 | `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |

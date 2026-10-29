@@ -478,7 +478,7 @@ function groupLiterals(literals, rootTokens) {
 
 /**
  * The live specimens: an Add button and a row's ⋯ menu, built by the functions the explorer lists
- * build theirs with, each opening the sample dialog in the shared modal host.
+ * build theirs with, each opening the sample dialog as a popover dialog below it.
  */
 function mountMenuSpecimens() {
     const hostEl = document.getElementById("styleGuideMenuSpecimens")

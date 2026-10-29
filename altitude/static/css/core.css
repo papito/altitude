@@ -15,7 +15,6 @@
     --theme-neutral-2: light-dark(#f4f5f7, #353639);
     --theme-neutral-3: light-dark(#565b66, #babdc5);
     --theme-neutral-4: light-dark(#12161f, #f7f8fa);
-    --theme-on-field: light-dark(#12161f, #353639);
     --shadow-color: light-dark(#000, #000);
 
     --border-hairline: 1px solid;
@@ -23,6 +22,7 @@
     --border-heavy: var(--border-heavy-width) solid;
     --border-double: 2px double;
     --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
+    --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
 
     --radius: 0.3125rem;
     --radius-small: 0.1875rem;
@@ -34,11 +34,18 @@
     --sheen-shadow: inset 0 1px 0 hsl(from var(--theme-neutral-1) h s l / 0.08);
     --soft-shadow: 0 1px 2px hsl(from var(--shadow-color) h s l / 0.25), 0 2px 6px hsl(from var(--shadow-color) h s l / 0.15);
     --lift-shadow: 0 4px 12px hsl(from var(--shadow-color) h s l / 0.3);
+    --float-shadow: 0 12px 32px hsl(from var(--shadow-color) h s l / 0.45);
+    --field-focus-shadow: 0 0 0 2px hsl(from var(--theme-accent) h s l / 0.15);
     --asset-detail-backdrop-color: hsl(from var(--shadow-color) h s l / 0.9);
     --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
+    --popover-background-color: hsl(from var(--theme-neutral-2) h s l / 0.84);
+    --popover-backdrop-filter: blur(10px) saturate(200%);
+    --field-background-color: hsl(from var(--shadow-color) h s l / 0.23);
     --modal-content-width: 25rem;
+    --popover-form-width: 20rem;
     --modal-content-padding: var(--space-6);
     --viewport-gap: var(--space-5);
+    --popover-anchor-gap: 0rem;
     --modal-toolbar-height: 1.875rem;
 
     --space-1: 0.125rem;
@@ -351,22 +358,85 @@ footer {
 /* FORMS */
 /*       */
 
-input, textarea {
-    padding: var(--space-4);
-    border: var(--border-heavy) var(--theme-neutral-3);
-    border-radius: var(--radius);
-    color: var(--theme-on-field);
+/* A text-like field anywhere but the setup screen, the nav search and the toolbar dropdowns, at zero specificity so a
+   page's own rule outranks it; its focus indicator replaces the focus ring (see Forms in views/AGENTS.md) */
+:where(body:not(.setup) :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"],
+                                      [type="submit"]), textarea, select):not(nav *, .sort-dropdown)) {
+    padding: var(--space-4) var(--space-5);
+    border: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.25);
+    border-radius: var(--radius-small);
+    color: var(--theme-neutral-4);
+    background-color: var(--field-background-color);
     font-size: var(--font-size-medium);
-    background-color: var(--theme-neutral-1);
+    caret-color: var(--theme-accent);
+
+    &:focus-visible {
+        outline: none;
+        border-color: var(--theme-accent);
+        box-shadow: var(--field-focus-shadow);
+    }
 }
 
-form div.error {
-    color: var(--error-color);
-    padding: var(--space-3);
-}
-
-form input.error, form input.error:focus {
+:where(body:not(.setup)) form input.error {
+    background-color: var(--error-background-color);
     border-color: var(--error-color);
+
+    &:focus-visible {
+        border-color: var(--error-color);
+        box-shadow: none;
+    }
+}
+
+:where(body:not(.setup)) form div.error {
+    margin-top: var(--space-2);
+    color: var(--error-color);
+    font-size: var(--font-size-small);
+}
+
+:is(#popoverContent, #modalContent) label {
+    display: block;
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+    color: hsl(from currentColor h s l / 0.6);
+}
+
+/* Behind @supports, so a browser without the customizable select keeps the native one; the options take a rule of their
+   own, since the design tweaks panel matches no nested descendant selector (see Do in views/AGENTS.md) */
+@supports (appearance: base-select) {
+    :where(body:not(.setup) select:not(.sort-dropdown)) {
+        appearance: base-select;
+
+        &::picker(select) {
+            appearance: base-select;
+            margin-top: var(--space-2);
+            padding: var(--space-2);
+            background: var(--popover-background-color);
+            backdrop-filter: var(--popover-backdrop-filter);
+            border: var(--border-hairline) var(--popover-border-color);
+            border-radius: var(--radius-large);
+            box-shadow: var(--sheen-shadow), var(--float-shadow);
+        }
+
+        &::picker-icon {
+            color: hsl(from currentColor h s l / 0.6);
+        }
+    }
+
+    :where(body:not(.setup) select:not(.sort-dropdown)) option {
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-small);
+
+        &:hover {
+            background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+        }
+
+        &:checked {
+            background: hsl(from var(--theme-accent) h s l / 0.2);
+        }
+    }
 }
 
 /*         */
@@ -703,20 +773,6 @@ form input.error, form input.error:focus {
     padding: var(--modal-content-padding);
 }
 
-#modalContainer.anchored #modalContent:not(:has(.location-editor)) {
-    width: max-content;
-}
-
-#modalContainer.anchored input, #modalContainer.anchored select {
-    max-width: 100%;
-}
-
-#modalContainer.anchored .modal-box {
-    position: fixed;
-    margin: 0;
-    overflow: auto;
-}
-
 .modal-box {
     display: grid;
     grid-template-rows: var(--modal-toolbar-height) auto;
@@ -791,6 +847,112 @@ form input.error, form input.error:focus {
     font-size: 3em;
     color: var(--theme-neutral-3);
     pointer-events: none;
+}
+
+/* Below the anchor, its margins replacing the UA popover's; most-height tries the roomier side's fallbacks first, so
+   one that does not fit either side is capped on the roomier one (see Modals in views/AGENTS.md) */
+#popoverDialog {
+    inset: auto;
+    position-area: bottom;
+    margin-block: var(--popover-anchor-gap) var(--viewport-gap);
+    margin-inline: var(--viewport-gap);
+    position-try-fallbacks: flip-block, --popover-capped, --popover-capped-above;
+    position-try-order: most-height;
+    position-visibility: anchors-visible;
+    width: max-content;
+    max-width: calc(100vw - 2 * var(--viewport-gap));
+    overflow: auto;
+}
+
+@position-try --popover-capped {
+    position-area: bottom;
+    max-height: calc(100% - var(--popover-anchor-gap) - var(--viewport-gap));
+}
+
+/* The block margins swapped, as flip-block swaps them: the anchor gap faces the anchor */
+@position-try --popover-capped-above {
+    position-area: top;
+    margin-block: var(--viewport-gap) var(--popover-anchor-gap);
+    max-height: calc(100% - var(--popover-anchor-gap) - var(--viewport-gap));
+}
+
+#popoverDialog:popover-open {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+/* An open with no displayed trigger to anchor to, which modal.js marks, is placed like the general host */
+#popoverDialog[data-unanchored] {
+    position-area: none;
+    position-try-fallbacks: none;
+    position-visibility: always;
+    inset: 100px var(--viewport-gap) auto;
+    margin: 0 auto;
+    max-height: calc(100% - 100px - var(--viewport-gap));
+}
+
+/* The padding and the text color replace the UA popover's */
+#popoverDialog {
+    padding: 0;
+    color: inherit;
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+}
+
+#popoverDialog .popover-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: var(--modal-content-padding) 0 0 var(--modal-content-padding);
+}
+
+/* The toolbar's padding lines the title up with the content, in place of the title's own */
+#popoverDialog .modal-title {
+    padding-left: 0;
+}
+
+#popoverDialog .close-modal {
+    font-size: var(--font-size-large);
+    color: hsl(from currentColor h s l / 0.6);
+}
+
+/* anywhere, unlike break-word, lowers the min-content width the popover's grid sizes the content by, so a long
+   unbroken name (the Delete button's) wraps */
+#popoverContent {
+    padding: var(--space-4) var(--modal-content-padding) var(--modal-content-padding);
+    overflow-wrap: anywhere;
+}
+
+#popoverContent form {
+    width: var(--popover-form-width);
+    max-width: 100%;
+}
+
+#popoverContent :is(input, select) {
+    width: 100%;
+}
+
+#popoverContent form > button {
+    margin-top: var(--space-5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    #popoverDialog {
+        transition: opacity 150ms ease-out, display 150ms allow-discrete, overlay 150ms allow-discrete;
+    }
+
+    #popoverDialog:not(:popover-open) {
+        opacity: 0;
+    }
+
+    @starting-style {
+        #popoverDialog:popover-open {
+            opacity: 0;
+        }
+    }
 }
 
 /*           */
