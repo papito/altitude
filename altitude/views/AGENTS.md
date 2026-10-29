@@ -11,8 +11,8 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`.
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a badge with `--radius-small`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold` or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip with the pill `--chip-border-radius`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's and the general modal host's 100 px, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including Add controls and category actions) open separate modals through `static/js/common/modal.js`. Anchor those modals below the row's menu trigger or the Add button and size ordinary forms to their content without widening inputs. Keep their context menus as action lists; only View settings uses an inline popover dialog. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -383,9 +383,10 @@ closed too), the folder model when an ancestor collapses, and `openModal`; the t
 hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
 those viewport coordinates apply correctly. `.menu-ctrl` and the icon control `.expand-ctrl` are
 excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags. A panel lives inside whatever container holds
-its trigger, so no stylesheet may reach into one with a descendant selector: `#searchControl > div`
-in `search_results.scala.html` is scoped to direct children for exactly that reason, since an ID
-selector outranks `.context-menu:popover-open` and would leave the closed panel displayed.
+its trigger, so no stylesheet may reach into one with a descendant selector: `#searchControl > div:not(.toggle-group)`
+in `includes/search_results.css` is scoped to direct children for exactly that reason, since an ID
+selector outranks `.context-menu:popover-open` and would leave the closed panel displayed (the
+`:not` leaves `#layoutToggle` its `.toggle-group` row).
 
 **Folder tree expansion and viewed scope** — In a non-root row the icon and the name have separate
 jobs: the name navigates (a search for the folder's results, disabled in triage and trash),
@@ -1020,6 +1021,18 @@ Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules ca
 coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
 `FrontendApp` remains the composition root that wires them together.
 
+**Control states** — The action buttons, a toggle group's segments, the filter chip, the menu trigger and a context
+menu's actions share one transition rule in the DEFAULT CORE section of `core.css` (background, border color, color,
+shadow, translate and scale over 160 ms, ease-out; a menu action's own rule shortens it to 120 ms, ease). A hovered
+`.action-button` lifts 1px, and a pressed one, toggle segment or filter chip scales to 0.97: both live in one
+`@media (prefers-reduced-motion: no-preference)` block, so nothing moves when the system asks for reduced motion while
+the colors and shadows still change. A disabled button takes neither the hover nor the press look
+(`:hover:not(:disabled)`, `:active:not(:disabled)`). `.action-button.primary`, the accent call to action, is a
+dialog's or a form's main action: Add in the Add location and Add to location dialogs, Move, Merge, the Settings
+Save, Upload from computer, and the empty lists' "Add your first album" and "Add your first location"; a destructive
+confirmation stays `.error`. The batch bar's buttons (`#batchOps .action-button`) keep a normal weight and draw the
+variants' own edges.
+
 **Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
 `color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
 switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Every color is a `:root` token
@@ -1031,12 +1044,13 @@ gradient and the tint of the nav bar), with
 `--theme-primary-text` (the primary as text or a thin edge on a surface, 4.5:1 where the primary itself is not: the
 filter chip) and `--theme-on-primary` (text and glyphs on the primary fill: a pin's path, a drop target's row, the
 checkmark of a selected cell; dark in the dark theme, since the primary cannot carry light text); `--theme-secondary`
-(the supporting surface, lifted off the page: a button, a hovered tab or row, a count pill in the nav,
-a pressed toggle); and `--theme-accent` (teal: where you are and what to do next. The current nav entry's text and
-its tint, the brand's mark and the end of its gradient, and the call-to-action color for a primary action button or a
-critical link, which no rule draws yet) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
+(the supporting surface, lifted off the page: a button, a hovered tab, row or menu action, a count pill in the
+nav, and at 0.5 the track of a toggle group); and `--theme-accent` (teal: where you are and what to do next. The current nav entry's text and
+its tint, the brand's mark and the end of its gradient, and the call to action: the fill of `.action-button.primary`,
+a dialog's or a form's main action) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
 The neutral scale, `--theme-neutral-1` to `--theme-neutral-4`, ordered from the lightest surface to the darkest text in
-the light theme: `-1` an input's field, the lightest surface in either theme; `-2` the page surface; `-3` lines and
+the light theme: `-1` an input's field, the lightest surface in either theme, and at a low alpha the light of a sheen
+or a hover veil; `-2` the page surface, a small button's fill and the pressed segment of a toggle group; `-3` lines and
 secondary text (the edge of a cell, a menu, an input, a button or a quiet control, a tab at rest, a disabled entry, a
 muted label; 4.5:1 on the page and on the secondary surface); `-4` text on the app's own surfaces. The dark side of
 the scale is not in lightness order, since the field stays light there: `--theme-on-field`, the text typed into a
@@ -1054,7 +1068,8 @@ trash entry of the nav are `--warning-color`; nothing draws `--info-color` yet),
 (`light-dark(hsl(from var(--success-color) h calc(s * 0.7) 90%), hsl(from var(--success-color) h calc(s * 0.6) 35%))`:
 the hue kept, the saturation at 70% or 60%, and the lightness set to 90% in the light theme and 35% in the dark one, so
 the four fills sit at one lightness; a fill carries `--theme-neutral-4` in either theme and its semantic color only as
-an edge, since the color on its own fill reads about 3:1); and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
+an edge, since the color on its own fill reads about 3:1; a success, warning or error button takes no fill token but its
+color at 0.16 as its fill, with the color itself as its text and edge); and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
 (`--scrim-color: hsl(from var(--shadow-color) h s l / 0.45)`). The only other color tokens are the veils, a theme
 color or `--shadow-color` at an alpha in relative color syntax, tokens because a translucent color cannot be written
 as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9) and
@@ -1063,15 +1078,20 @@ as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow
 token holds a width and a style and no color: `--border-hairline` (`1px solid`), `--border-heavy` (`2px solid`, its
 width also `--border-heavy-width` for a size that clears the edge) and `--border-double` (`2px double`). A rule writes
 the edge's color after it, in place (`border: var(--border-hairline) var(--theme-neutral-3)`): `--theme-neutral-3`
-on a hairline around a cell, a menu or a quiet control and on a heavy edge around an input, a button or a dialog;
-`--panel-border-color` on a hairline around a chrome panel or dividing one; `--theme-secondary` on the double trace of
+on a hairline around a cell, a menu or a quiet control and on a heavy edge around an input or a dialog; at 0.45 on a
+hairline around a button (a semantic or the accent button's edge is its own color); `--theme-primary-text` at 0.4 on
+a hairline around a chip; `--panel-border-color` on a hairline around a chrome panel or dividing one; `--theme-secondary` on the double trace of
 a list; `--theme-primary` on the heavy focus ring. A token holding a shadow keeps its offsets with its color, which is
 a theme color or `--shadow-color` at an alpha: `--drop-shadow`, the one shadow under a dialog, a panel, a pin or the
 checkmark, `--text-shadow`, whose light side is the ink at alpha 0 since a dark halo has no place under dark text, and
-`--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge and a button's hover look. No two
+`--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge. Three more draw the buttons:
+`--sheen-shadow`, an inset 1px line of `--theme-neutral-1` at 0.08 along a button's top edge, on every button;
+`--soft-shadow`, two layers of the ink (0.25 at 1px/2px, 0.15 at 2px/6px), under a button at rest, a small button on
+hover and the pressed segment of a toggle group; and `--lift-shadow`, the ink at 0.3 at 4px/12px, under a hovered
+button. A rule lists the ones it draws (`box-shadow: var(--sheen-shadow), var(--soft-shadow)`). No two
 border or shadow tokens hold one value: a rule that needs an edge or a shadow writes the token that has it, and a new
-one is a new look, described here. What is drawn on a semantic fill or over an image (the label of a button or a
-marker, the snackbar's text, a pin's frame) reads `--theme-neutral-4`; what is drawn on the primary fill reads
+one is a new look, described here. What is drawn on a semantic fill or over an image (the label of a marker, the
+snackbar's text, a pin's frame) reads `--theme-neutral-4`; what is drawn on the primary fill reads
 `--theme-on-primary`, and on the accent fill `--theme-on-accent`. A light theme is therefore the light side of every
 pair; both sides are real, and the style guide's switch shows either. Keyboard focus is one ring: `:focus-visible { outline: var(--border-heavy) var(--theme-primary); outline-offset: 2px }` in
 `core.css`, on every element, inset (`outline-offset: -2px`) where a panel clips its rows; the browser withholds it
@@ -1089,8 +1109,14 @@ value is a new token with a meaning, or an existing token whose meaning fits rat
 value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
 alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
 are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-color) r g b / 0.05)`, the
-nav bar is the primary at 0.1, the current nav entry the accent at 0.16, the brand's hover glow the primary at 0.8, and
-an entry's hover glow its own text color at 0.8, written over `currentColor` in the same syntax.
+nav bar is the primary at 0.1, the current nav entry the accent at 0.16, the brand's hover glow the primary at 0.8, a
+toggle group's track the secondary at 0.5, and an entry's hover glow its own text color at 0.8, written over
+`currentColor` in the same syntax, as are the hover tints of a toggle segment (0.06) and the menu trigger (0.12). A
+hovered button lightens its own fill by 0.04 in OKLCH, `oklch(from var(--button-fill) calc(l + 0.04) c h)`, one rule
+for every variant: `.action-button` and each variant declare the fill as `--button-fill` on their own rule (as the
+triage and trash views declare `--view-tint`), and `background` reads it. The filter chip's fill is a gradient,
+`--chip-fill` on its rule (`linear-gradient(in oklch 180deg, …)`, the primary at 0.12 down to `--theme-neutral-2`),
+and its hover lays `--theme-neutral-1` at 0.08 over it as a one-color gradient (`linear-gradient(<color> 0 0)`).
 The two SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a
 dropdown) carry their fill as a literal, because a data URI cannot read a token.
 
@@ -1121,7 +1147,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   (the veils, `--scrim-color`, `--asset-detail-backdrop-color` and `--dnd-dragging-background-color`, each a theme
   color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
-  length, such as a width or the two radii, `--radius` and `--radius-small`); a value of space-separated lengths, such as a padding shorthand, is a length,
+  length, such as a width or the radii, `--radius`, `--radius-small`, `--radius-large` and the pill `--chip-border-radius`); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
   `--line-height-*`) are a kind by name rather than by value, since a font size is a length and a weight a bare
   number, each drawn on sample text in the Typography section (`@tokenCards("typography")`). "Off palette" marks a color, border or shadow token outside the Theme colors

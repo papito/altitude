@@ -185,12 +185,18 @@
           <p>A border token carries width and style; the rule writes the color after it, in place
              (<code>border: var(--border-hairline) var(--theme-neutral-3)</code>).
              <code>--border-hairline</code> edges a cell, a menu or a quiet control in <code>--theme-neutral-3</code>,
-             and a chrome panel or the divider inside one in <code>--panel-border-color</code>;
-             <code>--border-heavy</code> edges an input, a button or a dialog in <code>--theme-neutral-3</code>, and
-             draws the focus ring in <code>--theme-primary</code>; <code>--border-double</code> is a list's trace, in
-             <code>--theme-secondary</code>.
-             A rectangular box or control rounds its corners with <code>--radius</code>, a badge with
-             <code>--radius-small</code>; a circle or an avatar writes its percentage.</p>
+             a button in <code>--theme-neutral-3</code> at 0.45 (or its semantic or accent color), a chip in
+             <code>--theme-primary-text</code> at 0.4, and a chrome panel or the divider inside one in
+             <code>--panel-border-color</code>; <code>--border-heavy</code> edges an input or a dialog in
+             <code>--theme-neutral-3</code>, and draws the focus ring in <code>--theme-primary</code>;
+             <code>--border-double</code> is a list's trace, in <code>--theme-secondary</code>. A button is lit from
+             above by <code>--sheen-shadow</code> and sits on <code>--soft-shadow</code>, which it trades for
+             <code>--lift-shadow</code> on hover (a small button rests on the sheen alone and takes the soft shadow on
+             hover); the pressed segment of a toggle group sits on <code>--soft-shadow</code>.
+             A rectangular box or control rounds its corners with <code>--radius</code>, a button and a toggle group's
+             track with <code>--radius-large</code> (a segment inside the track with the track's radius less its
+             padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>;
+             a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")
         </section>
 
@@ -218,17 +224,23 @@
 
         <section id="buttons">
           <h2>Buttons</h2>
-          <p>Success, warning and error buttons signal an outcome, not emphasis. Hover and keyboard focus share one look,
-             through <code>:focus-visible</code> and not <code>:focus</code>, so a button a dialog returns focus to is
-             not left glowing after a mouse click. A choice between ways of showing the same thing is a
-             <code>.toggle-group</code>: its buttons side by side, the current one <code>aria-pressed="true"</code>. The
-             theme switch above the contents is a live one.</p>
+          <p>A dialog's or a form's main action (Add, Move, Merge, Save, Upload, an empty list's first Add) is the call
+             to action, <code>.primary</code>, in <code>--theme-accent</code>. Success, warning and error
+             buttons take their color on a tint of it and signal an outcome, not emphasis. A button lifts and lightens its
+             fill on hover and gives a little when pressed (it stays in place when the system asks for reduced motion, and
+             a disabled one does neither); keyboard focus is the ring of <code>:focus-visible</code>, not
+             <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
+             between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
+             current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
+             is a live one.</p>
           <div class="sg-row">
+            <button type="button" class="action-button primary">.primary</button>
             <button type="button" class="action-button">.action-button</button>
             <button type="button" class="action-button success">.success</button>
             <button type="button" class="action-button warning">.warning</button>
             <button type="button" class="action-button error">.error</button>
             <button type="button" class="action-button small"><i class="fas fa-plus" aria-hidden="true"></i><span>.small</span></button>
+            <button type="button" class="action-button" disabled>Disabled</button>
             <div class="toggle-group" role="group" aria-label="Toggle group specimen">
               <button type="button" aria-pressed="true">Current</button>
               <button type="button" aria-pressed="false">Other</button>
@@ -312,8 +324,8 @@
 
         <section id="badges-states">
           <h2>Badges &amp; states</h2>
-          <p>A scope the results are narrowed to, such as the map area, follows the total as a chip; the whole chip is the
-             button that clears it. A count follows its row's name, dimmed. A Location's pin on a map is the
+          <p>A scope the results are narrowed to, such as the map area, follows the total as a pill-shaped chip; the
+             whole chip is the button that clears it. A count follows its row's name, dimmed. A Location's pin on a map is the
              <code>.location-pin</code> glyph, drawn as a Leaflet div icon. The drag and drop states are set by the
              drag and drop modules, never by hand.</p>
           <div class="sg-row">

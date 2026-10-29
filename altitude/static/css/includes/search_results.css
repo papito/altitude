@@ -13,9 +13,10 @@
   height: 100%;
 }
 
-/* The grid / map layout toggle, a .toggle-group of core.css */
+/* The grid / map layout toggle, a .toggle-group of core.css: its track hugs the buttons, centered in the cell */
 #layoutToggle {
-  padding: 0 var(--space-5);
+  place-self: center;
+  margin: 0 var(--space-5);
 }
 
 /* The "Map area" chip (a .filter-chip): the bbox scope of the crowded-pin panel, set off from the total */
@@ -25,8 +26,8 @@
 
 /* Direct children only: as a descendant selector this would also match the View control's popover
    panel, and an ID selector outranks `.context-menu:popover-open`, so the closed panel would be
-   forced back to display: grid and stay on screen. */
-#searchControl > div {
+   forced back to display: grid and stay on screen. The layout toggle keeps its .toggle-group flex row. */
+#searchControl > div:not(.toggle-group) {
   display: grid;
   place-items: center;
 }

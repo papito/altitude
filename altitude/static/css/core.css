@@ -26,10 +26,14 @@
 
     --radius: 0.3125rem;
     --radius-small: 0.1875rem;
+    --radius-large: 0.5rem;
 
     --drop-shadow: 0 1px 6px hsl(from var(--shadow-color) h s l / 0.6);
     --text-shadow: light-dark(hsl(from var(--shadow-color) h s l / 0), hsl(from var(--shadow-color) h s l / 0.75)) 0 1px;
     --box-shadow: hsl(from var(--theme-neutral-4) h s l / 0.07) 0 1px 0;
+    --sheen-shadow: inset 0 1px 0 hsl(from var(--theme-neutral-1) h s l / 0.08);
+    --soft-shadow: 0 1px 2px hsl(from var(--shadow-color) h s l / 0.25), 0 2px 6px hsl(from var(--shadow-color) h s l / 0.15);
+    --lift-shadow: 0 4px 12px hsl(from var(--shadow-color) h s l / 0.3);
     --asset-detail-backdrop-color: hsl(from var(--shadow-color) h s l / 0.9);
     --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
     --modal-content-width: 25rem;
@@ -86,7 +90,7 @@
     --dnd-dragging-background-color: hsl(from var(--theme-neutral-3) h s l / 0.48);
 
     --chip-padding: var(--space-1) var(--space-4);
-    --chip-border-radius: 0.625rem;
+    --chip-border-radius: 999rem;
 
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
     --font-nav: ui-monospace,"SF Mono","JetBrains Mono","Fira Code","DejaVu Sans Mono",monospace;
@@ -99,6 +103,7 @@
     --font-size-xl: 1.5rem;
     --font-size-display: 1.75rem;
     --font-weight-bold: 700;
+    --font-weight-semibold: 600;
     --font-weight-medium: 500;
     --letter-spacing-medium: 0.05em;
     --letter-spacing-wide: 0.1em;
@@ -135,6 +140,12 @@ body {
 :focus-visible {
     outline: var(--border-heavy) var(--theme-primary);
     outline-offset: 2px;
+}
+
+.action-button, .toggle-group button, .filter-chip, .menu-trigger, .context-menu .actions button {
+    transition-property: background, border-color, color, box-shadow, translate, scale;
+    transition-duration: 160ms;
+    transition-timing-function: ease-out;
 }
 
 /*            */
@@ -363,38 +374,57 @@ form input.error, form input.error:focus {
 /*         */
 
 .action-button {
-    background: var(--theme-secondary);
-    font-weight: var(--font-weight-bold);
+    --button-fill: var(--theme-secondary);
+    background: var(--button-fill);
+    font-weight: var(--font-weight-semibold);
     color: var(--theme-neutral-4);
-    border: var(--border-heavy) var(--theme-neutral-3);
-    border-radius: var(--radius);
+    border: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.45);
+    border-radius: var(--radius-large);
+    box-shadow: var(--sheen-shadow), var(--soft-shadow);
     cursor: pointer;
-    padding: var(--space-4);
+    padding: var(--space-4) var(--space-6);
     text-decoration: none;
-    text-shadow: var(--text-shadow);
     font-size: var(--font-size-base);
 }
 
-.action-button:hover {
-    box-shadow: var(--box-shadow);
+.action-button:hover:not(:disabled) {
+    background: oklch(from var(--button-fill) calc(l + 0.04) c h);
+    box-shadow: var(--sheen-shadow), var(--lift-shadow);
 }
 
 .action-button.success {
-    background: var(--success-background-color);
+    --button-fill: hsl(from var(--success-color) h s l / 0.16);
+    border-color: var(--success-color);
+    color: var(--success-color);
 }
 
 .action-button.warning {
-    background: var(--warning-background-color);
+    --button-fill: hsl(from var(--warning-color) h s l / 0.16);
+    border-color: var(--warning-color);
+    color: var(--warning-color);
 }
 
 .action-button.error {
-    background: var(--error-background-color);
+    --button-fill: hsl(from var(--error-color) h s l / 0.16);
+    border-color: var(--error-color);
+    color: var(--error-color);
+}
+
+.action-button.primary {
+    --button-fill: var(--theme-accent);
+    border-color: var(--theme-accent);
+    color: var(--theme-on-accent);
 }
 
 .action-button.small {
+    --button-fill: var(--theme-neutral-2);
+    padding: var(--space-4) var(--space-5);
     font-size: var(--font-size-small);
-    background: var(--theme-neutral-2);
-    border: var(--border-hairline) var(--theme-neutral-3);
+    box-shadow: var(--sheen-shadow);
+}
+
+.action-button.small:hover:not(:disabled) {
+    box-shadow: var(--sheen-shadow), var(--soft-shadow);
 }
 
 .action-button.small span {
@@ -403,28 +433,39 @@ form input.error, form input.error:focus {
 
 .toggle-group {
     display: flex;
-    gap: var(--space-1);
+    padding: var(--space-1);
+    border-radius: var(--radius-large);
+    background: hsl(from var(--theme-secondary) h s l / 0.5);
 }
 
 .toggle-group button {
     padding: var(--space-3) var(--space-5);
-    background-color: var(--theme-neutral-2);
-    border: var(--border-hairline) var(--theme-neutral-3);
+    border: none;
+    border-radius: calc(var(--radius-large) - var(--space-1));
+    background: none;
     color: var(--theme-neutral-3);
     cursor: pointer;
 }
 
-.toggle-group button:first-child {
-    border-radius: var(--radius) 0 0 var(--radius);
-}
-
-.toggle-group button:last-child {
-    border-radius: 0 var(--radius) var(--radius) 0;
+.toggle-group button:hover {
+    background: hsl(from currentColor h s l / 0.06);
 }
 
 .toggle-group button[aria-pressed="true"] {
     color: var(--theme-neutral-4);
-    background-color: var(--theme-secondary);
+    background-color: var(--theme-neutral-2);
+    box-shadow: var(--soft-shadow);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .action-button:hover:not(:disabled) {
+        translate: 0 -1px;
+    }
+
+    .action-button:active:not(:disabled), .toggle-group button:active, .filter-chip:active {
+        translate: none;
+        scale: 0.97;
+    }
 }
 
 /*       */
@@ -432,13 +473,18 @@ form input.error, form input.error:focus {
 /*       */
 
 .filter-chip {
-    padding: var(--chip-padding);
-    border: 1px solid var(--theme-primary-text);
+    --chip-fill: linear-gradient(in oklch 180deg, hsl(from var(--theme-primary) h s l / 0.12), var(--theme-neutral-2));
+    padding: var(--space-4) var(--space-7);
+    border: var(--border-hairline) hsl(from var(--theme-primary-text) h s l / 0.4);
     border-radius: var(--chip-border-radius);
-    background: none;
+    background: var(--chip-fill);
     color: var(--theme-primary-text);
     font-size: var(--font-size-small);
     cursor: pointer;
+}
+
+.filter-chip:hover {
+    background: linear-gradient(hsl(from var(--theme-neutral-1) h s l / 0.08) 0 0), var(--chip-fill);
 }
 
 /*          */
@@ -462,14 +508,19 @@ form input.error, form input.error:focus {
 }
 
 .menu-trigger {
-    padding: 0;
+    padding: var(--space-1) var(--space-3);
     border: 0;
+    border-radius: var(--radius);
     background: none;
     font: inherit;
     font-size: var(--font-size-large);
     line-height: 1;
     color: var(--theme-neutral-4);
     cursor: pointer;
+}
+
+.menu-trigger:hover {
+    background: hsl(from currentColor h s l / 0.12);
 }
 
 .context-menu {
@@ -506,14 +557,16 @@ form input.error, form input.error:focus {
     font: inherit;
     font-size: var(--font-size-base);
     text-align: left;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
+}
+
+.context-menu .actions button:hover {
+    background: var(--theme-secondary);
 }
 
 .context-menu .actions {
     display: grid;
-}
-
-.context-menu .actions button + button {
-    border-top: var(--border-hairline) var(--theme-neutral-3);
 }
 
 .context-menu .actions button:focus-visible {

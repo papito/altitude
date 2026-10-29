@@ -50,5 +50,5 @@
     <input type="hidden" id="field-@{Api.Field.Location.LONGITUDE}" name="@{Api.Field.Location.LONGITUDE}"
            value="@{formJson.obj.get(Api.Field.Location.LONGITUDE).flatMap(_.strOpt).getOrElse("")}">
   </div>
-  <button type="submit" class="action-button">Add</button>
+  <button type="submit" class="action-button primary">Add</button>
 </form>

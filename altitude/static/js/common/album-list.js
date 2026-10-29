@@ -177,7 +177,7 @@ function _ensureAddControls(repoId) {
             label: "Add your first album",
             iconClass: "fas fa-plus",
             url,
-            buttonClass: "action-button",
+            buttonClass: "action-button primary",
         }),
     )
 

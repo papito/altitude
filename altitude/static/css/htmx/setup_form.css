@@ -66,7 +66,6 @@
     background: var(--setup-form-accent);
     border: var(--setup-form-card-border);
     border-radius: 6px;
-    text-shadow: none;
 }
 
 #setupForm .action-button:hover {

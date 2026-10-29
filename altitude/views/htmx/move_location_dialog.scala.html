@@ -14,5 +14,5 @@
       hx-put="/htmx/location/r/@{RequestContext.getRepository.persistedId}/move">
   @includes.html.location_category_select(categories, formJson, fieldErrors)
   <input type="hidden" name="@{Api.Field.ID}" value="@{location.persistedId}">
-  <button type="submit" class="action-button">Move "<strong>@{location.name}</strong>"</button>
+  <button type="submit" class="action-button primary">Move "<strong>@{location.name}</strong>"</button>
 </form>

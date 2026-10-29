@@ -16,6 +16,11 @@
   row-gap: var(--control-vertical-space);
 }
 
+/* The theme switch's track hugs its buttons rather than the column */
+#styleGuideTheme {
+  justify-self: start;
+}
+
 #styleGuideToc a {
   color: var(--theme-neutral-3);
   text-decoration: none;

@@ -220,7 +220,7 @@ function _ensureAddControls(repoId) {
         buildModalTriggerCtrl({
             triggerId: "addFirstLocationBtn",
             label: "Add your first location",
-            buttonClass: "action-button",
+            buttonClass: "action-button primary",
             iconClass: "fas fa-plus",
             url: `/htmx/location/r/${repoId}/dialogs/add-location`,
         }),
