@@ -815,7 +815,7 @@ footer {
     background-color: var(--theme-neutral-2);
     margin: auto;
     width: fit-content;
-    border: var(--border-heavy) var(--theme-neutral-3);
+    border: var(--border-double) var(--theme-secondary);
     border-radius: var(--radius);
     box-shadow: var(--drop-shadow);
 }
