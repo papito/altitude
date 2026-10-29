@@ -175,7 +175,7 @@
 }
 
 .sg-panel {
-  border: var(--panel-border);
+  border: var(--border-hairline) var(--panel-border-color);
   box-shadow: var(--box-shadow);
   text-shadow: var(--text-shadow);
   padding: var(--panel-padding);
@@ -191,5 +191,5 @@
   position: relative;
   width: var(--section-vertical-space);
   height: var(--section-vertical-space);
-  border: var(--border-thin);
+  border: var(--border-hairline) var(--theme-neutral-3);
 }

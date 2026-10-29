@@ -14,7 +14,7 @@ body:where(.index) {
 }
 
 #explorer {
-  border-right: var(--panel-border);
+  border-right: var(--border-hairline) var(--panel-border-color);
   box-shadow: var(--box-shadow);
   text-shadow: var(--text-shadow);
   padding-top: var(--control-vertical-space);
@@ -25,7 +25,7 @@ body:where(.index) {
 }
 
 #content {
-  border-left: var(--panel-border);
+  border-left: var(--border-hairline) var(--panel-border-color);
   box-shadow: var(--box-shadow);
   text-shadow: var(--text-shadow);
   overflow-y: scroll;

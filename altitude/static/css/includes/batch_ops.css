@@ -15,7 +15,7 @@
 }
 
 #batchOps .action-button {
-    border: var(--panel-border);
+    border: var(--border-hairline) var(--panel-border-color);
     font-weight:  normal;
     touch-action: none;
 }

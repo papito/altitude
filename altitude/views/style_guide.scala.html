@@ -182,10 +182,13 @@
 
         <section id="borders-shadows">
           <h2>Borders &amp; shadows</h2>
-          <p>A border token carries width, style and color together; use it whole rather than restating its parts.
-             <code>--panel-border</code> is the edge of a chrome panel and the divider inside one;
-             <code>--border-thin</code> and <code>--border-thick</code> the edges of a cell, a menu or a quiet control,
-             and of an input, a button or a dialog.
+          <p>A border token carries width and style; the rule writes the color after it, in place
+             (<code>border: var(--border-hairline) var(--theme-neutral-3)</code>).
+             <code>--border-hairline</code> edges a cell, a menu or a quiet control in <code>--theme-neutral-3</code>,
+             and a chrome panel or the divider inside one in <code>--panel-border-color</code>;
+             <code>--border-heavy</code> edges an input, a button or a dialog in <code>--theme-neutral-3</code>, and
+             draws the focus ring in <code>--theme-primary</code>; <code>--border-double</code> is a list's trace, in
+             <code>--theme-secondary</code>.
              A rectangular box or control rounds its corners with <code>--radius</code>, a badge with
              <code>--radius-small</code>; a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")
@@ -193,7 +196,7 @@
 
         <section id="panels-layout">
           <h2>Panels &amp; layout</h2>
-          <p>A panel is edged with <code>--panel-border</code>, lit by <code>--box-shadow</code> and padded by
+          <p>A panel is edged with <code>--border-hairline</code> in <code>--panel-border-color</code>, lit by <code>--box-shadow</code> and padded by
              <code>--panel-padding</code>; its text carries <code>--text-shadow</code>. Lay pages out with CSS Grid and
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>

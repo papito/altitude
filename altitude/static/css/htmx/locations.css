@@ -72,7 +72,7 @@
     /* Spans the indent minus the grid gap on its icon side, so the icon/name sit where a plain
        margin-left indent would put them while the ⋯ stays flush left */
     width: calc(var(--depth) * var(--list-indent) - var(--list-control-gap));
-    border-top: var(--list-trace-border);
+    border-top: var(--border-double) var(--theme-secondary);
 }
 
 #locationList .location i {

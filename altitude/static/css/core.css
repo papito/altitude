@@ -18,11 +18,11 @@
     --theme-on-field: light-dark(#12161f, #353639);
     --shadow-color: light-dark(#000, #000);
 
-    --border-thin: 1px solid var(--theme-neutral-3);
-    --border-thick-width: 2px;
-    --border-thick: var(--border-thick-width) solid var(--theme-neutral-3);
-    --panel-border: 1px solid hsl(from var(--shadow-color) h s l / 0.18);
-    --focus-ring: 2px solid var(--theme-primary);
+    --border-hairline: 1px solid;
+    --border-heavy-width: 2px;
+    --border-heavy: var(--border-heavy-width) solid;
+    --border-double: 2px double;
+    --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
 
     --radius: 0.3125rem;
     --radius-small: 0.1875rem;
@@ -55,7 +55,6 @@
     --list-row-gap: var(--space-4);
     --list-control-gap: var(--space-3);
     --list-indent: var(--space-7);
-    --list-trace-border: 2px double var(--theme-secondary);
 
     --footer-height: 2.75rem;
     --nav-brand-width: 12.5rem;
@@ -134,7 +133,7 @@ body {
 }
 
 :focus-visible {
-    outline: var(--focus-ring);
+    outline: var(--border-heavy) var(--theme-primary);
     outline-offset: 2px;
 }
 
@@ -148,7 +147,7 @@ nav {
     background: hsl(from var(--theme-primary) h s l / 0.1);
     color: var(--theme-neutral-4);
     align-items: center;
-    border-bottom: var(--panel-border);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
 }
 
 nav a {
@@ -258,7 +257,7 @@ nav form {
     transition: width 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* The field widens while it has focus, and the glow is its one focus indicator, in place of the --focus-ring the
+/* The field widens while it has focus, and the glow is its one focus indicator, in place of the focus ring the
    input would draw inside it (see Nav in views/AGENTS.md) */
 nav form:focus-within {
     width: var(--nav-search-focus-width);
@@ -333,7 +332,7 @@ footer {
     font-size: var(--font-size-small);
     align-items: center;
     background: var(--theme-neutral-2);
-    border-top: var(--panel-border);
+    border-top: var(--border-hairline) var(--panel-border-color);
     box-shadow: var(--box-shadow);
 }
 
@@ -343,7 +342,7 @@ footer {
 
 input, textarea {
     padding: var(--space-4);
-    border: var(--border-thick);
+    border: var(--border-heavy) var(--theme-neutral-3);
     border-radius: var(--radius);
     color: var(--theme-on-field);
     font-size: var(--font-size-medium);
@@ -367,7 +366,7 @@ form input.error, form input.error:focus {
     background: var(--theme-secondary);
     font-weight: var(--font-weight-bold);
     color: var(--theme-neutral-4);
-    border: var(--border-thick);
+    border: var(--border-heavy) var(--theme-neutral-3);
     border-radius: var(--radius);
     cursor: pointer;
     padding: var(--space-4);
@@ -395,7 +394,7 @@ form input.error, form input.error:focus {
 .action-button.small {
     font-size: var(--font-size-small);
     background: var(--theme-neutral-2);
-    border: var(--border-thin);
+    border: var(--border-hairline) var(--theme-neutral-3);
 }
 
 .action-button.small span {
@@ -410,7 +409,7 @@ form input.error, form input.error:focus {
 .toggle-group button {
     padding: var(--space-3) var(--space-5);
     background-color: var(--theme-neutral-2);
-    border: var(--border-thin);
+    border: var(--border-hairline) var(--theme-neutral-3);
     color: var(--theme-neutral-3);
     cursor: pointer;
 }
@@ -479,7 +478,7 @@ form input.error, form input.error:focus {
     inset: auto;
     width: max-content;
     padding: 0;
-    border: var(--border-thin);
+    border: var(--border-hairline) var(--theme-neutral-3);
     border-radius: var(--radius);
     color: inherit;
     background-color: var(--theme-neutral-2);
@@ -514,7 +513,7 @@ form input.error, form input.error:focus {
 }
 
 .context-menu .actions button + button {
-    border-top: var(--border-thin);
+    border-top: var(--border-hairline) var(--theme-neutral-3);
 }
 
 .context-menu .actions button:focus-visible {
@@ -585,7 +584,7 @@ form input.error, form input.error:focus {
 .dragging {
     padding-left: var(--space-2);
     padding-right: var(--space-2);
-    border: var(--border-thin);
+    border: var(--border-hairline) var(--theme-neutral-3);
     border-radius: var(--radius);
     background-color: var(--dnd-dragging-background-color);
 }
@@ -647,7 +646,7 @@ form input.error, form input.error:focus {
 #modalContent {
     box-sizing: border-box;
     width: calc(var(--modal-content-width) + 2 * var(--modal-content-padding));
-    max-width: calc(100vw - 2 * (var(--viewport-gap) + var(--border-thick-width)));
+    max-width: calc(100vw - 2 * (var(--viewport-gap) + var(--border-heavy-width)));
     padding: var(--modal-content-padding);
 }
 
@@ -671,7 +670,7 @@ form input.error, form input.error:focus {
     background-color: var(--theme-neutral-2);
     margin: auto;
     width: fit-content;
-    border: var(--border-thick);
+    border: var(--border-heavy) var(--theme-neutral-3);
     border-radius: var(--radius);
     box-shadow: var(--drop-shadow);
 }
@@ -681,7 +680,7 @@ form input.error, form input.error:focus {
     align-items: center;
     grid-template-columns: 1fr minmax(auto, max-content);
     background-color: var(--theme-neutral-2);
-    border-bottom: var(--panel-border);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
 }
 
 .close-modal {

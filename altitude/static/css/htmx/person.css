@@ -2,7 +2,7 @@
     display: grid;
     margin: var(--space-3);
     padding: var(--space-3);
-    border-bottom: var(--panel-border);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
     grid-template-columns: var(--person-avatar-column) var(--person-meta-column) 1fr;
 }
 
