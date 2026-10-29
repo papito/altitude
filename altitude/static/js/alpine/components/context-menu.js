@@ -1,20 +1,23 @@
 /**
- * Alpine coordination for folder, album, and Location menus and the View settings popover.
+ * Alpine coordination for folder, album, and Location menus, the View settings popover and the
+ * choice menus (Group, Sort).
  *
- * The component root is the `.menu-ctrl` cell (or the View settings `.dialog-trigger-ctrl`) built by
- * `common/context-menu-markup.js`: it holds the trigger (`x-ref="trigger"`, opening the panel with
- * `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a child folder's
- * menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
+ * The component root is the `.menu-ctrl` cell (the View settings `.dialog-trigger-ctrl`, a choice menu's
+ * `.choice-menu-ctrl`) built by `common/context-menu-markup.js`: it holds the trigger (`x-ref="trigger"`, opening the
+ * panel with `popovertarget`) and the `popover="auto"` panel (`x-ref="panel"`). Keeping the root that small means a
+ * child folder's menu is never a DOM descendant of its ancestor's panel, so the browser treats the menus as
  * siblings: opening one closes any other, exactly as required.
  *
  * Entity menus hold actions that open popover dialogs (`common/modal.js`). Only View settings has a
  * dialog host (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh
- * settings.
+ * settings. A choice menu (`data-menu-kind="choice"`) holds options that run a search; picking one
+ * closes the menu.
  *
  * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
  * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component
  * adds only what native popovers lack: placement against the trigger (again when a dialog changes
- * the panel's height), dismissal when keyboard focus
+ * the panel's height), focus on the checked or first action when the panel opens and the arrow
+ * keys between actions, dismissal when keyboard focus
  * leaves, dismissal on scroll or resize, and cleanup. Escape is handled once for the whole
  * document in `global.js`.
  *
@@ -107,11 +110,74 @@ export function contextMenu() {
             if (event.newState === "open") {
                 console.debug(`Opened context menu ${this.$refs.panel.id}`)
                 this.attachOpenListeners()
+                this.focusInitialAction()
             } else {
                 this.detachOpenListeners?.()
                 dialogRequest = null
                 this.clearDialog()
             }
+        },
+
+        /** The panel's actions that can take focus: its buttons, less the disabled ones */
+        actions() {
+            return Array.from(
+                this.$refs.panel.querySelectorAll(
+                    ".actions button:not(:disabled)",
+                ),
+            )
+        },
+
+        /**
+         * A menu opens on its current choice, else on its first action, as a menu button does;
+         * View settings has no actions and keeps focus where the dialog hydrator puts it.
+         */
+        focusInitialAction() {
+            const actions = this.actions()
+            const checked = actions.find(
+                (actionEl) => actionEl.getAttribute("aria-checked") === "true",
+            )
+
+            ;(checked ?? actions[0])?.focus()
+        },
+
+        /**
+         * Down and Up move focus through the actions, wrapping; Home and End jump to the ends.
+         * Enter and Space are the focused button's own. Other keys pass, Escape to `global.js`.
+         */
+        handleKeydown(event) {
+            const actions = this.actions()
+            if (actions.length === 0) {
+                return
+            }
+
+            const current = actions.indexOf(document.activeElement)
+            let next
+            if (event.key === "ArrowDown") {
+                next = (current + 1) % actions.length
+            } else if (event.key === "ArrowUp") {
+                next = (current - 1 + actions.length) % actions.length
+            } else if (event.key === "Home") {
+                next = 0
+            } else if (event.key === "End") {
+                next = actions.length - 1
+            } else {
+                return
+            }
+
+            event.preventDefault()
+            actions[next].focus()
+        },
+
+        /**
+         * Picking a choice menu's option closes the menu; the option's own search trigger runs
+         * on the same click, and the results it brings back carry a new control showing the choice.
+         */
+        handleActionClick(event) {
+            if (!event.target.closest(".actions button")) {
+                return
+            }
+
+            this.close("option picked", { returnFocus: true })
         },
 
         /**

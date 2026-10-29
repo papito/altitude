@@ -21,6 +21,7 @@
  * design, while two recipes computing one color should be one token.
  */
 import {
+    buildChoiceMenuCtrl,
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
 } from "./common/context-menu-markup.js"
@@ -478,7 +479,8 @@ function groupLiterals(literals, rootTokens) {
 
 /**
  * The live specimens: an Add button and a row's ⋯ menu, built by the functions the explorer lists
- * build theirs with, each opening the sample dialog as a popover dialog below it.
+ * build theirs with, each opening the sample dialog as a popover dialog below it, and a choice
+ * menu whose options run nothing.
  */
 function mountMenuSpecimens() {
     const hostEl = document.getElementById("styleGuideMenuSpecimens")
@@ -508,6 +510,23 @@ function mountMenuSpecimens() {
         }),
     )
     hostEl.append("A row's ⋯ menu")
+
+    // A choice menu from a static host of options, as the results fragment renders Group and Sort
+    const choiceHostEl = document.createElement("div")
+    choiceHostEl.id = "styleGuideChoiceHost"
+    choiceHostEl.dataset.choiceMenu = "Sort"
+    choiceHostEl.dataset.choiceMenuIcon = "fas fa-sort-amount-down"
+    ;["Newest first", "Oldest first", "File name"].forEach((label, index) => {
+        const optionEl = document.createElement("button")
+        optionEl.type = "button"
+        optionEl.textContent = label
+        if (index === 0) {
+            optionEl.setAttribute("aria-checked", "true")
+        }
+        choiceHostEl.appendChild(optionEl)
+    })
+    hostEl.appendChild(choiceHostEl)
+    buildChoiceMenuCtrl(choiceHostEl)
 
     // Alpine's mutation observer initializes the new controls; htmx needs to be told
     htmx.process(hostEl)

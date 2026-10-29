@@ -87,7 +87,7 @@ import altitude.core.models.AssetType
      *
      * Assertions:
      *
-     * The first page heads the group with its Category › Location path, reflects the grouping in the Group dropdown and the
+     * The first page heads the group with its Category › Location path, reflects the grouping in the Group menu and the
      * fragment's data attributes, and gives an asset in a Location a cell ID qualified by it. The continuation finishes Beach
      * without repeating its header and opens No location, whose cell keeps the plain asset ID.
      */
@@ -107,8 +107,8 @@ import altitude.core.models.AssetType
         page.statusCode shouldBe 200
         page.text() should include("<span class=\"category\">Italy</span> › Beach")
         page.text() should include(header(location.persistedId))
-        // The Group dropdown reflects the grouping, and the grid carries it for its continuations
-        page.text() should include("""data-app-search-group-by="location" data-app-search-group-direction="" selected""")
+        // The Group menu reflects the grouping, and the grid carries it for its continuations
+        page.text() should include("""data-app-search-group-by="location" data-app-search-group-direction="" aria-checked="true"""")
         page.text() should include("""data-results-group-by="location"""")
         page.text() should include("""data-results-group-direction=""""")
         // An asset in a Location is a cell of its own under it, distinct from the same asset's cell elsewhere
@@ -231,7 +231,7 @@ import altitude.core.models.AssetType
         page should include("""data-results-total="1"""")
         page should include("""data-results-total-capped="false"""")
         page.contains("""id="assets"""") shouldBe false
-        "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
+        "(?s)<div id=\"groupMenuHost\".*?>".r.findFirstIn(page).get should include("data-choice-menu-disabled")
         page should include("""id="mapPanel" hidden""")
         page should include("""id="bboxScope"""")
         page should include("""data-results-layout="map"""")
@@ -365,7 +365,7 @@ import altitude.core.models.AssetType
      * Assertions:
      *
      * The first page is an HTML fragment whose replaced URL carries the grouping, with a header giving the whole day's count, the
-     * overall total, cells in sort order and the grouping reflected in the Group dropdown; only its last cell carries the cursor,
+     * overall total, cells in sort order and the grouping reflected in the Group menu; only its last cell carries the cursor,
      * and no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the
      * last page, carries no cursor.
      *
@@ -407,8 +407,8 @@ import altitude.core.models.AssetType
         ordered(page1, cell(a1), cell(a2))
         page1.contains(cell(a3)) shouldBe false
 
-        // The Group dropdown reflects the grouping
-        page1 should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
+        // The Group menu reflects the grouping
+        page1 should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
         page1 should include("""data-results-group-by="dateTaken"""")
         page1 should include("""data-results-group-direction="desc"""")
 
@@ -468,7 +468,7 @@ import altitude.core.models.AssetType
         val trashPage = trash.text()
         ordered(trashPage, header("2026-09-06"), cell(recycled))
         trashPage.contains(cell(kept)) shouldBe false
-        trashPage should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
+        trashPage should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
 
         val library = htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateTaken")).text()
         ordered(library, header("2026-09-06"), cell(kept))
@@ -693,19 +693,19 @@ import altitude.core.models.AssetType
     withServer(App) {
       host =>
         persistDated("2026-09-06T10:00:00", "beach.jpg")
-        val relevanceOption = """<option value="relevance""""
+        val relevanceOption = """data-app-search-sort="relevance""""
         val text = Map(Api.Field.Search.QUERY_TEXT -> "beach")
 
         for (shape <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"), Map(Api.Field.Search.LAYOUT -> "map")))
           withClue(s"$shape: ") {
             val withText = htmlSearch(host, repoId, text ++ shape).text()
             withText should include("""data-results-q="beach"""")
-            withText should include(s"$relevanceOption selected")
+            withText should include(s"$relevanceOption aria-checked=\"true\"")
 
             // A sort the request names leaves Relevance on offer, not selected
             val byName = htmlSearch(host, repoId, text ++ shape + (Api.Field.Search.SORT -> "filename0")).text()
             byName should include(relevanceOption)
-            byName.contains(s"$relevanceOption selected") shouldBe false
+            byName.contains(s"$relevanceOption aria-checked=\"true\"") shouldBe false
 
             // No text, or text without a usable term, is no text: the server would refuse the Relevance sort
             for (noText <- List(Map.empty[String, String], Map(Api.Field.Search.QUERY_TEXT -> "- OR"))) {
@@ -933,7 +933,7 @@ import altitude.core.models.AssetType
         html.headers("content-type").head should include("text/html")
         val page = html.text()
         page should include(cell(asset))
-        page should include("""data-app-search-group-by="" data-app-search-group-direction="" selected""")
+        page should include("""data-app-search-group-by="" data-app-search-group-direction="" aria-checked="true"""")
         page should include("""data-results-layout="grid"""")
         page should include("""data-results-group-by=""""")
         pressedLayout(page) shouldBe "grid"

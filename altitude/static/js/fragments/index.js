@@ -13,6 +13,7 @@ import {
 } from "./explorer.js"
 import { bindDialogOpeners } from "./dialog-openers.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
+import { ensureChoiceMenus } from "../common/choice-menus.js"
 
 export function hydrateAppFragments({ root, app }) {
     findFragmentRoots(root, "person-name-editor").forEach((fragmentEl) => {
@@ -61,5 +62,6 @@ export function hydrateAppFragments({ root, app }) {
     })
 
     bindDialogOpeners({ root, hydrate: (el) => app.hydrateFragments(el) })
+    ensureChoiceMenus(root)
     bindSearchTriggers(root)
 }

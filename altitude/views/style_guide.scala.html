@@ -259,8 +259,7 @@
              the setup screen is a sunken fill, <code>--field-background-color</code>, carrying the page's text, in a
              hairline of <code>--theme-neutral-3</code> at 0.25 with <code>--radius-small</code> and an accent caret;
              with focus its edge turns <code>--theme-accent</code> inside <code>--field-focus-shadow</code>, in place
-             of the focus ring. Checkboxes, radios and ranges take none of it, nor do the nav's quick search field and
-             the grid toolbar's dropdowns. A select is a customizable select where the browser has one, its picker
+             of the focus ring. Checkboxes, radios and ranges take none of it, nor does the nav's quick search field. A select is a customizable select where the browser has one, its picker
              drawn as the popover dialog's surface, and elsewhere a native select styled as a field. A field keeps the
              width its page gives it; in a popover dialog the form is <code>--popover-form-width</code> wide, its
              fields fill it, and its action sits <code>--space-5</code> below them. A label above a field in a dialog
@@ -344,11 +343,13 @@
 
         <section id="menus-dialogs">
           <h2>Menus &amp; dialogs</h2>
-          <p>Both controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
+          <p>All three controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
              like an Add button, opens a popover dialog anchored below its control and centered on it: a translucent,
              frosted surface with no scrim, which an outside click, Escape, the × or Tab out of it dismisses. A
              one-field dialog shows no label. Submit the dialog blank to see the validation state, or with a name to
-             see a completed operation.</p>
+             see a completed operation. A choice menu, the grid toolbar's Group and Sort, is a context menu that picks
+             one of several values: its trigger shows the current choice, its panel marks it with a check, and the
+             arrow keys move through the options; every menu panel wears the popover's frosted surface.</p>
           @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
         </section>

@@ -25,6 +25,11 @@ A named container for Locations, one level deep, with no pin and no assets of
 its own. Locations and Categories share one name pool per repository.
 _Avoid_: Parent, Folder, Group.
 
+**Choice menu**:
+A toolbar control that picks one of several values from a popover list, such as
+the results grid's Group and Sort; its trigger shows the current choice.
+_Avoid_: Dropdown, Select (a select is a form's field).
+
 **Pin**:
 The point of a Location, placed by clicking a map or from a place-name search.
 _Avoid_: Coordinates, Lat/Long in user-facing text.

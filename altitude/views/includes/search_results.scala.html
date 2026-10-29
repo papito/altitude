@@ -8,7 +8,7 @@
 
 @* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
    controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
-   `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the dropdowns. `text` is the Search text the
+   `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the Group and Sort choice menus. `text` is the Search text the
    results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
    up to one past `totalCap`, which means more than the cap. *@
 @(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None)
@@ -57,83 +57,40 @@
   <div id="viewSettingsActions"></div>
 
   <div class="group">
-    @* The selected option is the effective grouping the server used. Each option carries the two parameters it sets, which
-       the search funnel reads off the selected option (data-app-search-from-selected-option, js/search-results/search-triggers.js)
-       and combines with every other search parameter in the `searchParams` store. Grouping is a reorder, like the sort: it
-       survives a change of folder, person, album or view. *@
-    <select id="groupOptions"
-            @if(layout == Const.Search.Layout.MAP) {disabled}
-            class="sort-dropdown"
-            data-app-search="change"
-            data-app-search-from-selected-option>
-
-      <option data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {selected}>
-        No grouping
-      </option>
-
-      <option data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {selected}>
-        Date Taken (Newest first)
-      </option>
-      <option data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {selected}>
-        Date Taken (Oldest first)
-      </option>
+    @* A choice menu (js/common/choice-menus.js wraps the host into its trigger and popover panel). The option marked
+       aria-checked is the effective grouping the server used. Each option is a search trigger carrying the two parameters it
+       sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
+       `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
+       The map layout groups nothing, so its host is disabled. *@
+    <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP) {data-choice-menu-disabled}>
+      <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
+      <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
+      <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {aria-checked="true"}>Date Taken (Oldest first)</button>
       @* Path order, fixed: the option sets no direction *@
-      <option data-app-search-group-by="location" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Location)) {selected}>
-        Location
-      </option>
-    </select>
+      <button type="button" data-app-search="click" data-app-search-group-by="location" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Location)) {aria-checked="true"}>Location</button>
+    </div>
   </div>
 
   <div class="sort">
-    @* The selected option is the effective sort the server used; changing it goes through the search funnel, which
-       combines it with every other search parameter held in the `searchParams` store (js/search-results/search.js) *@
-    <select id="sortOptions"
-            class="sort-dropdown"
-            data-app-search="change"
-            data-app-search-from-value="sort">
-
+    @* A choice menu whose checked option is the effective sort the server used; each option is a search trigger carrying
+       its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
+       (js/search-results/search.js) *@
+    <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down">
       @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
       @if(text.isDefined) {
-        <option value="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {selected}>
-          Relevance
-        </option>
+        <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {aria-checked="true"}>Relevance</button>
       }
-
-      <option value="original_created_at1" @if(sort.field == "original_created_at" && sort.direction.id == 1) {selected}>
-        Date Created (Newest)
-      </option>
-      <option value="original_created_at0" @if(sort.field == "original_created_at" && sort.direction.id == 0) {selected}>
-        Date Created (Oldest)
-      </option>
-
-      <option value="created_at1" @if(sort.field == "created_at" && sort.direction.id == 1) {selected}>
-        Date Imported (Newest)
-      </option>
-      <option value="created_at0" @if(sort.field == "created_at" && sort.direction.id == 0) {selected}>
-        Date Imported (Oldest)
-      </option>
-
-      <option value="filename0" @if(sort.field == "filename" && sort.direction.id == 0) {selected}>
-        File Name (A-Z)
-      </option>
-      <option value="filename1" @if(sort.field == "filename" && sort.direction.id == 1) {selected}>
-        File Name (Z-A)
-      </option>
-
-      <option value="size_bytes0" @if(sort.field == "size_bytes" && sort.direction.id == 0) {selected}>
-        File Size (Smallest)
-      </option>
-      <option value="size_bytes1" @if(sort.field == "size_bytes" && sort.direction.id == 1) {selected}>
-        File Size (Largest)
-      </option>
-
-      <option value="area_size0" @if(sort.field == "area_size" && sort.direction.id == 0) {selected}>
-        Dimensions (Smallest)
-      </option>
-      <option value="area_size1" @if(sort.field == "area_size" && sort.direction.id == 1) {selected}>
-        Dimensions (Largest)
-      </option>
-    </select>
+      <button type="button" data-app-search="click" data-app-search-sort="original_created_at1" @if(sort.field == "original_created_at" && sort.direction.id == 1) {aria-checked="true"}>Date Created (Newest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="original_created_at0" @if(sort.field == "original_created_at" && sort.direction.id == 0) {aria-checked="true"}>Date Created (Oldest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="created_at1" @if(sort.field == "created_at" && sort.direction.id == 1) {aria-checked="true"}>Date Imported (Newest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="created_at0" @if(sort.field == "created_at" && sort.direction.id == 0) {aria-checked="true"}>Date Imported (Oldest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="filename0" @if(sort.field == "filename" && sort.direction.id == 0) {aria-checked="true"}>File Name (A-Z)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="filename1" @if(sort.field == "filename" && sort.direction.id == 1) {aria-checked="true"}>File Name (Z-A)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="size_bytes0" @if(sort.field == "size_bytes" && sort.direction.id == 0) {aria-checked="true"}>File Size (Smallest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="size_bytes1" @if(sort.field == "size_bytes" && sort.direction.id == 1) {aria-checked="true"}>File Size (Largest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="area_size0" @if(sort.field == "area_size" && sort.direction.id == 0) {aria-checked="true"}>Dimensions (Smallest)</button>
+      <button type="button" data-app-search="click" data-app-search-sort="area_size1" @if(sort.field == "area_size" && sort.direction.id == 1) {aria-checked="true"}>Dimensions (Largest)</button>
+    </div>
   </div>
 
   @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@

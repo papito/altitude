@@ -361,7 +361,7 @@ footer {
 /* A text-like field anywhere but the setup screen, the nav search and the toolbar dropdowns, at zero specificity so a
    page's own rule outranks it; its focus indicator replaces the focus ring (see Forms in views/AGENTS.md) */
 :where(body:not(.setup) :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"],
-                                      [type="submit"]), textarea, select):not(nav *, .sort-dropdown)) {
+                                      [type="submit"]), textarea, select):not(nav *)) {
     padding: var(--space-4) var(--space-5);
     border: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.25);
     border-radius: var(--radius-small);
@@ -406,7 +406,7 @@ footer {
 /* Behind @supports, so a browser without the customizable select keeps the native one; the options take a rule of their
    own, since the design tweaks panel matches no nested descendant selector (see Do in views/AGENTS.md) */
 @supports (appearance: base-select) {
-    :where(body:not(.setup) select:not(.sort-dropdown)) {
+    :where(body:not(.setup) select) {
         appearance: base-select;
 
         &::picker(select) {
@@ -425,7 +425,7 @@ footer {
         }
     }
 
-    :where(body:not(.setup) select:not(.sort-dropdown)) option {
+    :where(body:not(.setup) select) option {
         padding: var(--space-3) var(--space-5);
         border-radius: var(--radius-small);
 
@@ -593,16 +593,19 @@ footer {
     background: hsl(from currentColor h s l / 0.12);
 }
 
+/* The popover dialog's frosted surface, and the select picker's: every floating panel wears the one surface */
 .context-menu {
     position: fixed;
     margin: 0;
     inset: auto;
     width: max-content;
-    padding: 0;
-    border: var(--border-hairline) var(--theme-neutral-3);
-    border-radius: var(--radius);
+    padding: var(--space-2);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
     color: inherit;
-    background-color: var(--theme-neutral-2);
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
     text-shadow: none;
     grid-template-columns: 1fr;
     gap: 0;
@@ -617,11 +620,17 @@ footer {
     visibility: hidden;
 }
 
+/* A row is tinted on hover as a select picker's option is, and when checked as a checked option is. The leading
+   column is the check mark's, drawn on the checked option of a choice menu and left empty on the others, so the
+   labels line up; a ⋯ menu's actions, never checked, keep the column for one look across the menus */
 .context-menu .actions button {
-    display: flex;
-    padding: var(--space-5) var(--space-6);
+    display: grid;
+    grid-template-columns: var(--space-6) 1fr;
+    align-items: center;
+    padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
     cursor: pointer;
     border: none;
+    border-radius: var(--radius-small);
     background: none;
     color: inherit;
     font: inherit;
@@ -631,12 +640,35 @@ footer {
     transition-timing-function: ease;
 }
 
+.context-menu .actions button::before {
+    content: "";
+    font-size: var(--font-size-small);
+}
+
+.context-menu .actions button[aria-checked="true"] {
+    background: hsl(from var(--theme-accent) h s l / 0.2);
+}
+
+.context-menu .actions button[aria-checked="true"]::before {
+    content: "✓";
+}
+
 .context-menu .actions button:hover {
-    background: var(--theme-secondary);
+    background: hsl(from var(--theme-neutral-4) h s l / 0.08);
 }
 
 .context-menu .actions button + button {
     border-top: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.3);
+}
+
+/* A choice menu's trigger: the menu's name dimmed before the current choice, and a caret after it */
+.choice-menu-ctrl .choice-name {
+    color: hsl(from currentColor h s l / 0.6);
+}
+
+.choice-menu-ctrl .choice-caret {
+    margin-left: var(--space-3);
+    color: hsl(from currentColor h s l / 0.6);
 }
 
 .context-menu .actions {

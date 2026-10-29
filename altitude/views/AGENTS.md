@@ -13,7 +13,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip with the pill `--chip-border-radius`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
-* Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
+* Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
 
@@ -83,10 +83,10 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location and the dialog-trigger buttons), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, and the functions that close one from outside); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/frontend-app.js` and `js/stores/app-stores.js`)
 
@@ -240,8 +240,8 @@ set (`x-show`, `x-text`), and `reset()` from its Deselect All button clears it.
 ### 3. Coordination around native UI
 `x-data="contextMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
 `alpine/components/context-menu.js`) wraps each folder's, album's or Location row's ⋯ trigger and its native
-`popover="auto"` panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
-outside clicks); the component only places the panel, closes it when focus leaves or when the page scrolls or the explorer
+`popover="auto"` panel, the ⚙ View button and its panel, and each choice menu's trigger and panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
+outside clicks); the component only places the panel, moves focus into it and between its actions, closes it when focus leaves or when the page scrolls or the explorer
 resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
 menus** below.
 
@@ -415,7 +415,26 @@ The ⚙ View button above the results grid (`#viewSettingsBtn`, built by
 panel stays invisible until the settings arrive, opens below the button centered on it
 (`data-menu-align="center"`), and is cleared on close. The component records its load request and
 drops a response after the panel has closed or reopened. Each checkbox applies immediately;
-View settings submits nothing. Its trigger shows no focus ring (`.dialog-trigger-ctrl > button`).
+View settings submits nothing.
+
+A **choice menu** (the toolbar's Group `#groupMenuHost` and Sort `#sortMenuHost`, `includes/search_results.scala.html`)
+picks one of several values. The server renders a host, `data-choice-menu="<name>"` with `data-choice-menu-icon` and,
+for Group in the map layout, `data-choice-menu-disabled`, holding one `button` per option: a search trigger carrying
+its literals (`data-app-search="click"` with `data-app-search-sort`, or `data-app-search-group-by` and
+`data-app-search-group-direction`), the effective one `aria-checked="true"`. `ensureChoiceMenus` (`js/common/choice-menus.js`,
+called by `fragments/index.js` for every hydrated root) hands each host to `buildChoiceMenuCtrl`, which builds the
+control into it: a `.choice-menu-ctrl` root (`data-menu-kind="choice"`, centered under its trigger), the trigger
+(`action-button small`, `aria-haspopup="menu"`: the icon, the name dimmed, the checked option's text in `.choice`, a
+caret), and the panel (`role="menu"`, `aria-labelledby` the trigger) the option buttons move into as `menuitemradio`
+items; the trigger and panel IDs derive from the host's (`groupMenuHost` → `groupMenuBtn`, `groupMenu`). Picking an
+option closes the menu with focus on the trigger (`handleActionClick`) and runs the option's search; the results
+fragment comes back with a new control showing the choice, so nothing updates the label on the client, and a failed
+search leaves the previous choice shown. The search funnel knows nothing of the control: an option is a literal trigger
+like any other.
+
+A menu opens on its checked action, else its first (`focusInitialAction`, on `toggle`; View settings has no actions
+and keeps the focus its dialog hydrator sets); Down and Up move through the actions, wrapping, Home and End jump
+(`handleKeydown` on the panel), Enter and Space are the button's own, and no type-ahead exists.
 The browser owns popover visibility: it toggles the panel from its trigger, closes it on any click
 outside, and keeps one open because a panel is never a descendant of another entity's panel.
 The `contextMenu` component places the panel in the top layer against the trigger (below,
@@ -428,7 +447,13 @@ label or padding moves focus to the panel rather than out of it.
 outside the component: Escape in `global.js` (focus returns to the trigger unless a dialog was
 closed too), the folder model when an ancestor collapses, and `openModal`; the trigger is found as the
 `[popovertarget]` button in the panel's cell, not by an ID convention. Removing the tree or list removes the open panel and, through the component's
-`destroy`, its listeners. Styling lives in `core.css`; CSS sets `display` only under
+`destroy`, its listeners. Styling lives in `core.css`: a panel wears the popover dialog's frosted surface
+(`--popover-background-color` under `--popover-backdrop-filter`, a `--popover-border-color` hairline, `--radius-large`,
+`--sheen-shadow` over `--float-shadow`, `--space-2` padding, as the select picker is drawn), and an action is a
+`--radius-small` row in a two-column grid whose leading column is the check mark's (`✓` by `::before` on
+`[aria-checked="true"]`, empty otherwise, so labels line up across every menu), tinted on hover as a picker option is
+(`--theme-neutral-4` at 0.08) and when checked as a checked option is (the accent at 0.2), with the hairline between
+rows. CSS sets `display` only under
 `:popover-open`, because the hidden state relies on the browser's `display: none`. During
 `beforetoggle`, the component briefly sets inline `display: grid` to measure and position the
 hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
@@ -689,9 +714,8 @@ of `core.css`: text, search, email, password and file inputs, textareas and sele
 0.25, `--radius-small`, `--space-4` × `--space-5` padding, `--font-size-medium` and an accent caret, and on focus the
 accent edge and ring in place of the focus ring (see **Themes**). Its selector sits inside `:where()`, so any page's
 own rule outranks it, and is written once: the focus rule is nested in the field rule (`&:focus-visible`), as the
-picker's rules are in the select's, while the options take a rule of their own. Checkboxes, radios, ranges, hidden and submit inputs take none of it, nor do the
-nav's quick search field and the grid toolbar's Group and Sort dropdowns (`.sort-dropdown`), which keep their own
-looks. Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
+picker's rules are in the select's, while the options take a rule of their own. Checkboxes, radios, ranges, hidden and submit inputs take none of it, nor does the
+nav's quick search field, which keeps its own look. Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
 `htmx/setup_form.css`'s alone; the login page loads no app stylesheet. The upload form's file input takes the field's
 box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
 except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
@@ -706,7 +730,7 @@ their own labels. A one-field popover dialog (Add and Rename, the style guide's 
 its placeholder, and its input carries an `aria-label`. A select is a customizable select (`appearance:
 base-select`, behind `@supports`, Chromium today), its picker drawn as the popover dialog's surface, an option tinted
 on hover (`--theme-neutral-4` at 0.08) and when checked (the accent at 0.2); a browser without it keeps the native
-select, styled as a field. `.sort-dropdown` keeps its native list.
+select, styled as a field. The grid toolbar's Group and Sort are no selects but choice menus (see **Context menus**).
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
 `js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
@@ -1209,8 +1233,8 @@ for every variant: `.action-button` and each variant declare the fill as `--butt
 triage and trash views declare `--view-tint`), and `background` reads it. The filter chip's fill is a gradient,
 `--chip-fill` on its rule (`linear-gradient(in oklch 180deg, …)`, the primary at 0.12 down to `--theme-neutral-2`),
 and its hover lays `--theme-neutral-1` at 0.08 over it as a one-color gradient (`linear-gradient(<color> 0 0)`).
-The two SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset, the arrow of a
-dropdown) carry their fill as a literal, because a data URI cannot read a token.
+The SVG data URI of `static/css/includes/search_results.css` (the check of a selected asset) carries its fill as a
+literal, because a data URI cannot read a token.
 
 **Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`,
 `StyleGuideController`; the nav shows its button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
@@ -1431,7 +1455,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 ## Search parameters
 
 Every search in the app — the initial load, folder and person navigation, the Search input, the Sort
-and Group dropdowns, continuous scroll, the page the detail modal loads at the end of the grid — goes through
+and Group choice menus, continuous scroll, the page the detail modal loads at the end of the grid — goes through
 **one** function, `runSearch` in `js/search-results/search.js`. A caller supplies only the parameter
 it knows about; the `searchParams` store supplies the rest. Nothing else builds a URL for
 `/htmx/search/r/:repoId`.
@@ -1481,12 +1505,12 @@ and the browser navigates to `/r/<repoId>?<the store's query string>`, a full lo
 seeds the store from that URL, layout and grouping included.
 
 `includes/search_results` takes the Search text the results were matched by (`text`, set when `q` had a
-usable term) and puts it on the fragment as `data-results-q`. The Sort dropdown offers "Relevance"
-only then, selected when it is the effective sort, since the server
+usable term) and puts it on the fragment as `data-results-q`. The Sort menu offers "Relevance"
+only then, checked when it is the effective sort, since the server
 refuses it without text.
 
 `groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
-day; the Group dropdown in `search_results.scala.html` sets both from its selected option, and "No
+day; each option of the Group menu in `search_results.scala.html` carries both, and "No
 grouping" sets both to empty, which the store normalizes to `null`. A search has no page
 number, grouped or not: the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
 remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
@@ -1507,9 +1531,8 @@ has settled):
 
 ```html
 <a data-app-search="click" data-app-search-person-id="abc">          <!-- literal parameter -->
-<select data-app-search="change" data-app-search-from-value="sort">  <!-- parameter from the element's value -->
-<select data-app-search="change" data-app-search-from-selected-option>  <!-- every data-app-search-<param> literal of the selected <option> -->
-  <option data-app-search-group-by="dateTaken" data-app-search-group-direction="desc">
+<button data-app-search="click" data-app-search-sort="filename0">     <!-- a choice menu's option: literals too -->
+<button data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc">
 <button data-app-search="click" data-app-search-bbox="">             <!-- an empty literal clears the parameter -->
 ```
 
