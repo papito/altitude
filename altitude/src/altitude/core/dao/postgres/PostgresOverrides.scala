@@ -12,6 +12,7 @@ import scalasql.dialects.Dialect
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
+import altitude.core.dao.sql.search.PostgresSearchDialect
 
 object PostgresOverrides:
   /**
@@ -49,6 +50,10 @@ trait PostgresOverrides:
   override protected def nativeLocalDateTime(value: LocalDateTime): Any = value
 
   override protected def nativeUtcTimestamp(value: OffsetDateTime): Any = value
+
+  override protected def nativeLocalDate(value: LocalDate): Any = value
+
+  override protected def dayOf(column: String): String = PostgresSearchDialect.dayOf(column)
 
   override protected def rowProcessor: RowProcessor = PostgresOverrides.javaTimeRowProcessor
 

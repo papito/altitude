@@ -2,6 +2,7 @@ package altitude.core.dao
 
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
+import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
@@ -38,3 +39,24 @@ trait AssetDao extends BaseDao[Asset]:
   def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset]
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit
+
+  /*
+   * Sequences: the `sequence_id` the still images of one burst share while in triage. `SequenceService` reads and writes it
+   * through these; the rule that pairs two images is `SequenceRule`.
+   */
+
+  /**
+   * The context repository's completed, live, triaged still images other than the asset, with a hash and a camera-clock capture
+   * time within `gapMs` of the asset's either way, read through the triage capture-day index and locked until the transaction
+   * ends; nothing for an asset without a capture time
+   */
+  def getSequenceCandidates(asset: Asset, gapMs: Int): List[Asset]
+
+  /** How many members each of the Sequences has and when its first member was captured, for the ones that have any */
+  def countSequenceMembers(sequenceIds: Set[String]): List[SequenceMembers]
+
+  /** Puts the assets still in triage in the Sequence; how many rows changed */
+  def setSequence(assetIds: Set[String], sequenceId: String): Int
+
+  /** Moves every member of the Sequences to the one; how many rows changed */
+  def repointSequences(fromIds: Set[String], toId: String): Int

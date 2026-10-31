@@ -34,6 +34,19 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
+   * The engine's plan for a hand-written statement with its bind values, read as [[planOf]] reads a typed one, inside a write
+   * transaction so a statement that locks its rows (`FOR UPDATE`) can be explained. PostgreSQL is told to scan only when nothing
+   * else answers, as [[lookupPlanOf]] does, since over a handful of rows every index on the repository costs the same.
+   */
+  protected def lookupPlanOf(sql: String, values: List[Any]): String =
+    testApp.txManager.withTransaction {
+      if (isPostgres) {
+        update("SET LOCAL enable_seqscan = off")
+        query(s"EXPLAIN $sql", values*).map(_("QUERY PLAN").toString).mkString("\n")
+      } else query(s"EXPLAIN QUERY PLAN $sql", values*).map(_("detail").toString).mkString("\n")
+    }
+
+  /**
    * `read` over the rows `seed` adds, with the tables analyzed, all in one transaction that is rolled back: the schema is shared
    * by every suite that follows, so neither the rows nor their statistics may outlive the test. PostgreSQL writes a table's
    * row-count estimate in place, which a rollback keeps, so its tables are analyzed again over the rows that are left.

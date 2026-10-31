@@ -94,16 +94,18 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * The import pipeline's last stage: the asset marked complete, with its Image quality and perceptual hash stored alongside the
-   * flag (`markAsCompleted`), and counted in the stats. An asset that never gets here is purged at startup, so it is never
-   * counted.
+   * The import pipeline's last stage, one transaction: the asset marked complete, with its Image quality and perceptual hash
+   * stored alongside the flag (`markAsCompleted`), put in the Sequence of its burst if it has one (`SequenceService.assign`, for
+   * which the earlier uploads of the burst are completed candidates already), and counted in the stats. An asset that never gets
+   * here is purged at startup, so it is never counted.
    */
   def completeImport(asset: Asset): Asset =
     txManager.withTransaction {
       val completed = app.service.asset.markAsCompleted(asset)
+      val sequenced = app.service.sequence.assign(completed)
       app.service.stats.addAsset(asset)
       logger.trace(s"Import of asset [${asset.persistedId}] complete")
-      completed
+      sequenced
     }
 
   /**

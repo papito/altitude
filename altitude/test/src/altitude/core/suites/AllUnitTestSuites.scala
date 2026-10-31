@@ -23,6 +23,7 @@ import altitude.core.unit.SearchQueryModelTests
 import altitude.core.unit.SearchSqlTests
 import altitude.core.unit.SearchTextTests
 import altitude.core.unit.SearchWordsTests
+import altitude.core.unit.SequenceRuleTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.Sha256Tests
 import altitude.core.unit.SqlDialectTests
@@ -61,6 +62,7 @@ abstract class AllUnitTestSuites
     new VideoServiceTests,
     new ImageUtilTests,
     new ImageMeasurementTests,
+    new SequenceRuleTests,
     new RangeStreamingTests,
     new ContentSignerTests,
     new TransactionBoundaryTests,

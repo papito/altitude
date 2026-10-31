@@ -1,6 +1,7 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -74,6 +75,15 @@ abstract class BaseDao[Model <: BaseModel]:
 
   /** Bind value for an instant column: the UTC moment, independent of the JVM or server zone */
   protected def nativeUtcTimestamp(value: OffsetDateTime): Any
+
+  /** Bind value for a calendar day compared with [[dayOf]] a wall-clock timestamp column */
+  protected def nativeLocalDate(value: LocalDate): Any
+
+  /**
+   * The calendar day of a wall-clock timestamp column, spelled as the capture-day indexes spell it, so a statement that compares
+   * it reads the index: the engine's `SearchDialect.dayOf`, the one spelling the typed searches render too
+   */
+  protected def dayOf(column: String): String
 
   /** Converts result set rows to maps; engines override it to read temporal columns without an instant round trip */
   protected def rowProcessor: RowProcessor = new BasicRowProcessor()

@@ -3,6 +3,7 @@ package altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.Table
@@ -17,9 +18,11 @@ import altitude.core.models.ExtractedMetadata
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 import altitude.core.models.PublicMetadata
+import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.SequenceRule
 
 abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude.core.dao.AssetDao:
   final override val tableName = "asset"
@@ -232,6 +235,92 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     val values = RequestContext.getRepository.persistedId :: assetIds.map(idSet).toList
     manyBySqlQuery(sql, values).map(makeModel)
+
+  override def getSequenceCandidates(asset: Asset, gapMs: Int): List[Asset] =
+    sequenceCandidatesStatement(asset, gapMs).fold(List.empty[Asset])((sql, values) => manyBySqlQuery(sql, values).map(makeModel))
+
+  /**
+   * The statement behind [[getSequenceCandidates]] with its bind values, which the plan tests explain; nothing for an asset
+   * without a capture time. The window's calendar days, every one from the first to the last, lead the triage capture-day index
+   * and the timestamp then seeks within it. The flags are literals, which each engine reads as its own boolean, so the partial
+   * index on the triaged assets is read. The rows are locked (`FOR UPDATE` on PostgreSQL): a move sorting one of them meanwhile
+   * holds it, and once the move commits the row is re-evaluated and left out. A row without a hash or with a capture time no
+   * camera clock set is left out here too, so the Scala rule sees fewer rows; `SequenceRule` stays the authority. The metadata
+   * JSON a candidate is compared by (the device model) is the public one.
+   */
+  def sequenceCandidatesStatement(asset: Asset, gapMs: Int): Option[(String, List[Any])] =
+    asset.originalCreatedAt.map {
+      capturedAt =>
+        val from = capturedAt.minus(gapMs, ChronoUnit.MILLIS)
+        val to = capturedAt.plus(gapMs, ChronoUnit.MILLIS)
+        val days = Iterator.iterate(from.toLocalDate)(_.plusDays(1)).takeWhile(!_.isAfter(to.toLocalDate)).toList
+        val sources = SequenceRule.CameraClockSources.map(_.dbValue).toList.sorted
+        def placeholders(values: List[?]): String = values.map(_ => "?").mkString(", ")
+
+        val sql = s"""
+          SELECT asset.*,
+                 NULL AS ${FieldConst.Asset.USER_METADATA},
+                 NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
+            FROM asset
+           WHERE ${FieldConst.REPO_ID} = ?
+             AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+             AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+             AND ${FieldConst.Asset.IS_TRIAGED} = TRUE
+             AND ${dayOf(FieldConst.Asset.ORIGINAL_CREATED_AT)} IN (${placeholders(days)})
+             AND ${FieldConst.Asset.ORIGINAL_CREATED_AT} BETWEEN ? AND ?
+             AND ${FieldConst.ID} <> ?
+             AND ${FieldConst.AssetType.MEDIA_TYPE} = 'image'
+             AND ${FieldConst.Asset.DURATION_MS} IS NULL
+             AND ${FieldConst.Asset.PERCEPTUAL_HASH} IS NOT NULL
+             AND ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE} IN (${placeholders(sources)})
+             $forUpdate
+        """
+
+        val values = RequestContext.getRepository.persistedId :: days.map(nativeLocalDate) :::
+          List(nativeLocalDateTime(from), nativeLocalDateTime(to), asset.persistedId) ::: sources
+        (sql, values)
+    }
+
+  override def countSequenceMembers(sequenceIds: Set[String]): List[SequenceMembers] =
+    if sequenceIds.isEmpty then return List.empty[SequenceMembers]
+
+    val sql = s"""
+      SELECT ${FieldConst.Asset.SEQUENCE_ID}, COUNT(*) AS members, MIN(${FieldConst.Asset.ORIGINAL_CREATED_AT}) AS first_captured_at
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.SEQUENCE_ID} $inIdSet
+       GROUP BY ${FieldConst.Asset.SEQUENCE_ID}
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(sequenceIds))).map {
+      rec =>
+        SequenceMembers(
+          sequenceId = rec(FieldConst.Asset.SEQUENCE_ID).toString,
+          members = getLongField(rec("members")).get.toInt,
+          firstCapturedAt = getDateTimeField(rec.get("first_captured_at"))
+        )
+    }
+
+  override def setSequence(assetIds: Set[String], sequenceId: String): Int =
+    if assetIds.isEmpty then return 0
+
+    // Only a row still in triage takes a Sequence: a candidate a move sorted meanwhile is left as it is
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.SEQUENCE_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} $inIdSet AND ${FieldConst.Asset.IS_TRIAGED} = TRUE
+    """
+    updateByBySql(sql, List(sequenceId, RequestContext.getRepository.persistedId, idSet(assetIds)))
+
+  override def repointSequences(fromIds: Set[String], toId: String): Int =
+    if fromIds.isEmpty then return 0
+
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.SEQUENCE_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.Asset.SEQUENCE_ID} $inIdSet
+    """
+    updateByBySql(sql, List(toId, RequestContext.getRepository.persistedId, idSet(fromIds)))
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
     val existingMetadata = getUserMetadata(assetId) match

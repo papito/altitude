@@ -42,10 +42,9 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two assets added straight through the asset service and marked complete as an import completes them: one carrying an Image
-     * quality of five metrics and a perceptual hash with the high bit set, then put in a Sequence directly with updateById (a
-     * stand-in until Task 5 of the Sequences plan adds `AssetDao.setSequence`, which should then replace it), and one carrying
-     * none of them.
+     * Two assets added straight through the asset service and marked complete as an import completes them: one in triage,
+     * carrying an Image quality of five metrics and a perceptual hash with the high bit set, then put in a Sequence through the
+     * DAO's `setSequence` (which writes only a row in triage), and one carrying none of them.
      *
      * Assertions:
      *
@@ -55,10 +54,11 @@ import altitude.core.util.Query
     val quality = ImageQuality(sharpness = 123.5, luminance = 0.45, clippedHighlights = 0.01, crushedShadows = 0.002, score = 87)
     val hash = PerceptualHash(Long.MinValue + 42)
     val measured = testApp.service.asset.markAsCompleted(
-      testApp.service.asset.add(testContext.makeAsset().copy(imageQuality = Some(quality), perceptualHash = Some(hash))))
+      testApp.service.asset.add(
+        testContext.makeAsset(isTriaged = true).copy(imageQuality = Some(quality), perceptualHash = Some(hash))))
     val unmeasured = testApp.service.asset.markAsCompleted(testApp.service.asset.add(testContext.makeAsset()))
     val sequenceId = BaseDao.genId
-    testApp.service.asset.updateById(measured.persistedId, Map(FieldConst.Asset.SEQUENCE_ID -> sequenceId))
+    testApp.txManager.withTransaction(testApp.DAO.asset.setSequence(Set(measured.persistedId), sequenceId)) shouldBe 1
 
     def check(assets: Map[String, Asset]): Unit = {
       assets(measured.persistedId).imageQuality shouldBe Some(quality)

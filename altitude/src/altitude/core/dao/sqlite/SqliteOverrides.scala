@@ -1,5 +1,6 @@
 package altitude.core.dao.sqlite
 
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -10,14 +11,16 @@ import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
+import altitude.core.dao.sql.search.SqliteSearchDialect
 
 object SqliteOverrides:
   /**
    * The stored DATETIME text format, written and read. Timestamps are wall-clock text: camera-local for capture times, UTC for
    * import times. A fraction of a second is written only when there is one (a burst frame's subsecond capture time, the clock's
    * microseconds on an import time, as PostgreSQL's TIMESTAMPTZ keeps them), with no trailing zeros, so a whole second is
-   * `yyyy-MM-dd HH:mm:ss` as every existing row is, and `date()` reads both. The `java.sql.Timestamp.toString` form the tests
-   * write (`.0` to nine digits, `IntegrationTestCore.getSqlDateTime`) parses too.
+   * `yyyy-MM-dd HH:mm:ss` as every existing row is, and `date()` reads both. Every writer, the tests' helpers included, must
+   * write this canonical form: a hand-written statement compares the stored text (`BETWEEN` on a capture-time window), which
+   * orders as the times do only while no row carries trailing zeros or a `.0`.
    */
   val DATETIME_FORMATTER: DateTimeFormatter = new DateTimeFormatterBuilder()
     .appendPattern("yyyy-MM-dd HH:mm:ss")
@@ -44,6 +47,11 @@ trait SqliteOverrides:
 
   override protected def nativeUtcTimestamp(value: OffsetDateTime): Any =
     value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
+
+  // ISO text, which is what `date()` of a stored timestamp yields
+  override protected def nativeLocalDate(value: LocalDate): Any = value.toString
+
+  override protected def dayOf(column: String): String = SqliteSearchDialect.dayOf(column)
 
   // Parsed as the wall-clock time it spells; a JVM-zone round trip would shift a time inside the server's DST gap
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] =
