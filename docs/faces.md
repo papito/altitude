@@ -26,6 +26,12 @@ setting: 0, the default, means half the cores and never fewer than 2):
   transaction, so the detection never holds SQLite's one write connection. It works on one asset of a repository at a
   time, in upload order, so a face can join the Person an earlier photo of the same upload started.
 
+The detections stay on the element past recognition: `MeasureImageFlow`, the next stage, reads
+`AssetWithData.detectedFaces` and measures the Image quality's sharpness inside the face boxes when they cover enough
+of the frame, so a sharp portrait on a flat background is not dragged down. That stage and the score are described
+under **Sequences and Image quality** in [altitude/AGENTS.md](../altitude/AGENTS.md); `StripBinaryDataFlow` then leaves
+the detections behind.
+
 Whatever a stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
 rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`. Each Face's files are written as it
 is stored, inside that transaction, and a rollback deletes the files already written (`withFaceFiles`), so a Face in the
