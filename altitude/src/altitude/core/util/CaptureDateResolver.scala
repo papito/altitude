@@ -43,8 +43,8 @@ object CaptureDateResolver:
   private[core] def candidates(inputs: CaptureDateInputs): List[CaptureDate] =
     import CaptureDateSource.*
     def field(directory: String, key: String): Option[String] = inputs.extractedMetadata.getFieldValues(directory).get(key)
-    def parsed(raw: Option[String], source: CaptureDateSource): List[CaptureDate] =
-      raw.flatMap(WallClockParser.parse).map(CaptureDate(_, source)).toList
+    def parsed(raw: Option[String], source: CaptureDateSource, keepFraction: Boolean = false): List[CaptureDate] =
+      raw.flatMap(WallClockParser.parse(_, keepFraction)).map(CaptureDate(_, source)).toList
     def tag(directory: String, key: String, source: CaptureDateSource): List[CaptureDate] = parsed(field(directory, key), source)
     def iptc(date: String, time: String): List[CaptureDate] =
       parsed(field("IPTC", date).map(d => d + field("IPTC", time).map(" " + _).getOrElse("")), IptcCreated)
@@ -59,8 +59,9 @@ object CaptureDateResolver:
     exif("Date/Time Original", "Sub-Sec Time Original", ExifOriginal) ++
       exif("Date/Time Digitized", "Sub-Sec Time Digitized", ExifDigitized) ++
       tag("Exif IFD0", "Date/Time", ExifFileChange) ++
+      // An XMP date is ISO 8601 and may carry its fraction itself, which spaces the frames of a burst as the EXIF subsecond tag does
       List("xmp:CreateDate", "photoshop:DateCreated", "exif:DateTimeOriginal", "xmp:ModifyDate").flatMap(
-        tag("XMP", _, XmpCreateDate)) ++
+        key => parsed(field("XMP", key), XmpCreateDate, keepFraction = true)) ++
       iptc("Date Created", "Time Created") ++ iptc("Digital Date Created", "Digital Time Created") ++
       List("PNG-tEXt", "PNG-iTXt", "PNG-zTXt").flatMap(tag(_, "Creation Time", PngCreationTime)) ++
       // A phone's own recording date: a local wall clock with an offset, discarded like every other offset
@@ -168,7 +169,11 @@ private[core] object WallClockParser:
       digits => digits.take(6).padTo(6, '0').toInt * 1000
     }
 
-  def parse(raw: String): Option[LocalDateTime] =
+  /**
+   * The wall clock a string spells, to the whole second: a fraction in the string is dropped unless `keepFraction`, and then kept
+   * to the microsecond, the precision both engines store, as [[parseSubSecond]] keeps the EXIF tag's
+   */
+  def parse(raw: String, keepFraction: Boolean = false): Option[LocalDateTime] =
     Option(raw).flatMap {
       value =>
         val trimmed = value.trim.replaceAll("\\s+", " ")
@@ -180,7 +185,7 @@ private[core] object WallClockParser:
                 val local =
                   if parsed.isSupported(ChronoField.HOUR_OF_DAY) then LocalDateTime.from(parsed)
                   else LocalDate.from(parsed).atStartOfDay()
-                local.truncatedTo(ChronoUnit.SECONDS)
+                local.truncatedTo(if keepFraction then ChronoUnit.MICROS else ChronoUnit.SECONDS)
               }.toOption
           }
           .nextOption()

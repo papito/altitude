@@ -246,6 +246,29 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     Duration.between(storedUtc, nowUtc).abs().getSeconds should be <= 30L
   }
 
+  test("Import timestamp is stored to the microsecond on both engines") {
+
+    /**
+     * Setup:
+     *
+     * An asset written through the DAO, which binds the clock's reading truncated to the microsecond.
+     *
+     * Assertions:
+     *
+     * The import time read back through the model has no finer fraction than a microsecond on either engine (PostgreSQL keeps
+     * microseconds, and SQLite's text is written to the same precision, so the two engines store one value for one reading), and
+     * on SQLite the stored text spells at most six fractional digits.
+     */
+    val asset = addAssetWithCaptureTime(None)
+    asset.createdAt.get.getNano % 1000 shouldBe 0
+    if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
+      val raw = testApp.txManager.asReadOnly {
+        query("SELECT created_at FROM asset WHERE id = ?", asset.persistedId).head("created_at").toString
+      }
+      raw.matches("""\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?""") shouldBe true
+    }
+  }
+
   test("A PNG creation-time chunk is resolved and persisted through the real import") {
 
     /**

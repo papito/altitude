@@ -114,6 +114,30 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     CaptureDateResolver.resolve(fileChange, ceiling) shouldBe Some(CaptureDate(second, CaptureDateSource.ExifFileChange))
   }
 
+  test("An XMP date keeps the fraction it spells, to the microsecond, where an EXIF date string drops it") {
+
+    /**
+     * Setup:
+     *
+     * `xmp:CreateDate` spelled with a fraction of .25, with seven fractional digits and with none; and an EXIF original date
+     * spelled with a fraction of .999 and no subsecond tag.
+     *
+     * Assertions:
+     *
+     * The XMP rung keeps the fraction it carries, truncated to the microsecond, and a whole second stays whole; the EXIF rung
+     * reads its fraction from the dedicated tag alone, so the one in the date string is dropped.
+     */
+    val second = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
+    def xmp(raw: String): CaptureDateInputs = inputs(("XMP", "xmp:CreateDate", raw))
+
+    CaptureDateResolver.resolve(xmp("2024-07-04T08:09:10.25-12:00"), ceiling) shouldBe
+      Some(CaptureDate(second.withNano(250_000_000), CaptureDateSource.XmpCreateDate))
+    CaptureDateResolver.resolve(xmp("2024-07-04T08:09:10.1234567"), ceiling).map(_.at) shouldBe
+      Some(second.withNano(123_456_000))
+    CaptureDateResolver.resolve(xmp("2024-07-04T08:09:10"), ceiling).map(_.at) shouldBe Some(second)
+    CaptureDateResolver.resolve(original("2024:07:04 08:09:10.999"), ceiling).map(_.at) shouldBe Some(second)
+  }
+
   test("A video's container dates resolve: the phone's local creation date, then the UTC creation time in any zone") {
 
     /**

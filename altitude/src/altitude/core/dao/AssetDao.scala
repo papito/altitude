@@ -46,9 +46,9 @@ trait AssetDao extends BaseDao[Asset]:
    */
 
   /**
-   * The context repository's completed, live, triaged still images other than the asset, with a hash and a camera-clock capture
-   * time within `gapMs` of the asset's either way, read through the triage capture-day index and locked until the transaction
-   * ends; nothing for an asset without a capture time
+   * The context repository's completed, triaged still images other than the asset, in the trash or not but not purge-pending,
+   * with a hash and a camera-clock capture time within `gapMs` of the asset's either way, read through the triage capture-day
+   * index and locked until the transaction ends; nothing for an asset without a capture time
    */
   def getSequenceCandidates(asset: Asset, gapMs: Int): List[Asset]
 

@@ -15,11 +15,13 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
+import altitude.core.ConstraintException
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Settings
+import altitude.core.models.Stats
 
 /**
  * Sequences as the import assigns them. A burst is synthesized at test time: the frames are `images/2.jpg` shifted by a few
@@ -366,6 +368,81 @@ import altitude.core.models.Settings
     sorted.isTriaged shouldBe false
     sorted.sequenceId shouldBe None
     stored(second).sequenceId shouldBe sequenceId
+  }
+
+  test("A frame recycled from triage is a candidate, so the next frame of its burst joins it in the trash") {
+
+    /**
+     * Setup:
+     *
+     * A frame imported and recycled while still alone; then the next frame of its burst, imported a second later; then the first
+     * restored.
+     *
+     * Assertions:
+     *
+     * The second frame comes out of its import in a Sequence with the recycled first one, which keeps its trash and triage flags;
+     * the restore brings the first back with the Sequence it took in the trash, so the pair is together.
+     */
+    val first = importFrame(frame(0))
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    stored(first).sequenceId shouldBe None
+
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    second.sequenceId should not be None
+    val recycled = stored(first)
+    recycled.isRecycled shouldBe true
+    recycled.isTriaged shouldBe true
+    recycled.sequenceId shouldBe second.sequenceId
+
+    testApp.service.library.restoreRecycledAssets(Set(first.persistedId))
+    val restored = stored(first)
+    restored.isRecycled shouldBe false
+    restored.sequenceId shouldBe second.sequenceId
+    stored(second).sequenceId shouldBe second.sequenceId
+  }
+
+  test("A completion that fails after the assignment leaves the Sequences as they were") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames and a burst of two five seconds later, two Sequences; the repository's triage asset count row
+     * deleted behind the services' back, so counting the next completed asset fails; then a frame that would bridge the two.
+     *
+     * Assertions:
+     *
+     * The bridge's import fails on the missing stat (a `ConstraintException` naming the dimension), and since the assignment ran
+     * in the completion's transaction, the three frames are still in the first Sequence and the two in the second, with their
+     * member counts; the bridge itself is discarded, so the repository holds five assets.
+     */
+    val a =
+      List(importFrame(frame(0)), importFrame(frame(1), subSecond = Some("500")), importFrame(frame(2), taken = Some(takenAt(1))))
+    val b = List(
+      importFrame(frame(3), taken = Some(takenAt(6))),
+      importFrame(frame(4), taken = Some(takenAt(6)), subSecond = Some("500")))
+    val sequenceA = stored(a.head).sequenceId.get
+    val sequenceB = stored(b.head).sequenceId.get
+    sequenceA should not be sequenceB
+
+    testApp.txManager.withTransaction {
+      update(
+        "DELETE FROM stats WHERE repository_id = ? AND dimension = ?",
+        testContext.repository.persistedId,
+        Stats.TRIAGE_ASSETS)
+    }
+    val failure = the[ConstraintException] thrownBy importFrame(frame(5), taken = Some(takenAt(3)), subSecond = Some("500"))
+    failure.getMessage should include(Stats.TRIAGE_ASSETS)
+
+    a.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceA))
+    b.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceB))
+    val members = testApp.txManager.withTransaction(testApp.DAO.asset.countSequenceMembers(Set(sequenceA, sequenceB)))
+    members.map(sequence => sequence.sequenceId -> sequence.members).toMap shouldBe Map(sequenceA -> 3, sequenceB -> 2)
+    testApp.txManager.asReadOnly {
+      query("SELECT count(*) AS n FROM asset WHERE repository_id = ?", testContext.repository.persistedId)
+        .head("n")
+        .toString
+        .toInt
+    } shouldBe 5
   }
 
   test("A Video has no Image quality, no hash and no Sequence") {

@@ -166,8 +166,9 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       captureSource,
       latitude,
       longitude,
-      // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone
-      nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)),
+      // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone, and to the
+      // microsecond, the precision PostgreSQL keeps, so SQLite's text stores the same value
+      nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)),
       asset.width,
       asset.height,
       asset.width * asset.height,
@@ -243,10 +244,13 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    * The statement behind [[getSequenceCandidates]] with its bind values, which the plan tests explain; nothing for an asset
    * without a capture time. The window's calendar days, every one from the first to the last, lead the triage capture-day index
    * and the timestamp then seeks within it. The flags are literals, which each engine reads as its own boolean, so the partial
-   * index on the triaged assets is read. The rows are locked (`FOR UPDATE` on PostgreSQL): a move sorting one of them meanwhile
-   * holds it, and once the move commits the row is re-evaluated and left out. A row without a hash or with a capture time no
-   * camera clock set is left out here too, so the Scala rule sees fewer rows; `SequenceRule` stays the authority. The metadata
-   * JSON a candidate is compared by (the device model) is the public one.
+   * index on the triaged assets is read; a candidate may be in the trash (an asset recycled from triage keeps its flag and its
+   * Sequence, so a frame of its burst imported meanwhile joins it), so the index's `is_recycled` column is probed for both
+   * values, and only a purge-pending row is out. The rows are locked (`FOR UPDATE` on PostgreSQL): a move sorting one of them
+   * meanwhile holds it, and once the move commits the row is re-evaluated and left out. The predicates on the media type, the
+   * duration, the hash, the capture time's source and the triage flag are a derived copy of `SequenceRule.isEligible`, which
+   * stays the authority (every candidate goes through it again in Scala); they are here to spare reading full rows, and a change
+   * to the rule is made in both places. The metadata JSON a candidate is compared by (the device model) is the public one.
    */
   def sequenceCandidatesStatement(asset: Asset, gapMs: Int): Option[(String, List[Any])] =
     asset.originalCreatedAt.map {
@@ -263,11 +267,12 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
                  NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
             FROM asset
            WHERE ${FieldConst.REPO_ID} = ?
-             AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+             AND ${FieldConst.Asset.IS_RECYCLED} IN (FALSE, TRUE)
              AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
              AND ${FieldConst.Asset.IS_TRIAGED} = TRUE
              AND ${dayOf(FieldConst.Asset.ORIGINAL_CREATED_AT)} IN (${placeholders(days)})
              AND ${FieldConst.Asset.ORIGINAL_CREATED_AT} BETWEEN ? AND ?
+             AND ${FieldConst.Asset.IS_PURGED} = FALSE
              AND ${FieldConst.ID} <> ?
              AND ${FieldConst.AssetType.MEDIA_TYPE} = 'image'
              AND ${FieldConst.Asset.DURATION_MS} IS NULL
