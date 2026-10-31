@@ -89,6 +89,7 @@ export const Const = {
         searchParams: "searchParams",
         imageDetailLoading: "imageDetailLoading",
         modal: "modal",
+        snackbar: "snackbar",
     },
 
     localStore: {

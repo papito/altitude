@@ -363,11 +363,24 @@
         <section id="feedback">
           <h2>Feedback</h2>
           <p>The outcome of an action is reported in the snackbar: success for a completed one, warning for one that
-             partly applied, error for a failure. A failure to load a page area is a server error message in place.</p>
+             partly applied, error for a failure. Errors stack at top center and stay until dismissed; successes and
+             warnings stack at bottom left and leave after 3 s and 6 s, held while the pointer is over them or focus is
+             inside. Each stack holds three messages, the oldest giving way to a fourth, and a repeat of a message
+             shown counts on it (&times;n) instead. A failure to load a page area is a server error message in
+             place.</p>
           <div class="sg-row">
             <button type="button" class="action-button success" @@click="showSuccessSnackBar('A success message')">Success snackbar</button>
             <button type="button" class="action-button warning" @@click="showWarningSnackBar('A warning message')">Warning snackbar</button>
             <button type="button" class="action-button error" @@click="showErrorSnackBar('An error message')">Error snackbar</button>
+          </div>
+          @* A static message as the stacks render it, repeated once: its count badge and its dismiss button *@
+          <div class="sg-row">
+            <div class="snackbar success">
+              <i class="fas fa-check-circle" aria-hidden="true"></i>
+              <span class="snackbar-message">.snackbar.success, arrived twice</span>
+              <span class="snackbar-count">&times;2</span>
+              <button type="button" class="snackbar-dismiss" aria-label="Dismiss message">&times;</button>
+            </div>
           </div>
           <div id="serverError">#serverError: something went wrong on the server.</div>
           <div class="sg-row">

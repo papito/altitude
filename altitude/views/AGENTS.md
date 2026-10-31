@@ -11,8 +11,8 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -39,7 +39,7 @@ views/
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
-Full pages include `@includes.html.html_common()` (provides the three dialog hosts and `#snackbar`)
+Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, and the three dialog hosts)
 and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
@@ -78,9 +78,9 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
-| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators |
+| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`: each registers the htmx request rule with a minimal app (no stores, no fragments) and the page's own listeners; see **Settings screen** |
+| `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`. The import page's hydrates its upload form and starts no Alpine. Settings' starts Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store, no fragments) and registers the htmx request rule with a minimal app and the page's own listeners; see **Settings screen** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
 | `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
@@ -88,7 +88,13 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside) and `view-settings.js` (the View settings dialog's switches over the grid metadata set); `index.js` registers them |
 
-## Alpine.js Stores (initialized in `js/frontend-app.js` and `js/stores/app-stores.js`)
+## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
+
+`initializeFrontendStores()` (`js/stores/app-stores.js`), which `js/frontend-app.js` runs before `Alpine.start()` on
+the main page and the style guide, registers every store below. The ones `html_common` binds, `modal`,
+`imageDetailLoading` and `snackbar`, it registers through `registerHtmlCommonBindings()` (`js/stores/html-common.js`),
+with the focus plugin for the modal hosts' `x-trap`; Settings calls that registrar alone. Each page calls it once,
+before Alpine starts.
 
 | Store key | Purpose |
 |---|---|
@@ -96,6 +102,9 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
 | `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
 | `Const.state.resultsTotal` | The toolbar's results total: `count` and `isCapped`, set from the results fragment's `data-results-total` and `data-results-total-capped` (`js/fragments/search-results.js`). `label` reads the count followed by "+" when the server counted only up to its cap (`js/common/total-label.js`, "10000+"); `decrement` lowers an uncapped total as assets leave the grid and leaves a capped one alone, since it says only that there are more than the cap |
+| `Const.state.modal` | The active dialog host, its title and the identity of the displayed open (`js/common/modal.js`, see **Modals**); bound by the modal hosts and the popover title of `html_common` |
+| `Const.state.imageDetailLoading` | `value`: whether asset detail is loading its asset, which shows its spinner (`js/search-results/detail-navigator.js`) |
+| `Const.state.snackbar` | The snackbar's messages (`js/common/snackbar.js`): `items` in arrival order, read as the two stacks `errors` and `notices`, which `html_common` renders. Producers call the module's three functions, never the store (see **Snackbar** below) |
 | `Const.context.repoId` | Active repo ID — set from Twirl via `window.ctx.setRepoId(...)` |
 | `Const.context.gridMetadataFields` | Reactive `Set` of metadata field names shown in the grid; persisted in `localStorage` as a JSON array |
 
@@ -220,8 +229,9 @@ no editor.
 Alpine serves four distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
-Stores initialized in `js/frontend-app.js` and `js/stores/app-stores.js` hold shared data — the active
-repo ID, current view, and the set of selected assets. All access goes through `window.ctx`
+Stores initialized in `js/stores/app-stores.js` (run by `js/frontend-app.js`) and, for what `html_common` binds,
+`js/stores/html-common.js` hold shared data — the active repo ID, current view, the set of selected assets, the active
+dialog host, and the snackbar's messages. All access goes through `window.ctx`
 helpers or `Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
 
 ### 2. Selection
@@ -255,8 +265,9 @@ and the logic that needs the browser. Keep the expressions in such a template to
 single method calls: nothing lints them, so anything longer belongs in the component. A card or row
 repeated across sections is a Twirl reusable block (`@tokenCards(kinds, group)` in `style_guide.scala.html`),
 since Alpine has no template reuse of its own. Twirl reads `@` as its own, so Alpine's shorthand is
-written `@@click`. The explorer lists (folder tree, albums, Locations) are still rendered by their
-JavaScript modules.
+written `@@click`. `html_common` renders the `snackbar` store the same way, on every page that includes it: each
+stack is an `x-for` over the store's `errors` or `notices`, its bindings property reads, single calls on the store
+(`classesOf`, `iconOf`, `isRepeated`, `countOf`, `dismiss`, `syncStack`, `onStackFocusOut`), its events written `x-on:`. The explorer lists (folder tree, albums, Locations) are still rendered by their JavaScript modules.
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
@@ -273,8 +284,8 @@ control that opened it, using the visible ⋯ trigger for a menu action), and id
 (`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
 swaps once the user dismissed or replaced it. The two modal hosts' visibility is bound through the Alpine `modal` store
-(`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin registered in
-`js/app.js` contains focus and hides the page from assistive tech; its documented local patches
+(`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin, registered by
+`registerHtmlCommonBindings()` in `js/stores/html-common.js`, contains focus and hides the page from assistive tech; its documented local patches
 cancel delayed activation when a trap is released or removed, and count controls in open shadow
 roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes the
 active dialog and any open context menu and is consumed by them, which also keeps the browser's own
@@ -744,8 +755,31 @@ on hover (`--theme-neutral-4` at 0.08) and when checked (the accent at 0.2); a b
 select, styled as a field. The grid toolbar's Group and Sort are no selects but choice menus (see **Context menus**).
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
-`js/common/snackbar.js`. Messages render as plain text via `textContent`; pass raw text, including
-user-supplied names and server errors, without HTML markup or pre-escaping. Auto-dismisses after 3 s.
+`js/common/snackbar.js`. Messages render as plain text (`x-text`, which sets `textContent`); pass raw text, including
+user-supplied names and server errors, without HTML markup or pre-escaping. The messages live in the Alpine `snackbar`
+store, which `html_common` renders as two stacks: errors at top center (`#snackbarErrors`), kept until dismissed, and
+successes and warnings ("notices") at bottom left, over the footer (`#snackbarNotices`), dismissed after 3 s and 6 s.
+The notices' timers are held while the pointer is over their stack, focus is inside it or the document is hidden, and
+resume with the time they had left. Every message has a dismiss button and its type's icon. A stack holds three
+messages, a fourth dismissing the oldest; a message equal in type and text to one in its stack is counted on it
+(`×n`) and restarts its timer, and a dismissed message leaves no trace. A stack is at most `--snackbar-width` wide and
+keeps `--viewport-gap` from the viewport's edges, and a message wraps. Each stack is a `popover="manual"` element, open
+while it holds a message, so it is in the top layer: above the modal hosts and the map, above a popover dialog or menu
+opened before it (which it leaves open), below one opened after it. Clicking a message while the popover dialog is
+open is an outside click, so the browser closes the dialog (light dismiss); the modal hosts stay open. A keyboard user
+reaches a message's dismiss button by Tab, where the stacks sit in the DOM order (`html_common`'s place in the page);
+no key dismisses a message. Dismissing the message whose button has focus moves focus to the next message's button in
+its stack, or the previous one's when it was the last; with none left focus falls to `body`, and the notices' focus
+hold is released once focus is outside their stack (Firefox fires no `focusout` for a removed element). Screen readers
+hear a message through visually hidden live regions (`data-app-snackbar-announcer`), not the stacks. Each place holds
+two sibling regions, never nested: `role="status"` (`="polite"`) for successes and warnings, `role="alert"`
+(`="assertive"`) for errors. `x-trap.inert` hides everything outside the active trapped `.modal-box`, so each holds
+its own pair, and the top-level pair serves the page and the popover dialog; `modal.js` names the active trapped host
+(`getActiveTrapContainer`, `isInModalHost`). A message is appended to the fitting region heard now as a plain
+paragraph, a repeat's with its count, and removed after 5 s, so a burst is announced in full. A dismissed message
+fades out over `--snackbar-exit-duration`, which `snackbar.js` reads to remove it once the fade has run (a timer, not
+`transitionend`), or at once under reduced motion. A page without the store logs a message and drops it: the import
+page (`pipeline.scala.html`) includes no `html_common`, so the error snackbars of its upload form are only logged.
 
 **Infinite scroll + lazy load** — The last `.cell` (by position: a Location page can hold its last
 asset in an earlier cell too) gets class `last-cell` and carries how the next
@@ -931,8 +965,9 @@ on `#assets`, and the CSS in `static/css/includes/search_results.css` shows the 
 
 **Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, an Admin's page, `SettingsController`) is shaped like
 the import page: `header_common`, the shared nav, one `main`, `html_common` for the snackbar, `json-enc.js`, and the page
-module `js/settings-page.js`, which registers the htmx request rule with a minimal app and the save listener
-(`js/listeners/settings.js`); the template passes `Const.NavEntry.SETTINGS` as the nav's `current`. `main` holds the one form, `htmx/settings_form.scala.html`
+module `js/settings-page.js`, which starts Alpine for `html_common`'s bindings (`registerHtmlCommonBindings()`: the
+focus plugin and the `modal`, `imageDetailLoading` and `snackbar` stores; the nav and the form carry none) and registers the htmx request rule with a minimal app and the
+save listener (`js/listeners/settings.js`); the template passes `Const.NavEntry.SETTINGS` as the nav's `current`. `main` holds the one form, `htmx/settings_form.scala.html`
 (`#settingsForm`), rendered by `SettingsFormController.form` for the page and again by its save, `POST
 /htmx/settings/r/:repoId`: `hx-target="this"`, `hx-swap="outerHTML settle:0"`, `hx-json-enc`,
 `data-app-success-event="SETTINGS_SAVED_EVENT"`. Its sections are the Setting groups, each a grid of label and control
@@ -1407,7 +1442,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
-| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar` |
+| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar`; the `snackbar` store (`createSnackbarStore`: the two stacks, the cap and merge, the notices' timers, focus on dismiss) and the announcer (two regions per place) |
+| `static/js/stores/html-common.js` | `registerHtmlCommonBindings()`: what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the focus plugin), called once per page before Alpine starts: from `initializeFrontendStores()` and `settings-page.js` |
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
 | `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day or a Location) as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through the store on release |
@@ -1416,7 +1452,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/lazy-images.js` | loads thumbnails within a viewport, placeholders them once more than a viewport away, the first page's included |
 | `static/js/search-results/metadata-visibility.js` | keeps the `show-<field>` classes on `#assets` in step with the metadata fields set |
 | `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, validation replacements (no event), declared success events, tab selection, fragment hydration |
-| `static/js/settings-page.js` | the Settings page module: the request rule over its one form, the save listener, the Reset buttons |
+| `static/js/settings-page.js` | the Settings page module: Alpine with what `html_common` binds (`registerHtmlCommonBindings()`), the request rule over its one form, the save listener, the Reset buttons |
 | `static/js/listeners/settings.js` | `SETTINGS_SAVED_EVENT` → the success snackbar |
 | `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
 | `views/htmx/settings_form.scala.html` | The one Settings form: sections per group, a field per applicable Setting with Reset, error, restart notice and help |
@@ -1442,7 +1478,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
-| `views/includes/html_common.scala.html` | Snackbar + the three dialog hosts: the two Alpine-bound modal hosts and the popover dialog |
+| `views/includes/html_common.scala.html` | The snackbar's two stacks (manual popovers over the `snackbar` store) and its announcers + the three dialog hosts: the two Alpine-bound modal hosts and the popover dialog |
 | `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
 | `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |

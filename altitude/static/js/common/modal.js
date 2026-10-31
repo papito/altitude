@@ -3,7 +3,8 @@
  * modal (`#modalContent`), the popover dialog (`#popoverContent`) and asset detail
  * (`#imageDetailModalContent`).
  *
- * The active host lives in the Alpine `modal` store (registered from `stores/app-stores.js`).
+ * The active host lives in the Alpine `modal` store (registered with everything else `html_common`
+ * binds by `registerHtmlCommonBindings` in `stores/html-common.js`).
  * The two modal hosts bind to it declaratively: `x-show` toggles a host and
  * `x-trap.inert.noscroll` from the official `@alpinejs/focus` plugin contains focus and hides the
  * rest of the page from assistive technology while a host is active. Everything the hosts must
@@ -58,6 +59,9 @@ const hostContainerIds = {
     [ModalHost.assetDetail]: "imageDetailModalContainer",
 }
 
+// The hosts that trap focus with `x-trap.inert`; the popover dialog has no trap
+const trappedHosts = [ModalHost.general, ModalHost.assetDetail]
+
 // Identity of each displayed open; the store mirrors the current value for reactive consumers.
 let lastOpenId = 0
 
@@ -110,6 +114,23 @@ export function getModalOpenId() {
  */
 export function isModalOpenActive(openId) {
     return isModalActive() && getModalOpenId() === openId
+}
+
+/**
+ * The container of the active host when that host traps focus (the general modal or asset
+ * detail): its `x-trap.inert` hides the rest of the page from assistive technology. Null while no
+ * host, or the popover dialog, is active.
+ */
+export function getActiveTrapContainer() {
+    const host = getActiveModalHost()
+    return trappedHosts.includes(host) ? getContainer(host) : null
+}
+
+/** Whether `el` is inside one of the three hosts */
+export function isInModalHost(el) {
+    return Object.values(ModalHost).some((host) =>
+        getContainer(host)?.contains(el),
+    )
 }
 
 /**

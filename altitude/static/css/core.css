@@ -73,7 +73,9 @@
     --nav-search-focus-width: 15.5rem;
 
     --snackbar-width: 31.25rem;
-    --snackbar-height: 1.875rem;
+    /* A snackbar message's entry and its fade when dismissed; js/common/snackbar.js reads it, in ms, to remove the
+       message once the fade has run */
+    --snackbar-exit-duration: 150ms;
     --person-avatar-column: 6.25rem;
     --person-meta-column: 18.75rem;
     --merge-arrow-column: 5rem;
@@ -738,45 +740,125 @@ footer {
     font-size: var(--font-size-medium);
 }
 
-#snackbar {
+/* The two stacks of html_common: manual popovers in the top layer, their UA popover style reset. A closed popover's
+   display is the UA's none, so only an open one lays out; the gaps between messages let clicks through */
+.snackbar-stack {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow: visible;
+    color: inherit;
+    /* A fixed box's percentages are of the viewport less its scrollbar, which 100vw would include */
+    width: min(var(--snackbar-width), 100% - 2 * var(--viewport-gap));
+    pointer-events: none;
+}
+
+.snackbar-stack:popover-open {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* Errors: top center, growing downward */
+#snackbarErrors {
+    top: 50px;
+    inset-inline: 0;
+    margin-inline: auto;
+}
+
+/* Successes and warnings: bottom left, over the footer, growing upward */
+#snackbarNotices {
+    left: var(--viewport-gap);
+    bottom: var(--viewport-gap);
+}
+
+/* Icon, message, count and dismiss button in a row; the message takes the rest of the width and wraps, a long
+   unbroken path included */
+.snackbar {
     display: flex;
     align-items: center;
-    justify-content: center;
-    visibility: hidden;
-    min-width: var(--snackbar-width);
-    margin-left: calc(var(--snackbar-width) / -2);
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
     color: var(--theme-neutral-4);
-    text-align: center;
+    line-height: var(--line-height-text);
+    border: var(--border-hairline) var(--theme-neutral-4);
     border-radius: var(--radius);
-    padding: var(--space-6);
-    position: fixed;
-    z-index: 1;
-    left: 50%;
-    top: 50px;
-    height: var(--snackbar-height);
-    border: 1px solid var(--theme-neutral-4);
+    box-shadow: var(--soft-shadow);
+    pointer-events: auto;
 }
 
-#snackbar.show {
-    visibility: visible;
-    animation: fadein 0.5s;
-}
-
-#snackbar.success {
+.snackbar.success {
     background-color: var(--success-background-color);
 }
 
-#snackbar.warning {
+.snackbar.warning {
     background-color: var(--warning-background-color);
 }
 
-#snackbar.error {
+.snackbar.error {
     background-color: var(--error-background-color);
 }
 
-@keyframes fadein {
-    from {bottom: 0; opacity: 0;}
-    to {bottom: 30px; opacity: 1;}
+/* A dismissed message, fading out: hovering it no longer holds the timers */
+.snackbar.leaving {
+    pointer-events: none;
+}
+
+.snackbar-message {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* How many times the message arrived, from the second on */
+.snackbar-count {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-small);
+    background-color: var(--theme-secondary);
+    font-size: var(--font-size-small);
+    font-weight: var(--font-weight-bold);
+    white-space: nowrap;
+}
+
+/* The close control's look (.close-modal), a step smaller; the focus ring is the global one */
+.snackbar-dismiss {
+    padding: 0 var(--space-2);
+    background: none;
+    border: 0;
+    border-radius: var(--radius);
+    color: inherit;
+    font: inherit;
+    font-size: var(--font-size-large);
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* A message enters from its stack's edge and fades out when dismissed, both over --snackbar-exit-duration, which
+   js/common/snackbar.js waits out before it removes the message */
+@media (prefers-reduced-motion: no-preference) {
+    .snackbar {
+        transition: opacity var(--snackbar-exit-duration) ease-out, translate var(--snackbar-exit-duration) ease-out;
+    }
+
+    .snackbar.leaving {
+        opacity: 0;
+    }
+
+    @starting-style {
+        #snackbarErrors .snackbar {
+            opacity: 0;
+            translate: 0 calc(-1 * var(--space-4));
+        }
+
+        #snackbarNotices .snackbar {
+            opacity: 0;
+            translate: 0 var(--space-4);
+        }
+    }
 }
 
 /*             */
@@ -1040,4 +1122,15 @@ footer {
 
 [x-cloak] {
     display: none !important;
+}
+
+/* Read by screen readers but not drawn, and out of the layout (a grid parent gives it no cell): the snackbar's
+   announcers */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }

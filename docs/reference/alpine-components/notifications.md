@@ -50,4 +50,17 @@ appends it to a list, animates it in, and removes it after a timeout or when dis
 
 ## Notes for Altitude
 
-Altitude's snackbar (`js/common/snackbar.js`) does the same job imperatively with one message at a time. This is the shape to move to if stacked or multiple simultaneous messages are wanted.
+Altitude's snackbar has this shape: the Alpine `snackbar` store (`js/common/snackbar.js`) holds a list of messages,
+`views/includes/html_common.scala.html` renders it with `x-for`, and a message is removed after a timeout or a dismiss.
+It differs in that:
+
+- Producers call `showSuccessSnackBar`, `showWarningSnackBar` or `showErrorSnackBar` from `js/common/snackbar.js`
+  rather than dispatching an event.
+- There are two stacks: errors at top center, kept until dismissed, and successes and warnings at bottom left, timed.
+  Each is a `popover="manual"` element in the top layer, so it paints above the modal hosts.
+- A stack holds up to three messages, and a repeat is merged into the message already shown (`×n`).
+- Screen readers hear messages through separate visually hidden live regions, not the stacks: in each place a polite
+  `role="status"` region and, for errors, an assertive `role="alert"` one, siblings rather than nested. `x-trap.inert` hides
+  everything outside the active modal box, so a message is written into the region inside that box while a modal is
+  open.
+- The entry animation is CSS `@starting-style` rather than `$nextTick` and `x-transition`.

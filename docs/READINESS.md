@@ -121,7 +121,7 @@ As built, each repository has one owner (`repository.owner_account_id` in [all.s
 - ✅ No GET route changes state, every auth cookie is `SameSite=Strict`, and JSON PUT and DELETE need a CORS preflight.
 - [ ] No CSRF token and no `Origin` or `Sec-Fetch-Site` check. `SameSite` does not stop same-site sibling subdomains.
   - Fix: reject a non-safe method whose `Sec-Fetch-Site` is `cross-site`.
-- ✅ Output is escaped. Twirl escapes by default and no template uses raw `Html(...)`; file names, people, albums and Locations render through `@{...}`. Client JS builds DOM with `textContent` and `createElement` ([album-list.js], [location-list.js], [snackbar.js], [map-view.js]). EXIF is never rendered raw. Escaping has [no tests](test-coverage.md#asset-persistence-queries-and-previews).
+- ✅ Output is escaped. Twirl escapes by default and no template uses raw `Html(...)`; file names, people, albums and Locations render through `@{...}`. Client JS builds DOM with `textContent` and `createElement` ([album-list.js], [location-list.js], [map-view.js], the announcements of [snackbar.js]), and Alpine binds text with `x-text` (the snackbar's messages). EXIF is never rendered raw. Escaping has [no tests](test-coverage.md#asset-persistence-queries-and-previews).
 - [ ] Stored XSS through a file name. [ImportStatusWsActor] formats the raw `fileName` into HTML (`wsContent`) that htmx swaps into the page ([pipeline.scala.html]), so a file named `<img src=x onerror=…>.jpg` runs script in the app's origin. [HIGH]
   - Fix: escape the ticker, or send JSON and render it with `textContent`; a controller test with a `<script>` file name.
 - [ ] The Leaflet attribution Setting renders as HTML ([map-view.js] `attribution`), so an Admin could store script that runs for every user. [LOW]
@@ -295,7 +295,7 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 - ✅ Time handling is principled and documented: a wall-clock capture time with the zone deliberately dropped, 12 sources tried in order with plausibility checks, and UTC container times handled ([CaptureDateResolver]).
 - [ ] `OffsetTimeOriginal` is never read. "Imported:" ([result_cell.scala.html]) shows the JVM's zone on PostgreSQL ([PostgresOverrides] `getDateTimeField`) and UTC on SQLite ([SqliteOverrides] `toLocalDateTime`), never the viewer's, and without a label. Effort: S.
   - Fix: store `OffsetTimeOriginal` (EXIF 0x9011) beside the wall clock; render the import time in the viewer's zone with `<time datetime>` and `Intl.DateTimeFormat`.
-- [ ] Not usable on a phone. The viewport meta is set, but the app CSS has no `@media` query, and fixed widths overflow a 360 px screen: the nav and the snackbar's `min-width: 500px` ([core.css]), and the split pane's `minSize: [100, 300]` ([index.scala.html]). Touch box selection is off ([box-selection.js]), and detail navigation is arrow keys only ([global.js]). Effort: L.
+- [ ] Not usable on a phone. The viewport meta is set, but the app CSS has no `@media` query, and fixed widths overflow a 360 px screen: the nav ([core.css]) and the split pane's `minSize: [100, 300]` ([index.scala.html]). Touch box selection is off ([box-selection.js]), and detail navigation is arrow keys only ([global.js]). Effort: L.
   - Fix: below a breakpoint, stack the explorer or put it in a drawer, wrap the nav, swipe in the detail view, and add `accept="image/*,video/*"` to the file input.
 
 ### Operations and hygiene

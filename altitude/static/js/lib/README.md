@@ -52,8 +52,9 @@ view's on-screen clustering (`js/map/map-view.js`); `js/common/vendor-loader.js`
 (`js/search-results/detail-navigator.js`); the player's markup is on the page before and upgrades then. No module
 imports these three.
 
-The focus plugin is registered with `Alpine.plugin(focus)` in `static/js/app.js` before Alpine starts;
-the modal hosts in `views/includes/html_common.scala.html` rely on its `x-trap` directive.
+The focus plugin is registered with `Alpine.plugin(focus)` by `registerHtmlCommonBindings()` in
+`static/js/stores/html-common.js`, which every page including `views/includes/html_common.scala.html` calls once
+before Alpine starts; the modal hosts there rely on its `x-trap` directive.
 `alpine-focus.esm.js` has two local patches. One cancels delayed trap activation when the trap is
 released or its element is removed, preventing a closed dialog from intercepting Tab. The other
 passes `tabbableOptions: { getShadowRoot: true }` to every trap, so controls inside open shadow
