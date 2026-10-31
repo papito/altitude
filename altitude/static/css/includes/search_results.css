@@ -5,10 +5,32 @@
   position: sticky;
   top: var(--results-title-height, 0);
   z-index: 2;
-  padding: calc(var(--control-vertical-space) + var(--space-3));
-  display: grid;
-  grid-template-columns: .5fr 1fr 1fr 1fr auto;
+  padding: var(--space-6) var(--space-7);
+  display: flex;
+  align-items: center;
+  gap: var(--space-9);
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
+}
+
+/* The total holds the left edge; the View, Group and Sort menus and the layout toggle gather at the right */
+#searchControl .total {
+  margin-right: auto;
+}
+
+/* The total's "Total:" label is an eyebrow before the count, which is a step up from the body text so it reads at a
+   glance; tabular digits keep its width steady as assets leave the grid */
+#searchControl .total strong {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--theme-neutral-3);
+}
+
+#searchControl .results-total {
+  font-size: var(--font-size-large);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
 }
 
 /* In map layout the fragment is a column that hands the map every pixel under the controls
@@ -17,12 +39,6 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-
-/* The grid / map layout toggle, a .toggle-group of core.css: its track hugs the buttons, centered in the cell */
-#layoutToggle {
-  place-self: center;
-  margin: 0 var(--space-5);
 }
 
 /* The "Map area" chip (a .filter-chip): the bbox scope of the crowded-pin panel, set off from the total */

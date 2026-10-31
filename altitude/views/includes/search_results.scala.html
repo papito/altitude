@@ -77,6 +77,13 @@
       }
     </div>
   </div>
+  @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
+  <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
+    <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
+            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
+    <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
+            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
+  </div>
   @* The ⚙ View control is a dialog-trigger context menu, built into this host by
      js/search-results/view-settings-control.js like the Add album and Add folder controls; its dialog also holds the
      repository view's triage filter (htmx/view_settings_dialog), which runs a search. `hx-preserve` carries this very
@@ -121,13 +128,6 @@
     </div>
   </div>
 
-  @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
-  <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
-    <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
-            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
-    <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
-            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
-  </div>
 </div>
 
 @if(layout == Const.Search.Layout.MAP) {

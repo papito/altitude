@@ -933,7 +933,7 @@ the grouping and the layout stay, so a person selected in Triage goes back to al
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The scopes are exclusive by the store's rules; the template renders
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a flex row: the total holds the left edge (`margin-right: auto`) and the View, Group and Sort menus and the layout toggle gather at the right, `--space-9` apart. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
 the first of person, folder, album, Location and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
 
