@@ -30,6 +30,8 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.faces.max_sampled_frames', '120', '120'),
   ('video.faces.min_cluster_frames', '2', '2'),
   ('video.preview.min_luminance', '40', '40'),
+  ('sequence.max_gap_ms', '3000', '3000'),
+  ('sequence.max_hash_distance', '10', '10'),
   ('map.tile.url', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
   ('map.tile.attribution', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
   ('map.geocoder.enabled', 'false', 'false'),

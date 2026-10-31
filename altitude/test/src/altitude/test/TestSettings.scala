@@ -20,6 +20,8 @@ object TestSettings {
     Settings.VIDEO_FACES_MAX_SAMPLED_FRAMES -> "120",
     Settings.VIDEO_FACES_MIN_CLUSTER_FRAMES -> "2",
     Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "40",
+    Settings.SEQUENCE_MAX_GAP_MS -> "3000",
+    Settings.SEQUENCE_MAX_HASH_DISTANCE -> "10",
     Settings.MAP_TILE_URL -> "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     Settings.MAP_TILE_ATTRIBUTION -> "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors",
     Settings.MAP_GEOCODER_ENABLED -> "false",

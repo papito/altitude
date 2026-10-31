@@ -3,6 +3,9 @@ package altitude.core.models
 import altitude.core.util.JsonCodec
 
 object PerceptualHash:
+  /** The bits of a hash, the farthest two can be by Hamming distance */
+  val BITS: Int = java.lang.Long.SIZE
+
   // One wire form whatever the value: 16 lowercase hex digits, zero-padded. upickle would write a Long as a number up to 2^53
   // and as a string beyond, so a hash with the high bit set would otherwise change type on the way out.
   given JsonCodec.ReadWriter[PerceptualHash] = JsonCodec

@@ -11,6 +11,7 @@ enum SettingGroup(val label: String):
   case FaceDetection extends SettingGroup("Face detection")
   case FaceRecognition extends SettingGroup("Face recognition and quality")
   case Video extends SettingGroup("Video")
+  case Triage extends SettingGroup("Triage")
   case Maps extends SettingGroup("Map")
   case Operations extends SettingGroup("Operations")
 
@@ -22,7 +23,9 @@ enum SettingKind:
 enum SettingType:
   /** A number between the bounds, the lower one excluded when `minExclusive` */
   case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false)
-  case Integer(min: Int)
+
+  /** A whole number between the bounds */
+  case Integer(min: Int, max: Int = Int.MaxValue)
   case Flag
   case Text
 
@@ -33,7 +36,7 @@ enum SettingType:
   /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
   def number(text: String): Option[Double] = this match
     case Decimal(_, _, _) => text.toDoubleOption.filter(_.isFinite)
-    case Integer(_) => text.toIntOption.map(_.toDouble)
+    case Integer(_, _) => text.toIntOption.map(_.toDouble)
     case _ => None
 
   def error(text: String): Option[String] = this match
@@ -44,10 +47,11 @@ enum SettingType:
           Some(if minExclusive then s"Must be above ${SettingType.bound(min)}" else s"Must be at least ${SettingType.bound(min)}")
         case Some(value) if value > max => Some(s"Must be at most ${SettingType.bound(max)}")
         case _ => None
-    case Integer(min) =>
+    case Integer(min, max) =>
       number(text) match
         case None => Some("Must be a whole number")
         case Some(value) if value < min => Some(s"Must be at least $min")
+        case Some(value) if value > max => Some(s"Must be at most $max")
         case _ => None
     case Flag => Option.unless(text == "true" || text == "false")("Must be true or false")
     case Text => None
@@ -61,7 +65,7 @@ enum SettingType:
 
   /** Whether two valid texts mean the same value: a number by its value, anything else by its text */
   def same(a: String, b: String): Boolean = this match
-    case Decimal(_, _, _) | Integer(_) => number(a) == number(b)
+    case Decimal(_, _, _) | Integer(_, _) => number(a) == number(b)
     case _ => a == b
 
 object SettingType:
@@ -116,6 +120,8 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoFacesMaxSampledFrames: Int = number(VIDEO_FACES_MAX_SAMPLED_FRAMES).toInt
   val videoFacesMinClusterFrames: Int = number(VIDEO_FACES_MIN_CLUSTER_FRAMES).toInt
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
+  val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
+  val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
   val mapGeocoderEnabled: Boolean = text(MAP_GEOCODER_ENABLED) == "true"
@@ -144,6 +150,8 @@ object Settings:
   val VIDEO_FACES_MAX_SAMPLED_FRAMES = "video.faces.max_sampled_frames"
   val VIDEO_FACES_MIN_CLUSTER_FRAMES = "video.faces.min_cluster_frames"
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
+  val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
+  val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
   val MAP_TILE_URL = "map.tile.url"
   val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
   val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
@@ -258,6 +266,21 @@ object Settings:
       "The Preview is the first Sampled frame whose mean brightness (0 to 255) clears this floor, which skips a black leader " +
         "or a fade-in; when no frame does, the frame at a tenth of the duration.",
       Decimal(0, 255)
+    ),
+    SettingDef(
+      SEQUENCE_MAX_GAP_MS,
+      Triage,
+      "Sequence gap (milliseconds)",
+      "Two frames shot at most this far apart on the same camera, and looking alike, are one Sequence.",
+      Integer(1)
+    ),
+    SettingDef(
+      SEQUENCE_MAX_HASH_DISTANCE,
+      Triage,
+      "Sequence hash distance (bits)",
+      s"How far apart two frames' perceptual hashes may be, 0 to ${PerceptualHash.BITS} bits, to still look alike. Higher " +
+        "groups more freely.",
+      Integer(0, PerceptualHash.BITS)
     ),
     SettingDef(
       MAP_TILE_URL,

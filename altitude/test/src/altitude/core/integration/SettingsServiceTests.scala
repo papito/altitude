@@ -61,6 +61,8 @@ import altitude.core.models.Settings
     current.videoFacesMaxSampledFrames shouldBe 120
     current.videoFacesMinClusterFrames shouldBe 2
     current.videoPreviewMinLuminance shouldBe 40
+    current.sequenceMaxGapMs shouldBe 3000
+    current.sequenceMaxHashDistance shouldBe 10
     current.mapTileUrl shouldBe "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     current.mapTileAttribution shouldBe "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
     current.mapGeocoderEnabled shouldBe false
@@ -103,6 +105,8 @@ import altitude.core.models.Settings
       Settings.FACE_DETECTION_MIN_FACE_SIZE -> "0", // below 1
       Settings.FACE_RECOGNITION_MATCH_COUNT -> "2.5", // not an integer
       Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "256", // above 255
+      Settings.SEQUENCE_MAX_GAP_MS -> "0", // below 1
+      Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65", // above 64, the bits of a hash
       Settings.MAP_TILE_URL -> "https://tiles.example.org/{z}/{x}.png", // no {y}
       Settings.MAP_GEOCODER_ENABLED -> "yes", // not a boolean
       Settings.MAP_GEOCODER_URL -> "ftp://geocoder.example.org", // not http(s)
@@ -130,6 +134,15 @@ import altitude.core.models.Settings
 
     testApp.settings.validate(
       Map(Settings.FACE_DETECTION_BOUNDING_BOX_SIZE -> "200", Settings.FACE_DETECTION_MIN_FACE_SIZE -> "200")) shouldBe empty
+  }
+
+  test("The hash distance is capped at the bits of a hash, and an uncapped whole number takes any large value") {
+    testApp.settings.validate(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "64")) shouldBe empty
+    testApp.settings.validate(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65")) shouldBe
+      Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "Must be at most 64")
+
+    // An hour's gap: Integer(min) alone caps nothing
+    testApp.settings.validate(Map(Settings.SEQUENCE_MAX_GAP_MS -> "3600000")) shouldBe empty
   }
 
   test("The vector index keeps at least four times the match count, a rule of PostgreSQL alone") {
