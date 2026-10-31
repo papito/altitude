@@ -5,7 +5,7 @@
 .batch-ops .actions {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-6);
     white-space: nowrap;
 }
 

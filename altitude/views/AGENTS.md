@@ -1003,7 +1003,7 @@ the fragment's title with its controls (`static/css/htmx/map_view.css`).
 album, Remove from album while an album's results are displayed, Add to location, Remove from location while a Location's
 are, and Deselect all (×, an icon button with an accessible name); in the trash view Purge, Restore and Deselect all. The
 count shows once ("3 selected"), before the buttons, which carry no count of their own; they are the small action
-button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-4`
+button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-6`
 apart. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in
 the footer. Both copies are drawn alike, their sizes set in `static/css/includes/batch_ops.css` rather than inherited, and
 the footer's is placed by CSS anchor positioning: the toolbar copy is `anchor-name: --batch-ops`, and the footer copy is
