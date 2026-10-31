@@ -75,10 +75,21 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       danglingAssets.records
     }
 
+  /**
+   * Marks the import of the asset complete and, in the same update, stores the Image quality and the perceptual hash the pipeline
+   * put on it, so an asset is never complete without its metrics. Both stay NULL for a Video, an animated image, or a still image
+   * the pipeline did not measure.
+   */
   def markAsCompleted(asset: Asset): Asset =
     txManager.withTransaction {
       val updateData = Map(
-        FieldConst.Asset.IS_PIPELINE_PROCESSED -> true
+        FieldConst.Asset.IS_PIPELINE_PROCESSED -> true,
+        FieldConst.Asset.SHARPNESS -> asset.imageQuality.map(_.sharpness),
+        FieldConst.Asset.LUMINANCE -> asset.imageQuality.map(_.luminance),
+        FieldConst.Asset.CLIPPED_HIGHLIGHTS -> asset.imageQuality.map(_.clippedHighlights),
+        FieldConst.Asset.CRUSHED_SHADOWS -> asset.imageQuality.map(_.crushedShadows),
+        FieldConst.Asset.IMAGE_QUALITY -> asset.imageQuality.map(_.score),
+        FieldConst.Asset.PERCEPTUAL_HASH -> asset.perceptualHash.map(_.bits)
       )
 
       updateById(asset.persistedId, updateData)

@@ -79,6 +79,13 @@ object FieldConst:
     val LATITUDE = "latitude"
     val LONGITUDE = "longitude"
     val DURATION_MS = "duration_ms"
+    val SHARPNESS = "sharpness"
+    val LUMINANCE = "luminance"
+    val CLIPPED_HIGHLIGHTS = "clipped_highlights"
+    val CRUSHED_SHADOWS = "crushed_shadows"
+    val IMAGE_QUALITY = "image_quality"
+    val PERCEPTUAL_HASH = "perceptual_hash"
+    val SEQUENCE_ID = "sequence_id"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

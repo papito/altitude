@@ -39,6 +39,13 @@ case class AssetRow[T[_]](
     latitude: T[Option[Double]],
     longitude: T[Option[Double]],
     durationMs: T[Option[Long]],
+    sharpness: T[Option[Double]],
+    luminance: T[Option[Double]],
+    clippedHighlights: T[Option[Double]],
+    crushedShadows: T[Option[Double]],
+    imageQuality: T[Option[Int]],
+    perceptualHash: T[Option[Long]],
+    sequenceId: T[Option[String]],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

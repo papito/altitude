@@ -6,7 +6,10 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
+import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
+import altitude.core.models.ImageQuality
+import altitude.core.models.PerceptualHash
 import altitude.core.util.Query
 
 @DoNotDiscover class AssetServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -31,6 +34,46 @@ import altitude.core.util.Query
     val queried = testApp.service.asset.query(new Query()).records.map(asset => asset.persistedId -> asset.durationMs).toMap
     queried(video.persistedId) shouldBe Some(123456789L)
     queried(image.persistedId) shouldBe None
+  }
+
+  test(
+    "Image quality, the perceptual hash and the Sequence are stored on completion and read back, and an unmeasured asset has none") {
+
+    /**
+     * Setup:
+     *
+     * Two assets added straight through the asset service and marked complete as an import completes them: one carrying an Image
+     * quality of five metrics and a perceptual hash with the high bit set, then put in a Sequence directly with updateById (a
+     * stand-in until Task 5 of the Sequences plan adds `AssetDao.setSequence`, which should then replace it), and one carrying
+     * none of them.
+     *
+     * Assertions:
+     *
+     * The metrics, the hash and the Sequence survive a read by ID, a query, and the hand-written locking read that builds the
+     * model from its own row map; the asset without them reads back with none on every path.
+     */
+    val quality = ImageQuality(sharpness = 123.5, luminance = 0.45, clippedHighlights = 0.01, crushedShadows = 0.002, score = 87)
+    val hash = PerceptualHash(Long.MinValue + 42)
+    val measured = testApp.service.asset.markAsCompleted(
+      testApp.service.asset.add(testContext.makeAsset().copy(imageQuality = Some(quality), perceptualHash = Some(hash))))
+    val unmeasured = testApp.service.asset.markAsCompleted(testApp.service.asset.add(testContext.makeAsset()))
+    val sequenceId = BaseDao.genId
+    testApp.service.asset.updateById(measured.persistedId, Map(FieldConst.Asset.SEQUENCE_ID -> sequenceId))
+
+    def check(assets: Map[String, Asset]): Unit = {
+      assets(measured.persistedId).imageQuality shouldBe Some(quality)
+      assets(measured.persistedId).perceptualHash shouldBe Some(hash)
+      assets(measured.persistedId).sequenceId shouldBe Some(sequenceId)
+      assets(unmeasured.persistedId).imageQuality shouldBe None
+      assets(unmeasured.persistedId).perceptualHash shouldBe None
+      assets(unmeasured.persistedId).sequenceId shouldBe None
+    }
+
+    val ids = Set(measured.persistedId, unmeasured.persistedId)
+    check(ids.map(id => id -> (testApp.service.asset.getById(id): Asset)).toMap)
+    check(testApp.service.asset.query(new Query()).records.map(asset => asset.persistedId -> asset).toMap)
+    check(
+      testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToMove(ids)).map(asset => asset.persistedId -> asset).toMap)
   }
 
   test("Getting asset by invalid ID should raise NotFoundException") {

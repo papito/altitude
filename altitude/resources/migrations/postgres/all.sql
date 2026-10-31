@@ -115,7 +115,19 @@ CREATE TABLE asset (
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   -- How long a Video or an animated GIF plays; NULL for a still image.
-  duration_ms BIGINT
+  duration_ms BIGINT,
+  -- Image quality (ImageQuality): the metrics and the 0 to 100 score of a still image, measured at import. The five are NULL
+  -- together for a Video, an animated image, or a still image the pipeline did not measure.
+  sharpness DOUBLE PRECISION,
+  luminance DOUBLE PRECISION,
+  clipped_highlights DOUBLE PRECISION,
+  crushed_shadows DOUBLE PRECISION,
+  image_quality INT,
+  -- The DCT perceptual hash of a still image, 64 bits as a signed integer, compared by Hamming distance; NULL as the five are.
+  perceptual_hash BIGINT,
+  -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
+  -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
+  sequence_id CHAR(36) COLLATE "C"
 ) INHERITS (_core) WITH (toast_tuple_target = 128);
 
 -- One live asset per content in a repository; the recycle bin may hold any number of copies of it
@@ -141,6 +153,8 @@ CREATE INDEX asset_folder ON asset (folder_id);
 -- time a map cell is ranked by, so a viewport's own points are read from the index alone.
 CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude)
   INCLUDE (id, original_created_at) WHERE latitude IS NOT NULL;
+-- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
+CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
 
 CREATE SEQUENCE person_label;
 

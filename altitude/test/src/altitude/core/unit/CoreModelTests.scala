@@ -13,6 +13,8 @@ import altitude.core.models.AssetType
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Face
 import altitude.core.models.Folder
+import altitude.core.models.ImageQuality
+import altitude.core.models.PerceptualHash
 import altitude.core.models.Stat
 import altitude.core.models.UserMetadataValue
 
@@ -53,6 +55,54 @@ import altitude.core.models.UserMetadataValue
     deserialized.id should be(folder.id)
     deserialized.name should be(folder.name)
     deserialized.parentId should be(folder.parentId)
+  }
+
+  test("Image quality, the perceptual hash and the Sequence travel through JSON, and are absent when unset") {
+
+    /**
+     * Setup:
+     *
+     * A still image with an Image quality of five metrics, a perceptual hash with the high bit set and a Sequence id, a copy of
+     * it with a small hash, and a copy with none of the three.
+     *
+     * Assertions:
+     *
+     * The three are written under their snake_case names, the metrics nested under `image_quality` and the hash as 16 zero-padded
+     * lowercase hex digits whatever its value (upickle would write a Long as a number up to 2^53 and as a string beyond), and
+     * read back as given; the copy's JSON has none of the three keys and reads back with none.
+     */
+    val quality = ImageQuality(sharpness = 123.5, luminance = 0.45, clippedHighlights = 0.01, crushedShadows = 0.002, score = 87)
+    val highBit = PerceptualHash(Long.MinValue + 42)
+    val measured = Asset(
+      userId = "u",
+      assetType = AssetType("image", "jpeg", "image/jpeg"),
+      fileName = "burst-1.jpg",
+      checksum = "a" * 64,
+      sizeBytes = 10,
+      folderId = "",
+      imageQuality = Some(quality),
+      perceptualHash = Some(highBit),
+      sequenceId = Some("seq-id")
+    )
+    measured.toJson("image_quality")("clipped_highlights").num should be(0.01)
+    measured.toJson("image_quality")("score").num should be(87)
+    measured.toJson("perceptual_hash").str should be("800000000000002a")
+    measured.toJson("sequence_id").str should be("seq-id")
+    val reread = Asset.fromJson(measured.toJson)
+    reread.imageQuality should be(Some(quality))
+    reread.perceptualHash should be(Some(highBit))
+    reread.sequenceId should be(Some("seq-id"))
+
+    val small = measured.copy(perceptualHash = Some(PerceptualHash(255)))
+    small.toJson("perceptual_hash").str should be("00000000000000ff")
+    Asset.fromJson(small.toJson).perceptualHash should be(Some(PerceptualHash(255)))
+
+    val unmeasured = measured.copy(imageQuality = None, perceptualHash = None, sequenceId = None)
+    unmeasured.toJson.value.keySet.intersect(Set("image_quality", "perceptual_hash", "sequence_id")) should be(Set())
+    val rereadUnmeasured = Asset.fromJson(unmeasured.toJson)
+    rereadUnmeasured.imageQuality should be(None)
+    rereadUnmeasured.perceptualHash should be(None)
+    rereadUnmeasured.sequenceId should be(None)
   }
 
   test("Video duration and Face Frame time, quality and enrollment travel through JSON, and the times are absent when unset") {

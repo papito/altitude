@@ -14,6 +14,8 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
+import altitude.core.models.ImageQuality
+import altitude.core.models.PerceptualHash
 import altitude.core.models.PublicMetadata
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
@@ -49,6 +51,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       originalCreatedAtSource = row.originalCreatedAtSource.flatMap(CaptureDateSource.fromDbValue),
       latitude = row.latitude,
       longitude = row.longitude,
+      imageQuality =
+        ImageQuality.fromColumns(row.sharpness, row.luminance, row.clippedHighlights, row.crushedShadows, row.imageQuality),
+      perceptualHash = row.perceptualHash.map(PerceptualHash(_)),
+      sequenceId = row.sequenceId,
       createdAt = row.createdAt.map(toLocalDateTime),
       updatedAt = row.updatedAt.map(toLocalDateTime)
     )
@@ -82,6 +88,15 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         Option(rec(FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE)).flatMap(value => CaptureDateSource.fromDbValue(value.toString)),
       latitude = getDoubleField(rec(FieldConst.Asset.LATITUDE)),
       longitude = getDoubleField(rec(FieldConst.Asset.LONGITUDE)),
+      imageQuality = ImageQuality.fromColumns(
+        sharpness = getDoubleField(rec(FieldConst.Asset.SHARPNESS)),
+        luminance = getDoubleField(rec(FieldConst.Asset.LUMINANCE)),
+        clippedHighlights = getDoubleField(rec(FieldConst.Asset.CLIPPED_HIGHLIGHTS)),
+        crushedShadows = getDoubleField(rec(FieldConst.Asset.CRUSHED_SHADOWS)),
+        score = getLongField(rec(FieldConst.Asset.IMAGE_QUALITY)).map(_.toInt)
+      ),
+      perceptualHash = getLongField(rec(FieldConst.Asset.PERCEPTUAL_HASH)).map(PerceptualHash(_)),
+      sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )

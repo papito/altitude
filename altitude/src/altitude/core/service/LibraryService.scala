@@ -94,8 +94,9 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * The import pipeline's last stage: the asset marked complete and counted in the stats. An asset that never gets here is purged
-   * at startup, so it is never counted.
+   * The import pipeline's last stage: the asset marked complete, with its Image quality and perceptual hash stored alongside the
+   * flag (`markAsCompleted`), and counted in the stats. An asset that never gets here is purged at startup, so it is never
+   * counted.
    */
   def completeImport(asset: Asset): Asset =
     txManager.withTransaction {

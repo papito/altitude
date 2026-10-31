@@ -54,6 +54,12 @@ case class Asset(
     originalCreatedAtSource: Option[CaptureDateSource] = None,
     latitude: Option[Double] = None,
     longitude: Option[Double] = None,
+    // Measured at import; None for a Video, an animated image, or a still image the pipeline did not measure
+    imageQuality: Option[ImageQuality] = None,
+    // The DCT perceptual hash of a still image; None as for the Image quality
+    perceptualHash: Option[PerceptualHash] = None,
+    // The Sequence the image is in while in triage: the id its members share; None otherwise
+    sequenceId: Option[String] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:

@@ -103,6 +103,18 @@ CREATE TABLE asset (
   longitude REAL,
   -- How long a Video or an animated GIF plays; NULL for a still image.
   duration_ms INTEGER,
+  -- Image quality (ImageQuality): the metrics and the 0 to 100 score of a still image, measured at import. The five are NULL
+  -- together for a Video, an animated image, or a still image the pipeline did not measure.
+  sharpness REAL,
+  luminance REAL,
+  clipped_highlights REAL,
+  crushed_shadows REAL,
+  image_quality INTEGER,
+  -- The DCT perceptual hash of a still image, 64 bits as a signed integer, compared by Hamming distance; NULL as the five are.
+  perceptual_hash BIGINT,
+  -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
+  -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
+  sequence_id CHAR(36),
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   -- The metadata JSON is declared last: a row's columns are stored in order, and reading any column after a large value walks
@@ -139,6 +151,8 @@ CREATE INDEX asset_folder ON asset (folder_id);
 -- time a map cell is ranked by, so a viewport's own points are read from the index alone.
 CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude, id, original_created_at)
   WHERE latitude IS NOT NULL;
+-- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
+CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
 
 CREATE TABLE person_label (
   id INTEGER PRIMARY KEY AUTOINCREMENT
