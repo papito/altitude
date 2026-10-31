@@ -26,6 +26,7 @@ import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.Sha256Tests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.SqlExplainerTests
+import altitude.core.unit.SqliteOverridesTests
 import altitude.core.unit.StyleGuideScanTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
@@ -62,5 +63,6 @@ abstract class AllUnitTestSuites
     new ContentSignerTests,
     new TransactionBoundaryTests,
     new SqlExplainerTests,
+    new SqliteOverridesTests,
     new StyleGuideScanTests
   )

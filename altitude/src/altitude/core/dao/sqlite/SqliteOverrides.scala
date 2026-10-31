@@ -12,12 +12,15 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 
 object SqliteOverrides:
-  /** The stored DATETIME text format. Timestamps are wall-clock text: camera-local for capture times, UTC for import times. */
-  val DATETIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-
-  /** Reads the stored format, tolerating a fractional second on rows written from a java.sql.Timestamp */
-  val DATETIME_PARSER: DateTimeFormatter = new DateTimeFormatterBuilder()
-    .append(DATETIME_FORMATTER)
+  /**
+   * The stored DATETIME text format, written and read. Timestamps are wall-clock text: camera-local for capture times, UTC for
+   * import times. A fraction of a second is written only when there is one (a burst frame's subsecond capture time, the clock's
+   * microseconds on an import time, as PostgreSQL's TIMESTAMPTZ keeps them), with no trailing zeros, so a whole second is
+   * `yyyy-MM-dd HH:mm:ss` as every existing row is, and `date()` reads both. The `java.sql.Timestamp.toString` form the tests
+   * write (`.0` to nine digits, `IntegrationTestCore.getSqlDateTime`) parses too.
+   */
+  val DATETIME_FORMATTER: DateTimeFormatter = new DateTimeFormatterBuilder()
+    .appendPattern("yyyy-MM-dd HH:mm:ss")
     .optionalStart()
     .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
     .optionalEnd()
@@ -46,7 +49,7 @@ trait SqliteOverrides:
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] =
     if value.isEmpty || value.get == null then return None
 
-    Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_PARSER))
+    Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_FORMATTER))
 
   // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
   override protected def getBooleanField(value: AnyRef): Boolean = value match

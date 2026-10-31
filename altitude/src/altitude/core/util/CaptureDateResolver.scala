@@ -34,8 +34,9 @@ object CaptureDateResolver:
   def resolve(inputs: CaptureDateInputs, notLaterThan: LocalDateTime): Option[CaptureDate] =
     candidates(inputs).find {
       candidate =>
+        // An unset clock is its sentinel second whatever subsecond the camera adds to it
         !candidate.at.isBefore(EarliestPlausible) && !candidate.at.isAfter(notLaterThan.plus(FutureTolerance)) &&
-        !Sentinels.contains(candidate.at)
+        !Sentinels.contains(candidate.at.withNano(0))
     }
 
   /** Parsed candidates in priority order, before plausibility filtering; useful for diagnostics. */
@@ -48,9 +49,15 @@ object CaptureDateResolver:
     def iptc(date: String, time: String): List[CaptureDate] =
       parsed(field("IPTC", date).map(d => d + field("IPTC", time).map(" " + _).getOrElse("")), IptcCreated)
 
+    // An EXIF date is whole seconds; the camera's subsecond tag beside it holds the fraction, so burst frames keep their order
+    def exif(key: String, subSecondKey: String, source: CaptureDateSource): List[CaptureDate] =
+      val fraction = field("Exif SubIFD", subSecondKey).flatMap(WallClockParser.parseSubSecond)
+      tag("Exif SubIFD", key, source).map(
+        candidate => fraction.fold(candidate)(nanos => candidate.copy(at = candidate.at.withNano(nanos))))
+
     // Order is semantic priority, not chronological order. A bad candidate never hides a later key in the same rung.
-    tag("Exif SubIFD", "Date/Time Original", ExifOriginal) ++
-      tag("Exif SubIFD", "Date/Time Digitized", ExifDigitized) ++
+    exif("Date/Time Original", "Sub-Sec Time Original", ExifOriginal) ++
+      exif("Date/Time Digitized", "Sub-Sec Time Digitized", ExifDigitized) ++
       tag("Exif IFD0", "Date/Time", ExifFileChange) ++
       List("xmp:CreateDate", "photoshop:DateCreated", "exif:DateTimeOriginal", "xmp:ModifyDate").flatMap(
         tag("XMP", _, XmpCreateDate)) ++
@@ -149,6 +156,16 @@ private[core] object WallClockParser:
           .flatMap(formatter => Try(ZonedDateTime.parse(trimmed, formatter)).toOption)
           .map(_.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime.truncatedTo(ChronoUnit.SECONDS))
           .nextOption()
+    }
+
+  /**
+   * The nanoseconds an EXIF `SubSecTime` tag spells: the digits of the fraction of a second ("250" is .25, "7" is .7), read to
+   * the microsecond, the precision a PostgreSQL TIMESTAMP keeps, so both engines store what was resolved. Anything else is no
+   * fraction, so the date keeps its whole second.
+   */
+  def parseSubSecond(raw: String): Option[Int] =
+    Option(raw).map(_.trim).filter(digits => digits.nonEmpty && digits.forall(_.isDigit)).map {
+      digits => digits.take(6).padTo(6, '0').toInt * 1000
     }
 
   def parse(raw: String): Option[LocalDateTime] =

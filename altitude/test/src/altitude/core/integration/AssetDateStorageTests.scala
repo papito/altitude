@@ -158,17 +158,17 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24) and images/exif/DSCF1160.JPG (2008-04-17
-     * 11:12:02), imported through the pipeline.
+     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24, with a Sub-Sec Time Original of 30) and
+     * images/exif/DSCF1160.JPG (2008-04-17 11:12:02, no subsecond tag), imported through the pipeline.
      *
      * Assertions:
      *
-     * The asset the import returns carries the capture time with its EXIF-original source, and the same values are read back from
-     * the model, its JSON and the raw column ("exif_original").
+     * The asset the import returns carries the capture time, to the subsecond where the camera wrote one, with its EXIF-original
+     * source, and the same values are read back from the model, its JSON and the raw column ("exif_original").
      */
     for (
       (file, expected) <- List(
-        "images/cactus.jpg" -> LocalDateTime.of(2011, 5, 16, 17, 46, 24),
+        "images/cactus.jpg" -> LocalDateTime.of(2011, 5, 16, 17, 46, 24, 300_000_000),
         "images/exif/DSCF1160.JPG" -> LocalDateTime.of(2008, 4, 17, 11, 12, 2))
     ) {
       val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset(file))

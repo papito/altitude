@@ -76,14 +76,14 @@ import altitude.core.util.{ CaptureDateInputs, CaptureDateResolver, GeoLocationR
      *
      * Assertions:
      *
-     * The capture time is the EXIF original date, 2011-05-16 17:46:24, as a wall clock with no zone, and its source is the EXIF
-     * original.
+     * The capture time is the EXIF original date, 2011-05-16 17:46:24, refined by its subsecond tag to .300, as a wall clock with
+     * no zone, and its source is the EXIF original.
      */
     val imported = IntegrationTestUtil.getImportAsset("images/cactus.jpg")
     val metadata = testApp.service.metadataExtractor.extract(imported.path)
     val capture =
       CaptureDateResolver.resolve(CaptureDateInputs(metadata, imported.fileName), LocalDateTime.of(2026, 9, 7, 0, 0)).get
-    capture.at should be(LocalDateTime.of(2011, 5, 16, 17, 46, 24))
+    capture.at should be(LocalDateTime.of(2011, 5, 16, 17, 46, 24, 300_000_000))
     capture.source should be(CaptureDateSource.ExifOriginal)
   }
 

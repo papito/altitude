@@ -1,5 +1,6 @@
 package altitude.core.unit
 
+import altitude.test.TestFocus
 import java.time.LocalDateTime
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite.AnyFunSuite
@@ -8,7 +9,7 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.models.{ CaptureDateSource, ExtractedMetadata }
 import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver, JsonCodec, WallClockParser }
 
-@DoNotDiscover class CaptureDateResolverTests extends AnyFunSuite {
+@DoNotDiscover class CaptureDateResolverTests extends AnyFunSuite with TestFocus {
   private val ceiling = LocalDateTime.of(2026, 9, 7, 12, 0)
 
   private def original(raw: String): CaptureDateInputs =
@@ -62,6 +63,55 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     CaptureDateResolver.resolve(inputs(("IPTC", "Date Created", "2024:07:04")), ceiling).map(_.at) shouldBe
       Some(LocalDateTime.of(2024, 7, 4, 0, 0))
     CaptureDateResolver.resolve(inputs(("GPS", "GPS Date Stamp", "2024:07:04")), ceiling) shouldBe None
+  }
+
+  test("The camera's subsecond tag refines the EXIF original and digitized wall clocks, and no other") {
+
+    /**
+     * Setup:
+     *
+     * An EXIF original date with `Sub-Sec Time Original` spelled as cameras spell it: three digits, one digit, a leading zero,
+     * trailing padding, nine or more digits; the same for the digitized date and `Sub-Sec Time Digitized`; and an original date
+     * with a blank, non-numeric or missing subsecond.
+     *
+     * Assertions:
+     *
+     * The digits are the fraction of the second ("250" is .25, "7" is .7, "05" is .05), truncated to the microsecond, and the
+     * calendar day and the whole second are what the date tag spells. Each date reads only its own subsecond tag: the original's
+     * does not refine the digitized date, and neither refines the file change date.
+     *
+     * Edge cases:
+     *
+     * A subsecond that is blank, not digits, or absent leaves the whole second; a fraction in the date string itself is still
+     * dropped, so only the dedicated tag counts.
+     */
+    val second = LocalDateTime.of(2024, 7, 4, 8, 9, 10)
+    def originalWith(subsec: String): CaptureDateInputs =
+      inputs(("Exif SubIFD", "Date/Time Original", "2024:07:04 08:09:10"), ("Exif SubIFD", "Sub-Sec Time Original", subsec))
+
+    List("250" -> 250_000_000, "7" -> 700_000_000, "05" -> 50_000_000, "25 " -> 250_000_000, "1234567891" -> 123_456_000)
+      .foreach {
+        case (subsec, nanos) =>
+          withClue(s"'$subsec': ") {
+            CaptureDateResolver.resolve(originalWith(subsec), ceiling) shouldBe
+              Some(CaptureDate(second.withNano(nanos), CaptureDateSource.ExifOriginal))
+          }
+      }
+    List("", "  ", "abc", "1.5").foreach {
+      subsec => CaptureDateResolver.resolve(originalWith(subsec), ceiling).map(_.at) shouldBe Some(second)
+    }
+    CaptureDateResolver.resolve(original("2024:07:04 08:09:10.999"), ceiling).map(_.at) shouldBe Some(second)
+
+    val digitized = inputs(
+      ("Exif SubIFD", "Date/Time Digitized", "2024:07:04 08:09:10"),
+      ("Exif SubIFD", "Sub-Sec Time Digitized", "40"),
+      ("Exif SubIFD", "Sub-Sec Time Original", "250")
+    )
+    CaptureDateResolver.resolve(digitized, ceiling) shouldBe
+      Some(CaptureDate(second.withNano(400_000_000), CaptureDateSource.ExifDigitized))
+
+    val fileChange = inputs(("Exif IFD0", "Date/Time", "2024:07:04 08:09:10"), ("Exif SubIFD", "Sub-Sec Time", "250"))
+    CaptureDateResolver.resolve(fileChange, ceiling) shouldBe Some(CaptureDate(second, CaptureDateSource.ExifFileChange))
   }
 
   test("A video's container dates resolve: the phone's local creation date, then the UTC creation time in any zone") {
@@ -216,8 +266,9 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
     /**
      * Setup:
      *
-     * EXIF original dates around the plausibility limits - 1899, the last second of 1825, the 1970, 1904 and 1980 sentinels, two
-     * and three days past the ceiling, and one second into 1970 - and metadata with no date at all.
+     * EXIF original dates around the plausibility limits - 1899, the last second of 1825, the 1970, 1904 and 1980 sentinels, the
+     * 1970 and 1980 sentinels with a Sub-Sec Time Original beside them, two and three days past the ceiling, and one second into
+     * 1970 - and metadata with no date at all.
      *
      * Assertions:
      *
@@ -227,13 +278,20 @@ import altitude.core.util.{ CaptureDate, CaptureDateInputs, CaptureDateResolver,
      * Edge cases:
      *
      * The bounds: the last second before 1826 is rejected, two days past the ceiling is tolerated but three are not, and a
-     * sentinel is rejected only at its exact midnight, not a second later.
+     * sentinel is rejected only at its exact second, not a second later: an unset clock stays one whatever subsecond the camera
+     * adds to it.
      */
     CaptureDateResolver.resolve(original("1899:06:01 12:00:00"), ceiling) shouldBe
       Some(CaptureDate(LocalDateTime.of(1899, 6, 1, 12, 0), CaptureDateSource.ExifOriginal))
     CaptureDateResolver.resolve(CaptureDateInputs(ExtractedMetadata(), "image.jpg"), ceiling) shouldBe None
     List("1825:12:31 23:59:59", "1970:01:01 00:00:00", "1904:01:01 00:00:00", "1980:01:01 00:00:00", ceiling.plusDays(3).toString)
       .foreach(raw => CaptureDateResolver.resolve(original(raw), ceiling) shouldBe None)
+    List("1970:01:01 00:00:00", "1980:01:01 00:00:00").foreach {
+      raw =>
+        val unsetClock =
+          inputs(("Exif SubIFD", "Date/Time Original", raw), ("Exif SubIFD", "Sub-Sec Time Original", "250"))
+        CaptureDateResolver.resolve(unsetClock, ceiling) shouldBe None
+    }
     CaptureDateResolver.resolve(original(ceiling.plusDays(2).toString), ceiling).map(_.at) shouldBe Some(ceiling.plusDays(2))
     CaptureDateResolver.resolve(original("1970:01:01 00:00:01"), ceiling).isDefined shouldBe true
   }

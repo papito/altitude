@@ -246,6 +246,42 @@ import altitude.core.util.*
     }
   }
 
+  test("Frames captured within one second keep their order by the fraction, flat and grouped, through a cursor") {
+
+    /**
+     * Setup:
+     *
+     * Four assets captured within one second of one day: the whole second, a quarter and three quarters past it, and a
+     * millisecond past it, persisted out of that order so the ID does not happen to agree with the capture time. Walked one asset
+     * a page, flat and grouped by Date Taken, sorted by capture time in both directions.
+     *
+     * Assertions:
+     *
+     * The walk is the order of the fractions, in each direction, so a cursor anchored on a fractional capture time continues
+     * exactly after it on both engines (text as stored on SQLite, a timestamp on PostgreSQL), and the grouped walk reads them as
+     * one day.
+     *
+     * Edge cases:
+     *
+     * The whole second and the millisecond past it are the nearest pair, and the anchor's fraction has fewer digits than the next
+     * asset's.
+     */
+    val second = LocalDateTime.of(2026, 9, 6, 10, 0, 0)
+    val assets =
+      List(750_000_000, 1_000_000, 250_000_000, 0).map(nanos => persistDated(second.withNano(nanos).toString, "burst.jpg"))
+    val byFraction = assets.sortBy(_.taken.get.getNano).map(_.id)
+
+    traverseFlat(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.ASC), rpp = 1) shouldEqual byFraction
+    traverseFlat(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC), rpp = 1) shouldEqual byFraction.reverse
+
+    val grouping = SearchGrouping(GroupBy.DateTaken)
+    val sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.ASC)
+    traverse(grouping, sort, rpp = 1) shouldEqual byFraction
+    val page = firstPage(grouping, sort, rpp = 1)
+    page.groups.map(_.key) shouldEqual List(SearchGroupKey.Day(Some(second.toLocalDate)))
+    page.groups.head.total shouldBe 4
+  }
+
   test("A flat search under the Relevance sort continues by cursor in the order of the unpaged search") {
 
     /**
