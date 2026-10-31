@@ -7,7 +7,7 @@
 @* An option of the Dock side menu: its glyph (includes/dock_glyphs) and its label. The pick is the `data-app-dock-side`
    click js/common/explorer-dock.js takes; nothing here is a search trigger *@
 @dockOption(side: String, label: String) = {
-  <button type="button" data-app-dock-side="@side"><svg class="glyph" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
+  <button type="button" data-app-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
 }
 
 <!DOCTYPE html>

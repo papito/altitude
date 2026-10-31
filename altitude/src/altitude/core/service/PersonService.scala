@@ -261,6 +261,9 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       dao.getInBuckets(buckets)
     }
 
-  /** The bucket names of a comma-separated list, trimmed, empties dropped and nothing validated: `getInBuckets` refuses an unknown one */
+  /**
+   * The bucket names of a comma-separated list, trimmed, empties dropped and nothing validated: `getInBuckets` refuses an unknown
+   * one
+   */
   def parseBuckets(csv: String): Set[String] =
     csv.split(",").map(_.trim).filter(_.nonEmpty).toSet

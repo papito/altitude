@@ -808,6 +808,12 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     color: hsl(from currentColor h s l / 0.6);
 }
 
+/* A choice menu host before its control is built (common/choice-menus.js): its options, which the build moves into the
+   panel, are not shown raw. Only an unbuilt host has buttons as direct children */
+[data-choice-menu] > button {
+    display: none;
+}
+
 /* A compact choice menu's trigger (the Dock side menu): a square button showing the checked option's glyph alone */
 .choice-menu-ctrl .compact {
     display: inline-grid;

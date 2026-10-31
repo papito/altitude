@@ -540,6 +540,8 @@ function mountMenuSpecimens() {
         optionEl.type = "button"
         const glyphEl = document.createElementNS(SVG_NS, "svg")
         glyphEl.setAttribute("class", "glyph")
+        glyphEl.setAttribute("width", "16")
+        glyphEl.setAttribute("height", "16")
         glyphEl.setAttribute("aria-hidden", "true")
         const useEl = document.createElementNS(SVG_NS, "use")
         useEl.setAttribute("href", `#dockGlyph-${side}`)

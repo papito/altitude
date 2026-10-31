@@ -467,7 +467,10 @@ checked option's glyph alone, and the menu's name and the choice, "Dock side: Le
 triggers, so no server re-render shows the choice: `js/common/explorer-dock.js` re-checks the options and replaces
 the trigger's glyph and name on every side change (see **Explorer dock**). The page's own hosts are built
 by the first hydration (`initApp` hydrates `document`), before `initExplorerDock` checks the current option, so a
-compact trigger starts on its first option's glyph and is corrected in the same task, before any paint.
+compact trigger starts on its first option's glyph and is corrected in the same task, before any paint. Until a host
+is built, `core.css` hides its option buttons (`[data-choice-menu] > button`: only an unbuilt host has buttons as
+direct children), so the page's Dock side menu shows nothing before the deferred modules run; a `.glyph` also carries
+`width`/`height="16"`, its symbols' `viewBox`, so an unstyled one never draws at the SVG default of 300×150.
 
 A menu opens on its checked action, else its first (`focusInitialAction`, on `toggle`; View settings has no actions
 and keeps the focus its dialog hydrator sets); Down and Up move through the actions, wrapping, Home and End jump
