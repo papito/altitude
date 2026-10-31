@@ -200,8 +200,9 @@ function announceSideChange() {
 /**
  * The share's bounds on the current axis: the explorer's minimum, and all but the results'
  * minimum and the divider, as percentages of `main`'s size along the axis. The minimums are
- * `core.css` tokens registered as lengths, so their computed values are in px. Reading them
- * forces a layout, so a drag takes the bounds once, when it starts.
+ * `core.css` tokens registered as lengths, so their computed values are in px, and across the
+ * width the explorer's is its header's natural width when that is larger, as the page's grid lays
+ * it out. Reading them forces a layout, so a drag takes the bounds once, when it starts.
  */
 function shareBounds() {
     const vertical = isVerticalAxis(effectiveSide())
@@ -217,11 +218,15 @@ function shareBounds() {
     }
 
     const styles = getComputedStyle(html)
-    const explorerMin = parseFloat(
+    const explorerMinToken = parseFloat(
         styles.getPropertyValue(
             vertical ? "--explorer-min-height" : "--explorer-min-width",
         ),
     )
+    // Across the width the explorer is also never narrower than its header, as its grid column is laid out
+    const explorerMin = vertical
+        ? explorerMinToken
+        : Math.max(explorerMinToken, headerMinContentWidth())
     const contentMin = parseFloat(
         styles.getPropertyValue(
             vertical ? "--content-min-height" : "--content-min-width",
@@ -233,6 +238,23 @@ function shareBounds() {
 
     // A viewport too small for both minimums: the explorer keeps its own
     return { min, max: Math.max(min, max) }
+}
+
+/**
+ * The explorer header's natural width, the tabs and the Dock side control laid out in full: measured by sizing the
+ * header to its min-content for the moment of the read, which costs a layout, as reading the tokens does
+ */
+function headerMinContentWidth() {
+    const headerEl = document.getElementById("explorerHeader")
+    if (!headerEl) {
+        return 0
+    }
+
+    const previous = headerEl.style.width
+    headerEl.style.width = "min-content"
+    const width = headerEl.getBoundingClientRect().width
+    headerEl.style.width = previous
+    return width
 }
 
 function clampShare(percent, { min, max }) {

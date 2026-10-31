@@ -1242,7 +1242,11 @@ jet → lights.
 the areas: the explorer's track is `minmax(<its minimum>, var(--explorer-share))`, its share of the width (left,
 right) or of the height (top, bottom), the gutter's is `auto`, as thick as the divider, and the results take the
 rest, with their own minimum (`--explorer-min-width`, `--explorer-min-height`, `--content-min-width`,
-`--content-min-height` of `core.css`, registered as lengths so the script reads them in px). Each area draws the
+`--content-min-height` of `core.css`, registered as lengths so the script reads them in px). Across the width the
+explorer's minimum is `min-content`: its header's natural width, the tabs and the Dock side control in full, since the
+panel (`#explorerPanelContent`, `contain: inline-size`) contributes no width of its own, floored by
+`--explorer-min-width` as the explorer's `min-width`; the script measures the header at its min-content for the
+divider's bounds (`headerMinContentWidth`). Each area draws the
 hairline on the edge facing the divider, one rule per side. The trash bin shows the results alone
 (`main:has(> #content.trashbin)`: one area, the explorer and the divider not displayed). Until this browser has a
 pick, the side follows the viewport's proportions, a portrait viewport docking the explorer at the bottom and any

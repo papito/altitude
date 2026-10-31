@@ -69,8 +69,9 @@
 
     --footer-height: 2.75rem;
     /* The explorer's share of the main page along its Dock side's axis (a width for left and right, a height for top
-       and bottom), and the least the explorer and the results may be squeezed to on each axis;
-       js/common/explorer-dock.js sets the share and reads the minimums in px to bound the divider */
+       and bottom), and the least the explorer and the results may be squeezed to on each axis (the explorer's width
+       also never drops below its header's, pages/index.css); js/common/explorer-dock.js sets the share and reads the
+       minimums in px to bound the divider */
     --explorer-share: 25%;
     --explorer-min-width: 6.25rem;
     --explorer-min-height: 7.5rem;

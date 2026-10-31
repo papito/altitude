@@ -19,12 +19,12 @@ body:where(.index) {
 }
 
 html[data-dock-side="left"] main {
-  grid-template-columns: minmax(var(--explorer-min-width), var(--explorer-share)) auto minmax(var(--content-min-width), 1fr);
+  grid-template-columns: minmax(min-content, var(--explorer-share)) auto minmax(var(--content-min-width), 1fr);
   grid-template-areas: "explorer gutter content";
 }
 
 html[data-dock-side="right"] main {
-  grid-template-columns: minmax(var(--content-min-width), 1fr) auto minmax(var(--explorer-min-width), var(--explorer-share));
+  grid-template-columns: minmax(var(--content-min-width), 1fr) auto minmax(min-content, var(--explorer-share));
   grid-template-areas: "content gutter explorer";
 }
 
@@ -52,10 +52,13 @@ html[data-dock-side="bottom"] main {
 }
 
 /* A grid track may shrink below its content only when the item allows it, so each area resets the automatic
-   minimum; the explorer's own overflow never engages, its panel scrolls (see #explorerViews) */
+   minimum, except the explorer's width: its column's minimum is its min-content, which is its header's (the panel
+   contributes nothing, see #explorerPanelContent) and never less than --explorer-min-width, so the tabs and the Dock
+   side control always fit however far the divider is dragged. The explorer's own overflow never engages, its panel
+   scrolls (see #explorerViews) */
 #explorer {
   grid-area: explorer;
-  min-width: 0;
+  min-width: var(--explorer-min-width);
   min-height: 0;
   box-shadow: var(--box-shadow);
   text-shadow: var(--text-shadow);
@@ -112,10 +115,13 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   text-shadow: var(--text-shadow);
 }
 
+/* Inline-size containment gives the panel no intrinsic width, so a long folder name or a wide People grid never widens
+   the explorer's column: the header alone sets its minimum (see #explorer) */
 #explorerPanelContent {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  contain: inline-size;
 }
 
 /* The divider between the explorer and the results, in the grid's gutter area: a .divider of core.css that, with no
