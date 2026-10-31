@@ -10,15 +10,15 @@ import { bindInfiniteScroll } from "../search-results/infinite-scroll.js"
 import { bindLazyImages } from "../search-results/lazy-images.js"
 import { bindMetadataVisibility } from "../search-results/metadata-visibility.js"
 import { bindPageWindow } from "../search-results/page-window.js"
-import { bindResultsTitle } from "../search-results/results-title.js"
+import { bindStickyOffsets } from "../search-results/sticky-offsets.js"
 import { bindAssetSelection } from "../search-results/selection.js"
 import { ensureViewSettingsControl } from "../search-results/view-settings-control.js"
 
 /**
  * The search results fragment (`data-app-fragment="search-results"`, `includes/search_results.scala.html`):
  * the results title, the controls and the first page of the grid, re-swapped into `#content` on every
- * search. Each behaviour of the grid is its own module under `js/search-results/`, as is the title's
- * sticky offset; this only runs them in order.
+ * search. Each behaviour of the grid is its own module under `js/search-results/`, as are the sticky
+ * offsets of the title, the toolbar and the group headers; this only runs them in order.
  *
  * In map layout the fragment holds the map shell instead of `#assets` (hydrated next, as the
  * `map-view` fragment), and the same fragment is what the crowded-pin panel loads into
@@ -47,7 +47,7 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
         Alpine.store(Const.state.resultsTotal).set(total, isTotalCapped)
         syncViewedScope(fragmentEl)
         ensureViewSettingsControl(fragmentEl)
-        bindResultsTitle({ fragmentEl })
+        bindStickyOffsets({ fragmentEl })
 
         // Also discards the previous grid's controller, and any box it was still drawing
         bindBoxSelection({ assetsElement, contentElement })

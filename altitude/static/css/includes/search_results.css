@@ -1,8 +1,14 @@
+/* The toolbar sticks to the top of the scrolling pane, under the results title when there is one (its height, written by
+   js/search-results/sticky-offsets.js), so its former margin is padding, painted with the pane's background: the pane's
+   tint, if any, over the page background, so the grid does not show through */
 #searchControl {
-  margin: var(--control-vertical-space);
-  padding: var(--space-3);
+  position: sticky;
+  top: var(--results-title-height, 0);
+  z-index: 2;
+  padding: calc(var(--control-vertical-space) + var(--space-3));
   display: grid;
   grid-template-columns: .5fr 1fr 1fr 1fr auto;
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
 /* In map layout the fragment is a column that hands the map every pixel under the controls
@@ -156,13 +162,13 @@
 }
 
 /* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
-   pane, below the results title when there is one (its height, written by js/search-results/results-title.js). Every
-   header sticks at the same offset, so the next group's header paints over the previous one as it arrives - which reads
-   as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+   pane, below the results title and the toolbar (their heights together, written by js/search-results/sticky-offsets.js).
+   Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives - which
+   reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
 #assets .result-group {
   flex-basis: 100%;
   position: sticky;
-  top: var(--results-title-height, 0);
+  top: var(--results-sticky-height, 0);
   z-index: 1;
   display: flex;
   align-items: center;

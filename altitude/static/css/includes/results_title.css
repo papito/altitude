@@ -1,7 +1,8 @@
 /* The results title (includes/results_title.scala.html, views/AGENTS.md **Results title**): the scope of the results shown,
    above the toolbar, set off by a hairline below. It sticks to the top of the scrolling pane, so it paints the pane's own
-   background (the pane's tint, if any, over the page background) rather than letting the grid show through. Its rendered height is written to --results-title-height on the fragment
-   (js/search-results/results-title.js), which the grouped grid's headers stick below (includes/search_results.css). */
+   background (the pane's tint, if any, over the page background) rather than letting the grid show through. Its rendered
+   height is written to --results-title-height on the fragment (js/search-results/sticky-offsets.js), the offset the toolbar
+   sticks at; the grouped grid's headers stick below both (includes/search_results.css). */
 .results-title {
   position: sticky;
   top: 0;
