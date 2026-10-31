@@ -195,13 +195,20 @@ export function contextMenu() {
         },
 
         /**
-         * Remember the View settings load as the only response allowed to fill its dialog host.
+         * Remember the View settings load as the only response allowed to fill its dialog host, and
+         * empty the host first: a swap over a leftover fragment would match its element IDs, and
+         * htmx settles such elements back to their served attributes, stripping what Alpine's
+         * bindings set as the new fragment initialized (every switch would open unchecked).
+         *
+         * The load's request events are dispatched on the trigger, the element that issued it, and
+         * reach the component on its root, as does the settle event dispatched on the dialog host.
          */
         handleBeforeRequest(event) {
             const ctx = event.detail.ctx
 
             if (ctx.target === this.$refs.dialog) {
                 dialogRequest = ctx
+                this.clearDialog()
             }
         },
 
@@ -229,17 +236,22 @@ export function contextMenu() {
         },
 
         /**
-         * View settings has loaded: reveal its content and place the panel for its new height. The
-         * fragment hydrator that runs next, from the body-level settle listener, gives the dialog
-         * focus.
+         * View settings has loaded: reveal its content and place the panel for its new height.
+         * Alpine binds the fragment from its mutation observer, a microtask the swap queued, so the
+         * reveal waits in a microtask queued after it: placing the panel computes the switches'
+         * style, and computed before their bindings ran, every switch would slide from off into its
+         * state. The fragment hydrator that runs next, from the body-level settle listener, gives
+         * the dialog focus.
          */
         handleAfterSettle(event) {
             if (!this.$refs.dialog.contains(event.target)) {
                 return
             }
 
-            this.$refs.dialog.hidden = false
-            this.place()
+            queueMicrotask(() => {
+                this.$refs.dialog.hidden = false
+                this.place()
+            })
         },
 
         /** Only View settings has inline content to discard; entity menus keep their actions. */

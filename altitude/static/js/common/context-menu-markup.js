@@ -103,7 +103,8 @@ export function buildModalTriggerCtrl({
  * Builds a control whose button opens a panel holding one inline dialog and nothing else (the
  * ⚙ View settings button). The click both toggles the panel (`popovertarget`) and requests the dialog
  * into the panel's host; the `dialog-only` panel stays invisible until the dialog has arrived, so
- * the click never shows an empty box. The panel opens right below the button, centered on it
+ * the click never shows an empty box. The root listens for the load's htmx events, so the
+ * component can drop a response the panel no longer waits for. The panel opens right below the button, centered on it
  * (`data-menu-align="center"`), and the dialog returns focus to the button.
  */
 export function buildDialogTriggerCtrl({
@@ -129,11 +130,15 @@ export function buildDialogTriggerCtrl({
     btnEl.setAttribute("x-ref", "trigger")
     _requestDialogOnClick(btnEl, { url, target: `#${dialogId}`, vals })
 
+    // htmx dispatches the request events on the button, the element that issued the request, and
+    // the settle event on the dialog host, so the root hears all of them; the panel, the button's
+    // sibling, would hear only the settle
+    rootEl.setAttribute("x-on:htmx:before:request", "handleBeforeRequest")
+    rootEl.setAttribute("x-on:htmx:after:request", "handleAfterRequest")
+    rootEl.setAttribute("x-on:htmx:after:settle", "handleAfterSettle")
+
     const panelEl = _buildPanel({ panelId })
     panelEl.classList.add("dialog-only")
-    panelEl.setAttribute("x-on:htmx:before:request", "handleBeforeRequest")
-    panelEl.setAttribute("x-on:htmx:after:request", "handleAfterRequest")
-    panelEl.setAttribute("x-on:htmx:after:settle", "handleAfterSettle")
 
     const dialogEl = document.createElement("div")
     dialogEl.className = "dialog"

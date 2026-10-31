@@ -434,10 +434,14 @@ the View settings button too, which nothing anchors to.
 The ⚙ View button above the results grid (`#viewSettingsBtn`, built by
 `js/search-results/view-settings-control.js` into `#viewSettingsActions`) uses
 `buildDialogTriggerCtrl`, a `.dialog-trigger-ctrl` with an inline dialog host. Its `dialog-only`
-panel stays invisible until the settings arrive, opens below the button centered on it
-(`data-menu-align="center"`), and is cleared on close. The component records its load request and
-drops a response after the panel has closed or reopened. Each switch applies immediately;
-View settings submits nothing.
+panel stays invisible until the settings arrive and Alpine has bound their switches (the reveal waits a
+microtask behind the mutation observer's, so no switch slides from off into its state), opens below the
+button centered on it (`data-menu-align="center"`), and is cleared on close. The component records its load request and
+drops a response after the panel has closed or reopened; it listens on the component root, since htmx
+dispatches the request events on the button that issued the load, not on the panel beside it. The host
+is emptied again as a load starts, so the swap never meets a leftover fragment: htmx settles an element
+whose ID the old content also had back to its served attributes, which would strip the `aria-checked`
+Alpine set as the fragment initialized. Each switch applies immediately; View settings submits nothing.
 
 A **choice menu** (the toolbar's Group `#groupMenuHost` and Sort `#sortMenuHost`, `includes/search_results.scala.html`)
 picks one of several values. The server renders a host, `data-choice-menu="<name>"` with `data-choice-menu-icon` and,
