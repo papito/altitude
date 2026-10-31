@@ -13,7 +13,9 @@ object PerceptualHash:
     .bimap(hash => f"${hash.bits}%016x", hex => PerceptualHash(java.lang.Long.parseUnsignedLong(hex, 16)))
 
 /**
- * The DCT perceptual hash of a still image: 64 bits, stored as a signed `BIGINT`. Two hashes compare by Hamming distance,
- * `java.lang.Long.bitCount(a.bits ^ b.bits)`.
+ * The DCT perceptual hash of a still image: 64 bits, stored as a signed `BIGINT`. Two hashes compare by Hamming distance
+ * ([[distance]]).
  */
-case class PerceptualHash(bits: Long) extends AnyVal
+case class PerceptualHash(bits: Long) extends AnyVal:
+  /** The Hamming distance to another hash: the bits they differ in, 0 to [[PerceptualHash.BITS]] */
+  def distance(other: PerceptualHash): Int = java.lang.Long.bitCount(bits ^ other.bits)

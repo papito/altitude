@@ -36,7 +36,8 @@ object ImageQuality:
  * derived from them. It is about the whole image, where a Face's quality is about one face.
  *
  * @param sharpness
- *   variance of the Laplacian of the grayscale image, over the face boxes when the image has faces, else the whole frame
+ *   variance of the Laplacian of the grayscale image fitted to the measurement box, over the face boxes when the image has faces
+ *   covering at least `ImageMeasurement.MIN_FACE_AREA_PX` of it, else the whole frame
  * @param luminance
  *   mean gray level, 0 to 1
  * @param clippedHighlights

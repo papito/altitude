@@ -28,6 +28,7 @@ import altitude.core.pipeline.flows.ExtractMetadataFlow
 import altitude.core.pipeline.flows.FileStoreFlow
 import altitude.core.pipeline.flows.IndexFlow
 import altitude.core.pipeline.flows.MarkAsCompleteFlow
+import altitude.core.pipeline.flows.MeasureImageFlow
 import altitude.core.pipeline.flows.RecognizeFacesFlow
 import altitude.core.pipeline.flows.StripBinaryDataFlow
 import altitude.core.pipeline.sinks.AssetErrorLoggingSink
@@ -43,6 +44,7 @@ class ImportPipelineService(app: Altitude):
   private val indexFlow = IndexFlow(app)
   private val detectFacesFlow = DetectFacesFlow(app)
   private val recognizeFacesFlow = RecognizeFacesFlow(app)
+  private val measureImageFlow = MeasureImageFlow(app)
   private val extractMetadataFlow = ExtractMetadataFlow(app)
   private val fileStoreFlow = FileStoreFlow(app)
   private val addPreviewFlow = AddPreviewFlow(app)
@@ -57,10 +59,10 @@ class ImportPipelineService(app: Altitude):
    * One pipeline for both engines. A stage's work runs on the import dispatcher (`Altitude.importDispatcher`), whose
    * `import.parallelism` threads bound the work of every import at once; the stream's actor only routes, so the stages of every
    * repository work on different assets at the same time. The stages that only read and decode the file (metadata, face
-   * detection, the preview) work on up to `import.parallelism` assets of a repository at once; every other stage, and every one
-   * that writes to the database, on one, and all of them hand the assets on in upload order, so faces are matched one asset at a
-   * time, in the order uploaded. Each stage's writes are a short transaction of its own, which SQLite's single write connection
-   * runs one after another, and each stage commits before the next one reads the asset.
+   * detection, image measurement, the preview) work on up to `import.parallelism` assets of a repository at once; every other
+   * stage, and every one that writes to the database, on one, and all of them hand the assets on in upload order, so faces are
+   * matched one asset at a time, in the order uploaded. Each stage's writes are a short transaction of its own, which SQLite's
+   * single write connection runs one after another, and each stage commits before the next one reads the asset.
    */
   private val combinedFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
     // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
@@ -72,6 +74,7 @@ class ImportPipelineService(app: Altitude):
     .via(indexFlow)
     .via(detectFacesFlow)
     .via(recognizeFacesFlow)
+    .via(measureImageFlow)
     .via(fileStoreFlow)
     .via(addPreviewFlow)
     .via(stripBinaryDataFlow)

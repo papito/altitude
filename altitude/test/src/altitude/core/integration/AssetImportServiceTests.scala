@@ -16,6 +16,8 @@ import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.models.Asset
+import altitude.core.models.AssetType
+import altitude.core.models.AssetWithData
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.MimedPreviewData
 
@@ -306,5 +308,62 @@ import altitude.core.models.MimedPreviewData
     val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.width should be > 0
     asset.height should be > 0
+  }
+
+  test("A still image is imported with its Image quality and perceptual hash, and a Video with neither") {
+
+    /**
+     * Setup:
+     *
+     * A photo with a face (people/bullock.jpg) and a synthesized two-second MP4 (TestVideos.portrait), each run through the whole
+     * import.
+     *
+     * Assertions:
+     *
+     * The photo is read back with the five metrics, a score within 0 to 100, the exposure fractions within 0 to 1 (its dark
+     * background crushes more than it clips, so the two columns are not swapped) and a hash, the hash the import returned,
+     * written with the completion flag. The Video, which the measurement stage passes through untouched, has neither. (An
+     * animated GIF is covered in `ImportPipelineServiceTests`, where the GIF fixtures are synthesized.)
+     */
+    val photo = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/bullock.jpg"))
+    val stored: Asset = testApp.service.asset.getById(photo.persistedId)
+    stored.isPipelineProcessed shouldBe true
+    val quality = stored.imageQuality.value
+    quality.score should ((be >= 0).and(be <= 100))
+    quality.sharpness should be > 0.0
+    quality.luminance should ((be > 0.0).and(be < 1.0))
+    quality.clippedHighlights should ((be >= 0.0).and(be <= 1.0))
+    quality.crushedShadows should ((be >= 0.0).and(be <= 1.0))
+    // A dark photo: its crushed shadows outweigh its clipped highlights, which a swap of the two columns would reverse
+    quality.crushedShadows should be > quality.clippedHighlights
+    stored.perceptualHash.value shouldBe photo.perceptualHash.value
+
+    val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
+    val storedVideo: Asset = testApp.service.asset.getById(video.persistedId)
+    storedVideo.imageQuality shouldBe None
+    storedVideo.perceptualHash shouldBe None
+  }
+
+  test("An image the measurement cannot decode imports unmeasured") {
+
+    /**
+     * Setup:
+     *
+     * Bytes no image decoder takes, staged under a JPEG asset, handed to the measurement as the pipeline would hand a staged
+     * file.
+     *
+     * Assertions:
+     *
+     * The measurement does not throw: the asset comes back as it was, with no Image quality and no hash, so the import goes on
+     * without the metrics.
+     */
+    val undecodable = AssetWithData(
+      testContext.makeAsset().copy(assetType = AssetType("image", "jpeg", "image/jpeg")),
+      testApp.service.staging.stage("not an image".getBytes))
+
+    val measured = testApp.service.asset.measureImage(undecodable)
+    measured shouldBe undecodable.asset
+    measured.imageQuality shouldBe None
+    measured.perceptualHash shouldBe None
   }
 }
