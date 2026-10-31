@@ -35,7 +35,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, style_guide)
-  includes/             ← reusable layout fragments (nav, header, batch ops, search results)
+  includes/             ← reusable layout fragments (nav, header, batch ops, search results, results title)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -75,7 +75,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the results title's sticky offset (`results-title.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores and the focus plugin) on every page that includes it |
@@ -851,14 +851,48 @@ lazy loading and metadata visibility never see it; the detail modal's walk reloa
 navigation**). `pagesOf`, `foldPagesIfNeeded`, `reloadSpacer`, `isSpacer` and `MAX_LOADED_CELLS` are
 exported for tooling.
 
+**Results title** — The results fragment opens with the scope of the results, when it has one, as one block
+every scope renders the same way: `includes/results_title.scala.html` (styled by `static/css/includes/results_title.css`)
+wraps `includes/results_title_inner`, which lays out the kind's Font Awesome icon (`fa-user`, `fa-folder`, `fa-images`,
+`fa-map-marker-alt`, `fa-search`), the title the caller renders and the way back, then a subtitle. The results total stays in
+the toolbar. The title is `--font-size-display`, `--font-weight-semibold`, `--theme-primary-text`, and
+truncates with an ellipsis; the block has no fill of its own, only a hairline below in `--panel-border-color`, and is
+padded `--space-8` by `--space-6` (it paints the pane's background, `--theme-neutral-2` under the pane's tint, so the grid
+does not show through it while it sticks). The scopes:
+- a **person** through `htmx/person.scala.html`: `#person`, the block itself, is the face merge's drop zone (`.dropzone`,
+  `js/dragdrop/people.js`) and the swap target of the Hide / Show / Discard links, whose responses are
+  `htmx/person_inner`, the whole inside of the block. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
+  that opens the Choose cover face modal) comes before the text, the Hide / Show / Discard link (`.actions`) after it, and
+  the subtitle is the face count. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
+  (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`) with its pencil,
+  shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
+- a **folder** as the path's breadcrumb (`.crumbs`): every ancestor short of the repository root, top-level first, each a
+  search trigger for its folder (`data-app-search-folder-id`, dimmed `.crumb`), separated by a dimmed `fa-chevron-right`
+  (`.sep`), and the folder itself as the `.leaf` in the title style. The path wraps rather than truncating. The
+  controller builds it from `FolderService.getAncestors` (root first) and the folder; the root folder is the whole
+  repository and renders no block
+- an **album** by name, with "Created *day*" (`Util.humanReadableDate` of `Album.createdAt`) as the subtitle
+- a **Location** by name, with its category's name as the subtitle, when it has one
+- the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this repository" as the subtitle
+
+The way back is the `.clear-scope` × after the title: a search trigger carrying an empty `personId`, which the store's scope
+rules (see **Search parameters**) widen to clearing every place, the map area and the Search text while the view, the sort,
+the grouping and the layout stay, so a person selected in Triage goes back to all of Triage. The block is `position: sticky`
+at the top of `#content` (`z-index: 2`, above the group headers), and `js/search-results/results-title.js`, run by the
+results hydrator, writes its rendered height to `--results-title-height` on the fragment through a `ResizeObserver`, the
+offset the group headers stick at (**Group headers**). The scopes are exclusive by the store's rules; the template renders
+the first of person, folder, album, Location and text that is set. The crowded-pin panel hides
+the fragment's title with its controls (`static/css/htmx/map_view.css`).
+
 **Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day or
 a Location, with a `.result-group` header: a checkbox over the group; its name - a
 `<time datetime="yyyy-MM-dd">` with the server-formatted day (**Saturday, January 2, 2025**), "No date",
 `<span class="category">Italy</span> › Rome` (the category dimmed), or "No location"; `data-group-key`
 naming it; and the group's full match count across every page in `.count` — as text (**(3 items)**,
 **(1 item)**) with the number itself in `data-count`, which is what the client reads and decrements. The header spans
-the row and is `position: sticky` at the top of `#content` (CSS only, in
-`static/css/includes/search_results.css`; `#assets` is an isolation root so the drag stand-in still
+the row and is `position: sticky` at the top of `#content`, below the results title when there is one (its `top` is
+`--results-title-height`, which `js/search-results/results-title.js` keeps at the title's rendered height, 0 without one;
+otherwise CSS only, in `static/css/includes/search_results.css`; `#assets` is an isolation root so the drag stand-in still
 paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
 A continuation of a group already on screen repeats no header, so the new cells read as the same
 group. When the page window folds a page (**Infinite scroll + lazy load**), the header of the group
@@ -1488,7 +1522,10 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
 | `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the results title (**Results title**), the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell, and the scope the title names (the person, the folder's path, the album, the Location). Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
+| `views/includes/results_title.scala.html`, `results_title_inner.scala.html` | The results title block and its inside (icon, title, the way back, subtitle; a person's cover face and actions); styled by `static/css/includes/results_title.css` |
+| `views/htmx/person.scala.html`, `person_inner.scala.html`, `view_person_name.scala.html`, `edit_person_name.scala.html` | The person scope's results title: the block that is the merge drop zone and the person actions' swap target, its inside, and the inline name editor's two states; the person's own styles are `static/css/htmx/person.css` |
+| `static/js/search-results/results-title.js` | `bindResultsTitle`: writes the results title's rendered height to `--results-title-height` on the fragment, the group headers' sticky offset |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration switch like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |

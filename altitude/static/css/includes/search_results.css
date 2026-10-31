@@ -156,12 +156,13 @@
 }
 
 /* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
-   pane. Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives -
-   which reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+   pane, below the results title when there is one (its height, written by js/search-results/results-title.js). Every
+   header sticks at the same offset, so the next group's header paints over the previous one as it arrives - which reads
+   as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
 #assets .result-group {
   flex-basis: 100%;
   position: sticky;
-  top: 0;
+  top: var(--results-title-height, 0);
   z-index: 1;
   display: flex;
   align-items: center;

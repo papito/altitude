@@ -76,8 +76,7 @@
     /* A snackbar message's entry and its fade when dismissed; js/common/snackbar.js reads it, in ms, to remove the
        message once the fade has run */
     --snackbar-exit-duration: 150ms;
-    --person-avatar-column: 6.25rem;
-    --person-meta-column: 18.75rem;
+    --person-avatar-size: 4rem;
     --merge-arrow-column: 5rem;
     --map-panel-width: min(60%, 43.75rem);
     --location-editor-map-height: 18.75rem;

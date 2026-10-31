@@ -4,14 +4,20 @@
 @import altitude.core.util.SearchGrouping
 @import altitude.core.util.SearchSort
 @import altitude.core.util.SortDirection
+@import altitude.core.models.Album
+@import altitude.core.models.Folder
+@import altitude.core.models.Location
 @import altitude.core.models.Person
+@import altitude.core.util.Util
 
 @* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
    controller renders with the grid partial that fits the search (htmx/results_grid, or htmx/results_grid_grouped with
    `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the Group and Sort choice menus. `text` is the Search text the
    results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
-   up to one past `totalCap`, which means more than the cap. *@
-@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None)
+   up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
+   then the folder; empty for the root), `album` and `location` (with its category's name) are the scope the results title
+   names (includes/results_title); `text` is its title when none of them is set. *@
+@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None)
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
@@ -34,8 +40,27 @@
      data-results-group-by="@{grouping.map(_.by.apiValue).getOrElse("")}"
      data-results-group-direction="@{grouping.filter(_.by.dateField.isDefined).map(_.direction.toString.toLowerCase).getOrElse("")}">
 
+@* The results title (views/AGENTS.md **Results title**): one block for every scope, which the scope rules of the searchParams
+   store keep exclusive. A person's block is also the person actions' swap target (htmx/person); a folder's title is the
+   path's breadcrumb, each ancestor a search trigger for that folder. *@
 @if(person != null) {
 @htmx.html.person(person)
+} else if (folderPath.nonEmpty) {
+@includes.html.results_title("fa-folder") {
+<span class="crumbs">@for(ancestor <- folderPath.init) {<a href="#" class="crumb" data-app-search="click" data-app-search-folder-id="@{ancestor.persistedId}">@{ancestor.name}</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<span class="leaf">@{folderPath.last.name}</span></span>
+}
+} else if (album.isDefined) {
+@includes.html.results_title("fa-images", subtitle = album.get.createdAt.map(d => s"Created ${Util.humanReadableDate(d.toLocalDate)}")) {
+<span class="name">@{album.get.name}</span>
+}
+} else if (location.isDefined) {
+@includes.html.results_title("fa-map-marker-alt", subtitle = location.get.categoryName) {
+<span class="name">@{location.get.name}</span>
+}
+} else if (text.isDefined) {
+@includes.html.results_title("fa-search", subtitle = Some("in this repository")) {
+<span class="query">@{text.get}</span>
+}
 }
 
 @if(view == Const.Search.View.TRASHBIN) {

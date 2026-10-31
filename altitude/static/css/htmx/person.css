@@ -1,62 +1,67 @@
-#person {
-    display: grid;
-    margin: var(--space-3);
-    padding: var(--space-3);
-    border-bottom: var(--border-hairline) var(--panel-border-color);
-    grid-template-columns: var(--person-avatar-column) var(--person-meta-column) 1fr;
-}
-
-#person img {
-    border-radius: 25%;
-}
-
-#person .visual {
-    display: grid;
-    grid-auto-rows: auto;
-}
-
-#person .visual .cover {
+/* The person scope's results title (htmx/person.scala.html): a .results-title of includes/results_title.css with the cover
+   face before the text and the Hide / Show / Discard link after it */
+#person .cover {
+    flex: none;
     cursor: pointer;
 }
 
-#person .meta {
-    display: grid;
-    align-self: center;
+#person .cover img {
+    display: block;
+    width: var(--person-avatar-size);
+    height: var(--person-avatar-size);
+    border-radius: 50%;
+    object-fit: cover;
 }
 
-#person .meta .name {
-    font-size: var(--font-size-medium);
-}
-
-#person .name span  {
+/* The name opens the inline editor (htmx/view_person_name); its pencil shows while the title is hovered or the name has
+   focus, in the editor among others */
+#personName > span {
     cursor: pointer;
 }
 
-#person .name span i {
-    padding-left: var(--space-5);
+#personName .fa-edit {
+    padding-left: var(--space-3);
+    font-size: var(--font-size-large);
+    color: var(--theme-neutral-3);
+    opacity: 0;
+    transition: opacity 160ms ease-out;
 }
 
-#person .visibility-controls {
-    display: grid;
-    grid-template-rows: 1fr;
-    place-items: center;
+#person .title:hover #personName .fa-edit,
+#personName:focus-within .fa-edit {
+    opacity: 1;
 }
 
-#person .mark-hidden a, #person .mark-hidden i {
+#personName .fa-edit:hover {
+    color: var(--theme-neutral-4);
+}
+
+/* The editor (htmx/edit_person_name) swaps in at the title's size, sized to the name, so the row keeps its height */
+#personName form {
+    display: inline;
+}
+
+#personName input {
+    font-size: var(--font-size-display);
+    field-sizing: content;
+}
+
+#person .actions a,
+#person .actions span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    text-decoration: none;
+}
+
+#person .mark-hidden {
     color: var(--warning-color);
-    text-decoration: none;
 }
 
-#person .mark-visible a, #person .mark-visible i {
+#person .mark-visible {
     color: var(--success-color);
-    text-decoration: none;
 }
 
-#person .mark-discarded, #person .mark-discarded i, #person .mark-discarded a {
+#person .mark-discarded {
     color: var(--error-color);
-    text-decoration: none;
-}
-
-#person .visibility-controls i {
-    padding-right: var(--space-3);
 }

@@ -9,6 +9,7 @@ import altitude.core.App
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
+import altitude.core.util.Util
 
 /** The grouped HTML grid of the search results route, its continuation by cursor, and the ungrouped grid next to it */
 @DoNotDiscover class SearchResultsControllerTests extends ControllerTestCore {
@@ -1003,6 +1004,74 @@ import altitude.core.models.AssetType
         legacy.statusCode shouldBe 400
         legacy.headers("content-type").head should include("application/json")
         ujson.read(legacy.text())("error").str should include("HTML")
+    }
+  }
+
+  test("Results open with a title block for their scope, and with the toolbar's total without one") {
+
+    /**
+     * Setup:
+     *
+     * A folder Iceland under Trips, an album, a Location Reykjavik under the category Countries, and one asset named beach.jpg.
+     *
+     * Assertions:
+     *
+     * Unscoped results render no title block. A folder scope renders a title block with the folder icon, the ancestors as folder
+     * search triggers, the folder as the leaf and the way back to the whole result set (a trigger clearing the person scope,
+     * which the store's rules widen to every scope); the toolbar keeps "Total:" with and without a scope. An album scope shows
+     * the album's icon, name and creation day; a Location scope its icon, name and category; Search text its icon, the text and
+     * "in this repository".
+     *
+     * Edge cases:
+     *
+     * The root folder is the whole repository and renders no title block.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        persistDated("2026-09-06T10:00:00", "beach.jpg")
+        val trips = testApp.service.folder.add("Trips")
+        val iceland = testApp.service.folder.add("Iceland", parentId = trips.id)
+        val album = testApp.service.album.add("Best of Iceland")
+        val countries = testApp.service.location.addCategory("Countries")
+        val reykjavik = testApp.service.location.addLocation("Reykjavik", 64.1466, -21.9426, categoryId = countries.id)
+        val total = "<strong>Total:</strong>"
+        val titleBlock = """class="results-title"""
+
+        val unscoped = htmlSearch(host, repoId, Map.empty).text()
+        unscoped should include(total)
+        unscoped.contains(titleBlock) shouldBe false
+
+        val folderPage = htmlSearch(host, repoId, Map(Api.Field.Search.FOLDER_ID -> iceland.persistedId)).text()
+        folderPage should include(titleBlock)
+        folderPage should include("fa-folder")
+        folderPage should include(s"""data-app-search-folder-id="${trips.persistedId}"""")
+        folderPage should include("""<span class="leaf">Iceland</span>""")
+        folderPage should include("""data-app-search-person-id=""""")
+        folderPage should include(total)
+
+        val rootPage = htmlSearch(host, repoId, Map(Api.Field.Search.FOLDER_ID -> testContext.repository.rootFolderId)).text()
+        rootPage should include(total)
+        rootPage.contains(titleBlock) shouldBe false
+
+        val albumPage = htmlSearch(host, repoId, Map(Api.Field.Search.ALBUM_ID -> album.persistedId)).text()
+        albumPage should include("fa-images")
+        albumPage should include("Best of Iceland")
+        val createdAt = testApp.service.album.getById(album.persistedId).createdAt.get
+        albumPage should include(s"Created ${Util.humanReadableDate(createdAt.toLocalDate)}")
+
+        val locationPage = htmlSearch(host, repoId, Map(Api.Field.Search.LOCATION_ID -> reykjavik.persistedId)).text()
+        locationPage should include("fa-map-marker-alt")
+        locationPage should include("Reykjavik")
+        locationPage should include("""<div class="subtitle">Countries</div>""")
+
+        val textPage = htmlSearch(host, repoId, Map(Api.Field.Search.QUERY_TEXT -> "beach")).text()
+        textPage should include("fa-search")
+        textPage should include("""<span class="query">beach</span>""")
+        textPage should include("in this repository")
     }
   }
 }

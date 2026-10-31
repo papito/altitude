@@ -815,4 +815,25 @@ import altitude.core.models.Repository
     switchContextRepo(firstRepo)
     treeCounts(firstRepo.rootFolderId) shouldEqual 1
   }
+
+  test("A folder's ancestors come root first") {
+
+    /**
+     * Setup:
+     *
+     * A chain of three folders under a top-level folder.
+     *
+     * Assertions:
+     *
+     * The deepest folder's ancestors are listed from the top-level folder down to its parent, without the repository root, which
+     * is the order a breadcrumb reads them in.
+     */
+    val top: Folder = testApp.service.folder.add("top")
+    val middle: Folder = testApp.service.folder.add(name = "middle", parentId = top.id)
+    val lower: Folder = testApp.service.folder.add(name = "lower", parentId = middle.id)
+    val leaf: Folder = testApp.service.folder.add(name = "leaf", parentId = lower.id)
+
+    val ancestors = testApp.service.folder.getAncestors(leaf.persistedId)
+    ancestors.map(_.persistedId) shouldEqual List(top.persistedId, middle.persistedId, lower.persistedId)
+  }
 }

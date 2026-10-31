@@ -12,6 +12,9 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.QueryTimeoutException
 import altitude.core.SearchCursorException
+import altitude.core.models.Album
+import altitude.core.models.Folder
+import altitude.core.models.Location
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
@@ -108,6 +111,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       return badRequest(
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})")
 
+    // What the results title names: the person, the folder's path, the album or the Location the results are scoped to
+    val person = personOf(personId)
+    val folderPath = folderPathOf(folderId)
+    val album: Option[Album] = albumId.map(App.altitude.service.album.getById)
+    val location = locationOf(locationId)
+
     val browserUrl = browserViewUrl(
       view,
       effectiveSort,
@@ -140,7 +149,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           sort = searchSort,
           grouping = None,
           grid = htmx.html.map_view(bounds, settings.mapTileUrl, settings.mapTileAttribution),
-          person = personOf(personId),
+          person = person,
+          folderPath = folderPath,
+          album = album,
+          location = location,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -187,7 +199,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           sort = results.sort,
           grouping = Some(results.grouping),
           grid = htmx.html.results_grid_grouped(results = results),
-          person = personOf(personId),
+          person = person,
+          folderPath = folderPath,
+          album = album,
+          location = location,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -227,7 +242,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         sort = searchSort,
         grouping = None,
         grid = htmx.html.results_grid(isContinuousScroll = false, results = results),
-        person = personOf(personId),
+        person = person,
+        folderPath = folderPath,
+        album = album,
+        location = location,
         view = view,
         folderId = folderId,
         albumId = albumId,
@@ -316,6 +334,23 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   private def personOf(personId: Option[String]): Person =
     personId.map(id => App.altitude.service.person.getById(id): Person).orNull
+
+  /**
+   * The folder scope as a breadcrumb reads it: the top-level folder first, the folder itself last. The repository root is the
+   * whole repository, so it is no scope and has no path.
+   */
+  private def folderPathOf(folderId: Option[String]): List[Folder] =
+    val folders = App.altitude.service.folder
+    folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getById(id)).getOrElse(Nil)
+
+  /** The Location scope with its category's name, which the typed read leaves out */
+  private def locationOf(locationId: Option[String]): Option[Location] =
+    locationId.map {
+      id =>
+        val locations = App.altitude.service.location
+        val location = locations.getById(id)
+        location.copy(categoryName = location.categoryId.map(locations.getById(_).name))
+    }
 
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same

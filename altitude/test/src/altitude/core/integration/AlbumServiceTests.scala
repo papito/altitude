@@ -397,4 +397,21 @@ import altitude.core.util.SearchQuery
     val emptyAlbum: Album = testApp.service.album.add("empty")
     searchAlbum(emptyAlbum) shouldEqual Set()
   }
+
+  test("An album records when it was created") {
+
+    /**
+     * Setup:
+     *
+     * One album, read back by ID and through the list.
+     *
+     * Assertions:
+     *
+     * Both reads carry the creation time the database set when the album was added.
+     */
+    val album: Album = testApp.service.album.add("Summer 2024")
+
+    testApp.service.album.getById(album.persistedId).createdAt.isDefined shouldBe true
+    testApp.service.album.getAll.head.createdAt.isDefined shouldBe true
+  }
 }

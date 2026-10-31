@@ -91,6 +91,12 @@ join a known Person but never starts one, is never a match candidate, and is
 dropped when it matches nobody.
 _Avoid_: Weak face, Low-quality face in user-facing text.
 
+**Results title**:
+The block above the results toolbar naming what the results are scoped to: a
+Person, a folder's path, an album, a Location or the Search text, with the
+way back to the whole result set.
+_Avoid_: Header, Banner, Scope bar.
+
 **Search text**:
 What the user types into the nav's quick search input: Search terms, optionally joined by
 `OR`, excluded with a leading `-`, or quoted into a phrase. It always searches

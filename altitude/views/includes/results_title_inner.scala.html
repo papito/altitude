@@ -1,0 +1,81 @@
+@import altitude.core.Const
+@import altitude.core.Const.FaceRecognition
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+
+@* The inside of a results title (see includes/results_title for the block, and views/AGENTS.md **Results title**): the kind's
+   icon, the title the caller renders, the way back to the whole result set, and the subtitle. A person's
+   title also holds the cover face before the text and the Hide / Show / Discard link after it; those parts are the person
+   scope's alone, so they are rendered here from the person rather than passed in. Rendered on its own by htmx/person_inner,
+   which the Hide / Show / Discard responses swap into the person's block. *@
+@(icon: String, subtitle: Option[String] = None, person: Option[Person] = None)(title: Html)
+
+@for(p <- person) {
+<div class="cover drag-drop" data-person-id="@{p.persistedId}">
+    <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{p.coverFaceId}"
+         alt=""
+         hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
+         hx-target="#modalContent"
+         hx-vals='{"personId": "@{p.persistedId}"}'
+         hx-trigger="click"
+         draggable="false">
+</div>
+}
+
+<div class="text">
+  <div class="title">
+    <i class="fas @icon kind-icon" aria-hidden="true"></i>
+    @title
+    @* The way back: a search trigger clearing the person scope, which the searchParams store's scope rules widen to every
+       other scope, the map area and the Search text, while the view, the sort, the grouping and the layout stay
+       (js/stores/search-params.js) *@
+    <button type="button"
+            class="clear-scope"
+            title="Back to all results"
+            aria-label="Back to all results"
+            data-app-search="click"
+            data-app-search-person-id="">&times;</button>
+  </div>
+  @for(s <- subtitle) {<div class="subtitle">@s</div>}
+</div>
+
+@for(p <- person) {
+<div class="actions">
+    @if(!p.isBadMatch && p.numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD) {
+        @if(p.isHidden) {
+            <a href="#"
+               class="mark-visible"
+               hx-trigger="click"
+               hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{p.persistedId}/show"
+               hx-swap="innerHTML"
+               hx-target="#person"
+            ><i class="fas fa-eye" aria-hidden="true"></i>Show</a>
+        } else {
+            <a href="#"
+               class="mark-hidden"
+               hx-trigger="click"
+               hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{p.persistedId}/hide"
+               hx-swap="innerHTML"
+               hx-target="#person"
+            ><i class="fas fa-eye-slash" aria-hidden="true"></i>Hide</a>
+        }
+    }
+
+    @* A successful discard announces itself (js/listeners/htmx-requests.js), and the people list drops the person *@
+    @if(p.numOfFaces < FaceRecognition.MIN_FACES_THRESHOLD && !p.isBadMatch) {
+        <a href="#"
+           class="mark-discarded"
+           hx-trigger="click"
+           hx-delete="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{p.persistedId}"
+           hx-swap="innerHTML"
+           hx-target="#person"
+           data-app-success-event="PERSON_MARKED_AS_BAD_MATCH_EVENT"
+           data-app-success-detail='{"personId":"@{p.persistedId}"}'
+        ><i class="fas fa-trash" aria-hidden="true"></i>Discard</a>
+    }
+
+    @if(p.isBadMatch) {
+        <span class="mark-discarded">Discarded</span>
+    }
+</div>
+}

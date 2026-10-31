@@ -1,12 +1,9 @@
-@import altitude.core.Const
-@import altitude.core.Api
-@import altitude.core.RequestContext
 @import altitude.core.models.Person
 @(person: Person)
 
-<div id="person" class="dropzone" data-person-id="@{person.persistedId}">
+@* The person scope's results title (includes/results_title_inner, styled by static/css/includes/results_title.css and
+   static/css/htmx/person.css). The block itself is the drop zone of a face merge (js/dragdrop/people.js) and the swap target
+   of the Hide / Show / Discard responses, which return htmx/person_inner. *@
+<div id="person" class="results-title dropzone" x-data data-person-id="@{person.persistedId}">
     @htmx.html.person_inner(person)
 </div>
-
-
-

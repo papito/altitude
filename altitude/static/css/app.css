@@ -6,6 +6,7 @@
 @import "pages/style_guide.css";
 @import "includes/batch_ops.css";
 @import "includes/search_results.css";
+@import "includes/results_title.css";
 @import "htmx/folders.css";
 @import "htmx/albums.css";
 @import "htmx/locations.css";

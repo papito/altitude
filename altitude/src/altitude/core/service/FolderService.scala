@@ -84,6 +84,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       dao.getChildrenRecursive(rootId)
     }
 
+  /** The folders above `folderId`, the top-level one first and its parent last; the repository root is not among them */
   def getAncestors(folderId: String): List[Folder] =
     txManager.asReadOnly {
       dao.getAncestors(folderId)

@@ -210,6 +210,19 @@
              <code>--panel-padding</code>; its text carries <code>--text-shadow</code>. Lay pages out with CSS Grid and
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
+          <p>The results title (<code>.results-title</code>, <code>includes/results_title</code>) opens scoped results: the
+             kind's icon, the title in <code>--font-size-display</code> and <code>--theme-primary-text</code>, the × back to
+             the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.</p>
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-folder kind-icon" aria-hidden="true"></i>
+                <span class="crumbs"><a href="#" class="crumb">Trips</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><a href="#" class="crumb">2026</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><span class="leaf">Iceland</span></span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
+              <div class="subtitle">A subtitle: a person's face count, an album's creation day, a Location's category</div>
+            </div>
+          </div>
         </section>
 
         <section id="icons">
