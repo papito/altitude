@@ -618,7 +618,8 @@ dialog's return control was hidden by the change (`focusAddLocationControlIfFocu
 completes with `dialogSuccessResponse` naming the new Location's `categoryId` (null at the top level),
 and the `locationAdded` listener expands that category (`expandLocationCategory`) after the reload; a
 move into a collapsed category leaves it collapsed, as moving a folder under a collapsed parent does. Add and Move share
-`includes/location_category_select`, which offers categories only and `(none)` for the top level; Add to
+`includes/location_category_select`, which offers categories only and `(none)` for the top level (Move passes
+`labelled = false`: its title names the field); Add to
 location offers Locations only, labelled `Category - Location`. Rename, Delete, and Move titles
 come from `Const.UI`, chosen by kind in the controller.
 
@@ -751,8 +752,9 @@ view, which the pin editor opens on.
 `data-app-fragment="modal"` and `data-app-modal-title` and open as popover dialogs (Add location in the general
 modal host); the host supplies their heading and close control. Add and Rename submit with Return and retain
 `hx-target="this"`, `hx-swap="none"`, and `hx-json-enc`, so validation replaces the active form with its submitted
-values and errors. They hold one field with no label, only its placeholder, and the input carries an `aria-label`
-("Folder name", "Album name", "Category name", or "Location name" by kind for a Location row's Rename).
+values and errors. They hold one field with no label, since the title names it: a placeholder in Add's and Rename's input, which
+carries an `aria-label` ("Folder name", "Album name", "Category name", or "Location name" by kind for a Location
+row's Rename), and an `aria-label` alone on Move's and Add to location's select.
 The dialog focuses the name field (selecting it for Rename), or the category selector for Move.
 Delete leaves initial focus on the close control, so opening the confirmation cannot activate its
 destructive button. Rename and Move return focus to the row's ⋯ button; Delete names a control
@@ -793,11 +795,11 @@ except in a popover dialog, whose form fills `--popover-form-width` with its act
 (`--error-background-color`) with `--theme-neutral-4` text and the `--error-color` edge, which it keeps on focus,
 with no ring. Its message is a `div.error` under the field, in `--font-size-small` and `--error-color` with no box:
 the dialogs and the person name editor (`htmx/edit_person_name`) render it directly after the field, the Settings form
-under the row of the field and its Reset button. A label above a field in a dialog of either host (Move's Category,
-Add to location's Location, Add location's fields) is in small caps: `--font-size-xs`, semibold, uppercase,
+under the row of the field and its Reset button. A label above a field in a dialog of either host (Add location's fields) is in small caps: `--font-size-xs`, semibold, uppercase,
 `--letter-spacing-wide`, its text color at 0.6 (`:is(#popoverContent, #modalContent) label`); the Settings rows keep
-their own labels. A one-field popover dialog (Add and Rename, the style guide's sample dialog) shows no label, only
-its placeholder, and its input carries an `aria-label`. A select is a customizable select (`appearance:
+their own labels. A one-field dialog whose title names the field (Add, Rename and the style guide's sample dialog, with a
+placeholder in the input; Move to category and Add to location, with their select) shows no label, and its field
+carries an `aria-label`. A select is a customizable select (`appearance:
 base-select`, behind `@supports`, Chromium today), its picker drawn as the popover dialog's surface, an option tinted
 on hover (`--theme-neutral-4` at 0.08) and when checked (the accent at 0.2); a browser without it keeps the native
 select, styled as a field. The grid toolbar's Group and Sort are no selects but choice menus (see **Context menus**).
