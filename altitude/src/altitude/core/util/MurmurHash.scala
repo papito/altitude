@@ -1,10 +1,7 @@
 package altitude.core.util
 
-import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.file.Files
-import java.nio.file.Path
 
 object MurmurHash:
   private val c1 = 0xcc9e2d51
@@ -24,41 +21,6 @@ object MurmurHash:
       h = mixBlock(h, buffer.getInt)
     }
 
-    if buffer.remaining > 0 then
-      var k1 = 0
-      for (i <- buffer.remaining - 1 to 0 by -1) {
-        k1 ^= (buffer.get & 0xff) << (i * 8)
-      }
-      h = mixTail(h, k1)
-
-    finish(h, length)
-
-  /** The hash of a file's content, streamed, equal to `hash32` over the same bytes */
-  def hash32(path: Path): Int =
-    val stream = Files.newInputStream(path)
-    try hash32(stream)
-    finally stream.close()
-
-  def hash32(stream: InputStream): Int =
-    // The block cipher consumes whole little-endian ints, so the bytes of a read that do not fill one are kept for the next
-    val chunk = new Array[Byte](8192)
-    val buffer = ByteBuffer.allocate(chunk.length + 3).order(ByteOrder.LITTLE_ENDIAN)
-    var length = 0
-    var h = 0
-
-    var read = stream.read(chunk)
-    while (read > 0) {
-      length += read
-      buffer.put(chunk, 0, read)
-      buffer.flip()
-      while (buffer.remaining >= 4) {
-        h = mixBlock(h, buffer.getInt)
-      }
-      buffer.compact()
-      read = stream.read(chunk)
-    }
-
-    buffer.flip()
     if buffer.remaining > 0 then
       var k1 = 0
       for (i <- buffer.remaining - 1 to 0 by -1) {

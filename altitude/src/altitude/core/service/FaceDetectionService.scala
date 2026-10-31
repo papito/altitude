@@ -31,7 +31,7 @@ import altitude.core.models.Settings
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
-import altitude.core.util.MurmurHash
+import altitude.core.util.Sha256
 
 object FaceDetectionService:
 
@@ -338,7 +338,9 @@ class FaceDetectionService(app: Altitude):
         val alignedFaceImageGsBytes = new MatOfByte
         Imgcodecs.imencode(".png", alignedFaceImageGs, alignedFaceImageGsBytes)
 
-        val displayImage = makeImageThumbnail(imageBytes.toArray, FaceDetectionService.faceDetectionBoxPx)
+        // The thumbnail, the checksum and the stored file share one copy, so the checksum is over the exact bytes stored
+        val crop = imageBytes.toArray
+        val displayImage = makeImageThumbnail(crop, FaceDetectionService.faceDetectionBoxPx)
 
         val face = Face(
           x1 = rect.x,
@@ -349,12 +351,12 @@ class FaceDetectionService(app: Altitude):
           features = embedding.features,
           quality = embedding.norm,
           isEnrolled = embedding.norm >= enrollThreshold,
-          checksum = MurmurHash.hash32(imageBytes.toArray)
+          checksum = Sha256.hex(crop)
         )
         logger.trace(s"$face in ${fileName.getOrElse("image")}")
 
         val faceImages = FaceImages(
-          image = imageBytes.toArray,
+          image = crop,
           displayImage = displayImage,
           alignedImage = alignedImageBytes.toArray, // fix: was alignedFaceImageGsBytes
           alignedImageGs = alignedFaceImageGsBytes.toArray

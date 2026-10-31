@@ -64,7 +64,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
       userId = rec(FieldConst.USER_ID).asInstanceOf[String],
       fileName = rec(FieldConst.Asset.FILENAME).asInstanceOf[String],
-      checksum = rec(FieldConst.Asset.CHECKSUM).asInstanceOf[Int],
+      checksum = rec(FieldConst.Asset.CHECKSUM).asInstanceOf[String],
       assetType = assetType,
       width = rec(FieldConst.Asset.WIDTH).asInstanceOf[Int],
       height = rec(FieldConst.Asset.HEIGHT).asInstanceOf[Int],

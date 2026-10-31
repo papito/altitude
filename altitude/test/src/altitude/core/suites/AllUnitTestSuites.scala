@@ -15,7 +15,6 @@ import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
 import altitude.core.unit.ImageUtilTests
-import altitude.core.unit.MurmurHashTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
@@ -24,6 +23,7 @@ import altitude.core.unit.SearchSqlTests
 import altitude.core.unit.SearchTextTests
 import altitude.core.unit.SearchWordsTests
 import altitude.core.unit.SessionControllerTests
+import altitude.core.unit.Sha256Tests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.StyleGuideScanTests
@@ -55,7 +55,7 @@ abstract class AllUnitTestSuites
     new UrlServiceTests,
     new UtilTests,
     new EnvironmentTests,
-    new MurmurHashTests,
+    new Sha256Tests,
     new VideoServiceTests,
     new ImageUtilTests,
     new RangeStreamingTests,

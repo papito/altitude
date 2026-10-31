@@ -46,7 +46,7 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       personId = Option(rec(FieldConst.Face.PERSON_ID).asInstanceOf[String]),
       detectionScore = rec(FieldConst.Face.DETECTION_SCORE).asInstanceOf[Double],
       features = Array[Float](),
-      checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[Int],
+      checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[String],
       quality = rec(FieldConst.Face.QUALITY).asInstanceOf[Double],
       isEnrolled = getBooleanField(rec(FieldConst.Face.IS_ENROLLED)),
       frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS))

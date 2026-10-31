@@ -164,20 +164,22 @@ import altitude.core.models.MimedPreviewData
      *
      * Assertions:
      *
-     * The JPEG is detected as an image and keeps its type, checksum and size when read back from the repository. Metadata
-     * extraction ran: the raw extracted metadata has the JPEG directory, and every camera field of the public metadata derived
-     * from the EXIF directories is filled in - device model, exposure settings and the original capture time.
+     * The JPEG is detected as an image and keeps its type, checksum and size when read back from the repository; the checksum is
+     * the SHA-256 of the file in lowercase hex, what `sha256sum` prints for it. Metadata extraction ran: the raw extracted
+     * metadata has the JPEG directory, and every camera field of the public metadata derived from the EXIF directories is filled
+     * in - device model, exposure settings and the original capture time.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("people/bullock.jpg")
+    val fileSha256 = IntegrationTestUtil.jdkSha256Hex(Files.readAllBytes(importAsset.path))
 
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
 
     importedAsset.assetType.mediaType shouldBe "image"
-    importedAsset.checksum should not be 0
+    importedAsset.checksum shouldBe fileSha256
 
     val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.assetType should equal(importedAsset.assetType)
-    asset.checksum should not be 0
+    asset.checksum shouldBe fileSha256
     asset.sizeBytes should not be 0
 
     asset.extractedMetadata.getFieldValues("JPEG").get("Image Height") should not be empty

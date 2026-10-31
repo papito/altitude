@@ -7,6 +7,7 @@ import java.net.HttpCookie
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.util.HexFormat
 import org.apache.commons.dbutils.QueryRunner
 
 import scala.util.Random
@@ -33,6 +34,9 @@ import altitude.core.util.Util
 object TestContext {
   val ASSET_SIZE = 652084
   val USER_PASSWORD = "password123"
+
+  /** A checksum of the stored form, 64 lowercase hex characters of random bytes, distinct for every call */
+  def randomChecksum: String = HexFormat.of().formatHex(Random.nextBytes(32))
 }
 
 class TestContext(val testApp: Altitude) {
@@ -130,7 +134,7 @@ class TestContext(val testApp: Altitude) {
       folderId = folderId,
       assetType = new AssetType(mediaType = "image", mediaSubtype = "png", mime = "image/png"),
       fileName = filename,
-      checksum = Random.nextInt(500000),
+      checksum = TestContext.randomChecksum,
       userMetadata = userMetadata,
       sizeBytes = TestContext.ASSET_SIZE,
       isTriaged = isTriaged,
@@ -225,12 +229,13 @@ class TestContext(val testApp: Altitude) {
         width = 10,
         height = 10,
         detectionScore = 0.9,
-        checksum = Random.nextInt(),
+        checksum = TestContext.randomChecksum,
         features = features,
         quality = 20.0,
         isEnrolled = isEnrolled),
       asset,
-      person)
+      person
+    )
 
   def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {
     require(people.count(_.id.isEmpty) == 0, "Person must have an ID for a mock face to be added")
@@ -255,7 +260,7 @@ class TestContext(val testApp: Altitude) {
             features = Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(Random.nextFloat()),
             quality = 20.0,
             isEnrolled = true,
-            checksum = Random.nextInt()
+            checksum = TestContext.randomChecksum
           )
 
           val persistedFace = testApp.service.person.addFace(face, asset, person)

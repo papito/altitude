@@ -36,7 +36,7 @@ case class Asset(
     userId: String,
     assetType: AssetType,
     fileName: String,
-    checksum: Int,
+    checksum: String,
     sizeBytes: Long,
     folderId: String,
     width: Int = 0,

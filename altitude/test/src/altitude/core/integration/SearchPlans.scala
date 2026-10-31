@@ -53,16 +53,17 @@ trait SearchPlans { self: IntegrationTestCore =>
    * library for the planner to choose the asset's indexes by. `id`, `checksum`, `folder_id` and `created_at` are the copy's own.
    */
   protected def seedCopies(templateId: String, copies: Int, folders: Int): Unit = {
-    val (copyId, createdAt) =
-      if (isPostgres) ("lpad(g.n::text, 36, '0')", "created_at - g.n * interval '1 minute'")
-      else ("printf('%036d', g.n)", "datetime(created_at, '-' || g.n || ' minutes')")
+    val (copyId, checksum, createdAt) =
+      if (isPostgres)
+        ("lpad(g.n::text, 36, '0')", "lpad((1000000 + g.n)::text, 64, '0')", "created_at - g.n * interval '1 minute'")
+      else ("printf('%036d', g.n)", "printf('%064d', 1000000 + g.n)", "datetime(created_at, '-' || g.n || ' minutes')")
 
     update(
       s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $copies)
          |INSERT INTO asset (id, repository_id, user_id, checksum, media_type, media_subtype, mime_type, width, height, area_size,
          |                   folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
          |                   original_created_at, created_at)
-         |SELECT $copyId, repository_id, user_id, 1000000 + g.n, media_type, media_subtype, mime_type, width, height, area_size,
+         |SELECT $copyId, repository_id, user_id, $checksum, media_type, media_subtype, mime_type, width, height, area_size,
          |       'folder-' || (g.n % $folders), filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
          |       original_created_at, $createdAt
          |  FROM asset CROSS JOIN g
@@ -86,8 +87,10 @@ trait SearchPlans { self: IntegrationTestCore =>
   }
 
   /**
-   * The plan of a lookup that only an index can serve, so that the index named is the one the engine reads at any scale. SQLite
-   * has no statistics to weigh a scan against; PostgreSQL is told to scan only when nothing else answers.
+   * The plan of a lookup that only an index can serve, so that the plan reads an index and never the whole table. SQLite has no
+   * statistics to weigh a scan against; PostgreSQL is told to scan only when nothing else answers. Over a handful of rows,
+   * PostgreSQL weighs the indexes that lead with the repository by their size: the plan of a lookup on a narrow key holds at any
+   * scale, while a lookup on a wide key runs inside [[atScale]], as the checksum lookup does, so the selective column decides.
    */
   protected def lookupPlanOf(statement: SqlStr): String =
     if (isPostgres)

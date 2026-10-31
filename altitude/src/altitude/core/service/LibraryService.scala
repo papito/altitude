@@ -19,12 +19,12 @@ import altitude.core.pipeline.sinks.AssetSeqOutputSink
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchResult
-import altitude.core.util.MurmurHash
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import altitude.core.util.Sha256
 
 /**
  * What is the difference between this and the AssetService?
@@ -51,12 +51,15 @@ class LibraryService(val app: Altitude):
   def convImportAsset2dataAsset(importAsset: ImportAsset): AssetWithData =
     stagedFileToAsset(importAsset.fileName, app.service.staging.stageCopy(importAsset.path))
 
-  /** The asset of a staged file: its media type by content, its checksum streamed, its size; the pipeline owns the file from here */
+  /**
+   * The asset of a staged file: its media type by content, its checksum (the file's SHA-256, streamed), its size; the pipeline
+   * owns the file from here
+   */
   def stagedFileToAsset(fileName: String, staged: Path): AssetWithData =
     val asset = Asset(
       userId = RequestContext.account.value.get.persistedId,
       fileName = fileName,
-      checksum = MurmurHash.hash32(staged),
+      checksum = Sha256.hex(staged),
       assetType = app.service.metadataExtractor.detectAssetType(staged),
       sizeBytes = Files.size(staged),
       isTriaged = true,

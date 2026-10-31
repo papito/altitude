@@ -235,8 +235,11 @@ import altitude.core.util.SearchQuery
   /** A library for the planner: 5,000 copies of the asset, one in ten of them geotagged somewhere on the globe */
   private def seedGeotagged(template: Asset): Unit = {
     seedCopies(template.persistedId, copies = 5000, folders = 500)
-    update("""UPDATE asset SET latitude = -80 + (checksum % 160), longitude = -180 + (checksum % 360)
-             | WHERE checksum >= 1000000 AND checksum % 10 = 0""".stripMargin)
+    // The copies are the assets whose ID is digits alone (`seedCopies`), every other asset's is a UUID; the copies whose ID ends
+    // in 0 are the one in ten. The ID is cast to a number only in the rows that match, as PostgreSQL refuses to cast a UUID.
+    val copyNumber = if (isPostgres) "CAST(id AS BIGINT)" else "CAST(id AS INTEGER)"
+    update(s"""UPDATE asset SET latitude = -80 + ($copyNumber % 160), longitude = -180 + ($copyNumber % 360)
+              | WHERE id NOT LIKE '%-%' AND id LIKE '%0'""".stripMargin)
   }
 
   test("The viewport statements read the geotagged assets through the asset_geo partial index alone") {

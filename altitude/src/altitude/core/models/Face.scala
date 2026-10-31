@@ -21,7 +21,7 @@ case class Face(
     personId: Option[String] = None,
     personLabel: Option[Int] = None,
     detectionScore: Double,
-    checksum: Int,
+    checksum: String,
     features: Array[Float],
     // The L2 norm of the raw ArcFace embedding: how recognizable the face is, higher is better
     quality: Double,

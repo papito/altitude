@@ -12,7 +12,7 @@
 
 ## Status
 
-Planned.
+Done.
 
 ## Decisions
 
@@ -48,13 +48,19 @@ a comment naming SHA-256 in hex; `asset_01` and `face_01` are unchanged.
 
 ```scala
 object Sha256:
-  def hex(bytes: Array[Byte]): String = hex(MessageDigest.getInstance("SHA-256").digest(bytes))
+  def hex(bytes: Array[Byte]): String = render(newDigest.digest(bytes))
   def hex(path: Path): String = ...            // streams the file through hex(stream)
   def hex(stream: InputStream): String = ...   // 8 KiB reads into MessageDigest.update
-  private def hex(digest: Array[Byte]): String = HexFormat.of().formatHex(digest)
+  private def newDigest: MessageDigest = MessageDigest.getInstance("SHA-256")   // a fresh digest per hash
+  private def render(hash: Array[Byte]): String = HexFormat.of().formatHex(hash)
 ```
 
 `java.util.HexFormat` renders lowercase by default. `MurmurHash` keeps only `hash32(data, seed)`.
+
+Tests compute the expected digest with the JDK directly (`IntegrationTestUtil.jdkSha256Hex`), never through `Sha256`,
+and `TestContext.randomChecksum` is 64 hex characters of random bytes. The live-copy lookup plan test runs over
+`atScale(seedCopies(...))`: over a handful of rows PostgreSQL weighs the indexes that lead with the repository by size,
+and `asset_01`'s 64-character keys make it the larger.
 
 ## Tasks
 
@@ -68,8 +74,8 @@ Each group is one reviewable change; its guide and comment updates go in the sam
    `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad` (the FIPS 180-4 vectors); the streamed hash
    equals the array hash for the lengths `MurmurHashTests` covers today (0 to 70, around the 8 KiB read boundaries,
    50,000); a temporary file hashes as its bytes.
-2. **Green**: `altitude/src/altitude/core/util/Sha256.scala` as above. Delete `MurmurHashTests` and the stream and
-   path overloads of `MurmurHash`, which nothing else uses.
+2. **Green**: `altitude/src/altitude/core/util/Sha256.scala` as above. `MurmurHashTests` and the stream and path
+   overloads of `MurmurHash` go in group B, once `stagedFileToAsset` no longer calls the path overload.
 
 ### B. Assets
 
@@ -81,19 +87,17 @@ Each group is one reviewable change; its guide and comment updates go in the sam
    `AssetService.getByChecksum(checksum: String)`; `LibraryService.stagedFileToAsset` calls `Sha256.hex(staged)` and
    drops the `MurmurHash` import; the `asset.checksum` columns in both `all.sql` files.
 5. **Tests that build checksums by hand**, to a 64-character hex string:
-   - `TestContext.makeAsset`: `Sha256.hex(Random.nextBytes(32))`, or a helper `TestContext.randomChecksum` the face
-     helpers share.
-   - `PurgePipelineServiceTests` (distinct checksums per recycled asset): `Sha256.hex(checksum.toString.getBytes)` or
-     the helper.
+   - `TestContext.makeAsset`: the helper `TestContext.randomChecksum` the face helpers share.
+   - `PurgePipelineServiceTests` (distinct checksums per recycled asset): `makeAsset`'s random checksums.
    - `CoreModelTests` (`checksum = 1`, `7`): any fixed 64-character string.
    - `SearchPlans.seedCopies`: the copies' own checksums are `1000000 + g.n`; render them as text padded to 64,
      `lpad((1000000 + g.n)::text, 64, '0')` on PostgreSQL and `printf('%064d', 1000000 + g.n)` on SQLite, as the
      copies' IDs already are.
-   - `SearchMapTests.seedGeotagged` derives coordinates from `checksum % 160` and `checksum % 360` and picks one copy in
-     ten with `checksum % 10`; with a text checksum it derives them from the copy's numeric ID instead
-     (`CAST(id AS BIGINT)` on PostgreSQL, `CAST(id AS INTEGER)` on SQLite; the seeded IDs are zero-padded digits), with the
-     same predicate on the seeded copies.
-   - `SearchServiceTests` (the live-copy lookup binds `asset.checksum`): unchanged, the bind is a string now.
+   - `SearchMapTests.seedGeotagged` derives coordinates from the copy's numeric ID (`CAST(id AS BIGINT)` on PostgreSQL,
+     `CAST(id AS INTEGER)` on SQLite, in the `SET` alone) and picks one copy in ten as the IDs of digits alone that end
+     in 0 (`id NOT LIKE '%-%' AND id LIKE '%0'`), so no UUID is ever cast.
+   - `SearchServiceTests` (the live-copy lookup binds `asset.checksum`, a string): the lookup runs inside
+     `atScale(seedCopies(...))`, and `SearchPlans.lookupPlanOf` says when a lookup needs it.
 6. **Docs**: [altitude/AGENTS.md](../altitude/AGENTS.md) (the staged-files paragraph: `Sha256.hex(path)`;
    the indexes paragraph if it names the column's type), [docs/READINESS.md](../docs/READINESS.md) (the duplicate-check
    item becomes done, with the new facts), [docs/test-coverage.md](../docs/test-coverage.md) (the import coverage
@@ -101,9 +105,9 @@ Each group is one reviewable change; its guide and comment updates go in the sam
 
 ### C. Faces
 
-7. **Red**: in `FaceRecognitionServiceTests` or `ImportPipelineServiceTests`, a detected Face's checksum is the
-   SHA-256 hex of its crop file as written to the face store (the crop is written by `PersonService`), asserted
-   over one face of an imported fixture.
+7. **Red**: in `FaceRecognitionServiceTests`, a detected Face's checksum is the SHA-256 hex of its crop file as written
+   to the face store (`FaceRecognitionService.withFaceFiles` through `fileStore.addFace`, read back with
+   `getDetectedFaceById`), asserted over one face of an imported fixture.
 8. **Green**: `Face.checksum: String`; `FaceRow.checksum: T[String]`; `FaceDao.toModel` and `makeModel`; `setString`
    in both `FaceDao.add` statements; `FaceDetectionService.extractFaces` calls `Sha256.hex` and drops the
    `MurmurHash` import; the `face.checksum` columns in both `all.sql` files.
@@ -114,7 +118,8 @@ Each group is one reviewable change; its guide and comment updates go in the sam
 
 ### Verification
 
-- `make test-focused` on the new and changed suites, then `make test` and `make test-psql`: the duplicate import, the
+- `make test-focused-sqlite` and `make test-focused-psql` on the new and changed tests, then `make test-sqlite`,
+  `make test-psql`, `make test-unit` and `make test-controllers`: the duplicate import, the
   restore of a recycled copy, the same-crop-twice face test and the search plan suites (`asset_01`, `face_01`) all
   pass on both engines.
 - An import through the dev server of a file whose `sha256sum` is known shows that value in the `asset` row.

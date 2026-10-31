@@ -346,10 +346,10 @@ import altitude.core.util.Query
      * The purge queue deletes every one of them.
      */
     val binSize = testApp.parallelism * 4
-    // Distinct checksums, since only one live asset of a content is allowed
+    // Each made asset has a random checksum of its own, as it must: only one live asset of a content is allowed
     val ids = (1 to binSize).map {
-      checksum =>
-        val asset = testApp.service.library.persistAndIndex(testContext.makeAsset().copy(checksum = checksum))
+      _ =>
+        val asset = testApp.service.library.persistAndIndex(testContext.makeAsset())
         testApp.service.library.completeImport(asset).persistedId
     }.toSet
     testApp.service.library.recycleAssets(ids)

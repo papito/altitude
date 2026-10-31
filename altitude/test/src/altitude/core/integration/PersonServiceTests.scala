@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestContext
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
@@ -78,7 +79,7 @@ import altitude.core.util.Util
     width = 10,
     height = 10,
     detectionScore = 0.9,
-    checksum = Random.nextInt(),
+    checksum = TestContext.randomChecksum,
     features = Array.fill(512)(Random.nextFloat()),
     quality = quality,
     isEnrolled = isEnrolled,
@@ -876,7 +877,7 @@ import altitude.core.util.Util
       personId = Some(person.persistedId),
       personLabel = Some(1),
       detectionScore = 0.99,
-      checksum = Random.nextInt(),
+      checksum = TestContext.randomChecksum,
       features = Array.fill(512)(0.1f),
       quality = 20.0,
       isEnrolled = true

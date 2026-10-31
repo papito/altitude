@@ -159,8 +159,7 @@ As built, each repository has one owner (`repository.owner_account_id` in [all.s
 - [ ] No real schema migrations. Until the first real data, schema changes go into `all.sql` and the database is recreated (the rule under "Schema migrations" in [altitude/AGENTS.md]). That has to end before anyone has real data, and every upgrade after it needs a tested, forward-only migration. [MigrationService] `migrate` can run `<version>.sql` files, but none exist and `schemaVersion` stays 2 ([Altitude] `schemaVersion`). A database built from an older `all.sql` is stamped 2, starts without complaint and then fails at runtime on missing columns. There are no upgrade tests and no snapshot before migrating. [CRITICAL]
   - Fix: freeze the schema and start `<version>.sql` files with a `schemaVersion` bump per change, rewriting that rule in altitude/AGENTS.md in the same change. Test the upgrade from the last release's database to head on both engines, refuse to start on a version mismatch, and snapshot before migrating (`VACUUM INTO`, or `pg_dump` behind a flag).
 - ✅ Originals are never touched: moved into the store once ([FileSystemStoreService] `addAsset`), copied for a server-side import ([StagingService] `stageCopy`), and renamed only in the database. No metadata is written into files.
-- [ ] The duplicate check can reject distinct photos. The checksum is a 32-bit MurmurHash (`MurmurHash.hash32` in [LibraryService] `stagedFileToAsset`), stored as `checksum INT` under a unique index on `(repository_id, checksum) WHERE NOT is_recycled` (`asset_01` in [all.sql]), and [CheckDuplicateFlow] compares nothing else. The chance that at least one pair of different files in a repository collides is about 1% at 10k assets, 25% at 50k, 50% at 77k and 69% at 100k (1 − e^(−n²/2³³)), and a collision can be crafted on purpose. The second file is reported as "Duplicate asset"; anyone who trusts that and deletes their copy has lost the photo. The same collision keeps an unrelated recycled asset from being restored ([LibraryService] `restoreRecycledAssets`). The streamed hash also keeps the length in an `Int`, which overflows past 2 GB (harmless, but wrong). [CRITICAL]
-  - Fix: BLAKE3 (fast, 256-bit), xxh3-128, or SHA-256 for interoperability, stored as `BYTEA`/`BLOB` under the unique index; keep MurmurHash only for ETags. Until then, compare the bytes before reporting a duplicate.
+- ✅ Only a copy of the same file is reported as a duplicate. The checksum is the SHA-256 of the file, streamed once from the staged file ([Sha256] `hex` in [LibraryService] `stagedFileToAsset`) and stored as 64 lowercase hex characters, `checksum CHAR(64)` (`COLLATE "C"` on PostgreSQL), under a unique index on `(repository_id, checksum) WHERE NOT is_recycled` (`asset_01` in [all.sql]); [CheckDuplicateFlow] and [LibraryService] `restoreRecycledAssets` compare nothing else. A collision between different files is not practical, by chance or crafted, so a file reported as "Duplicate asset" has the same bytes as one in the repository, and the stored value is what `sha256sum` prints for the original.
 - ✅ The duplicate check is streamed and scoped to the repository, and recycled copies do not block a re-import.
 - ✅ Trash exists: [LibraryService] `recycleAssets`, a purge behind a confirmation ([trashbin_header.scala.html]), and folder deletion in one transaction (`deleteFolderById`).
 - [ ] The trash has no retention, auto-purge or `recycled_at` column. Recycling assets or deleting a folder permanently removes Album and Location memberships, and restoring does not bring them back. Purge cannot be undone. [MEDIUM]
@@ -377,7 +376,6 @@ Entries leave this list when their items close.
 
 **Before real data:**
 
-- Replace the duplicate hash; until then, compare bytes before calling a file a duplicate ([Data safety](#data-safety)).
 - Freeze the schema and start versioned migrations, with an upgrade test and a snapshot before each one ([Data safety](#data-safety)).
 - A written, tested backup and restore ([Data safety](#data-safety)).
 - Keep staged uploads across a restart and resume them ([Running and upgrading](#running-and-upgrading)).
@@ -462,6 +460,7 @@ Entries leave this list when their items close.
 [TransactionManager]: ../altitude/src/altitude/core/transactions/TransactionManager.scala
 [CaptureDateResolver]: ../altitude/src/altitude/core/util/CaptureDateResolver.scala
 [ImageUtil]: ../altitude/src/altitude/core/util/ImageUtil.scala
+[Sha256]: ../altitude/src/altitude/core/util/Sha256.scala
 [Util]: ../altitude/src/altitude/core/util/Util.scala
 [AssetControllerTests]: ../altitude/test/src/altitude/core/controller/AssetControllerTests.scala
 [ContentViewControllerTests]: ../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala

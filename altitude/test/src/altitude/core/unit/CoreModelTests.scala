@@ -72,7 +72,7 @@ import altitude.core.models.UserMetadataValue
       userId = "u",
       assetType = AssetType("video", "mp4", "video/mp4"),
       fileName = "clip.mp4",
-      checksum = 1,
+      checksum = "a" * 64,
       sizeBytes = 10,
       folderId = "",
       durationMs = Some(90_500L))
@@ -88,7 +88,7 @@ import altitude.core.models.UserMetadataValue
       width = 3,
       height = 4,
       detectionScore = 0.5,
-      checksum = 7,
+      checksum = "a" * 64,
       features = Array(0.1f),
       quality = 21.5,
       isEnrolled = false,
@@ -137,7 +137,7 @@ import altitude.core.models.UserMetadataValue
       width = 3,
       height = 4,
       detectionScore = 0.5,
-      checksum = 7,
+      checksum = "a" * 64,
       features = Array(0.1f),
       quality = 21.5,
       isEnrolled = false)

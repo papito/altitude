@@ -29,7 +29,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       dao.updateById(asset.persistedId, Map(FieldConst.Asset.IS_RECYCLED -> isRecycled))
     }
 
-  def getByChecksum(checksum: Int): Option[Asset] =
+  def getByChecksum(checksum: String): Option[Asset] =
     txManager.asReadOnly {
       val q = new Query(params = Map(FieldConst.Asset.CHECKSUM -> checksum))
       val existing = query(q)

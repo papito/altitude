@@ -17,7 +17,7 @@ case class AssetRow[T[_]](
     id: T[String],
     repositoryId: T[String],
     userId: T[String],
-    checksum: T[Int],
+    checksum: T[String],
     mediaType: T[String],
     mediaSubtype: T[String],
     mimeType: T[String],

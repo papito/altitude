@@ -78,7 +78,8 @@ CREATE TABLE asset (
   id CHAR(36) PRIMARY KEY,
   repository_id CHAR(36) NOT NULL,
   user_id CHAR(36) NOT NULL,
-  checksum INT NOT NULL,
+  -- SHA-256 of the file, 64 lowercase hex characters (Sha256.hex)
+  checksum CHAR(64) NOT NULL,
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
   mime_type VARCHAR(64) NOT NULL,
@@ -183,7 +184,8 @@ CREATE TABLE face (
   height INT NOT NULL,
   detection_score FLOAT NOT NULL,
   features BLOB NOT NULL,
-  checksum INT NOT NULL,
+  -- SHA-256 of the raw crop PNG, 64 lowercase hex characters (Sha256.hex)
+  checksum CHAR(64) NOT NULL,
   -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
   frame_time_ms INTEGER,
   -- L2 norm of the raw ArcFace embedding: higher is a more recognizable face. See face.quality.* in reference.conf.

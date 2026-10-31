@@ -43,7 +43,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     preparedStatement.setString(8, person.persistedId)
     preparedStatement.setDouble(9, face.detectionScore)
     preparedStatement.setString(10, toVectorAsF32Arg(face.features))
-    preparedStatement.setInt(11, face.checksum)
+    preparedStatement.setString(11, face.checksum)
     face.frameTimeMs match
       case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
       case None => preparedStatement.setNull(12, Types.BIGINT)

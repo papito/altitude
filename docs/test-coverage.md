@@ -119,7 +119,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ Import multiple assets and assert their persisted pipeline-complete flags; a void sink returns an empty result sequence.
 - ✅ An in-batch duplicate is returned as one `InvalidAsset` with `DuplicateException` while the other batch assets complete.
 - ✅ An unsupported media type returns an `InvalidAsset` with `UnsupportedMediaTypeException`.
-- ✅ Synchronous import rejects a duplicate, produces a triaged image, and persists extracted/public metadata, checksum, size, dimensions, and preview data.
+- ✅ Synchronous import rejects a duplicate, produces a triaged image, and persists extracted/public metadata, size, dimensions, preview data, and a checksum that is the file's SHA-256 in lowercase hex (computed in the test with the JDK's `MessageDigest`, as `sha256sum` would print it).
 - ✅ An import dropped after face recognition (the file store stage failing) leaves no asset, face, person or Search document row, no face file and no staged file; one that added a face to a known, hidden Person gives the face back, and the Person keeps its count, its cover and its cover's files; a video dropped in the preview stage leaves no row, stored file or preview.
 - ✅ A file dropped for a reason that has passed imports when it is uploaded again; a dropped duplicate leaves the asset it duplicates, its file, preview, faces and their files untouched.
 - [ ] Inject failures in indexing, recognition, preview storage, and final completion, as the tests above do for metadata extraction, original-file storage and the preview of an undecodable video; assert the failure results and statistics. [CRITICAL]
@@ -137,7 +137,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - [ ] Submit the same asset concurrently, then verify only one completed record/file set and one statistics increment remain. [MEDIUM]
 - ✅ An input the pipeline cannot use is dropped and the asset behind it in the same stream is imported, its staged file deleted: bytes no image reader takes under a JPEG type (`ImageException` in the metadata stage, through `run` and through the queue), an asset of a repository whose `files` directory is a plain file (`StorageException` in the file store stage, the next asset in another repository), and a video no frame of which decodes (`VideoException` in the preview stage).
 - [ ] Verify user-scoped success/error notifications identify the correct asset and recipient and are not duplicated. [MEDIUM]
-- [ ] Assert the mapping from `ImportAsset` to `AssetWithData`, including supplied user metadata, user identity, filename, exact checksum/size, and detected type. Existing metadata fixtures mainly enter through `addAsset`. [MEDIUM]
+- [ ] Assert the mapping from `ImportAsset` to `AssetWithData`, including supplied user metadata, user identity, filename, exact size, and detected type; the JPEG import test pins the exact checksum. Existing metadata fixtures mainly enter through `addAsset`. [MEDIUM]
 - [ ] Verify an empty finite source completes cleanly with no rows, files, statistics changes, or notifications. [EDGE]
 - [ ] Refuse an anonymous `/import/status` WebSocket handshake and one naming another account's `userId`; assert a file name with markup reaches the import ticker escaped. [CRITICAL]
 - [ ] Upload an SVG and assert it is dropped as an unsupported type; today only the lack of an ImageIO reader drops it. [MEDIUM]
@@ -445,6 +445,7 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 
 - ✅ Detect one face in the supplied small-face and large-portrait fixtures and two faces in the exercised two-person image.
 - ✅ Produce nonempty detected, display, aligned-color, and aligned-grayscale image buffers for a recognized face.
+- ✅ An imported Face's stored checksum is the SHA-256 in lowercase hex of the crop file the import wrote (computed in the test with the JDK's `MessageDigest`).
 - ✅ A face-relative blur lowers the embedding norm; a sharp portrait is enrolled, a blurred one is kept match-only, a heavily blurred one is detected but dropped below the quality floor.
 - [ ] Assert zero detections for a no-face image, empty image, and image smaller than the configured minimum; define corrupt-byte behavior. [MEDIUM]
 - [ ] Verify minimum-size/confidence boundaries, downscaled bounding boxes/landmarks mapped back to the original image, and preservation of confidence scores during scaling. [MEDIUM]

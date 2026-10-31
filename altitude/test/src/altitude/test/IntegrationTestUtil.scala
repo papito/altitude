@@ -5,6 +5,8 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.HexFormat
 import java.util.TimeZone
 import java.util.zip.CRC32
 import javax.imageio.ImageIO
@@ -53,6 +55,12 @@ object IntegrationTestUtil {
     val fileImportAsset = fileToImportAsset(file)
     fileImportAsset
   }
+
+  /**
+   * SHA-256 in lowercase hex computed with the JDK directly, deliberately bypassing `Sha256`, so a test checks a stored checksum
+   * independently of the code under test
+   */
+  def jdkSha256Hex(bytes: Array[Byte]): String = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
 
   /** A Preview's bytes decoded as stored, its alpha channel included; the app under test has loaded the OpenCV natives */
   def decodePreview(bytes: Array[Byte]): Mat = Imgcodecs.imdecode(new MatOfByte(bytes*), Imgcodecs.IMREAD_UNCHANGED)

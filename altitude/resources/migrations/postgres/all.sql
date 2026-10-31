@@ -88,7 +88,8 @@ CREATE TABLE asset (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
   user_id CHAR(36) COLLATE "C",
-  checksum INT NOT NULL,
+  -- SHA-256 of the file, 64 lowercase hex characters (Sha256.hex), compared byte-wise as the IDs are
+  checksum CHAR(64) COLLATE "C" NOT NULL,
   media_type VARCHAR(64) NOT NULL,
   media_subtype VARCHAR(64) NOT NULL,
   mime_type VARCHAR(64) NOT NULL,
@@ -180,7 +181,8 @@ CREATE TABLE face (
   detection_score FLOAT NOT NULL,
   -- The L2-normalized ArcFace embedding (FaceDetectionService.EMBEDDING_DIMENSIONS)
   features vector(512) NOT NULL,
-  checksum INT NOT NULL,
+  -- SHA-256 of the raw crop PNG, 64 lowercase hex characters (Sha256.hex), compared byte-wise as the IDs are
+  checksum CHAR(64) COLLATE "C" NOT NULL,
   -- The Frame time of a Face in a Video, where its crop and box were taken from; NULL for a Face in an image.
   frame_time_ms BIGINT,
   -- L2 norm of the raw ArcFace embedding: higher is a more recognizable face. See face.quality.* in reference.conf.

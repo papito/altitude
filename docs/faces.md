@@ -62,7 +62,8 @@ returns a `(Face, FaceImages)` per face it keeps.
    `face.quality.keep_threshold` (15.0) is dropped here, after the debug dump, with an INFO log. Both thresholds are read
    from the snapshot of this `extractFaces` call; changing them never re-tiers Faces already stored.
 6. **Crops** (`FaceImages`): the raw crop as PNG, an 80 px display thumbnail, the aligned 112×112 colour crop and a
-   histogram-equalized grayscale copy of it. The Face's `checksum` is `MurmurHash.hash32` of the raw crop PNG.
+   histogram-equalized grayscale copy of it. The Face's `checksum` is `Sha256.hex` of the raw crop PNG, its SHA-256 as
+   64 lowercase hex characters; the file store writes those same bytes as the Face's `-detected.png`.
 
 With `face.debug.enabled=true` every processed image is written to `debug/` at the project root (cleared at startup):
 `<base>-annotated.jpg` with each box, its landmarks and a `q=<quality> d=<score>` label, and
@@ -128,11 +129,12 @@ holds all detections of the video in memory. Then, with the pure functions of th
 ## Storage
 
 `face` row: box (`x1`, `y1`, `width`, `height`), `asset_id`, `person_id` (NOT NULL: a Face always belongs to a
-Person), `detection_score`, `features` (the vector, never read back into the model; `FaceRow` omits it), `checksum`,
-`quality`, `is_enrolled`, `frame_time_ms` (NULL for an image). `is_enrolled` is decided at import and stored, so
+Person), `detection_score`, `features` (the vector, never read back into the model; `FaceRow` omits it), `checksum`
+(the crop's SHA-256 in hex, `CHAR(64)`, `COLLATE "C"` on PostgreSQL as the IDs are), `quality`, `is_enrolled`,
+`frame_time_ms` (NULL for an image). `is_enrolled` is decided at import and stored, so
 changing a threshold later does not re-tier existing Faces, and a Video's support rule is not derivable from quality.
 
-`face_01` makes `(repository_id, asset_id, checksum)` unique: the same crop twice in one asset is a
+`face_01` makes `(asset_id, repository_id, checksum)` unique: the same crop twice in one asset is a
 `DuplicateException`, while two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
 `face_02` is `(person_id, detection_score)` for a person's faces.
 
@@ -191,7 +193,8 @@ cross rules (box size ≥ smallest face, `hnsw_ef_search` ≥ 4 × `match_count`
 [FaceDetectionTests](../altitude/test/src/altitude/core/integration/FaceDetectionTests.scala) covers detection on the
 `people/` fixtures and the tiers on blurred copies (`TestVideos.frameStill` at `FRAME_BLUR`, `still` at `HEAVY_BLUR`);
 [FaceRecognitionServiceTests](../altitude/test/src/altitude/core/integration/FaceRecognitionServiceTests.scala) covers
-candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`), and the
-Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
+candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`), a stored
+Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset, and the Video rules on clips
+synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
 [FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering.
 Gaps are listed in [test-coverage.md](test-coverage.md).

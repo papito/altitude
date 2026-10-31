@@ -1032,7 +1032,8 @@ import altitude.core.util.*
     /**
      * Setup:
      *
-     * One imported asset, and a lookup of the repository's live asset with its checksum, the flag bound as the DAOs bind it.
+     * One imported asset seeded into 5,000 copies for the planner, and a lookup of the repository's live asset with its checksum,
+     * the flag bound as the DAOs bind it.
      *
      * Assertions:
      *
@@ -1044,8 +1045,12 @@ import altitude.core.util.*
     val asset = importAsset("beach.jpg")
     val repositoryId = RequestContext.getRepository.persistedId
 
-    val plan = lookupPlanOf(
-      sql"SELECT id FROM asset WHERE repository_id = $repositoryId AND checksum = ${asset.checksum} AND is_recycled = ${false}")
+    // Over a handful of rows the planner weighs the indexes that lead with the repository by their size, and `asset_01`, with its
+    // 64-character keys, can be the larger; at scale the checksum is the one selective column
+    val plan = atScale(seedCopies(asset.persistedId, copies = 5000, folders = 500)) {
+      lookupPlanOf(
+        sql"SELECT id FROM asset WHERE repository_id = $repositoryId AND checksum = ${asset.checksum} AND is_recycled = ${false}")
+    }
 
     withClue(plan)(plan should include("asset_01"))
   }

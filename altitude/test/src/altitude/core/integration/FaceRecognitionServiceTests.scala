@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestContext
 import altitude.test.TestVideos
 import java.awt.Color
 import java.awt.RenderingHints
@@ -380,6 +381,25 @@ import altitude.core.service.FaceRecognitionService
     people.size should be(2)
   }
 
+  test("A Face's checksum is the SHA-256 of its crop as stored") {
+
+    /**
+     * Setup:
+     *
+     * An import of `people/meme-ben2.png`, which stores its Face and the Face's files.
+     *
+     * Assertions:
+     *
+     * The Face read back from the repository has, as its checksum, the SHA-256 in lowercase hex of the crop file the import wrote
+     * to the file store.
+     */
+    val importedAsset: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/meme-ben2.png"))
+
+    val face = testApp.service.person.getAssetFaces(importedAsset.persistedId).head
+    val crop = testApp.service.fileStore.getDetectedFaceById(face.persistedId).data
+    face.checksum shouldBe IntegrationTestUtil.jdkSha256Hex(crop)
+  }
+
   test("Faces rolled back with their asset leave no files behind") {
 
     /**
@@ -452,7 +472,7 @@ import altitude.core.service.FaceRecognitionService
       width = 10,
       height = 10,
       detectionScore = 0.9,
-      checksum = Random.nextInt(),
+      checksum = TestContext.randomChecksum,
       features = features,
       quality = 20.0,
       isEnrolled = isEnrolled)
