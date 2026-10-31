@@ -41,7 +41,9 @@
 
 @for(p <- person) {
 <div class="actions">
-    @if(!p.isBadMatch && p.numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD) {
+    @* A successful hide or show announces PEOPLE_CHANGED_EVENT (js/listeners/htmx-requests.js), so the People tab moves
+       the person between its buckets *@
+    @if(!p.isBadMatch && p.isMatched) {
         @if(p.isHidden) {
             <a href="#"
                class="mark-visible"
@@ -49,6 +51,8 @@
                hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{p.persistedId}/show"
                hx-swap="innerHTML"
                hx-target="#person"
+               data-app-success-event="PEOPLE_CHANGED_EVENT"
+               data-app-success-detail='{"personId":"@{p.persistedId}"}'
             ><i class="fas fa-eye" aria-hidden="true"></i>Show</a>
         } else {
             <a href="#"
@@ -57,11 +61,14 @@
                hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{p.persistedId}/hide"
                hx-swap="innerHTML"
                hx-target="#person"
+               data-app-success-event="PEOPLE_CHANGED_EVENT"
+               data-app-success-detail='{"personId":"@{p.persistedId}"}'
             ><i class="fas fa-eye-slash" aria-hidden="true"></i>Hide</a>
         }
     }
 
-    @* A successful discard announces itself (js/listeners/htmx-requests.js), and the people list drops the person *@
+    @* A successful discard announces itself (js/listeners/htmx-requests.js); its listener re-dispatches PEOPLE_CHANGED_EVENT, and
+       the People tab reloads its panes *@
     @if(p.numOfFaces < FaceRecognition.MIN_FACES_THRESHOLD && !p.isBadMatch) {
         <a href="#"
            class="mark-discarded"

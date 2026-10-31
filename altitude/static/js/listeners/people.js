@@ -11,8 +11,11 @@ const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
 
 /**
  * People events: merging (a drop of one person onto another confirms in a modal, whose success
- * shows the merged person), the inline name editor, cover face and discard follow-up on the
- * people list.
+ * shows the merged person), the inline name editor, and the follow-up on the People tab. A
+ * person's cell may be in both of the tab's panes, so a rename and a cover face change patch
+ * every cell of the person, found by `data-person-id` under `#people`. A merge and a discard
+ * move people between the People buckets instead, so they announce `peopleChanged`, which the
+ * tab's `peopleTab` component answers by reloading each pane with its own buckets.
  */
 export function registerPeopleListeners(app) {
     document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
@@ -35,12 +38,9 @@ export function registerPeopleListeners(app) {
     })
 
     document.body.addEventListener(Const.events.personMerged, (event) => {
-        const mergeSourceId = event.detail.mergeSourceId
-        const sourcePersonEl = htmx.find(`#person-${mergeSourceId}`)
-
-        if (sourcePersonEl) {
-            sourcePersonEl.remove()
-        }
+        app.dispatch(Const.events.peopleChanged, {
+            personId: event.detail.mergeSourceId,
+        })
 
         showSuccessSnackBar("Person merged successfully")
 
@@ -78,36 +78,43 @@ export function registerPeopleListeners(app) {
         })
     })
 
+    // A hidden person's name link carries an aria-label, which the server renders again on the
+    // next reload; the patch leaves it alone
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
-        const personId = event.detail.personId
         const newPersonName = event.detail.newPersonName
-        const personNameEl = htmx.find(`#person-${personId} .name a`)
 
-        if (!personNameEl) {
-            return
-        }
-
-        personNameEl.textContent = newPersonName
-        personNameEl.classList.remove("unknown")
+        personCellElements(event.detail.personId, ".name a").forEach(
+            (personNameEl) => {
+                personNameEl.textContent = newPersonName
+                personNameEl.classList.remove("unknown")
+            },
+        )
     })
 
     document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {
-        const personId = event.detail.personId
-        const faceId = event.detail.faceId
-        const imageEl = htmx.find(`#person-${personId} .image img`)
+        const src = `/content/r/${app.context.getRepoId()}/face/${event.detail.faceId}`
 
-        if (!imageEl) {
-            return
-        }
-
-        imageEl.src = `/content/r/${app.context.getRepoId()}/face/${faceId}`
+        personCellElements(event.detail.personId, ".image img").forEach(
+            (imageEl) => {
+                imageEl.src = src
+            },
+        )
     })
 
     document.body.addEventListener(
         Const.events.personMarkedAsBadMatch,
         (event) => {
-            htmx.find(`#person-${event.detail.personId}`)?.remove()
+            app.dispatch(Const.events.peopleChanged, {
+                personId: event.detail.personId,
+            })
         },
+    )
+}
+
+/** The elements matching `selector` inside every cell of the person on the People tab */
+function personCellElements(personId, selector) {
+    return document.querySelectorAll(
+        `#people [data-person-id="${personId}"] ${selector}`,
     )
 }
 

@@ -43,6 +43,8 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
+        // A person was merged, hidden, shown or discarded; the People tab reloads its panes
+        peopleChanged: "PEOPLE_CHANGED_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
@@ -104,6 +106,9 @@ export const Const = {
         // active tweak set, the snapshots, the theme, the panel's dock and open state and the adopted
         // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`
         designTweaks: "designTweaks",
+        // The People tab's remembered state (js/alpine/components/people-tab.js): each pane's
+        // People buckets and whether Split view is on
+        peopleView: "peopleView",
     },
 
     sessionStore: {
@@ -125,6 +130,20 @@ export const Const = {
     http: {
         // JSON the server adds to a dialog operation's success detail (`Api.Field.SUCCESS_DETAIL_HEADER`)
         successDetailHeader: "App-Success-Detail",
+    },
+
+    people: {
+        // The People bucket names are the server's (`Const.PeopleBucket`), sent as the `buckets` parameter
+        buckets: {
+            matched: "matched",
+            hidden: "hidden",
+            unmatched: "unmatched",
+        },
+        // The two panes of the People tab, as `data-app-people-pane` names them
+        panes: {
+            top: "top",
+            bottom: "bottom",
+        },
     },
 }
 

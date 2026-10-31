@@ -113,9 +113,6 @@ object Api:
       val SRC_PERSON_ID = "srcPersonId"
       val DEST_PERSON_ID = "destPersonId"
 
-    object People:
-      val TYPE_FILTER = "typeFilter"
-
     object Search:
       val PERSON = "person"
       val QUERY_TEXT = "q"

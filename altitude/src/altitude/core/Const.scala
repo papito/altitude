@@ -107,11 +107,12 @@ object Const:
     val STAGING = "staging"
     val MODELS = "models"
 
-  object PeopleTypeFilter:
-    val ALL = "all"
+  /** The People buckets of the People tab; a listing is the union of the buckets asked for (see docs/faces.md, People) */
+  object PeopleBucket:
+    val MATCHED = "matched"
+    val UNMATCHED = "unmatched"
     val HIDDEN = "hidden"
-    val COMPLETE = "complete"
-    val INCOMPLETE = "incomplete"
+    val ALL: Set[String] = Set(MATCHED, UNMATCHED, HIDDEN)
 
   /** MESSAGES */
   object Msg:

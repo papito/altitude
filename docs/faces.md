@@ -149,8 +149,11 @@ themselves go with the asset on purge, and their files with them, except the cov
 pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the counts it
 added are given back, its faces and their files go, and a person it started, left with no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
 
-The People tab (`PeopleActionController`) lists people by `Const.PeopleTypeFilter`: complete (at least
-`Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named), incomplete, hidden. Its actions:
+The People tab (`PeopleActionController`) lists people by People bucket (`Const.PeopleBucket`; the glossary in
+`CONTEXT.md` has the terms): Matched (at least `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named),
+Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a discarded person is in none. The list
+(`PersonService.getInBuckets`, one query) is the union of the buckets switched on, Matched alone by default; Hide / Show,
+offered to a Matched person (`Person.isMatched`), moves it between buckets. Its actions:
 
 - **Name**: `updateName` sets `is_named`; a named person is listed whatever their count.
 - **Cover face**: `getPersonFaces` (by detection score) offers the candidates, `setFaceAsCover` picks one.

@@ -5,10 +5,12 @@ import altitude.core.models.Person
 
 trait PersonDao extends BaseDao[Person]:
   def getAll: Map[String, Person]
-  def getAllNotDiscarded: Map[String, Person]
-  def getAllAboveThreshold: List[Person]
-  def getAllBelowThreshold: List[Person]
-  def getAllHidden: List[Person]
+
+  /**
+   * The people in any of the given People buckets (`Const.PeopleBucket`), named first and then by sort name. An empty set is an
+   * empty list; a name that is no bucket is an `IllegalArgumentException`.
+   */
+  def getInBuckets(buckets: Set[String]): List[Person]
   def recycleFacesForAssets(assetIds: Set[String]): Unit
   def restoreFacesForAssets(assetIds: Set[String]): Unit
 

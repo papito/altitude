@@ -12,6 +12,7 @@ import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const.FaceRecognition
+import altitude.core.Const.PeopleBucket
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.RequestContext
@@ -199,15 +200,15 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The person is below the face threshold when added and above it once the Faces are in.
+     * The person is not Matched when added and is once the Faces are in.
      */
     val person: Person = testApp.service.person.addPerson(Person())
-    person.isAboveThreshold should be(false)
+    person.isMatched should be(false)
 
     testContext.addTestFacesAndAssets(person, FaceRecognition.MIN_FACES_THRESHOLD)
 
     val updatedPerson: Person = testApp.service.person.getById(person.persistedId)
-    updatedPerson.isAboveThreshold should be(true)
+    updatedPerson.isMatched should be(true)
   }
 
   test("Person has cover face assigned") {
@@ -386,7 +387,7 @@ import altitude.core.util.Util
     val mergedB: Person = testApp.service.person.merge(dest = personB, source = personC)
     // B is trained on C faces
     mergedB.numOfFaces should be(NUM_OF_FACES * 2)
-    mergedB.isAboveThreshold should be(true)
+    mergedB.isMatched should be(true)
 
     var bFacesInDb: List[Face] = testApp.service.person.getPersonFaces(mergedB.persistedId)
     bFacesInDb.size should be(NUM_OF_FACES * 2)
@@ -610,11 +611,11 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two Persons with six test Faces each, both above the face threshold; one is then hidden.
+     * Two Persons with six test Faces each, both Matched; one is then hidden.
      *
      * Assertions:
      *
-     * Listing the people above the threshold returns both before hiding and only the visible one after.
+     * Listing the Matched bucket returns both before hiding and only the visible one after.
      */
     val person: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(person, 6)
@@ -622,9 +623,138 @@ import altitude.core.util.Util
     val hiddenPerson: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(hiddenPerson, 6)
 
-    testApp.service.person.getAllAboveThreshold.size should be(2)
+    testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)).size should be(2)
     testApp.service.person.setVisibility(hiddenPerson, isHidden = true)
-    testApp.service.person.getAllAboveThreshold.size should be(1)
+    testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)).size should be(1)
+  }
+
+  test("A hidden person is in the Hidden bucket alone") {
+
+    /**
+     * Setup:
+     *
+     * A hidden unnamed Person with two test Faces, below the face threshold, and a hidden named Person with six.
+     *
+     * Assertions:
+     *
+     * Both are listed by the Hidden bucket and by neither the Unmatched nor the Matched bucket, whatever their count or name.
+     */
+    val fewFaces: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(fewFaces, 2)
+    testApp.service.person.setVisibility(fewFaces, isHidden = true)
+
+    val named: Person = testApp.service.person.addPerson(Person(name = Some("Hidden Harry")))
+    testContext.addTestFacesAndAssets(named, 6)
+    testApp.service.person.setVisibility(named, isHidden = true)
+
+    def ids(buckets: Set[String]): Set[String] = testApp.service.person.getInBuckets(buckets).map(_.persistedId).toSet
+
+    ids(Set(PeopleBucket.HIDDEN)) should be(Set(fewFaces.persistedId, named.persistedId))
+    ids(Set(PeopleBucket.UNMATCHED)) shouldBe empty
+    ids(Set(PeopleBucket.MATCHED)) shouldBe empty
+  }
+
+  test("A named person is Matched whatever the face count") {
+
+    /**
+     * Setup:
+     *
+     * A named Person with one test Face, below the face threshold.
+     *
+     * Assertions:
+     *
+     * The person is listed by the Matched bucket and not by the Unmatched one.
+     */
+    val person: Person = testApp.service.person.addPerson(Person(name = Some("One Face")))
+    testContext.addTestFacesAndAssets(person, 1)
+
+    testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)).map(_.persistedId) should be(List(person.persistedId))
+    testApp.service.person.getInBuckets(Set(PeopleBucket.UNMATCHED)) shouldBe empty
+  }
+
+  test("An unnamed person below the face threshold is Unmatched") {
+
+    /**
+     * Setup:
+     *
+     * An unnamed Person with two test Faces, below the face threshold.
+     *
+     * Assertions:
+     *
+     * The person is listed by the Unmatched bucket and not by the Matched one.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, 2)
+
+    testApp.service.person.getInBuckets(Set(PeopleBucket.UNMATCHED)).map(_.persistedId) should be(List(person.persistedId))
+    testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)) shouldBe empty
+  }
+
+  test("A discarded person is in no bucket") {
+
+    /**
+     * Setup:
+     *
+     * A Person with six test Faces, marked as a bad match.
+     *
+     * Assertions:
+     *
+     * Every bucket together lists no one.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, 6)
+    testApp.service.person.markAsBadMatch(person)
+
+    testApp.service.person.getInBuckets(PeopleBucket.ALL) shouldBe empty
+  }
+
+  test("Every bucket together lists everyone but the discarded") {
+
+    /**
+     * Setup:
+     *
+     * Four People with test Faces: a Matched one (six Faces), an Unmatched one (two), a Hidden one (two), and one marked as a bad
+     * match (six).
+     *
+     * Assertions:
+     *
+     * The three buckets together list the same people as the plain listing less the bad match; no bucket at all lists no one.
+     */
+    val matched: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(matched, 6)
+
+    val unmatched: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(unmatched, 2)
+
+    val hidden: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(hidden, 2)
+    testApp.service.person.setVisibility(hidden, isHidden = true)
+
+    val badMatch: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(badMatch, 6)
+    testApp.service.person.markAsBadMatch(badMatch)
+
+    val everyone: Set[String] = testApp.service.person.getAll.map(_.persistedId).toSet
+    everyone should be(Set(matched, unmatched, hidden, badMatch).map(_.persistedId))
+
+    val inBuckets: Set[String] = testApp.service.person.getInBuckets(PeopleBucket.ALL).map(_.persistedId).toSet
+    inBuckets should be(everyone - badMatch.persistedId)
+
+    testApp.service.person.getInBuckets(Set()) shouldBe empty
+  }
+
+  test("An unknown bucket name is refused") {
+
+    /**
+     * Setup:
+     *
+     * No people; a listing asked for the Matched bucket and a name that is no bucket.
+     *
+     * Assertions:
+     *
+     * The listing is an `IllegalArgumentException`.
+     */
+    intercept[IllegalArgumentException](testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED, "verified")))
   }
 
   test("Hidden person is not returned for an asset") {

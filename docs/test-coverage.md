@@ -424,13 +424,13 @@ Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.sca
 - ✅ Merge people and merge chains, transfer face ownership, zero source counts, preserve/inherit the tested names, and allow reuse of a merged source's name.
 - ✅ Two live people cannot share a name on either engine; a person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover face; listing the live people reads the partial `person_03`.
 - ✅ Recount a merge when two people share one asset; separately recognize multiple occurrences of one person in a single image.
-- ✅ Hide a person from above-threshold and per-asset retrieval; recycle/restore assets without deleting/restoring the wrong face-record set in the tested normal cases.
+- ✅ List people by People bucket (`getInBuckets`): a hidden person is in Hidden alone, a named one is Matched whatever its count, an unnamed one below the threshold is Unmatched, a discarded one is in no bucket, every bucket together equals `getAll` less the discarded, an empty set lists no one, and an unknown bucket name is refused; hide a person from per-asset retrieval; recycle/restore assets without deleting/restoring the wrong face-record set in the tested normal cases.
 - ✅ Preserve explicitly selected cover-face binaries through purge.
 - [ ] Reject self-merge, missing/deleted participants, and foreign-repository participants without changing faces or either person. [CRITICAL]
 - [ ] Inject a failure midway through merge and assert source status, target name/count, and face ownership roll back together. [CRITICAL]
 - [ ] Merge a named source into an unnamed target and assert `isNamed`, sort name, cover selection, and list placement as well as the inherited display name. [MEDIUM]
 - [ ] Verify source deletion/exclusion explicitly after merge, including attempts to merge the same source again. [MEDIUM]
-- [ ] Cover `markAsBadMatch`, unhide, and every bulk-list variant with named/unnamed, hidden, deleted, bad-match, zero-face, and threshold-boundary people. [MEDIUM]
+- [ ] Cover `markAsBadMatch`'s effect on the match candidates, unhide, and the buckets with deleted, zero-face, and threshold-boundary people. [MEDIUM]
 - ✅ `getPersonFaces` returns a person's faces by descending detection score and keeps the best of them under a limit smaller than the person's face count.
 - [ ] Recycle/restore an asset containing multiple faces for a person after a merge; assert the intended distinct-asset versus raw-face count contract remains consistent. [MEDIUM]
 - [ ] Reject assigning a cover face belonging to another person/repository or a nonexistent face; preserve the previous cover. [MEDIUM]

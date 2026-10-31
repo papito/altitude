@@ -91,6 +91,33 @@ join a known Person but never starts one, is never a match candidate, and is
 dropped when it matches nobody.
 _Avoid_: Weak face, Low-quality face in user-facing text.
 
+**Matched person**:
+A Person the library treats as established: at least three Faces, or named.
+Not about face matching: a Matched person is one whose faces have accumulated.
+_Avoid_: Verified, Complete, Above threshold.
+
+**Unmatched person**:
+A Person with fewer than three Faces and no name: a merge candidate or noise.
+_Avoid_: Unverified, Incomplete, Below threshold.
+
+**Hidden person**:
+A Person taken off the People list by the user; its Faces still match. Being
+hidden overrides the tier: a hidden person is neither Matched nor Unmatched in
+the list.
+_Avoid_: Suppressed, Invisible, Archived.
+
+**People bucket**:
+One of Matched, Unmatched or Hidden; every listed Person is in exactly one. The
+People tab shows the union of the buckets switched on, Matched alone by default.
+_Avoid_: Type filter, Quality category, Tier (a Face has a tier, a Person a
+bucket).
+
+**Split view**:
+The People tab divided into two panes, one above the other, each with its own
+People buckets, so a person in one pane can be dragged onto a person in the
+other.
+_Avoid_: Dual pane, Clone, Mirror.
+
 **Results title**:
 The block above the results toolbar naming what the results are scoped to: a
 Person, a folder's path, an album, a Location or the Search text, with the

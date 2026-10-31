@@ -26,7 +26,7 @@ The frontend is organized around a thin composition root in `static/js/frontend-
 Feature logic is split into focused ES module folders instead of accumulating in one large file:
 
 - `static/js/stores/` — Alpine store initialization (`app-stores.js`), including the search parameter set (`search-params.js`) and what `views/includes/html_common.scala.html` binds on every page that includes it (`html-common.js`: the `modal`, `imageDetailLoading` and `snackbar` stores and the focus plugin)
-- `static/js/alpine/components/` — Alpine components (`date-group-selectable.js`, `context-menu.js`), registered from its `index.js` before Alpine starts; asset cells have no component, selection is a reactive set of IDs (`static/js/search-results/selection.js`)
+- `static/js/alpine/components/` — Alpine components (`date-group-selectable.js`, `context-menu.js`, `view-settings.js`, `people-tab.js`), registered from its `index.js` before Alpine starts; asset cells have no component, selection is a reactive set of IDs (`static/js/search-results/selection.js`)
 - `static/js/fragments/` — declarative HTMX fragment hydration (`data-app-fragment="..."`), including the modal dialog operation lifecycle (`dialog-operations.js`)
 - `static/js/listeners/` — `document.body` custom-event wiring per domain, and the one rule for every htmx request's outcome (`htmx-requests.js`: failures to the snackbar, declared `data-app-success-event`s dispatched, tab selection, fragment hydration)
 - `static/js/assets/` — asset mutation/action flows (move, recycle, purge, restore)

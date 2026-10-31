@@ -59,7 +59,8 @@ is the same shape for the Albums tab (`static/css/htmx/albums.css`): the two add
 (`data-app-fragment="album-list"`) that `js/common/album-list.js` renders (see **Albums** below), and
 `htmx/locations.scala.html` for the Locations tab (`static/css/htmx/locations.css`): the `#locationActions` / `#noLocations` hosts
 and the empty `#locationList` host (`data-app-fragment="location-list"`) that `js/common/location-list.js`
-renders (see **Locations** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
+renders (see **Locations** below); `htmx/people.scala.html` (`static/css/htmx/people.css`) is the People tab's shell, whose
+panes' lists the `peopleTab` Alpine component loads from the server (see **People tab** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
 explorer tab that issued a load is marked selected from `htmx:after:request`
 (`js/listeners/htmx-requests.js`). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
 `.asset-count`) live in `core.css`.
@@ -86,7 +87,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside) and `view-settings.js` (the View settings dialog's switches over the grid metadata set); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) and `people-tab.js` (the People tab's buckets, Split view and pane loads); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -109,6 +110,10 @@ before Alpine starts.
 | `Const.context.gridMetadataFields` | Reactive `Set` of metadata field names shown in the grid; persisted in `localStorage` as a JSON array |
 
 Always access the repo ID via `window.ctx.getRepoId()`, not directly from the store.
+
+The People tab's state is no store: its `peopleTab` component holds the buckets of each pane and whether Split view is on
+as component data and remembers them in `localStorage` under `Const.localStore.peopleView`, which nothing else reads
+(see **People tab** below).
 
 ## DOM Addressing Convention
 
@@ -203,8 +208,10 @@ Two-layer event bus, both on `document.body`:
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
-follow-up live in `js/listeners/people.js`; a purge of the recycle bin announces `trashPurged`,
-which refreshes the counts.
+follow-up live in `js/listeners/people.js`: a merge, a hide, a show or a discard announces `peopleChanged`, which the
+People tab answers by reloading each pane with its own buckets (see **People tab**), while a rename and a cover-face
+change patch every cell of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
+`trashPurged`, which refreshes the counts.
 
 ### Full action flow (drag-and-drop example)
 
@@ -267,7 +274,9 @@ repeated across sections is a Twirl reusable block (`@tokenCards(kinds, group)` 
 since Alpine has no template reuse of its own. Twirl reads `@` as its own, so Alpine's shorthand is
 written `@@click`. `html_common` renders the `snackbar` store the same way, on every page that includes it: each
 stack is an `x-for` over the store's `errors` or `notices`, its bindings property reads, single calls on the store
-(`classesOf`, `iconOf`, `isRepeated`, `countOf`, `dismiss`, `syncStack`, `onStackFocusOut`), its events written `x-on:`. The explorer lists (folder tree, albums, Locations) are still rendered by their JavaScript modules.
+(`classesOf`, `iconOf`, `isRepeated`, `countOf`, `dismiss`, `syncStack`, `onStackFocusOut`), its events written `x-on:`. The explorer lists (folder tree, albums, Locations) are still rendered by their JavaScript modules; the People tab's
+`peopleTab` component (`alpine/components/people-tab.js`) renders nothing itself: it holds the tab's remembered state, binds
+the bucket switches and the bottom pane's `x-if` to it, and has htmx load each pane's list (see **People tab** below).
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
@@ -320,7 +329,7 @@ tries the roomier side's options first (the base placement below is always tried
 fallbacks): `flip-block` puts it above when that side is roomy enough, and `@position-try --popover-capped` (below)
 or `--popover-capped-above` caps its height on the roomier side, its content scrolling; the capped-above option
 swaps the block margins as `flip-block` does, so the anchor gap faces the trigger and `--viewport-gap` the viewport's
-top. It follows its trigger as the explorer scrolls and the Split.js divider moves, and
+top. It follows its trigger as the explorer panel (`#explorerPanelContent`, the explorer's scroll container) scrolls and the Split.js divider moves, and
 `position-visibility: anchors-visible` hides it while its row is clipped out of the explorer. An open whose trigger is gone or not displayed marks the host
 `data-unanchored`, placed like the general modal: 100px from the top, centered, its height capped at
 `--viewport-gap` from the bottom. A validation replacement re-hydrates into the open host and only refocuses: the
@@ -634,6 +643,45 @@ it is empty with the label's first segment; a failed search is a snackbar. Leafl
 script (`window.L`), loaded with its stylesheet by the first editor or map (`js/common/vendor-loader.js`); the
 hydrator waits for it and skips a fragment removed meanwhile.
 
+**People tab** — The People tab (`views/htmx/people.scala.html`, `static/css/htmx/people.css`) is a shell the browser
+fills: `#people` (`x-data="peopleTab"`, `js/alpine/components/people-tab.js`; it carries `--face-box`, the face detection
+box size, for the cells) holds one or two panes, `section.pane[data-app-people-pane="top"|"bottom"]` (`#peoplePane-top`,
+`#peoplePane-bottom`, named to assistive tech "Top pane" and "Bottom pane"), each a `.buckets` row (`role="group"`, "People
+buckets") of switches over an empty `.list` host. A switch is the View dialog's pattern,
+a `button[role="switch"]` and a `<label for>` whose click flips it with no script, its id carrying the pane name so the
+labels stay unique; a pane offers Matched, Hidden and Unmatched, the top pane also Split view, labelled "Duplicate Split
+View" with a faint `small.legend` after the label, "(for quick drag-and-drop)", that the switch is `aria-describedby`. The switches are the
+**People buckets** (the glossary in `CONTEXT.md`: Matched person, Unmatched person, Hidden person), three disjoint sets,
+and a pane lists the union of the buckets switched on, Matched alone on a first visit; with none on it shows one `.empty`
+line and no grid. The server renders no switch state, as with View settings: the component asks
+`GET /htmx/people/r/:repoId/list?buckets=matched,hidden` (comma-separated bucket names; a name that is no bucket is a 400)
+through `htmx.ajax` into the pane's `.list`, on init, when a switch flips and when a person changes (the host's
+`hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
+`htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
+may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and an `aria-label`
+("…, hidden") on its name link, an Unmatched person told apart by its orange "Unknown N" name. The remembered state is
+`localStorage` `Const.localStore.peopleView`, `{ split, buckets: { top: [...], bottom?: [...] } }`, written on every flip
+and read once in `init()`, which falls back to the first visit's when it is missing or unreadable and keeps only the
+bucket names the tab knows; the split sizes are taken only as two percentages. The component listens
+for `Const.events.peopleChanged` on `document.body` from `init()` to `destroy()` (the events are dispatched on the body,
+an ancestor of the shell, which a listener on the shell cannot see whatever their bubbling) and reloads each displayed
+pane with its own buckets; a merge, a
+hide, a show and a discard announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
+(in a `@click` handler `$el` is the button). **Split view** renders the bottom pane under `<template x-if="split">` and
+divides the two pane elements, found from `this.$root`, with a vertical Split.js instance (`minSize` 120, sizes remembered in
+`Const.localStore.verticalSplitSizes`, default `[50, 50]`, written on `onDragEnd`), made in `$nextTick` once the pane
+exists; turning it off destroys the instance, which takes its gutter and the inline heights with it, before `split` drops
+the pane, and `destroy()` does the same when another tab replaces the fragment. The bottom pane copies the top's buckets
+the first time Split view is turned on, when it has none remembered; from then on the two are remembered apart, across
+split off and on. `js/dragdrop/people.js` binds `#people .drag-drop` and `#people .dropzone`, which match both panes, so a
+cell dropped on the other pane's cell dispatches `confirmPersonMerge` as any drop does; on drag start the `autoScroll`
+container becomes the dragged cell's `.pane .list` (the scrolling element: the pane itself is `overflow: hidden`), falling
+back to `#explorerPanelContent` for the `#person` cover in the results title. The heights: `#explorerViews` is a grid of
+`auto 1fr` at `height: 100%` (`static/css/pages/index.css`), `#explorerPanelContent` (`min-height: 0; overflow-y: auto`)
+is the explorer's scroll container for every tab, `#people` is `height: 100%`, and a pane is a grid of `auto 1fr` whose
+`.list` scrolls; alone (`.pane:only-of-type`) it is `height: 100%`, and with two Split.js sets each pane's height inline.
+Nothing of the tab is server state: switching to another tab and back restores the panes from `localStorage`.
+
 **Map view** — `layout` (`grid` | `map`) is a search parameter (see **Search parameters**). The
 toolbar's `#layoutToggle` in `includes/search_results` (a `.toggle-group` of `core.css`) is two
 `data-app-search="click"` buttons with a literal `data-app-search-layout`, the current one `aria-pressed="true"`. In map layout the server
@@ -861,7 +909,10 @@ padded `--space-8` by `--space-6` (it paints the pane's background, `--theme-neu
 does not show through it while it sticks). The scopes:
 - a **person** through `htmx/person.scala.html`: `#person`, the block itself, is the face merge's drop zone (`.dropzone`,
   `js/dragdrop/people.js`) and the swap target of the Hide / Show / Discard links, whose responses are
-  `htmx/person_inner`, the whole inside of the block. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
+  `htmx/person_inner`, the whole inside of the block. The Hide / Show links declare
+  `data-app-success-event="PEOPLE_CHANGED_EVENT"` (the person id as the detail) as the Discard link declares
+  `PERSON_MARKED_AS_BAD_MATCH_EVENT`, so `js/listeners/htmx-requests.js` announces a successful one and the People tab
+  moves the person between its panes. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
   that opens the Choose cover face modal) comes before the text, the Hide / Show / Discard link (`.actions`) after it, and
   the subtitle is the face count. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
   (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`) with its pencil,
@@ -1500,6 +1551,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the general modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
+| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of each pane and Split view (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the vertical Split.js instance, the reload on `peopleChanged` |
+| `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |

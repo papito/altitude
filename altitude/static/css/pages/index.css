@@ -20,8 +20,20 @@ body:where(.index) {
   padding-top: var(--control-vertical-space);
 }
 
+/* The tab list stays put and the panel scrolls: the panel, not #explorer, is the explorer's scroll container, so a
+   vertical Split.js inside it has a definite height to divide. #explorer's padding-top sits inside its height
+   (core.css sets border-box on every element), so 100% fits under it and #explorer's own overflow never engages */
 #explorerViews {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
   text-shadow: var(--text-shadow);
+}
+
+#explorerPanelContent {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 #content {

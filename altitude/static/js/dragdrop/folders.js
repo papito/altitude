@@ -7,7 +7,9 @@ export function bindFolderDragDrop({ dispatch }) {
         // drag starting on the icon would break its single/double-click expansion gestures
         ignoreFrom: ".menu-ctrl, .expand-ctrl",
         inertia: true,
-        autoScroll: { container: document.querySelector("#explorer") },
+        autoScroll: {
+            container: document.querySelector("#explorerPanelContent"),
+        },
 
         listeners: {
             move: dragMoveListener,

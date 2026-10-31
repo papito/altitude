@@ -1,65 +1,54 @@
-@import altitude.core.RequestContext
-@import altitude.core.models.Person
 @import altitude.core.Const
-@import altitude.core.Api
 
-@(people: List[Person], typeFilter: String)
+@()
 
-@* One request for the whole group: the checked radio's value is the filter (hx-include) *@
-<div id="peopleTypeFilter">
-    <div class="radio-group"
-         hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab"
-         hx-trigger="change"
-         hx-target="#explorerPanelContent"
-         hx-swap="innerHTML"
-         hx-include="[name='@{Api.Field.People.TYPE_FILTER}']:checked">
-        @for((value, label) <- Seq(
-            Const.PeopleTypeFilter.COMPLETE -> "Verified",
-            Const.PeopleTypeFilter.HIDDEN -> "Hidden",
-            Const.PeopleTypeFilter.INCOMPLETE -> "Unverified",
-            Const.PeopleTypeFilter.ALL -> "All")) {
-        <label>
-            <input type="radio" @if(typeFilter == value) {checked}
-                   name="@{Api.Field.People.TYPE_FILTER}"
-                   value="@{value}">
-            @label
-        </label>
-        }
+@* The People tab's shell. The browser owns the buckets and the split: the `peopleTab` Alpine component
+   (js/alpine/components/people-tab.js) remembers which People buckets each pane shows and whether Split view is on,
+   and loads each pane's list itself, so nothing here is a list; the server renders only htmx/people_list, per pane,
+   for the buckets the pane asks for. A pane is a `section.pane` named by `data-app-people-pane`, which is how the
+   component finds it: its bucket switches over the empty `.list` host. The bottom pane exists only while Split view
+   is on (`x-if`, one root element, the section), and Split.js divides the two panes vertically. The `.list` host
+   is the source of the component's `htmx.ajax` loads, so its `hx-sync="replace"` makes a newer load of the pane
+   abort the one in flight: the latest bucket set always lands. `#people` keeps
+   `--face-box`, the face detection box size, for the cells (static/css/htmx/people.css) and the design tweaks
+   panel's control. A switch is the View dialog's: a `button[role="switch"]` and a `<label for>`, whose click flips
+   the switch with no script; the ids carry the pane name so the labels' `for` stay unique across the two panes. A switch
+   may carry a legend, a faint line after its label that the switch is described by (`aria-describedby`), so the label
+   stays the switch's name; the Duplicate Split View switch has one. *@
+
+@switch(id: String, label: String, checked: String, flip: String, legend: String = "") = {
+  <div>
+    <button type="button"
+            role="switch"
+            class="switch"
+            id="@id"
+            @if(legend.nonEmpty) { aria-describedby="@{id}Legend" }
+            :aria-checked="@checked"
+            @@click="@flip"></button>
+    <label for="@id">@label</label>
+    @if(legend.nonEmpty) { <small class="legend" id="@{id}Legend">@legend</small> }
+  </div>
+}
+
+@bucketSwitch(pane: String, bucket: String, label: String) = {
+  @switch(s"peopleBucket-$pane-$bucket", label, s"isOn('$pane', '$bucket')", s"toggle('$pane', '$bucket')")
+}
+
+@pane(name: String) = {
+  <section class="pane" id="peoplePane-@name" data-app-people-pane="@name" aria-label="@{name.capitalize} pane">
+    <div class="buckets" role="group" aria-label="People buckets">
+      @bucketSwitch(name, Const.PeopleBucket.MATCHED, "Matched")
+      @bucketSwitch(name, Const.PeopleBucket.HIDDEN, "Hidden")
+      @bucketSwitch(name, Const.PeopleBucket.UNMATCHED, "Unmatched")
+      @if(name == "top") {
+        @switch("peopleSplitView", "Duplicate Split View", "split", "toggleSplit()", legend = "(for quick drag-and-drop)")
+      }
     </div>
+    <div class="list" hx-sync="replace"></div>
+  </section>
+}
+
+<div id="people" x-data="peopleTab" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
+  @pane("top")
+  <template x-if="split">@pane("bottom")</template>
 </div>
-
-<div id="peopleList">
-    <div id="people" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
-        <div class="grid">
-            @for(person <- people) {
-            <div id="person-@{person.persistedId}"
-                 class="cell drag-drop dropzone"
-                 data-person-id="@{person.persistedId}">
-                <div class="image">
-                    <a href="#"
-                       data-app-search="click"
-                       data-app-search-person-id="@{person.persistedId}">
-                    <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}">
-                    </a>
-                </div>
-                <div class="name">
-                    <span>
-                        <a href="#"
-                           @if(!person.isNamed) {
-                           class="unknown"
-                           }
-                           data-app-search="click"
-                           data-app-search-person-id="@{person.persistedId}">
-                            @{person.name.getOrElse("")} <span>(@{person.numOfFaces})</span>
-                        </a>
-                    </span>
-                </div>
-            </div>
-            }
-        </div>
-    </div>
-</div>
-
-
-
-
