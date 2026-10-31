@@ -871,8 +871,8 @@ then the loaded pages, then nothing. Once a page is appended, while the loaded c
 `MAX_LOADED_CELLS` (600) and more than two pages are loaded, the topmost page is folded unless one of
 its cells is within a viewport (`window.innerHeight` above or below, the observers' own margin, so a
 folded page is not reloaded at once): its nodes make way for one
-`<div class="page-spacer" data-app-search-after="<cursor>">` (`""` for the first page; `flex-basis:
-100%` in `includes/search_results.scala.html`) as tall as the top of its first cell to the bottom of
+`<div class="page-spacer" data-app-search-after="<cursor>">` (`""` for the first page; `grid-column:
+1 / -1` in `static/css/includes/search_results.css`) as tall as the top of its first cell to the bottom of
 its last (headers left out: a header above the pane sticks to the pane's top, so its box says nothing
 of where the page is), which keeps the scrollbar proportional. A top page none of whose cells is in
 the grid any more (an action removed them) is discarded rather than folded. Spacers are observed with
@@ -933,7 +933,7 @@ the grouping and the layout stay, so a person selected in Triage goes back to al
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a flex row: the total holds the left edge (`margin-right: auto`) and the View, Group and Sort menus and the layout toggle gather at the right, `--space-9` apart. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a six-column grid (`1fr auto auto auto auto 1fr`, `--space-9` gaps): the total holds the left edge of the first track, the layout toggle and the View, Group and Sort menus take the four middle tracks, and the last track is empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The side tracks are equal, so the controls sit on the bar's center whatever the sides measure. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
 the first of person, folder, album, Location and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
 

@@ -113,10 +113,20 @@ _Avoid_: Type filter, Quality category, Tier (a Face has a tier, a Person a
 bucket).
 
 **Split view**:
-The People tab divided into two panes, one above the other, each with its own
-People buckets, so a person in one pane can be dragged onto a person in the
-other.
+The People tab divided into two panes, each with its own People buckets, so a
+person in one pane can be dragged onto a person in the other. The panes stack
+when the Dock side is left or right and sit side by side when it is top or
+bottom.
 _Avoid_: Dual pane, Clone, Mirror.
+
+**Main pane**:
+The People tab's first pane, always shown, which carries the Split view switch.
+_Avoid_: Top pane, Left pane, Primary pane.
+
+**Duplicate pane**:
+The People tab's second pane, shown only in Split view, with People buckets of
+its own.
+_Avoid_: Bottom pane, Right pane, Secondary pane, Clone.
 
 **Results title**:
 The block above the results toolbar naming what the results are scoped to: a
@@ -171,6 +181,11 @@ _Avoid_: Hot setting, Dynamic setting.
 A Setting whose new value is used only after the next server start. Until then
 it has both a saved value and a running value.
 _Avoid_: Static setting, Boot setting.
+
+**Dock side**:
+Where the explorer sits against the results: left, right, top or bottom. The
+explorer is docked to a side; the results take the rest.
+_Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
 
 **View settings**:
 Which details the grid shows under each asset, chosen per browser tab in the

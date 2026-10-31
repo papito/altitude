@@ -1,8 +1,13 @@
+/* The last track of the search toolbar's grid (includes/search_results.css), at its right edge */
 #purgeRecycleBin {
-    display: grid;
-    grid-template-columns: 1fr;
-    place-items: center;
-    margin-top: var(--control-vertical-space);
+    justify-self: end;
+}
+
+/* The small action button's size, so the bar's height holds; the class itself would trade the error fill for the
+   neutral one */
+#purgeRecycleBin .action-button {
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-small);
 }
 
 #purgeRecycleBinConfirm {

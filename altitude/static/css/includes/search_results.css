@@ -5,16 +5,21 @@
   position: sticky;
   top: var(--results-title-height, 0);
   z-index: 2;
-  padding: var(--space-6) var(--space-7);
-  display: flex;
+  padding: var(--space-6) var(--space-8);
+  /* A grid whose side tracks are equal: the total sits in the first, the last is empty (the trash view's Purge button
+     holds its right edge, htmx/trashbin_header.css), so the layout toggle and the View, Group and Sort menus between
+     them sit on the bar's center whatever the sides measure (a flex row with an auto margin on the total would center
+     them in what it leaves instead); the gap keeps the controls --space-9 apart */
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto 1fr;
   align-items: center;
   gap: var(--space-9);
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
-/* The total holds the left edge; the View, Group and Sort menus and the layout toggle gather at the right */
+/* The total holds the left edge */
 #searchControl .total {
-  margin-right: auto;
+  justify-self: start;
 }
 
 /* The total's "Total:" label is an eyebrow before the count, which is a step up from the body text so it reads at a
@@ -158,13 +163,16 @@
 }
 
 #assets {
+  --cell-box: calc(var(--preview-box) + 10px);
   padding: 0 var(--space-5) var(--space-5);
-  display: flex;
-  flex-wrap: wrap;
-  flex-direction: row;
-  /* Cells fill each row from the left, so a group's short last row lines up under the rest of it
-     and under its header rather than floating in the middle of the pane */
-  justify-content: flex-start;
+  display: grid;
+  /* As many columns as fit, each a cell's margin box, and the remainder split evenly between the left and right
+     edges, so the grid stays centered at any pane width. Cells still fill the columns from the left, so a
+     group's short last row lines up under the rest of it and under its header rather than floating in the
+     middle of the pane; auto-fill keeps the empty columns of a short result, so the left edge does not move
+     with the count */
+  grid-template-columns: repeat(auto-fill, calc(var(--cell-box) + var(--space-2) * 2));
+  justify-content: center;
   /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
   isolation: isolate;
   /* The page window (js/search-results/page-window.js) folds, reloads and drops pages above and below the viewport
@@ -174,7 +182,7 @@
 
 /* A page folded above the window: a full row of about the page's height, carrying the page's cursor */
 #assets .page-spacer {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
 }
 
 /* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
@@ -182,7 +190,7 @@
    Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives - which
    reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
 #assets .result-group {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   position: sticky;
   top: var(--results-sticky-height, 0);
   z-index: 1;
@@ -225,10 +233,9 @@
 
 #assets .cell {
   display: grid;
-  /* --preview-box is the preview size, set on #assets by includes/search_results.scala.html */
-  width: calc(var(--preview-box) + 10px);
+  width: var(--cell-box);
   place-items: center;
-  grid-template-rows: calc(var(--preview-box) + 10px) auto;
+  grid-template-rows: var(--cell-box) auto;
 }
 
 #assets .cell div.selected.masked {

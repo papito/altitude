@@ -63,10 +63,6 @@
 }
 }
 
-@if(view == Const.Search.View.TRASHBIN) {
-@htmx.html.trashbin_header()
-}
-
 <div id="searchControl" x-data>
   <div class="total">
     <div>
@@ -128,6 +124,10 @@
     </div>
   </div>
 
+  @* The trash view's Purge button holds the right edge of the toolbar, in the last track of its grid (includes/search_results.css) *@
+  @if(view == Const.Search.View.TRASHBIN) {
+  @htmx.html.trashbin_header()
+  }
 </div>
 
 @if(layout == Const.Search.Layout.MAP) {
