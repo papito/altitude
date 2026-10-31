@@ -4,6 +4,12 @@
 @* `current` is the nav entry of the view shown (a `Const.NavEntry` key) *@
 @(stats: Stats, current: String)
 
+@* An option of the Dock side menu: its glyph (includes/dock_glyphs) and its label. The pick is the `data-app-dock-side`
+   click js/common/explorer-dock.js takes; nothing here is a search trigger *@
+@dockOption(side: String, label: String) = {
+  <button type="button" data-app-dock-side="@side"><svg class="glyph" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
+}
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -11,6 +17,9 @@
     <title>ALTITUDE</title>
 
     @includes.html.header_common()
+    @* The Dock side and the explorer's share are written on <html> before the first paint, from what this browser
+       remembers under the `data-key` (js/common/explorer-dock.js keeps them from then on) *@
+    <script src="/static/js/explorer-dock-boot.js" data-key="explorerDock"></script>
     <script src="/static/js/lib/interact.min.js" defer></script>
     <script src="/static/js/lib/json-enc.js" defer></script>
   </head>
@@ -22,62 +31,80 @@
 
     <main>
       @includes.html.html_common()
+      @includes.html.dock_glyphs()
 
-      <div id="explorer" class="split content split-horizontal">
-        <div id="explorerViews" class="content">
-          @* Each tab is the link itself. A successful tab load marks its tab selected
-             (js/listeners/htmx-requests.js); the initial tab is loaded the same way below *@
-          <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
-            <a id="foldersTab"
-               role="tab"
-               aria-selected="false"
-               href="#folders"
-               hx-target="#explorerPanelContent"
-               hx-swap="innerHTML"
-               hx-trigger="click"
-               hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab">
-              <i class="fas fa-folder"></i> Folders
-            </a>
+      <div id="explorer">
+        <div id="explorerViews">
+          @* The header: the tab list, hidden in triage, and the row's end. Each tab is the link itself. A successful
+             tab load marks its tab selected (js/listeners/htmx-requests.js); the initial tab is loaded the same way
+             below *@
+          <div id="explorerHeader">
+            <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
+              <a id="foldersTab"
+                 role="tab"
+                 aria-selected="false"
+                 href="#folders"
+                 hx-target="#explorerPanelContent"
+                 hx-swap="innerHTML"
+                 hx-trigger="click"
+                 hx-get="/htmx/folder/r/@{RequestContext.getRepository.persistedId}/tab">
+                <i class="fas fa-folder"></i> Folders
+              </a>
 
-            <a id="albumsTab"
-               role="tab"
-               aria-selected="false"
-               href="#albums"
-               hx-target="#explorerPanelContent"
-               hx-swap="innerHTML"
-               hx-trigger="click"
-               hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab">
-              <i class="fas fa-images"></i> Albums
-            </a>
+              <a id="albumsTab"
+                 role="tab"
+                 aria-selected="false"
+                 href="#albums"
+                 hx-target="#explorerPanelContent"
+                 hx-swap="innerHTML"
+                 hx-trigger="click"
+                 hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab">
+                <i class="fas fa-images"></i> Albums
+              </a>
 
-            <a id="peopleTab"
-               role="tab"
-               aria-selected="false"
-               href="#people"
-               hx-target="#explorerPanelContent"
-               hx-swap="innerHTML"
-               hx-trigger="click"
-               hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab">
-              <i class="fas fa-users"></i> People
-            </a>
+              <a id="peopleTab"
+                 role="tab"
+                 aria-selected="false"
+                 href="#people"
+                 hx-target="#explorerPanelContent"
+                 hx-swap="innerHTML"
+                 hx-trigger="click"
+                 hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/tab">
+                <i class="fas fa-users"></i> People
+              </a>
 
               <a id="locationsTab"
-              role="tab"
-              aria-selected="false"
-              href="#locations"
-              hx-target="#explorerPanelContent"
-              hx-swap="innerHTML"
-              hx-trigger="click"
-              hx-get="/htmx/location/r/@{RequestContext.getRepository.persistedId}/tab">
-                  <i class="fas fa-map-marker-alt"></i> Locations
+                 role="tab"
+                 aria-selected="false"
+                 href="#locations"
+                 hx-target="#explorerPanelContent"
+                 hx-swap="innerHTML"
+                 hx-trigger="click"
+                 hx-get="/htmx/location/r/@{RequestContext.getRepository.persistedId}/tab">
+                <i class="fas fa-map-marker-alt"></i> Locations
               </a>
+            </div>
+
+            @* The Dock side menu, at the row's end: a compact choice menu (js/common/context-menu-markup.js) whose
+               trigger shows the current side's glyph alone; js/common/explorer-dock.js checks the current option and
+               keeps the trigger's glyph on every side change. Built by the page's hydration (ensureChoiceMenus) *@
+            <div id="dockSideMenuHost" data-choice-menu="Dock side" data-choice-menu-compact>
+              @dockOption("left", "Left")
+              @dockOption("right", "Right")
+              @dockOption("top", "Top")
+              @dockOption("bottom", "Bottom")
+            </div>
           </div>
 
           <div id="explorerPanelContent" role="tabpanel" class="tab-content"></div>
         </div>
       </div>
 
-      <div id="content" class="split content split-horizontal"></div>
+      @* The divider between the explorer and the results, in the grid's gutter area; js/common/explorer-dock.js drags
+         it, moves it with the arrow keys and keeps its separator state current *@
+      <div id="explorerDivider" class="divider" role="separator" aria-controls="explorer" aria-label="Explorer size" tabindex="0"></div>
+
+      <div id="content"></div>
     </main>
 
     <footer x-data>
@@ -87,7 +114,7 @@
     <script type="module">
       "use strict"
 
-      import { initExplorerSplit } from "/static/js/common/explorer-split.js"
+      import { initExplorerDock } from "/static/js/common/explorer-dock.js"
       import { Const } from "/static/js/constants.js"
       import { initApp } from "/static/js/app.js"
       import { runSearch } from "/static/js/search-results/search.js"
@@ -119,9 +146,9 @@
            */
           window.ctx.loadMetadataFieldViewSettingsFromStore()
 
-          // The explorer and the content area split at the remembered sizes; the trash bin hides
-          // the explorer instead (js/common/explorer-split.js)
-          initExplorerSplit(view)
+          // The divider between the explorer and the results, and the Dock side's upkeep; the trash
+          // bin shows no explorer, so nothing is bound there (js/common/explorer-dock.js)
+          initExplorerDock(view)
 
           // The URL fragment names the explorer tab to open, defaulting to folders; in triage
           // the tab list is hidden, so it is always folders. The tab is loaded exactly as a

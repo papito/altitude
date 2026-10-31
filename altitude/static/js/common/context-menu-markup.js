@@ -158,6 +158,13 @@ export function buildDialogTriggerCtrl({
  * the host's (`fooHost` → `fooBtn`, `foo`), so they are stable across rebuilds. Picking an option
  * closes the menu (`data-menu-kind="choice"`, read by the component); the search the option runs
  * then replaces the whole control with one showing the new choice.
+ *
+ * A compact host (`data-choice-menu-compact`, the explorer's Dock side menu) has no icon of its
+ * own: its options each carry a `.glyph`, and the trigger shows the checked option's glyph alone,
+ * with no name, choice text or caret; its `aria-label` and `title` name the menu and the choice,
+ * "Dock side: Left", so the choice is read without opening it. Such a menu is updated on the
+ * client: whoever takes the pick re-checks the options and gives the trigger the new glyph and
+ * name (`js/common/explorer-dock.js`).
  */
 export function buildChoiceMenuCtrl(hostEl) {
     const hostId = hostEl.id
@@ -179,19 +186,32 @@ export function buildChoiceMenuCtrl(hostEl) {
     btnEl.setAttribute("aria-haspopup", "menu")
     btnEl.disabled = "choiceMenuDisabled" in hostEl.dataset
 
-    const iconEl = document.createElement("i")
-    iconEl.className = hostEl.dataset.choiceMenuIcon
-    iconEl.setAttribute("aria-hidden", "true")
-    const nameEl = document.createElement("span")
-    nameEl.className = "choice-name"
-    nameEl.textContent = name
-    const choiceEl = document.createElement("span")
-    choiceEl.className = "choice"
-    choiceEl.textContent = checkedEl?.textContent.trim() ?? ""
-    const caretEl = document.createElement("i")
-    caretEl.className = "fas fa-caret-down choice-caret"
-    caretEl.setAttribute("aria-hidden", "true")
-    btnEl.append(iconEl, nameEl, choiceEl, caretEl)
+    if ("choiceMenuCompact" in hostEl.dataset) {
+        // The glyph of the checked option, else of the first, is the trigger's whole content
+        btnEl.classList.add("compact")
+        const shownEl = checkedEl ?? optionEls[0]
+        const label = `${name}: ${shownEl?.textContent.trim() ?? ""}`
+        btnEl.setAttribute("aria-label", label)
+        btnEl.title = label
+        const glyphEl = shownEl?.querySelector(".glyph")
+        if (glyphEl) {
+            btnEl.append(glyphEl.cloneNode(true))
+        }
+    } else {
+        const iconEl = document.createElement("i")
+        iconEl.className = hostEl.dataset.choiceMenuIcon
+        iconEl.setAttribute("aria-hidden", "true")
+        const nameEl = document.createElement("span")
+        nameEl.className = "choice-name"
+        nameEl.textContent = name
+        const choiceEl = document.createElement("span")
+        choiceEl.className = "choice"
+        choiceEl.textContent = checkedEl?.textContent.trim() ?? ""
+        const caretEl = document.createElement("i")
+        caretEl.className = "fas fa-caret-down choice-caret"
+        caretEl.setAttribute("aria-hidden", "true")
+        btnEl.append(iconEl, nameEl, choiceEl, caretEl)
+    }
 
     const panelEl = _buildPanel({ panelId })
     panelEl.setAttribute("role", "menu")

@@ -5,6 +5,14 @@ export const Const = {
         trashbin: "trashbin",
     },
 
+    // Where the explorer sits against the results, as `data-dock-side` on <html> names it
+    dockSides: {
+        left: "left",
+        right: "right",
+        top: "top",
+        bottom: "bottom",
+    },
+
     /**
      * Custom event names, dispatched on `document.body`. Templates name the same strings verbatim
      * in `data-app-success-event` attributes and `$dispatch(...)` calls, so a rename touches both.
@@ -50,6 +58,8 @@ export const Const = {
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
+        // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
+        dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
     },
 
@@ -96,8 +106,9 @@ export const Const = {
 
     localStore: {
         gridMetadataFields: "gridMetadataFields",
-        verticalSplitSizes: "verticalSplitSizes",
-        horizontalSplitSizes: "horizontalSplitSizes",
+        // The explorer's Dock side, once picked, and its share of the width and of the height
+        // (js/common/explorer-dock.js; static/js/explorer-dock-boot.js names the same key in its `data-key`)
+        explorerDock: "explorerDock",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
         // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
@@ -107,7 +118,7 @@ export const Const = {
         // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`
         designTweaks: "designTweaks",
         // The People tab's remembered state (js/alpine/components/people-tab.js): each pane's
-        // People buckets and whether Split view is on
+        // People buckets, whether Split view is on and the panes' sizes on each axis
         peopleView: "peopleView",
     },
 
@@ -139,10 +150,11 @@ export const Const = {
             hidden: "hidden",
             unmatched: "unmatched",
         },
-        // The two panes of the People tab, as `data-app-people-pane` names them
+        // The two panes of the People tab, as `data-app-people-pane` names them: the Main pane,
+        // always shown, and the Duplicate pane of Split view
         panes: {
-            top: "top",
-            bottom: "bottom",
+            main: "main",
+            duplicate: "duplicate",
         },
     },
 }

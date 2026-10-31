@@ -179,6 +179,17 @@
   padding: var(--panel-padding);
 }
 
+/* The two divider specimens: the vertical one needs a height to run down, the horizontal one a width to run across */
+.sg-dividers {
+  align-items: stretch;
+  height: var(--space-9);
+}
+
+.sg-dividers .horizontal {
+  flex: 1;
+  align-self: center;
+}
+
 /* The error form holds its message under its field; line the fields up on their tops */
 #forms .sg-row {
   align-items: start;

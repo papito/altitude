@@ -1,20 +1,34 @@
-/* The People tab fills the explorer panel so Split.js has a box to divide between the two panes */
+/* The People tab fills the explorer panel so Split.js has a box to divide between the two panes, laid along the axis
+   the Dock side calls for: a column (the panes stacked) under a left or right dock, where the explorer is tall, and a row
+   (side by side) under a top or bottom one, where it is wide */
 #people {
+    display: flex;
+    flex-direction: column;
     height: 100%;
 }
 
-/* A pane: the buckets row stays put while the list below it scrolls */
+html[data-dock-side="top"] #people,
+html[data-dock-side="bottom"] #people {
+    flex-direction: row;
+}
+
+/* A pane: the buckets row stays put while the list below it scrolls. Both minimums are reset so Split.js may size it
+   below its content on either axis */
 #people .pane {
     display: grid;
     grid-template-rows: auto 1fr;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
 }
 
-/* One pane, no Split view: it fills the tab so its list scrolls. With two, Split.js sets each pane's height inline */
+/* One pane, no Split view: it fills the tab so its list scrolls. With two, Split.js sets each pane's size inline along
+   its axis, the height when stacked and the width side by side */
 #people .pane:only-of-type {
-    height: 100%;
+    flex: 1;
 }
+
+/* The gutter between the two panes is a .divider of core.css, built with its orientation class by the component */
 
 #people .pane .list {
     min-height: 0;

@@ -285,7 +285,8 @@ export function contextMenu() {
             })
             window.addEventListener("resize", onResize)
 
-            // The Split.js divider resizes the explorer without resizing the window. A
+            // The explorer's divider (js/common/explorer-dock.js) resizes the explorer without
+            // resizing the window. A
             // ResizeObserver reports the current size once as soon as it starts observing; only a
             // later notification means the size changed.
             let observer = null

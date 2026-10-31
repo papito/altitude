@@ -6,20 +6,22 @@
  * keeps under `Const.localStore.designTweaks` so the boot script (`lib/tokentweak-boot.js`, the same
  * key in its `data-key`) adopts it again before the first paint. This module only passes what the
  * package cannot infer: the sections in the style guide's order, the spacing scale, the type scale,
- * the two tokens the server sets inline on their containers, the explorer width
- * (no token: a Split.js size `js/common/explorer-split.js` owns), the scan the server serves and
+ * the two tokens the server sets inline on their containers, the explorer size
+ * (no token of its own in the panel: the share `js/common/explorer-dock.js` owns), the scan the server serves and
  * the file the exports name. `Ctrl+Alt+T` toggles the panel; there is no trigger element.
  */
 import {
-    explorerPercent,
-    hasExplorerSplit,
-    setExplorerSizes,
-} from "./common/explorer-split.js"
+    DEFAULT_WIDTH_SHARE,
+    explorerShare,
+    hasExplorerDock,
+    setExplorerShare,
+} from "./common/explorer-dock.js"
 import { Const } from "./constants.js"
 import { createTokenTweaks } from "./lib/tokentweak.js"
 
-// The explorer's default share of the width, the first of explorer-split.js's default Split sizes
-const EXPLORER_DEFAULT = 25
+// The package takes one default, so a top or bottom dock, whose default share of the height differs, resets to the
+// width's from the panel
+const EXPLORER_DEFAULT = DEFAULT_WIDTH_SHARE
 
 createTokenTweaks({
     storageKey: Const.localStore.designTweaks,
@@ -96,21 +98,21 @@ createTokenTweaks({
     extraControls: [
         {
             id: "explorer",
-            label: "Explorer width",
+            label: "Explorer size",
             section: "panels",
             min: 10,
             max: 70,
             step: 1,
             unit: "%",
             default: EXPLORER_DEFAULT,
-            get: explorerPercent,
-            set: setExplorerSizes,
-            available: hasExplorerSplit,
+            get: explorerShare,
+            set: setExplorerShare,
+            available: hasExplorerDock,
             unavailableNote: "Set on the main page, where the explorer is",
             exportLabel:
-                "the explorer split (Split.js sizes in js/common/explorer-split.js)",
+                "the explorer's share of the width or the height on its Dock side (js/common/explorer-dock.js)",
             describe: (value, defaultValue) =>
-                `Split sizes [${value}, ${100 - value}] instead of [${defaultValue}, ${100 - defaultValue}]`,
+                `An explorer share of ${value}% of its axis instead of ${defaultValue}%`,
         },
     ],
     exports: { fileName: "core.css" },

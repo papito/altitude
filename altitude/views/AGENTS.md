@@ -67,7 +67,9 @@ explorer tab that issued a load is marked selected from `htmx:after:request`
 
 The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">` in a
 `role="tablist"`, styled by `tabs.css` on `aria-selected="true"`); the initial tab is loaded through
-`htmx.ajax` with the tab as `source`, so it is selected exactly as a click would select it.
+`htmx.ajax` with the tab as `source`, so it is selected exactly as a click would select it. The tab list sits in
+`#explorerHeader`, the explorer's header row, which stays while the list hides in triage. Where the explorer sits
+against the results, and the divider between them, is under **Explorer dock** below.
 
 ## JS Directory ↔ Template Mapping
 
@@ -82,9 +84,10 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`. The import page's hydrates its upload form and starts no Alpine. Settings' starts Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store, no fragments) and registers the htmx request rule with a minimal app and the page's own listeners; see **Settings screen** |
+| `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) and `people-tab.js` (the People tab's buckets, Split view and pane loads); `index.js` registers them |
@@ -111,9 +114,9 @@ before Alpine starts.
 
 Always access the repo ID via `window.ctx.getRepoId()`, not directly from the store.
 
-The People tab's state is no store: its `peopleTab` component holds the buckets of each pane and whether Split view is on
-as component data and remembers them in `localStorage` under `Const.localStore.peopleView`, which nothing else reads
-(see **People tab** below).
+The People tab's state is no store: its `peopleTab` component holds the buckets of each pane, whether Split view is on
+and the panes' Split.js sizes on each axis as component data and remembers them in `localStorage` under
+`Const.localStore.peopleView`, which nothing else reads (see **People tab** below).
 
 ## DOM Addressing Convention
 
@@ -276,7 +279,7 @@ written `@@click`. `html_common` renders the `snackbar` store the same way, on e
 stack is an `x-for` over the store's `errors` or `notices`, its bindings property reads, single calls on the store
 (`classesOf`, `iconOf`, `isRepeated`, `countOf`, `dismiss`, `syncStack`, `onStackFocusOut`), its events written `x-on:`. The explorer lists (folder tree, albums, Locations) are still rendered by their JavaScript modules; the People tab's
 `peopleTab` component (`alpine/components/people-tab.js`) renders nothing itself: it holds the tab's remembered state, binds
-the bucket switches and the bottom pane's `x-if` to it, and has htmx load each pane's list (see **People tab** below).
+the bucket switches and the Duplicate pane's `x-if` to it, and has htmx load each pane's list (see **People tab** below).
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
 those responsibilities stay with HTMX and the custom event bus.
@@ -329,7 +332,7 @@ tries the roomier side's options first (the base placement below is always tried
 fallbacks): `flip-block` puts it above when that side is roomy enough, and `@position-try --popover-capped` (below)
 or `--popover-capped-above` caps its height on the roomier side, its content scrolling; the capped-above option
 swaps the block margins as `flip-block` does, so the anchor gap faces the trigger and `--viewport-gap` the viewport's
-top. It follows its trigger as the explorer panel (`#explorerPanelContent`, the explorer's scroll container) scrolls and the Split.js divider moves, and
+top. It follows its trigger as the explorer panel (`#explorerPanelContent`, the explorer's scroll container) scrolls and the explorer's divider moves, and
 `position-visibility: anchors-visible` hides it while its row is clipped out of the explorer. An open whose trigger is gone or not displayed marks the host
 `data-unanchored`, placed like the general modal: 100px from the top, centered, its height capped at
 `--viewport-gap` from the bottom. A validation replacement re-hydrates into the open host and only refocuses: the
@@ -450,6 +453,17 @@ option closes the menu with focus on the trigger (`handleActionClick`) and runs 
 fragment comes back with a new control showing the choice, so nothing updates the label on the client, and a failed
 search leaves the previous choice shown. The search funnel knows nothing of the control: an option is a literal trigger
 like any other.
+
+A **compact choice menu** is a choice menu with no words on its trigger: the host carries `data-choice-menu-compact`
+and no icon, each option holds a `.glyph` (an inline `<svg><use href="#dockGlyph-…">` of a symbol sheet) before its
+label in a `span`, and `buildChoiceMenuCtrl` gives the trigger (`action-button small compact`, square) a clone of the
+checked option's glyph alone, and the menu's name and the choice, "Dock side: Left", as its `aria-label` and
+`title`, so the choice is read without opening it. The one such menu is the explorer header's Dock side menu
+(`#dockSideMenuHost`, `index.scala.html`), whose options are `[data-app-dock-side]` picks rather than search
+triggers, so no server re-render shows the choice: `js/common/explorer-dock.js` re-checks the options and replaces
+the trigger's glyph and name on every side change (see **Explorer dock**). The page's own hosts are built
+by the first hydration (`initApp` hydrates `document`), before `initExplorerDock` checks the current option, so a
+compact trigger starts on its first option's glyph and is corrected in the same task, before any paint.
 
 A menu opens on its checked action, else its first (`focusInitialAction`, on `toggle`; View settings has no actions
 and keeps the focus its dialog hydrator sets); Down and Up move through the actions, wrapping, Home and End jump
@@ -646,11 +660,12 @@ hydrator waits for it and skips a fragment removed meanwhile.
 
 **People tab** — The People tab (`views/htmx/people.scala.html`, `static/css/htmx/people.css`) is a shell the browser
 fills: `#people` (`x-data="peopleTab"`, `js/alpine/components/people-tab.js`; it carries `--face-box`, the face detection
-box size, for the cells) holds one or two panes, `section.pane[data-app-people-pane="top"|"bottom"]` (`#peoplePane-top`,
-`#peoplePane-bottom`, named to assistive tech "Top pane" and "Bottom pane"), each a `.buckets` row (`role="group"`, "People
+box size, for the cells) holds one or two panes, the **Main pane** and the **Duplicate pane** of the glossary,
+`section.pane[data-app-people-pane="main"|"duplicate"]` (`#peoplePane-main`, `#peoplePane-duplicate`, named to assistive
+tech "Main pane" and "Duplicate pane"), each a `.buckets` row (`role="group"`, "People
 buckets") of switches over an empty `.list` host. A switch is the View dialog's pattern,
 a `button[role="switch"]` and a `<label for>` whose click flips it with no script, its id carrying the pane name so the
-labels stay unique; a pane offers Matched, Hidden and Unmatched, the top pane also Split view, labelled "Duplicate Split
+labels stay unique; a pane offers Matched, Hidden and Unmatched, the Main pane also Split view, labelled "Duplicate Split
 View" with a faint `small.legend` after the label, "(for quick drag-and-drop)", that the switch is `aria-describedby`. The switches are the
 **People buckets** (the glossary in `CONTEXT.md`: Matched person, Unmatched person, Hidden person), three disjoint sets,
 and a pane lists the union of the buckets switched on, Matched alone on a first visit; with none on it shows one `.empty`
@@ -661,26 +676,35 @@ through `htmx.ajax` into the pane's `.list`, on init, when a switch flips and wh
 `htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
 may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and an `aria-label`
 ("…, hidden") on its name link, an Unmatched person told apart by its orange "Unknown N" name. The remembered state is
-`localStorage` `Const.localStore.peopleView`, `{ split, buckets: { top: [...], bottom?: [...] } }`, written on every flip
-and read once in `init()`, which falls back to the first visit's when it is missing or unreadable and keeps only the
-bucket names the tab knows; the split sizes are taken only as two percentages. The component listens
+`localStorage` `Const.localStore.peopleView`, `{ split, buckets: { main: [...], duplicate?: [...] }, paneSizes: { stacked,
+sideBySide } }`, written on every flip and drag and read once in `init()`, which falls back to the first visit's when it
+is missing or unreadable, keeps only the bucket names the tab knows, reads a pane's buckets remembered under the older
+names `top` and `bottom` as its own, and takes an axis's sizes only as two percentages. The component listens
 for `Const.events.peopleChanged` on `document.body` from `init()` to `destroy()` (the events are dispatched on the body,
 an ancestor of the shell, which a listener on the shell cannot see whatever their bubbling) and reloads each displayed
 pane with its own buckets; a merge, a
 hide, a show and a discard announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
-(in a `@click` handler `$el` is the button). **Split view** renders the bottom pane under `<template x-if="split">` and
-divides the two pane elements, found from `this.$root`, with a vertical Split.js instance (`minSize` 120, sizes remembered in
-`Const.localStore.verticalSplitSizes`, default `[50, 50]`, written on `onDragEnd`), made in `$nextTick` once the pane
-exists; turning it off destroys the instance, which takes its gutter and the inline heights with it, before `split` drops
-the pane, and `destroy()` does the same when another tab replaces the fragment. The bottom pane copies the top's buckets
-the first time Split view is turned on, when it has none remembered; from then on the two are remembered apart, across
-split off and on. `js/dragdrop/people.js` binds `#people .drag-drop` and `#people .dropzone`, which match both panes, so a
+(in a `@click` handler `$el` is the button). **Split view** renders the Duplicate pane under `<template x-if="split">` and
+divides the two pane elements, found from `this.$root`, with a Split.js instance (`minSize` 120) along the axis the
+**Dock side** calls for (`effectiveSide()` of `js/common/explorer-dock.js`): stacked, `direction: "vertical"`, under a
+left or right dock, and side by side, `"horizontal"`, under a top or bottom one, each axis with its own sizes
+(`paneSizes.stacked` / `paneSizes.sideBySide`, default `[50, 50]`, written on `onDragEnd` under the axis dragged), made
+in `$nextTick` once the pane exists. A `Const.events.dockSideChanged` on `document.body`, listened for from `init()` to
+`destroy()` like `peopleChanged`, destroys the instance and makes it again on the new axis while Split view is on, the
+panes staying put (the gutter is built by the component as a `.divider` of `core.css` with its orientation class, next
+to Split.js's own); turning Split view off destroys the instance, which takes its gutter and the inline sizes along its
+axis with it, before `split` drops the pane, and `destroy()` does the same when another tab replaces the fragment. The
+Duplicate pane copies the Main pane's buckets the first time Split view is turned on, when it has none remembered; from
+then on the two are remembered apart, across split off and on. `js/dragdrop/people.js` binds `#people .drag-drop` and
+`#people .dropzone`, which match both panes, so a
 cell dropped on the other pane's cell dispatches `confirmPersonMerge` as any drop does; on drag start the `autoScroll`
 container becomes the dragged cell's `.pane .list` (the scrolling element: the pane itself is `overflow: hidden`), falling
 back to `#explorerPanelContent` for the `#person` cover in the results title. The heights: `#explorerViews` is a grid of
 `auto 1fr` at `height: 100%` (`static/css/pages/index.css`), `#explorerPanelContent` (`min-height: 0; overflow-y: auto`)
-is the explorer's scroll container for every tab, `#people` is `height: 100%`, and a pane is a grid of `auto 1fr` whose
-`.list` scrolls; alone (`.pane:only-of-type`) it is `height: 100%`, and with two Split.js sets each pane's height inline.
+is the explorer's scroll container for every tab, `#people` is a flex container at `height: 100%`, a column under a left
+or right dock and a row (`html[data-dock-side="top"]`, `"bottom"`) under a top or bottom one, and a pane is a grid of
+`auto 1fr` with both minimums reset whose `.list` scrolls; alone (`.pane:only-of-type`) it is `flex: 1`, and with two
+Split.js sets each pane's size inline along its axis, the height stacked and the width side by side.
 Nothing of the tab is server state: switching to another tab and back restores the panes from `localStorage`.
 
 **Map view** — `layout` (`grid` | `map`) is a search parameter (see **Search parameters**). The
@@ -698,7 +722,7 @@ the whole chip is the button), whose `data-app-search-bbox=""` clears it, in eit
 `js/map/map-view.js` hydrates `#map` (`data-app-fragment="map-view"`, after the results hydrator). One
 map exists at a time: the results hydrator calls `disposeMapView()` for every new results fragment,
 which cancels the pending cells request, disconnects the `ResizeObserver` that tells Leaflet the column
-was resized (the Split.js drag, the window), and removes the map. The initial view is the one last
+was resized (the divider's drag, the window), and removes the map. The initial view is the one last
 looked at in this scope (`map-state.js`), else `fitBounds` on `data-map-bounds` (padded, never past zoom
 15), else the world. Every `moveend`, debounced 150 ms, requests `/api/map/r/:repoId/cells` with the
 store's query string plus `viewport` and `zoom`, and a response older than the latest request is
@@ -1212,6 +1236,61 @@ on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flash
 1.2 s. A frame's draw order is field-edge fill → each block's cells, roads and vehicles → cloud shadows → clouds →
 jet → lights.
 
+**Explorer dock** — The main page (`index.scala.html`, `static/css/pages/index.css`) is a grid of three areas,
+`explorer`, `gutter` and `content`, whose shape is the **Dock side**: where the explorer sits against the results,
+`left`, `right`, `top` or `bottom`, written on `<html>` as `data-dock-side`. One rule per side sets the tracks and
+the areas: the explorer's track is `minmax(<its minimum>, var(--explorer-share))`, its share of the width (left,
+right) or of the height (top, bottom), the gutter's is `auto`, as thick as the divider, and the results take the
+rest, with their own minimum (`--explorer-min-width`, `--explorer-min-height`, `--content-min-width`,
+`--content-min-height` of `core.css`, registered as lengths so the script reads them in px). Each area draws the
+hairline on the edge facing the divider, one rule per side. The trash bin shows the results alone
+(`main:has(> #content.trashbin)`: one area, the explorer and the divider not displayed). Until this browser has a
+pick, the side follows the viewport's proportions, a portrait viewport docking the explorer at the bottom and any
+other on the left, and a rotation re-docks it; a pick holds from then on. The state is per browser, under
+`Const.localStore.explorerDock` as `{ side?, widthShare, heightShare }`: the width share serves left and right, the
+height share top and bottom (defaults 25 and 35 %), so a switch within an axis keeps the size.
+
+`static/js/explorer-dock-boot.js`, a plain blocking script in the page's head with the key in its `data-key`, writes
+the side and `--explorer-share` on `<html>` before the first paint, so nothing moves under the user. From
+`initExplorerDock(view)` (`js/common/explorer-dock.js`, called by the page script; it returns at once in the trash
+bin, where `hasExplorerDock()` is false) the module owns both: it re-docks on the orientation query's `change` while
+nothing is picked, takes a pick from any `[data-app-dock-side]` click on the page (`setDockSide`), and dispatches
+`Const.events.dockSideChanged` on `document.body` after every side change, with the side in `detail.side`, for
+whatever lays itself out by the side: the People tab's Split view stacks its panes under a left or right dock and sets
+them side by side under a top or bottom one, remaking its Split.js instance on the event (see **People tab**).
+`effectiveSide()` reads the attribute.
+
+The pick is the **Dock side menu** at the end of the explorer's header (`#explorerHeader`: the tab list, growing, then
+the menu, centered on the row and inset by `--panel-padding`; in triage, where the tab list is hidden, the menu stands
+alone at the row's end, and in the trash bin it is hidden with the explorer). `#dockSideMenuHost` is a compact choice
+menu (see **Context menus**): four options, Left, Right, Top and Bottom, each `data-app-dock-side="<side>"` with the
+side's glyph, a `<use>` of `includes/dock_glyphs.scala.html`, the hidden `<svg class="svg-sprite">` of four symbols
+(a frame with the docked band filled, in `currentColor`) that `index.scala.html` and the style guide include. The
+module checks the option of the effective side (`aria-checked`) and gives the trigger a clone of its glyph and the
+side's name in `applyEffectiveSide`, on init and every change, so the trigger shows and reads the current side
+without opening the menu; picking the side already picked changes nothing, and picking an option closes the menu
+with focus back on the trigger, as any choice menu does.
+
+The divider, `#explorerDivider` (`role="separator"`, `aria-controls="explorer"`, `tabindex="0"`), sits in the
+gutter area. It is a `.divider` of `core.css`, the one drawing of a draggable divider, which the People panes'
+Split.js gutter wears too: `--space-3` thick along its axis, a transparent band with a short dotted grip centered on
+it, drawn in `currentColor` by a `radial-gradient` tile repeated along the divider, so hover and `[data-dragging]`
+tint it `--theme-primary` with one color change; the cursor is `col-resize` or `row-resize`. Its orientation is its
+class, `.vertical` (a column) or `.horizontal` (a row), and a divider with neither, the explorer's, runs across the
+Dock side's axis (`html[data-dock-side]`), so it is laid out before any script runs. A pointer drag
+(`setPointerCapture`, `touch-action: none`; `main` is `user-select: none` meanwhile; the pointer's own focus on the separator, which draws no ring, makes the arrow keys work right after the drag)
+sets the share from the pointer's distance from the explorer's edge of `main`, within the bounds taken as the drag
+starts (the explorer's minimum, and all but the results' minimum and the divider, as percentages of `main`'s size),
+and remembers it on release; the arrow keys along the axis move the divider the way they point, 1 % (Shift, 5 %),
+Home and End take it to the bounds; Enter and a double-click reset the axis's default. The remembered share is the
+user's own, bounded when the user sets it; the share the page is laid out with is bounded again on every write and
+on `resize`, so a visit in a small window never narrows what a wide one remembered. The separator's
+`aria-orientation` is the divider's own (`vertical` for a left or right dock), and `aria-valuenow`, `-valuemin` and
+`-valuemax` are the laid-out share and its bounds, rounded. Everything that reacts to the explorer's size reacts to
+the divider as it did to Split.js: the context menus close through their `ResizeObserver` on `#explorer`, the map
+resizes through its own, the sticky offsets through theirs. The style guide's Panels & layout section shows the
+divider in both orientations.
+
 **Nav** — `includes/nav` is the bar of every page behind a login, inside the page's `<nav>`, styled by the NAVIGATION
 block of `core.css`: the `.brand` (the `fa-chevron-up` mark in `--theme-accent` and the name, lowercase, in `--font-nav`
 at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped to the text, which glows in the primary
@@ -1486,15 +1565,16 @@ lines, the snapshot JSON). The package's README documents every option; this ent
   veils, the borders and the shadows, whose colors are written over a token; the two tokens
   the server sets inline on their containers as scoped tokens, `--preview-box` on `#assets` (200px, labeled
   `Const.AssetView.PREVIEW_BOX_PIXELS` in the exports) and `--face-box` on `#people` (80px,
-  `FaceDetectionService.faceDetectionBoxPx`), 40..600 by 10, in Panels; the explorer width as an extra control in
-  Panels (no token: `explorerPercent`, `setExplorerSizes` and `hasExplorerSplit` of `js/common/explorer-split.js`,
-  10..70 %, default 25, "Set on the main page, where the explorer is" elsewhere, phrased as the Split sizes in the
-  prompt); and `exports: { fileName: "core.css" }`.
+  `FaceDetectionService.faceDetectionBoxPx`), 40..600 by 10, in Panels; the explorer size as an extra control in
+  Panels (no token of the panel's own: `explorerShare`, `setExplorerShare` and `hasExplorerDock` of
+  `js/common/explorer-dock.js`, the explorer's share of its Dock side's axis, 10..70 %, default 25, the width's, since
+  the package takes one number, "Set on the main page, where the explorer is" elsewhere); and
+  `exports: { fileName: "core.css" }`.
 - **How an override applies:** one `CSSStyleSheet` in `document.adoptedStyleSheets`, rewritten on every change: a
   marker rule first, `:root { --tokentweak: designTweaks }` (the storage key), then one `:root` rule with every tweaked
   token, then one `!important` rule per scoped token on its container. Adopted sheets cascade after the document's, so
   they win over the bundle at equal specificity, with no `!important` on the root tokens and no `@layer`. The explorer
-  width is applied through `setExplorerSizes`, at `load` when the page has a split.
+  size is applied through `setExplorerShare`, at `load` when the page has a dock.
 - **No flash on load:** the package keeps the sheet's text (`css`) and the theme in its `localStorage` key, and
   `lib/tokentweak-boot.js`, a plain blocking script in the head whose tag names the key in `data-key="designTweaks"`,
   adopts that text and declares the theme before the first paint. The adapter's module, deferred as every module is,
@@ -1553,7 +1633,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the general modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
-| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of each pane and Split view (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the vertical Split.js instance, the reload on `peopleChanged` |
+| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` |
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
@@ -1563,7 +1643,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
-| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row and the dialog-trigger buttons |
+| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu) |
+| `views/includes/dock_glyphs.scala.html` | The hidden SVG symbol sheet of the four Dock side glyphs, drawn by the Dock side menu's options and trigger through `<use>`; included by `index.scala.html` and the style guide |
 | `static/js/common/album-list.js` | renders the album list, its counts (after each name), and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
 | `static/js/common/location-list.js` | renders the categories (expandable nodes holding their Locations) and top-level Locations, the counts after each name, and each row's menu from the JSON list endpoint; restores expansion across rebuilds; patches the counts in place; marks the viewed Location |
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
@@ -1575,7 +1656,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |
 | `static/js/common/theme.js` | the two themes: `applyTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
 | `static/js/common/font-availability.js` | `isFontAvailable` and `asFontFamily`, the font tester's check |
-| `static/js/common/explorer-split.js` | the main page's Split.js instance over the explorer and the content area: `initExplorerSplit(view)`, the remembered sizes, `setExplorerSizes(percent)`, which the design tweaks adapter passes as an extra control |
+| `static/js/common/explorer-dock.js` | the main page's Dock side: `initExplorerDock(view)`, `setDockSide(side)`, `effectiveSide()`, the explorer's remembered share per axis, the divider's drag and keys, `explorerShare()` / `setExplorerShare(percent)`, which the design tweaks adapter passes as an extra control, and the `dockSideChanged` event |
+| `static/js/explorer-dock-boot.js` | the blocking boot script of the main page's head: the Dock side and the share on `<html>` before the first paint |
 | `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
 | `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |

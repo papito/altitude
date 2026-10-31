@@ -8,20 +8,102 @@ body:where(.index) {
   margin: 0;
 }
 
+/* The explorer, the divider and the results are the three areas of a grid whose shape is the Dock side, written on
+   <html> as data-dock-side by static/js/explorer-dock-boot.js before the first paint and kept by
+   js/common/explorer-dock.js. The explorer's track is its share of the width or the height, --explorer-share, bounded
+   by the minimums of core.css; the divider's track is as thick as the divider; the results take the rest */
 :where(body.index) main {
   height: 100%;
   overflow: hidden;
+  display: grid;
 }
 
+html[data-dock-side="left"] main {
+  grid-template-columns: minmax(var(--explorer-min-width), var(--explorer-share)) auto minmax(var(--content-min-width), 1fr);
+  grid-template-areas: "explorer gutter content";
+}
+
+html[data-dock-side="right"] main {
+  grid-template-columns: minmax(var(--content-min-width), 1fr) auto minmax(var(--explorer-min-width), var(--explorer-share));
+  grid-template-areas: "content gutter explorer";
+}
+
+html[data-dock-side="top"] main {
+  grid-template-rows: minmax(var(--explorer-min-height), var(--explorer-share)) auto minmax(var(--content-min-height), 1fr);
+  grid-template-areas: "explorer" "gutter" "content";
+}
+
+html[data-dock-side="bottom"] main {
+  grid-template-rows: minmax(var(--content-min-height), 1fr) auto minmax(var(--explorer-min-height), var(--explorer-share));
+  grid-template-areas: "content" "gutter" "explorer";
+}
+
+/* The trash bin has no use for the explorer: the results fill the page and no divider is shown, whatever the Dock side.
+   The page script marks the results area with the view's name */
+:where(body.index) main:has(> #content.trashbin) {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "content";
+}
+
+:where(body.index) main:has(> #content.trashbin) > #explorer,
+:where(body.index) main:has(> #content.trashbin) > #explorerDivider {
+  display: none;
+}
+
+/* A grid track may shrink below its content only when the item allows it, so each area resets the automatic
+   minimum; the explorer's own overflow never engages, its panel scrolls (see #explorerViews) */
 #explorer {
-  border-right: var(--border-hairline) var(--panel-border-color);
+  grid-area: explorer;
+  min-width: 0;
+  min-height: 0;
   box-shadow: var(--box-shadow);
   text-shadow: var(--text-shadow);
   padding-top: var(--control-vertical-space);
 }
 
-/* The tab list stays put and the panel scrolls: the panel, not #explorer, is the explorer's scroll container, so a
-   vertical Split.js inside it has a definite height to divide. #explorer's padding-top sits inside its height
+#content {
+  grid-area: content;
+  min-width: 0;
+  min-height: 0;
+  box-shadow: var(--box-shadow);
+  text-shadow: var(--text-shadow);
+  overflow-y: scroll;
+}
+
+/* The hairline between the two areas is drawn by each on the edge that faces the divider */
+html[data-dock-side="left"] #explorer { border-right: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="left"] #content { border-left: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="right"] #explorer { border-left: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="right"] #content { border-right: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="top"] #explorer { border-bottom: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="top"] #content { border-top: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="bottom"] #explorer { border-top: var(--border-hairline) var(--panel-border-color); }
+html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) var(--panel-border-color); }
+
+/* The explorer's header: the tab list, growing, and whatever sits at its end. The tab list's own bottom edge (tabs.css)
+   moves up to the header so it spans the whole row; the selected tab's primary edge still sits right above it */
+#explorerHeader {
+  display: flex;
+  align-items: flex-end;
+  border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+#explorerHeader [role="tablist"] {
+  flex: 1;
+  border-bottom: 0;
+}
+
+/* The Dock side menu at the header's end, centered on the tab row, inset as the tab list is; in triage, where the
+   tab list is hidden, it is pushed to the end on its own */
+#dockSideMenuHost {
+  align-self: center;
+  margin-inline-start: auto;
+  padding-inline-end: var(--panel-padding);
+}
+
+/* The header stays put and the panel scrolls: the panel, not #explorer, is the explorer's scroll container, so a
+   Split.js instance inside it has a definite box to divide. #explorer's padding-top sits inside its height
    (core.css sets border-box on every element), so 100% fits under it and #explorer's own overflow never engages */
 #explorerViews {
   display: grid;
@@ -36,38 +118,13 @@ body:where(.index) {
   overflow-x: hidden;
 }
 
-#content {
-  border-left: var(--border-hairline) var(--panel-border-color);
-  box-shadow: var(--box-shadow);
-  text-shadow: var(--text-shadow);
-  overflow-y: scroll;
-  max-width: 100%;
+/* The divider between the explorer and the results, in the grid's gutter area: a .divider of core.css that, with no
+   orientation of its own, runs across the Dock side's axis */
+#explorerDivider {
+  grid-area: gutter;
 }
 
-/* SPLIT */
-.split.split-horizontal,
-.gutter.gutter-horizontal {
-  height: 100%;
-  float: left;
-}
-
-.gutter {
-  background-color: transparent;
-  background-repeat: no-repeat;
-  background-position: 50%;
-}
-
-.gutter.gutter-vertical {
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=");
-  cursor: ns-resize;
-}
-
-.gutter.gutter-horizontal {
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==");
-  cursor: ew-resize;
-}
-
-.split {
-  overflow-y: auto;
-  overflow-x: hidden;
+/* Nothing on the page is selected by a drag of the divider */
+:where(body.index) main:has(> .divider[data-dragging]) {
+  user-select: none;
 }

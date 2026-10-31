@@ -68,6 +68,14 @@
     --list-indent: var(--space-7);
 
     --footer-height: 2.75rem;
+    /* The explorer's share of the main page along its Dock side's axis (a width for left and right, a height for top
+       and bottom), and the least the explorer and the results may be squeezed to on each axis;
+       js/common/explorer-dock.js sets the share and reads the minimums in px to bound the divider */
+    --explorer-share: 25%;
+    --explorer-min-width: 6.25rem;
+    --explorer-min-height: 7.5rem;
+    --content-min-width: 18.75rem;
+    --content-min-height: 12.5rem;
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
@@ -123,6 +131,36 @@
 }
 
 @property --viewport-gap {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --explorer-share {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 25%;
+}
+
+@property --explorer-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --explorer-min-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --content-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --content-min-height {
     syntax: "<length>";
     inherits: true;
     initial-value: 0px;
@@ -612,6 +650,60 @@ footer {
     white-space: nowrap;
 }
 
+/*         */
+/* DIVIDER */
+/*         */
+
+/* A draggable divider between two panes: the explorer's against the results (#explorerDivider, views/index.scala.html)
+   and the Split.js gutter between the People panes (js/alpine/components/people-tab.js). A transparent band,
+   --space-3 thick, with a short dotted grip centered on it, a tile of one dot drawn in currentColor and repeated
+   along the band, so the hover and drag tint is one color change. Its orientation is its own class, .vertical (a
+   column, as between a left or right dock and the results) or .horizontal (a row); a divider with neither runs across
+   the Dock side's axis, which is how the explorer's is laid out before any script runs. Split.js sets its gutter's
+   thickness inline. */
+.divider {
+    position: relative;
+    color: var(--theme-neutral-3);
+    touch-action: none;
+}
+
+.divider::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: var(--space-3);
+    height: var(--space-9);
+    background-image: radial-gradient(circle closest-side, currentColor 50%, transparent 60%);
+    background-size: var(--space-3) var(--space-3);
+    background-repeat: repeat-y;
+    background-position: center;
+}
+
+.divider:hover,
+.divider[data-dragging] {
+    color: var(--theme-primary);
+}
+
+.divider.vertical,
+html:is([data-dock-side="left"], [data-dock-side="right"]) .divider:not(.vertical, .horizontal) {
+    width: var(--space-3);
+    cursor: col-resize;
+}
+
+.divider.horizontal,
+html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertical, .horizontal) {
+    height: var(--space-3);
+    cursor: row-resize;
+}
+
+.divider.horizontal::before,
+html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertical, .horizontal)::before {
+    width: var(--space-9);
+    height: var(--space-3);
+    background-repeat: repeat-x;
+}
+
 /*               */
 /* CONTEXT MENUS */
 /*               */
@@ -713,6 +805,31 @@ footer {
 .choice-menu-ctrl .choice-caret {
     margin-left: var(--space-3);
     color: hsl(from currentColor h s l / 0.6);
+}
+
+/* A compact choice menu's trigger (the Dock side menu): a square button showing the checked option's glyph alone */
+.choice-menu-ctrl .compact {
+    display: inline-grid;
+    place-items: center;
+    padding: var(--space-3);
+    line-height: 1;
+}
+
+.choice-menu-ctrl .compact .glyph {
+    width: 1.25em;
+    height: 1.25em;
+}
+
+/* An option with a glyph lays it out in a column of its own before the label (a span, so it is an item of its own),
+   the two a gap apart; the check keeps the first column */
+.context-menu .actions button:has(> .glyph) {
+    grid-template-columns: var(--space-6) auto 1fr;
+    column-gap: var(--space-3);
+}
+
+.context-menu .actions button .glyph {
+    width: 1em;
+    height: 1em;
 }
 
 .context-menu .actions {
@@ -1132,4 +1249,13 @@ footer {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+/* A sheet of SVG symbols (includes/dock_glyphs) takes no room: it is drawn only through <use>, never on its own.
+   Not display: none, which would keep a browser from drawing what it defines */
+.svg-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
 }

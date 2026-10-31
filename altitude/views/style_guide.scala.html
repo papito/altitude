@@ -60,6 +60,7 @@
 
     <main x-data="styleGuide">
       @includes.html.html_common()
+      @includes.html.dock_glyphs()
 
       <div id="styleGuideToc">
         @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for the guide *@
@@ -210,6 +211,15 @@
              <code>--panel-padding</code>; its text carries <code>--text-shadow</code>. Lay pages out with CSS Grid and
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
+          <p>The main page is a grid of the explorer, the divider and the results, shaped by the Dock side the explorer
+             is on (left, right, top or bottom). The divider (<code>.divider</code>, a
+             <code>role="separator"</code>) is a transparent band <code>--space-3</code> thick with a dotted grip in
+             <code>--theme-neutral-3</code>, tinted <code>--theme-primary</code> on hover and while dragged; it runs
+             top to bottom for a left or right dock and across for a top or bottom one.</p>
+          <div class="sg-row sg-dividers">
+            <div class="divider vertical" role="separator" aria-orientation="vertical" aria-label="Divider specimen, a left or right dock"></div>
+            <div class="divider horizontal" role="separator" aria-orientation="horizontal" aria-label="Divider specimen, a top or bottom dock"></div>
+          </div>
           <p>The results title (<code>.results-title</code>, <code>includes/results_title</code>) opens scoped results: the
              kind's icon, the title in <code>--font-size-display</code> and <code>--theme-primary-text</code>, the × back to
              the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.</p>
@@ -368,7 +378,10 @@
              one-field dialog shows no label. Submit the dialog blank to see the validation state, or with a name to
              see a completed operation. A choice menu, the grid toolbar's Group and Sort, is a context menu that picks
              one of several values: its trigger shows the current choice, its panel marks it with a check, and the
-             arrow keys move through the options; every menu panel wears the popover's frosted surface.</p>
+             arrow keys move through the options; every menu panel wears the popover's frosted surface. A compact
+             choice menu, the explorer's Dock side, has room for no words: each option carries a glyph
+             (<code>includes/dock_glyphs</code>) and the trigger shows the checked option's glyph alone, named by its
+             tooltip; the script that takes the pick re-checks the options and swaps the glyph.</p>
           @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
         </section>

@@ -6,8 +6,10 @@
    (js/alpine/components/people-tab.js) remembers which People buckets each pane shows and whether Split view is on,
    and loads each pane's list itself, so nothing here is a list; the server renders only htmx/people_list, per pane,
    for the buckets the pane asks for. A pane is a `section.pane` named by `data-app-people-pane`, which is how the
-   component finds it: its bucket switches over the empty `.list` host. The bottom pane exists only while Split view
-   is on (`x-if`, one root element, the section), and Split.js divides the two panes vertically. The `.list` host
+   component finds it: its bucket switches over the empty `.list` host. The Main pane is always shown; the Duplicate
+   pane exists only while Split view is on (`x-if`, one root element, the section), and Split.js divides the two panes
+   along the axis the Dock side calls for: stacked under a left or right dock, side by side under a top or bottom
+   one (static/css/htmx/people.css lays `#people` out as a column or a row by `html[data-dock-side]`). The `.list` host
    is the source of the component's `htmx.ajax` loads, so its `hx-sync="replace"` makes a newer load of the pane
    abort the one in flight: the latest bucket set always lands. `#people` keeps
    `--face-box`, the face detection box size, for the cells (static/css/htmx/people.css) and the design tweaks
@@ -40,7 +42,7 @@
       @bucketSwitch(name, Const.PeopleBucket.MATCHED, "Matched")
       @bucketSwitch(name, Const.PeopleBucket.HIDDEN, "Hidden")
       @bucketSwitch(name, Const.PeopleBucket.UNMATCHED, "Unmatched")
-      @if(name == "top") {
+      @if(name == "main") {
         @switch("peopleSplitView", "Duplicate Split View", "split", "toggleSplit()", legend = "(for quick drag-and-drop)")
       }
     </div>
@@ -49,6 +51,6 @@
 }
 
 <div id="people" x-data="peopleTab" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
-  @pane("top")
-  <template x-if="split">@pane("bottom")</template>
+  @pane("main")
+  <template x-if="split">@pane("duplicate")</template>
 </div>

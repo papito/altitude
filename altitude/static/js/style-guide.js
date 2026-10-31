@@ -79,6 +79,7 @@ const COLOR_FUNCTION = new RegExp(
 )
 
 // The token whose card has an alpha slider
+const SVG_NS = "http://www.w3.org/2000/svg"
 const ALPHA_SLIDER_TOKEN = "--scrim-color"
 // A color with its alpha replaced, as `withAlpha` writes it: the groups are the function, the
 // color and the channels
@@ -527,6 +528,33 @@ function mountMenuSpecimens() {
     })
     hostEl.appendChild(choiceHostEl)
     buildChoiceMenuCtrl(choiceHostEl)
+
+    // A compact choice menu, as the explorer's Dock side menu is rendered: an option is its glyph
+    // (the symbols of includes/dock_glyphs, included by the page) and its label
+    const compactHostEl = document.createElement("div")
+    compactHostEl.id = "styleGuideCompactChoiceHost"
+    compactHostEl.dataset.choiceMenu = "Dock side"
+    compactHostEl.dataset.choiceMenuCompact = ""
+    Object.values(Const.dockSides).forEach((side, index) => {
+        const optionEl = document.createElement("button")
+        optionEl.type = "button"
+        const glyphEl = document.createElementNS(SVG_NS, "svg")
+        glyphEl.setAttribute("class", "glyph")
+        glyphEl.setAttribute("aria-hidden", "true")
+        const useEl = document.createElementNS(SVG_NS, "use")
+        useEl.setAttribute("href", `#dockGlyph-${side}`)
+        glyphEl.appendChild(useEl)
+        const labelEl = document.createElement("span")
+        labelEl.textContent = side.charAt(0).toUpperCase() + side.slice(1)
+        optionEl.append(glyphEl, labelEl)
+        if (index === 0) {
+            optionEl.setAttribute("aria-checked", "true")
+        }
+        compactHostEl.appendChild(optionEl)
+    })
+    hostEl.appendChild(compactHostEl)
+    buildChoiceMenuCtrl(compactHostEl)
+    hostEl.append("A compact choice menu")
 
     // Alpine's mutation observer initializes the new controls; htmx needs to be told
     htmx.process(hostEl)

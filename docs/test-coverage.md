@@ -86,6 +86,7 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 
 - ✅ Create and retrieve a repository with the supplied name, a creation timestamp, and no update timestamp.
 - ✅ System initialization creates an additional repository and user.
+- ✅ The `system` table holds exactly one row: the database rejects a second row with the default id and with the only allowed id, on both engines.
 - [ ] Assert repository creation sets the owner/storage type, creates exactly one self-parented root folder and all six zeroed statistics, and selects the intended context. These are heavily used as fixtures but not fully asserted together. [MEDIUM]
 - [ ] Fail root-folder or statistics creation and verify no partial repository remains; verify request context is usable after rollback. [CRITICAL]
 - [ ] Test `setContextFromRequest` with valid, unknown, and absent IDs following a request for a different repository; prevent reuse of a stale repository context. [CRITICAL]
