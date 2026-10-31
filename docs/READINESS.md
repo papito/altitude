@@ -99,7 +99,7 @@ As built, each repository has one owner (`repository.owner_account_id` in [all.s
   - read **asset detail** (`…/modals/asset-detail/:id`) as full JSON, including `extractedMetadata` and GPS;
   - on **people**, read the name and the edit-name, cover-face and merge modals; edit the name (ID taken from the body), hide, show, mark as a bad match and set the cover; and merge, which moves the other repository's faces through an unscoped `faceDao.updateByQuery` ([PeopleActionController], [SearchResultsController] `personOf`, [FaceDao] `getTopFaces`, [PersonService] `merge`);
   - on **folders**, open the rename and delete dialogs ([FolderActionController]), rename and move ([FolderService] `move`), and add under a foreign parent. Deleting a foreign folder is a no-op, because `updateByQuery` adds the repository;
-  - on **albums**, open the dialogs, rename and hard-delete ([AlbumService]), add to a foreign album, and remove memberships ([AlbumDao] `removeAssets`);
+  - on **albums**, hard-delete ([AlbumService] `deleteById`) and remove memberships ([AlbumDao] `removeAssets`); reading by ID, renaming and adding to a foreign album are closed by the scoped `AlbumService.getById`;
   - move assets into a foreign folder: the destination is not checked ([LibraryService] `moveAssetsToFolder`).
 
   Fix: scope by default: `BaseService.getById`, `updateById` and `deleteById` add the repository the way `query` and `updateByQuery` already do. Scope `FaceDao.getTopFaces`, `AlbumDao.removeAssets` and `getAssetIds`, the face update in `PersonService.merge` and `FolderDao.getById`, and check destination folders. Locations are the model to copy: a scoped `getById`, foreign IDs answered 404, tested ([LocationServiceTests]).

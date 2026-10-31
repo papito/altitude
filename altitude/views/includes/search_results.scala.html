@@ -63,71 +63,81 @@
 }
 }
 
+@* Three groups in a wrapping row (includes/search_results.css): the lead (the total, then the batch ops while assets are
+   selected), the controls, and the trail (the trash view's Purge button). The side groups share what the controls leave,
+   so the controls sit on the bar's center until the lead needs more room and pushes them right, and a second row once the
+   lead and the controls no longer fit on one. *@
 <div id="searchControl" x-data>
-  <div class="total">
-    <div>
+  <div class="lead">
+    <div class="total">
       <strong>Total:</strong> <span class="results-total" x-text="$store.resultsTotal.label"></span>
       @* The map-area scope of the crowded-pin panel (js/map/map-panel.js); its × clears `bbox` in either layout *@
       @if(bbox.isDefined) {
         <button id="bboxScope" type="button" class="filter-chip" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
       }
     </div>
+    @includes.html.batch_ops()
   </div>
-  @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
-  <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
-    <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
-            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
-    <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
-            data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
-  </div>
-  @* The ⚙ View control is a dialog-trigger context menu, built into this host by
-     js/search-results/view-settings-control.js like the Add album and Add folder controls; its dialog also holds the
-     repository view's triage filter (htmx/view_settings_dialog), which runs a search. `hx-preserve` carries this very
-     element, the built control and its open panel included, from the old fragment into the new one, so the dialog stays
-     open while the results it changed are swapped in under it. *@
-  <div id="viewSettingsActions" hx-preserve></div>
 
-  <div class="group">
-    @* A choice menu (js/common/choice-menus.js wraps the host into its trigger and popover panel). The option marked
-       aria-checked is the effective grouping the server used. Each option is a search trigger carrying the two parameters it
-       sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
-       `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
-       The map layout groups nothing, so its host is disabled. *@
-    <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP) {data-choice-menu-disabled}>
-      <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
-      <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
-      <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {aria-checked="true"}>Date Taken (Oldest first)</button>
-      @* Path order, fixed: the option sets no direction *@
-      <button type="button" data-app-search="click" data-app-search-group-by="location" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Location)) {aria-checked="true"}>Location</button>
+  <div class="controls">
+    @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
+    <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
+      <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
+              data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
+      <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
+              data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
+    </div>
+    @* The ⚙ View control is a dialog-trigger context menu, built into this host by
+       js/search-results/view-settings-control.js like the Add album and Add folder controls; its dialog also holds the
+       repository view's triage filter (htmx/view_settings_dialog), which runs a search. `hx-preserve` carries this very
+       element, the built control and its open panel included, from the old fragment into the new one, so the dialog stays
+       open while the results it changed are swapped in under it. *@
+    <div id="viewSettingsActions" hx-preserve></div>
+
+    <div class="group">
+      @* A choice menu (js/common/choice-menus.js wraps the host into its trigger and popover panel). The option marked
+         aria-checked is the effective grouping the server used. Each option is a search trigger carrying the two parameters it
+         sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
+         `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
+         The map layout groups nothing, so its host is disabled. *@
+      <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP) {data-choice-menu-disabled}>
+        <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
+        <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
+        <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {aria-checked="true"}>Date Taken (Oldest first)</button>
+        @* Path order, fixed: the option sets no direction *@
+        <button type="button" data-app-search="click" data-app-search-group-by="location" data-app-search-group-direction="" @if(grouping.exists(_.by == GroupBy.Location)) {aria-checked="true"}>Location</button>
+      </div>
+    </div>
+
+    <div class="sort">
+      @* A choice menu whose checked option is the effective sort the server used; each option is a search trigger carrying
+         its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
+         (js/search-results/search.js) *@
+      <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down">
+        @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
+        @if(text.isDefined) {
+          <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {aria-checked="true"}>Relevance</button>
+        }
+        <button type="button" data-app-search="click" data-app-search-sort="original_created_at1" @if(sort.field == "original_created_at" && sort.direction.id == 1) {aria-checked="true"}>Date Created (Newest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="original_created_at0" @if(sort.field == "original_created_at" && sort.direction.id == 0) {aria-checked="true"}>Date Created (Oldest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="created_at1" @if(sort.field == "created_at" && sort.direction.id == 1) {aria-checked="true"}>Date Imported (Newest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="created_at0" @if(sort.field == "created_at" && sort.direction.id == 0) {aria-checked="true"}>Date Imported (Oldest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="filename0" @if(sort.field == "filename" && sort.direction.id == 0) {aria-checked="true"}>File Name (A-Z)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="filename1" @if(sort.field == "filename" && sort.direction.id == 1) {aria-checked="true"}>File Name (Z-A)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="size_bytes0" @if(sort.field == "size_bytes" && sort.direction.id == 0) {aria-checked="true"}>File Size (Smallest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="size_bytes1" @if(sort.field == "size_bytes" && sort.direction.id == 1) {aria-checked="true"}>File Size (Largest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="area_size0" @if(sort.field == "area_size" && sort.direction.id == 0) {aria-checked="true"}>Dimensions (Smallest)</button>
+        <button type="button" data-app-search="click" data-app-search-sort="area_size1" @if(sort.field == "area_size" && sort.direction.id == 1) {aria-checked="true"}>Dimensions (Largest)</button>
+      </div>
     </div>
   </div>
 
-  <div class="sort">
-    @* A choice menu whose checked option is the effective sort the server used; each option is a search trigger carrying
-       its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
-       (js/search-results/search.js) *@
-    <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down">
-      @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
-      @if(text.isDefined) {
-        <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {aria-checked="true"}>Relevance</button>
-      }
-      <button type="button" data-app-search="click" data-app-search-sort="original_created_at1" @if(sort.field == "original_created_at" && sort.direction.id == 1) {aria-checked="true"}>Date Created (Newest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="original_created_at0" @if(sort.field == "original_created_at" && sort.direction.id == 0) {aria-checked="true"}>Date Created (Oldest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="created_at1" @if(sort.field == "created_at" && sort.direction.id == 1) {aria-checked="true"}>Date Imported (Newest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="created_at0" @if(sort.field == "created_at" && sort.direction.id == 0) {aria-checked="true"}>Date Imported (Oldest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="filename0" @if(sort.field == "filename" && sort.direction.id == 0) {aria-checked="true"}>File Name (A-Z)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="filename1" @if(sort.field == "filename" && sort.direction.id == 1) {aria-checked="true"}>File Name (Z-A)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="size_bytes0" @if(sort.field == "size_bytes" && sort.direction.id == 0) {aria-checked="true"}>File Size (Smallest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="size_bytes1" @if(sort.field == "size_bytes" && sort.direction.id == 1) {aria-checked="true"}>File Size (Largest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="area_size0" @if(sort.field == "area_size" && sort.direction.id == 0) {aria-checked="true"}>Dimensions (Smallest)</button>
-      <button type="button" data-app-search="click" data-app-search-sort="area_size1" @if(sort.field == "area_size" && sort.direction.id == 1) {aria-checked="true"}>Dimensions (Largest)</button>
-    </div>
+  @* The trash view's Purge button holds the right edge of the toolbar *@
+  <div class="trail">
+    @if(view == Const.Search.View.TRASHBIN) {
+    @htmx.html.trashbin_header()
+    }
   </div>
-
-  @* The trash view's Purge button holds the right edge of the toolbar, in the last track of its grid (includes/search_results.css) *@
-  @if(view == Const.Search.View.TRASHBIN) {
-  @htmx.html.trashbin_header()
-  }
 </div>
 
 @if(layout == Const.Search.Layout.MAP) {

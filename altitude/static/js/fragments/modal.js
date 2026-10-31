@@ -5,8 +5,8 @@
  * A validation response that replaces the form in place is re-hydrated, which re-opens the same
  * host.
  *
- * A dialog that needs wiring beyond its form names it with `data-app-dialog-kind`; the Add to
- * location dialog is the only one (`add-to-location.js`).
+ * A dialog that needs wiring beyond its form names it with `data-app-dialog-kind`: the batch ops'
+ * Add to album (`add-to-album.js`) and Add to location (`add-to-location.js`) dialogs.
  */
 import {
     closeModal,
@@ -15,6 +15,7 @@ import {
     ModalHost,
     openModal,
 } from "../common/modal.js"
+import { hydrateAddToAlbumFragment } from "./add-to-album.js"
 import { hydrateAddToLocationFragment } from "./add-to-location.js"
 import { registerDialogKind } from "./dialog-operations.js"
 
@@ -44,5 +45,7 @@ export function hydrateModalFragment({ fragmentEl }) {
 
     if (fragmentEl.dataset.appDialogKind === "add-to-location") {
         hydrateAddToLocationFragment({ fragmentEl })
+    } else if (fragmentEl.dataset.appDialogKind === "add-to-album") {
+        hydrateAddToAlbumFragment({ fragmentEl })
     }
 }

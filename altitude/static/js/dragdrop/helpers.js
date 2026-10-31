@@ -37,6 +37,14 @@ export function dragMoveListener(event) {
     target.setAttribute("data-y", y)
 }
 
+/**
+ * The batch ops' Move button (`includes/batch_ops`, in the toolbar or the footer): it carries no asset ID, so a drop of
+ * it acts on the selection store's assets.
+ */
+export function isBatchMoverElement(element) {
+    return element.classList.contains("batch-mover")
+}
+
 // Setting element as "fixed" will let us drag it outside the parent container boundaries (between panels)
 export function setFixedPositionWhileDragging(event) {
     let target = event.target

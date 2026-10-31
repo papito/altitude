@@ -151,5 +151,8 @@ object Const:
     val DELETE_CATEGORY_DIALOG_TITLE = "Delete category"
     val MOVE_LOCATION_DIALOG_TITLE = "Move to category"
     val ADD_TO_LOCATION_DIALOG_TITLE = "Add to location"
+    val ADD_TO_ALBUM_DIALOG_TITLE = "Add to album"
+    // The Add to album dialog's last option, which reveals the name field of the album it creates
+    val NEW_ALBUM_OPTION = "New album…"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"

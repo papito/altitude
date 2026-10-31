@@ -35,6 +35,8 @@ export const Const = {
         assetAddedToAlbum: "ASSET_ADDED_TO_ALBUM_EVENT",
         batchAssetsAddedToAlbum: "BATCH_ASSETS_ADDED_TO_ALBUM_EVENT",
         batchAssetsRemovedFromAlbum: "BATCH_ASSETS_REMOVED_FROM_ALBUM_EVENT",
+        batchAddToAlbumRequested: "BATCH_ADD_TO_ALBUM_REQUESTED_EVENT",
+        assetsAddedToAlbum: "ASSETS_ADDED_TO_ALBUM_EVENT",
         locationAdded: "LOCATION_ADDED_EVENT",
         categoryAdded: "CATEGORY_ADDED_EVENT",
         locationRenamed: "LOCATION_RENAMED_EVENT",

@@ -1,32 +1,61 @@
-#batchOps {
-    display: grid;
-    grid-template-columns: 2fr 2fr;
-}
-
-#batchOps .container {
+/* The batch ops (includes/batch_ops), rendered twice: in the search toolbar's lead and in the footer. Both copies are
+   drawn alike, sizes set here rather than inherited from where they sit, so the footer's copy, placed at the toolbar
+   copy's left edge, holds each button directly below its twin */
+.batch-ops,
+.batch-ops .actions {
     display: flex;
-    grid-column-start: 2;
-    flex-direction: row;
     align-items: center;
-    justify-content: flex-end;
-    gap: 100px;
-    padding-right: 100px;
-    box-sizing: border-box;
+    gap: var(--space-4);
+    white-space: nowrap;
 }
 
-#batchOps .action-button {
-    font-weight:  normal;
+.batch-ops {
+    font-size: var(--font-size-small);
+    color: var(--theme-neutral-4);
+}
+
+.batch-ops .selected-count {
+    font-variant-numeric: tabular-nums;
+}
+
+/* The small action button's size, as the trash view's Purge button has it, so the toolbar's height holds */
+.batch-ops .action-button {
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-small);
+    font-weight: normal;
     touch-action: none;
 }
 
-#batchOps i {
+.batch-ops .action-button:hover:not(:disabled) {
+    border-color: var(--warning-background-color);
+}
+
+.batch-ops i {
     margin-right: var(--space-5);
 }
 
-#batchOps .batch-mover button {
+/* Deselect all is its icon alone */
+.batch-ops .deselect i {
+    margin-right: 0;
+}
+
+.batch-ops .drag-drop {
     cursor: move;
 }
 
-#batchOps .control button:hover {
-    border-color: var(--warning-background-color);
+/* The toolbar copy names the anchor the footer copy is placed by */
+#searchControl .batch-ops {
+    anchor-name: --batch-ops;
+}
+
+/* The footer copy is fixed over the footer's row, centered in its height, at the toolbar copy's left edge, so it follows
+   the toolbar copy wherever the explorer's size and dock side and the toolbar's own layout put it. Only the left edge is
+   read, so the results pane's scrolling does not move it. With no toolbar on screen it sits at the toolbar's side
+   padding. A fixed box's containing block is the viewport, which makes the toolbar copy an acceptable anchor although
+   it lies outside the footer */
+footer .batch-ops {
+    position: fixed;
+    bottom: 0;
+    height: var(--footer-height);
+    left: anchor(--batch-ops left, var(--space-8));
 }

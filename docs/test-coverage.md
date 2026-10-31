@@ -193,7 +193,9 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 - ✅ Remove memberships or delete an album while preserving assets and other albums' memberships.
 - ✅ Recycling removes all memberships; restoration does not reinstate them; folder recycling and asset-row deletion also remove affected memberships.
 - ✅ Album-filtered searches return only matching active assets, including across folders and for an empty album; HTTP mutations verify persisted memberships.
-- [ ] Exercise foreign album IDs for read/rename/delete/add/remove and foreign asset IDs in an otherwise local batch; assert isolation of membership rows and return counts. [CRITICAL]
+- ✅ Another repository's album is not found by ID, and adding to it fails and writes no membership (`AlbumService.getById` is scoped); the Add to album dialog answers it with a field error.
+- ✅ The Add to album dialog adds the selection to an album or to a new one created in the same transaction; a taken name creates and adds nothing.
+- [ ] Exercise foreign album IDs for rename/delete/remove and foreign asset IDs in an otherwise local batch; assert isolation of membership rows and return counts. [CRITICAL]
 - [ ] Test unknown album IDs for rename/delete/add and define the read/remove contract for a missing album. [MEDIUM]
 - [ ] Run concurrent insertion of the same membership and verify idempotency and accurate counts under the unique constraint. [MEDIUM]
 - [ ] Verify album operations preserve the complete asset state, binary files, statistics, and people counts, including deleting the last album membership. Current assertions cover only selected asset fields. [MEDIUM]

@@ -22,5 +22,6 @@
 @import "htmx/view_image_detail_modal.css";
 @import "htmx/add_location_dialog.css";
 @import "htmx/add_to_location_dialog.css";
+@import "htmx/add_to_album_dialog.css";
 @import "htmx/merge_people_modal.css";
 @import "htmx/choose_person_cover_face_modal.css";

@@ -6,20 +6,42 @@
   top: var(--results-title-height, 0);
   z-index: 2;
   padding: var(--space-6) var(--space-8);
-  /* A grid whose side tracks are equal: the total sits in the first, the last is empty (the trash view's Purge button
-     holds its right edge, htmx/trashbin_header.css), so the layout toggle and the View, Group and Sort menus between
-     them sit on the bar's center whatever the sides measure (a flex row with an auto margin on the total would center
-     them in what it leaves instead); the gap keeps the controls --space-9 apart */
-  display: grid;
-  grid-template-columns: 1fr auto auto auto auto 1fr;
+  /* A wrapping row of three groups (includes/search_results). The lead (the total, then the batch ops) and the trail (the
+     trash view's Purge button) grow from the same zero basis, so they split what the controls leave evenly and the
+     controls sit on the bar's center whatever the sides hold (a flex row with an auto margin on the total would center
+     them in what the total leaves instead). Neither side shrinks below its content, so the batch ops push the controls
+     right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one,
+     --space-6 below; the groups keep --space-9 apart */
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-9);
+  gap: var(--space-6) var(--space-9);
   background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
-/* The total holds the left edge */
+/* The total holds the left edge, followed by the batch ops while assets are selected */
+#searchControl .lead {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-9);
+}
+
+#searchControl .controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-9);
+}
+
+/* The trash view's Purge button holds the right edge */
+#searchControl .trail {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
 #searchControl .total {
-  justify-self: start;
+  white-space: nowrap;
 }
 
 /* The total's "Total:" label is an eyebrow before the count, which is a step up from the body text so it reads at a
@@ -51,16 +73,12 @@
   margin-left: var(--space-5);
 }
 
-/* Direct children only: as a descendant selector this would also match the View control's popover
+/* The controls' direct children only: as a descendant selector this would also match the View control's popover
    panel, and an ID selector outranks `.context-menu:popover-open`, so the closed panel would be
    forced back to display: grid and stay on screen. The layout toggle keeps its .toggle-group flex row. */
-#searchControl > div:not(.toggle-group) {
+#searchControl .controls > div:not(.toggle-group) {
   display: grid;
   place-items: center;
-}
-
-#searchControl .total div {
-  display: block;
 }
 
 #assets .cell {

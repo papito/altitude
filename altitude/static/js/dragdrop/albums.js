@@ -1,5 +1,5 @@
 import { Const } from "../constants.js"
-import { dropzoneListeners } from "./helpers.js"
+import { dropzoneListeners, isBatchMoverElement } from "./helpers.js"
 
 /**
  * Album rows accept assets: a single thumbnail, or the batch mover when assets are selected.
@@ -8,7 +8,7 @@ import { dropzoneListeners } from "./helpers.js"
  */
 export function bindAlbumDragDrop({ dispatch }) {
     interact("#albumList .dropzone").dropzone({
-        accept: "#assets .drag-drop, #batchOps .drag-drop",
+        accept: "#assets .drag-drop, .batch-ops .drag-drop",
         overlap: 0.2,
 
         ...dropzoneListeners((event) => {
@@ -17,8 +17,7 @@ export function bindAlbumDragDrop({ dispatch }) {
             const assetId = draggableElement.getAttribute(
                 Const.attributes.assetId,
             )
-            const isBatchMover =
-                draggableElement.parentNode.classList.contains("batch-mover")
+            const isBatchMover = isBatchMoverElement(draggableElement)
 
             if (assetId) {
                 console.debug(`Adding asset ${assetId} to album ${albumId}`)

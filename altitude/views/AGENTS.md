@@ -11,7 +11,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -76,7 +76,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | JS directory | Template(s) it serves |
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
-| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the Add to location dialog's selection field (`add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
+| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
@@ -254,8 +254,8 @@ click listener per displayed grid toggles an asset from its checkmark or a Shift
 image; box selection commits through the same methods; drag handlers read `contains(id)` to
 decide whether a drop escalates to a batch and call `setDragging` to dim the selection while it
 moves. Cells entering or leaving the grid are announced with `noteGridChange()`, which bumps a
-reactive counter the group headers read (the DOM itself is not reactive). The footer binds to the
-set (`x-show`, `x-text`), and `reset()` from its Deselect All button clears it.
+reactive counter the group headers read (the DOM itself is not reactive). Both copies of the batch ops (see **Batch
+ops**) bind to the set (`x-show`, `x-text`), and `reset()` from their Deselect all (×) button clears it.
 
 ### 3. Coordination around native UI
 `x-data="contextMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
@@ -369,7 +369,7 @@ shown in the popover host. Attributes that describe
 the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), and `kind`, naming wiring a dialog needs beyond its
-form (the Add to location selection, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-location.js`). Its success
+form (the Add to album and Add to location selections, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-album.js` and `js/fragments/add-to-location.js`). Its success
 event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
 `-detail-target-attr-*`) on the fragment root. An outcome only the server knows (how many assets a
 membership change applied) arrives as JSON in the `App-Success-Detail` response header
@@ -496,8 +496,8 @@ rows. CSS sets `display` only under
 hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
 those viewport coordinates apply correctly. `.menu-ctrl` and the icon control `.expand-ctrl` are
 excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags. A panel lives inside whatever container holds
-its trigger, so no stylesheet may reach into one with a descendant selector: `#searchControl > div:not(.toggle-group)`
-in `includes/search_results.css` is scoped to direct children for exactly that reason, since an ID
+its trigger, so no stylesheet may reach into one with a descendant selector: `#searchControl .controls > div:not(.toggle-group)`
+in `includes/search_results.css` is scoped to the controls' direct children for exactly that reason, since an ID
 selector outranks `.context-menu:popover-open` and would leave the closed panel displayed (the
 `:not` leaves `#layoutToggle` its `.toggle-group` row).
 
@@ -574,8 +574,18 @@ does not change, and the album counts are patched in place (`refreshAlbumCounts`
 `refreshCounts` after every asset mutation, because recycling drops an asset from its albums).
 While an album's results are displayed (`searchParams.albumId`, mirrored by `data-results-album-id`
 on the results fragment, which marks the row `data-viewed-scope` and colors its icon green) the batch
-footer offers "Remove from album", which deletes the memberships of the selected assets and removes
-their cells. Add is a popover dialog (`add_album_dialog.scala.html`, submitted with Return) opened by the top `#addAlbumBtn` (centered above the list) or, while
+ops offer "Remove from album", which deletes the memberships of the selected assets and removes
+their cells. Outside the trash they always offer "Add to album": it dispatches `batchAddToAlbumRequested`, the
+listener requests `add_to_album_dialog` (`AlbumActionController`) into the modal host, and
+`js/fragments/add-to-album.js` fills its hidden `assetIds` field from the selection (`fillSelectionField` in
+`js/fragments/selection-field.js`, which the Add to location dialog shares) and keeps the success detail naming the
+chosen album. The select lists the albums, then "New album…" (an empty value), which shows the name field below it:
+the server then creates that album and adds the selection in one transaction (`AlbumService.addAssetsToNewAlbum`; a
+taken name is the field's error and creates nothing). With no albums, "New album…" is the only option and the name
+field shows from the start, focused. The server's detail adds how many assets it `added`, the album's ID and name, and
+whether it `created` it; `assetsAddedToAlbum` reports that through `assetActions.reportAddedToAlbum`, the report a drop
+makes too ("Already in album" when nothing was new), resets the selection, and reloads the list for a created album
+(it needs its row) or refreshes the counts otherwise. Add is a popover dialog (`add_album_dialog.scala.html`, submitted with Return) opened by the top `#addAlbumBtn` (centered above the list) or, while
 there are no albums, by the centered `#addFirstAlbumBtn`; the renderer builds both controls into
 their hosts and shows one or the other. Rename and Delete open popover dialogs from the album's menu; deleting the viewed album runs a
 search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDeleted` reload the
@@ -614,11 +624,11 @@ are patched in place (`refreshLocationCounts`, also called by `refreshCounts` af
 mutation, because recycling drops an asset from its Locations). While a Location's results are
 displayed (`searchParams.locationId`, mirrored by `data-results-location-id`, which marks the row
 `data-viewed-scope` and colors its own icon green, top-level or inside a category, whose icon stays
-plain; inside a collapsed category the viewed Location stays hidden until it is expanded) the batch footer offers "Remove from location", which
-deletes the memberships of the selected assets and removes their cells. The footer always offers "Add
-to location (n)" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
+plain; inside a collapsed category the viewed Location stays hidden until it is expanded) the batch ops offer "Remove from location", which
+deletes the memberships of the selected assets and removes their cells. They always offer "Add
+to location" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
 `add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
-`assetIds` field from the selection and keeps the fragment's success detail naming the chosen
+`assetIds` field from the selection (`fillSelectionField`) and keeps the fragment's success detail naming the chosen
 Location (its ID, and its bare name from the option's `data-name`, since the row is not rendered while
 another explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
 reports that through `assetActions.reportAddedToLocation`, the report a drop makes too ("Already in
@@ -871,12 +881,12 @@ from the element and flipped below (`flip-block`) when the top has no room; it w
 `--font-size-small`, takes no pointer events and fades in over 150 ms under `prefers-reduced-motion: no-preference`,
 with no exit fade. One tooltip at a time: a new call hides the shown one first, and the inline name moves with it. It
 hides after 2 s, or at the next press or key anywhere (`pointerdown` and `keydown` at the document's capture phase),
-which comes a tick before the anchor may leave the tree (Deselect All hides the batch bar), so no tooltip is left
+which comes a tick before the anchor may leave the tree (Deselect all hides the batch ops), so no tooltip is left
 anchorless at the viewport's corner. A screen reader hears the message through the snackbar's polite live region
 (`announcePolitely` in `snackbar.js`): the host is `display: none` until shown, so a live region of its own would not
 reliably be read. Click only, no hover or focus tooltip: a hover hint stays a native `title`. The one caller is the
-batch bar's Move button (`includes/batch_ops`), a drag handle, whose hint is "Drag to folder, location, or album"; its
-drag (`js/dragdrop/batch-ops.js`) arms `suppressClickAfterRelease()` at `start`, so the click the release produces on
+batch ops' Move button (`includes/batch_ops`, either copy), a drag handle, whose hint is "Drag to folder, location, or
+album"; its drag (`js/dragdrop/batch-ops.js`) arms `suppressClickAfterRelease()` at `start`, so the click the release produces on
 the button, moved under the pointer, never shows the hint (at `start` rather than `end`: with inertia a flick's `end`
 fires after the click), and a press that wobbles past interact's 1 px tolerance is a drag that snaps back, with no
 hint. The style guide's Feedback section holds a specimen.
@@ -985,9 +995,25 @@ the grouping and the layout stay, so a person selected in Triage goes back to al
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a six-column grid (`1fr auto auto auto auto 1fr`, `--space-9` gaps): the total holds the left edge of the first track, the layout toggle and the View, Group and Sort menus take the four middle tracks, and the last track is empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The side tracks are equal, so the controls sit on the bar's center whatever the sides measure. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
 the first of person, folder, album, Location and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
+
+**Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, see **Tooltip**), Recycle, Add to
+album, Remove from album while an album's results are displayed, Add to location, Remove from location while a Location's
+are, and Deselect all (×, an icon button with an accessible name); in the trash view Purge, Restore and Deselect all. The
+count shows once ("3 selected"), before the buttons, which carry no count of their own; they are the small action
+button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-4`
+apart. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in
+the footer. Both copies are drawn alike, their sizes set in `static/css/includes/batch_ops.css` rather than inherited, and
+the footer's is placed by CSS anchor positioning: the toolbar copy is `anchor-name: --batch-ops`, and the footer copy is
+`position: fixed` over the footer's row (`--footer-height`, its buttons centered in it) with `left: anchor(--batch-ops left,
+var(--space-8))`, so each button sits directly below its twin wherever the explorer's size and dock side and the
+toolbar's wrapping put the toolbar copy, with no script; only the left edge is read, so the results pane's scrolling does
+not move it, and the crowded-pin panel's toolbar is `display: none`, so it is never the anchor. Move drags from either
+copy (`js/dragdrop/batch-ops.js`): `setFixedPositionWhileDragging` lifts the button out of the scrolling results pane, as
+a dragged thumbnail is, and the drop zones recognize it by its `batch-mover` class (`isBatchMoverElement` in
+`js/dragdrop/helpers.js`).
 
 **Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day or
 a Location, with a `.result-group` header: a checkbox over the group; its name - a
@@ -1378,7 +1404,7 @@ the colors and shadows still change. A disabled button takes neither the hover n
 (`:hover:not(:disabled)`, `:active:not(:disabled)`). `.action-button.primary`, the accent call to action, is a
 dialog's or a form's main action: Add in the Add location and Add to location dialogs, Move, Merge, the Settings
 Save, Upload from computer, and the empty lists' "Add your first album" and "Add your first location"; a destructive
-confirmation stays `.error`. The batch bar's buttons (`#batchOps .action-button`) keep a normal weight and draw the
+confirmation stays `.error`. The batch ops' buttons (`.batch-ops .action-button`) keep a normal weight, the small button size, and draw the
 variants' own edges.
 
 **Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
@@ -1678,6 +1704,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/includes/dock_glyphs.scala.html` | The hidden SVG symbol sheet of the four Dock side glyphs, drawn by the Dock side menu's options and trigger through `<use>`; included by `index.scala.html` and the style guide |
 | `static/js/common/album-list.js` | renders the album list, its counts (after each name), and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
 | `static/js/common/location-list.js` | renders the categories (expandable nodes holding their Locations) and top-level Locations, the counts after each name, and each row's menu from the JSON list endpoint; restores expansion across rebuilds; patches the counts in place; marks the viewed Location |
+| `static/js/fragments/selection-field.js` | `fillSelectionField`: fills a batch dialog's hidden `assetIds` field from the selection, shared by the Add to album and Add to location dialogs |
+| `static/js/fragments/add-to-album.js` | the Add to album dialog: its selection field, the new album's name field shown while "New album…" is chosen, and the success detail naming the chosen album |
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |

@@ -146,14 +146,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
       fields.LOCATION_ID) {
       normalize(json)
       validate(json, required = List(fields.LOCATION_ID, Api.Field.ASSET_IDS), uuid = List(fields.LOCATION_ID))
-      // HTMX's hidden field is a comma-separated selection, unlike the array accepted by the JSON API.
-      val ids = json(Api.Field.ASSET_IDS).str.split(",").map(_.trim).filter(_.nonEmpty).toSet
-      val validator = ApiRequestValidator(uuid = List(Api.Field.ASSET_IDS))
-      ids.foreach(id => validator.validate(ujson.Obj(Api.Field.ASSET_IDS -> id)))
-      if ids.isEmpty then
-        val errors = ValidationException()
-        errors.errors += Api.Field.ASSET_IDS -> Const.Msg.Err.VALUE_REQUIRED
-        errors.trigger()
+      val ids = selectionIds(json)
       val added = App.altitude.service.location.addAssets(json(fields.LOCATION_ID).str, ids)
       // Assets already in the Location are skipped, so the dialog reports this count rather than the selection's size
       dialogSuccessResponse(ujson.Obj("added" -> added))

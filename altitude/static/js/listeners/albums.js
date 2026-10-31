@@ -8,9 +8,10 @@ import { showSuccessSnackBar } from "../common/snackbar.js"
 import { runSearch } from "../search-results/search.js"
 
 /**
- * Album events: the dialogs' outcomes (add, rename, delete reload the list) and membership changes
- * from drag/drop and the batch footer. A single-asset drop escalates to a batch when that asset is
- * among the selected ones, as folder moves do.
+ * Album events: the dialogs' outcomes (add, rename, delete reload the list; the Add to album
+ * dialog announces its memberships) and membership changes from drag/drop and the batch ops. A
+ * single-asset drop escalates to a batch when that asset is among the selected ones, as folder
+ * moves do.
  */
 export function registerAlbumListeners(app) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
@@ -72,4 +73,36 @@ export function registerAlbumListeners(app) {
             })
         },
     )
+
+    // The batch ops' "Add to album" opens the dialog for the selection in the modal host; the
+    // hidden selection field is filled when the dialog is hydrated (js/fragments/add-to-album.js)
+    document.body.addEventListener(
+        Const.events.batchAddToAlbumRequested,
+        () => {
+            htmx.ajax(
+                "GET",
+                `/htmx/album/r/${app.context.getRepoId()}/dialogs/add-to-album`,
+                { swap: "innerHTML", target: "#modalContent" },
+            )
+        },
+    )
+
+    // The dialog's success: the server added the selection to the chosen album, or to the album
+    // it created (`created`), skipping assets already in it, so the selection is done with. A new
+    // album needs its row, so the list is reloaded; otherwise only the counts move on
+    document.body.addEventListener(Const.events.assetsAddedToAlbum, (event) => {
+        // `added` is the server's count (the dialog operation merges it into the detail); a
+        // detail that did not arrive falls back to the selection the dialog submitted
+        app.assetActions.reportAddedToAlbum({
+            ...event.detail,
+            added: event.detail.added ?? selectedAssets().size,
+        })
+        selectedAssets().reset()
+
+        if (event.detail.created) {
+            reloadAlbumList(app.context.getRepoId())
+        } else {
+            app.reloadAlbumCounts()
+        }
+    })
 }
