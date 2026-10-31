@@ -55,6 +55,10 @@
 
 @snackbarAnnouncers()
 
+@* The tooltip's host: `$tooltip('Message')` (static/js/common/tooltip.js) writes the message in and
+   shows it above the clicked element, placed by CSS anchor positioning (`#tooltip` in core.css). *@
+<div id="tooltip" popover="manual" role="tooltip"></div>
+
 @* Dialog hosts: the general modal, the popover dialog and asset detail. Visibility, focus, and
    dismissal are owned by static/js/common/modal.js through the Alpine `modal` store; `x-trap` comes
    from the @@alpinejs/focus plugin. General dialogs ignore backdrop clicks; asset detail closes on

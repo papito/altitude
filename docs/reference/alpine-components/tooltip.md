@@ -43,4 +43,11 @@ None in the component; tippy instances are created per element.
 
 ## Notes for Altitude
 
-Altitude uses native `title` attributes today (for example on grid metadata). Adding tippy would be a new vendored dependency plus Popper; only worth it if tooltips need to be styled or positioned.
+Altitude has the magic and not the directive, with neither tippy nor Popper: `$tooltip('Message')`
+(`altitude/static/js/common/tooltip.js`, registered with everything else `html_common` binds) writes the
+message into `#tooltip`, a `popover="manual"` host of `includes/html_common`, and CSS anchor positioning
+(`#tooltip` in `core.css`) centers it above the element, named by an inline `anchor-name`. It hides after
+two seconds or at the next press or key, and the message is announced through the snackbar's polite live
+region. The batch bar's Move button, a drag handle, shows its hint this way on a click. Hover tooltips stay
+native `title` attributes (for example on grid metadata). The detail is under **Tooltip** in
+`altitude/views/AGENTS.md`.

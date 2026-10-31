@@ -18,7 +18,8 @@
  * dismiss button by Tab; dismissing the focused one moves focus to its neighbour in the stack.
  *
  * Screen readers hear a message through visually hidden live regions
- * (`data-app-snackbar-announcer`), not through the stacks. Each place holds two sibling regions,
+ * (`data-app-snackbar-announcer`), not through the stacks; `announcePolitely` lends the polite
+ * one to a message that is no snackbar (the tooltip's, `common/tooltip.js`). Each place holds two sibling regions,
  * a polite `role="status"` one for notices and an assertive `role="alert"` one for errors.
  * `x-trap.inert` hides everything outside an active modal host from assistive technology, so
  * while the general modal or asset detail is active the message is written into that host's
@@ -348,6 +349,11 @@ function _showSnackbar({ type = "success", message }) {
     }
 
     store.add(type, message)
+}
+
+/** Announces a message of the page's own (a tooltip's hint) through the polite live region */
+export function announcePolitely(message) {
+    announce("success", message, 1)
 }
 
 export function showSuccessSnackBar(message) {

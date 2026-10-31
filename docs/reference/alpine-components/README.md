@@ -23,7 +23,7 @@ libraries below are not vendored.
 | [Notifications](notifications.md) | none |
 | [Radio Group](radio-group.md) | none |
 | [Toggle](toggle.md) | none |
-| [Tooltip](tooltip.md) | @popperjs/core, tippy.js |
+| [Tooltip](tooltip.md) | @popperjs/core, tippy.js (Altitude's `$tooltip` uses neither: a native popover, anchored by CSS) |
 
 ## Headless components (`@alpinejs/ui`)
 

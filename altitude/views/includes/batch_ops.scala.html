@@ -1,10 +1,11 @@
 <div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
     <div class="container">
-        <!-- Default view: Move, Recycle, Remove from album (in an album), Add to location, Remove from location (in a Location), Deselect All -->
+        <!-- Default view: Move, Recycle, Remove from album (in an album), Add to location, Remove from location (in a Location), Deselect All.
+             Move is a drag handle (js/dragdrop/batch-ops.js); a click on it explains that in a tooltip. -->
         <template x-if="!$store.currentView.isTrashBinView()">
             <div class="container">
                 <div class="control batch-mover">
-                    <button class="action-button success drag-drop"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
+                    <button class="action-button success drag-drop" @@click="$tooltip('Drag to folder, location, or album')"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
                 </div>
                 <div class="control batch-recycler">
                     <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>

@@ -3,12 +3,14 @@ import focusPlugin from "../lib/alpine-focus.esm.js"
 import { Const } from "../constants.js"
 import { createModalStore } from "../common/modal.js"
 import { createSnackbarStore } from "../common/snackbar.js"
+import { tooltipMagic } from "../common/tooltip.js"
 
 /**
  * Registers everything `views/includes/html_common.scala.html` binds, so every page that includes
  * it starts Alpine with the same set: the `modal` store (the modal hosts and the popover title),
- * the `imageDetailLoading` store (asset detail's spinner), the `snackbar` store (the two stacks)
- * and the focus plugin (`x-trap` on the modal hosts, the only Alpine plugin and its only user).
+ * the `imageDetailLoading` store (asset detail's spinner), the `snackbar` store (the two stacks),
+ * the `$tooltip` magic (over the `#tooltip` host) and the focus plugin (`x-trap` on the modal
+ * hosts, the only Alpine plugin and its only user).
  *
  * The plugin is registered here rather than by each page's entry module, so a page cannot start
  * Alpine with the stores and without `x-trap`. Each page calls this exactly once, before
@@ -27,4 +29,7 @@ export function registerHtmlCommonBindings() {
 
     // The snackbar's two stacks of messages, errors and notices (common/snackbar.js)
     Alpine.store(Const.state.snackbar, createSnackbarStore())
+
+    // `$tooltip('Message')`: a hint above the element, shown on a click (common/tooltip.js)
+    Alpine.magic("tooltip", tooltipMagic)
 }

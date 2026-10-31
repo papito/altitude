@@ -1233,6 +1233,40 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     }
 }
 
+/* The tooltip of common/tooltip.js, the host html_common renders: a manual popover centered above the element the
+   magic names --tooltip-anchor, flipped below when the top has no room, in the menus' frosted surface. Its inset and
+   margins replace the UA popover's, which would pin it to the viewport. No exit fade: it hides at the press that may
+   take its anchor out of the tree a tick later, and a fading box with no anchor would sit at the viewport's corner */
+#tooltip {
+    inset: auto;
+    position-anchor: --tooltip-anchor;
+    position-area: top;
+    margin-block: 0 var(--space-2);
+    margin-inline: var(--viewport-gap);
+    position-try-fallbacks: flip-block;
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius);
+    color: inherit;
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+    font-size: var(--font-size-small);
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    #tooltip {
+        transition: opacity 150ms ease-out;
+    }
+
+    @starting-style {
+        #tooltip:popover-open {
+            opacity: 0;
+        }
+    }
+}
+
 /*           */
 /* UTILITIES */
 /*           */

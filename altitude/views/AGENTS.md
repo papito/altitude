@@ -39,7 +39,7 @@ views/
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
-Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, and the three dialog hosts)
+Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, the tooltip's host, and the three dialog hosts)
 and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
@@ -81,13 +81,13 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
-| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores and the focus plugin) on every page that includes it |
+| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`. The import page's hydrates its upload form and starts no Alpine. Settings' starts Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store, no fragments) and registers the htmx request rule with a minimal app and the page's own listeners; see **Settings screen** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) and `people-tab.js` (the People tab's buckets, Split view and pane loads); `index.js` registers them |
@@ -859,6 +859,28 @@ fades out over `--snackbar-exit-duration`, which `snackbar.js` reads to remove i
 `transitionend`), or at once under reduced motion. A page without the store logs a message and drops it: the import
 page (`pipeline.scala.html`) includes no `html_common`, so the error snackbars of its upload form are only logged.
 
+**Tooltip** — A hint about a control, shown on a click, not an outcome (that is the snackbar's). `$tooltip('Message')`
+in a click handler (`@@click="$tooltip('…')"`; the Alpine UI tooltip's magic, `docs/reference/alpine-components/tooltip.md`,
+with neither tippy nor Popper) is `js/common/tooltip.js`, registered by `registerHtmlCommonBindings()` with everything
+else `html_common` binds. It writes the message as plain text into `#tooltip`, the one `popover="manual"` host of
+`html_common` (`role="tooltip"`, no `x-data`: the module owns it as `modal.js` owns the popover dialog), and shows it
+in the top layer. CSS anchor positioning places it (`#tooltip` in `core.css`): the magic sets an inline
+`anchor-name: --tooltip-anchor` on the clicked element, so any element can call it with no ID or rule of its own, and
+the host's `position-area: top` centers it above the element, slid inside the viewport at a side edge, `--space-2`
+from the element and flipped below (`flip-block`) when the top has no room; it wears the menus' frosted surface at
+`--font-size-small`, takes no pointer events and fades in over 150 ms under `prefers-reduced-motion: no-preference`,
+with no exit fade. One tooltip at a time: a new call hides the shown one first, and the inline name moves with it. It
+hides after 2 s, or at the next press or key anywhere (`pointerdown` and `keydown` at the document's capture phase),
+which comes a tick before the anchor may leave the tree (Deselect All hides the batch bar), so no tooltip is left
+anchorless at the viewport's corner. A screen reader hears the message through the snackbar's polite live region
+(`announcePolitely` in `snackbar.js`): the host is `display: none` until shown, so a live region of its own would not
+reliably be read. Click only, no hover or focus tooltip: a hover hint stays a native `title`. The one caller is the
+batch bar's Move button (`includes/batch_ops`), a drag handle, whose hint is "Drag to folder, location, or album"; its
+drag (`js/dragdrop/batch-ops.js`) arms `suppressClickAfterRelease()` at `start`, so the click the release produces on
+the button, moved under the pointer, never shows the hint (at `start` rather than `end`: with inertia a flick's `end`
+fires after the click), and a press that wobbles past interact's 1 px tolerance is a drag that snaps back, with no
+hint. The style guide's Feedback section holds a specimen.
+
 **Infinite scroll + lazy load** — The last `.cell` (by position: a Location page can hold its last
 asset in an earlier cell too) gets class `last-cell` and carries how the next
 page is reached: the encoded cursor in `data-app-search-after`, in an ungrouped grid and a grouped
@@ -1619,8 +1641,9 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
-| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar`; the `snackbar` store (`createSnackbarStore`: the two stacks, the cap and merge, the notices' timers, focus on dismiss) and the announcer (two regions per place) |
-| `static/js/stores/html-common.js` | `registerHtmlCommonBindings()`: what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the focus plugin), called once per page before Alpine starts: from `initializeFrontendStores()` and `settings-page.js` |
+| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar`; the `snackbar` store (`createSnackbarStore`: the two stacks, the cap and merge, the notices' timers, focus on dismiss) and the announcer (two regions per place; `announcePolitely` lends the polite one to the tooltip) |
+| `static/js/common/tooltip.js` | the `$tooltip` magic (`tooltipMagic`), `showTooltip` and `hideTooltip`: the hint above a clicked element, in the `#tooltip` host, placed by CSS anchor positioning (see **Tooltip**) |
+| `static/js/stores/html-common.js` | `registerHtmlCommonBindings()`: what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic, the focus plugin), called once per page before Alpine starts: from `initializeFrontendStores()` and `settings-page.js` |
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
 | `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day or a Location) as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through the store on release |
