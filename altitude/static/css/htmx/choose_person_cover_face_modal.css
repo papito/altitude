@@ -6,10 +6,10 @@
 
 #faceSelector .info {
     display: grid;
-    font-size: 1.1em;
-    color: var(--font-color-dim);
-    font-weight: 500;
-    letter-spacing: 1px;
+    font-size: var(--font-size-medium);
+    color: var(--theme-neutral-3);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--letter-spacing-wide);
     place-items: center;
 }
 
@@ -25,6 +25,6 @@
 }
 
 #faceSelector .faces img:hover {
-    border: 1px solid var(--warning-font-color);
+    border: 1px solid var(--warning-color);
     cursor: pointer;
 }

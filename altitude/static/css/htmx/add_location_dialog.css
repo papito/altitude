@@ -1,6 +1,6 @@
 /* The editor needs room for the map: widen the general modal for this dialog only */
 #modalContent:has(.location-editor) {
-  --modal-content-width: 720px;
+  --modal-content-width: 45rem;
 }
 
 /* One field per row; the map, its readout and the place search take rows of their own */
@@ -9,29 +9,24 @@
   row-gap: var(--control-vertical-space);
 }
 
-#addLocation label {
-  display: block;
-  margin-bottom: 4px;
-}
-
 #addLocation input[type="text"], #addLocation input[type="search"], #addLocation select {
   width: 100%;
   box-sizing: border-box;
 }
 
 #locationEditorMap {
-  height: 300px;
+  height: var(--location-editor-map-height);
 }
 
 #locationPinReadout {
-  color: var(--font-color-dim);
-  font-size: .9em;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
 }
 
 #addLocation .geocode-row {
   display: grid;
   grid-template-columns: 1fr max-content;
-  column-gap: 6px;
+  column-gap: var(--space-3);
   align-items: center;
 }
 
@@ -41,7 +36,7 @@
 }
 
 #locationGeocodeResults button {
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   border: 0;
   background: none;
   color: inherit;
@@ -51,5 +46,5 @@
 }
 
 #locationGeocodeResults button:hover, #locationGeocodeResults button:focus-visible {
-  background-color: var(--background-tertiary-color);
+  background-color: var(--theme-secondary);
 }

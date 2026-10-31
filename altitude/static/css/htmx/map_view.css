@@ -3,8 +3,8 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  margin: 0 10px 10px 10px;
-  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+  margin: 0 var(--space-5) var(--space-5);
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
 /* Its own stacking context: Leaflet's panes carry z-indexes in the hundreds, which must stay below the modals */
@@ -22,25 +22,25 @@
   right: 0;
   bottom: 0;
   z-index: 1;
-  width: min(60%, 700px);
+  width: var(--map-panel-width);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--panel-border-color);
-  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
-  box-shadow: var(--map-panel-shadow);
+  border-left: var(--border-hairline) var(--panel-border-color);
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
+  box-shadow: var(--drop-shadow);
 }
 
 #mapPanel header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--panel-border-color);
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-hairline) var(--panel-border-color);
 }
 
 #mapPanel header .count {
   flex: 1;
-  font-weight: bold;
+  font-weight: var(--font-weight-bold);
 }
 
 #mapPanelContent {
@@ -49,7 +49,8 @@
   overflow-y: auto;
 }
 
-/* The panel's grid is scoped by the header above it: the fragment's own controls are for the map */
+/* The panel's grid is scoped by the header above it: the fragment's own title and controls are for the map */
+#mapPanel .results-title,
 #mapPanel #searchControl {
   display: none;
 }
@@ -58,10 +59,10 @@
    div inside it, which fills it */
 .asset-pin {
   box-sizing: border-box;
-  border: 2px solid var(--on-fill-color);
-  border-radius: 4px;
-  background-color: var(--background-color);
-  box-shadow: var(--pin-shadow);
+  border: 2px solid var(--theme-neutral-4);
+  border-radius: var(--radius);
+  background-color: var(--theme-neutral-2);
+  box-shadow: var(--drop-shadow);
   cursor: pointer;
 }
 
@@ -76,7 +77,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: var(--radius-small);
 }
 
 /* A pin standing for several plotted points: the count badge over the representative thumbnail */
@@ -85,9 +86,9 @@
   left: 0;
   width: 100%;
   height: 100%;
-  color: var(--on-fill-color);
+  color: var(--theme-neutral-4);
   background-color: var(--scrim-color);
-  text-shadow: var(--pin-shadow);
+  text-shadow: var(--drop-shadow);
 }
 
 /* A Location's pin: the glyph with the Location's path beside it */
@@ -99,18 +100,18 @@
 .location-pin.on-map > div {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .location-pin.on-map .path {
-  font-size: 12px;
-  font-weight: bold;
-  line-height: 1.2;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-text);
   white-space: nowrap;
-  padding: 1px 5px;
-  border-radius: 3px;
-  color: var(--on-fill-color);
-  background-color: var(--dnd-drop-target-color);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-small);
+  color: var(--theme-on-primary);
+  background-color: var(--theme-primary);
 }
 
 .location-pin.on-map .path .category {

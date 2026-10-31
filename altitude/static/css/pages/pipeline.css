@@ -18,13 +18,13 @@
   grid-column: 2;
   width: 100%;
   display: grid;
-  padding: 20px;
-  border: var(--form-border);
-  border-radius: 5px;
+  padding: var(--space-7);
+  border: var(--border-hairline) var(--theme-neutral-3);
+  border-radius: var(--radius);
   place-items: center;
-  background-color: var(--background-form-color);
+  background-color: var(--theme-neutral-2);
 }
 
 #importLog {
-  border-top: var(--form-border);
+  border-top: var(--border-hairline) var(--theme-neutral-3);
 }

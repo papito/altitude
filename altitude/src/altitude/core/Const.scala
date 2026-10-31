@@ -81,6 +81,18 @@ object Const:
       val TRIAGE = "triage"
       val TRASHBIN = "trashbin"
 
+  /**
+   * The entries of the shared nav (`includes/nav`), by the key a page marks its own entry with (`current`): the main page's three
+   * views, then a page each.
+   */
+  object NavEntry:
+    val BROWSE: String = Search.View.DEFAULT
+    val TRIAGE: String = Search.View.TRIAGE
+    val TRASH: String = Search.View.TRASHBIN
+    val IMPORT = "import"
+    val SETTINGS = "settings"
+    val STYLE_GUIDE = "style-guide"
+
   object Security:
     val MEMBER_ME_COOKIE_EXPIRATION_DAYS = 7
 
@@ -95,11 +107,12 @@ object Const:
     val STAGING = "staging"
     val MODELS = "models"
 
-  object PeopleTypeFilter:
-    val ALL = "all"
+  /** The People buckets of the People tab; a listing is the union of the buckets asked for (see docs/faces.md, People) */
+  object PeopleBucket:
+    val MATCHED = "matched"
+    val UNMATCHED = "unmatched"
     val HIDDEN = "hidden"
-    val COMPLETE = "complete"
-    val INCOMPLETE = "incomplete"
+    val ALL: Set[String] = Set(MATCHED, UNMATCHED, HIDDEN)
 
   /** MESSAGES */
   object Msg:
@@ -138,5 +151,8 @@ object Const:
     val DELETE_CATEGORY_DIALOG_TITLE = "Delete category"
     val MOVE_LOCATION_DIALOG_TITLE = "Move to category"
     val ADD_TO_LOCATION_DIALOG_TITLE = "Add to location"
+    val ADD_TO_ALBUM_DIALOG_TITLE = "Add to album"
+    // The Add to album dialog's last option, which reveals the name field of the album it creates
+    val NEW_ALBUM_OPTION = "New album…"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"

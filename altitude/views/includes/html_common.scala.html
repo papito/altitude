@@ -1,10 +1,69 @@
 @()
 
-<div id="snackbar"></div>
+@* The snackbar, rendered from the Alpine `snackbar` store of static/js/common/snackbar.js: errors
+   stack at top center, successes and warnings ("notices") at bottom left. Each stack is a
+   `popover="manual"` element the store shows while it has a message, so it paints in the top layer,
+   above the modal hosts and the map. The notices stack holds its timers while the pointer is over it
+   or focus is inside it. Screen readers hear a message through visually hidden announcers
+   (`data-app-snackbar-announcer`), not through the stacks: `x-trap.inert` hides everything outside
+   an active modal host, so each trapped `.modal-box` holds announcers of its own next to its
+   content (which every open replaces), and the ones below serve the page and the popover dialog. *@
 
-@* Modal hosts. Visibility, focus, and dismissal are owned by static/js/common/modal.js through the
-   Alpine `modal` store; `x-trap` comes from the @@alpinejs/focus plugin. General dialogs ignore
-   backdrop clicks; asset detail closes on them. *@
+@* The messages of one stack, `messages` being the store's list for it. The icon gives the type
+   along with the color. *@
+@snackbarMessages(messages: String) = {
+    <template x-for="item in @messages" :key="item.id">
+        <div class="snackbar" :class="$store.snackbar.classesOf(item)">
+            <i class="fas" :class="$store.snackbar.iconOf(item)" aria-hidden="true"></i>
+            <span class="snackbar-message" x-text="item.message"></span>
+            <span class="snackbar-count" x-show="$store.snackbar.isRepeated(item)" x-text="$store.snackbar.countOf(item)"></span>
+            <button type="button"
+                    class="snackbar-dismiss"
+                    aria-label="Dismiss message"
+                    x-on:click="$store.snackbar.dismiss(item.id, $el)">&times;</button>
+        </div>
+    </template>
+}
+
+@* The announcers of one place: two sibling live regions, never nested, the polite one for successes
+   and warnings and the assertive one for errors. A message is appended as a paragraph and removed
+   again after 5 s. *@
+@snackbarAnnouncers() = {
+    <div class="visually-hidden" role="status" data-app-snackbar-announcer="polite"></div>
+    <div class="visually-hidden" role="alert" data-app-snackbar-announcer="assertive"></div>
+}
+
+<div id="snackbarErrors"
+     class="snackbar-stack"
+     popover="manual"
+     x-data
+     x-effect="$store.snackbar.syncStack($el, $store.snackbar.errors)">
+    @snackbarMessages("$store.snackbar.errors")
+</div>
+
+<div id="snackbarNotices"
+     class="snackbar-stack"
+     popover="manual"
+     x-data
+     x-effect="$store.snackbar.syncStack($el, $store.snackbar.notices)"
+     x-on:pointerenter="$store.snackbar.pause('pointer')"
+     x-on:pointerleave="$store.snackbar.resume('pointer')"
+     x-on:focusin="$store.snackbar.pause('focus')"
+     x-on:focusout="$store.snackbar.onStackFocusOut($event)">
+    @snackbarMessages("$store.snackbar.notices")
+</div>
+
+@snackbarAnnouncers()
+
+@* The tooltip's host: `$tooltip('Message')` (static/js/common/tooltip.js) writes the message in and
+   shows it above the clicked element, placed by CSS anchor positioning (`#tooltip` in core.css). *@
+<div id="tooltip" popover="manual" role="tooltip"></div>
+
+@* Dialog hosts: the general modal, the popover dialog and asset detail. Visibility, focus, and
+   dismissal are owned by static/js/common/modal.js through the Alpine `modal` store; `x-trap` comes
+   from the @@alpinejs/focus plugin. General dialogs ignore backdrop clicks; asset detail closes on
+   them. The popover dialog is a native `<dialog popover="auto">` with no scrim and no trap: the
+   browser shows it below its anchor and dismisses it on an outside click. *@
 
 <div id="modalContainer"
      x-data
@@ -24,8 +83,18 @@
         </div>
         <div id="modalContent">
         </div>
+        @snackbarAnnouncers()
     </div>
 </div>
+
+<dialog id="popoverDialog" popover="auto" tabindex="-1" aria-labelledby="popoverTitle">
+    <div class="popover-toolbar">
+        <div class="modal-title" id="popoverTitle" x-data x-text="$store.modal.title"></div>
+        <button type="button" class="close-modal" aria-label="Close" x-data
+                x-on:click="$store.modal.close()">&times;</button>
+    </div>
+    <div id="popoverContent"></div>
+</dialog>
 
 <div id="imageDetailModalContainer"
      x-data
@@ -50,5 +119,6 @@
         </div>
         <div id="imageDetailModalContent">
         </div>
+        @snackbarAnnouncers()
     </div>
 </div>

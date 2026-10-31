@@ -1,10 +1,63 @@
+/* The toolbar sticks to the top of the scrolling pane, under the results title when there is one (its height, written by
+   js/search-results/sticky-offsets.js), so its former margin is padding, painted with the pane's background: the pane's
+   tint, if any, over the page background, so the grid does not show through */
 #searchControl {
-  margin: var(--control-vertical-space);
-  padding: 5px;
-  border: 1px solid var(--background-tertiary-color);
-  border-radius: 5px;
-  display: grid;
-  grid-template-columns: .5fr 1fr 1fr 1fr auto;
+  position: sticky;
+  top: var(--results-title-height, 0);
+  z-index: 2;
+  padding: var(--space-6) var(--space-8);
+  /* A wrapping row of three groups (includes/search_results). The lead (the total, then the batch ops) and the trail (the
+     trash view's Purge button) grow from the same zero basis, so they split what the controls leave evenly and the
+     controls sit on the bar's center whatever the sides hold (a flex row with an auto margin on the total would center
+     them in what the total leaves instead). Neither side shrinks below its content, so the batch ops push the controls
+     right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one,
+     --space-6 below; the groups keep --space-9 apart */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6) var(--space-9);
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
+}
+
+/* The total holds the left edge, followed by the batch ops while assets are selected */
+#searchControl .lead {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-9);
+}
+
+#searchControl .controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-9);
+}
+
+/* The trash view's Purge button holds the right edge */
+#searchControl .trail {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+#searchControl .total {
+  white-space: nowrap;
+}
+
+/* The total's "Total:" label is an eyebrow before the count, which is a step up from the body text so it reads at a
+   glance; tabular digits keep its width steady as assets leave the grid */
+#searchControl .total strong {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--theme-neutral-3);
+}
+
+#searchControl .results-total {
+  font-size: var(--font-size-large);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
 }
 
 /* In map layout the fragment is a column that hands the map every pixel under the controls
@@ -15,31 +68,25 @@
   height: 100%;
 }
 
-/* The grid / map layout toggle, a .toggle-group of core.css */
-#layoutToggle {
-  padding: 0 10px;
-}
-
 /* The "Map area" chip (a .filter-chip): the bbox scope of the crowded-pin panel, set off from the total */
 #bboxScope {
-  margin-left: 10px;
+  margin-left: var(--space-5);
 }
 
-/* Direct children only: as a descendant selector this would also match the View control's popover
+/* The controls' direct children only: as a descendant selector this would also match the View control's popover
    panel, and an ID selector outranks `.context-menu:popover-open`, so the closed panel would be
-   forced back to display: grid and stay on screen. */
-#searchControl > div {
+   forced back to display: grid and stay on screen. The layout toggle keeps its .toggle-group flex row. */
+#searchControl .controls > div:not(.toggle-group) {
   display: grid;
   place-items: center;
 }
 
-#searchControl .total div {
-  display: block;
-}
-
 #assets .cell {
-  margin: 3px;
-  border: var(--result-border);
+  margin: var(--space-2);
+  border: var(--border-hairline);
+  border-radius: var(--radius);
+  border-color: rgb(from var(--theme-neutral-3) r g b / 40%);
+  box-shadow: var(--soft-shadow);
   touch-action: none;
 }
 
@@ -52,16 +99,15 @@
    (js/search-results/metadata-visibility.js), and these rules do the rest, for every cell loaded or not */
 #assets .cell .metadata {
   display: none;
-  background-color: var(--background-tertiary-color);
+  background-color: rgb(from var(--theme-secondary) r g b / 40%);
   width: 100%;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
   grid-auto-rows: auto;
-  row-gap: 3px;
-  margin-top: 3px;
-  font-size: 11px;
-  color: var(--font-color);
-  box-shadow: var(--result-metadata-shadow);
+  row-gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--theme-neutral-4);
 }
 
 /* Shrink-wrapped and centered by the cell's grid, so its box is exactly the rendered thumbnail:
@@ -74,24 +120,36 @@
 /* The box-selection rectangle. Viselect draws it inside its own fixed, clipped container on
    <body>; only its look is styled here */
 .selection-area {
-  border: var(--result-border);
+  border: var(--border-hairline) var(--theme-neutral-3);
   pointer-events: none;
 }
 
 #assets .cell .drag-drop.selected .checkmark::before {
   content: '';
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: var(--marker-size);
+  height: var(--marker-size);
   border-radius: 50%;
-  background-color: var(--selection-color);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-  background-size: 16px 16px;
-  background-position: center;
-  background-repeat: no-repeat;
-  box-shadow: var(--selection-shadow);
+  /* The primary disc, with the check cut out of --theme-on-primary through a mask: a data URI cannot read a token, a
+     mask lets the fill be one */
+  background: var(--theme-primary);
+  box-shadow: var(--drop-shadow);
+}
+
+#assets .cell .drag-drop.selected .checkmark::after {
+  content: '';
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: var(--marker-size);
+  height: var(--marker-size);
+  background-color: var(--theme-on-primary);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+  mask-size: 16px 16px;
+  mask-position: center;
+  mask-repeat: no-repeat;
 }
 
 #assets:is(.show-fileName, .show-originalCreatedAt, .show-importedAt, .show-dimensions, .show-duration, .show-fileSize) .cell .metadata {
@@ -109,7 +167,7 @@
 
 #assets .cell .metadata div {
   display: none;
-  padding: 0 5px 0 5px;
+  padding: 0 var(--space-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -118,18 +176,21 @@
 }
 
 #assets .cell .metadata span {
-  color: var(--faded-font-color);
-  letter-spacing: 1px;
+  color: var(--theme-neutral-3);
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 #assets {
-  padding: 0 10px 10px 10px;
-  display: flex;
-  flex-wrap: wrap;
-  flex-direction: row;
-  /* Cells fill each row from the left, so a group's short last row lines up under the rest of it
-     and under its header rather than floating in the middle of the pane */
-  justify-content: flex-start;
+  --cell-box: calc(var(--preview-box) + 10px);
+  padding: 0 var(--space-5) var(--space-5);
+  display: grid;
+  /* As many columns as fit, each a cell's margin box, and the remainder split evenly between the left and right
+     edges, so the grid stays centered at any pane width. Cells still fill the columns from the left, so a
+     group's short last row lines up under the rest of it and under its header rather than floating in the
+     middle of the pane; auto-fill keeps the empty columns of a short result, so the left edge does not move
+     with the count */
+  grid-template-columns: repeat(auto-fill, calc(var(--cell-box) + var(--space-2) * 2));
+  justify-content: center;
   /* Keeps the date headers' z-index inside the grid, so the drag stand-in and other overlays still paint above them */
   isolation: isolate;
   /* The page window (js/search-results/page-window.js) folds, reloads and drops pages above and below the viewport
@@ -139,95 +200,68 @@
 
 /* A page folded above the window: a full row of about the page's height, carrying the page's cursor */
 #assets .page-spacer {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
 }
 
 /* A group header (a day, or a Location) of a grouped grid spans the whole row and sticks to the top of the scrolling
-   pane. Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives -
-   which reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
+   pane, below the results title and the toolbar (their heights together, written by js/search-results/sticky-offsets.js).
+   Every header sticks at the same offset, so the next group's header paints over the previous one as it arrives - which
+   reads as a replacement only because the background is opaque: the pane's tint, if any, over the page background. */
 #assets .result-group {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   position: sticky;
-  top: 0;
+  top: var(--results-sticky-height, 0);
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 6px;
-  font-weight: bold;
-  font-size: 1.1em;
-  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--background-color);
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-medium);
+  background: linear-gradient(var(--view-tint, transparent), var(--view-tint, transparent)) var(--theme-neutral-2);
 }
 
 /* The gap between groups. It hangs off the header rather than the cells above it, so the first
    group still starts flush against the controls, and a group continued onto the next page - which
    repeats no header - gains no gap in its middle */
 #assets .result-group:not(:first-child) {
-  margin-top: 20px;
+  margin-top: var(--space-7);
 }
 
 /* A Location group's category, dimmed before the › */
 #assets .result-group .category {
-  color: var(--faded-font-color);
+  color: var(--theme-neutral-3);
   font-weight: normal;
 }
 
 #assets .result-group .count {
-  color: var(--faded-font-color);
+  color: var(--theme-neutral-3);
   font-weight: normal;
-  font-size: smaller;
+  font-size: var(--font-size-small);
 }
 
 /* Selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js) */
 #assets .result-group .group-checkmark {
-  width: 16px;
-  height: 16px;
+  width: var(--marker-size-small);
+  height: var(--marker-size-small);
   margin: 0;
   cursor: pointer;
-  accent-color: var(--success-background-color);
+  accent-color: var(--theme-primary);
 }
 
 #assets .cell {
   display: grid;
-  /* --preview-box is the preview size, set on #assets by includes/search_results.scala.html */
-  width: calc(var(--preview-box) + 10px);
+  width: var(--cell-box);
   place-items: center;
-  grid-template-rows: calc(var(--preview-box) + 10px) auto;
+  grid-template-rows: var(--cell-box) auto;
 }
 
 #assets .cell div.selected.masked {
   opacity: 30%;
 }
 
-.sort-dropdown {
-  padding: 5px 25px 5px 5px;
-  background-color: var(--background-secondary-color);
-  border: 1px solid var(--background-tertiary-color);
-  border-radius: 5px;
-  cursor: pointer;
-  letter-spacing: 1px;
-  font-size: smaller;
-  outline: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg fill='gray' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 5px center;
-}
-
-#searchControl .sort-dropdown:hover {
-  background-color: var(--background-tertiary-color);
-}
-
-#searchControl .sort-dropdown:focus {
-  box-shadow: var(--dropdown-focus-shadow);
-}
-
-#searchControl .sort-dropdown span {
-  font-size: 1.2em;
-}
-
 #searchControl .total strong {
-  color: var(--faded-font-color);
+  color: var(--theme-neutral-3);
 }
 
 /* The Preview of an asset that plays (a Video, an animated GIF) wears a play badge, so a still and a clip tell apart */
@@ -235,38 +269,38 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
+  width: var(--play-badge-size);
+  height: var(--play-badge-size);
+  margin: calc(var(--play-badge-size) / -2) 0 0 calc(var(--play-badge-size) / -2);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--on-fill-color);
+  color: var(--theme-neutral-4);
   background-color: var(--scrim-color);
-  font-size: 18px;
+  font-size: var(--font-size-large);
   pointer-events: none;
 }
 
 #assets .cell .drag-drop .triage-marker,
 #assets .cell .drag-drop .no-date-marker {
   position: absolute;
-  bottom: 8px;
-  color: var(--on-fill-color);
-  font-size: 10px;
-  font-weight: bold;
+  bottom: var(--space-4);
+  color: var(--theme-neutral-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 3px;
-  letter-spacing: 1px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-small);
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 #assets .cell .drag-drop .triage-marker {
-  right: 8px;
+  right: var(--space-4);
   background-color: var(--success-background-color);
 }
 
 #assets .cell .drag-drop .no-date-marker {
-  left: 8px;
+  left: var(--space-4);
   background-color: var(--warning-background-color);
 }
 

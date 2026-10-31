@@ -5,6 +5,14 @@ export const Const = {
         trashbin: "trashbin",
     },
 
+    // Where the explorer sits against the results, as `data-dock-side` on <html> names it
+    dockSides: {
+        left: "left",
+        right: "right",
+        top: "top",
+        bottom: "bottom",
+    },
+
     /**
      * Custom event names, dispatched on `document.body`. Templates name the same strings verbatim
      * in `data-app-success-event` attributes and `$dispatch(...)` calls, so a rename touches both.
@@ -27,6 +35,8 @@ export const Const = {
         assetAddedToAlbum: "ASSET_ADDED_TO_ALBUM_EVENT",
         batchAssetsAddedToAlbum: "BATCH_ASSETS_ADDED_TO_ALBUM_EVENT",
         batchAssetsRemovedFromAlbum: "BATCH_ASSETS_REMOVED_FROM_ALBUM_EVENT",
+        batchAddToAlbumRequested: "BATCH_ADD_TO_ALBUM_REQUESTED_EVENT",
+        assetsAddedToAlbum: "ASSETS_ADDED_TO_ALBUM_EVENT",
         locationAdded: "LOCATION_ADDED_EVENT",
         categoryAdded: "CATEGORY_ADDED_EVENT",
         locationRenamed: "LOCATION_RENAMED_EVENT",
@@ -43,11 +53,15 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
+        // A person was merged, hidden, shown or discarded; the People tab reloads its panes
+        peopleChanged: "PEOPLE_CHANGED_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
+        // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
+        dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
     },
 
@@ -89,16 +103,25 @@ export const Const = {
         searchParams: "searchParams",
         imageDetailLoading: "imageDetailLoading",
         modal: "modal",
+        snackbar: "snackbar",
     },
 
     localStore: {
         gridMetadataFields: "gridMetadataFields",
-        verticalSplitSizes: "verticalSplitSizes",
-        horizontalSplitSizes: "horizontalSplitSizes",
+        // The explorer's Dock side, once picked, and its share of the width and of the height
+        // (js/common/explorer-dock.js; static/js/explorer-dock-boot.js names the same key in its `data-key`)
+        explorerDock: "explorerDock",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
         // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
         styleGuideTheme: "styleGuideTheme",
+        // The design tweaks panel's state (the tokentweak package, configured by js/design-tweaks.js): the
+        // active tweak set, the snapshots, the theme, the panel's dock and open state and the adopted
+        // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`
+        designTweaks: "designTweaks",
+        // The People tab's remembered state (js/alpine/components/people-tab.js): each pane's
+        // People buckets, whether Split view is on and the panes' sizes on each axis
+        peopleView: "peopleView",
     },
 
     sessionStore: {
@@ -120,6 +143,21 @@ export const Const = {
     http: {
         // JSON the server adds to a dialog operation's success detail (`Api.Field.SUCCESS_DETAIL_HEADER`)
         successDetailHeader: "App-Success-Detail",
+    },
+
+    people: {
+        // The People bucket names are the server's (`Const.PeopleBucket`), sent as the `buckets` parameter
+        buckets: {
+            matched: "matched",
+            hidden: "hidden",
+            unmatched: "unmatched",
+        },
+        // The two panes of the People tab, as `data-app-people-pane` names them: the Main pane,
+        // always shown, and the Duplicate pane of Split view
+        panes: {
+            main: "main",
+            duplicate: "duplicate",
+        },
     },
 }
 

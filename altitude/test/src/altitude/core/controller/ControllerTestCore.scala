@@ -6,6 +6,7 @@ import org.scalatest.{ funsuite, BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.matchers.should.Matchers.shouldBe
 
 import altitude.core.{ Altitude, App }
+import altitude.core.models.{ AccountType, User }
 import altitude.core.suites.SqliteSuiteBundle
 
 class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll with BeforeAndAfterEach with TestFocus {
@@ -48,6 +49,15 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
 
         testContext.cookies = loginResponse.cookies
     }
+  }
+
+  /** A repository owned by an account of `accountType`, logged in; its ID */
+  def loginAs(accountType: AccountType): String = {
+    val model = if (accountType == AccountType.Admin) testContext.makeAdminUser() else testContext.makeUser()
+    val account: User = testContext.persistUser(Some(model.copy(accountType = accountType)))
+    testContext.persistRepository(Some(account))
+    login()
+    testContext.repository.persistedId
   }
 
   def withServer[T](app: cask.main.Main)(f: String => T): T = {

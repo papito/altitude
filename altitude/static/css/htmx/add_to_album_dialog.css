@@ -1,0 +1,10 @@
+#addToAlbum {
+  display: grid;
+  row-gap: var(--control-vertical-space);
+}
+
+#addToAlbum select,
+#addToAlbum input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}

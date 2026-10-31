@@ -5,6 +5,7 @@ import {
     dragged,
     dragMoveListener,
     dropzoneListeners,
+    isBatchMoverElement,
     setFixedPositionWhileDragging,
 } from "./helpers.js"
 
@@ -34,7 +35,7 @@ export function bindAssetDragDrop({ dispatch }) {
     })
 
     interact("#trash").dropzone({
-        accept: "#assets .drag-drop, #batchOps .drag-drop",
+        accept: "#assets .drag-drop, .batch-ops .drag-drop",
         overlap: 0.2,
 
         ...dropzoneListeners((event) => {
@@ -43,9 +44,7 @@ export function bindAssetDragDrop({ dispatch }) {
                 Const.attributes.assetId,
             )
 
-            // The batch mover carries no asset ID; the selection store has the assets
-            const isBatchMover =
-                draggableElement.parentNode.classList.contains("batch-mover")
+            const isBatchMover = isBatchMoverElement(draggableElement)
 
             if (trashedAssetId) {
                 console.debug(`Trashed asset ${trashedAssetId}`)

@@ -1,12 +1,9 @@
-import { Alpine } from "../lib/alpine.esm.min.js"
-import { Const } from "../constants.js"
+import { fillSelectionField } from "./selection-field.js"
 
 /**
  * The Add to location modal dialog (`htmx/add_to_location_dialog.scala.html`,
- * `data-app-dialog-kind="add-to-location"`): the server knows nothing of the selection, so the
- * form's hidden `assetIds` field is filled here from the `selectedAssets` store, as a
- * comma-separated list. A validation replacement re-renders the field with the submitted value,
- * which is kept: the modal traps focus, so the selection cannot have changed meanwhile.
+ * `data-app-dialog-kind="add-to-location"`): the form's hidden `assetIds` field carries the
+ * selection (`fillSelectionField`).
  *
  * The success event's detail names the chosen Location - its ID, and its bare name from the
  * option's `data-name`, as a drop's report names it, rather than the option's `Category › Name`
@@ -15,13 +12,7 @@ import { Const } from "../constants.js"
  * select rather than written on submit. The server adds how many assets it `added`.
  */
 export function hydrateAddToLocationFragment({ fragmentEl }) {
-    // The field is named by `Api.Field.ASSET_IDS` server-side
-    const assetIdsEl = fragmentEl.querySelector('input[name="assetIds"]')
-    if (assetIdsEl && !assetIdsEl.value) {
-        assetIdsEl.value = Alpine.store(Const.state.selectedAssets)
-            .toArray()
-            .join(",")
-    }
+    fillSelectionField(fragmentEl)
 
     const selectEl = fragmentEl.querySelector("select")
     if (!selectEl) {

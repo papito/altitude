@@ -197,6 +197,39 @@ import altitude.core.util.SearchQuery
     asset.isRecycled shouldBe false
   }
 
+  test("A new album is created with the selection in one step, and a duplicate name creates and adds nothing") {
+
+    /**
+     * Setup:
+     *
+     * The album "Trip", and two imported assets.
+     *
+     * Assertions:
+     *
+     * Creating an album for the selection stores the album, trimmed, holding exactly the selected assets, and reports how many it
+     * added. A name taken by another album, in any case, is a duplicate: no album is created and no membership is written.
+     *
+     * Edge cases:
+     *
+     * A padded name, and a duplicate that differs only by case.
+     */
+    testApp.service.album.add("Trip")
+    val asset1: Asset = testContext.persistAsset()
+    val asset2: Asset = testContext.persistAsset()
+
+    val (album, added) = testApp.service.album.addAssetsToNewAlbum("  Beach  ", Set(asset1.persistedId, asset2.persistedId))
+
+    added shouldEqual 2
+    album.name shouldEqual "Beach"
+    testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(asset1.persistedId, asset2.persistedId)
+
+    intercept[DuplicateException] {
+      testApp.service.album.addAssetsToNewAlbum("trip", Set(asset1.persistedId))
+    }
+    testApp.service.album.getAll.map(_.name) shouldEqual List("Beach", "Trip")
+    albumCounts(album.persistedId) shouldEqual 2
+  }
+
   test("Recycled and unknown assets are not added to an album") {
 
     /**
@@ -367,6 +400,35 @@ import altitude.core.util.SearchQuery
     albumCounts(album.persistedId) shouldEqual 1
   }
 
+  test("Another repository's album is not found by ID, and nothing is added to it") {
+
+    /**
+     * Setup:
+     *
+     * An album in the first repository, then a second repository holding an asset of its own.
+     *
+     * Assertions:
+     *
+     * From the second repository the first one's album is not found: neither read by ID nor added to, and it keeps no membership.
+     */
+    val firstRepo: Repository = testContext.repository
+    val album: Album = testApp.service.album.add("theirs")
+
+    val secondRepo: Repository = testContext.persistRepository()
+    switchContextRepo(secondRepo)
+    val asset: Asset = testContext.persistAsset(repository = Some(secondRepo))
+
+    intercept[NotFoundException] {
+      testApp.service.album.getById(album.persistedId)
+    }
+    intercept[NotFoundException] {
+      testApp.service.album.addAssets(album.persistedId, Set(asset.persistedId))
+    }
+
+    switchContextRepo(firstRepo)
+    testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set()
+  }
+
   test("Searching by album returns only its non-recycled assets") {
 
     /**
@@ -396,5 +458,22 @@ import altitude.core.util.SearchQuery
 
     val emptyAlbum: Album = testApp.service.album.add("empty")
     searchAlbum(emptyAlbum) shouldEqual Set()
+  }
+
+  test("An album records when it was created") {
+
+    /**
+     * Setup:
+     *
+     * One album, read back by ID and through the list.
+     *
+     * Assertions:
+     *
+     * Both reads carry the creation time the database set when the album was added.
+     */
+    val album: Album = testApp.service.album.add("Summer 2024")
+
+    testApp.service.album.getById(album.persistedId).createdAt.isDefined shouldBe true
+    testApp.service.album.getAll.head.createdAt.isDefined shouldBe true
   }
 }

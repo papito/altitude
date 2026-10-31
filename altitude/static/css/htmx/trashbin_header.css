@@ -1,8 +1,9 @@
-#purgeRecycleBin {
-    display: grid;
-    grid-template-columns: 1fr;
-    place-items: center;
-    margin-top: var(--control-vertical-space);
+/* In the search toolbar's trail, which holds it at the right edge (includes/search_results.css). The small action
+   button's size, so the bar's height holds, as the batch ops have it; the class itself would trade the error fill for
+   the neutral one */
+#purgeRecycleBin .action-button {
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-small);
 }
 
 #purgeRecycleBinConfirm {

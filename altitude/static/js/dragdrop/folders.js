@@ -1,5 +1,10 @@
 import { Const } from "../constants.js"
-import { dragged, dragMoveListener, dropzoneListeners } from "./helpers.js"
+import {
+    dragged,
+    dragMoveListener,
+    dropzoneListeners,
+    isBatchMoverElement,
+} from "./helpers.js"
 
 export function bindFolderDragDrop({ dispatch }) {
     interact("#rootFolderList .drag-drop").draggable({
@@ -7,7 +12,9 @@ export function bindFolderDragDrop({ dispatch }) {
         // drag starting on the icon would break its single/double-click expansion gestures
         ignoreFrom: ".menu-ctrl, .expand-ctrl",
         inertia: true,
-        autoScroll: { container: document.querySelector("#explorer") },
+        autoScroll: {
+            container: document.querySelector("#explorerPanelContent"),
+        },
 
         listeners: {
             move: dragMoveListener,
@@ -16,7 +23,7 @@ export function bindFolderDragDrop({ dispatch }) {
     })
 
     interact("#rootFolderList .dropzone").dropzone({
-        accept: "#rootFolderList .drag-drop, #assets .drag-drop, #batchOps .drag-drop",
+        accept: "#rootFolderList .drag-drop, #assets .drag-drop, .batch-ops .drag-drop",
         overlap: 0.2,
 
         ...dropzoneListeners((event) => {
@@ -28,8 +35,7 @@ export function bindFolderDragDrop({ dispatch }) {
             const movedAssetId = draggableElement.getAttribute(
                 Const.attributes.assetId,
             )
-            const isBatchMover =
-                draggableElement.parentNode.classList.contains("batch-mover")
+            const isBatchMover = isBatchMoverElement(draggableElement)
             const newParentId = dropzoneElement.getAttribute(
                 Const.attributes.folderId,
             )

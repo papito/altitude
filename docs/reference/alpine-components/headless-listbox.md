@@ -54,4 +54,4 @@ options and multiple selection.
 
 ## Notes for Altitude
 
-The sort dropdown in `search_results.scala.html` is a native `<select>` driven by HTMX; keep it native unless custom option rendering is needed.
+The grid toolbar's Group and Sort dropdowns (`search_results.scala.html`) are choice menus: native `popover="auto"` panels of `menuitemradio` buttons, built by `buildChoiceMenuCtrl` in `static/js/common/context-menu-markup.js` from a server-rendered host of options and coordinated by the `contextMenu` component, which gives them the arrow keys. A `<select>` is kept for a form's field.

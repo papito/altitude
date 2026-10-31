@@ -242,9 +242,27 @@ export function createAssetActions({
     }
 
     /**
+     * The outcome of adding assets to an album, by a drop or the Add to album dialog: the server
+     * skips assets already in it and reports how many it `added`, so nothing added is a warning
+     * rather than a success. The dialog passes the album's `name`, since its row is not rendered
+     * while another explorer tab is displayed, nor yet for an album the dialog has just created.
+     */
+    function reportAddedToAlbum({ albumId, added, name }) {
+        const label = name ?? albumName(albumId)
+
+        if (added === 0) {
+            showWarningSnackBar(`Already in album "${label}"`)
+            return
+        }
+
+        showSuccessSnackBar(
+            `${added > 1 ? `${added} assets` : "Asset"} added to album "${label}"`,
+        )
+    }
+
+    /**
      * Albums only point at assets: adding leaves the assets where they are, so the grid does not
-     * change. Assets already in the album are skipped by the server, hence the warning when the
-     * drop added nothing.
+     * change.
      */
     async function addAssetsToAlbum({ albumId, assetIds }) {
         const payload = { albumId, assetIds }
@@ -254,15 +272,7 @@ export function createAssetActions({
                 `/api/album/r/${context.getRepoId()}/assets`,
                 payload,
             )
-            const added = response.data.added
-
-            if (added === 0) {
-                showWarningSnackBar(`Already in album "${albumName(albumId)}"`)
-            } else {
-                showSuccessSnackBar(
-                    `${added > 1 ? `${added} assets` : "Asset"} added to album "${albumName(albumId)}"`,
-                )
-            }
+            reportAddedToAlbum({ albumId, added: response.data.added })
 
             if (shouldResetSelectedAssets(assetIds)) {
                 selectedAssets().reset()
@@ -380,6 +390,7 @@ export function createAssetActions({
         purgeAssets,
         restoreAssets,
         addAssetsToAlbum,
+        reportAddedToAlbum,
         removeAssetsFromAlbum,
         addAssetsToLocation,
         reportAddedToLocation,

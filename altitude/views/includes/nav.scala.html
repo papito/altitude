@@ -5,42 +5,56 @@
 @import altitude.core.models.Stats
 @import altitude.core.RequestContext
 
-@* `search` adds the Search input, which only the main page has: its results are that page's grid *@
-@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, search: Boolean = false)
+@* `current` is the entry of the page shown (a `Const.NavEntry` key), which carries `aria-current="page"`; a nav reload
+   passes it again. *@
+@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, current: String = "")
+
+@currentAttr(entry: String) = {@if(entry == current){ aria-current="page"}}
 
 <div class="brand">
-    <a href="/">Altitude</a>
+    <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
-<div class="menu repository">
-@*    <a href="/"><i class="fas fa-database"></i><span>@{RequestContext.getRepository.name}</span></a>*@
+<div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
       <a href="/"><i class="fas fa-database"></i><span>Browse</span></a>
 </div>
 
+@* The quick search is on every page. Where js/search-results/search-input.js binds it (the main page), Enter searches
+   in place or navigates to Browse; elsewhere the form's own submit opens Browse with the text as `q`. `hx-preserve`
+   keeps this very element, and with it the text being typed, when the nav is reloaded for fresh counts. The clear (×)
+   control empties the text. *@
+<div class="search">
+  <form id="searchForm" role="search" method="get" action="/r/@repoId" hx-preserve>
+    <i class="fas fa-search"></i>
+    <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Quick search" placeholder="quick search" autocomplete="off">
+    <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
+  </form>
+</div>
+
 @if(stats.getTriageAssetCount > 0) {
-    <div class="menu triage">
+    <div class="menu triage"@currentAttr(Const.NavEntry.TRIAGE)>
         <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRIAGE}"><i class="fas fa-medkit"></i>
-            <span>Triage (@{stats.getTriageAssetCount})</span>
+            <span>Triage<span class="count">@{stats.getTriageAssetCount}</span></span>
         </a>
     </div>
   } else {
-    <div class="menu triage empty">
+    <div class="menu triage empty"@currentAttr(Const.NavEntry.TRIAGE)>
         <i class="fas fa-medkit"></i><span>Triage (0)</span>
     </div>
 }
 
 @if(stats.getRecycledAssetCount > 0) {
-    <div id="trash" class="menu trashbin">
+    <div id="trash" class="menu trashbin"@currentAttr(Const.NavEntry.TRASH)>
         <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRASHBIN}">
-            <i class="fas fa-trash"></i><span>Trash (@{stats.getRecycledAssetCount})</span>
+            <i class="fas fa-trash"></i><span>Trash<span class="count">@{stats.getRecycledAssetCount}</span></span>
         </a>
     </div>
   } else {
-    <div id="trash" class="menu trashbin empty">
+    <div id="trash" class="menu trashbin empty"@currentAttr(Const.NavEntry.TRASH)>
         <i class="fas fa-trash"></i><span>Trash (0)</span>
     </div>
   }
 
-<div class="menu import">
+<div class="menu import"@currentAttr(Const.NavEntry.IMPORT)>
     <a href="/pipeline/r/@repoId"><i class="fas fa-plus-square">
         </i><span>Import</span>
     </a>
@@ -48,23 +62,15 @@
 
 @* Settings are an Admin's alone; every nav is rendered behind a login, so the account is always here *@
 @if(RequestContext.account.value.exists(_.accountType == AccountType.Admin)) {
-<div class="menu settings">
+<div class="menu settings"@currentAttr(Const.NavEntry.SETTINGS)>
     <a href="/settings/r/@repoId"><i class="fas fa-cog"></i><span>Settings</span></a>
 </div>
 }
 
-@* Dev only, like the routes behind it (StyleGuideController) *@
+@* Dev only, like the routes behind it (StyleGuideController). The design tweaks panel has no nav entry: `Ctrl+Alt+T`
+   toggles it (js/design-tweaks.js) *@
 @if(Environment.isDev) {
-    <div class="menu style-guide">
+    <div class="menu style-guide"@currentAttr(Const.NavEntry.STYLE_GUIDE)>
         <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
     </div>
-}
-
-@* Bound by js/search-results/search-input.js. `hx-preserve` keeps this very element, and with it the text being typed, when
-   the nav is reloaded for fresh counts. *@
-@if(search) {
-  <form id="searchForm" role="search" hx-preserve>
-    <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Search" autocomplete="off">
-    <button type="submit" class="action-button small">Search</button>
-  </form>
 }

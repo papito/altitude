@@ -127,6 +127,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId))
     recs.map(makeModel)
 
+  /** Every folder above `folderId` short of the repository root (its own parent), the top-level folder first */
   def getAncestors(folderId: String): List[Folder] =
     val sql = """
       WITH RECURSIVE ancestors AS (
@@ -145,6 +146,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
       SELECT *
         FROM ancestors
        WHERE level > 0
+       ORDER BY level DESC
     """
 
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId))

@@ -1,7 +1,7 @@
 package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -91,6 +91,42 @@ import altitude.core.util.Query
     viewAssetIds(Const.Search.View.TRASHBIN) shouldBe Set(recycled.persistedId)
   }
 
+  test("The triaged filter overlays the view's scope") {
+
+    /**
+     * Setup:
+     *
+     * An asset in the root folder, a triaged asset, and two recycled assets, one of them recycled from triage; each view's scope
+     * parsed with and without the `triaged` filter.
+     *
+     * Assertions:
+     *
+     * The default view without the filter holds the sorted and the triaged asset; `triaged=false` leaves the triaged one out and
+     * `triaged=true` keeps it alone. The trash view with `triaged=true` holds the asset recycled from triage alone, and with
+     * `triaged=false` the other recycled asset alone.
+     *
+     * Edge cases:
+     *
+     * The triage view with `triaged=false` is a contradiction the parser refuses, naming the view; with `triaged=true` it is the
+     * triage view.
+     */
+    val sorted = testContext.persistAsset()
+    val triaged = testContext.persistAsset(isTriaged = true)
+    val recycled = testContext.persistAsset()
+    val recycledFromTriage = testContext.persistAsset(isTriaged = true)
+    testApp.service.library.recycleAssets(Set(recycled.persistedId, recycledFromTriage.persistedId))
+
+    viewAssetIds(Const.Search.View.DEFAULT) shouldBe Set(sorted.persistedId, triaged.persistedId)
+    viewAssetIds(Const.Search.View.DEFAULT, triaged = Some(false)) shouldBe Set(sorted.persistedId)
+    viewAssetIds(Const.Search.View.DEFAULT, triaged = Some(true)) shouldBe Set(triaged.persistedId)
+    viewAssetIds(Const.Search.View.TRASHBIN, triaged = Some(true)) shouldBe Set(recycledFromTriage.persistedId)
+    viewAssetIds(Const.Search.View.TRASHBIN, triaged = Some(false)) shouldBe Set(recycled.persistedId)
+    viewAssetIds(Const.Search.View.TRIAGE, triaged = Some(true)) shouldBe Set(triaged.persistedId)
+
+    val refused = SearchRequestParser.parse(Const.Search.View.TRIAGE, None, None, None, None, None, None, triaged = Some(false))
+    refused.left.toOption.value should include("triage")
+  }
+
   test("Pagination") {
 
     /**
@@ -149,7 +185,7 @@ import altitude.core.util.Query
   }
 
   /** The IDs of the assets a search in the view's scope returns, as the search results route parses the view */
-  private def viewAssetIds(view: String): Set[String] =
-    val scope = SearchRequestParser.parse(view, None, None, None, None, None, None).toOption.value
+  private def viewAssetIds(view: String, triaged: Option[Boolean] = None): Set[String] =
+    val scope = SearchRequestParser.parse(view, None, None, None, None, None, None, triaged).toOption.value
     testApp.service.library.search(scope.query(rpp = 10)).records.map(_.persistedId).toSet
 }

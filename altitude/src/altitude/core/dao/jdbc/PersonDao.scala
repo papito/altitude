@@ -95,72 +95,43 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     makePersonLookup(recs)
 
-  def getAllNotDiscarded: Map[String, Person] =
-    val sql = """SELECT *
-                    FROM person
-                   WHERE repository_id = ?
-                     AND is_bad_match = FALSE
-                     AND num_of_faces > 0
-                     AND is_deleted = FALSE
-                     ORDER BY num_of_faces DESC
-               """
-    val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
-
-    makePersonLookup(recs)
-
   private def makePersonLookup(recs: List[Map[String, AnyRef]]): Map[String, Person] =
     recs.map(makeModel).map(p => p.persistedId -> p).toMap
 
-  def getAllAboveThreshold: List[Person] =
-    val sql = """SELECT *
-                    FROM person
-                   WHERE repository_id = ?
-                     AND is_bad_match = FALSE
-                     AND (num_of_faces >= ? OR is_named = ?)
-                     AND is_hidden = FALSE
-                     AND is_deleted = FALSE
-                ORDER BY is_named DESC, name_for_sort
-               """
-    val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(
-        sql,
-        List(
-          RequestContext.getRepository.persistedId,
-          FaceRecognition.MIN_FACES_THRESHOLD,
-          nativeBool(true)
-        ))
+  /**
+   * One query whatever the buckets: the clauses every bucket shares, then an OR of the chosen buckets' own. Hidden takes
+   * precedence, so a hidden person is in Hidden alone whatever its count or name: the Matched and Unmatched clauses both require
+   * `is_hidden = FALSE`, and the three buckets are disjoint.
+   */
+  def getInBuckets(buckets: Set[String]): List[Person] =
+    val unknown = buckets -- C.PeopleBucket.ALL
+    require(unknown.isEmpty, s"Unknown People bucket(s): ${unknown.mkString(", ")}")
+    if buckets.isEmpty then return Nil
 
-    recs.map(makeModel)
+    val bucketClauses: List[(String, List[Any])] = buckets.toList.sorted.map {
+      case C.PeopleBucket.MATCHED =>
+        (
+          "(is_hidden = FALSE AND (num_of_faces >= ? OR is_named = ?))",
+          List(FaceRecognition.MIN_FACES_THRESHOLD, nativeBool(true)))
+      case C.PeopleBucket.UNMATCHED =>
+        (
+          "(is_hidden = FALSE AND num_of_faces < ? AND is_named = ?)",
+          List(FaceRecognition.MIN_FACES_THRESHOLD, nativeBool(false)))
+      case C.PeopleBucket.HIDDEN =>
+        ("(is_hidden = TRUE)", Nil)
+    }
 
-  def getAllBelowThreshold: List[Person] =
-    val sql = """SELECT *
-                    FROM person
-                   WHERE repository_id = ?
-                     AND is_bad_match = FALSE
-                     AND num_of_faces > 0
-                     AND num_of_faces < ?
-                     AND is_named = ?
-                     AND is_deleted = FALSE
-                ORDER BY is_named DESC, name_for_sort
-               """
-    val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, FaceRecognition.MIN_FACES_THRESHOLD, nativeBool(false)))
-
-    recs.map(makeModel)
-
-  def getAllHidden: List[Person] =
-    val sql = """SELECT *
+    val sql = s"""SELECT *
                     FROM person
                    WHERE repository_id = ?
                      AND is_bad_match = FALSE
                      AND num_of_faces > 0
-                     AND is_hidden = TRUE
                      AND is_deleted = FALSE
+                     AND (${bucketClauses.map(_._1).mkString(" OR ")})
                 ORDER BY is_named DESC, name_for_sort
                """
     val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId))
+      manyBySqlQuery(sql, RequestContext.getRepository.persistedId :: bucketClauses.flatMap(_._2))
 
     recs.map(makeModel)
 

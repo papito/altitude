@@ -25,6 +25,10 @@ publish:
 	mill altitude.assembly
 	mill show altitude.assembly
 
+# Vendors the tokentweak package (the design tweaks panel) into altitude/static/js/lib; see the README there.
+vendor-tokentweak:
+	sh scripts/vendor-tokentweak.sh $(TOKENTWEAK)
+
 lint:
 	npm run lint:fix
 	npm run format

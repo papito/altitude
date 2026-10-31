@@ -1,9 +1,9 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { createModalStore } from "../common/modal.js"
 import { totalLabel } from "../common/total-label.js"
 import { createSelectedAssetsStore } from "../search-results/selection.js"
 import { createSearchParamsStore } from "./search-params.js"
+import { registerHtmlCommonBindings } from "./html-common.js"
 
 export function initializeFrontendStores() {
     Alpine.store(Const.context.repoId, "")
@@ -62,9 +62,6 @@ export function initializeFrontendStores() {
         },
     })
 
-    Alpine.store(Const.state.imageDetailLoading, {
-        value: false,
-    })
-
-    Alpine.store(Const.state.modal, createModalStore())
+    // The modal hosts, asset detail's spinner and the snackbar, with the focus plugin (stores/html-common.js)
+    registerHtmlCommonBindings()
 }

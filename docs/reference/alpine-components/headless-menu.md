@@ -49,4 +49,4 @@ Internal to the directive.
 
 ## Notes for Altitude
 
-The closest match for the folder context menu if it moves from server-rendered spans to a keyboard-navigable menu.
+The folder, album and Location ⋯ menus and the Group and Sort choice menus are native `popover="auto"` panels with core Alpine (`static/js/alpine/components/context-menu.js`), which supplies what this directive would: focus on the checked or first item when the panel opens, Up/Down wrapping through the items, Home/End, Escape (in `global.js`) and the `menu`/`menuitemradio` roles of a choice menu. No type-ahead: the lists are short.

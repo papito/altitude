@@ -1,3 +1,6 @@
+/* The setup form's carve-out: its fields, labels and submit button take the `--setup-form-*` tokens of pages/setup.css,
+   a palette of the form's own, apart from the theme the rest of the app derives from */
+
 #setupForm {
     display: grid;
     grid-auto-rows: min-content;
@@ -6,39 +9,75 @@
 
 #setupForm label {
     display: block;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-bottom: 5px;
-    font-size: 1.2em;
+    margin-bottom: var(--space-3);
+    color: var(--setup-form-label-color);
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-medium);
 }
 
-#setupForm input:not([type="submit"]) {
-    width: 100%
+#setupForm input {
+    width: 100%;
+    padding: var(--space-5) var(--space-6);
+    background-color: var(--setup-form-field-color);
+    color: var(--theme-neutral-4);
+    border: var(--setup-form-field-border);
+    border-radius: 6px;
+    font-size: var(--font-size-base);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+#setupForm input::placeholder {
+    color: var(--setup-form-placeholder-color);
+}
+
+/* Before the focus rule, so a focused field under the pointer keeps its accent edge */
+#setupForm input:hover {
+    border-color: var(--setup-form-field-hover-border-color);
+}
+
+#setupForm input:focus {
+    border-color: var(--setup-form-accent);
+    box-shadow: var(--setup-form-focus-shadow);
+}
+
+/* The database type, information rather than a field: plain text in the placeholder's gray */
+#dbEngine {
+    color: var(--setup-form-placeholder-color);
+}
+
+/* A field in error keeps its 1px edge, in the error color, focused too; after the focus rule, so it wins at equal
+   specificity */
+#setupForm input.error, #setupForm input.error:focus {
+    border-color: var(--error-color);
+    box-shadow: none;
+}
+
+/* The submit button fills the card's width: a grid cell stretches it */
 #setupForm .submit {
     margin-top: var(--control-vertical-space);
     display: grid;
-    place-items: center;
-}
-
-#setupForm input[type="submit"] {
-    line-height: 1.3em;
-    font-size: 1.2em;
-    width: 50%
 }
 
 #setupForm .action-button {
-    padding: 10px 36px;
-    font-size: 1.3em;
+    padding: var(--space-5);
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
+    color: var(--setup-form-base);
+    background: var(--setup-form-accent);
+    border: var(--setup-form-card-border);
+    border-radius: 6px;
+}
+
+#setupForm .action-button:hover {
+    box-shadow: var(--setup-form-focus-shadow);
 }
 
 #setupForm div.error {
-    padding: 5px;
-    margin-top: 2px;
-    background-color: var(--message-background-color);
-    color: var(--font-color);
+    padding: var(--space-3);
+    margin-top: var(--space-1);
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
     border: 1px solid var(--error-color);
     border-bottom: 2px solid var(--error-color);
-    letter-spacing: 1px;
+    letter-spacing: var(--letter-spacing-wide);
 }

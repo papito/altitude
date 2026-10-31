@@ -15,10 +15,10 @@
       hx-post="/htmx/location/r/@{RequestContext.getRepository.persistedId}/add">
   <div>
     <label for="field-@{Api.Field.Location.NAME}">Name</label>
-    @if(fieldErrors.contains(Api.Field.Location.NAME)) {<div class="error">@{fieldErrors(Api.Field.Location.NAME)}</div>}
     <input id="field-@{Api.Field.Location.NAME}" name="@{Api.Field.Location.NAME}" type="text" autocomplete="off"
            maxlength="@{Api.Constraints.MAX_LOCATION_NAME_LENGTH}"
            value="@{formJson.obj.get(Api.Field.Location.NAME).flatMap(_.strOpt).getOrElse("")}">
+    @if(fieldErrors.contains(Api.Field.Location.NAME)) {<div class="error">@{fieldErrors(Api.Field.Location.NAME)}</div>}
   </div>
   <div>
     @includes.html.location_category_select(categories, formJson, fieldErrors)
@@ -50,5 +50,5 @@
     <input type="hidden" id="field-@{Api.Field.Location.LONGITUDE}" name="@{Api.Field.Location.LONGITUDE}"
            value="@{formJson.obj.get(Api.Field.Location.LONGITUDE).flatMap(_.strOpt).getOrElse("")}">
   </div>
-  <button type="submit" class="action-button">Add</button>
+  <button type="submit" class="action-button primary">Add</button>
 </form>

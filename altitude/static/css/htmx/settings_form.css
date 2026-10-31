@@ -30,11 +30,11 @@
 }
 
 #settingsForm .help {
-  color: var(--faded-font-color);
+  color: var(--theme-neutral-3);
 }
 
 #settingsForm .pending {
-  color: var(--warning-font-color);
+  color: var(--warning-color);
 }
 
 #settingsForm > button {

@@ -39,6 +39,7 @@ import {
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
 } from "./context-menu-markup.js"
+import { ModalHost } from "./modal.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
@@ -188,9 +189,9 @@ function _render(locations, repoId) {
 }
 
 /**
- * Builds the add controls into their hosts on the first render after the tab loads. "Add location"
- * and "Add category" open separate modals. The hosts (`#locationActions`, `#noLocations`)
- * decide which controls are shown.
+ * Builds the add controls into their hosts on the first render after the tab loads. "Add category"
+ * opens a popover dialog below its button; "Add location" opens a centered modal, with room for
+ * its map editor. The hosts (`#locationActions`, `#noLocations`) decide which controls are shown.
  */
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("locationActions")
@@ -203,6 +204,7 @@ function _ensureAddControls(repoId) {
             buttonClass: "action-button small",
             iconClass: "fas fa-plus",
             url: `/htmx/location/r/${repoId}/dialogs/add-location`,
+            host: ModalHost.general,
         }),
     )
     actionsEl.appendChild(
@@ -220,9 +222,10 @@ function _ensureAddControls(repoId) {
         buildModalTriggerCtrl({
             triggerId: "addFirstLocationBtn",
             label: "Add your first location",
-            buttonClass: "action-button",
+            buttonClass: "action-button primary",
             iconClass: "fas fa-plus",
             url: `/htmx/location/r/${repoId}/dialogs/add-location`,
+            host: ModalHost.general,
         }),
     )
 
@@ -566,7 +569,7 @@ function _makeSearchTrigger(el, locationId) {
 
 /**
  * The row's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete for both kinds, plus Move
- * to category for a Location, each loading a separate modal.
+ * to category for a Location, each loading a popover dialog.
  * `locationMenuCtrl-<id>` is the trigger the rename and move dialogs return focus to.
  */
 function _buildMenuCtrl(location, repoId) {

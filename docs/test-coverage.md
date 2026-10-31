@@ -86,6 +86,7 @@ Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositorySer
 
 - ✅ Create and retrieve a repository with the supplied name, a creation timestamp, and no update timestamp.
 - ✅ System initialization creates an additional repository and user.
+- ✅ The `system` table holds exactly one row: the database rejects a second row with the default id and with the only allowed id, on both engines.
 - [ ] Assert repository creation sets the owner/storage type, creates exactly one self-parented root folder and all six zeroed statistics, and selects the intended context. These are heavily used as fixtures but not fully asserted together. [MEDIUM]
 - [ ] Fail root-folder or statistics creation and verify no partial repository remains; verify request context is usable after rollback. [CRITICAL]
 - [ ] Test `setContextFromRequest` with valid, unknown, and absent IDs following a request for a different repository; prevent reuse of a stale repository context. [CRITICAL]
@@ -103,6 +104,7 @@ Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala
 - ✅ Unit: `ImageUtil.orient` puts the pixels of a two-by-three image where each of the eight EXIF orientations has them (mirrored, turned around, transposed, a quarter turn either way; from 5 on, three rows of two), leaves them for a value the tag cannot hold, and returns a new image, the input unchanged.
 - ✅ The triage view's scope returns the triaged assets that are not recycled, leaving out a sorted asset and a recycled triaged asset, which keeps its triage flag.
 - ✅ The trash view's scope returns the recycled assets not yet marked for purging.
+- ✅ The `triaged` filter overlays each view's scope: it hides or isolates the triaged assets of the repository view, tells the assets recycled from triage from the rest of the trash, and is refused with the triage view when `false`; the HTML and map routes carry it and refuse the contradiction.
 - [ ] Cover the trash view with combined filters and pagination. Basic recycled counts are already covered by recycle/restore tests. [MEDIUM]
 - [ ] Verify `getByChecksum` selects only an eligible asset in the current repository when the same checksum exists elsewhere or only in recycled records. [MEDIUM]
 - [ ] Define/test invalid filename handling on rename and ensure rejection preserves the old filename. [MINOR]
@@ -191,7 +193,9 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 - ✅ Remove memberships or delete an album while preserving assets and other albums' memberships.
 - ✅ Recycling removes all memberships; restoration does not reinstate them; folder recycling and asset-row deletion also remove affected memberships.
 - ✅ Album-filtered searches return only matching active assets, including across folders and for an empty album; HTTP mutations verify persisted memberships.
-- [ ] Exercise foreign album IDs for read/rename/delete/add/remove and foreign asset IDs in an otherwise local batch; assert isolation of membership rows and return counts. [CRITICAL]
+- ✅ Another repository's album is not found by ID, and adding to it fails and writes no membership (`AlbumService.getById` is scoped); the Add to album dialog answers it with a field error.
+- ✅ The Add to album dialog adds the selection to an album or to a new one created in the same transaction; a taken name creates and adds nothing.
+- [ ] Exercise foreign album IDs for rename/delete/remove and foreign asset IDs in an otherwise local batch; assert isolation of membership rows and return counts. [CRITICAL]
 - [ ] Test unknown album IDs for rename/delete/add and define the read/remove contract for a missing album. [MEDIUM]
 - [ ] Run concurrent insertion of the same membership and verify idempotency and accurate counts under the unique constraint. [MEDIUM]
 - [ ] Verify album operations preserve the complete asset state, binary files, statistics, and people counts, including deleting the last album membership. Current assertions cover only selected asset fields. [MEDIUM]
@@ -423,13 +427,13 @@ Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.sca
 - ✅ Merge people and merge chains, transfer face ownership, zero source counts, preserve/inherit the tested names, and allow reuse of a merged source's name.
 - ✅ Two live people cannot share a name on either engine; a person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover face; listing the live people reads the partial `person_03`.
 - ✅ Recount a merge when two people share one asset; separately recognize multiple occurrences of one person in a single image.
-- ✅ Hide a person from above-threshold and per-asset retrieval; recycle/restore assets without deleting/restoring the wrong face-record set in the tested normal cases.
+- ✅ List people by People bucket (`getInBuckets`): a hidden person is in Hidden alone, a named one is Matched whatever its count, an unnamed one below the threshold is Unmatched, a discarded one is in no bucket, every bucket together equals `getAll` less the discarded, an empty set lists no one, and an unknown bucket name is refused; hide a person from per-asset retrieval; recycle/restore assets without deleting/restoring the wrong face-record set in the tested normal cases.
 - ✅ Preserve explicitly selected cover-face binaries through purge.
 - [ ] Reject self-merge, missing/deleted participants, and foreign-repository participants without changing faces or either person. [CRITICAL]
 - [ ] Inject a failure midway through merge and assert source status, target name/count, and face ownership roll back together. [CRITICAL]
 - [ ] Merge a named source into an unnamed target and assert `isNamed`, sort name, cover selection, and list placement as well as the inherited display name. [MEDIUM]
 - [ ] Verify source deletion/exclusion explicitly after merge, including attempts to merge the same source again. [MEDIUM]
-- [ ] Cover `markAsBadMatch`, unhide, and every bulk-list variant with named/unnamed, hidden, deleted, bad-match, zero-face, and threshold-boundary people. [MEDIUM]
+- [ ] Cover `markAsBadMatch`'s effect on the match candidates, unhide, and the buckets with deleted, zero-face, and threshold-boundary people. [MEDIUM]
 - ✅ `getPersonFaces` returns a person's faces by descending detection score and keeps the best of them under a limit smaller than the person's face count.
 - [ ] Recycle/restore an asset containing multiple faces for a person after a merge; assert the intended distinct-asset versus raw-face count contract remains consistent. [MEDIUM]
 - [ ] Reject assigning a cover face belonging to another person/repository or a nonexistent face; preserve the previous cover. [MEDIUM]
@@ -491,3 +495,12 @@ Sources: [UrlService](../altitude/src/altitude/core/service/UrlService.scala). E
 - [ ] Verify an empty trailing `#` produces no fragment, including an empty query-parameter sequence. [EDGE]
 - [ ] Test Unicode/reserved characters, repeated parameter keys, and a fragment containing additional `#` characters. [EDGE]
 - [ ] Verify the repository path comes from the current request context rather than a different repository embedded in `browserUrl`; isolate the fixture's request context explicitly. [MINOR]
+
+## Style guide scan and dev routes
+
+Sources: [StyleGuideScan](../altitude/src/altitude/core/util/StyleGuideScan.scala), [StyleGuideController](../altitude/src/altitude/core/routes/web/StyleGuideController.scala). Evidence: [StyleGuideScanTests](../altitude/test/src/altitude/core/unit/StyleGuideScanTests.scala), [StyleGuideControllerTests](../altitude/test/src/altitude/core/controller/StyleGuideControllerTests.scala).
+
+- ✅ `:root` tokens in source order with their notes, scoped and runtime tokens, reference counts, color literals as values only (not selectors, fragment links, comments or token declarations), icons without modifiers, and the `lib` and excluded-file skips.
+- ✅ Length literals: the px, rem and em values of `font-size`, `width`, `height`, `min-*`, `max-*`, `grid-template-*` and the four insets, outside token declarations, grouped by property and value with locations; a token declaration, `border-width`, a padding, a unitless zero, a viewport unit and a commented-out size are not counted.
+- ✅ Dev routes: the page renders every section with the embedded scan; `GET /style-guide/scan.json`, the design tweaks panel's sources, answers the scan as JSON with `version` 1 (the sources schema the vendored tokentweak package reads), the tokens, the literals and the length literals; outside dev the page, the scan JSON and the sample dialog answer 404 and the index and the nav carry neither the Style Guide button nor the panel's adapter, package or boot script.
+- [ ] Test a sizing declaration split across lines and a `calc()` holding two literals, and a template attribute with several declarations. [EDGE]

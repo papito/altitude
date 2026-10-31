@@ -1,7 +1,10 @@
 package altitude.core.integration
 
 import altitude.test.TestFocus
+import java.sql.SQLException
 import java.util.Base64
+import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.handlers.ScalarHandler
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.shouldBe
 
@@ -50,6 +53,29 @@ import altitude.core.util.Query
     val adminUser = RequestContext.account.value
     adminUser.get.email shouldBe userModel.email
     adminUser.get.accountType shouldBe AccountType.Admin
+  }
+
+  test("The system table holds exactly one row and rejects a second") {
+
+    /**
+     * Setup:
+     *
+     * The seeded system row, then a second row inserted next to it, with the default id and with the only id the table allows.
+     *
+     * Assertions:
+     *
+     * Both inserts fail on the primary key, and the table still holds one row.
+     */
+    intercept[SQLException] {
+      testApp.txManager.withTransaction(update("INSERT INTO system (version, is_initialized) VALUES (1, false)"))
+    }
+    intercept[SQLException] {
+      testApp.txManager.withTransaction(update("INSERT INTO system (id, version, is_initialized) VALUES (1, 1, false)"))
+    }
+
+    testApp.txManager.asReadOnly {
+      new QueryRunner().query(RequestContext.getConn, "SELECT COUNT(*) AS c FROM system", new ScalarHandler[Number]()).intValue
+    } shouldBe 1
   }
 
   /** The signing key the system row holds, decoded, if it holds one */

@@ -18,14 +18,13 @@
       hx-trigger="submit"
       hx-json-enc>
 
-    @if(fieldErrors.contains(Api.Field.Person.NAME)) {
-        <div class="error">@{ fieldErrors(Api.Field.Person.NAME) }</div>
-    }
-
     <input type="text"
            id="field-@{ Api.Field.Person.NAME }"
            name="@{ Api.Field.Person.NAME }"
            value="@{ newName.getOrElse(person.name.getOrElse("")) }">
+    @if(fieldErrors.contains(Api.Field.Person.NAME)) {
+        <div class="error">@{ fieldErrors(Api.Field.Person.NAME) }</div>
+    }
     <input type="hidden" name="@{ Api.Field.ID }" value="@{ person.persistedId }">
 
 </form>

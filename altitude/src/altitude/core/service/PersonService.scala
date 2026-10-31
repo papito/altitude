@@ -255,22 +255,15 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       dao.getAll.values.toList
     }
 
-  def getAllNotDiscarded: List[Person] =
+  /** The people in any of the given People buckets (`Const.PeopleBucket`); see `PersonDao.getInBuckets` */
+  def getInBuckets(buckets: Set[String]): List[Person] =
     txManager.asReadOnly {
-      dao.getAllNotDiscarded.values.toList
+      dao.getInBuckets(buckets)
     }
 
-  def getAllAboveThreshold: List[Person] =
-    txManager.asReadOnly {
-      dao.getAllAboveThreshold
-    }
-
-  def getAllBelowThreshold: List[Person] =
-    txManager.asReadOnly {
-      dao.getAllBelowThreshold
-    }
-
-  def getAllHidden: List[Person] =
-    txManager.asReadOnly {
-      dao.getAllHidden
-    }
+  /**
+   * The bucket names of a comma-separated list, trimmed, empties dropped and nothing validated: `getInBuckets` refuses an unknown
+   * one
+   */
+  def parseBuckets(csv: String): Set[String] =
+    csv.split(",").map(_.trim).filter(_.nonEmpty).toSet

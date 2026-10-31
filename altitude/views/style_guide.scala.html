@@ -1,3 +1,4 @@
+@import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.Stats
 
@@ -7,19 +8,23 @@
    the real classes of core.css and tabs.css; the guide's own layout is static/css/pages/style_guide.css. *@
 @(stats: Stats, scanJson: String)
 
-@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another. A card
-   is mostly a button: clicking it copies the token's var() reference. The card of a token with an alpha slider
+@* The cards of the `:root` tokens whose value is of one of `kinds` (space-separated), one kind after another, in
+   `group` when one is given (the groups are named in js/style-guide.js). A card is mostly a button: clicking it copies
+   the token's var() reference. A token whose declaration references other tokens shows it as written, with the tokens
+   it comes from; any other shows the value it resolves to. The card of a token with an alpha slider
    (js/style-guide.js) has the slider below the button, and a button that copies the value the slider gives it. *@
-@tokenCards(kinds: String) = {
+@tokenCards(kinds: String, group: String = "") = {
   <div class="sg-tokens">
-    <template x-for="token in tokensOf('@kinds')">
+    <template x-for="token in tokensOf('@kinds', '@group')">
       <div class="sg-token">
         <button type="button" @@click="copyReference(token.name)">
           <div class="sg-sample" :class="token.kind" :style="token.sampleStyle" x-text="token.sampleText"></div>
           <code x-text="token.name"></code>
           <span :class="{ 'sg-flag': !token.value }" x-text="currentValue(token) || 'Not served yet: restart the dev server'"></span>
+          <span class="sg-dim" x-show="token.derivedFrom" x-text="token.derivedFrom"></span>
           <span class="sg-dim" x-show="token.note" x-text="token.note"></span>
           <span :class="token.references ? 'sg-dim' : 'sg-flag'" x-text="token.usage"></span>
+          <span class="sg-flag" x-show="token.isOffPalette">Off palette</span>
           <span class="sg-flag" x-show="token.duplicates.length" x-text="'Same value as ' + token.duplicates.join(', ')"></span>
         </button>
         <template x-if="token.hasAlphaSlider">
@@ -50,11 +55,12 @@
 
   <body class="style-guide">
     <nav>
-      @includes.html.nav(stats = stats)
+      @includes.html.nav(stats = stats, current = Const.NavEntry.STYLE_GUIDE)
     </nav>
 
     <main x-data="styleGuide">
       @includes.html.html_common()
+      @includes.html.dock_glyphs()
 
       <div id="styleGuideToc">
         @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for the guide *@
@@ -80,43 +86,67 @@
       <div>
         <section id="colors">
           <h2>Colors</h2>
-          <p>Every color token of <code>:root</code> in <code>core.css</code>, each a
-             <code>light-dark(light, dark)</code> pair. The app is dark; the Light / Dark switch above the contents shows
-             this page in either theme and is remembered in this browser. Click a token to copy its
-             <code>var()</code> reference. Use a token rather than a literal; the literals written past them are listed
-             under Token audit. The slider of <code>--background-color</code> repaints this page with the token's color
-             of the theme shown at another alpha, until the page is reloaded.</p>
-          @tokenCards("color")
+          <p>Every color token of <code>:root</code> in <code>core.css</code>, each theme and semantic color a literal
+             <code>light-dark(light, dark)</code> pair of hex values. The Theme colors are the brand colors
+             (<code>--theme-primary</code>, the one hue of the chrome, with its text and on-color;
+             <code>--theme-secondary</code>, the supporting surface; <code>--theme-accent</code>, the call-to-action
+             color, with its on-color) and the neutral scale (<code>--theme-neutral-1</code> to <code>-4</code>, from
+             the lightest color to the darkest text in the light theme: the light of a sheen, the page, lines and
+             secondary text, text, a field's included). A rule writes a theme color or a semantic color directly. The
+             Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha, such as a field's
+             fill and the popover dialog's surface and edge: the only other color tokens. A new color is a new theme
+             role as a hex pair, or a new veil when it must be translucent. The four semantic colors (success, warning, error, info) and
+             <code>--shadow-color</code> stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
+             color per scheme, shown with its From line. The setup page's palette is that page's own, in
+             <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows it and the tokens it comes
+             from; Off palette marks a token that writes a color literal, and the literals written past the tokens are
+             listed under Token audit. The app ships dark; the Light / Dark switch above the contents shows this page
+             in either theme, both real, and is remembered in this browser. Click a token to copy its
+             <code>var()</code> reference. The slider of <code>--scrim-color</code> repaints this page with the
+             token's color of the theme shown at another alpha, until the page is reloaded.</p>
+          <h3>Theme colors</h3>
+          @tokenCards("color", "theme")
+          <h3>Status and shadow</h3>
+          @tokenCards("color", "status-and-shadow")
+          <h3>Derived</h3>
+          @tokenCards("color", "derived")
         </section>
 
         <section id="typography">
           <h2>Typography</h2>
-          <p>One font stack, <code>--font</code>, at a 14px base on <code>body</code>. Other sizes are relative to it and
-             belong to a component, shown here on the real ones. The tester previews any font this browser has
-             installed.</p>
+          <p>One font stack, <code>--font</code>, and the nav's monospace one, <code>--font-nav</code> (the brand and the
+             entries), and a scale of sizes in rem, <code>--font-size-xs</code> to
+             <code>--font-size-display</code>, with <code>--font-size-base</code> on <code>body</code>: a font size is a
+             step of the scale, never a literal. A weight is <code>--font-weight-bold</code> or
+             <code>--font-weight-medium</code>, spaced-out text takes <code>--letter-spacing-wide</code> (the brand the
+             narrower <code>--letter-spacing-medium</code>) and text that wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
+             category's badge) stay in its rule. The Sizes row shows the steps on the real components. The tester
+             previews any font this browser has installed.</p>
           <div class="sg-halves">
             <div>
               @tokenCards("font")
 
+              <h3>Scale</h3>
+              @tokenCards("typography")
+
               <h3>Sizes</h3>
               <div class="sg-row">
-                <span>Body text, 14px</span>
-                <button type="button" class="action-button small">Small button, 0.8em</button>
-                <span class="asset-count">Asset count, 0.9em</span>
-                <input type="text" value="Input, 1.2em" aria-label="Input size specimen">
-                <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, 1.3em</span>
+                <span>Body text, --font-size-base</span>
+                <button type="button" class="action-button small">Small button, --font-size-small</button>
+                <span class="asset-count">Asset count, --font-size-small</span>
+                <input type="text" value="Input, --font-size-medium" aria-label="Input size specimen">
+                <span><button type="button" class="menu-trigger" aria-label="Menu trigger size specimen">⋯</button> Menu trigger, --font-size-large</span>
               </div>
 
               <h3>Text colors</h3>
               <div class="sg-row">
-                <span style="color: var(--font-color)">--font-color</span>
-                <span style="color: var(--on-fill-color); background-color: var(--success-background-color)">--on-fill-color</span>
-                <span style="color: var(--font-color-dim)">--font-color-dim</span>
-                <span style="color: var(--faded-font-color)">--faded-font-color</span>
-                <span style="color: var(--success-font-color)">--success-font-color</span>
-                <span style="color: var(--warning-font-color)">--warning-font-color</span>
-                <span style="color: var(--error-font-color)">--error-font-color</span>
-                <span style="text-shadow: var(--navbar-text-shadow)">--navbar-text-shadow</span>
+                <span style="color: var(--theme-neutral-4)">--theme-neutral-4</span>
+                <span style="color: var(--theme-neutral-3)">--theme-neutral-3</span>
+                <span style="color: var(--success-color)">--success-color</span>
+                <span style="color: var(--warning-color)">--warning-color</span>
+                <span style="color: var(--error-color)">--error-color</span>
+                <span style="color: var(--info-color)">--info-color</span>
+                <span style="text-shadow: var(--text-shadow)">--text-shadow</span>
               </div>
             </div>
 
@@ -138,31 +168,71 @@
 
         <section id="spacing">
           <h2>Spacing &amp; sizing</h2>
-          <p>Use the section space between large areas, such as panels and page paddings, and the control spaces between
-             individual elements and list rows.</p>
-          @tokenCards("length")
+          <p>Gaps (paddings, margins, gaps and insets) use a step of the <code>--space-*</code> scale, or a role token
+             over it. Use the section space between large areas, such as panels and page paddings, and the control
+             spaces between individual elements and list rows. A role card names the step it takes; the sizes are the
+             lengths that are no gap, such as widths and heights. The scale and the sizes are in rem, so they follow
+             the browser's default font size.</p>
+          <h3>Scale</h3>
+          @tokenCards("length", "scale")
+          <h3>Roles</h3>
+          @tokenCards("length", "role")
+          <h3>Sizes</h3>
+          @tokenCards("length", "size")
         </section>
 
         <section id="borders-shadows">
           <h2>Borders &amp; shadows</h2>
-          <p>A border token carries width, style and color together; use it whole rather than restating its parts.</p>
+          <p>A border token carries width and style; the rule writes the color after it, in place
+             (<code>border: var(--border-hairline) var(--theme-neutral-3)</code>).
+             <code>--border-hairline</code> edges a cell, a menu or a quiet control in <code>--theme-neutral-3</code>,
+             a button in <code>--theme-neutral-3</code> at 0.45 (or its semantic or accent color), a field in
+             <code>--theme-neutral-3</code> at 0.25, a floating surface (the popover dialog, a select's picker) in
+             <code>--popover-border-color</code>, a chip in <code>--theme-primary-text</code> at 0.4, and a chrome
+             panel or the divider inside one in <code>--panel-border-color</code>; <code>--border-heavy</code> edges
+             a modal dialog in <code>--theme-neutral-3</code>, and draws the focus ring in
+             <code>--theme-primary</code>; <code>--border-double</code> is a list's trace, in
+             <code>--theme-secondary</code>. A button is lit from
+             above by <code>--sheen-shadow</code> and sits on <code>--soft-shadow</code>, which it trades for
+             <code>--lift-shadow</code> on hover (a small button rests on the sheen alone and takes the soft shadow on
+             hover); the pressed segment of a toggle group sits on <code>--soft-shadow</code>. A floating surface is
+             lit by the sheen too and floats on <code>--float-shadow</code>; a focused field is ringed by
+             <code>--field-focus-shadow</code>, its edge in the accent.
+             A rectangular box or control rounds its corners with <code>--radius</code>, a button and a toggle group's
+             track with <code>--radius-large</code> (a segment inside the track with the track's radius less its
+             padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>;
+             a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")
         </section>
 
         <section id="panels-layout">
           <h2>Panels &amp; layout</h2>
-          <p>A panel is edged with <code>--panel-border-color</code>, lit by <code>--box-shadow</code> and padded by
-             <code>--panel-padding</code>; its text carries the navbar's text shadow. Lay pages out with CSS Grid and
+          <p>A panel is edged with <code>--border-hairline</code> in <code>--panel-border-color</code>, lit by <code>--box-shadow</code> and padded by
+             <code>--panel-padding</code>; its text carries <code>--text-shadow</code>. Lay pages out with CSS Grid and
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
-
-          <h3>Spacing rhythm</h3>
-          <div class="sg-space" style="width: var(--section-vertical-space)"></div>
-          <span class="sg-dim">--section-vertical-space</span>
-          <div class="sg-space" style="width: var(--control-vertical-space)"></div>
-          <span class="sg-dim">--control-vertical-space</span>
-          <div class="sg-space" style="width: var(--control-horizontal-space)"></div>
-          <span class="sg-dim">--control-horizontal-space</span>
+          <p>The main page is a grid of the explorer, the divider and the results, shaped by the Dock side the explorer
+             is on (left, right, top or bottom). The divider (<code>.divider</code>, a
+             <code>role="separator"</code>) is a transparent band <code>--space-3</code> thick with a dotted grip in
+             <code>--theme-neutral-3</code>, tinted <code>--theme-primary</code> on hover and while dragged; it runs
+             top to bottom for a left or right dock and across for a top or bottom one.</p>
+          <div class="sg-row sg-dividers">
+            <div class="divider vertical" role="separator" aria-orientation="vertical" aria-label="Divider specimen, a left or right dock"></div>
+            <div class="divider horizontal" role="separator" aria-orientation="horizontal" aria-label="Divider specimen, a top or bottom dock"></div>
+          </div>
+          <p>The results title (<code>.results-title</code>, <code>includes/results_title</code>) opens scoped results: the
+             kind's icon, the title in <code>--font-size-display</code> and <code>--theme-primary-text</code>, the × back to
+             the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.</p>
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-folder kind-icon" aria-hidden="true"></i>
+                <span class="crumbs"><a href="#" class="crumb">Trips</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><a href="#" class="crumb">2026</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><span class="leaf">Iceland</span></span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
+              <div class="subtitle">A subtitle: a person's face count, an album's creation day, a Location's category</div>
+            </div>
+          </div>
         </section>
 
         <section id="icons">
@@ -181,17 +251,23 @@
 
         <section id="buttons">
           <h2>Buttons</h2>
-          <p>Success, warning and error buttons signal an outcome, not emphasis. Hover and keyboard focus share one look,
-             through <code>:focus-visible</code> and not <code>:focus</code>, so a button a dialog returns focus to is
-             not left glowing after a mouse click. A choice between ways of showing the same thing is a
-             <code>.toggle-group</code>: its buttons side by side, the current one <code>aria-pressed="true"</code>. The
-             theme switch above the contents is a live one.</p>
+          <p>A dialog's or a form's main action (Add, Move, Merge, Save, Upload, an empty list's first Add) is the call
+             to action, <code>.primary</code>, in <code>--theme-accent</code>. Success, warning and error
+             buttons take their color on a tint of it and signal an outcome, not emphasis. A button lifts and lightens its
+             fill on hover and gives a little when pressed (it stays in place when the system asks for reduced motion, and
+             a disabled one does neither); keyboard focus is the ring of <code>:focus-visible</code>, not
+             <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
+             between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
+             current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
+             is a live one.</p>
           <div class="sg-row">
+            <button type="button" class="action-button primary">.primary</button>
             <button type="button" class="action-button">.action-button</button>
             <button type="button" class="action-button success">.success</button>
             <button type="button" class="action-button warning">.warning</button>
             <button type="button" class="action-button error">.error</button>
             <button type="button" class="action-button small"><i class="fas fa-plus" aria-hidden="true"></i><span>.small</span></button>
+            <button type="button" class="action-button" disabled>Disabled</button>
             <div class="toggle-group" role="group" aria-label="Toggle group specimen">
               <button type="button" aria-pressed="true">Current</button>
               <button type="button" aria-pressed="false">Other</button>
@@ -202,29 +278,88 @@
 
         <section id="forms">
           <h2>Forms</h2>
-          <p>A field in error takes the <code>error</code> class, with the message in a <code>div.error</code> above it
-             inside the form. Mark a field that cannot be edited with <code>readonly</code>.</p>
+          <p>A text-like field (a text, search, email, password or file input, a textarea, a select) on every page but
+             the setup screen is a sunken fill, <code>--field-background-color</code>, carrying the page's text, in a
+             hairline of <code>--theme-neutral-3</code> at 0.25 with <code>--radius-small</code> and an accent caret;
+             with focus its edge turns <code>--theme-accent</code> inside <code>--field-focus-shadow</code>, in place
+             of the focus ring. Checkboxes, radios and ranges take none of it, nor does the nav's quick search field. A setting
+             that applies as it is flipped, with nothing to submit (the View settings), is a <code>.switch</code>: a
+             <code>button[role="switch"]</code> before its label, its track <code>--theme-primary</code> when
+             <code>aria-checked</code>, which an Alpine binding keeps in step with the setting. A select is a customizable select where the browser has one, its picker
+             drawn as the popover dialog's surface, and elsewhere a native select styled as a field. A field keeps the
+             width its page gives it; in a popover dialog the form is <code>--popover-form-width</code> wide, its
+             fields fill it, and its action sits <code>--space-5</code> below them. A label above a field in a dialog
+             is in small caps, <code>--space-2</code> above its field: the Labelled fields button opens a live one in the
+             modal host. A one-field popover dialog shows no label, only its placeholder, and names its input with
+             <code>aria-label</code>. A field in error takes the <code>error</code> class, the error fill and edge,
+             which it keeps with focus, with no ring, and its message is a <code>div.error</code>
+             <code>--space-2</code> under it inside the form.</p>
           <div class="sg-row">
             <input type="text" placeholder="input" aria-label="Input specimen">
-            <input type="text" class="readonly" value="input.readonly" readonly aria-label="Read-only input specimen">
             <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
+            <select aria-label="Select specimen">
+              <option>select</option>
+              <option>Another option</option>
+            </select>
+            <button type="button" role="switch" class="switch" aria-label="Switch specimen"
+                    x-data="{ on: true }" :aria-checked="on" @@click="on = !on"></button>
+            <span>.switch</span>
             @* A single-field form submits on Return; the error specimen has nowhere to submit to *@
             <form action="#" @@submit.prevent>
-              <div class="error">This field is required</div>
               <input type="text" class="error" placeholder="input.error" aria-label="Input in error specimen">
+              <div class="error">This field is required</div>
             </form>
           </div>
+          @* The button opens the dialog below in the modal host without a request (js/fragments/dialog-openers.js), so
+             its labels take the dialog's small caps; the dialog has nothing to submit *@
+          <div class="sg-row">
+            <button type="button" id="styleGuideLabelledFieldsBtn" class="action-button"
+                    data-app-open-dialog="#styleGuideLabelledFieldsDialog">Labelled fields</button>
+          </div>
+          <template id="styleGuideLabelledFieldsDialog">
+            <div id="styleGuideLabelledFields"
+                 data-app-fragment="modal"
+                 data-app-modal-title="Labelled fields"
+                 data-app-dialog-autofocus-selector="#styleGuideLabelledName"
+                 data-app-dialog-return-focus="#styleGuideLabelledFieldsBtn">
+              <div>
+                <label for="styleGuideLabelledName">Name</label>
+                <input type="text" id="styleGuideLabelledName" placeholder="A labelled field" autocomplete="off">
+              </div>
+              <div>
+                <label for="styleGuideLabelledSelect">Category</label>
+                <select id="styleGuideLabelledSelect">
+                  <option>(none)</option>
+                  <option>A category</option>
+                </select>
+              </div>
+            </div>
+          </template>
         </section>
 
         <section id="navigation-tabs">
           <h2>Navigation &amp; tabs</h2>
-          <p>The nav above is the live one. A nav entry is <code>.menu</code>; the page marks its own entry
-             <code>active</code>, and an entry with nothing behind it is <code>empty</code> and not a link. A tab is the
-             link itself, selected through <code>aria-selected</code>.</p>
+          <p>The nav above is the live one. The brand is the chevron and the name on a primary-to-accent gradient, in
+             <code>--font-nav</code> at <code>--font-size-xl</code>. A nav entry is <code>.menu</code>, at
+             <code>--font-size-medium</code>; the server marks the entry of the page shown with
+             <code>aria-current="page"</code> (the include's <code>current</code>, which a nav reload passes again), a
+             count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
+             <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
+             entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
+             there is text, and an accent glow for focus. A tab is the link itself, selected through
+             <code>aria-selected</code>.</p>
           <nav aria-label="Navigation specimen">
-            <div class="brand"><a href="#navigation-tabs">Altitude</a></div>
+            <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
             <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
-            <div class="menu active"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu.active</span></a></div>
+            <div class="menu" aria-current="page"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>aria-current</span></a></div>
+            <div class="search">
+              <form role="search" @@submit.prevent>
+                <i class="fas fa-search"></i>
+                <input type="search" aria-label="Quick search specimen" placeholder="quick search" autocomplete="off">
+                <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
+              </form>
+            </div>
+            <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
           </nav>
 
@@ -237,9 +372,16 @@
 
         <section id="menus-dialogs">
           <h2>Menus &amp; dialogs</h2>
-          <p>Both controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
-             like an Add button, opens a separate modal anchored below its control. Submit the dialog blank to see the
-             validation state, or with a name to see a completed operation.</p>
+          <p>All three controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
+             like an Add button, opens a popover dialog anchored below its control and centered on it: a translucent,
+             frosted surface with no scrim, which an outside click, Escape, the × or Tab out of it dismisses. A
+             one-field dialog shows no label. Submit the dialog blank to see the validation state, or with a name to
+             see a completed operation. A choice menu, the grid toolbar's Group and Sort, is a context menu that picks
+             one of several values: its trigger shows the current choice, its panel marks it with a check, and the
+             arrow keys move through the options; every menu panel wears the popover's frosted surface. A compact
+             choice menu, the explorer's Dock side, has room for no words: each option carries a glyph
+             (<code>includes/dock_glyphs</code>) and the trigger shows the checked option's glyph alone, named by its
+             tooltip; the script that takes the pick re-checks the options and swaps the glyph.</p>
           @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
         </section>
@@ -247,11 +389,28 @@
         <section id="feedback">
           <h2>Feedback</h2>
           <p>The outcome of an action is reported in the snackbar: success for a completed one, warning for one that
-             partly applied, error for a failure. A failure to load a page area is a server error message in place.</p>
+             partly applied, error for a failure. Errors stack at top center and stay until dismissed; successes and
+             warnings stack at bottom left and leave after 3 s and 6 s, held while the pointer is over them or focus is
+             inside. Each stack holds three messages, the oldest giving way to a fourth, and a repeat of a message
+             shown counts on it (&times;n) instead. A failure to load a page area is a server error message in
+             place. A tooltip (<code>$tooltip('…')</code>, <code>#tooltip</code>) is a hint about a control rather
+             than an outcome, shown above it on a click only, never on hover, in the menus' frosted surface, and
+             gone after two seconds or at the next press or key: the batch ops' Move button, a drag handle, says
+             so when clicked.</p>
           <div class="sg-row">
             <button type="button" class="action-button success" @@click="showSuccessSnackBar('A success message')">Success snackbar</button>
             <button type="button" class="action-button warning" @@click="showWarningSnackBar('A warning message')">Warning snackbar</button>
             <button type="button" class="action-button error" @@click="showErrorSnackBar('An error message')">Error snackbar</button>
+            <button type="button" class="action-button" @@click="$tooltip('A transient tooltip')">Tooltip</button>
+          </div>
+          @* A static message as the stacks render it, repeated once: its count badge and its dismiss button *@
+          <div class="sg-row">
+            <div class="snackbar success">
+              <i class="fas fa-check-circle" aria-hidden="true"></i>
+              <span class="snackbar-message">.snackbar.success, arrived twice</span>
+              <span class="snackbar-count">&times;2</span>
+              <button type="button" class="snackbar-dismiss" aria-label="Dismiss message">&times;</button>
+            </div>
           </div>
           <div id="serverError">#serverError: something went wrong on the server.</div>
           <div class="sg-row">
@@ -262,8 +421,8 @@
 
         <section id="badges-states">
           <h2>Badges &amp; states</h2>
-          <p>A scope the results are narrowed to, such as the map area, follows the total as a chip; the whole chip is the
-             button that clears it. A count follows its row's name, dimmed. A Location's pin on a map is the
+          <p>A scope the results are narrowed to, such as the map area, follows the total as a pill-shaped chip; the
+             whole chip is the button that clears it. A count follows its row's name, dimmed. A Location's pin on a map is the
              <code>.location-pin</code> glyph, drawn as a Leaflet div icon. The drag and drop states are set by the
              drag and drop modules, never by hand.</p>
           <div class="sg-row">
@@ -334,6 +493,28 @@
               </tr>
             </template>
           </table>
+
+          <h3>Length literals</h3>
+          <p>Sizes written as px, rem or em literals in a font size, a width or height, a bound, a grid's tracks or an
+             inset, which no token reaches: the glyph sizes that stay in their rules, and anything that should be a step
+             or a size token. The design tweaks panel lists the same under Not reachable.</p>
+          <table>
+            <tr><th>Property</th><th>Literal</th><th>Uses</th></tr>
+            <template x-for="literal in lengthLiterals">
+              <tr>
+                <td x-text="literal.property"></td>
+                <td x-text="literal.value"></td>
+                <td>
+                  <details>
+                    <summary x-text="literal.locations.length"></summary>
+                    <template x-for="location in literal.locations">
+                      <div x-text="location"></div>
+                    </template>
+                  </details>
+                </td>
+              </tr>
+            </template>
+          </table>
         </section>
       </div>
     </main>
@@ -344,7 +525,6 @@
 
     <script type="module">
       import { initApp } from "/static/js/app.js"
-      import { highlightNav } from "/static/js/common/navigation.js"
       // Importing the module registers the `styleGuide` component, before `initApp()` starts Alpine
       import { initStyleGuide } from "/static/js/style-guide.js"
 
@@ -353,7 +533,6 @@
       // Set once: the repository cannot change without a full page load
       window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
 
-      highlightNav("style-guide")
       initStyleGuide()
     </script>
   </body>

@@ -9,11 +9,26 @@ import {
 export function bindPeopleDragDrop({ dispatch }) {
     interact("#people .drag-drop, #person .drag-drop").draggable({
         inertia: true,
-        autoScroll: { container: document.querySelector("#explorer") },
+        autoScroll: {
+            container: document.querySelector("#explorerPanelContent"),
+        },
 
         listeners: {
             move: dragMoveListener,
-            start: setFixedPositionWhileDragging,
+            start: (event) => {
+                // Scroll the pane the cell was lifted from (interact.js reads the container on every
+                // move); the `#person` cover in the results title has none, so the panel scrolls.
+                // `draggable()` extends the autoScroll options in place and touches no other
+                // option, so the listeners and `inertia` stay
+                event.interactable.draggable({
+                    autoScroll: {
+                        container:
+                            event.target.closest(".pane .list") ??
+                            document.querySelector("#explorerPanelContent"),
+                    },
+                })
+                setFixedPositionWhileDragging(event)
+            },
             end: dragged,
         },
     })

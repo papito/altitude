@@ -1,4 +1,5 @@
 import { Alpine } from "./lib/alpine.esm.min.js"
+import { Const } from "./constants.js"
 import { refreshAlbumCounts } from "./common/album-list.js"
 import { refreshLocationCounts } from "./common/location-list.js"
 import { refreshFolderCounts } from "./common/folder-tree.js"
@@ -74,10 +75,12 @@ export class FrontendApp {
     }
 
     reloadNav() {
-        // `search`: this page's nav holds the Search input, which the reload keeps (`hx-preserve`)
+        // `current`: the view shown, whose entry the reload marks again (the reload keeps the quick
+        // search form, `hx-preserve`)
+        const view = Alpine.store(Const.state.searchParams).view
         htmx.ajax(
             "GET",
-            `/htmx/nav/r/${this.context.getRepoId()}?search=true`,
+            `/htmx/nav/r/${this.context.getRepoId()}?current=${view}`,
             {
                 swap: "innerHTML",
                 target: "nav",

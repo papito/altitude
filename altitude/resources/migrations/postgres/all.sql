@@ -12,7 +12,7 @@ CREATE TABLE _core (
 );
 
 CREATE TABLE system (
-  id INT NOT NULL DEFAULT 1 CHECK (id = 1), -- this is the ONLY ID in the system table
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- the one and only row: the key rejects a second, the check pins its id
   version INT NOT NULL,
   is_initialized BOOL NOT NULL DEFAULT FALSE,
   -- The HMAC-SHA256 key of signed content URLs, the Base64 of 32 random bytes, generated on first start
@@ -20,7 +20,6 @@ CREATE TABLE system (
   signing_key CHAR(44)
 );
 
-CREATE UNIQUE INDEX system_01 ON system (id);
 INSERT INTO system (version, is_initialized) VALUES (1, False);
 
 -- The Settings an Admin tunes on the Settings screen, seeded with their defaults; the registry is models/Settings.scala

@@ -12,6 +12,9 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.QueryTimeoutException
 import altitude.core.SearchCursorException
+import altitude.core.models.Album
+import altitude.core.models.Folder
+import altitude.core.models.Location
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
@@ -37,6 +40,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * The response still pushes the user-friendly, bookmarkable browser URL via a special HTMX header. That URL is a projection of
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
+   *
+   * `triaged` overlays the view's scope (`SearchRequestParser`): `false` hides the triaged assets of the repository view. The
+   * View settings dialog offers that switch there alone, since the triage view refuses it.
    *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
@@ -67,6 +73,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId: Option[String] = None,
       locationId: Option[String] = None,
       bbox: Option[String] = None,
+      triaged: Option[Boolean] = None,
       layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
@@ -86,7 +93,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400,
         Seq(("Content-Type", "application/json")))
 
-    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox) match
+    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged) match
       case Left(message) => return badRequest(message)
       case Right(scope) => scope
 
@@ -104,6 +111,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       return badRequest(
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})")
 
+    // What the results title names: the person, the folder's path, the album or the Location the results are scoped to
+    val person = personOf(personId)
+    val folderPath = folderPathOf(folderId)
+    val album: Option[Album] = albumId.map(App.altitude.service.album.getById)
+    val location = locationOf(locationId)
+
     val browserUrl = browserViewUrl(
       view,
       effectiveSort,
@@ -113,6 +126,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId,
       locationId,
       bbox,
+      triaged,
       layout,
       if layout == Const.Search.Layout.MAP then None else groupBy,
       if layout == Const.Search.Layout.MAP then None else groupDirection,
@@ -135,7 +149,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           sort = searchSort,
           grouping = None,
           grid = htmx.html.map_view(bounds, settings.mapTileUrl, settings.mapTileAttribution),
-          person = personOf(personId),
+          person = person,
+          folderPath = folderPath,
+          album = album,
+          location = location,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -182,7 +199,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           sort = results.sort,
           grouping = Some(results.grouping),
           grid = htmx.html.results_grid_grouped(results = results),
-          person = personOf(personId),
+          person = person,
+          folderPath = folderPath,
+          album = album,
+          location = location,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -222,7 +242,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         sort = searchSort,
         grouping = None,
         grid = htmx.html.results_grid(isContinuousScroll = false, results = results),
-        person = personOf(personId),
+        person = person,
+        folderPath = folderPath,
+        album = album,
+        location = location,
         view = view,
         folderId = folderId,
         albumId = albumId,
@@ -313,6 +336,23 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     personId.map(id => App.altitude.service.person.getById(id): Person).orNull
 
   /**
+   * The folder scope as a breadcrumb reads it: the top-level folder first, the folder itself last. The repository root is the
+   * whole repository, so it is no scope and has no path.
+   */
+  private def folderPathOf(folderId: Option[String]): List[Folder] =
+    val folders = App.altitude.service.folder
+    folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getById(id)).getOrElse(Nil)
+
+  /** The Location scope with its category's name, which the typed read leaves out */
+  private def locationOf(locationId: Option[String]): Option[Location] =
+    locationId.map {
+      id =>
+        val locations = App.altitude.service.location
+        val location = locations.getById(id)
+        location.copy(categoryName = location.categoryId.map(locations.getById(_).name))
+    }
+
+  /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
    * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
    * first page.
@@ -326,6 +366,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId: Option[String],
       locationId: Option[String],
       bbox: Option[String],
+      triaged: Option[Boolean],
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
@@ -337,6 +378,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
       locationId.map(Api.Field.Search.LOCATION_ID -> _),
       bbox.map(Api.Field.Search.BBOX -> _),
+      triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
       q.map(Api.Field.Search.QUERY_TEXT -> _),
       Some(Api.Field.Search.SORT -> sort),

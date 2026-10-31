@@ -1,11 +1,12 @@
 /**
  * Document-level keyboard handling, loaded on every page.
  *
- * Escape closes the active modal and any open context menu, wherever focus is, and is consumed by
- * them, so a background inline edit (the person name editor) survives; with neither open, it
- * closes the map view's crowded-pin panel, and with none of those open, Escape is broadcast for
- * such editors to cancel. Consuming it also keeps the browser's own Escape handling for the
- * popover from running a second time.
+ * Escape closes the active modal or popover dialog and any open context menu, wherever focus is,
+ * and is consumed by them, so a background inline edit (the person name editor) survives; with
+ * neither open, it closes the map view's crowded-pin panel, and with none of those open, Escape is
+ * broadcast for such editors to cancel. Consuming it also keeps the browser's own Escape handling
+ * for the popover dialog and the menus from running a second time. An open select picker's Escape
+ * is left to the picker, which closes itself and nothing else.
  * While asset detail is active and no text is being edited, the arrow keys navigate between assets,
  * except on the video player's timeline and volume slider, which they step, and Space plays or
  * pauses a Video and does nothing on an image.
@@ -17,7 +18,12 @@ import { closeMapPanel } from "./map/map-panel.js"
 
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-        // A closing modal restores focus itself; only otherwise does the menu's trigger take it back
+        if (isInOpenSelectPicker(event.target)) {
+            return
+        }
+
+        // A closing modal or popover dialog restores focus itself; only otherwise does the menu's
+        // trigger take it back
         const modalClosed = closeModal()
         const menuClosed = closeOpenContextMenu({
             reason: "Escape",
@@ -59,6 +65,21 @@ document.addEventListener("keydown", (event) => {
         }
     }
 })
+
+// `matches` throws on `:open` in a browser that does not know the pseudo-class
+const supportsOpenPseudoClass = CSS.supports("selector(:open)")
+
+/**
+ * Focus is in a customizable select's open picker (`appearance: base-select`), whose Escape bubbles
+ * to the document, unlike a native select's: the picker closes itself, and the dialog holding the
+ * select stays open.
+ */
+function isInOpenSelectPicker(target) {
+    return Boolean(
+        supportsOpenPseudoClass &&
+        target?.closest?.("select")?.matches(":open"),
+    )
+}
 
 /** Focus is in the asset's video player: the <video>, its controller, or one of its controls */
 function isInPlayer(target) {

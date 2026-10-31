@@ -1,49 +1,37 @@
-<div id="batchOps" x-show="!$store.selectedAssets.isEmpty">
-    <div class="container">
-        <!-- Default view: Move, Recycle, Remove from album (in an album), Add to location, Remove from location (in a Location), Deselect All -->
-        <template x-if="!$store.currentView.isTrashBinView()">
-            <div class="container">
-                <div class="control batch-mover">
-                    <button class="action-button success drag-drop"><i class="fas fa-truck-moving"></i>Move&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                </div>
-                <div class="control batch-recycler">
-                    <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                </div>
-                <!-- While an album's results are displayed: drop the selected assets from that album (the assets themselves are untouched) -->
-                <template x-if="$store.searchParams.albumId">
-                    <div class="control">
-                        <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromAlbum)"><i class="fas fa-minus-circle"></i>Remove from album&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                    </div>
-                </template>
-                <!-- Opens the Add to location dialog for the selection (js/listeners/locations.js); Locations are pointers like albums -->
-                <div class="control">
-                    <button class="action-button" @@click="$dispatch(window.Const.events.batchAddToLocationRequested)"><i class="fas fa-map-marker-alt"></i>Add to location&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                </div>
-                <!-- While a Location's results are displayed: drop the selected assets from that Location -->
-                <template x-if="$store.searchParams.locationId">
-                    <div class="control">
-                        <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                    </div>
-                </template>
-                <div class="control">
-                    <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
-                </div>
-            </div>
-        </template>
-        <!-- Trash bin view: Purge, Restore, Deselect All -->
-        <template x-if="$store.currentView.isTrashBinView()">
-            <div class="container">
-                <div class="control">
-                    <button class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsPurged)"><i class="fas fa-fire"></i>Purge&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                </div>
-                <div class="control">
-                    <button class="action-button success" @@click="$dispatch(window.Const.events.batchAssetsRestored)"><i class="fas fa-undo"></i>Restore&nbsp;(<span x-text="$store.selectedAssets.size"></span>)</button>
-                </div>
-                <div class="control">
-                    <button class="action-button" @@click="$store.selectedAssets.reset()"><i class="fas fa-toggle-off"></i>Deselect All</button>
-                </div>
-            </div>
-        </template>
-    </div>
+@* The batch ops: what the selection can do, shown while assets are selected. Rendered twice: in the search toolbar
+   (includes/search_results), between the total and the layout and View controls, and in the footer (index), where CSS
+   anchor positioning keeps each button directly below its twin in the toolbar (static/css/includes/batch_ops.css).
+   The count shows once; the buttons carry no count of their own.
+   Move is a drag handle (js/dragdrop/batch-ops.js); a click on it explains that in a tooltip. *@
+<div class="batch-ops" x-show="!$store.selectedAssets.isEmpty">
+    <span class="selected-count"><span x-text="$store.selectedAssets.size"></span> selected</span>
+    @* Default view: Move, Recycle, Add to album, Remove from album (in an album), Add to location, Remove from location
+       (in a Location), Deselect all *@
+    <template x-if="!$store.currentView.isTrashBinView()">
+        <div class="actions">
+            <button type="button" class="action-button success drag-drop batch-mover" @@click="$tooltip('Drag to folder, location, or album')"><i class="fas fa-truck-moving"></i>Move</button>
+            <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle</button>
+            @* Opens the Add to album dialog for the selection (js/listeners/albums.js), which can also create the album *@
+            <button type="button" class="action-button" @@click="$dispatch(window.Const.events.batchAddToAlbumRequested)"><i class="fas fa-images"></i>Add to album</button>
+            @* While an album's results are displayed: drop the selected assets from that album (the assets themselves are untouched) *@
+            <template x-if="$store.searchParams.albumId">
+                <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromAlbum)"><i class="fas fa-minus-circle"></i>Remove from album</button>
+            </template>
+            @* Opens the Add to location dialog for the selection (js/listeners/locations.js); Locations are pointers like albums *@
+            <button type="button" class="action-button" @@click="$dispatch(window.Const.events.batchAddToLocationRequested)"><i class="fas fa-map-marker-alt"></i>Add to location</button>
+            @* While a Location's results are displayed: drop the selected assets from that Location *@
+            <template x-if="$store.searchParams.locationId">
+                <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
+            </template>
+            <button type="button" class="action-button deselect" title="Deselect all" aria-label="Deselect all" @@click="$store.selectedAssets.reset()"><i class="fas fa-times"></i></button>
+        </div>
+    </template>
+    @* Trash bin view: Purge, Restore, Deselect all *@
+    <template x-if="$store.currentView.isTrashBinView()">
+        <div class="actions">
+            <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsPurged)"><i class="fas fa-fire"></i>Purge</button>
+            <button type="button" class="action-button success" @@click="$dispatch(window.Const.events.batchAssetsRestored)"><i class="fas fa-undo"></i>Restore</button>
+            <button type="button" class="action-button deselect" title="Deselect all" aria-label="Deselect all" @@click="$store.selectedAssets.reset()"><i class="fas fa-times"></i></button>
+        </div>
+    </template>
 </div>
-

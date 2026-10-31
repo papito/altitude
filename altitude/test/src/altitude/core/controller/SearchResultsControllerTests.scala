@@ -9,6 +9,7 @@ import altitude.core.App
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
+import altitude.core.util.Util
 
 /** The grouped HTML grid of the search results route, its continuation by cursor, and the ungrouped grid next to it */
 @DoNotDiscover class SearchResultsControllerTests extends ControllerTestCore {
@@ -87,7 +88,7 @@ import altitude.core.models.AssetType
      *
      * Assertions:
      *
-     * The first page heads the group with its Category › Location path, reflects the grouping in the Group dropdown and the
+     * The first page heads the group with its Category › Location path, reflects the grouping in the Group menu and the
      * fragment's data attributes, and gives an asset in a Location a cell ID qualified by it. The continuation finishes Beach
      * without repeating its header and opens No location, whose cell keeps the plain asset ID.
      */
@@ -107,8 +108,9 @@ import altitude.core.models.AssetType
         page.statusCode shouldBe 200
         page.text() should include("<span class=\"category\">Italy</span> › Beach")
         page.text() should include(header(location.persistedId))
-        // The Group dropdown reflects the grouping, and the grid carries it for its continuations
-        page.text() should include("""data-app-search-group-by="location" data-app-search-group-direction="" selected""")
+        // The Group menu reflects the grouping, and the grid carries it for its continuations
+        page.text() should include(
+          """data-app-search-group-by="location" data-app-search-group-direction="" aria-checked="true"""")
         page.text() should include("""data-results-group-by="location"""")
         page.text() should include("""data-results-group-direction=""""")
         // An asset in a Location is a cell of its own under it, distinct from the same asset's cell elsewhere
@@ -231,7 +233,7 @@ import altitude.core.models.AssetType
         page should include("""data-results-total="1"""")
         page should include("""data-results-total-capped="false"""")
         page.contains("""id="assets"""") shouldBe false
-        "(?s)<select id=\"groupOptions\".*?>".r.findFirstIn(page).get should include("disabled")
+        "(?s)<div id=\"groupMenuHost\".*?>".r.findFirstIn(page).get should include("data-choice-menu-disabled")
         page should include("""id="mapPanel" hidden""")
         page should include("""id="bboxScope"""")
         page should include("""data-results-layout="map"""")
@@ -365,9 +367,9 @@ import altitude.core.models.AssetType
      * Assertions:
      *
      * The first page is an HTML fragment whose replaced URL carries the grouping, with a header giving the whole day's count, the
-     * overall total, cells in sort order and the grouping reflected in the Group dropdown; only its last cell carries the cursor,
-     * and no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the
-     * last page, carries no cursor.
+     * overall total, cells in sort order and the grouping reflected in the Group menu; only its last cell carries the cursor, and
+     * no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the last
+     * page, carries no cursor.
      *
      * Edge cases:
      *
@@ -407,8 +409,9 @@ import altitude.core.models.AssetType
         ordered(page1, cell(a1), cell(a2))
         page1.contains(cell(a3)) shouldBe false
 
-        // The Group dropdown reflects the grouping
-        page1 should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
+        // The Group menu reflects the grouping
+        page1 should include(
+          """data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
         page1 should include("""data-results-group-by="dateTaken"""")
         page1 should include("""data-results-group-direction="desc"""")
 
@@ -468,7 +471,8 @@ import altitude.core.models.AssetType
         val trashPage = trash.text()
         ordered(trashPage, header("2026-09-06"), cell(recycled))
         trashPage.contains(cell(kept)) shouldBe false
-        trashPage should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" selected""")
+        trashPage should include(
+          """data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
 
         val library = htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateTaken")).text()
         ordered(library, header("2026-09-06"), cell(kept))
@@ -693,19 +697,19 @@ import altitude.core.models.AssetType
     withServer(App) {
       host =>
         persistDated("2026-09-06T10:00:00", "beach.jpg")
-        val relevanceOption = """<option value="relevance""""
+        val relevanceOption = """data-app-search-sort="relevance""""
         val text = Map(Api.Field.Search.QUERY_TEXT -> "beach")
 
         for (shape <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"), Map(Api.Field.Search.LAYOUT -> "map")))
           withClue(s"$shape: ") {
             val withText = htmlSearch(host, repoId, text ++ shape).text()
             withText should include("""data-results-q="beach"""")
-            withText should include(s"$relevanceOption selected")
+            withText should include(s"$relevanceOption aria-checked=\"true\"")
 
             // A sort the request names leaves Relevance on offer, not selected
             val byName = htmlSearch(host, repoId, text ++ shape + (Api.Field.Search.SORT -> "filename0")).text()
             byName should include(relevanceOption)
-            byName.contains(s"$relevanceOption selected") shouldBe false
+            byName.contains(s"$relevanceOption aria-checked=\"true\"") shouldBe false
 
             // No text, or text without a usable term, is no text: the server would refuse the Relevance sort
             for (noText <- List(Map.empty[String, String], Map(Api.Field.Search.QUERY_TEXT -> "- OR"))) {
@@ -753,6 +757,54 @@ import altitude.core.models.AssetType
           host,
           repoId,
           Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.QUERY_TEXT -> "beach")).statusCode shouldBe 200
+    }
+  }
+
+  test("The triaged filter narrows the repository view and is refused with the triage view") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a sorted asset and a triaged asset.
+     *
+     * Assertions:
+     *
+     * The repository view renders both cells. With `triaged=false` the triaged cell is left out and the bookmarkable URL carries
+     * the filter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
+     *
+     * Edge cases:
+     *
+     * A `triaged` that is not a boolean is a 400.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val sorted = testContext.persistAsset()
+        val triaged = testContext.persistAsset(isTriaged = true)
+
+        val all = htmlSearch(host, repoId, Map.empty).text()
+        all should include(cell(sorted))
+        all should include(cell(triaged))
+
+        val hidden = htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "false"))
+        hidden.statusCode shouldBe 200
+        hidden.text() should include(cell(sorted))
+        (hidden.text() should not).include(cell(triaged))
+        hidden.headers("hx-replace-url").head should include("triaged=false")
+
+        val contradiction = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.TRIAGED -> "false")
+        for (shape <- List(Map.empty[String, String], Map(Api.Field.Search.LAYOUT -> "map")))
+          withClue(s"$shape: ") {
+            val response = htmlSearch(host, repoId, contradiction ++ shape)
+            response.statusCode shouldBe 400
+            response.headers("content-type").head should include("text/plain")
+            response.text() should include("triage")
+          }
+
+        htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "maybe")).statusCode shouldBe 400
     }
   }
 
@@ -933,7 +985,7 @@ import altitude.core.models.AssetType
         html.headers("content-type").head should include("text/html")
         val page = html.text()
         page should include(cell(asset))
-        page should include("""data-app-search-group-by="" data-app-search-group-direction="" selected""")
+        page should include("""data-app-search-group-by="" data-app-search-group-direction="" aria-checked="true"""")
         page should include("""data-results-layout="grid"""")
         page should include("""data-results-group-by=""""")
         pressedLayout(page) shouldBe "grid"
@@ -952,6 +1004,74 @@ import altitude.core.models.AssetType
         legacy.statusCode shouldBe 400
         legacy.headers("content-type").head should include("application/json")
         ujson.read(legacy.text())("error").str should include("HTML")
+    }
+  }
+
+  test("Results open with a title block for their scope, and with the toolbar's total without one") {
+
+    /**
+     * Setup:
+     *
+     * A folder Iceland under Trips, an album, a Location Reykjavik under the category Countries, and one asset named beach.jpg.
+     *
+     * Assertions:
+     *
+     * Unscoped results render no title block. A folder scope renders a title block with the folder icon, the ancestors as folder
+     * search triggers, the folder as the leaf and the way back to the whole result set (a trigger clearing the person scope,
+     * which the store's rules widen to every scope); the toolbar keeps "Total:" with and without a scope. An album scope shows
+     * the album's icon, name and creation day; a Location scope its icon, name and category; Search text its icon, the text and
+     * "in this repository".
+     *
+     * Edge cases:
+     *
+     * The root folder is the whole repository and renders no title block.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        persistDated("2026-09-06T10:00:00", "beach.jpg")
+        val trips = testApp.service.folder.add("Trips")
+        val iceland = testApp.service.folder.add("Iceland", parentId = trips.id)
+        val album = testApp.service.album.add("Best of Iceland")
+        val countries = testApp.service.location.addCategory("Countries")
+        val reykjavik = testApp.service.location.addLocation("Reykjavik", 64.1466, -21.9426, categoryId = countries.id)
+        val total = "<strong>Total:</strong>"
+        val titleBlock = """class="results-title"""
+
+        val unscoped = htmlSearch(host, repoId, Map.empty).text()
+        unscoped should include(total)
+        unscoped.contains(titleBlock) shouldBe false
+
+        val folderPage = htmlSearch(host, repoId, Map(Api.Field.Search.FOLDER_ID -> iceland.persistedId)).text()
+        folderPage should include(titleBlock)
+        folderPage should include("fa-folder")
+        folderPage should include(s"""data-app-search-folder-id="${trips.persistedId}"""")
+        folderPage should include("""<span class="leaf">Iceland</span>""")
+        folderPage should include("""data-app-search-person-id=""""")
+        folderPage should include(total)
+
+        val rootPage = htmlSearch(host, repoId, Map(Api.Field.Search.FOLDER_ID -> testContext.repository.rootFolderId)).text()
+        rootPage should include(total)
+        rootPage.contains(titleBlock) shouldBe false
+
+        val albumPage = htmlSearch(host, repoId, Map(Api.Field.Search.ALBUM_ID -> album.persistedId)).text()
+        albumPage should include("fa-images")
+        albumPage should include("Best of Iceland")
+        val createdAt = testApp.service.album.getById(album.persistedId).createdAt.get
+        albumPage should include(s"Created ${Util.humanReadableDate(createdAt.toLocalDate)}")
+
+        val locationPage = htmlSearch(host, repoId, Map(Api.Field.Search.LOCATION_ID -> reykjavik.persistedId)).text()
+        locationPage should include("fa-map-marker-alt")
+        locationPage should include("Reykjavik")
+        locationPage should include("""<div class="subtitle">Countries</div>""")
+
+        val textPage = htmlSearch(host, repoId, Map(Api.Field.Search.QUERY_TEXT -> "beach")).text()
+        textPage should include("fa-search")
+        textPage should include("""<span class="query">beach</span>""")
+        textPage should include("in this repository")
     }
   }
 }

@@ -1,16 +1,10 @@
+/* The list's spacing is the explorer lists' shared one (core.css): one row gap between sibling rows and between a
+   category's own row and its Locations, so nesting never tightens the spacing, and a Location under a category is
+   indented by one step, drawn by its `.trace` cell like the folder tree's */
 #locationList {
-    /* A Location under a category is indented by one step, drawn by its `.trace` cell like the folder tree's */
-    --location-indent: 20px;
-    /* One vertical rhythm for the whole list: the same gap separates sibling rows and separates a
-       category's own row from its Locations, so nesting never tightens the spacing */
-    --location-row-gap: 8px;
-    /* Horizontal gap between the cells of a row (⋯ button, trace, icon, name, count). The trace
-       subtracts it, so both uses must be the same value */
-    --location-control-gap: 6px;
-
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: var(--location-row-gap);
+    grid-row-gap: var(--list-row-gap);
 }
 
 /* A category node holds its row and its children container (js/common/location-list.js); a
@@ -18,14 +12,14 @@
 #locationList .location.category, #locationList .children {
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: var(--location-row-gap);
+    grid-row-gap: var(--list-row-gap);
 }
 
 /* An expanded category and its Locations form a group, set off from the rows around it by twice
    the row gap: the list's own gap plus this margin, present only while expanded. Grid items do
    not collapse margins, so the cases below cancel the margin where it would triple the gap */
 #locationList .location.category[data-expanded] {
-    margin-block: var(--location-row-gap);
+    margin-block: var(--list-row-gap);
 }
 
 /* An expanded category directly after another expanded category: the first one's bottom margin
@@ -46,7 +40,7 @@
 
 #locationList .location .controls {
     display: grid;
-    column-gap: var(--location-control-gap);
+    column-gap: var(--list-control-gap);
     align-items: center;
     touch-action: none;
 }
@@ -77,13 +71,13 @@
 #locationList .trace {
     /* Spans the indent minus the grid gap on its icon side, so the icon/name sit where a plain
        margin-left indent would put them while the ⋯ stays flush left */
-    width: calc(var(--depth) * var(--location-indent) - var(--location-control-gap));
-    border-top: 2px double var(--panel-border-color);
+    width: calc(var(--depth) * var(--list-indent) - var(--list-control-gap));
+    border-top: var(--border-double) var(--theme-secondary);
 }
 
 #locationList .location i {
-    font-size: 1.2em;
-    color: var(--font-color);
+    font-size: var(--font-size-medium);
+    color: var(--theme-neutral-4);
 }
 
 /* A category's expand control is a real button (Enter/Space work, no page jump) that keeps only
@@ -94,7 +88,7 @@
 #locationList .location.category .expand-ctrl {
     display: grid;
     grid-template-columns: max-content auto;
-    column-gap: var(--location-control-gap);
+    column-gap: var(--list-control-gap);
     align-items: center;
     justify-items: start;
     text-align: left;
@@ -125,7 +119,7 @@
     bottom: -0.35em;
     padding: 0.15em;
     border-radius: 50%;
-    background-color: var(--background-color);
+    background-color: var(--theme-neutral-2);
 }
 
 #locationList .location.category[data-expanded] .expand-ctrl .location-icon::after {
@@ -140,7 +134,7 @@
    Only that row's own icon: the marker sits on a Location row, never on a category node, and a
    category is never colored for a Location inside it */
 #locationList .location[data-viewed-scope] > .controls .location-icon {
-    color: var(--success-font-color);
+    color: var(--success-color);
 }
 
 /* The two add buttons sit centered at the top of the explorer. Both rules are scoped to the shown
@@ -160,5 +154,5 @@
 }
 
 #locationActions .action-button span, #noLocations .action-button span {
-    margin-left: 5px;
+    margin-left: var(--space-3);
 }

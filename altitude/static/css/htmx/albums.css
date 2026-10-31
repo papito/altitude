@@ -1,12 +1,8 @@
+/* The rows take the explorer lists' shared row and cell gaps (core.css) */
 #albumList {
-    /* One vertical rhythm between album rows */
-    --album-row-gap: 8px;
-    /* Horizontal gap between the cells of a row (⋯ button, icon, name, count) */
-    --album-control-gap: 6px;
-
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: var(--album-row-gap);
+    grid-row-gap: var(--list-row-gap);
 }
 
 #albumList .album .controls {
@@ -15,14 +11,14 @@
        name directly and a row without a count ends at its name */
     display: grid;
     grid-template-columns: max-content max-content auto 1fr;
-    column-gap: var(--album-control-gap);
+    column-gap: var(--list-control-gap);
     align-items: center;
     touch-action: none;
 }
 
 #albumList .album i {
-    font-size: 1.2em;
-    color: var(--font-color);
+    font-size: var(--font-size-medium);
+    color: var(--theme-neutral-4);
 }
 
 #albumList .album-name, #albumList .album-icon {
@@ -31,7 +27,7 @@
 
 /* Green marks the viewed album: the one whose results are displayed (see js/common/album-list.js) */
 #albumList .album[data-viewed-scope] .album-icon {
-    color: var(--success-font-color);
+    color: var(--success-color);
 }
 
 /* The add button sits centered at the top of the explorer. Both rules are scoped to the shown
@@ -50,5 +46,5 @@
 }
 
 #albumActions .action-button span, #noAlbums .action-button span {
-    margin-left: 5px;
+    margin-left: var(--space-3);
 }

@@ -22,18 +22,26 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
-  def showPeopleTab(
-      repoId: String,
-      typeFilter: String = Const.PeopleTypeFilter.COMPLETE,
-      peopleTypeFilter: Option[String] = None)(using request: Request): Response[String] =
-    val people: List[Person] = typeFilter match
-      case Const.PeopleTypeFilter.ALL => App.altitude.service.person.getAllNotDiscarded
-      case Const.PeopleTypeFilter.HIDDEN => App.altitude.service.person.getAllHidden
-      case Const.PeopleTypeFilter.COMPLETE => App.altitude.service.person.getAllAboveThreshold
-      case Const.PeopleTypeFilter.INCOMPLETE => App.altitude.service.person.getAllBelowThreshold
-
-    val payload = "<!doctype html>" + htmx.html.people(people = people, typeFilter = typeFilter)
+  def showPeopleTab(repoId: String)(using request: Request): Response[String] =
+    // The shell only: the browser's `peopleTab` component asks `listPeople` for each pane's list
+    val payload = "<!doctype html>" + htmx.html.people()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+
+  /** The list of the people in the People buckets named, comma-separated, by `buckets`; a name that is no bucket is a 400 */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/list")
+  def listPeople(repoId: String, buckets: String = Const.PeopleBucket.MATCHED)(using request: Request): Response[String] =
+    val requested: Set[String] = App.altitude.service.person.parseBuckets(buckets)
+    val unknown = requested -- Const.PeopleBucket.ALL
+    if unknown.nonEmpty then return badRequest(s"Unknown People bucket: ${unknown.mkString(", ")}")
+
+    val people: List[Person] = App.altitude.service.person.getInBuckets(requested)
+    val payload = "<!doctype html>" + htmx.html.people_list(people = people)
+    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+
+  /** A plain-text 400; the snackbar reports the status */
+  private def badRequest(message: String): Response[String] =
+    cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")

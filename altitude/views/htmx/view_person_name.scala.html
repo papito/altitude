@@ -1,11 +1,9 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Person
-@import altitude.core.Api
 @(person: Person)
 
+@* The person's name in the results title; a click swaps in the editor (htmx/edit_person_name). The pencil is revealed by
+   static/css/htmx/person.css while the title is hovered or the name has focus. *@
 <span hx-trigger="click"
       hx-swap="outerHTML"
-      hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/edit">
-            @{person.name}
-    <i class="fas fa-edit"></i></span>
-
+      hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/edit">@{person.name}<i class="fas fa-edit" aria-hidden="true"></i></span>

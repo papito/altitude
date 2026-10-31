@@ -9,9 +9,7 @@
 
 <body class="setup">
 
-<div>
-    @includes.html.brand()
-</div>
+<canvas id="setupBackground"></canvas>
 
 <div id="messages">
     <div id="serverError" hidden></div>
@@ -20,6 +18,7 @@
 
 <main>
     <div>
+        <h1 id="setupTitle">Altitude</h1>
         @htmx.html.setup_form()
     </div>
 </main>
@@ -27,6 +26,8 @@
 <footer>
     By Renegade Otter
 </footer>
+
+<script type="module" src="/static/js/setup-page.js"></script>
 
 </body>
 </html>

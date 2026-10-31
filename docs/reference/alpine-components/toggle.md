@@ -36,3 +36,12 @@ A switch-style on/off control with a label, exposed to assistive technology as a
     </button>
 </div>
 ```
+
+## Notes for Altitude
+
+The View settings dialog (`altitude/views/htmx/view_settings_dialog.scala.html`) follows this lesson for its
+switches, styled as `.switch` in `static/css/core.css`, with two differences. The state is not a per-switch
+`value`: one `viewSettings` component (`static/js/alpine/components/view-settings.js`) on the form binds every
+switch's `aria-checked` to the reactive grid metadata set in the context, and a click adds or removes the field.
+And the label is a plain `<label for>` pointing at the button, which is a labelable element, so the label's click
+reaches the switch without `x-id` or a `$refs` forward.

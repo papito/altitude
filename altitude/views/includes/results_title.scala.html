@@ -1,0 +1,9 @@
+@* The results title: the scope of the results shown, as a block above the toolbar of includes/search_results. Every scope
+   renders the same block (views/AGENTS.md **Results title**): a folder's path, an album, a Location or the Search text through
+   this template, and a person through htmx/person, whose block is also the drop zone and swap target of the person actions.
+   Styled by static/css/includes/results_title.css. *@
+@(icon: String, subtitle: Option[String] = None)(title: Html)
+
+<div class="results-title" x-data>
+@includes.html.results_title_inner(icon, subtitle)(title)
+</div>

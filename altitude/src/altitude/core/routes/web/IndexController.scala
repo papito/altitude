@@ -5,6 +5,7 @@ import cask.model.Response
 import org.slf4j.Logger
 
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.routes.decorators.extractToken
 import altitude.core.routes.decorators.requireLogin
 
@@ -56,7 +57,8 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
       Response("", 302, Seq("Location" -> "/setup"), Nil)
     else
       val stats = App.altitude.service.stats.getStats
-      val payload = "<!doctype html>" + html.index(stats = stats)
+      // The nav marks the view asked for; the client reads the same parameter to seed its search
+      val payload = "<!doctype html>" + html.index(stats = stats, current = view.getOrElse(Const.Search.View.DEFAULT))
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()

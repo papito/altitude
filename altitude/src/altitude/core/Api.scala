@@ -113,9 +113,6 @@ object Api:
       val SRC_PERSON_ID = "srcPersonId"
       val DEST_PERSON_ID = "destPersonId"
 
-    object People:
-      val TYPE_FILTER = "typeFilter"
-
     object Search:
       val PERSON = "person"
       val QUERY_TEXT = "q"
@@ -128,6 +125,7 @@ object Api:
       val BBOX = "bbox"
       val LAYOUT = "layout"
       val VIEW = "view"
+      val TRIAGED = "triaged"
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
       val GROUP_BY = "groupBy"

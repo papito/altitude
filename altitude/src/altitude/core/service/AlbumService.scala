@@ -5,6 +5,7 @@ import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
+import altitude.core.util.Query
 
 /**
  * Albums are flat, repository-scoped lists of pointers to assets. Nothing here touches an asset: adding to, removing from, or
@@ -19,6 +20,10 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       logger.debug(s"Adding album [$name]")
       add(Album(name = name.trim))
     }
+
+  /** Scoped to the context repository: another repository's album is not found, so it is neither read, renamed nor added to */
+  override def getById(id: String): Album =
+    getOneByQuery(new Query().add(FieldConst.ID -> id).withRepository())
 
   def getAll: List[Album] =
     txManager.asReadOnly {
@@ -54,6 +59,18 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       val added = dao.addAssets(albumId, assetIds)
       logger.debug(s"Added $added of ${assetIds.size} asset(s) to album [$albumId]")
       added
+    }
+
+  /**
+   * Creates the album `name` holding `assetIds`, in one transaction: a duplicate name fails with `DuplicateException` before any
+   * membership is written, and a failed add leaves no empty album behind. Returns the album and how many assets it added.
+   */
+  def addAssetsToNewAlbum(name: String, assetIds: Set[String]): (Album, Int) =
+    txManager.withTransaction {
+      val album: Album = add(name)
+      val added = addAssets(album.persistedId, assetIds)
+      logger.info(s"Created album [${album.name}] with $added asset(s)")
+      (album, added)
     }
 
   def removeAssets(albumId: String, assetIds: Set[String]): Int =

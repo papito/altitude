@@ -29,7 +29,7 @@
  * Each folder's context menu is built with the tree too, as a native
  * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu-markup.js`, shared
  * with the album list), so opening a menu needs no request. The panel holds its
- * actions, each requesting a separate modal through HTMX. The `contextMenu` Alpine
+ * actions, each requesting a popover dialog through HTMX. The `contextMenu` Alpine
  * component (`alpine/components/context-menu.js`) places and dismisses the menu;
  * the modal owner closes it when the dialog opens.
  *
@@ -445,11 +445,6 @@ function _buildFolderNameEl(folder, label) {
     const el = document.createElement("span")
     el.id = `folderName-${folder.id}`
     el.className = "folder-name"
-    el.setAttribute("x-data", "")
-    el.setAttribute(
-        ":class",
-        "{ 'disabled': $store.currentView.isTriageView() || $store.currentView.isTrashBinView() }",
-    )
     _makeSearchTrigger(el, folder.id)
     el.textContent = label
     return el
@@ -468,7 +463,7 @@ function _makeSearchTrigger(el, folderId) {
 /**
  * The folder's ⋯ menu cell (see `buildContextMenuCtrl`). The IDs are stable across rebuilds:
  * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel.
- * Each action requests a separate modal; the root can only gain children, so it offers Add folder alone.
+ * Each action requests a popover dialog; the root can only gain children, so it offers Add folder alone.
  */
 function _buildMenuCtrl(folder, repoId, folderName) {
     const actions = [

@@ -1,3 +1,7 @@
+@import altitude.core.Environment
+
+@()
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
@@ -12,3 +16,13 @@
 <script src="/static/js/lib/htmx.min.js"></script>
 <script src="/static/js/lib/axios.min.js" defer></script>
 <script type="module" src="/static/js/global.js"></script>
+@* Dev only, like the routes behind it (StyleGuideController): the design tweaks panel, the vendored tokentweak package
+   (js/lib/tokentweak.js) configured by the adapter js/design-tweaks.js. The boot script (js/lib/tokentweak-boot.js) adopts
+   the stylesheet of the stored tweaks before the first paint, so a page never flashes the untweaked look, and shows the page
+   in the remembered theme; the adapter's module, deferred as every module is, finds that sheet by its marker rule, takes it
+   over and builds the panel. The boot script reads the storage key from its `data-key`, the same key as
+   `Const.localStore.designTweaks`. *@
+@if(Environment.isDev) {
+<script src="/static/js/lib/tokentweak-boot.js" data-key="designTweaks"></script>
+<script type="module" src="/static/js/design-tweaks.js"></script>
+}

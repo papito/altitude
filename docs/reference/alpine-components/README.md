@@ -23,7 +23,7 @@ libraries below are not vendored.
 | [Notifications](notifications.md) | none |
 | [Radio Group](radio-group.md) | none |
 | [Toggle](toggle.md) | none |
-| [Tooltip](tooltip.md) | @popperjs/core, tippy.js |
+| [Tooltip](tooltip.md) | @popperjs/core, tippy.js (Altitude's `$tooltip` uses neither: a native popover, anchored by CSS) |
 
 ## Headless components (`@alpinejs/ui`)
 
@@ -63,5 +63,8 @@ libraries below are not vendored.
 - The folder and album context menus are native HTML popovers coordinated by core Alpine
   (`static/js/alpine/components/context-menu.js`); see the Altitude notes in [Dropdown](dropdown.md)
   and [Popover](headless-popover.md). [Menu](headless-menu.md) remains the reference if it ever
-  needs roving arrow-key focus; [Notifications](notifications.md) for a stacked snackbar;
-  [Flatpickr](flatpickr.md) for a date filter in search.
+  needs roving arrow-key focus; [Flatpickr](flatpickr.md) for a date filter in search.
+- The snackbar (`static/js/common/snackbar.js`) follows the [Notifications](notifications.md) lesson;
+  see its Altitude notes.
+- The View settings dialog's switches (`static/js/alpine/components/view-settings.js`, `.switch` in
+  `static/css/core.css`) follow the [Toggle](toggle.md) lesson; see its Altitude notes.

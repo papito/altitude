@@ -1,13 +1,24 @@
 package altitude.core.controller
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual }
+import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.models.Album
 
 @DoNotDiscover class AlbumActionControllerTests extends ControllerTestCore {
+  private val jsonHeaders = Map("Content-Type" -> "application/json")
+
+  /** A refused submission answers with the dialog's form carrying an error, replacing the submitted form in place */
+  private def validation(response: requests.Response, form: String): Unit = {
+    response.statusCode shouldBe 200
+    response.headers("hx-retarget") shouldBe Seq("this")
+    response.headers("hx-reswap") shouldBe Seq("outerHTML settle:0")
+    response.text() should include(s"""id="$form"""")
+    response.text() should include("""class="error"""")
+  }
 
   test("Albums tab and dialogs render") {
 
@@ -157,6 +168,159 @@ import altitude.core.models.Album
           check = false)
         deleted.statusCode shouldBe 200
         testApp.service.album.getAll shouldEqual List()
+    }
+  }
+
+  test("The Add to album dialog lists the albums and offers a new one") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, first with no albums, then with the albums "holiday" and "beach".
+     *
+     * Assertions:
+     *
+     * The dialog lists every album by name, with the bare name in `data-name`, followed by the "New album…" option. While there
+     * are albums, an album is selected and the new album's name field is hidden; with none, "New album…" is the only option and
+     * the name field shows and takes the focus.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def dialog() = {
+          val response =
+            requests.get(s"$host/htmx/album/r/$repoId/dialogs/add-to-album", cookies = testContext.cookies, check = false)
+          response.statusCode shouldBe 200
+          response.text()
+        }
+
+        val empty = dialog()
+        empty should include("""id="addToAlbum"""")
+        empty should include(s"""data-app-modal-title="${Const.UI.ADD_TO_ALBUM_DIALOG_TITLE}"""")
+        empty should include(Const.UI.NEW_ALBUM_OPTION)
+        empty should include("""data-app-dialog-autofocus-selector="#field-newAlbumName"""")
+        (empty should not).include("""id="newAlbum" hidden""")
+
+        testApp.service.album.add("holiday")
+        testApp.service.album.add("beach")
+
+        val listed = dialog()
+        listed should include("""data-name="holiday"""")
+        listed should include("""data-name="beach"""")
+        listed should include(Const.UI.NEW_ALBUM_OPTION)
+        listed should include("""data-app-dialog-autofocus-selector="#field-albumId"""")
+        listed should include("""id="newAlbum" hidden""")
+    }
+  }
+
+  test("The selection is added to an album, or to a new album the dialog creates") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the album "Holiday" and two imported assets, and a second repository holding the album
+     * "Elsewhere". The selection is posted as the dialog posts it: a comma-separated `assetIds` field.
+     *
+     * Assertions:
+     *
+     * Adding to an album writes the memberships and reports in the success detail how many assets the server added, the album's
+     * ID and name, and that no album was created. A name with no album ID creates that album, trimmed, holding the selection, and
+     * says it was created. Every refused submission answers with the dialog's form carrying the error and changes nothing.
+     *
+     * Edge cases:
+     *
+     * A repeated add reports 0; a new name taken by an album in another case; neither an album nor a name; a malformed album or
+     * asset ID; an empty selection; the other repository's album.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val foreign: Album = testApp.service.album.add("Elsewhere")
+        testApp.service.repository.switchContextToRepository(repo)
+
+        val album: Album = testApp.service.album.add("Holiday")
+        val first = testContext.persistAsset(repository = Some(repo))
+        val second = testContext.persistAsset(repository = Some(repo))
+        val selection = s"${first.persistedId},${second.persistedId}"
+
+        def put(payload: ujson.Obj) = requests.put(
+          s"$host/htmx/album/r/$repoId/assets",
+          headers = jsonHeaders,
+          data = payload.toString,
+          cookies = testContext.cookies,
+          check = false)
+        def detail(response: requests.Response): ujson.Value =
+          ujson.read(response.headers(Api.Field.SUCCESS_DETAIL_HEADER.toLowerCase).head)
+
+        val membership = put(ujson.Obj(Api.Field.Album.ALBUM_ID -> album.persistedId, Api.Field.ASSET_IDS -> selection))
+        membership.statusCode shouldBe 200
+        membership.text() shouldBe ""
+        detail(membership)("added").num shouldBe 2
+        detail(membership)(Api.Field.Album.ALBUM_ID).str shouldBe album.persistedId
+        detail(membership)(Api.Field.Album.NAME).str shouldBe "Holiday"
+        detail(membership)("created").bool shouldBe false
+        testApp.service.album.getAssetIds(album.persistedId) shouldBe Set(first.persistedId, second.persistedId)
+
+        val repeat = put(ujson.Obj(Api.Field.Album.ALBUM_ID -> album.persistedId, Api.Field.ASSET_IDS -> first.persistedId))
+        detail(repeat)("added").num shouldBe 0
+
+        val created =
+          put(ujson.Obj(Api.Field.Album.ALBUM_ID -> "", Api.Field.Album.NAME -> "  Beach ", Api.Field.ASSET_IDS -> selection))
+        created.statusCode shouldBe 200
+        detail(created)("added").num shouldBe 2
+        detail(created)(Api.Field.Album.NAME).str shouldBe "Beach"
+        detail(created)("created").bool shouldBe true
+        val beachId = detail(created)(Api.Field.Album.ALBUM_ID).str
+        testApp.service.album.getAssetIds(beachId) shouldBe Set(first.persistedId, second.persistedId)
+
+        validation(
+          put(ujson.Obj(Api.Field.Album.ALBUM_ID -> "", Api.Field.Album.NAME -> "holiday", Api.Field.ASSET_IDS -> selection)),
+          "addToAlbum")
+        validation(
+          put(ujson.Obj(Api.Field.Album.ALBUM_ID -> "", Api.Field.Album.NAME -> " ", Api.Field.ASSET_IDS -> selection)),
+          "addToAlbum")
+        validation(put(ujson.Obj(Api.Field.Album.ALBUM_ID -> "bad-id", Api.Field.ASSET_IDS -> selection)), "addToAlbum")
+        validation(put(ujson.Obj(Api.Field.Album.ALBUM_ID -> album.persistedId, Api.Field.ASSET_IDS -> "bad-id")), "addToAlbum")
+        validation(put(ujson.Obj(Api.Field.Album.ALBUM_ID -> album.persistedId, Api.Field.ASSET_IDS -> " , ")), "addToAlbum")
+        validation(
+          put(ujson.Obj(Api.Field.Album.ALBUM_ID -> foreign.persistedId, Api.Field.ASSET_IDS -> selection)),
+          "addToAlbum")
+
+        // The duplicate, blank and refused submissions created nothing
+        testApp.service.album.getAll.map(_.name) shouldEqual List("Beach", "Holiday")
+    }
+  }
+
+  test("The Add to album routes require authentication") {
+
+    /**
+     * Setup:
+     *
+     * A repository, and a client that accepts JSON and has not logged in, so the routes answer 401 instead of redirecting to the
+     * login page.
+     *
+     * Assertions:
+     *
+     * The Add to album dialog and the membership action answer 401.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val headers = Map("Accept" -> "application/json")
+
+    withServer(App) {
+      host =>
+        requests
+          .get(s"$host/htmx/album/r/$repoId/dialogs/add-to-album", headers = headers, check = false)
+          .statusCode shouldBe 401
+        requests.put(s"$host/htmx/album/r/$repoId/assets", headers = headers, check = false).statusCode shouldBe 401
     }
   }
 }

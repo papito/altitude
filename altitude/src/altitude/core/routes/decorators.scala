@@ -224,8 +224,8 @@ object decorators:
         else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
-   * For files under content-hashed names: the bytes under a name never change, so a found file may be cached by anyone for
-   * good. A miss carries no Cache-Control, since the name may be served once a build produces that content again.
+   * For files under content-hashed names: the bytes under a name never change, so a found file may be cached by anyone for good.
+   * A miss carries no Cache-Control, since the name may be served once a build produces that content again.
    */
   class cachedForever extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -236,10 +236,10 @@ object decorators:
       }
 
   /**
-   * For files whose names stay when their content changes (the vendored libraries, the fonts and the JS modules under
-   * /static/): the browser keeps a file but asks before each use (`no-cache`), and an unchanged one answers 304 with no body.
-   * The ETag is a hash of the bytes, taken on every request, so a file refreshed under a running dev server is never answered
-   * as unchanged. It is weak, since `compress` may send the same bytes gzipped.
+   * For files whose names stay when their content changes (the vendored libraries, the fonts and the JS modules under /static/):
+   * the browser keeps a file but asks before each use (`no-cache`), and an unchanged one answers 304 with no body. The ETag is a
+   * hash of the bytes, taken on every request, so a file refreshed under a running dev server is never answered as unchanged. It
+   * is weak, since `compress` may send the same bytes gzipped.
    */
   class revalidated extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =

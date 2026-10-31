@@ -1,7 +1,7 @@
 #uploadForm {
     display: grid;
     grid-auto-rows: auto;
-    grid-row-gap: calc(var(--control-vertical-space) * 1.5);
+    grid-row-gap: var(--space-8);
 }
 
 #uploadForm div {
@@ -13,33 +13,33 @@
 }
 
 #uploadForm input[type="file"] {
-    background-color: var(--background-form-color);
-    color: var(--font-color);
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
 }
 
 #uploadForm input::file-selector-button {
-    color: var(--font-color);
-    background-color: var(--background-form-color);
+    color: var(--theme-neutral-4);
+    background-color: var(--theme-neutral-2);
 }
 
 #uploadForm button {
-    font-size: 1.2em;
+    font-size: var(--font-size-medium);
 }
 
 
 /* These elements are served by the server via websocket */
 #statusText {
     display: none;
-    color: var(--success-font-color);
-    font-weight: bold;
-    padding: 10px;
-    font-size: 1.1em;
+    color: var(--success-color);
+    font-weight: var(--font-weight-bold);
+    padding: var(--space-5);
+    font-size: var(--font-size-medium);
 }
 
 #statusText.warning {
-    color: var(--warning-font-color);
+    color: var(--warning-color);
 }
 
 #statusText span {
-    color: var(--font-color);
+    color: var(--theme-neutral-4);
 }

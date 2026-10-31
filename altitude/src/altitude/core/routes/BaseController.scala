@@ -7,6 +7,7 @@ import org.slf4j.Logger
 import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.ValidationException
+import altitude.core.Validators.ApiRequestValidator
 
 abstract class BaseController(using logger: Logger) extends cask.Routes:
 
@@ -25,6 +26,27 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
     cask.Response(value.toString, status, Seq(("Content-Type", "application/json")))
 
   def jsonError(message: String, status: Int): Response[String] = jsonResponse(ujson.Obj("error" -> message), status)
+
+  /**
+   * The selection a batch dialog submits: its hidden `Api.Field.ASSET_IDS` field is a comma-separated list, unlike the array the
+   * JSON API takes. Every ID must be a UUID, and an empty selection is an error on that field (`ValidationException`).
+   */
+  def selectionIds(json: ujson.Obj): Set[String] =
+    val ids = json.obj
+      .get(Api.Field.ASSET_IDS)
+      .flatMap(_.strOpt)
+      .getOrElse("")
+      .split(",")
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .toSet
+    val validator = ApiRequestValidator(uuid = List(Api.Field.ASSET_IDS))
+    ids.foreach(id => validator.validate(ujson.Obj(Api.Field.ASSET_IDS -> id)))
+    if ids.isEmpty then
+      val errors = ValidationException()
+      errors.errors += Api.Field.ASSET_IDS -> C.Msg.Err.VALUE_REQUIRED
+      errors.trigger()
+    ids
 
   /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the

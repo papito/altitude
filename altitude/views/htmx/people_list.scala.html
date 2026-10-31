@@ -1,0 +1,48 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+@import altitude.core.Const
+
+@(people: List[Person])
+
+@* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
+   (GET /htmx/people/r/:repoId/list?buckets=...), one `.cell` each, found by `data-person-id` wherever one is looked
+   up, since a person may be in both panes. A hidden person's cell carries the eye-slash badge, and its name link says
+   so to assistive tech; an Unmatched person is told apart by its orange "Unknown N" name. With no one listed, one line
+   of text and no grid. *@
+
+@if(people.isEmpty) {
+<p class="empty">No one in the buckets switched on</p>
+} else {
+<div class="grid">
+    @for(person <- people) {
+    <div class="cell drag-drop dropzone"
+         data-person-id="@{person.persistedId}">
+        <div class="image">
+            <a href="#"
+               data-app-search="click"
+               data-app-search-person-id="@{person.persistedId}">
+            <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}">
+            </a>
+            @if(person.isHidden) {
+            <i class="fas fa-eye-slash hidden-badge" aria-hidden="true"></i>
+            }
+        </div>
+        <div class="name">
+            <span>
+                <a href="#"
+                   @if(!person.isNamed) {
+                   class="unknown"
+                   }
+                   @if(person.isHidden) {
+                   aria-label="@{person.name.getOrElse("Unknown")} (@{person.numOfFaces}), hidden"
+                   }
+                   data-app-search="click"
+                   data-app-search-person-id="@{person.persistedId}">
+                    @{person.name.getOrElse("")} <span>(@{person.numOfFaces})</span>
+                </a>
+            </span>
+        </div>
+    </div>
+    }
+</div>
+}

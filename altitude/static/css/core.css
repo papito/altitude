@@ -1,141 +1,185 @@
+/*        */
+/* TOKENS */
+/*        */
+
 :root {
-    /* Light is not implemented yet - there is no switch -but light-dark is wired */
     color-scheme: dark;
 
-    --background-color: light-dark(rgb(from #363636 r g b / 0.88), #363636);
-    --background-form-color: light-dark(#363535, #363535);
-    --background-secondary-color: light-dark(rgb(56, 56, 65), rgb(56, 56, 65));
-    --background-tertiary-color: light-dark(rgb(75, 75, 87), rgb(75, 75, 87));
+    --theme-primary: light-dark(#4159d4, #005bff);
+    --theme-primary-text: light-dark(#4057c2, #a4bbfe);
+    --theme-on-primary: light-dark(#f7f8fa, #12161f);
+    --theme-secondary: light-dark(#dfe1e6, #484b52);
+    --theme-accent: light-dark(#1e7777, #3bcfce);
+    --theme-on-accent: light-dark(#f5f9f8, #0a1919);
+    --theme-neutral-1: light-dark(#fdfdfe, #f7f8fa);
+    --theme-neutral-2: light-dark(#f4f5f7, #353639);
+    --theme-neutral-3: light-dark(#565b66, #babdc5);
+    --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+    --shadow-color: light-dark(#000, #000);
 
-    --form-border: 2px solid light-dark(#646161, #646161);
+    --border-hairline: 1px solid;
+    --border-heavy-width: 2px;
+    --border-heavy: var(--border-heavy-width) solid;
+    --border-double: 2px double;
+    --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
+    --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
 
-    /* The edge of an input or a textarea */
-    --input-border: 2px solid light-dark(#ccc, #ccc);
-    /* The text typed into an input or a textarea */
-    --input-font-color: light-dark(#2C3E50, #2C3E50);
-    /* The field of an input or a textarea */
-    --input-background-color: light-dark(#f6f6f6, #f6f6f6);
-    /* The field of an input that cannot be edited */
-    --input-readonly-background-color: light-dark(#ada8a8, #ada8a8);
+    --radius: 0.3125rem;
+    --radius-small: 0.1875rem;
+    --radius-large: 0.5rem;
 
-    /* The face of an action button that signals no outcome */
-    --button-background-color: light-dark(rgb(76, 75, 75), rgb(76, 75, 75));
-    /* The edge of an action button */
-    --button-border: 2px solid light-dark(#bdbbbb, #bdbbbb);
-    /* Under the label of an action button */
-    --button-text-shadow: light-dark(rgba(72, 70, 70, 0.55), rgba(72, 70, 70, 0.55)) 4px 4px 4px;
+    --drop-shadow: 0 1px 6px hsl(from var(--shadow-color) h s l / 0.6);
+    --text-shadow: light-dark(hsl(from var(--shadow-color) h s l / 0), hsl(from var(--shadow-color) h s l / 0.75)) 0 1px;
+    --box-shadow: hsl(from var(--theme-neutral-4) h s l / 0.07) 0 1px 0;
+    --sheen-shadow: inset 0 1px 0 hsl(from var(--theme-neutral-1) h s l / 0.08);
+    --soft-shadow: 0 1px 2px hsl(from var(--shadow-color) h s l / 0.25), 0 2px 6px hsl(from var(--shadow-color) h s l / 0.15);
+    --lift-shadow: 0 4px 12px hsl(from var(--shadow-color) h s l / 0.3);
+    --float-shadow: 0 12px 32px hsl(from var(--shadow-color) h s l / 0.45);
+    --field-focus-shadow: 0 0 0 2px hsl(from var(--theme-accent) h s l / 0.15);
+    --asset-detail-backdrop-color: hsl(from var(--shadow-color) h s l / 0.9);
+    --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
+    --popover-background-color: hsl(from var(--theme-neutral-2) h s l / 0.84);
+    --popover-backdrop-filter: blur(10px) saturate(200%);
+    --field-background-color: hsl(from var(--shadow-color) h s l / 0.23);
+    --modal-content-width: 25rem;
+    --popover-form-width: 20rem;
+    --modal-content-padding: var(--space-6);
+    --viewport-gap: var(--space-5);
+    --popover-anchor-gap: 0rem;
+    --modal-toolbar-height: 1.875rem;
 
-    --modal-border-width: 2px;
-    --modal-border: var(--modal-border-width) solid light-dark(rgba(129, 128, 128, 0.98), rgba(129, 128, 128, 0.98));
-    --modal-background-color: light-dark(#3b3b3b, #3b3b3b);
-    --modal-close-color: light-dark(#fff, #fff);
-    /* Lifts a general dialog off the page */
-    --modal-box-shadow: light-dark(rgba(10, 0, 0, 0.66), rgba(10, 0, 0, 0.66)) 6px 6px 6px;
-    /* Behind the asset detail, all but hiding the page */
-    --asset-detail-backdrop-color: light-dark(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.9));
-    /* Dims what is behind it: the page under a general dialog, the Preview under a play badge or a pin's count */
-    --scrim-color: light-dark(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45));
-    /* General dialogs: content width on wide screens, and the gap kept to the viewport edges on narrow ones */
-    --modal-content-width: 400px;
-    --modal-content-padding: 15px;
-    --modal-viewport-gap: 10px;
-    --modal-toolbar-height: 30px;
+    --space-1: 0.125rem;
+    --space-2: 0.25rem;
+    --space-3: 0.375rem;
+    --space-4: 0.5rem;
+    --space-5: 0.625rem;
+    --space-6: 1rem;
+    --space-7: 1.25rem;
+    --space-8: 1.5rem;
+    --space-9: 2.25rem;
 
-    /* The edge of a context menu and the divider between its actions */
-    --menu-border: 1px solid light-dark(gray, gray);
+    --section-vertical-space: var(--space-9);
 
-    --result-border: 1px solid light-dark(#837c7c, #837c7c);
-    /* Sets a cell's metadata off from the Preview above it */
-    --result-metadata-shadow: 0 -2px 2px 0 light-dark(rgba(44, 43, 43, 0.75), rgba(44, 43, 43, 0.75));
-    /* The checkmark of a selected asset */
-    --selection-color: light-dark(#4CAF50, #4CAF50);
-    /* Under the checkmark of a selected asset */
-    --selection-shadow: 0 2px 4px light-dark(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2));
-    /* Around a focused dropdown */
-    --dropdown-focus-shadow: 0 0 2px 2px light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1));
+    --control-vertical-space: var(--space-6);
+    --control-horizontal-space: var(--space-8);
 
-    --form-error-border: 2px solid var(--error-color);
-    --navbar-border: 1px solid light-dark(#272727, #272727);
-    --navbar-text-shadow: light-dark(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.75)) 0 1px;
-    /* The brand name in the nav */
-    --brand-color: light-dark(#979393, #979393);
-    /* The base color of a nav entry, under the color of its link and label */
-    --navbar-menu-color: light-dark(#9399b4, #9399b4);
-    /* The edge of the nav's Search input */
-    --navbar-input-border: 2px groove light-dark(#5a5855, #5a5855);
-    --box-shadow: light-dark(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) 0 1px 0;
-    /* Under a tab the pointer is over */
-    --tab-hover-background-color: light-dark(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
-    --font-color-dim: light-dark(#b0acac, #b0acac);
+    --list-row-gap: var(--space-4);
+    --list-control-gap: var(--space-3);
+    --list-indent: var(--space-7);
 
-    /* Larger spacing for larger app areas, like panels and page paddings */
-    --section-vertical-space: 35px;
+    --footer-height: 2.75rem;
+    /* The explorer's share of the main page along its Dock side's axis (a width for left and right, a height for top
+       and bottom), and the least the explorer and the results may be squeezed to on each axis (the explorer's width
+       also never drops below its header's, pages/index.css); js/common/explorer-dock.js sets the share and reads the
+       minimums in px to bound the divider */
+    --explorer-share: 25%;
+    --explorer-min-width: 6.25rem;
+    --explorer-min-height: 7.5rem;
+    --content-min-width: 18.75rem;
+    --content-min-height: 12.5rem;
+    --nav-brand-width: 12.5rem;
+    --nav-search-width: 11.5rem;
+    --nav-search-focus-width: 15.5rem;
 
-    /* Standard spacing for individual elements and lists */
-    --control-vertical-space: 15px;
-    --control-horizontal-space: 25px;
+    --snackbar-width: 31.25rem;
+    /* A snackbar message's entry and its fade when dismissed; js/common/snackbar.js reads it, in ms, to remove the
+       message once the fade has run */
+    --snackbar-exit-duration: 150ms;
+    --person-avatar-size: 4rem;
+    --merge-arrow-column: 5rem;
+    --map-panel-width: min(60%, 43.75rem);
+    --location-editor-map-height: 18.75rem;
+    --marker-size-small: 1rem;
+    --marker-size: 1.25rem;
+    --play-badge-size: 2.75rem;
 
-    --footer-height: 44px;
+    --success-color: light-dark(#297612, #87d575);
+    --warning-color: light-dark(#976212, #ebb16b);
+    --error-color: light-dark(#be2229, #f88a81);
+    --info-color: light-dark(#0e6a9b, #69c1fb);
+    --success-background-color: light-dark(hsl(from var(--success-color) h calc(s * 0.7) 90%), hsl(from var(--success-color) h calc(s * 0.6) 35%));
+    --warning-background-color: light-dark(hsl(from var(--warning-color) h calc(s * 0.7) 90%), hsl(from var(--warning-color) h calc(s * 0.6) 35%));
+    --error-background-color: light-dark(hsl(from var(--error-color) h calc(s * 0.7) 90%), hsl(from var(--error-color) h calc(s * 0.6) 35%));
+    --info-background-color: light-dark(hsl(from var(--info-color) h calc(s * 0.7) 90%), hsl(from var(--info-color) h calc(s * 0.6) 35%));
 
-    /* font colors */
+    --panel-padding: var(--space-5);
 
-    /* Text on the app's own surfaces */
-    --font-color: light-dark(#fff, #fff);
-    /* What is drawn on a colored fill or over an image, light in either theme: the label of a button or a marker,
-       the snackbar's text and edge, a pin's frame */
-    --on-fill-color: light-dark(#fff, #fff);
-    --faded-font-color: light-dark(#b0acac, #b0acac);
-    --success-font-color: light-dark(#82da5f, #82da5f);
-    --success-background-color: light-dark(#377a1c, #377a1c);
-    --warning-font-color: light-dark(#dca051, #dca051);
-    --warning-background-color: light-dark(#7c4802, #7c4802);
-    --error-font-color: light-dark(#fc1e1e, #fc1e1e);
-    --error-background-color: light-dark(#a80404, #a80404);
-    --error-color: light-dark(#fc1e1e, #fc1e1e);
-    /* The name of a person who has not been named yet */
-    --person-unknown-color: light-dark(#fdda63, #fdda63);
+    --dnd-dragging-background-color: hsl(from var(--theme-neutral-3) h s l / 0.48);
 
-    /* Panels */
-    --panel-border-color: light-dark(#464646, #464646);
-    --panel-padding: 12px;
-    /* The root folder's icon */
-    --folder-root-icon-color: light-dark(#f8c98f, #f8c98f);
+    --chip-padding: var(--space-1) var(--space-4);
+    --chip-border-radius: 999rem;
 
-    /* Dragon Drop */
-    --dnd-can-drop-color: light-dark(#377a1c, #377a1c);
-    --dnd-drop-target-color: light-dark(rgb(109, 140, 253), rgb(109, 140, 253));
-    --dnd-draggable-border: 1px solid light-dark(#b0acac, #b0acac);
-    /* Behind an element while it is dragged */
-    --dnd-dragging-background-color: light-dark(rgba(129, 128, 128, 0.48), rgba(129, 128, 128, 0.48));
-    /* The trash: its nav entry as a drop target and, faintly, the tint of its view */
-    --trashbin-color: light-dark(#ce7d0a, #ce7d0a);
+    /* A switch's track; its knob is the track's height less the track's padding on each side */
+    --switch-width: 1.75rem;
+    --switch-height: 1rem;
 
-    /* Under what sits on a map: an asset pin's frame, a Location pin's glyph, a pin's count */
-    --pin-shadow: light-dark(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)) 0 1px 4px;
-    /* Lifts the crowded-pin panel off the map to its left */
-    --map-panel-shadow: light-dark(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)) -4px 0 8px;
+    --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+    --font-nav: ui-monospace,"SF Mono","JetBrains Mono","Fira Code","DejaVu Sans Mono",monospace;
 
-    /* Chips: a dismissable scope the results are narrowed to, such as the map area */
-    --chip-padding: 2px 8px;
-    --chip-border-radius: 10px;
-
-    /* For messages such as form validation and server response status */
-    --message-background-color: light-dark(#2f2e2e, #2f2e2e);
-    --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"
+    --font-size-xs: 0.625rem;
+    --font-size-small: 0.75rem;
+    --font-size-base: 0.875rem;
+    --font-size-medium: 1rem;
+    --font-size-large: 1.3rem;
+    --font-size-xl: 1.5rem;
+    --font-size-display: 1.75rem;
+    --font-weight-bold: 700;
+    --font-weight-semibold: 600;
+    --font-weight-medium: 500;
+    --letter-spacing-medium: 0.05em;
+    --letter-spacing-wide: 0.1em;
+    --line-height-text: 1.4;
 }
 
-* {
-    box-sizing: border-box;
+@property --viewport-gap {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --explorer-share {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 25%;
+}
+
+@property --explorer-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --explorer-min-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --content-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --content-min-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
 }
 
 /*              */
 /* DEFAULT CORE */
 /*              */
+
+* {
+    box-sizing: border-box;
+}
+
 body {
-    font-size: 14px;
+    font-size: var(--font-size-base);
     margin: 0;
-    background-color: var(--background-color);
-    color: var(--font-color);
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
     font-family: var(--font);
     display: grid;
     grid-template-rows: [header]  auto
@@ -144,59 +188,299 @@ body {
     min-height: 100vh;
 }
 
-footer {
-    padding: 5px;
-    color: var(--font-color);
-    bottom: 0;
-    display: grid;
-    font-size: .9em;
+:focus-visible {
+    outline: var(--border-heavy) var(--theme-primary);
+    outline-offset: 2px;
+}
+
+.action-button, .toggle-group button, .filter-chip, .menu-trigger, .context-menu .actions button, .switch, .switch::before {
+    transition-property: background, border-color, color, box-shadow, translate, scale;
+    transition-duration: 160ms;
+    transition-timing-function: ease-out;
+}
+
+/*            */
+/* NAVIGATION */
+/*            */
+
+nav {
+    display: flex;
+    column-gap: var(--space-5);
+    background: hsl(from var(--theme-primary) h s l / 0.1);
+    color: var(--theme-neutral-4);
     align-items: center;
-    background: var(--background-secondary-color);
-    border-top: var(--navbar-border);
-    box-shadow: var(--box-shadow);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+nav a {
+    color: inherit;
+    text-decoration: none;
+}
+
+nav .brand {
+    flex: 0 0 var(--nav-brand-width);
+}
+
+nav .brand a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--letter-spacing-medium);
+    text-transform: lowercase;
+    background: linear-gradient(90deg, var(--theme-primary), var(--theme-accent));
+    background-clip: text;
+    color: transparent;
+    transition: filter 0.25s ease;
+}
+
+nav .brand a:hover {
+    filter: drop-shadow(0 0 8px hsl(from var(--theme-primary) h s l / 0.8));
+}
+
+nav .brand i {
+    color: var(--theme-accent);
+}
+
+nav div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+nav .menu, nav .menu a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+}
+
+nav .menu a {
+    transition: filter 0.25s ease;
+}
+
+nav .menu:hover a {
+    filter: drop-shadow(0 0 8px hsl(from currentColor h s l / 0.8));
+}
+
+nav .menu {
+    flex: 1 1 0;
+    padding: var(--space-5) var(--space-3);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-medium);
+    text-transform: lowercase;
+    color: var(--theme-neutral-3);
+    cursor: pointer;
+}
+
+nav .menu .count {
+    margin-left: var(--space-3);
+    padding: var(--chip-padding);
+    border-radius: var(--chip-border-radius);
+    background-color: var(--theme-secondary);
+    color: var(--theme-neutral-4);
+    font-size: var(--font-size-base);
+}
+
+nav .menu.triage {
+    color: var(--success-color);
+}
+
+nav .menu.trashbin {
+    color: var(--warning-color);
+}
+
+nav .menu.empty {
+    color: var(--theme-neutral-3);
+    cursor: default;
+}
+
+nav .menu[aria-current="page"] {
+    background-color: hsl(from var(--theme-accent) h s l / 0.16);
+    color: var(--theme-accent);
+    font-weight: var(--font-weight-bold);
+}
+
+/* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form at its own
+   width */
+nav .search {
+    flex: 1 1 0;
+    padding: 0 var(--space-3);
+}
+
+nav form {
+    display: flex;
+    align-items: center;
+    width: var(--nav-search-width);
+    padding: var(--space-4);
+    color: var(--theme-neutral-4);
+    transition: width 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* The field widens while it has focus, and the glow is its one focus indicator, in place of the focus ring the
+   input would draw inside it (see Nav in views/AGENTS.md) */
+nav form:focus-within {
+    width: var(--nav-search-focus-width);
+    box-shadow: 0 0 0 1px var(--theme-accent), 0 0 14px hsl(from var(--theme-accent) h s l / 0.55);
+}
+
+nav form i {
+    color: rgb(from var(--theme-neutral-4) r g b / 0.6);
+}
+
+nav form input {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 var(--space-3);
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: var(--font-nav);
+    font-size: var(--font-size-base);
+    text-align: center;
+}
+
+nav form input:focus-visible {
+    outline: none;
+}
+
+nav form input::placeholder {
+    color: rgb(from var(--theme-neutral-4) r g b / 0.6);
+}
+
+/* The clear control stands in for the native one */
+nav form input::-webkit-search-cancel-button {
+    display: none;
+}
+
+nav form .clear {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    line-height: 1;
+}
+
+nav form:has(input:placeholder-shown) .clear {
+    display: none;
 }
 
 /*         */
 /* CONTENT */
 /*         */
 
-/* The tint is a variable so the sticky date headers of the results grid can paint the same one over the page background */
 #content.triage {
     --view-tint: rgb(from var(--success-background-color) r g b / 0.07);
     background-color: var(--view-tint);
 }
 
 #content.trashbin {
-    --view-tint: rgb(from var(--trashbin-color) r g b / 0.05);
+    --view-tint: rgb(from var(--warning-color) r g b / 0.05);
     background-color: var(--view-tint);
 }
 
+/*        */
+/* FOOTER */
+/*        */
+
+footer {
+    padding: var(--space-3);
+    color: var(--theme-neutral-4);
+    bottom: 0;
+    display: grid;
+    font-size: var(--font-size-small);
+    align-items: center;
+    background: var(--theme-neutral-2);
+    border-top: var(--border-hairline) var(--panel-border-color);
+    box-shadow: var(--box-shadow);
+}
 
 /*       */
 /* FORMS */
 /*       */
 
-input, textarea {
-    padding: 8px;
-    border: var(--input-border);
-    border-radius: 4px;
-    color: var(--input-font-color);
-    font-size: 1.2em;
-    background-color: var(--input-background-color);
+/* A text-like field anywhere but the setup screen, the nav search and the toolbar dropdowns, at zero specificity so a
+   page's own rule outranks it; its focus indicator replaces the focus ring (see Forms in views/AGENTS.md) */
+:where(body:not(.setup) :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"],
+                                      [type="submit"]), textarea, select):not(nav *)) {
+    padding: var(--space-4) var(--space-5);
+    border: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.25);
+    border-radius: var(--radius-small);
+    color: var(--theme-neutral-4);
+    background-color: var(--field-background-color);
+    font-size: var(--font-size-medium);
+    caret-color: var(--theme-accent);
+
+    &:focus-visible {
+        outline: none;
+        border-color: var(--theme-accent);
+        box-shadow: var(--field-focus-shadow);
+    }
 }
 
-input.readonly {
-    background-color: var(--input-readonly-background-color);
+:where(body:not(.setup)) form input.error {
+    background-color: var(--error-background-color);
+    border-color: var(--error-color);
+
+    &:focus-visible {
+        border-color: var(--error-color);
+        box-shadow: none;
+    }
 }
 
-form div.error {
-    color: var(--error-font-color);
-    padding: 5px;
+:where(body:not(.setup)) form div.error {
+    margin-top: var(--space-2);
+    color: var(--error-color);
+    font-size: var(--font-size-small);
 }
 
-form input.error, form input.error:focus {
-    border: var(--form-error-border);
-    outline: none !important;
+:is(#popoverContent, #modalContent) label {
+    display: block;
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+    color: hsl(from currentColor h s l / 0.6);
+}
+
+/* Behind @supports, so a browser without the customizable select keeps the native one; the options take a rule of their
+   own, since the design tweaks panel matches no nested descendant selector (see Do in views/AGENTS.md) */
+@supports (appearance: base-select) {
+    :where(body:not(.setup) select) {
+        appearance: base-select;
+
+        &::picker(select) {
+            appearance: base-select;
+            margin-top: var(--space-2);
+            padding: var(--space-2);
+            background: var(--popover-background-color);
+            backdrop-filter: var(--popover-backdrop-filter);
+            border: var(--border-hairline) var(--popover-border-color);
+            border-radius: var(--radius-large);
+            box-shadow: var(--sheen-shadow), var(--float-shadow);
+        }
+
+        &::picker-icon {
+            color: hsl(from currentColor h s l / 0.6);
+        }
+    }
+
+    :where(body:not(.setup) select) option {
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-small);
+
+        &:hover {
+            background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+        }
+
+        &:checked {
+            background: hsl(from var(--theme-accent) h s l / 0.2);
+        }
+    }
 }
 
 /*         */
@@ -204,187 +488,367 @@ form input.error, form input.error:focus {
 /*         */
 
 .action-button {
-    background: var(--button-background-color);
-    font-weight: bold;
-    color: var(--on-fill-color);
-    border: var(--button-border);
-    border-radius: 4px;
+    --button-fill: var(--theme-secondary);
+    background: var(--button-fill);
+    font-weight: var(--font-weight-semibold);
+    color: var(--theme-neutral-4);
+    border: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.45);
+    border-radius: var(--radius-large);
+    box-shadow: var(--sheen-shadow), var(--soft-shadow);
     cursor: pointer;
-    padding: 7px;
+    padding: var(--space-4) var(--space-6);
     text-decoration: none;
-    text-shadow: var(--button-text-shadow);
-    font-size: 1em;
+    font-size: var(--font-size-base);
 }
 
-/* `:focus-visible`, not `:focus`: a control that opens a dialog takes focus back when it closes, and
-   a plain `:focus` glow would be left sitting on the button the user clicked with a mouse */
-.action-button:hover, .action-button:focus-visible {
-    box-shadow: var(--box-shadow);
+.action-button:hover:not(:disabled) {
+    background: oklch(from var(--button-fill) calc(l + 0.04) c h);
+    box-shadow: var(--sheen-shadow), var(--lift-shadow);
 }
 
 .action-button.success {
-    background: var(--success-background-color);
+    --button-fill: hsl(from var(--success-color) h s l / 0.16);
+    border-color: var(--success-color);
+    color: var(--success-color);
 }
 
 .action-button.warning {
-    background: var(--warning-background-color);
+    --button-fill: hsl(from var(--warning-color) h s l / 0.16);
+    border-color: var(--warning-color);
+    color: var(--warning-color);
 }
 
 .action-button.error {
-    background: var(--error-background-color);
+    --button-fill: hsl(from var(--error-color) h s l / 0.16);
+    border-color: var(--error-color);
+    color: var(--error-color);
+}
+
+.action-button.primary {
+    --button-fill: var(--theme-accent);
+    border-color: var(--theme-accent);
+    color: var(--theme-on-accent);
 }
 
 .action-button.small {
-    font-size: 0.8em;
-    background: var(--background-secondary-color);
-    border: 1px solid var(--background-tertiary-color);
+    --button-fill: var(--theme-neutral-2);
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-small);
+    box-shadow: var(--sheen-shadow);
+}
+
+.action-button.small:hover:not(:disabled) {
+    box-shadow: var(--sheen-shadow), var(--soft-shadow);
 }
 
 .action-button.small span {
-    margin-left: 5px;
+    margin-left: var(--space-3);
 }
 
-/* A set of choices of which one is current: its buttons side by side, the current one `aria-pressed="true"`
-   in the tertiary background */
 .toggle-group {
     display: flex;
-    gap: 2px;
+    padding: var(--space-1);
+    border-radius: var(--radius-large);
+    background: hsl(from var(--theme-secondary) h s l / 0.5);
 }
 
 .toggle-group button {
-    padding: 5px 10px;
-    background-color: var(--background-secondary-color);
-    border: 1px solid var(--background-tertiary-color);
-    color: var(--faded-font-color);
+    padding: var(--space-3) var(--space-5);
+    border: none;
+    border-radius: calc(var(--radius-large) - var(--space-1));
+    background: none;
+    color: var(--theme-neutral-3);
     cursor: pointer;
 }
 
-.toggle-group button:first-child {
-    border-radius: 5px 0 0 5px;
-}
-
-.toggle-group button:last-child {
-    border-radius: 0 5px 5px 0;
+.toggle-group button:hover {
+    background: hsl(from currentColor h s l / 0.06);
 }
 
 .toggle-group button[aria-pressed="true"] {
-    color: var(--font-color);
-    background-color: var(--background-tertiary-color);
+    color: var(--theme-neutral-4);
+    background-color: var(--theme-neutral-2);
+    box-shadow: var(--soft-shadow);
 }
 
-/*                                             */
-/* CONTEXT MENUS (folders, albums, Locations, and View settings)  */
-/*                                             */
+@media (prefers-reduced-motion: no-preference) {
+    .action-button:hover:not(:disabled) {
+        translate: 0 -1px;
+    }
 
-/* The ⋯ cell built by js/common/context-menu-markup.js: the trigger and its native popover panel */
+    .action-button:active:not(:disabled), .toggle-group button:active, .filter-chip:active {
+        translate: none;
+        scale: 0.97;
+    }
+}
+
+/*       */
+/* CHIPS */
+/*       */
+
+.filter-chip {
+    --chip-fill: linear-gradient(in oklch 180deg, hsl(from var(--theme-primary) h s l / 0.12), var(--theme-neutral-2));
+    padding: var(--space-4) var(--space-7);
+    border: var(--border-hairline) hsl(from var(--theme-primary-text) h s l / 0.4);
+    border-radius: var(--chip-border-radius);
+    background: var(--chip-fill);
+    color: var(--theme-primary-text);
+    font-size: var(--font-size-small);
+    cursor: pointer;
+}
+
+.filter-chip:hover {
+    background: linear-gradient(hsl(from var(--theme-neutral-1) h s l / 0.08) 0 0), var(--chip-fill);
+}
+
+/*        */
+/* SWITCH */
+/*        */
+
+/* An on/off setting that applies as it is flipped (the View settings dialog): a `button[role="switch"]` whose
+   `aria-checked` an Alpine binding keeps in step with the setting, labelled by a `<label for>`. The knob is a
+   pseudo-element that slides across the track by the track's width less its height. The track off is a veil of
+   the neutral that stays visible on the frosted popover surface (the toggle group's secondary veil fades into it),
+   and on it takes the primary color, as a checkbox's accent does */
+.switch {
+    display: inline-grid;
+    align-items: center;
+    width: var(--switch-width);
+    height: var(--switch-height);
+    padding: var(--space-1);
+    border: none;
+    border-radius: var(--chip-border-radius);
+    background: hsl(from var(--theme-neutral-3) h s l / 0.3);
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.switch::before {
+    content: "";
+    width: calc(var(--switch-height) - 2 * var(--space-1));
+    height: calc(var(--switch-height) - 2 * var(--space-1));
+    border-radius: 50%;
+    background: var(--theme-neutral-1);
+    box-shadow: var(--soft-shadow);
+}
+
+.switch[aria-checked="true"] {
+    background: var(--theme-primary);
+}
+
+.switch[aria-checked="true"]::before {
+    translate: calc(var(--switch-width) - var(--switch-height));
+}
+
+/*          */
+/* EXPLORER */
+/*          */
+
+.asset-count {
+    justify-self: start;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+}
+
+/*         */
+/* DIVIDER */
+/*         */
+
+/* A draggable divider between two panes: the explorer's against the results (#explorerDivider, views/index.scala.html)
+   and the Split.js gutter between the People panes (js/alpine/components/people-tab.js). A transparent band,
+   --space-3 thick, with a short dotted grip centered on it, a tile of one dot drawn in currentColor and repeated
+   along the band, so the hover and drag tint is one color change. Its orientation is its own class, .vertical (a
+   column, as between a left or right dock and the results) or .horizontal (a row); a divider with neither runs across
+   the Dock side's axis, which is how the explorer's is laid out before any script runs. Split.js sets its gutter's
+   thickness inline. */
+.divider {
+    position: relative;
+    color: var(--theme-neutral-3);
+    touch-action: none;
+}
+
+.divider::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: var(--space-3);
+    height: var(--space-9);
+    background-image: radial-gradient(circle closest-side, currentColor 50%, transparent 60%);
+    background-size: var(--space-3) var(--space-3);
+    background-repeat: repeat-y;
+    background-position: center;
+}
+
+.divider:hover,
+.divider[data-dragging] {
+    color: var(--theme-primary);
+}
+
+.divider.vertical,
+html:is([data-dock-side="left"], [data-dock-side="right"]) .divider:not(.vertical, .horizontal) {
+    width: var(--space-3);
+    cursor: col-resize;
+}
+
+.divider.horizontal,
+html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertical, .horizontal) {
+    height: var(--space-3);
+    cursor: row-resize;
+}
+
+.divider.horizontal::before,
+html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertical, .horizontal)::before {
+    width: var(--space-9);
+    height: var(--space-3);
+    background-repeat: repeat-x;
+}
+
+/*               */
+/* CONTEXT MENUS */
+/*               */
+
 .menu-ctrl {
     display: grid;
     place-items: center;
 }
 
-/* The ⋯ trigger keeps the look of a plain link. It never shows a focus ring: dialogs return focus
-   here when they close, and the ring that marked would read as a stray highlight in the list */
 .menu-trigger {
-    padding: 0;
+    padding: var(--space-1) var(--space-3);
     border: 0;
-    outline: none;
+    border-radius: var(--radius);
     background: none;
     font: inherit;
-    font-size: 1.3em;
+    font-size: var(--font-size-large);
     line-height: 1;
-    color: var(--font-color);
+    color: var(--theme-neutral-4);
     cursor: pointer;
 }
 
-/* The menu is a native popover in the top layer, so it takes no room in the list and is not
-   clipped by the explorer. The browser centers popovers with auto margins and `inset: 0`; both
-   are reset so the coordinates the contextMenu component measures apply as-is. */
+.menu-trigger:hover {
+    background: hsl(from currentColor h s l / 0.12);
+}
+
+/* The popover dialog's frosted surface, and the select picker's: every floating panel wears the one surface */
 .context-menu {
     position: fixed;
     margin: 0;
     inset: auto;
     width: max-content;
-    /* All vertical space lives on the rows, so the intervals between edge, row, and divider are equal */
-    padding: 0;
-    border: var(--menu-border);
-    border-radius: 5px;
+    padding: var(--space-2);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
     color: inherit;
-    background-color: var(--modal-background-color);
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
     text-shadow: none;
     grid-template-columns: 1fr;
     gap: 0;
-    /* Actions scroll inside the panel when the component caps its height */
     overflow-y: auto;
 }
 
-/* Only the open state may set a display: the popover's hidden state relies on display: none.
-   (The component sets the same display inline for a moment to measure the panel before it opens.) */
 .context-menu:popover-open {
     display: grid;
 }
 
-/* A panel holding only a dialog (the View settings control) opens on the click that requests the
-   dialog, so it stays invisible until the dialog has arrived rather than showing an empty box */
 .context-menu.dialog-only:not(:has(.dialog:not([hidden]))) {
     visibility: hidden;
 }
 
-/* A button that opens a dialog-only panel takes focus back when the dialog closes; like the ⋯
-   trigger it shows no ring for that */
-.dialog-trigger-ctrl > button {
-    outline: none;
-}
-
+/* A row is tinted on hover as a select picker's option is, and when checked as a checked option is. The leading
+   column is the check mark's, drawn on the checked option of a choice menu and left empty on the others, so the
+   labels line up; a ⋯ menu's actions, never checked, keep the column for one look across the menus */
 .context-menu .actions button {
-    display: flex;
-    padding: 10px 15px;
+    display: grid;
+    grid-template-columns: var(--space-6) 1fr;
+    align-items: center;
+    padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
     cursor: pointer;
     border: none;
+    border-radius: var(--radius-small);
     background: none;
     color: inherit;
     font: inherit;
-    font-size: 1em;
+    font-size: var(--font-size-base);
     text-align: left;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
+}
+
+.context-menu .actions button::before {
+    content: "";
+    font-size: var(--font-size-small);
+}
+
+.context-menu .actions button[aria-checked="true"] {
+    background: hsl(from var(--theme-accent) h s l / 0.2);
+}
+
+.context-menu .actions button[aria-checked="true"]::before {
+    content: "✓";
+}
+
+.context-menu .actions button:hover {
+    background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+}
+
+.context-menu .actions button + button {
+    border-top: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.3);
+}
+
+/* A choice menu's trigger: the menu's name dimmed before the current choice, and a caret after it */
+.choice-menu-ctrl .choice-name {
+    color: hsl(from currentColor h s l / 0.6);
+}
+
+.choice-menu-ctrl .choice-caret {
+    margin-left: var(--space-3);
+    color: hsl(from currentColor h s l / 0.6);
+}
+
+/* A choice menu host before its control is built (common/choice-menus.js): its options, which the build moves into the
+   panel, are not shown raw. Only an unbuilt host has buttons as direct children */
+[data-choice-menu] > button {
+    display: none;
+}
+
+/* A compact choice menu's trigger (the Dock side menu): a square button showing the checked option's glyph alone */
+.choice-menu-ctrl .compact {
+    display: inline-grid;
+    place-items: center;
+    padding: var(--space-3);
+    line-height: 1;
+}
+
+.choice-menu-ctrl .compact .glyph {
+    width: 1.25em;
+    height: 1.25em;
+}
+
+/* An option with a glyph lays it out in a column of its own before the label (a span, so it is an item of its own),
+   the two a gap apart; the check keeps the first column */
+.context-menu .actions button:has(> .glyph) {
+    grid-template-columns: var(--space-6) auto 1fr;
+    column-gap: var(--space-3);
+}
+
+.context-menu .actions button .glyph {
+    width: 1em;
+    height: 1em;
 }
 
 .context-menu .actions {
     display: grid;
 }
 
-/* Divider between rows only, never above the first or below the last */
-.context-menu .actions button + button {
-    border-top: var(--menu-border);
-}
-
-/* The panel clips its rows, so draw the focus ring inside the row to keep it fully visible */
 .context-menu .actions button:focus-visible {
     outline-offset: -2px;
 }
 
-/* The View settings popover uses the same content padding as the modal. */
 .context-menu .dialog {
     padding: var(--modal-content-padding);
-}
-
-/* Asset count on a folder, album or Location row, in the track after the name, so it follows the
-   name directly; zero counts render empty (js/common/asset-count.js) */
-.asset-count {
-    justify-self: start;
-    color: var(--font-color-dim);
-    font-size: .9em;
-    white-space: nowrap;
-}
-
-/* A dismissable scope chip, in the drop-target blue: the whole chip is the button that clears the scope it names
-   (its text, then ×), so it carries no separate close control */
-.filter-chip {
-    padding: var(--chip-padding);
-    border: 1px solid var(--dnd-drop-target-color);
-    border-radius: var(--chip-border-radius);
-    background: none;
-    color: var(--dnd-drop-target-color);
-    font-size: smaller;
-    cursor: pointer;
 }
 
 /*          */
@@ -392,74 +856,155 @@ form input.error, form input.error:focus {
 /*          */
 
 #serverError {
-    color: var(--font-color);
-    background-color: var(--message-background-color);
+    color: var(--theme-neutral-4);
+    background-color: var(--theme-neutral-2);
     border: 1px solid var(--error-color);
-    padding: 8px;
-    font-size: 1.1em;
+    padding: var(--space-4);
+    font-size: var(--font-size-medium);
 }
 
-#snackbar {
+/* The two stacks of html_common: manual popovers in the top layer, their UA popover style reset. A closed popover's
+   display is the UA's none, so only an open one lays out; the gaps between messages let clicks through */
+.snackbar-stack {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow: visible;
+    color: inherit;
+    /* A fixed box's percentages are of the viewport less its scrollbar, which 100vw would include */
+    width: min(var(--snackbar-width), 100% - 2 * var(--viewport-gap));
+    pointer-events: none;
+}
+
+.snackbar-stack:popover-open {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* Errors: top center, growing downward */
+#snackbarErrors {
+    top: 50px;
+    inset-inline: 0;
+    margin-inline: auto;
+}
+
+/* Successes and warnings: bottom left, over the footer, growing upward */
+#snackbarNotices {
+    left: var(--viewport-gap);
+    bottom: var(--viewport-gap);
+}
+
+/* Icon, message, count and dismiss button in a row; the message takes the rest of the width and wraps, a long
+   unbroken path included */
+.snackbar {
     display: flex;
     align-items: center;
-    justify-content: center;
-    visibility: hidden;
-    min-width: 500px;
-    margin-left: -250px;
-    color: var(--on-fill-color);
-    text-align: center;
-    border-radius: 2px;
-    padding: 16px;
-    position: fixed;
-    z-index: 1;
-    left: 50%;
-    top: 50px;
-    height: 30px;
-    border: 1px solid var(--on-fill-color);
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+    color: var(--theme-neutral-4);
+    line-height: var(--line-height-text);
+    border: var(--border-hairline) var(--theme-neutral-4);
+    border-radius: var(--radius);
+    box-shadow: var(--soft-shadow);
+    pointer-events: auto;
 }
 
-#snackbar.show {
-    visibility: visible;
-    animation: fadein 0.5s;
-}
-
-#snackbar.success {
+.snackbar.success {
     background-color: var(--success-background-color);
 }
 
-#snackbar.warning {
+.snackbar.warning {
     background-color: var(--warning-background-color);
 }
 
-#snackbar.error {
+.snackbar.error {
     background-color: var(--error-background-color);
 }
 
-@keyframes fadein {
-    from {bottom: 0; opacity: 0;}
-    to {bottom: 30px; opacity: 1;}
+/* A dismissed message, fading out: hovering it no longer holds the timers */
+.snackbar.leaving {
+    pointer-events: none;
 }
 
+.snackbar-message {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* How many times the message arrived, from the second on */
+.snackbar-count {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-small);
+    background-color: var(--theme-secondary);
+    font-size: var(--font-size-small);
+    font-weight: var(--font-weight-bold);
+    white-space: nowrap;
+}
+
+/* The close control's look (.close-modal), a step smaller; the focus ring is the global one */
+.snackbar-dismiss {
+    padding: 0 var(--space-2);
+    background: none;
+    border: 0;
+    border-radius: var(--radius);
+    color: inherit;
+    font: inherit;
+    font-size: var(--font-size-large);
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* A message enters from its stack's edge and fades out when dismissed, both over --snackbar-exit-duration, which
+   js/common/snackbar.js waits out before it removes the message */
+@media (prefers-reduced-motion: no-preference) {
+    .snackbar {
+        transition: opacity var(--snackbar-exit-duration) ease-out, translate var(--snackbar-exit-duration) ease-out;
+    }
+
+    .snackbar.leaving {
+        opacity: 0;
+    }
+
+    @starting-style {
+        #snackbarErrors .snackbar {
+            opacity: 0;
+            translate: 0 calc(-1 * var(--space-4));
+        }
+
+        #snackbarNotices .snackbar {
+            opacity: 0;
+            translate: 0 var(--space-4);
+        }
+    }
+}
 
 /*             */
 /* DRAGON DROP */
 /*             */
 
 .dragging {
-    padding-left: 4px;
-    padding-right: 4px;
-    border: var(--dnd-draggable-border);
-    border-radius: 4px;
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+    border: var(--border-hairline) var(--theme-neutral-3);
+    border-radius: var(--radius);
     background-color: var(--dnd-dragging-background-color);
 }
 
 .drop-target {
-    border-radius: 6px;
-    background-color: var(--dnd-drop-target-color);
+    border-radius: var(--radius);
+    background-color: var(--theme-primary);
+    color: var(--theme-on-primary);
 }
 
 #trash.drop-target {
-    background-color: var(--trashbin-color);
+    background-color: var(--warning-background-color);
+    color: var(--theme-neutral-4);
 }
 
 .draggable {
@@ -471,9 +1016,9 @@ form input.error, form input.error:focus {
     position: absolute;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    font-weight: bold;
-    border-radius: 4px;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
+    border-radius: var(--radius);
     pointer-events: none;
 }
 
@@ -481,22 +1026,18 @@ form input.error, form input.error:focus {
 /* MAPS */
 /*      */
 
-/* A Location's pin, in the pin editor of the Add location dialog and on the map view: a Leaflet div icon, so no marker
-   images are needed (see static/js/lib/README.md) */
 .location-pin {
-    color: var(--dnd-drop-target-color);
-    font-size: 28px;
+    color: var(--theme-primary);
+    font-size: var(--font-size-display);
     line-height: 1;
     text-align: center;
-    text-shadow: var(--pin-shadow);
+    text-shadow: var(--drop-shadow);
 }
 
 /*       */
 /* MODAL */
 /*       */
 
-/* Both hosts start hidden inline and are shown by Alpine (`x-show`). Without an anchor, the general
-   host centers the box horizontally (`.modal-box` margin) with this padding from the top. */
 #modalContainer {
     position: fixed;
     z-index: 4;
@@ -509,69 +1050,48 @@ form input.error, form input.error:focus {
     background-color: var(--scrim-color);
 }
 
-/* Default content width, shrunk on narrow viewports so the box (content + its border) keeps
-   --modal-viewport-gap to each viewport edge; the box itself is sized by its content */
 #modalContent {
     box-sizing: border-box;
     width: calc(var(--modal-content-width) + 2 * var(--modal-content-padding));
-    max-width: calc(100vw - 2 * (var(--modal-viewport-gap) + var(--modal-border-width)));
+    max-width: calc(100vw - 2 * (var(--viewport-gap) + var(--border-heavy-width)));
     padding: var(--modal-content-padding);
-}
-
-/* Explorer forms keep their controls' natural widths; the box shrinks around them. The Location
-   map editor declares its own width and already fills it with its map and fields. */
-#modalContainer.anchored #modalContent:not(:has(.location-editor)) {
-    width: max-content;
-}
-
-/* Preserve natural control widths, only constraining them when the viewport is narrower. */
-#modalContainer.anchored input, #modalContainer.anchored select {
-    max-width: 100%;
-}
-
-#modalContainer.anchored .modal-box {
-    position: fixed;
-    margin: 0;
-    overflow: auto;
 }
 
 .modal-box {
     display: grid;
     grid-template-rows: var(--modal-toolbar-height) auto;
-    background-color: var(--background-secondary-color);
+    background-color: var(--theme-neutral-2);
     margin: auto;
     width: fit-content;
-    border: var(--modal-border);
-    border-radius: 5px;
-    box-shadow: var(--modal-box-shadow);
+    border: var(--border-double) var(--theme-secondary);
+    border-radius: var(--radius);
+    box-shadow: var(--drop-shadow);
 }
 
 .modal-toolbar {
     display: grid;
     align-items: center;
     grid-template-columns: 1fr minmax(auto, max-content);
-    background-color: var(--background-secondary-color);
-    border-bottom: 1px solid var(--background-tertiary-color);
+    background-color: var(--theme-neutral-2);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
 }
 
-/* Keep the X white without an outline, including when the modal focuses it on open. */
 .close-modal {
     background: none;
     border: 0;
-    outline: none;
-    color: var(--modal-close-color);
+    color: var(--theme-neutral-4);
     font: inherit;
-    font-size: 1.6em;
-    font-weight: bold;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
     line-height: 1;
-    padding: 0 .4em 0 0;
+    padding: 0 var(--space-4) 0 0;
     cursor: pointer;
 }
 
 .modal-title {
-    padding-left: .7em;
-    font-size: 1.1em;
-    font-weight: bold;
+    padding-left: var(--space-5);
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
     text-transform: capitalize;
 }
 
@@ -587,9 +1107,6 @@ form input.error, form input.error:focus {
     background-color: var(--asset-detail-backdrop-color);
 }
 
-/* The asset's stored size (--asset-width, --asset-height, from setAssetDetailSize) fitted into the viewport below the
-   toolbar, 5 px from each side and never enlarged. Until a size is set, --fit-width and --fit-height are undefined
-   and the box spans the viewport, which is what the host shows while the first asset loads. */
 #imageDetailModalContainer .modal-box {
     --fit-width: min(var(--asset-width) * 1px, 100dvw - 10px,
                      (100dvh - var(--modal-toolbar-height)) * var(--asset-width) / var(--asset-height));
@@ -602,7 +1119,6 @@ form input.error, form input.error:focus {
     border-radius: 0;
 }
 
-/* The fragment's image has no source until the coordinator loads it */
 #imageDetailModalContent img[src=""] {
     visibility: hidden;
 }
@@ -613,123 +1129,174 @@ form input.error, form input.error:focus {
     display: grid;
     place-items: center;
     font-size: 3em;
-    color: var(--font-color-dim);
+    color: var(--theme-neutral-3);
     pointer-events: none;
 }
 
-/*            */
-/* NAVIGATION */
-/*            */
-
-/* One row: the brand, the entries sharing what is left equally whatever their number (it varies with the account
-   type and the environment), and the Search form */
-nav {
-     display: flex;
-     column-gap: 10px;
-     background: var(--background-secondary-color);
-     color: var(--font-color);
-     align-items: center;
-     border-bottom: var(--navbar-border);
-     text-shadow: var(--navbar-text-shadow);
- }
-
-nav span, nav a {
-    color: var(--font-color);
-    text-decoration: none;
-    font-size: 10px;
-    font-weight: bold;
-    font-family: var(--font);
-    text-transform: uppercase;
-}
-nav .brand {
-    flex: 0 0 120px;
+/* Below the anchor, its margins replacing the UA popover's; most-height tries the roomier side's fallbacks first, so
+   one that does not fit either side is capped on the roomier one (see Modals in views/AGENTS.md) */
+#popoverDialog {
+    inset: auto;
+    position-area: bottom;
+    margin-block: var(--popover-anchor-gap) var(--viewport-gap);
+    margin-inline: var(--viewport-gap);
+    position-try-fallbacks: flip-block, --popover-capped, --popover-capped-above;
+    position-try-order: most-height;
+    position-visibility: anchors-visible;
+    width: max-content;
+    max-width: calc(100vw - 2 * var(--viewport-gap));
+    overflow: auto;
 }
 
-nav .brand a {
-    letter-spacing: .15em;
-    text-transform: uppercase;
-    text-decoration: none;
-    color: var(--brand-color);
-    font-weight: bold;
-    font-size: 16px;
+@position-try --popover-capped {
+    position-area: bottom;
+    max-height: calc(100% - var(--popover-anchor-gap) - var(--viewport-gap));
 }
 
-nav div {
-    display: flex;
+/* The block margins swapped, as flip-block swaps them: the anchor gap faces the anchor */
+@position-try --popover-capped-above {
+    position-area: top;
+    margin-block: var(--viewport-gap) var(--popover-anchor-gap);
+    max-height: calc(100% - var(--popover-anchor-gap) - var(--viewport-gap));
+}
+
+#popoverDialog:popover-open {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+/* An open with no displayed trigger to anchor to, which modal.js marks, is placed like the general host */
+#popoverDialog[data-unanchored] {
+    position-area: none;
+    position-try-fallbacks: none;
+    position-visibility: always;
+    inset: 100px var(--viewport-gap) auto;
+    margin: 0 auto;
+    max-height: calc(100% - 100px - var(--viewport-gap));
+}
+
+/* The padding and the text color replace the UA popover's */
+#popoverDialog {
+    padding: 0;
+    color: inherit;
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+}
+
+#popoverDialog .popover-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
-    justify-content: center;
+    padding: var(--modal-content-padding) 0 0 var(--modal-content-padding);
 }
 
-nav .menu {
-    /* Equal widths, never narrower than the entry's own text. The sides are as wide as the active entry's border, which
-       would otherwise widen that one entry and shift the others as the page changes */
-    flex: 1 1 0;
-    border-inline: 2px solid transparent;
-    letter-spacing: .10em;
-    color: var(--navbar-menu-color);
-    padding: 6px;
-    cursor: pointer;
+/* The toolbar's padding lines the title up with the content, in place of the title's own */
+#popoverDialog .modal-title {
+    padding-left: 0;
 }
 
-nav .menu span {
-    margin-left: .5em;
+#popoverDialog .close-modal {
+    font-size: var(--font-size-large);
+    color: hsl(from currentColor h s l / 0.6);
 }
 
-nav .menu.active {
-    background-color: var(--background-tertiary-color);
-    color: var(--font-color);
-    border: 2px solid var(--warning-background-color);
-    border-radius: 5px;
-    font-weight: bold;
+/* anywhere, unlike break-word, lowers the min-content width the popover's grid sizes the content by, so a long
+   unbroken name (the Delete button's) wraps */
+#popoverContent {
+    padding: var(--space-4) var(--modal-content-padding) var(--modal-content-padding);
+    overflow-wrap: anywhere;
 }
 
-nav input {
-    border-radius: 3px;
-    border: var(--navbar-input-border);
-    padding: 5px;
-    background-color: var(--input-background-color);
-    width: 90%;
-    /* a flex item's min-width:auto would keep the input from shrinking to fit the form's fixed width */
-    min-width: 0;
+#popoverContent form {
+    width: var(--popover-form-width);
+    max-width: 100%;
 }
 
-/* The Search input and its button, side by side, at the nav's right end */
-nav form {
-    flex: 0 0 220px;
-    display: flex;
-    align-items: center;
+#popoverContent :is(input, select) {
+    width: 100%;
 }
 
-/* A page without the Search form keeps its place, so the entries stand where they do on the main page. The brand-only
-   nav of the setup page has no entries and no place to keep */
-nav:has(.menu):not(:has(form))::after {
-    content: "";
-    flex: 0 0 220px;
+#popoverContent form > button {
+    margin-top: var(--space-5);
 }
 
-nav input::placeholder {
-    color: var(--faded-font-color);
+@media (prefers-reduced-motion: no-preference) {
+    #popoverDialog {
+        transition: opacity 150ms ease-out, display 150ms allow-discrete, overlay 150ms allow-discrete;
+    }
+
+    #popoverDialog:not(:popover-open) {
+        opacity: 0;
+    }
+
+    @starting-style {
+        #popoverDialog:popover-open {
+            opacity: 0;
+        }
+    }
 }
 
-nav .menu.triage i, nav .menu.triage span {
-    color: var(--success-font-color);
+/* The tooltip of common/tooltip.js, the host html_common renders: a manual popover centered above the element the
+   magic names --tooltip-anchor, flipped below when the top has no room, in the menus' frosted surface. Its inset and
+   margins replace the UA popover's, which would pin it to the viewport. No exit fade: it hides at the press that may
+   take its anchor out of the tree a tick later, and a fading box with no anchor would sit at the viewport's corner */
+#tooltip {
+    inset: auto;
+    position-anchor: --tooltip-anchor;
+    position-area: top;
+    margin-block: 0 var(--space-2);
+    margin-inline: var(--viewport-gap);
+    position-try-fallbacks: flip-block;
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius);
+    color: inherit;
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+    font-size: var(--font-size-small);
+    pointer-events: none;
 }
 
-nav .menu.trashbin i, nav .menu.trashbin span {
-    color: var(--warning-font-color);
+@media (prefers-reduced-motion: no-preference) {
+    #tooltip {
+        transition: opacity 150ms ease-out;
+    }
+
+    @starting-style {
+        #tooltip:popover-open {
+            opacity: 0;
+        }
+    }
 }
 
+/*           */
+/* UTILITIES */
+/*           */
 
-nav .menu.triage.empty i,
-nav .menu.triage.empty span,
-nav .menu.trashbin.empty i,
-nav .menu.trashbin.empty span {
-    color: var(--faded-font-color);
-    font-size: 10px;
-    cursor: default;
-}
-
-/* For Alpine x-cloak prop */
 [x-cloak] {
     display: none !important;
+}
+
+/* Read by screen readers but not drawn, and out of the layout (a grid parent gives it no cell): the snackbar's
+   announcers */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* A sheet of SVG symbols (includes/dock_glyphs) takes no room: it is drawn only through <use>, never on its own.
+   Not display: none, which would keep a browser from drawing what it defines */
+.svg-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
 }

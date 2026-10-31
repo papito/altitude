@@ -21,7 +21,11 @@ case class Person(
   extends BaseModel
   with NoDates:
 
-  def isAboveThreshold: Boolean = numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD
+  /**
+   * The glossary's Matched person: named, or at least `MIN_FACES_THRESHOLD` faces; `PersonDao.getInBuckets` restates the rule in
+   * SQL
+   */
+  def isMatched: Boolean = isNamed || numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
