@@ -99,6 +99,10 @@
     --chip-padding: var(--space-1) var(--space-4);
     --chip-border-radius: 999rem;
 
+    /* A switch's track; its knob is the track's height less the track's padding on each side */
+    --switch-width: 1.75rem;
+    --switch-height: 1rem;
+
     --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
     --font-nav: ui-monospace,"SF Mono","JetBrains Mono","Fira Code","DejaVu Sans Mono",monospace;
 
@@ -149,7 +153,7 @@ body {
     outline-offset: 2px;
 }
 
-.action-button, .toggle-group button, .filter-chip, .menu-trigger, .context-menu .actions button {
+.action-button, .toggle-group button, .filter-chip, .menu-trigger, .context-menu .actions button, .switch, .switch::before {
     transition-property: background, border-color, color, box-shadow, translate, scale;
     transition-duration: 160ms;
     transition-timing-function: ease-out;
@@ -555,6 +559,45 @@ footer {
 
 .filter-chip:hover {
     background: linear-gradient(hsl(from var(--theme-neutral-1) h s l / 0.08) 0 0), var(--chip-fill);
+}
+
+/*        */
+/* SWITCH */
+/*        */
+
+/* An on/off setting that applies as it is flipped (the View settings dialog): a `button[role="switch"]` whose
+   `aria-checked` an Alpine binding keeps in step with the setting, labelled by a `<label for>`. The knob is a
+   pseudo-element that slides across the track by the track's width less its height. The track off is a veil of
+   the neutral that stays visible on the frosted popover surface (the toggle group's secondary veil fades into it),
+   and on it takes the primary color, as a checkbox's accent does */
+.switch {
+    display: inline-grid;
+    align-items: center;
+    width: var(--switch-width);
+    height: var(--switch-height);
+    padding: var(--space-1);
+    border: none;
+    border-radius: var(--chip-border-radius);
+    background: hsl(from var(--theme-neutral-3) h s l / 0.3);
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.switch::before {
+    content: "";
+    width: calc(var(--switch-height) - 2 * var(--space-1));
+    height: calc(var(--switch-height) - 2 * var(--space-1));
+    border-radius: 50%;
+    background: var(--theme-neutral-1);
+    box-shadow: var(--soft-shadow);
+}
+
+.switch[aria-checked="true"] {
+    background: var(--theme-primary);
+}
+
+.switch[aria-checked="true"]::before {
+    translate: calc(var(--switch-width) - var(--switch-height));
 }
 
 /*          */

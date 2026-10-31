@@ -11,7 +11,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip with the pill `--chip-border-radius`, and only a circle or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the batch bar's, the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin and the close button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -86,7 +86,7 @@ The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">
 | `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-split (the main page's Split.js instance and its remembered sizes), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location) and `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside) and `view-settings.js` (the View settings dialog's switches over the grid metadata set); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/frontend-app.js` and `js/stores/app-stores.js`)
 
@@ -346,8 +346,7 @@ shown in the popover host. Attributes that describe
 the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
 selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
 survive the page update the dialog triggers), and `kind`, naming wiring a dialog needs beyond its
-form (the view settings checkboxes, hydrated in `js/fragments/inline-dialog.js`, and the Add to
-location selection, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-location.js`). Its success
+form (the Add to location selection, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-location.js`). Its success
 event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
 `-detail-target-attr-*`) on the fragment root. An outcome only the server knows (how many assets a
 membership change applied) arrives as JSON in the `App-Success-Detail` response header
@@ -356,7 +355,7 @@ membership change applied) arrives as JSON in the `App-Success-Detail` response 
 `data-app-modal-title`, the title either host shows. Folder, album, Location, and category actions, including the Add
 controls, are **popover dialogs**; Add location, Add to location, the people dialogs and the purge confirmation are
 **modal dialogs**. Only View settings is an
-**inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its checkboxes apply
+**inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its switches apply
 immediately without submitting an operation.
 
 A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"`
@@ -414,7 +413,7 @@ The ⚙ View button above the results grid (`#viewSettingsBtn`, built by
 `buildDialogTriggerCtrl`, a `.dialog-trigger-ctrl` with an inline dialog host. Its `dialog-only`
 panel stays invisible until the settings arrive, opens below the button centered on it
 (`data-menu-align="center"`), and is cleared on close. The component records its load request and
-drops a response after the panel has closed or reopened. Each checkbox applies immediately;
+drops a response after the panel has closed or reopened. Each switch applies immediately;
 View settings submits nothing.
 
 A **choice menu** (the toolbar's Group `#groupMenuHost` and Sort `#sortMenuHost`, `includes/search_results.scala.html`)
@@ -705,8 +704,17 @@ and Tab out of the popover dismiss the dialog; Escape and the × return focus as
 Tab leave it where they put it.
 
 **Inline dialogs** — Only View settings uses `js/fragments/inline-dialog.js`, which gives it initial
-focus and binds its checkboxes. It has no operation lifecycle; dismissal follows the popover's
-rules and Escape returns focus to the trigger.
+focus. It is two columns (`htmx/view_settings_dialog.scala.html`, `static/css/htmx/view_settings_dialog.css`): on the
+left the switches bound to the grid metadata set by its own Alpine component
+(`x-data="viewSettings"`, `js/alpine/components/view-settings.js`), which the mutation observer
+initializes as the fragment arrives, and on the right, behind a hairline, the scope: "Show triaged items", the
+`triaged` search parameter read from the `searchParams` store (on unless it is `false`), whose click runs `runSearch`
+with `triaged=false` or the empty literal that clears it, so the results re-render under the open panel: the View
+control's host `#viewSettingsActions` is `hx-preserve` in `includes/search_results`, so the swap carries the built
+control and its open panel from the old fragment into the new one (htmx moves it with `moveBefore`, which keeps the
+popover showing), and `ensureViewSettingsControl` finds the host filled and builds nothing. The scope column is shown in
+the repository view alone (`x-show`); in Triage and Trash the dialog is the metadata switches and nothing else. The dialog has no operation lifecycle; dismissal follows the popover's rules and
+Escape returns focus to the trigger.
 
 **Forms** — Every text-like field on every page but the setup screen takes the one field style of the FORMS section
 of `core.css`: text, search, email, password and file inputs, textareas and selects. It is a sunken fill
@@ -715,7 +723,10 @@ of `core.css`: text, search, email, password and file inputs, textareas and sele
 accent edge and ring in place of the focus ring (see **Themes**). Its selector sits inside `:where()`, so any page's
 own rule outranks it, and is written once: the focus rule is nested in the field rule (`&:focus-visible`), as the
 picker's rules are in the select's, while the options take a rule of their own. Checkboxes, radios, ranges, hidden and submit inputs take none of it, nor does the
-nav's quick search field, which keeps its own look. Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
+nav's quick search field, which keeps its own look. A setting that applies as it is flipped, with nothing to submit, is a `.switch` of the SWITCH
+section: a `button[role="switch"]` before its `<label for>` (a button is labelable, so the label's click flips it with no script), whose `aria-checked` an
+Alpine binding keeps in step with the setting; the track, `--switch-width` by `--switch-height`, takes `--theme-primary` when on, and the knob, a
+pseudo-element, slides across it. The View settings dialog's switches are the one use. Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
 `htmx/setup_form.css`'s alone; the login page loads no app stylesheet. The upload form's file input takes the field's
 box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
 except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
@@ -1442,7 +1453,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
 | `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |
 | `views/includes/search_results.scala.html` | Search grid wrapper with the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell. Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
-| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration checkbox like every other field |
+| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration switch like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
@@ -1461,7 +1472,7 @@ it knows about; the `searchParams` store supplies the rest. Nothing else builds 
 `/htmx/search/r/:repoId`.
 
 `js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
-`locationId`, `q`, `bbox`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`) and the rules for combining them:
+`locationId`, `q`, `bbox`, `triaged`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`) and the rules for combining them:
 choosing a folder, a person, an album, or a Location clears the other three, and a view clears all four. The store
 holds no position: a search starts at its first page, and a later page is one request's `after` cursor. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
 drawn on, so a view, a folder, a person, an album, a Location or a new `q` clears it too. Search text
@@ -1471,17 +1482,21 @@ and a view, clears `q`. The whole `CLEARS` table:
 
 | Changed | Cleared (back to its default) |
 |---|---|
-| `view` | `folderId`, `personId`, `albumId`, `locationId`, `bbox`, `q` |
+| `view` | `folderId`, `personId`, `albumId`, `locationId`, `bbox`, `q`, `triaged` |
 | `folderId`, `personId`, `albumId` or `locationId` | the other three, `bbox`, `q` |
 | `q` | `view`, `folderId`, `personId`, `albumId`, `locationId`, `bbox` |
 
 The layout, the grouping, `rpp` and the sort narrow or reorder what is already in scope and survive
 all of those: a chosen sort is kept from one place to the next, and with no sort chosen the server's
-default applies (Relevance with text, newest import without). The two combinations the server refuses
+default applies (Relevance with text, newest import without). The triage filter (`triaged`) narrows
+too, and survives a folder, person, album, Location or `q`, but it is the repository view's: the View
+settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown in that view alone, and a
+change of view clears it. The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
-change): `q` with the trash view becomes the repository view, and `sort=relevance`
+change): `q` with the trash view becomes the repository view, `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
-the text it ranked. The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
+the text it ranked, and `triaged` in any view but the repository view is dropped (the triage view
+refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
 in that range (`normalize`, with
 `Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
 default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every

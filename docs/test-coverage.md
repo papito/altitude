@@ -103,6 +103,7 @@ Sources: [AssetService](../altitude/src/altitude/core/service/AssetService.scala
 - ✅ Unit: `ImageUtil.orient` puts the pixels of a two-by-three image where each of the eight EXIF orientations has them (mirrored, turned around, transposed, a quarter turn either way; from 5 on, three rows of two), leaves them for a value the tag cannot hold, and returns a new image, the input unchanged.
 - ✅ The triage view's scope returns the triaged assets that are not recycled, leaving out a sorted asset and a recycled triaged asset, which keeps its triage flag.
 - ✅ The trash view's scope returns the recycled assets not yet marked for purging.
+- ✅ The `triaged` filter overlays each view's scope: it hides or isolates the triaged assets of the repository view, tells the assets recycled from triage from the rest of the trash, and is refused with the triage view when `false`; the HTML and map routes carry it and refuse the contradiction.
 - [ ] Cover the trash view with combined filters and pagination. Basic recycled counts are already covered by recycle/restore tests. [MEDIUM]
 - [ ] Verify `getByChecksum` selects only an eligible asset in the current repository when the same checksum exists elsewhere or only in recycled records. [MEDIUM]
 - [ ] Define/test invalid filename handling on rename and ensure rejection preserves the old filename. [MINOR]

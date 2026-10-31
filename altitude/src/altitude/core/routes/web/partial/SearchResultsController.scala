@@ -38,6 +38,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
    *
+   * `triaged` overlays the view's scope (`SearchRequestParser`): `false` hides the triaged assets of the repository view. The
+   * View settings dialog offers that switch there alone, since the triage view refuses it.
+   *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
@@ -67,6 +70,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId: Option[String] = None,
       locationId: Option[String] = None,
       bbox: Option[String] = None,
+      triaged: Option[Boolean] = None,
       layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
@@ -86,7 +90,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400,
         Seq(("Content-Type", "application/json")))
 
-    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox) match
+    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged) match
       case Left(message) => return badRequest(message)
       case Right(scope) => scope
 
@@ -113,6 +117,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId,
       locationId,
       bbox,
+      triaged,
       layout,
       if layout == Const.Search.Layout.MAP then None else groupBy,
       if layout == Const.Search.Layout.MAP then None else groupDirection,
@@ -326,6 +331,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId: Option[String],
       locationId: Option[String],
       bbox: Option[String],
+      triaged: Option[Boolean],
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
@@ -337,6 +343,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
       locationId.map(Api.Field.Search.LOCATION_ID -> _),
       bbox.map(Api.Field.Search.BBOX -> _),
+      triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
       q.map(Api.Field.Search.QUERY_TEXT -> _),
       Some(Api.Field.Search.SORT -> sort),

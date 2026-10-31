@@ -1,9 +1,19 @@
+/* Two columns of switches: the grid metadata on the left, the scope on the right behind a hairline. A flex row, so the
+   scope column hidden outside the repository view leaves no track and no gap behind */
 #viewSettingsForm {
+  display: flex;
+  column-gap: var(--space-5);
+}
+
+#viewSettingsForm .metadata,
+#viewSettingsForm .scope {
   display: grid;
   grid-auto-rows: auto;
+  align-content: start;
   row-gap: var(--control-vertical-space);
 }
 
-#viewSettingsForm input[type="checkbox"] {
-  vertical-align: middle;
+#viewSettingsForm .scope {
+  padding-left: var(--space-5);
+  border-left: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.3);
 }

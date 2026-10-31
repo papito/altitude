@@ -5,8 +5,8 @@
  * A validation response that replaces the form in place is re-hydrated, which re-opens the same
  * host.
  *
- * A dialog that needs wiring beyond its form names it with `data-app-dialog-kind`, as the inline
- * dialogs do; the Add to location dialog is the only modal one (`add-to-location.js`).
+ * A dialog that needs wiring beyond its form names it with `data-app-dialog-kind`; the Add to
+ * location dialog is the only one (`add-to-location.js`).
  */
 import {
     closeModal,

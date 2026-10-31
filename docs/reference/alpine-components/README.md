@@ -65,3 +65,5 @@ libraries below are not vendored.
   and [Popover](headless-popover.md). [Menu](headless-menu.md) remains the reference if it ever
   needs roving arrow-key focus; [Notifications](notifications.md) for a stacked snackbar;
   [Flatpickr](flatpickr.md) for a date filter in search.
+- The View settings dialog's switches (`static/js/alpine/components/view-settings.js`, `.switch` in
+  `static/css/core.css`) follow the [Toggle](toggle.md) lesson; see its Altitude notes.

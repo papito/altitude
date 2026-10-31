@@ -1,52 +1,43 @@
-@* Shown inline in the panel below the ⚙ View button, which holds nothing else. Each checkbox applies
+@* Shown inline in the panel below the ⚙ View button, which holds nothing else. Each switch applies
    immediately and there is no submit, so nothing closes the panel from the inside; it is dismissed
    like any context menu. The dialog has no heading: its labels are the whole content.
 
-   NOTE: The "value" here mirrors the ones in the search results grid, so these are
-   the classes we show/hide in the grid. *@
+   Two columns, a hairline between them. The left column's switches are bound to the grid metadata set
+   by the `viewSettings` Alpine component (js/alpine/components/view-settings.js); the field names
+   mirror the metadata classes in the search results grid, so these are the classes we show/hide
+   there. The right column is the scope: "Show triaged items" is the `triaged` search parameter of the
+   repository view (the only view that offers it), so flipping it runs a search; the host of the ⚙ View
+   control is `hx-preserve`d (includes/search_results), so this panel stays open over the new results.
+   A button is a labelable element, so the label's click flips its switch with no script. *@
+
+@switch(id: String, label: String, checked: String, flip: String) = {
+  <div>
+    <button type="button"
+            role="switch"
+            class="switch"
+            id="@{id}Switch"
+            :aria-checked="@checked"
+            @@click="@flip"></button>
+    <label for="@{id}Switch">@label</label>
+  </div>
+}
+
+@metadataSwitch(field: String, label: String) = {
+  @switch(field, label, s"isShown('$field')", s"toggle('$field')")
+}
 
 <form id="viewSettingsForm"
-      data-app-fragment="inline-dialog"
-      data-app-dialog-kind="view-settings">
-  <div>
-    <input type="checkbox"
-           id="fileNameCheckbox"
-           value="fileName">
-    <label for="fileNameCheckbox">File Name</label>
+      x-data="viewSettings"
+      data-app-fragment="inline-dialog">
+  <div class="metadata">
+    @metadataSwitch("fileName", "File Name")
+    @metadataSwitch("originalCreatedAt", "Date/Time Created")
+    @metadataSwitch("importedAt", "Date/Time Imported")
+    @metadataSwitch("dimensions", "Media Dimensions")
+    @metadataSwitch("duration", "Duration")
+    @metadataSwitch("fileSize", "File Size")
   </div>
-
-  <div>
-    <input type="checkbox"
-           id="originalCreatedAtCheckbox"
-           value="originalCreatedAt">
-    <label for="originalCreatedAtCheckbox">Date/Time Created</label>
-  </div>
-
-  <div>
-    <input type="checkbox"
-           id="importedAtCheckbox"
-           value="importedAt">
-    <label for="importedAtCheckbox">Date/Time Imported</label>
-  </div>
-
-  <div>
-    <input type="checkbox"
-           id="dimensionsCheckbox"
-           value="dimensions">
-    <label for="dimensionsCheckbox">Media Dimensions</label>
-  </div>
-
-  <div>
-    <input type="checkbox"
-           id="durationCheckbox"
-           value="duration">
-    <label for="durationCheckbox">Duration</label>
-  </div>
-
-  <div>
-    <input type="checkbox"
-           id="fileSizeCheckbox"
-           value="fileSize">
-    <label for="fileSizeCheckbox">File Size</label>
+  <div class="scope" x-show="hasTriageOption()">
+    @switch("triaged", "Show triaged items", "showsTriaged()", "toggleTriaged()")
   </div>
 </form>

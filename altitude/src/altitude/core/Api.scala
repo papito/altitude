@@ -128,6 +128,7 @@ object Api:
       val BBOX = "bbox"
       val LAYOUT = "layout"
       val VIEW = "view"
+      val TRIAGED = "triaged"
       val SORT = "sort"
       val IS_CONTINUOUS_SCROLL = "isContinuousScroll"
       val GROUP_BY = "groupBy"

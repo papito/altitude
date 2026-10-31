@@ -53,8 +53,11 @@
     </div>
   </div>
   @* The ⚙ View control is a dialog-trigger context menu, built into this host by
-     js/search-results/view-settings-control.js like the Add album and Add folder controls *@
-  <div id="viewSettingsActions"></div>
+     js/search-results/view-settings-control.js like the Add album and Add folder controls; its dialog also holds the
+     repository view's triage filter (htmx/view_settings_dialog), which runs a search. `hx-preserve` carries this very
+     element, the built control and its open panel included, from the old fragment into the new one, so the dialog stays
+     open while the results it changed are swapped in under it. *@
+  <div id="viewSettingsActions" hx-preserve></div>
 
   <div class="group">
     @* A choice menu (js/common/choice-menus.js wraps the host into its trigger and popover panel). The option marked

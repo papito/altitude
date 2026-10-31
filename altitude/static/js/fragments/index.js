@@ -30,7 +30,7 @@ export function hydrateAppFragments({ root, app }) {
     })
 
     findFragmentRoots(root, "inline-dialog").forEach((fragmentEl) => {
-        hydrateInlineDialogFragment({ fragmentEl, context: app.context })
+        hydrateInlineDialogFragment({ fragmentEl })
     })
 
     findFragmentRoots(root, "image-detail").forEach((fragmentEl) => {

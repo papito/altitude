@@ -16,6 +16,7 @@ const DEFAULTS = {
     locationId: null,
     q: null,
     bbox: null,
+    triaged: null,
     layout: Const.search.layout.grid,
     sort: null,
     groupBy: null,
@@ -37,7 +38,9 @@ const DEFAULTS = {
  *
  * The layout, the grouping and the sort narrow or reorder what is already in scope and survive all
  * of them; the one sort that does not outlive its search is Relevance, which goes with the text
- * (`withoutRefusedCombinations`). This table is what the server's old `newSearch=true` flag used to express, and it is the whole
+ * (`withoutRefusedCombinations`). The triage filter (`triaged`, the toolbar's switch of the
+ * repository view) narrows too, but belongs to that view: a change of view clears it, and the
+ * store drops it from any other view, which the triage view refuses. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
  * reason a widget can send just the one parameter it knows about.
  */
 const PLACES = ["folderId", "personId", "albumId", "locationId"]
@@ -50,7 +53,7 @@ const elsewhere = (place) => [
 ]
 
 const CLEARS = {
-    view: elsewhere(),
+    view: [...elsewhere(), "triaged"],
     folderId: elsewhere("folderId"),
     personId: elsewhere("personId"),
     albumId: elsewhere("albumId"),
@@ -85,10 +88,11 @@ export function seedSearchParams(search) {
 }
 
 /**
- * The two combinations the server refuses, settled the way the scope rules would have: text
- * searches the repository view, not the trash, and the Relevance sort goes with the text: a change
- * that clears the text drops it, so the server's default applies, while any other sort stays. A URL
- * can ask for either combination as well.
+ * The combinations the server refuses, settled the way the scope rules would have: text searches
+ * the repository view, not the trash; the Relevance sort goes with the text: a change that clears
+ * the text drops it, so the server's default applies, while any other sort stays; and the triage
+ * filter is the repository view's, so another view drops it (the server refuses it with the triage
+ * view, and the toolbar offers it nowhere else). A URL can ask for any of them as well.
  */
 function withoutRefusedCombinations(params) {
     if (params.q !== null && params.view === Const.views.trashbin) {
@@ -97,6 +101,10 @@ function withoutRefusedCombinations(params) {
 
     if (params.q === null && params.sort === Const.search.sortRelevance) {
         params.sort = DEFAULTS.sort
+    }
+
+    if (params.view !== Const.views.repository) {
+        params.triaged = DEFAULTS.triaged
     }
 
     return params

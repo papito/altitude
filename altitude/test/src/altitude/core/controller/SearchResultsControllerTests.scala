@@ -108,7 +108,8 @@ import altitude.core.models.AssetType
         page.text() should include("<span class=\"category\">Italy</span> › Beach")
         page.text() should include(header(location.persistedId))
         // The Group menu reflects the grouping, and the grid carries it for its continuations
-        page.text() should include("""data-app-search-group-by="location" data-app-search-group-direction="" aria-checked="true"""")
+        page.text() should include(
+          """data-app-search-group-by="location" data-app-search-group-direction="" aria-checked="true"""")
         page.text() should include("""data-results-group-by="location"""")
         page.text() should include("""data-results-group-direction=""""")
         // An asset in a Location is a cell of its own under it, distinct from the same asset's cell elsewhere
@@ -365,9 +366,9 @@ import altitude.core.models.AssetType
      * Assertions:
      *
      * The first page is an HTML fragment whose replaced URL carries the grouping, with a header giving the whole day's count, the
-     * overall total, cells in sort order and the grouping reflected in the Group menu; only its last cell carries the cursor,
-     * and no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the
-     * last page, carries no cursor.
+     * overall total, cells in sort order and the grouping reflected in the Group menu; only its last cell carries the cursor, and
+     * no cell a page number. The continuation completes the day without repeating its header, opens the next one and, as the last
+     * page, carries no cursor.
      *
      * Edge cases:
      *
@@ -408,7 +409,8 @@ import altitude.core.models.AssetType
         page1.contains(cell(a3)) shouldBe false
 
         // The Group menu reflects the grouping
-        page1 should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
+        page1 should include(
+          """data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
         page1 should include("""data-results-group-by="dateTaken"""")
         page1 should include("""data-results-group-direction="desc"""")
 
@@ -468,7 +470,8 @@ import altitude.core.models.AssetType
         val trashPage = trash.text()
         ordered(trashPage, header("2026-09-06"), cell(recycled))
         trashPage.contains(cell(kept)) shouldBe false
-        trashPage should include("""data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
+        trashPage should include(
+          """data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true"""")
 
         val library = htmlSearch(host, repoId, Map(Api.Field.Search.GROUP_BY -> "dateTaken")).text()
         ordered(library, header("2026-09-06"), cell(kept))
@@ -753,6 +756,54 @@ import altitude.core.models.AssetType
           host,
           repoId,
           Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.QUERY_TEXT -> "beach")).statusCode shouldBe 200
+    }
+  }
+
+  test("The triaged filter narrows the repository view and is refused with the triage view") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a sorted asset and a triaged asset.
+     *
+     * Assertions:
+     *
+     * The repository view renders both cells. With `triaged=false` the triaged cell is left out and the bookmarkable URL carries
+     * the filter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
+     *
+     * Edge cases:
+     *
+     * A `triaged` that is not a boolean is a 400.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val sorted = testContext.persistAsset()
+        val triaged = testContext.persistAsset(isTriaged = true)
+
+        val all = htmlSearch(host, repoId, Map.empty).text()
+        all should include(cell(sorted))
+        all should include(cell(triaged))
+
+        val hidden = htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "false"))
+        hidden.statusCode shouldBe 200
+        hidden.text() should include(cell(sorted))
+        (hidden.text() should not).include(cell(triaged))
+        hidden.headers("hx-replace-url").head should include("triaged=false")
+
+        val contradiction = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.TRIAGED -> "false")
+        for (shape <- List(Map.empty[String, String], Map(Api.Field.Search.LAYOUT -> "map")))
+          withClue(s"$shape: ") {
+            val response = htmlSearch(host, repoId, contradiction ++ shape)
+            response.statusCode shouldBe 400
+            response.headers("content-type").head should include("text/plain")
+            response.text() should include("triage")
+          }
+
+        htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "maybe")).statusCode shouldBe 400
     }
   }
 

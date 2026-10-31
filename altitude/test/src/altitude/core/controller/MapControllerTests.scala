@@ -95,6 +95,50 @@ import altitude.core.App
     }
   }
 
+  test("The map follows the triaged filter and refuses its contradiction with the triage view") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a sorted asset and a triaged asset, each plotted at a point of its own.
+     *
+     * Assertions:
+     *
+     * The bounds and the cells count both points without the filter and the sorted asset's alone with `triaged=false`; the triage
+     * view with `triaged=false` is a JSON 400 naming the view on both routes.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val sorted = testContext.persistAsset()
+        testContext.setAssetCoordinates(sorted.persistedId, 10, 20)
+        val triaged = testContext.persistAsset(isTriaged = true)
+        testContext.setAssetCoordinates(triaged.persistedId, 30, 40)
+        def get(endpoint: String, params: Map[String, String]) =
+          requests.get(s"$host/api/map/r/$repoId/$endpoint", params = params, cookies = testContext.cookies, check = false)
+        val world = Map("viewport" -> "-90,-180,90,180", "zoom" -> "10")
+
+        ujson.read(get("bounds", Map.empty).text())("count").num shouldBe 2
+        ujson.read(get("bounds", Map("triaged" -> "false")).text()) shouldBe ujson.Obj(
+          "south" -> 10,
+          "west" -> 20,
+          "north" -> 10,
+          "east" -> 20,
+          "count" -> 1)
+        ujson.read(get("cells", world + ("triaged" -> "false")).text())("cells").arr.map(_("assetId").str).toList shouldBe
+          List(sorted.persistedId)
+
+        for (endpoint <- List("bounds", "cells")) withClue(s"$endpoint: ") {
+          val response = get(endpoint, world ++ Map("view" -> "triage", "triaged" -> "false"))
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("application/json")
+          ujson.read(response.text())("error").str should include("triage")
+        }
+    }
+  }
+
   test("Map input errors are JSON 400s and a disabled geocoder is a JSON 404") {
 
     /**

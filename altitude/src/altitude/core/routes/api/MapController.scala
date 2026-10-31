@@ -39,8 +39,9 @@ class MapController(using logger: Logger) extends BaseController:
       personId: Option[String] = None,
       albumId: Option[String] = None,
       locationId: Option[String] = None,
+      triaged: Option[Boolean] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
-    val scope = mapScope(view, q, folderId, personId, albumId, locationId) match
+    val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
     val box = viewport match
@@ -89,8 +90,9 @@ class MapController(using logger: Logger) extends BaseController:
       personId: Option[String] = None,
       albumId: Option[String] = None,
       locationId: Option[String] = None,
+      triaged: Option[Boolean] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
-    val scope = mapScope(view, q, folderId, personId, albumId, locationId) match
+    val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
     val result =
@@ -130,7 +132,8 @@ class MapController(using logger: Logger) extends BaseController:
       folderId: Option[String],
       personId: Option[String],
       albumId: Option[String],
-      locationId: Option[String]): Either[String, SearchRequestParser.Scope] =
-    SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox = None)
+      locationId: Option[String],
+      triaged: Option[Boolean]): Either[String, SearchRequestParser.Scope] =
+    SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox = None, triaged)
 
   initialize()
