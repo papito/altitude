@@ -291,6 +291,83 @@ import altitude.core.models.Settings
     stored(first).sequenceId shouldBe None
   }
 
+  test("A move out of triage clears the moved frames' Sequence and leaves the frames that stay in it") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames in one Sequence, and a folder. One frame is moved to the folder, then the other two.
+     *
+     * Assertions:
+     *
+     * The moved frame is sorted with no Sequence, and the two in triage keep theirs. Once every frame has moved, no asset carries
+     * the id: the Sequence ended with its last member's move. A sorted frame moved again between folders stays without one.
+     */
+    val frames = List(
+      importFrame(frame(0)),
+      importFrame(frame(1), taken = Some(takenAt(1))),
+      importFrame(frame(2), taken = Some(takenAt(2))))
+    val sequenceId = frames.last.sequenceId
+    sequenceId should not be None
+    frames.map(stored(_).sequenceId).distinct shouldBe List(sequenceId)
+    val folder = testApp.service.folder.add("sorted")
+
+    testApp.service.library.moveAssetsToFolder(Set(frames.head.persistedId), folder.persistedId)
+    val moved = stored(frames.head)
+    moved.isTriaged shouldBe false
+    moved.sequenceId shouldBe None
+    frames.tail.map(stored(_).sequenceId).distinct shouldBe List(sequenceId)
+
+    testApp.service.library.moveAssetsToFolder(frames.tail.map(_.persistedId).toSet, folder.persistedId)
+    frames.map(stored(_).sequenceId).distinct shouldBe List(None)
+    frames.map(stored(_).isTriaged).distinct shouldBe List(false)
+    testApp.txManager.withTransaction(testApp.DAO.asset.countSequenceMembers(Set(sequenceId.get))) shouldBe Nil
+
+    val other = testApp.service.folder.add("other")
+    testApp.service.library.moveAssetsToFolder(Set(frames.head.persistedId), other.persistedId)
+    stored(frames.head).sequenceId shouldBe None
+  }
+
+  test("A frame recycled from triage keeps its Sequence, and a restore brings it back to it") {
+
+    /**
+     * Setup:
+     *
+     * Two frames in one Sequence. One is recycled, then restored; then recycled again and moved out of the trash into a folder.
+     *
+     * Assertions:
+     *
+     * In the trash the frame keeps its triage flag and its Sequence (a Sequence whose members are all in the trash still exists),
+     * and the restored frame is back in triage and in the Sequence. Moved out of the trash into a folder it leaves triage, so it
+     * leaves the Sequence as a move does, while the other frame keeps it.
+     */
+    val first = importFrame(frame(0))
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    val sequenceId = second.sequenceId
+    sequenceId should not be None
+
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    val recycled = stored(first)
+    recycled.isRecycled shouldBe true
+    recycled.isTriaged shouldBe true
+    recycled.sequenceId shouldBe sequenceId
+
+    testApp.service.library.restoreRecycledAssets(Set(first.persistedId))
+    val restored = stored(first)
+    restored.isRecycled shouldBe false
+    restored.isTriaged shouldBe true
+    restored.sequenceId shouldBe sequenceId
+
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    val folder = testApp.service.folder.add("sorted")
+    testApp.service.library.moveAssetsToFolder(Set(first.persistedId), folder.persistedId)
+    val sorted = stored(first)
+    sorted.isRecycled shouldBe false
+    sorted.isTriaged shouldBe false
+    sorted.sequenceId shouldBe None
+    stored(second).sequenceId shouldBe sequenceId
+  }
+
   test("A Video has no Image quality, no hash and no Sequence") {
 
     /**

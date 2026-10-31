@@ -308,7 +308,12 @@ class LibraryService(val app: Altitude):
       val folder: Folder = app.service.folder.getById(asset.folderId)
       if folder.isRecycled then app.service.folder.setRecycledProp(folder = folder, isRecycled = false)
 
-  /** Note that this is also how we restore assets from the recycle bin or move them from triage. */
+  /**
+   * Moves assets into a folder, which is also how an asset is moved out of the recycle bin into a folder, or out of triage. An
+   * asset leaving triage leaves its Sequence in the same update: a sorted asset never carries one, so a Sequence whose last
+   * member moves is gone with it. The column is written NULL for every moved asset in the one update: a sorted asset has none
+   * already, and an asset recycled from triage keeps its Sequence until it is moved into a folder.
+   */
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit =
     if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
 
@@ -324,7 +329,8 @@ class LibraryService(val app: Altitude):
           data = Map(
             FieldConst.Asset.FOLDER_ID -> destFolderId,
             FieldConst.Asset.IS_RECYCLED -> false,
-            FieldConst.Asset.IS_TRIAGED -> false)
+            FieldConst.Asset.IS_TRIAGED -> false,
+            FieldConst.Asset.SEQUENCE_ID -> None)
         )
 
         // A recycled asset counts as recycled even when it was recycled from triage and keeps its triage flag, and an asset moved

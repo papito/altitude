@@ -13,7 +13,8 @@ import altitude.core.util.SequenceRule
 
 /**
  * Puts the still images of one burst in a Sequence as their imports complete. A Sequence has no row of its own: it is the
- * `sequence_id` its members share, and it exists exactly while some asset in triage carries it.
+ * `sequence_id` its members share, and it exists exactly while some asset carries it: a member leaves it only by a move into a
+ * folder (`LibraryService.moveAssetsToFolder`); one recycled from triage keeps it.
  */
 class SequenceService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
