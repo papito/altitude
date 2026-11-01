@@ -4,6 +4,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
 import java.io.File
+import java.lang.management.ManagementFactory
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.Cancellable
@@ -48,6 +49,7 @@ import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.SqlExplainer
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.ImportParallelism
 
 class Altitude(val dbEngineOverride: Option[String] = None):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -175,7 +177,8 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   // Startup order: settings service (empty) → transaction manager → DAOs → migration → settings load → importParallelism → actor
   // system → services. The transaction manager reads the Settings an Admin tunes on the Settings screen for the transactions it
   // begins, so their service comes first; it is loaded once the schema is in place, and until then a transaction sets none. The
-  // import dispatcher's thread count is a Setting, so the database must be current and read before the actor system is built.
+  // import dispatcher's thread count starts from a Setting, so the database must be current and read before the actor system is
+  // built.
   final val settings: SettingsService = SettingsService(app)
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
@@ -275,14 +278,19 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   settings.load()
 
   /**
-   * How many threads do the import's work: the `import.parallelism` Setting as it was saved when the server started (a Restart
-   * setting), or, at 0, half the cores and never fewer than 2. Every one of them holds its own face detection and recognition
-   * networks.
+   * How many threads do the import's work, and why: the `import.parallelism` Setting as it was saved when the server started (a
+   * Restart setting), or, at 0, what the machine affords, within the cap in the server config (see `ImportParallelism`). Each of
+   * them holds its own YuNet face detector, and they share the pool's two ArcFace recognition nets.
    */
-  final val importParallelism: Int = settings.atStartup.importParallelism match
-    case 0 => math.max(2, Runtime.getRuntime.availableProcessors / 2)
-    case n => n
-  logger.info(s"Import parallelism: $importParallelism threads")
+  final val importParallelismResolution: ImportParallelism.Resolution = ImportParallelism.resolve(
+    settings.atStartup.importParallelism,
+    Runtime.getRuntime.availableProcessors,
+    // The machine's memory, or the container's limit in a container
+    ManagementFactory.getOperatingSystemMXBean.asInstanceOf[com.sun.management.OperatingSystemMXBean].getTotalMemorySize,
+    ImportParallelism.configuredCap(config)
+  )
+  final val importParallelism: Int = importParallelismResolution.value
+  logger.info(s"Import parallelism: ${importParallelismResolution.summary}")
 
   // The app's config, with the dispatcher the import's work runs on
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =

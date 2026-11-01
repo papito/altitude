@@ -23,6 +23,9 @@ object Const:
     // (`models.Settings`), not config.
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
 
+    // Caps the `import.parallelism` Setting, for an operator who ships a config but never logs in. See `util.ImportParallelism`.
+    val IMPORT_PARALLELISM_MAX = "import.parallelism.max"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"
