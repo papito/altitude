@@ -16,6 +16,7 @@ import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
 import altitude.core.unit.ImageMeasurementTests
 import altitude.core.unit.ImageUtilTests
+import altitude.core.unit.NetPoolTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
@@ -59,6 +60,7 @@ abstract class AllUnitTestSuites
     new UtilTests,
     new EnvironmentTests,
     new Sha256Tests,
+    new NetPoolTests,
     new VideoServiceTests,
     new ImageUtilTests,
     new ImageMeasurementTests,
