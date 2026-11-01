@@ -29,7 +29,8 @@
   grid-column: 1 / -1;
 }
 
-#settingsForm .help {
+#settingsForm .help,
+#settingsForm .note {
   color: var(--theme-neutral-3);
 }
 

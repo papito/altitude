@@ -34,7 +34,9 @@ object ImportParallelism:
 
   /** The running parallelism, and why it is that */
   final case class Resolution(value: Int, reason: String):
-    def summary: String = s"$value threads: $reason"
+    def summary: String = s"${counted(value, "thread")}: $reason"
+
+  private def counted(count: Int, noun: String): String = if count == 1 then s"$count $noun" else s"$count ${noun}s"
 
   /**
    * The Setting if there is one (the floor belongs to the automatic rule only), else the automatic rule, then the cap: 0 for
@@ -53,7 +55,7 @@ object ImportParallelism:
     val affordable = math.min(cores / 2, (memoryBudget - POOL_COST) / THREAD_COST).toInt
     // Without saying so, the floor would read as a contradiction of the halves on a small box
     val floor = if affordable < MIN_THREADS then s", never fewer than $MIN_THREADS" else ""
-    val reason = s"automatic, half of $cores cores or ${memoryBudget / GB} GB of ${totalMemoryBytes / GB} GB$floor"
+    val reason = s"automatic, half of ${counted(cores, "core")} or ${memoryBudget / GB} GB of ${totalMemoryBytes / GB} GB$floor"
     Resolution(math.max(affordable, MIN_THREADS), reason)
 
   /**

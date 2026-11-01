@@ -6,9 +6,10 @@
 
 @* The one form of the Settings screen. Its fields are named after the Settings; `values` are what the fields show (the saved
    values, or the submitted ones under a validation replacement), `errors` sit beside their fields, and a Restart setting with
-   a value saved but not running carries `pending`. Reset fills a field with its default (js/settings-page.js); only Save writes. *@
+   a value saved but not running carries `pending`. `notes` are plain information on a Setting, always shown when it has one.
+   Reset fills a field with its default (js/settings-page.js); only Save writes. *@
 @(settings: List[SettingDef], values: Map[String, String], defaults: Map[String, String], errors: Map[String, String],
-  pending: Map[String, PendingRestart])
+  pending: Map[String, PendingRestart], notes: Map[String, String])
 
 <form action="#"
       id="settingsForm"
@@ -51,6 +52,10 @@
 
             @for(p <- pending.get(setting.name)) {
               <div class="pending">Saved @p.saved, running @p.running until the server restarts</div>
+            }
+
+            @for(note <- notes.get(setting.name)) {
+              <div class="note">@note</div>
             }
 
             <div class="help">@setting.help Default: @{ defaults(setting.name) }</div>

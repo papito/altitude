@@ -83,7 +83,7 @@ import altitude.core.util.ImportParallelism.Resolution
       Resolution(2, "automatic, half of 2 cores or 1 GB of 3 GB, never fewer than 2")
     // One core
     ImportParallelism.resolve(AUTOMATIC, 1, 31 * GB, NO_CAP) shouldBe
-      Resolution(2, "automatic, half of 1 cores or 15 GB of 31 GB, never fewer than 2")
+      Resolution(2, "automatic, half of 1 core or 15 GB of 31 GB, never fewer than 2")
     // Half the memory does not even hold the shared nets
     ImportParallelism.resolve(AUTOMATIC, 24, 1 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 24 cores or 0 GB of 1 GB, never fewer than 2")
@@ -134,6 +134,7 @@ import altitude.core.util.ImportParallelism.Resolution
       "12 threads: automatic, half of 24 cores or 15 GB of 31 GB"
     ImportParallelism.resolve(3, 24, 31 * GB, NO_CAP).summary shouldBe "3 threads: the Setting"
     ImportParallelism.resolve(8, 24, 31 * GB, 4).summary shouldBe s"4 threads: $CAPPED"
+    ImportParallelism.resolve(1, 24, 31 * GB, NO_CAP).summary shouldBe "1 thread: the Setting"
   }
 
   test("The configured cap is the key's value, and no cap when the key is absent") {

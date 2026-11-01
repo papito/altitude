@@ -2,7 +2,7 @@ package altitude.core.controller
 
 import altitude.test.TestContext
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, include, not, should, shouldBe }
 
 import altitude.core.App
 import altitude.core.models.AccountType
@@ -10,7 +10,8 @@ import altitude.core.models.Settings
 
 /**
  * The Settings screen: an Admin's page and save, a User's and a Guest's 403, the admin-only nav link, a validation replacement
- * that writes nothing, a save that announces its success event, and the PostgreSQL-only Settings absent on SQLite.
+ * that writes nothing, a save that announces its success event, a note beside its Setting, and the PostgreSQL-only Settings
+ * absent on SQLite.
  */
 @DoNotDiscover class SettingsControllerTests extends ControllerTestCore {
 
@@ -255,6 +256,36 @@ import altitude.core.models.Settings
         response.text() should include("Saved 3, running 0 until the server restarts")
 
         (save(host, repoId, ujson.Obj(Settings.IMPORT_PARALLELISM -> "0")).text() should not).include("until the server restarts")
+    }
+  }
+
+  test("The import parallelism field says what is running and why, on the page and in a save's answer") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's page, then a save of another import parallelism, while the server runs with the seed, 0.
+     *
+     * Assertions:
+     *
+     * The page carries the running line, the one note of the form. The save's answer still carries it, since the saved value runs
+     * only from the next start, and renders it between the restart notice and the field's help.
+     */
+    val repoId = loginAs(AccountType.Admin)
+
+    withServer(App) {
+      host =>
+        val note = s"""<div class="note">Running ${App.altitude.importParallelismResolution.summary}</div>"""
+
+        val page = requests.get(pageUrl(host, repoId), cookies = testContext.cookies, check = false).text()
+        page should include(note)
+        "class=\"note\"".r.findAllIn(page).size shouldBe 1
+
+        val saved = save(host, repoId, ujson.Obj(Settings.IMPORT_PARALLELISM -> "3")).text()
+        val notice = saved.indexOf("Saved 3, running 0 until the server restarts")
+        notice should be > -1
+        saved.indexOf(note) should be > notice
+        saved.indexOf("""<div class="help">How many threads""") should be > saved.indexOf(note)
     }
   }
 

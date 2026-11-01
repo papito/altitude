@@ -329,8 +329,11 @@ object Settings:
       Operations,
       "Import parallelism",
       "How many threads do the import's work: metadata, face detection and recognition, previews and the database writes, " +
-        "for every repository at once. Each holds its own face detection and recognition networks, about 200 MB of native " +
-        "memory, so this bounds memory as well as CPU. 0 means half the cores, and never fewer than 2.",
+        "for every repository at once. Each thread takes up to about 512 MB of native memory at its worst, for its own face " +
+        "detector and the decodes of large images in flight, and the threads share two face recognition networks of about " +
+        "370 MB each, so this bounds memory as well as CPU. 0 means half the cores or as many threads as half the machine's " +
+        "memory affords, whichever is fewer, and never fewer than 2. import.parallelism.max in the server config caps this, " +
+        "whatever is set here.",
       Integer(0),
       kind = SettingKind.Restart
     )

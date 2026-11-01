@@ -1142,7 +1142,9 @@ save listener (`js/listeners/settings.js`); the template passes `Const.NavEntry.
 rows (`.setting` is `display: contents`, so the labels of a section line up); a field is a text input, or a checkbox with
 `value="true"` for a flag, named after its Setting (`field-<name>`), followed by its Reset button, its error, a restart
 notice ("Saved X, running Y until the server restarts") for a Restart setting whose saved value is not the running one,
-and its help text ending in `Default: …`. The Settings of the other engine are not rendered (PostgreSQL only:
+its note, plain information always shown for a Setting the controller gives one (`.note`, one today: "Running N threads:
+<reason>" on `import.parallelism`, from `Altitude.importParallelismResolution`), and its help text ending in `Default: …`.
+The Settings of the other engine are not rendered (PostgreSQL only:
 `face.recognition.hnsw_ef_search`, `db.postgres.read_statement_timeout`). Reset is `data-app-reset-setting`, handled by one
 delegated click listener in the page module that fills the input from the row's `data-setting-default`
 (`Const.attributes.settingDefault`) and clears its `error` class; nothing is written until Save. A failed validation comes
