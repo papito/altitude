@@ -57,9 +57,9 @@ class ImportPipelineService(app: Altitude):
 
   /**
    * One pipeline for both engines. A stage's work runs on the import dispatcher (`Altitude.importDispatcher`), whose
-   * `import.parallelism` threads bound the work of every import at once; the stream's actor only routes, so the stages of every
+   * `importParallelism` threads bound the work of every import at once; the stream's actor only routes, so the stages of every
    * repository work on different assets at the same time. The stages that only read and decode the file (metadata, face
-   * detection, image measurement, the preview) work on up to `import.parallelism` assets of a repository at once; every other
+   * detection, image measurement, the preview) work on up to `importParallelism` assets of a repository at once; every other
    * stage, and every one that writes to the database, on one, and all of them hand the assets on in upload order, so faces are
    * matched one asset at a time, in the order uploaded. Each stage's writes are a short transaction of its own, which SQLite's
    * single write connection runs one after another, and each stage commits before the next one reads the asset.

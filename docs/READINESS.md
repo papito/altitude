@@ -144,8 +144,8 @@ As built, each repository has one owner (`repository.owner_account_id` in [all.s
 - ✅ Types come from the content: Tika's `DefaultDetector` on the UUID-named staged file ([MetadataExtractionService] `detectAssetType`).
 - [ ] Every `image/*` and `video/*` subtype is accepted, so the decoder surface is wider than needed: JPEG 2000, HDR, PxM, and JBIG2 and PCX (`tika-parser-image-module` brings `jai-imageio-core` and `jbig2-imageio` into the ImageIO fallback), plus every FFmpeg demuxer. The test media type `"x-none"` is in the production allowlist ([LibraryService] `SUPPORTED_MEDIA_TYPES`). [MEDIUM]
   - Fix: allow named formats only, run FFmpeg with a format whitelist, and drop the JBIG2 and JAI plugins.
-- [ ] Pixel and decompression bombs. Dimensions are read from the header before decoding ([AssetService] `getDimensionsAndDuration`) but never limited. OpenCV's default limit is about 1 gigapixel, roughly 3–4 GB of native memory per decode, and each image is decoded twice (faces and preview) times `import.parallelism`. The ImageIO fallback, which decodes every GIF, is unbounded, and [AssetWithData] `bytes` reads the whole file. GIF frame count and video dimensions and duration are not limited either (video sampling is bounded to 120 frames). The stage guard catches only `NonFatal` ([PipelineUtils] `guard`), so an `OutOfMemoryError` probably leaves the stage's future incomplete and that repository's import hung (unconfirmed). [HIGH]
-  - Fix: maximum pixels and side length as Settings, checked in [ExtractMetadataFlow]; header-only probing already happens, so the cap is a few lines. The same limits for video dimensions, duration and GIF frames. Set `OPENCV_IO_MAX_IMAGE_PIXELS` to match, size-check the ImageIO fallback, and decode once instead of reading the file twice. Tests with a large-canvas PNG, a huge GIF canvas and a GIF with millions of frames.
+- [ ] Pixel and decompression bombs. Dimensions are read from the header before decoding ([AssetService] `getDimensionsAndDuration`) but never limited. OpenCV's default limit is about 1 gigapixel, roughly 3–4 GB of native memory per decode, and each image is decoded three times (faces, measurement and preview), with up to one of each per import thread at once. The ImageIO fallback, which decodes every GIF, is unbounded, and [AssetWithData] `bytes` reads the whole file. GIF frame count and video dimensions and duration are not limited either (video sampling is bounded to 120 frames). The stage guard catches only `NonFatal` ([PipelineUtils] `guard`), so an `OutOfMemoryError` probably leaves the stage's future incomplete and that repository's import hung (unconfirmed). [HIGH]
+  - Fix: maximum pixels and side length as Settings, checked in [ExtractMetadataFlow]; header-only probing already happens, so the cap is a few lines. The same limits for video dimensions, duration and GIF frames. Set `OPENCV_IO_MAX_IMAGE_PIXELS` to match, size-check the ImageIO fallback, and decode once instead of three times. Tests with a large-canvas PNG, a huge GIF canvas and a GIF with millions of frames.
 - ✅ No path traversal: staged files are named by UUID ([StagingService] `freshPath`), store paths come from server IDs, and non-UUID IDs are refused ([ContentViewController] `getContent`). File names never become paths. There is no archive or sidecar import.
 - [ ] File names have no length cap.
 - [ ] Decoders are not hardened. OpenCV and FFmpeg run in the server process through JNI with no timeout, so a crafted file can hang an import and a segfault kills the server. Video decoding is in software, with up to 120 seeks for faces plus up to 120 for the preview. FFmpeg opens files with every demuxer and protocol ([VideoService] `withGrabber`), not `protocol_whitelist=file`. For decoder versions, see [Dependencies](#operations-and-hygiene). [HIGH]
@@ -205,7 +205,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
   - Fix: paginate the People tab.
 - [ ] No index for the file name, size and area sorts, or for metadata filters by `(field_id, value)` ([all.sql]).
 - ✅ HTTP range requests work for seeking ([RangeStreaming], tested).
-- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test, import-throughput test or JVM memory guidance.
+- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on one import of 100 24-megapixel JPEGs, with the heap under 1 GB, and no repeatable test: budget the JVM heap plus `POOL_COST` (768 MB, the two shared face recognition nets) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf].
   - Fix: commit a seeding and benchmark harness.
 
 ### User management
@@ -460,6 +460,7 @@ Entries leave this list when their items close.
 [TransactionManager]: ../altitude/src/altitude/core/transactions/TransactionManager.scala
 [CaptureDateResolver]: ../altitude/src/altitude/core/util/CaptureDateResolver.scala
 [ImageUtil]: ../altitude/src/altitude/core/util/ImageUtil.scala
+[ImportParallelism]: ../altitude/src/altitude/core/util/ImportParallelism.scala
 [Sha256]: ../altitude/src/altitude/core/util/Sha256.scala
 [Util]: ../altitude/src/altitude/core/util/Util.scala
 [AssetControllerTests]: ../altitude/test/src/altitude/core/controller/AssetControllerTests.scala

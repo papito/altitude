@@ -447,12 +447,13 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 - ✅ Produce nonempty detected, display, aligned-color, and aligned-grayscale image buffers for a recognized face.
 - ✅ An imported Face's stored checksum is the SHA-256 in lowercase hex of the crop file the import wrote (computed in the test with the JDK's `MessageDigest`).
 - ✅ A face-relative blur lowers the embedding norm; a sharp portrait is enrolled, a blurred one is kept match-only, a heavily blurred one is detected but dropped below the quality floor.
+- ✅ Embeddings computed concurrently by more threads than the ArcFace pool has nets match the ones computed one at a time.
 - [ ] Assert zero detections for a no-face image, empty image, and image smaller than the configured minimum; define corrupt-byte behavior. [MEDIUM]
 - [ ] Verify minimum-size/confidence boundaries, downscaled bounding boxes/landmarks mapped back to the original image, and preservation of confidence scores during scaling. [MEDIUM]
 - [ ] Test clamping for negative/out-of-bounds/zero-size face boxes and confirm crops stay inside the image. [MEDIUM]
 - [ ] Verify landmark order and a known similarity transform, reject insufficient/degenerate landmarks, and assert aligned output is 112×112. [MEDIUM]
 - [ ] Assert each embedding has 512 finite values and unit L2 norm for a normal fixture; cover the zero-norm branch and distinguish aligned color from grayscale output. [MEDIUM]
-- [ ] Process images concurrently and verify the thread-local detector/network instances do not corrupt results. [MEDIUM]
+- [ ] Process images concurrently and verify the thread-local detectors do not corrupt results. [MEDIUM]
 - [ ] Exercise debug-output enablement and missing model/resource failures, with temporary output paths and native resources cleaned up. [EDGE]
 
 ## Face recognition and nearest-match selection

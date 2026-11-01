@@ -133,7 +133,7 @@ case class Settings(private val text: Map[String, String], private val defaults:
   /** Seconds */
   val pipelineShutdownTimeout: Int = number(PIPELINE_SHUTDOWN_TIMEOUT).toInt
 
-  /** 0 means half the cores and never fewer than 2 */
+  /** 0 means what the machine affords, see `util.ImportParallelism` */
   val importParallelism: Int = number(IMPORT_PARALLELISM).toInt
 
 object Settings:

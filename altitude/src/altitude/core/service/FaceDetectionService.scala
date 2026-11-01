@@ -215,7 +215,7 @@ class FaceDetectionService(app: Altitude):
   /**
    * ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings.
    *
-   * Two Net instances, shared by every thread that detects faces, chiefly the import dispatcher's `import.parallelism` threads.
+   * Two Net instances, shared by every thread that detects faces, chiefly the import dispatcher's `importParallelism` threads.
    * OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe, so a borrower has a net to itself. It is too
    * costly to give each thread one: about 370 MB resident with Winograd off, a convolution algorithm rather than a model change,
    * against about 780 MB with it on. Two are enough because embedding a face takes tens of milliseconds against the hundreds a
