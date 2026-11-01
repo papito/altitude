@@ -3,9 +3,13 @@ package altitude.core.integration
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
 import java.nio.file.Files
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import org.opencv.core.Mat
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+
+import scala.jdk.CollectionConverters.*
 
 import altitude.core.Altitude
 import altitude.core.util.ImageUtil.matFromBytes
@@ -197,9 +201,62 @@ import altitude.core.util.ImageUtil.matFromBytes
     testApp.service.faceDetection.extractFaces(bytes) shouldBe empty
   }
 
+  test("Embeddings computed concurrently match the ones computed one at a time") {
+
+    /**
+     * Setup:
+     *
+     * The aligned faces of `people/affleck.jpg` and `people/damon.jpg`, embedded one at a time for the expected vectors, then by
+     * 8 threads, more than the ArcFace pool has nets, 20 embeddings a thread, alternating the faces.
+     *
+     * Assertions:
+     *
+     * The two faces' vectors differ, and every concurrent embedding is its own face's vector, within float noise.
+     *
+     * Edge cases:
+     *
+     * A net's output shares its data with the net, so a copy of it made after the net is back in the pool would race the next
+     * borrower's forward pass and silently give a face a wrong vector. Such a race does not fire on every run, so one pass here
+     * does not prove its absence.
+     */
+    val faces = List("people/affleck.jpg", "people/damon.jpg").map {
+      path => alignedFace(matFromBytes(IntegrationTestUtil.getImportAsset(path).bytes))
+    }
+    val expected = faces.map(testApp.service.faceDetection.getArcFaceEmbedding(_).features)
+    maxDifference(expected.head, expected.last) should be > 0.01f
+
+    val threads = 8
+    val executor = Executors.newFixedThreadPool(threads)
+    val embedded =
+      try {
+        val tasks = (0 until threads).map {
+          thread =>
+            (() =>
+              (0 until 20).map {
+                i =>
+                  val face = (thread + i) % faces.size
+                  (face, testApp.service.faceDetection.getArcFaceEmbedding(faces(face)).features)
+              }): Callable[IndexedSeq[(Int, Array[Float])]]
+        }
+        executor.invokeAll(tasks.asJava).asScala.toList.flatMap(_.get())
+      } finally executor.shutdown()
+
+    embedded.size should be(threads * 20)
+    embedded.foreach {
+      case (face, features) => maxDifference(features, expected(face)) should be < 1e-5f
+    }
+  }
+
+  /** The first face YuNet finds in the image, aligned for ArcFace */
+  private def alignedFace(image: Mat): Mat =
+    val detection = testApp.service.faceDetection.detectFacesWithYunet(image).head
+    testApp.service.faceDetection.alignCropFaceFromDetection(image, detection)
+
   /** The norm of the raw ArcFace embedding of the first face YuNet finds in the image */
   private def embeddingNorm(image: Mat): Float =
-    val detection = testApp.service.faceDetection.detectFacesWithYunet(image).head
-    val aligned = testApp.service.faceDetection.alignCropFaceFromDetection(image, detection)
-    testApp.service.faceDetection.getArcFaceEmbedding(aligned).norm
+    testApp.service.faceDetection.getArcFaceEmbedding(alignedFace(image)).norm
+
+  /** The largest difference between two vectors over their components */
+  private def maxDifference(a: Array[Float], b: Array[Float]): Float =
+    a.zip(b).map((x, y) => Math.abs(x - y)).max
 }

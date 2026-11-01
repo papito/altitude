@@ -31,6 +31,7 @@ import altitude.core.models.Settings
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
+import altitude.core.util.NetPool
 import altitude.core.util.Sha256
 
 object FaceDetectionService:
@@ -214,19 +215,28 @@ class FaceDetectionService(app: Altitude):
   /**
    * ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings.
    *
-   * One Net instance per thread: OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe. ThreadLocal
-   * gives each thread that detects faces, chiefly the import dispatcher's `import.parallelism` threads, its own exclusive copy
-   * with zero contention, so that setting also bounds the native memory the networks take (the ArcFace model alone is 174 MB).
+   * Two Net instances, shared by every thread that detects faces, chiefly the import dispatcher's `import.parallelism` threads.
+   * OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe, so a borrower has a net to itself. It is too
+   * costly to give each thread one: about 370 MB resident with Winograd off, a convolution algorithm rather than a model change,
+   * against about 780 MB with it on. Two are enough because embedding a face takes tens of milliseconds against the hundreds a
+   * decode and a detection take. A borrow never nests another borrow, so the wait for a net cannot deadlock.
    */
-  private val arcFaceNetLocal: ThreadLocal[Net] =
-    ThreadLocal.withInitial(() => readNetFromONNX(ARCFACE_MODEL_PATH))
+  private val arcFaceNets: NetPool[Net] = new NetPool[Net](
+    2,
+    () => {
+      logger.debug("Loading an ArcFace net")
+      val net = readNetFromONNX(ARCFACE_MODEL_PATH)
+      net.enableWinograd(false)
+      net
+    })
 
   /**
    * YuNet face detector.
    *
-   * One FaceDetectorYN instance per thread for the same reason as arcFaceNetLocal: the native object carries mutable state (input
-   * size, score/NMS thresholds, detection scratch buffers) and must not be shared across threads. The score and NMS thresholds
-   * are Settings, set on the thread's detector before each detection (cheap setters), so a saved value is used by the next one.
+   * One FaceDetectorYN instance per thread: the native object carries mutable state (input size, score/NMS thresholds, detection
+   * scratch buffers) and must not be shared across threads, and at about 70 MB it is cheap enough to copy. The score and NMS
+   * thresholds are Settings, set on the thread's detector before each detection (cheap setters), so a saved value is used by the
+   * next one.
    */
   private val yuNetLocal: ThreadLocal[FaceDetectorYN] =
     ThreadLocal.withInitial(() => FaceDetectorYN.create(YUNET_MODEL_PATH, "", new Size()))
@@ -430,13 +440,17 @@ class FaceDetectionService(app: Altitude):
       false
     )
 
-    arcFaceNetLocal.get().setInput(blob)
-    val output = arcFaceNetLocal.get().forward()
-    blob.release()
-
     val embedding = new Array[Float](FaceDetectionService.EMBEDDING_DIMENSIONS)
-    output.get(0, 0, embedding)
-    output.release()
+    try
+      arcFaceNets.borrow {
+        net =>
+          net.setInput(blob)
+          val output = net.forward()
+          // Copied in the borrow: the output shares its data with the net, and the next borrower's forward pass overwrites it
+          output.get(0, 0, embedding)
+          output.release()
+      }
+    finally blob.release()
 
     // L2-normalize the embedding
     val norm = Math.sqrt(embedding.map(x => x.toDouble * x.toDouble).sum).toFloat
