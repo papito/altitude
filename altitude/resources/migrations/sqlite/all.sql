@@ -208,6 +208,9 @@ CREATE TABLE face (
   quality FLOAT NOT NULL,
   -- An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join one.
   is_enrolled BOOLEAN NOT NULL,
+  -- How much fine detail the box holds at the measurement scale (ImageMeasurement), comparable only between Faces of one Person
+  -- at a similar size; NULL for a Face in a Video, a box too small to say, or an image that could not be measured
+  sharpness REAL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (person_id) REFERENCES person (id) ON DELETE CASCADE,

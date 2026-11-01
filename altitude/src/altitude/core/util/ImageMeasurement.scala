@@ -16,11 +16,15 @@ import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 
 /**
- * The Image quality and the perceptual hash of a still image: pure functions over a decoded `Mat` (gray, BGR or BGRA, as
- * `ImageUtil` decodes) and its faces. The image is first scaled to fit [[MEASUREMENT_BOX_SIZE]], so neither the sharpness nor the
- * hash depends on the resolution; EXIF orientation is not applied, since the frames of one burst share it.
+ * The Image quality and the perceptual hash of a still image, and the sharpness of its faces: pure functions over a decoded `Mat`
+ * (gray, BGR or BGRA, as `ImageUtil` decodes) and its faces. The image is first scaled to fit [[MEASUREMENT_BOX_SIZE]], so
+ * neither the sharpness nor the hash depends on the resolution. `ImageUtil.matFromBytes` applies the EXIF orientation as it
+ * decodes, so the image is upright and a face's box is in upright pixels.
  */
 object ImageMeasurement:
+
+  /** What measuring an image gives: its Image quality, its hash, and its faces in the order given, each with its sharpness */
+  case class Measurement(quality: ImageQuality, hash: PerceptualHash, faces: List[Face])
 
   /**
    * The box the image is fitted into before it is measured, never enlarged. It is the default face detection box, but a constant
@@ -39,9 +43,9 @@ object ImageMeasurement:
   val SHARPNESS_HALF_POINT: Double = 30.0
 
   /**
-   * The least area, in pixels of the fitted image, the face boxes must cover for the sharpness to be measured inside them: a 50 x
-   * 50 box, face detection's smallest face at the box scale. Under it, one tiny face would decide the whole frame's sharpness, so
-   * the whole frame is measured instead.
+   * The least area, in pixels of the fitted image, a box must cover for its sharpness to mean anything: a 50 x 50 box, face
+   * detection's smallest face at the box scale. Under it a Face has no sharpness, and when the union of an image's face boxes is
+   * under it the score reads the whole frame's, so one tiny face does not decide the score.
    */
   val MIN_FACE_AREA_PX: Int = 2500
 
@@ -54,21 +58,28 @@ object ImageMeasurement:
   val CRUSHED_WEIGHT: Double = 2.0
   val TARGET_LUMINANCE: Double = 0.45
 
-  /** The metrics, the score and the hash of an image; the faces' boxes are in the image's own pixels */
-  def measure(image: Mat, faces: Seq[Face]): (ImageQuality, PerceptualHash) =
+  /** The metrics, the score, the hash and each face's sharpness; the faces' boxes are in the image's own pixels */
+  def measure(image: Mat, faces: Seq[Face]): Measurement =
     val scale = fitScale(image)
     val scaled = fitToBox(image, scale)
     val gray = new Mat()
+    val laplacian = new Mat()
     try
       toGray(scaled, gray)
-      val boxes = faces.map(face => scaleBox(face, scale, gray)).filter(box => box.width > 0 && box.height > 0)
-      val quality = qualityOf(gray, boxes)
-      (quality, hash(scaled))
+      Imgproc.Laplacian(gray, laplacian, CvType.CV_64F)
+      val boxes = faces.map(face => scaleBox(face, scale, gray))
+      val measuredFaces = faces.zip(boxes).map((face, box) => face.copy(sharpness = sharpnessInBox(laplacian, box)))
+      Measurement(qualityOf(gray, laplacian, boxes), hash(scaled), measuredFaces.toList)
     finally
       gray.release()
+      laplacian.release()
       if scaled ne image then scaled.release()
 
-  /** The 0 to 100 score of the metrics: the saturating sharpness term times the exposure term */
+  /**
+   * The 0 to 100 score of the metrics: the saturating sharpness term times the exposure term. `sharpness` is the one
+   * [[qualityOf]] reads for the score, of the faces when they are large enough, so two scores do not compare when only one
+   * image's faces are.
+   */
   def score(sharpness: Double, luminance: Double, clippedHighlights: Double, crushedShadows: Double): Int =
     val sharpnessTerm = sharpness / (sharpness + SHARPNESS_HALF_POINT)
     val exposurePenalty =
@@ -118,33 +129,43 @@ object ImageMeasurement:
     val y2 = Math.min(image.rows(), Math.ceil((face.y1 + face.height) * scale).toInt)
     new Rect(x1, y1, Math.max(0, x2 - x1), Math.max(0, y2 - y1))
 
-  private def qualityOf(gray: Mat, faceBoxes: Seq[Rect]): ImageQuality =
-    val sharpness = sharpnessOf(gray, faceBoxes)
+  private def qualityOf(gray: Mat, laplacian: Mat, faceBoxes: Seq[Rect]): ImageQuality =
+    val frameSharpness = varianceOf(laplacian)
     val luminance = Core.mean(gray).`val`(0) / 255.0
     val clipped = fractionAbove(gray, CLIPPED_LEVEL - 1)
     val crushed = fractionAtMost(gray, CRUSHED_LEVEL)
-    ImageQuality(sharpness, luminance, clipped, crushed, score(sharpness, luminance, clipped, crushed))
+    val subjectSharpness = sharpnessInFaces(laplacian, faceBoxes).getOrElse(frameSharpness)
+    ImageQuality(frameSharpness, luminance, clipped, crushed, score(subjectSharpness, luminance, clipped, crushed))
 
   /**
-   * The variance of the Laplacian of the gray image: over the pixels inside the face boxes when they cover at least
-   * [[MIN_FACE_AREA_PX]], so a sharp portrait on a flat sky is not dragged down, over the whole frame otherwise
+   * The variance of the Laplacian over the pixels inside the union of the face boxes when they cover at least
+   * [[MIN_FACE_AREA_PX]]: what the score reads, so a sharp portrait on a flat sky is not dragged down. Not stored: its region
+   * varies from image to image, so two values of it do not compare.
    */
-  private def sharpnessOf(gray: Mat, faceBoxes: Seq[Rect]): Double =
-    val laplacian = new Mat()
+  private def sharpnessInFaces(laplacian: Mat, faceBoxes: Seq[Rect]): Option[Double] =
     val mask = new Mat()
+    try
+      fillMask(mask, laplacian, faceBoxes)
+      Option.when(Core.countNonZero(mask) >= MIN_FACE_AREA_PX)(varianceOf(laplacian, mask))
+    finally mask.release()
+
+  /** The variance of the Laplacian inside one box, when it covers at least [[MIN_FACE_AREA_PX]] */
+  private def sharpnessInBox(laplacian: Mat, box: Rect): Option[Double] =
+    Option.when(box.area() >= MIN_FACE_AREA_PX) {
+      val region = laplacian.submat(box)
+      try varianceOf(region)
+      finally region.release()
+    }
+
+  /** The variance of an image's values, over the pixels a mask sets; an empty mask is every pixel */
+  private def varianceOf(values: Mat, mask: Mat = new Mat()): Double =
     val mean = new MatOfDouble()
     val stdDev = new MatOfDouble()
     try
-      if faceBoxes.nonEmpty then fillMask(mask, gray, faceBoxes)
-      // An empty mask means the whole frame; a mask with too little inside is dropped for the same reason
-      if !mask.empty() && Core.countNonZero(mask) < MIN_FACE_AREA_PX then mask.release()
-      Imgproc.Laplacian(gray, laplacian, CvType.CV_64F)
-      Core.meanStdDev(laplacian, mean, stdDev, mask)
+      Core.meanStdDev(values, mean, stdDev, mask)
       val sd = stdDev.toArray()(0)
       sd * sd
     finally
-      laplacian.release()
-      mask.release()
       mean.release()
       stdDev.release()
 
@@ -152,7 +173,9 @@ object ImageMeasurement:
   private def fillMask(mask: Mat, image: Mat, boxes: Seq[Rect]): Unit =
     mask.create(image.size(), CvType.CV_8UC1)
     mask.setTo(new Scalar(0))
-    boxes.foreach(box => Imgproc.rectangle(mask, box, new Scalar(255), Imgproc.FILLED))
+    boxes
+      .filter(box => box.width > 0 && box.height > 0)
+      .foreach(box => Imgproc.rectangle(mask, box, new Scalar(255), Imgproc.FILLED))
 
   private def fractionAbove(gray: Mat, level: Int): Double =
     fractionWhere(gray, level, Imgproc.THRESH_BINARY)

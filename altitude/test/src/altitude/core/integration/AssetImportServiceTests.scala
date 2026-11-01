@@ -20,6 +20,8 @@ import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.MimedPreviewData
+import altitude.core.util.ImageMeasurement
+import altitude.core.util.ImageUtil
 
 @DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
@@ -344,6 +346,37 @@ import altitude.core.models.MimedPreviewData
     storedVideo.perceptualHash shouldBe None
   }
 
+  test("A still image's Faces carry their sharpness and its own sharpness is the whole frame's") {
+
+    /**
+     * Setup:
+     *
+     * A portrait imported through the pipeline, its stored file decoded and measured again with no faces and with its stored
+     * Faces, and a Video imported the same way.
+     *
+     * Assertions:
+     *
+     * The measurement ran before recognition stored the Faces, so each Face of the photo has its sharpness. The asset's sharpness
+     * is the one measured with no faces, while its score is the one measured with them. The Faces of the Video have none.
+     */
+    val photo = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/bullock.jpg"))
+    val stored: Asset = testApp.service.asset.getById(photo.persistedId)
+    val faces = testApp.service.person.getAssetFaces(photo.persistedId)
+    faces should not be empty
+    all(faces.map(_.sharpness)) should not be None
+
+    val decoded = ImageUtil.matFromBytes(Files.readAllBytes(testApp.service.fileStore.assetFile(photo.persistedId)))
+    try
+      stored.imageQuality.value.sharpness shouldBe ImageMeasurement.measure(decoded, Nil).quality.sharpness
+      stored.imageQuality.value.score shouldBe ImageMeasurement.measure(decoded, faces).quality.score
+    finally decoded.release()
+
+    val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.oneFace.toFile))
+    val videoFaces = testApp.service.person.getAssetFaces(video.persistedId)
+    videoFaces should not be empty
+    all(videoFaces.map(_.sharpness)) shouldBe None
+  }
+
   test("An image the measurement cannot decode imports unmeasured") {
 
     /**
@@ -362,8 +395,8 @@ import altitude.core.models.MimedPreviewData
       testApp.service.staging.stage("not an image".getBytes))
 
     val measured = testApp.service.asset.measureImage(undecodable)
-    measured shouldBe undecodable.asset
-    measured.imageQuality shouldBe None
-    measured.perceptualHash shouldBe None
+    measured shouldBe undecodable
+    measured.asset.imageQuality shouldBe None
+    measured.asset.perceptualHash shouldBe None
   }
 }

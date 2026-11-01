@@ -221,7 +221,12 @@ class TestContext(val testApp: Altitude) {
   }
 
   /** A Face of the person in the asset with the given embedding, so recognition can be exercised on known vectors */
-  def addTestFace(person: Person, asset: Asset, features: Array[Float], isEnrolled: Boolean = true): Face =
+  def addTestFace(
+      person: Person,
+      asset: Asset,
+      features: Array[Float],
+      isEnrolled: Boolean = true,
+      sharpness: Option[Double] = None): Face =
     testApp.service.person.addFace(
       Face(
         x1 = 1,
@@ -232,7 +237,9 @@ class TestContext(val testApp: Altitude) {
         checksum = TestContext.randomChecksum,
         features = features,
         quality = 20.0,
-        isEnrolled = isEnrolled),
+        isEnrolled = isEnrolled,
+        sharpness = sharpness
+      ),
       asset,
       person
     )

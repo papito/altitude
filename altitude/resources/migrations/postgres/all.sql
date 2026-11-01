@@ -204,7 +204,10 @@ CREATE TABLE face (
   -- L2 norm of the raw ArcFace embedding: higher is a more recognizable face. See face.quality.* in reference.conf.
   quality FLOAT NOT NULL,
   -- An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join one.
-  is_enrolled BOOLEAN NOT NULL
+  is_enrolled BOOLEAN NOT NULL,
+  -- How much fine detail the box holds at the measurement scale (ImageMeasurement), comparable only between Faces of one Person
+  -- at a similar size; NULL for a Face in a Video, a box too small to say, or an image that could not be measured
+  sharpness DOUBLE PRECISION
 ) INHERITS (_core);
 
 -- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).

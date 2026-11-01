@@ -26,8 +26,8 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
         INSERT INTO face (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Face.X1}, ${FieldConst.Face.Y1}, ${FieldConst.Face.WIDTH}, ${FieldConst.Face.HEIGHT},
                           ${FieldConst.Face.ASSET_ID}, ${FieldConst.Face.PERSON_ID}, ${FieldConst.Face.DETECTION_SCORE},
                           ${FieldConst.Face.FEATURES}, ${FieldConst.Face.CHECKSUM}, ${FieldConst.Face.FRAME_TIME_MS},
-                          ${FieldConst.Face.QUALITY}, ${FieldConst.Face.IS_ENROLLED})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, vector_as_f32(?), ?, ?, ?, ?)
+                          ${FieldConst.Face.QUALITY}, ${FieldConst.Face.IS_ENROLLED}, ${FieldConst.Face.SHARPNESS})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, vector_as_f32(?), ?, ?, ?, ?, ?)
     """
 
     val conn = RequestContext.getConn
@@ -49,6 +49,9 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       case None => preparedStatement.setNull(12, Types.BIGINT)
     preparedStatement.setDouble(13, face.quality)
     preparedStatement.setBoolean(14, face.isEnrolled)
+    face.sharpness match
+      case Some(sharpness) => preparedStatement.setDouble(15, sharpness)
+      case None => preparedStatement.setNull(15, Types.DOUBLE)
 
     logger.trace(s"Inserting face [$id] for person [${person.persistedId}] in asset [${asset.persistedId}]")
     preparedStatement.execute()

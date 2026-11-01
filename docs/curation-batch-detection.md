@@ -6,8 +6,8 @@ automatically, to measure image quality, and to grade a batch on its faces. Writ
 that day.
 
 **Implemented** (see **Sequences and Image quality** in [altitude/AGENTS.md](../altitude/AGENTS.md)): every still image
-gets an Image quality at import (`ImageMeasurement`: sharpness over the face boxes or the frame, luminance, clipped
-highlights, crushed shadows, and a 0 to 100 score), a pHash (`PerceptualHash`), and a Sequence when the import finds it
+gets an Image quality at import (`ImageMeasurement`: sharpness over the whole frame, luminance, clipped highlights,
+crushed shadows, and a 0 to 100 score over the face boxes or the frame), a sharpness per Face, a pHash (`PerceptualHash`), and a Sequence when the import finds it
 shot in one burst (`SequenceService.assign`: capture time to the subsecond, same camera and size, hashes within
 `sequence.max_hash_distance`, within `sequence.max_gap_ms`; the two Triage Settings). **Not implemented**: the Curate
 view itself, session grouping by a global image embedding (section 1's later layers), learned quality models (BRISQUE,

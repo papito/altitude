@@ -28,7 +28,10 @@ case class Face(
     // An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join a Person
     isEnrolled: Boolean,
     // The Frame time the crop and box were taken from, for a Face in a Video; None for a Face in an image
-    frameTimeMs: Option[Long] = None)
+    frameTimeMs: Option[Long] = None,
+    // How much fine detail the Face's box holds at the measurement scale (ImageMeasurement); comparable only between Faces of
+    // one Person at a similar size. None for a Face in a Video, a box too small to say, or an image that could not be measured
+    sharpness: Option[Double] = None)
   extends BaseModel:
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

@@ -191,3 +191,9 @@ _Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
 Which details the grid shows under each asset, chosen per browser tab in the
 ⚙ View popover. They are not Settings.
 _Avoid_: Display options, Grid options.
+
+**Face sharpness**:
+How much fine detail a Face's box holds at a fixed scale. It falls as a face fills
+more of the frame, so it compares only between Faces of one Person at a similar
+size.
+_Avoid_: Face quality (how recognizable a face is).

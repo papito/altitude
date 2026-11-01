@@ -13,6 +13,7 @@ import altitude.core.ImageException
 import altitude.core.dao.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
+import altitude.core.models.DetectedFaces
 import altitude.core.models.MimedPreviewData
 import altitude.core.util.ImageMeasurement
 import altitude.core.util.ImageUtil
@@ -100,30 +101,34 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     }
 
   /**
-   * The asset with its Image quality and perceptual hash, measured over the staged file and the faces found in it
-   * (`ImageMeasurement`). Only a still image is measured: a Video, an animated image (one with a duration) and any other type
-   * come back as they are. The metrics are derived data and NULL is a state every reader handles, so a measurement that fails (a
-   * file OpenCV decodes for detection but not here, an image of a channel count it does not take) is logged at WARN and leaves
-   * the asset unmeasured rather than dropping the import. Touches no database.
+   * The asset with its Image quality and perceptual hash, and its detected faces each with its sharpness, measured over the
+   * staged file (`ImageMeasurement`). Only a still image is measured: a Video, an animated image (one with a duration) and any
+   * other type come back as they are. The metrics are derived data and NULL is a state every reader handles, so a measurement
+   * that fails (a file OpenCV decodes for detection but not here, an image of a channel count it does not take) is logged at WARN
+   * and leaves the asset and its faces unmeasured rather than dropping the import. Touches no database.
    */
-  def measureImage(dataAsset: AssetWithData): Asset =
+  def measureImage(dataAsset: AssetWithData): AssetWithData =
     val asset = dataAsset.asset
     if asset.assetType.mediaType != "image" || asset.durationMs.isDefined then
       logger.debug(s"Not measuring $asset")
-      return asset
+      return dataAsset
 
-    val faces = dataAsset.detectedFaces.toList.flatMap(_.faces).map(_._1)
+    val detected = dataAsset.detectedFaces.toList.flatMap(_.faces)
     try
       val image = ImageUtil.matFromBytes(dataAsset.bytes)
-      val (quality, hash) =
-        try ImageMeasurement.measure(image, faces)
+      val measurement =
+        try ImageMeasurement.measure(image, detected.map(_._1))
         finally image.release()
-      logger.debug(s"Measured $asset: score ${quality.score}, sharpness ${quality.sharpness}, hash $hash")
-      asset.copy(imageQuality = Some(quality), perceptualHash = Some(hash))
+      val quality = measurement.quality
+      logger.debug(s"Measured $asset: score ${quality.score}, sharpness ${quality.sharpness}, hash ${measurement.hash}")
+      dataAsset.copy(
+        asset = asset.copy(imageQuality = Some(quality), perceptualHash = Some(measurement.hash)),
+        detectedFaces = dataAsset.detectedFaces.map(_ => DetectedFaces(measurement.faces.zip(detected.map(_._2))))
+      )
     catch
       case NonFatal(e) =>
         logger.warn(s"Could not measure ${asset.fileName}, importing it unmeasured", e)
-        asset
+        dataAsset
 
   private def genPreviewData(dataAsset: AssetWithData): Array[Byte] =
     dataAsset.asset.assetType.mediaType match

@@ -98,6 +98,28 @@ import altitude.core.service.FaceRecognitionService
       .persistedId shouldBe enrolled.persistedId
   }
 
+  test("A Face's sharpness is stored, and a Face without one reads back without one") {
+
+    /**
+     * Setup:
+     *
+     * Two people's Faces on one asset, one with a sharpness and one without.
+     *
+     * Assertions:
+     *
+     * Each reads back as it was stored, through the DAO mapping both engines share and each engine's own insert.
+     */
+    val asset = testContext.persistAsset()
+    val sharp = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(sharp, asset, unitVector(1), sharpness = Some(123.5))
+    val unmeasured = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(unmeasured, asset, unitVector(2))
+
+    val faces = testApp.service.person.getAssetFaces(asset.persistedId).map(face => face.personId.value -> face.sharpness).toMap
+    faces(sharp.persistedId) shouldBe Some(123.5)
+    faces(unmeasured.persistedId) shouldBe None
+  }
+
   test("A Face of another repository is not a match candidate") {
 
     /**

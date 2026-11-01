@@ -12,6 +12,7 @@ import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import org.scalatest.DoNotDiscover
+import org.scalatest.OptionValues.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
@@ -62,7 +63,31 @@ import altitude.core.util.ImageMeasurement
       isEnrolled = true)
 
   private def measure(image: Mat, boxes: Seq[Rect] = Nil): (ImageQuality, PerceptualHash) =
-    ImageMeasurement.measure(image, boxes.map(faceAt))
+    val measurement = ImageMeasurement.measure(image, boxes.map(faceAt))
+    (measurement.quality, measurement.hash)
+
+  /** The sharpness measured for each box, in the order given */
+  private def faceSharpness(image: Mat, boxes: Seq[Rect]): List[Option[Double]] =
+    ImageMeasurement.measure(image, boxes.map(faceAt)).faces.map(_.sharpness)
+
+  /**
+   * Runs `f` over `people/affleck.jpg` blurred everywhere except a rectangle in the middle, which keeps the original pixels, with
+   * that rectangle, a box over a blurred corner, and a 30 x 30 box inside the sharp rectangle, under the least face area that
+   * counts
+   */
+  private def withPartlySharpPhoto[A](f: (Mat, Rect, Rect, Rect) => A): A =
+    val image = fixture("people/affleck.jpg")
+    val composite = blurred(image, 3.0)
+    val sharpRect = new Rect(image.cols() / 4, image.rows() / 4, image.cols() / 2, image.rows() / 2)
+    val sharpSource = image.submat(sharpRect)
+    val sharpTarget = composite.submat(sharpRect)
+    sharpSource.copyTo(sharpTarget)
+    sharpSource.release()
+    sharpTarget.release()
+    val blurredCorner = new Rect(0, 0, image.cols() / 5, image.rows() / 5)
+    val tiny = new Rect(image.cols() / 2, image.rows() / 2, 30, 30)
+    try f(composite, sharpRect, blurredCorner, tiny)
+    finally List(image, composite).foreach(_.release())
 
   private def quality(image: Mat, boxes: Seq[Rect] = Nil): ImageQuality = measure(image, boxes)._1
 
@@ -186,44 +211,93 @@ import altitude.core.util.ImageMeasurement
     List(image, blown, crushed).foreach(_.release())
   }
 
-  test("With faces, the sharpness is measured inside their boxes, unless they are too small to count") {
+  test("An image's sharpness is the whole frame's, whatever faces it has") {
 
     /**
      * Setup:
      *
-     * `people/affleck.jpg` (1280 x 1786, fitted to the box already) blurred everywhere except a rectangle in the middle, which
-     * keeps the original pixels; measured with no boxes, with that rectangle as the one face box, with a box over a blurred
-     * corner, and with a 30 x 30 box inside the sharp rectangle, under the least face area that counts.
+     * A photo sharp only in its middle (`withPartlySharpPhoto`), measured with no faces, with a face over the sharp rectangle,
+     * with one over a blurred corner, and with one too small to count.
      *
      * Assertions:
      *
-     * The box over the sharp rectangle measures sharper than the whole frame, which measures sharper than the box over the
-     * blurred corner, so the boxes decide which pixels count. The tiny box measures exactly as the whole frame: too little area
-     * to stand for the image. The exposure metrics are the whole frame's whichever box is given.
+     * All four have one sharpness, so two images can be compared on it whichever faces were detected in each. The exposure
+     * metrics are the whole frame's too.
+     */
+    withPartlySharpPhoto {
+      (photo, sharpRect, blurredCorner, tiny) =>
+        val whole = quality(photo)
+        List(sharpRect, blurredCorner, tiny).map(box => quality(photo, Seq(box))).foreach {
+          withFace =>
+            withFace.sharpness shouldBe whole.sharpness
+            withFace.luminance shouldBe whole.luminance
+            withFace.clippedHighlights shouldBe whole.clippedHighlights
+        }
+    }
+  }
+
+  test("The faces decide the score, unless they are too small to count") {
+
+    /**
+     * Setup:
+     *
+     * The same photo, scored with no faces, with a face over the sharp rectangle, with one over a blurred corner, and with one
+     * too small to count.
+     *
+     * Assertions:
+     *
+     * The face over the sharp rectangle scores above the whole frame, which scores above the face over the blurred corner, so a
+     * sharp portrait on a flat background is not dragged down. The tiny face scores exactly as the whole frame.
+     */
+    withPartlySharpPhoto {
+      (photo, sharpRect, blurredCorner, tiny) =>
+        val whole = quality(photo)
+        quality(photo, Seq(sharpRect)).score should be > whole.score
+        whole.score should be > quality(photo, Seq(blurredCorner)).score
+        quality(photo, Seq(tiny)).score shouldBe whole.score
+    }
+  }
+
+  test("Each face has its own sharpness, unless it is too small to count") {
+
+    /**
+     * Setup:
+     *
+     * The same photo, measured with a sharp face, a blurred face and a face too small to count, in that order, then in the
+     * reverse order, and with no faces.
+     *
+     * Assertions:
+     *
+     * The sharp face measures above the blurred one, so a soft face in a group shot is not averaged away. The tiny face has none.
+     * The values follow the faces' order, and no faces give none.
+     */
+    withPartlySharpPhoto {
+      (photo, sharpRect, blurredCorner, tiny) =>
+        val measured = faceSharpness(photo, Seq(sharpRect, blurredCorner, tiny))
+        measured(0).value should be > measured(1).value
+        measured(2) shouldBe None
+        faceSharpness(photo, Seq(tiny, blurredCorner, sharpRect)) shouldBe measured.reverse
+        faceSharpness(photo, Nil) shouldBe Nil
+    }
+  }
+
+  test("A face's box is clamped to the image") {
+
+    /**
+     * Setup:
+     *
+     * A photo, measured with a box reaching past its bottom right corner and with the part of that box inside the image.
+     *
+     * Assertions:
+     *
+     * Both measure the same, and neither throws.
      */
     val image = fixture("people/affleck.jpg")
-    val composite = blurred(image, 3.0)
-    val sharpRect = new Rect(image.cols() / 4, image.rows() / 4, image.cols() / 2, image.rows() / 2)
-    val sharpSource = image.submat(sharpRect)
-    val sharpTarget = composite.submat(sharpRect)
-    sharpSource.copyTo(sharpTarget)
-    sharpSource.release()
-    sharpTarget.release()
-    val blurredCorner = new Rect(0, 0, image.cols() / 5, image.rows() / 5)
-    val tiny = new Rect(image.cols() / 2, image.rows() / 2, 30, 30)
-
-    val whole = quality(composite)
-    val inFace = quality(composite, Seq(sharpRect))
-    val inCorner = quality(composite, Seq(blurredCorner))
-    val inTiny = quality(composite, Seq(tiny))
-
-    inFace.sharpness should be > whole.sharpness
-    whole.sharpness should be > inCorner.sharpness
-    inTiny.sharpness shouldBe whole.sharpness
-    inFace.luminance shouldBe whole.luminance
-    inCorner.clippedHighlights shouldBe whole.clippedHighlights
+    val inside = new Rect(image.cols() - 100, image.rows() - 100, 100, 100)
+    val past = new Rect(image.cols() - 100, image.rows() - 100, 200, 200)
+    faceSharpness(image, Seq(past)) shouldBe faceSharpness(image, Seq(inside))
+    faceSharpness(image, Seq(inside)).head should not be None
     image.release()
-    composite.release()
   }
 
   test("The score follows the formula over the metrics") {

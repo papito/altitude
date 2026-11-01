@@ -36,8 +36,8 @@ object ImageQuality:
  * derived from them. It is about the whole image, where a Face's quality is about one face.
  *
  * @param sharpness
- *   variance of the Laplacian of the grayscale image fitted to the measurement box, over the face boxes when the image has faces
- *   covering at least `ImageMeasurement.MIN_FACE_AREA_PX` of it, else the whole frame
+ *   variance of the Laplacian of the grayscale image fitted to the measurement box, always over the whole frame, so two images
+ *   compare on it whichever faces were detected in each
  * @param luminance
  *   mean gray level, 0 to 1
  * @param clippedHighlights
@@ -45,6 +45,7 @@ object ImageQuality:
  * @param crushedShadows
  *   fraction of pixels crushed to black
  * @param score
- *   0 to 100, from the sharpness and the exposure
+ *   0 to 100, from the exposure and the sharpness of the face boxes when they cover at least `ImageMeasurement.MIN_FACE_AREA_PX`,
+ *   else of the whole frame, which is not stored; measured once, so a change to its formula means measuring again
  */
 case class ImageQuality(sharpness: Double, luminance: Double, clippedHighlights: Double, crushedShadows: Double, score: Int)

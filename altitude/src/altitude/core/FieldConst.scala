@@ -46,6 +46,7 @@ object FieldConst:
     val QUALITY = "quality"
     val IS_ENROLLED = "is_enrolled"
     val FRAME_TIME_MS = "frame_time_ms"
+    val SHARPNESS = "sharpness"
 
   object Person:
     val NAME = "name"

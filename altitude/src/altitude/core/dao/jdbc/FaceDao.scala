@@ -32,7 +32,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       checksum = row.checksum,
       quality = row.quality,
       isEnrolled = row.isEnrolled,
-      frameTimeMs = row.frameTimeMs
+      frameTimeMs = row.frameTimeMs,
+      sharpness = row.sharpness
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Face =
@@ -49,7 +50,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[String],
       quality = rec(FieldConst.Face.QUALITY).asInstanceOf[Double],
       isEnrolled = getBooleanField(rec(FieldConst.Face.IS_ENROLLED)),
-      frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS))
+      frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS)),
+      sharpness = getDoubleField(rec(FieldConst.Face.SHARPNESS))
     )
 
   // Reads `face_02` backwards and stops at the limit: no count of the person's faces and no sort of them
