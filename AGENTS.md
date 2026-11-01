@@ -10,4 +10,4 @@ This file only routes. The rules and the architecture live in the guides below, 
 | Security, data safety, operational readiness | also [docs/READINESS.md](docs/READINESS.md): what live use needs and where the code stands on each item |
 | Naming a domain concept in code, UI text or docs | [CONTEXT.md](CONTEXT.md): the glossary |
 
-Reference, when relevant: [docs/test-coverage.md](docs/test-coverage.md) (service-layer coverage and gaps), [altitude/static/js/lib/README.md](altitude/static/js/lib/README.md) (vendored libraries, versions, local patches), [docs/reference/alpine-components/](docs/reference/alpine-components/README.md) (notes on Alpine UI components).
+Reference, when relevant: [docs/test-coverage.md](docs/test-coverage.md) (service-layer coverage and gaps), [docs/curation-batch-detection.md](docs/curation-batch-detection.md) (research notes: automatic batch detection, image quality metrics, face grading for a Curate view), [altitude/static/js/lib/README.md](altitude/static/js/lib/README.md) (vendored libraries, versions, local patches), [docs/reference/alpine-components/](docs/reference/alpine-components/README.md) (notes on Alpine UI components).

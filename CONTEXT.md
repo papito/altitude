@@ -183,14 +183,41 @@ it has both a saved value and a running value.
 _Avoid_: Static setting, Boot setting.
 
 **Dock side**:
-Where the explorer sits against the results: left, right, top or bottom. The
-explorer is docked to a side; the results take the rest.
+Where a docked panel sits: left, right, top or bottom. The explorer is docked
+to a side of the results, and the Detail panel to a side of Asset detail's
+media; each has its own Dock side.
 _Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
+
+**Asset detail**:
+The dialog that shows one asset at full size, stepping to the previous or next
+asset of the results.
+_Avoid_: Lightbox, Image detail, Viewer.
+
+**Detail panel**:
+The docked panel of Asset detail, holding the asset's People, its Details and
+its Metadata as extracted from the file.
+_Avoid_: Metadata panel, Info panel, Sidebar.
+
+**Face highlight**:
+A Face's box drawn on the media, with its Person's name in a badge under it.
+_Avoid_: Bounding box, Face box, Tag in user-facing text.
 
 **View settings**:
 Which details the grid shows under each asset, chosen per browser tab in the
 ⚙ View popover. They are not Settings.
 _Avoid_: Display options, Grid options.
+
+**Sequence**:
+Still images in triage that the import found shot as one burst: a few seconds
+apart on the same camera, looking alike. An image is in at most one Sequence,
+and a Sequence ends when its last image leaves triage or is purged.
+_Avoid_: Batch (a user's selection), Burst, Stack, Group, Series.
+
+**Image quality**:
+How technically good a still image is, from its sharpness and exposure, on a
+scale of 0 to 100. It is about the whole image, where Face quality is about one
+face.
+_Avoid_: Score, Rating, Quality alone where it could mean Face quality.
 
 **Face sharpness**:
 How much fine detail a Face's box holds at a fixed scale. It falls as a face fills
