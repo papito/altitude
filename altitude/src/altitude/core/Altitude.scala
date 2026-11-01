@@ -280,7 +280,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   /**
    * How many threads do the import's work, and why: the `import.parallelism` Setting as it was saved when the server started (a
    * Restart setting), or, at 0, what the machine affords, within the cap in the server config (see `ImportParallelism`). Each of
-   * them holds its own YuNet face detector, and they share the pool's two ArcFace recognition nets.
+   * them holds its own YuNet face detector, and they share one ArcFace recognition net.
    */
   final val importParallelismResolution: ImportParallelism.Resolution = ImportParallelism.resolve(
     settings.atStartup.importParallelism,

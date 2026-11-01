@@ -31,6 +31,7 @@ import altitude.core.models.Settings
 import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
+import altitude.core.util.ImportParallelism
 import altitude.core.util.NetPool
 import altitude.core.util.Sha256
 
@@ -215,14 +216,19 @@ class FaceDetectionService(app: Altitude):
   /**
    * ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings.
    *
-   * Two Net instances, shared by every thread that detects faces, chiefly the import dispatcher's `importParallelism` threads.
-   * OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe, so a borrower has a net to itself. It is too
-   * costly to give each thread one: about 370 MB resident with Winograd off, a convolution algorithm rather than a model change,
-   * against about 780 MB with it on. Two are enough because embedding a face takes tens of milliseconds against the hundreds a
-   * decode and a detection take. A borrow never nests another borrow, so the wait for a net cannot deadlock.
+   * One Net instance (`ImportParallelism.ARCFACE_NETS`), shared by every thread that detects faces, chiefly the import
+   * dispatcher's `importParallelism` threads. OpenCV's Net holds mutable internal forward-pass buffers and is not thread-safe, so
+   * a borrower has it to itself. It is too costly to give each thread one: about 370 MB resident with Winograd off, a convolution
+   * algorithm rather than a model change, against about 780 MB with it on.
+   *
+   * Measured on generated 24-megapixel JPEGs with 12 threads on 24 cores: a forward pass takes 40 to 52 ms, and one net tops out
+   * at about 24 embeddings a second, twelve at about 38. Each face borrows again, so with every thread on a 20-face photo a
+   * borrow waits about 400 ms and such a photo holds its thread and its decoded image for about 9 s. A second net cuts the wall
+   * time of an import about 3% on photos of three faces and 7% on photos of twenty, for roughly 350 MB. A borrow never nests
+   * another borrow, so the wait for the net cannot deadlock.
    */
   private val arcFaceNets: NetPool[Net] = new NetPool[Net](
-    2,
+    ImportParallelism.ARCFACE_NETS,
     () => {
       logger.debug("Loading an ArcFace net")
       val net = readNetFromONNX(ARCFACE_MODEL_PATH)

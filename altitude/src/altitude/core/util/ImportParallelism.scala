@@ -15,12 +15,16 @@ import altitude.core.models.Settings
  * networks: resident memory peaks at 12.8 to 13.4 GB and 11 GB stays after a full GC, with the heap under 1 GB.
  *
  *   - An ArcFace `Net` holds about 780 MB resident after its first forward pass (174 MB of weights), about 370 MB with Winograd
- *     off. `FaceDetectionService` shares two of them between the threads: `POOL_COST`, at 384 MB each.
+ *     off. `FaceDetectionService` shares `ARCFACE_NETS` of them between the threads: `POOL_COST`, at 384 MB each.
  *   - A YuNet `FaceDetectorYN` holds about 70 MB, one per thread for the life of the fixed import dispatcher.
- *   - A 24-megapixel image is 72 MB decoded, and `DetectFacesFlow`, `MeasureImageFlow` and `AddPreviewFlow` each hold up to one
- *     per thread.
+ *   - A 24-megapixel image is 72 MB decoded. `DetectFacesFlow`, `MeasureImageFlow` and `AddPreviewFlow` each decode an image and
+ *     release it inside their work, and no decoded image rides on the element, so a thread holds one at a time, while an image is
+ *     decoded three times over its import.
  *
- * `THREAD_COST` is a YuNet, those three decodes and the file copy a decode leaves for the finalizer, rounded up.
+ * `THREAD_COST` is a YuNet, one decode of a large image and the file copy a decode leaves for the finalizer, about 150 MB at 24
+ * megapixels, and the rest is a margin left on purpose for a larger image and for native allocator overhead. Imports of generated
+ * 24-megapixel JPEGs with 12 threads and the one shared net peak at 3.9 to 5.1 GB resident, the heap included, under the 6.4 GB
+ * that `POOL_COST` and `THREAD_COST` budget without it.
  */
 object ImportParallelism:
   private val logger = LoggerFactory.getLogger(getClass)
@@ -29,7 +33,10 @@ object ImportParallelism:
   private val GB: Long = 1024 * MB
 
   val MIN_THREADS = 2
-  val POOL_COST: Long = 2 * 384 * MB
+
+  /** The ArcFace nets `FaceDetectionService` shares between the threads */
+  val ARCFACE_NETS = 1
+  val POOL_COST: Long = ARCFACE_NETS * 384 * MB
   val THREAD_COST: Long = 512 * MB
 
   /** The running parallelism, and why it is that */
@@ -49,7 +56,7 @@ object ImportParallelism:
     val uncapped = if setting > 0 then Resolution(setting, "the Setting") else automatic(cores, totalMemoryBytes)
     if cap > 0 && cap < uncapped.value then Resolution(cap, s"capped by ${Const.Conf.IMPORT_PARALLELISM_MAX}") else uncapped
 
-  /** Half the cores, or as many threads as fit beside the shared nets in half the memory, whichever is fewer */
+  /** Half the cores, or as many threads as fit beside the shared net in half the memory, whichever is fewer */
   private def automatic(cores: Int, totalMemoryBytes: Long): Resolution =
     val memoryBudget = totalMemoryBytes / 2
     val affordable = math.min(cores / 2, (memoryBudget - POOL_COST) / THREAD_COST).toInt

@@ -8,8 +8,8 @@ import play.twirl.api.Html
 import altitude.core.{ Const => C }
 import altitude.core.App
 import altitude.core.ValidationException
-import altitude.core.models.SettingType
 import altitude.core.models.Settings
+import altitude.core.models.SettingType
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin

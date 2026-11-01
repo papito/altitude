@@ -123,7 +123,7 @@ import altitude.core.util.NetPool
     val pool = new NetPool[Element](3, factory)
 
     val first = pool.borrow(identity)
-    pool.borrow(identity) should be theSameInstanceAs first
+    (pool.borrow(identity) should be).theSameInstanceAs(first)
     factory.created.get shouldEqual 1
 
     val kept = new Holder(pool)
@@ -133,7 +133,7 @@ import altitude.core.util.NetPool
     returned.giveBack()
 
     val next = new Holder(pool)
-    next.element should be theSameInstanceAs returnedElement
+    (next.element should be).theSameInstanceAs(returnedElement)
     factory.created.get shouldEqual 2
 
     kept.giveBack()
@@ -164,9 +164,9 @@ import altitude.core.util.NetPool
           throw failure
       }
     }
-    thrown should be theSameInstanceAs failure
+    (thrown should be).theSameInstanceAs(failure)
 
-    Await.result(async(pool.borrow(identity)), deadline) should be theSameInstanceAs Await.result(elementSeen.future, deadline)
+    (Await.result(async(pool.borrow(identity)), deadline) should be).theSameInstanceAs(Await.result(elementSeen.future, deadline))
     factory.created.get shouldEqual 1
   }
 
@@ -193,7 +193,7 @@ import altitude.core.util.NetPool
     third.staysBlocked shouldBe true
 
     first.giveBack()
-    third.element should be theSameInstanceAs firstElement
+    (third.element should be).theSameInstanceAs(firstElement)
     factory.created.get shouldEqual 2
 
     second.giveBack()
@@ -253,7 +253,7 @@ import altitude.core.util.NetPool
     next.staysBlocked shouldBe true
 
     holder.giveBack()
-    next.element should be theSameInstanceAs element
+    (next.element should be).theSameInstanceAs(element)
     factory.created.get shouldEqual 1
     next.giveBack()
   }

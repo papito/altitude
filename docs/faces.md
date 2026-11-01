@@ -15,7 +15,7 @@ registry in [Settings.scala](../altitude/src/altitude/core/models/Settings.scala
 
 Faces are two stages of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists and is
 indexed, on both engines, their work on the import dispatcher's threads (the `import.parallelism` Setting, a Restart
-setting: 0, the default, means half the cores or what half the machine's memory affords beside the shared nets,
+setting: 0, the default, means half the cores or what half the machine's memory affords beside the shared net,
 whichever is fewer, and never fewer than 2, and `import.parallelism.max` in the server config caps it whatever the
 Setting says; see `util/ImportParallelism`):
 
@@ -61,9 +61,9 @@ returns a `(Face, FaceImages)` per face it keeps.
    (`Calib3d.estimateAffinePartial2D`) onto the ArcFace 112×112 reference template (`ARCFACE_REF_LANDMARKS_112`,
    `alignCropFaceFromDetection`).
 3. **Embedding**: ArcFace w600k_r50 (`resources/opencv/w600k_r50.onnx`, OpenCV DNN) turns the aligned crop into 512
-   floats (`getArcFaceEmbedding`). The threads share two `Net`s (`arcFaceNets`, a `util/NetPool`, Winograd off: about
-   370 MB each, against about 780 MB with it on). A `Net` is not thread-safe, so an embedding borrows one for its one
-   forward pass, waiting when both are out, and copies the output inside the borrow, because the output shares its
+   floats (`getArcFaceEmbedding`). The threads share one `Net` (`arcFaceNets`, a `util/NetPool`, Winograd off: about
+   370 MB, against about 780 MB with it on). A `Net` is not thread-safe, so an embedding borrows it for its one
+   forward pass, waiting while it is out, and copies the output inside the borrow, because the output shares its
    memory with the net. The result is an `Embedding`: the L2-normalized vector, which
    is compared by cosine distance, and the **norm** the raw output had before normalization.
 4. **Quality** is that norm (`Face.quality`). For a net trained with the ArcFace loss the norm tracks how

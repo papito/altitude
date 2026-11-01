@@ -1,4 +1,4 @@
-# Import memory: shared recognition nets and a memory-aware parallelism
+# Import memory: a shared recognition net and a memory-aware parallelism
 
 ## Goals
 
@@ -19,8 +19,15 @@ One hundred 24-megapixel JPEGs imported on a 24-core, 31 GB machine (12 import t
 under 1 GB. The holdings are the thread-local networks, created on a thread's first detection and kept for the life of
 the fixed import dispatcher: an ArcFace `Net` holds about 780 MB resident after its first forward pass (174 MB of
 weights, about 370 MB with Winograd off), a YuNet `FaceDetectorYN` about 70 MB. The decodes in flight are transient:
-a 24-megapixel image is 72 MB decoded, and `DetectFacesFlow`, `MeasureImageFlow` and `AddPreviewFlow` each hold up to
-`importParallelism` of them. The FP16 CPU target changes nothing. glibc arena limits change nothing.
+a 24-megapixel image is 72 MB decoded, and a thread holds one at a time, since `DetectFacesFlow`, `MeasureImageFlow` and
+`AddPreviewFlow` each decode an image and release it inside their work and no decoded image rides on the element. An
+image is decoded three times over its import. The FP16 CPU target changes nothing. glibc arena limits change nothing.
+
+Generated 24-megapixel JPEGs imported with 12 threads on 24 cores, Winograd off, one shared net: a forward pass takes
+40 to 52 ms and the net tops out at about 24 embeddings a second, twelve nets at about 38. With every thread on a 20-face
+photo a borrow waits about 400 ms and such a photo holds its thread and its decoded image for about 9 s. A second net
+cuts the wall time about 3% on photos of three faces and 7% on photos of twenty, for roughly 350 MB. Resident memory
+peaks at 3.9 to 5.1 GB, the heap included.
 
 ## Language
 
@@ -34,14 +41,14 @@ Restart setting.
 
 ### The shared ArcFace pool
 
-`FaceDetectionService` keeps one `NetPool` of at most two ArcFace nets instead of a `ThreadLocal[Net]`. A net is created
-on the first borrow that finds none free and fewer than two made (`readNetFromONNX`, then `enableWinograd(false)`), and
-lives for the life of the service. `getArcFaceEmbedding` borrows a net for its one forward pass and returns it in a
-`finally`, so a throw never loses a net; a borrower waits when both are out (a semaphore of two over a queue). Blocking
-an import thread there is fine: embedding a face takes tens of milliseconds against the hundreds a decode and a
-detection take, so two nets keep twelve threads fed, and a borrow never nests another borrow, so the wait cannot
-deadlock. The pool is a class of its own (`util/NetPool`, generic over what it holds, taking a factory), unit-tested
-with a counting factory. YuNet stays thread-local: 70 MB a thread, and its detector carries per-call state.
+`FaceDetectionService` keeps one `NetPool` of one ArcFace net (`ImportParallelism.ARCFACE_NETS`) instead of a
+`ThreadLocal[Net]`. The net is created on the first borrow (`readNetFromONNX`, then `enableWinograd(false)`), and lives
+for the life of the service. `getArcFaceEmbedding` borrows it for its one forward pass and returns it in a `finally`, so
+a throw never loses it; a borrower waits while it is out (a semaphore over a queue). Blocking an import thread there is
+fine: a forward pass takes 40 to 52 ms, a second net buys little for its memory (see the measurements), and a borrow
+never nests another borrow, so the wait cannot deadlock. The pool is a class of its own (`util/NetPool`, generic over
+what it holds, taking a factory), unit-tested with a counting factory. YuNet stays thread-local: 70 MB a thread, and its
+detector carries per-call state.
 
 Winograd off: `Net.enableWinograd(false)` right after the net is read. It is a convolution algorithm, not a model
 change, so the embeddings move at float noise; the recognition suites over the `people/` fixtures are the guard. The
@@ -53,9 +60,9 @@ figure in the Setting's help and the docs is the measured one, about 370 MB a ne
 
 - `setting > 0`: that many threads.
 - `setting == 0`: `min(cores / 2, (totalMemory / 2 - POOL_COST) / THREAD_COST)`, never fewer than `MIN_THREADS` (2).
-  `POOL_COST` is the two shared nets (2 × 384 MB); `THREAD_COST` is 512 MB: a YuNet, three decodes of a large image
-  and the file copy a decode leaves for the finalizer, rounded up. Both are code constants beside the measurements that
-  justify them, not Settings.
+  `POOL_COST` is the one shared net (384 MB); `THREAD_COST` is 512 MB: a YuNet, one decode of a large image and the file
+  copy a decode leaves for the finalizer, about 150 MB at 24 megapixels, and a deliberate margin for a larger image and
+  for native allocator overhead. Both are code constants beside the measurements that justify them, not Settings.
 - then `min(that, cap)` when `cap > 0`. A cap under `MIN_THREADS` is a startup error (`IllegalStateException` from
   `Altitude`), never a silent 2.
 
@@ -79,8 +86,8 @@ name (a `Map[String, String]`, one entry today). The help text says what a threa
    making another, returns the element when `use` throws, blocks a third borrower until a return. Rationale: the
    pool is the piece with concurrency to get right, so it is tested alone.
 2. **ArcFace through the pool, Winograd off.** `FaceDetectionService` replaces `arcFaceNetLocal` with a `NetPool[Net]`
-   of two whose factory reads the model and calls `enableWinograd(false)`; `getArcFaceEmbedding` borrows. The
-   recognition suites stay green. Rationale: memory drops from 780 MB a thread to 2 × 370 MB in all, before any
+   of one whose factory reads the model and calls `enableWinograd(false)`; `getArcFaceEmbedding` borrows. The
+   recognition suites stay green. Rationale: memory drops from 780 MB a thread to 370 MB in all, before any
    parallelism rule.
 3. **`util/ImportParallelism`.** The pure rule with its constants and unit tests (`ImportParallelismTests`): an
    explicit Setting, the core half, the memory half winning on a small box, the floor, the cap, the cap under the
@@ -93,4 +100,5 @@ name (a `Map[String, String]`, one entry today). The help text says what a threa
 5. **Docs.** `altitude/AGENTS.md` (the startup order line, the import pipeline paragraph, the Settings paragraph:
    `FaceDetectionService` pools ArcFace and keeps YuNet thread-local), `docs/faces.md` line 17, `docs/READINESS.md`
    (item 208 gains the memory guidance: heap plus `POOL_COST` plus `THREAD_COST` per thread; item 147 says three
-   decodes, not two), `reference.conf`'s header comment. Rationale: the Do section's no-drift rule.
+   decodes per image, one in flight per thread), `reference.conf`'s header comment. Rationale: the Do section's no-drift
+   rule.

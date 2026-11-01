@@ -63,9 +63,9 @@ import altitude.core.util.ImportParallelism.Resolution
   }
 
   test("Automatic takes what half the memory affords on a small box with many cores") {
-    // (4096 MB - 768 MB) / 512 MB
+    // (4096 MB - 384 MB) / 512 MB
     ImportParallelism.resolve(AUTOMATIC, 24, 8 * GB, NO_CAP) shouldBe
-      Resolution(6, "automatic, half of 24 cores or 4 GB of 8 GB")
+      Resolution(7, "automatic, half of 24 cores or 4 GB of 8 GB")
   }
 
   test("Automatic computes in bytes, past what an Int holds") {
@@ -84,9 +84,12 @@ import altitude.core.util.ImportParallelism.Resolution
     // One core
     ImportParallelism.resolve(AUTOMATIC, 1, 31 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 1 core or 15 GB of 31 GB, never fewer than 2")
-    // Half the memory does not even hold the shared nets
+    // Half the memory holds the shared net and not one thread
     ImportParallelism.resolve(AUTOMATIC, 24, 1 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 24 cores or 0 GB of 1 GB, never fewer than 2")
+    // Half the memory does not even hold the shared net
+    ImportParallelism.resolve(AUTOMATIC, 24, GB / 2, NO_CAP) shouldBe
+      Resolution(2, "automatic, half of 24 cores or 0 GB of 0 GB, never fewer than 2")
   }
 
   test("Automatic landing on the floor by itself does not claim the floor raised it") {

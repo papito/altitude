@@ -242,9 +242,7 @@ import altitude.core.util.ImageUtil.matFromBytes
       } finally executor.shutdown()
 
     embedded.size should be(threads * 20)
-    embedded.foreach {
-      case (face, features) => maxDifference(features, expected(face)) should be < 1e-5f
-    }
+    embedded.foreach { case (face, features) => maxDifference(features, expected(face)) should be < 1e-5f }
   }
 
   /** The first face YuNet finds in the image, aligned for ArcFace */
