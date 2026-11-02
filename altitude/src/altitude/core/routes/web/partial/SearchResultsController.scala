@@ -23,7 +23,6 @@ import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGrouping
-import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
 
@@ -47,9 +46,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
-   * With `groupBy`, a header opens each date or Location (`parseGroupedQuery`). Grouped or not, a page is `rpp` assets, 1 to
-   * `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries (`data-app-search-after`), never by page
-   * number (`parseCursor`).
+   * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
+   * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
+   * (`data-app-search-after`), never by page number (`parseCursor`).
    *
    * `layout=map` renders bounds and a total without fetching asset rows; grouping, paging and the `bbox` filter have no effect on
    * them (`bbox` scopes the panel and the grid, and stays in the URL).
@@ -172,11 +171,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       case Left(message) => return badRequest(message)
       case Right(cursor) => cursor
 
-    if groupBy.isDefined || groupDirection.isDefined then
-      val searchQuery =
-        parseGroupedQuery(scope, rpp, searchSort, groupBy, groupDirection, cursor) match
-          case Left(message) => return badRequest(message)
-          case Right(query) => query
+    val grouping = parseGrouping(view, groupBy, groupDirection) match
+      case Left(message) => return badRequest(message)
+      case Right(grouping) => grouping
+
+    if grouping.isDefined then
+      val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), grouping = grouping, cursor = cursor)
 
       logger.trace(s"GROUPED QUERY: ${searchQuery.toString}")
 
@@ -257,18 +257,19 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     )
 
   /**
-   * A grouped request, validated up front. A problem is the message of a 400:
-   *   - `groupBy` is `dateTaken` or `location`; `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken`
-   *     and is refused with `location`, whose order is fixed
-   *   - `sort` was parsed by the caller (`parseSort`), `rpp` checked by it and the cursor decoded by it (`parseCursor`)
+   * The grouping of a request, validated up front; a problem is the message of a 400. `groupBy` is `dateTaken`, `location` or
+   * `sequence`, and `groupDirection` (`asc`/`desc`, default `desc`) orders the days of `dateTaken` and is refused with the other
+   * two, whose order is fixed.
+   *
+   * Only a frame in triage carries a Sequence, so `sequence` outside the Triage view is no grouping and not a 400: grouping
+   * survives a change of view, and the search store goes on asking for it, so a return to Triage groups by Sequence again.
    */
-  private def parseGroupedQuery(
-      scope: SearchRequestParser.Scope,
-      rpp: Int,
-      searchSort: SearchSort,
+  private def parseGrouping(
+      view: String,
       groupBy: Option[String],
-      groupDirection: Option[String],
-      cursor: Option[SearchCursor]): Either[String, SearchQuery] =
+      groupDirection: Option[String]): Either[String, Option[SearchGrouping]] =
+
+    if groupBy.isEmpty && groupDirection.isEmpty then return Right(None)
 
     val by: GroupBy = groupBy.map(GroupBy.fromApiValue) match
       case None => return Left(s"${Api.Field.Search.GROUP_BY} is required")
@@ -278,17 +279,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     val direction: SortDirection = groupDirection.map(parseDirection) match
       case None => SortDirection.DESC
       case Some(None) => return Left(s"${Api.Field.Search.GROUP_DIRECTION} must be asc or desc")
-      case Some(Some(_)) if by == GroupBy.Location =>
+      case Some(Some(_)) if by.dateField.isEmpty =>
         return Left(s"${Api.Field.Search.GROUP_DIRECTION} does not apply to ${by.apiValue}: the order is fixed")
       case Some(Some(direction)) => direction
 
-    Right(
-      scope.query(
-        rpp = rpp,
-        searchSort = List(searchSort),
-        grouping = Some(SearchGrouping(by, direction)),
-        cursor = cursor
-      ))
+    Right(Option.unless(by == GroupBy.Sequence && view != Const.Search.View.TRIAGE)(SearchGrouping(by, direction)))
 
   /**
    * The cursor of the previous page, which `after` carries and which is sent with `isContinuousScroll`, or the message of a 400.

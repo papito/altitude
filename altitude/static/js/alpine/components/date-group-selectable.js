@@ -2,7 +2,7 @@ import { Alpine } from "../../lib/alpine.esm.min.js"
 import { Const } from "../../constants.js"
 
 /**
- * The checkbox of a group header (`.result-group`, a day or a Location,
+ * The checkbox of a group header (`.result-group`, a day, a Location or a Sequence,
  * `htmx/results_grid_grouped.scala.html`): it selects or deselects that group's cells as a set, and
  * shows how much of the group is selected - unchecked, the indeterminate dash, or checked.
  *

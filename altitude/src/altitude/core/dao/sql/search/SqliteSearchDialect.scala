@@ -44,7 +44,7 @@ object SqliteSearchDialect extends SearchDialect:
   /**
    * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort
    * every matching row; the unary plus keeps any term other than the grouping date from being matched, leaving the day index in
-   * charge. A Location grouping has no such index, and every sort term of one gets the plus.
+   * charge. A Location or a Sequence grouping has no such index, and every sort term of one gets the plus.
    */
   override def secondarySort(column: Expr[?], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
     if grouping.by.dateField.contains(sort.field) then column else Expr[Any](implicit ctx => sql"+$column")

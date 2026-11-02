@@ -983,7 +983,7 @@ import altitude.core.util.SortValue
       by <- GroupBy.values.toList
       second <- List(SortValue.Text("2026-09-06 10:00:00"), SortValue.Null)
     } {
-      // A day's anchor, or one in the trailing "No location" group
+      // A day's anchor, or one in the trailing "No location" or "No sequence" group
       val cursor = SearchCursor(
         key = Option.when(by == GroupBy.DateTaken)("2026-09-06"),
         groupId = None,
@@ -1000,8 +1000,10 @@ import altitude.core.util.SortValue
           grouping = Some(SearchGrouping(by)),
           cursor = Some(cursor)
         )
-        if by == GroupBy.DateTaken then SearchQueries.grouped(dialect, query, "repo-1")
-        else SearchQueries.groupedByLocation(dialect, query, "repo-1")
+        by match
+          case GroupBy.DateTaken => SearchQueries.grouped(dialect, query, "repo-1")
+          case GroupBy.Location => SearchQueries.groupedByLocation(dialect, query, "repo-1")
+          case GroupBy.Sequence => SearchQueries.groupedBySequence(dialect, query, "repo-1")
       val statement = page(cursor)
       val text = statement.toString.replaceAll("\\s+", " ").trim
       val scored = "scored\\d+"

@@ -48,6 +48,15 @@ object Util:
   /** A calendar day as a date group header reads it, "Sunday, September 6, 2026". No zone is involved: the day is the day */
   def humanReadableDate(date: LocalDate): String = date.format(dateFormatter)
 
+  private val timeFormatter = DateTimeFormatter.ofPattern("h:mm:ss a", Locale.ENGLISH)
+
+  /**
+   * A moment as a Sequence's group header reads it, "Sunday, September 6, 2026, 10:00:05 AM": the seconds tell apart the bursts
+   * of one minute. The camera's wall clock, so no zone is involved.
+   */
+  def humanReadableDayAndTime(dateTime: LocalDateTime): String =
+    s"${humanReadableDate(dateTime.toLocalDate)}, ${dateTime.format(timeFormatter)}"
+
   /**
    * A date group's match count as its header reads it, "(3 items)". The client rebuilds the same text as the count falls
    * (`itemCountText` in js/search-results/date-groups.js); the two have to agree.

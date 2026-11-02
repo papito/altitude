@@ -2,6 +2,7 @@ import { Alpine } from "../lib/alpine.esm.min.js"
 import { requestCuration } from "../alpine/components/curation.js"
 import { showWarningSnackBar } from "../common/snackbar.js"
 import { Const } from "../constants.js"
+import { removeCurateButtons } from "../search-results/date-groups.js"
 import { runSearch } from "../search-results/search.js"
 
 /**
@@ -49,8 +50,9 @@ export function registerCurationListeners(app) {
     /**
      * The grid keeps its scroll position, and with nothing changed its selection too. Otherwise the
      * frames still recycled leave it as the grid's own Recycle takes them, with the group counts and
-     * the total, and kept frames stay under their old header until the next search. The map layout
-     * has no cells, so it runs the search again.
+     * the total, a group whose Sequence was cleared loses its Curate button, and kept frames stay
+     * under their old header until the next search. The map layout has no cells, so it runs the
+     * search again.
      */
     document.body.addEventListener(Const.events.curationClosed, (event) => {
         const { recycledIds, clearedSequenceIds } = event.detail
@@ -68,6 +70,7 @@ export function registerCurationListeners(app) {
         }
 
         app.assetActions.removeAssetsFromGrid(recycledIds)
+        removeCurateButtons(clearedSequenceIds)
         Alpine.store(Const.state.selectedAssets).reset()
     })
 }

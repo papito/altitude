@@ -102,6 +102,8 @@ export const Const = {
         fileName: "data-file-name",
         bundleKind: "data-bundle-kind",
         inAlbumOrLocation: "data-in-album-or-location",
+        // The Sequence a group header's Curate opens Curation on
+        sequenceId: "data-app-sequence-id",
         // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
         maxSelection: "data-max-selection",
         // A Curation set's opening frames, and whether its Bundles collapse

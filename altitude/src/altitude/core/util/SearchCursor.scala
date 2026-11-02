@@ -15,10 +15,11 @@ import altitude.core.util.Query.QueryParam
  * opaque, versioned token to the client and supplies only a position: every request re-applies authorization and every filter,
  * and the values are bound, never inlined. The page size is not part of it, so a continuation may ask for a different one.
  *
- * The group is `key`, the value the groups are ordered by (the ISO day of a date grouping, the path key of a Location grouping),
- * and for a Location also `groupId`, the Location's ID. Both absent means the trailing group of images with no date or no
- * Location. A flat search has no groups, but one sorted by capture time is ordered by day first, and its cursor carries the
- * image's ISO day as `key`.
+ * The group is `key`, the value the groups are ordered by (the ISO day of a date grouping, the path key of a Location grouping,
+ * the first capture of a Sequence grouping), and for a Location or a Sequence also `groupId`, its ID. Both absent means the
+ * trailing group of images with no date, no Location or no Sequence; a Sequence whose matching frames have no capture time has
+ * `groupId` alone. A flat search has no groups, but one sorted by capture time is ordered by day first, and its cursor carries
+ * the image's ISO day as `key`.
  *
  * The Relevance sort orders by two values before the ID, so its position has `secondSortValue` as well: the image's capture time,
  * [[SortValue.Null]] when it has none. Under any other sort it is absent, and it is read only under that sort.

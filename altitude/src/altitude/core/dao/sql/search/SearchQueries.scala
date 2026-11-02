@@ -1,6 +1,7 @@
 package altitude.core.dao.sql.search
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 import scalasql.Sc
 import scalasql.Table
 import scalasql.core.Context
@@ -384,8 +385,7 @@ object SearchQueries:
     // A cursor whose anchor was in a Location continues the located part; one without a key is in the trailing group already
     val inLocatedPart = query.cursor.forall(_.key.isDefined)
 
-    def assetPosition(row: AssetRow[Expr]): Position =
-      Position(row.id, nullDay, sortColumn(engine, query, row), row.originalCreatedAt)
+    def assetPosition(row: AssetRow[Expr]): Position = assetPositionIn(engine, query, row)
     def inNoLocation(id: Expr[String]): Expr[Boolean] =
       LocationAssetRow.select.filter(link => link.assetId `=` id).map(_.assetId).isEmpty
     def nullText: Expr[Option[String]] = Expr[Option[String]](implicit ctx => sql"NULL")
@@ -528,6 +528,165 @@ object SearchQueries:
     )
 
   /**
+   * One statement for a page grouped by Sequence: the shell of [[groupedByLocation]] over its two relations. `sequenced` is the
+   * matches with a Sequence, `unsequenced` the rest, which always come last as the "No sequence" group, and a frame is in one
+   * group. Under the Relevance sort both read `scored`, the matches with their Relevance computed once.
+   *
+   * Groups are in the queue's order and it is fixed: the first capture of the group's matching frames, oldest first, then the
+   * Sequence's ID, then the sort within the group, then the asset ID. The first capture is a window over the matching frames, so
+   * a search showing some of a Sequence's frames orders it by those; `sequence_frames` ([[SequenceFrameRow]]) materializes it for
+   * the cursor to compare, and costs the frames that carry a Sequence, through `asset_sequence`, and not the library. A Sequence
+   * with no capture time follows those with one on both engines.
+   *
+   * A cursor whose anchor was in a Sequence slices `sequenced` after it and lets `unsequenced` fill the page only once
+   * `sequenced` has run out, through the same guarded `LIMIT CASE`; a cursor without a Sequence is already in the trailing group
+   * and slices `unsequenced` alone. A group's count is its matching frames, one correlated count per distinct Sequence on the
+   * page, so it costs the size of the page's groups; the "No sequence" count runs only on the pages that reach that group.
+   */
+  def groupedBySequence(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
+    import engine.dialect.*
+    given TypeMapper[SortValue] = engine.sortValueMapper
+
+    val sort = query.searchSort.head
+    val base = matching(engine, query, repositoryId)
+    val scored = ScoredRow.select
+    val isFirstPage = query.cursor.isEmpty
+    // A cursor whose anchor was in a Sequence continues the sequenced part; a Sequence with no capture time has an ID and no key
+    val inSequencedPart = query.cursor.forall(_.groupId.isDefined)
+
+    val frames = SequenceFrameRow.select
+    val frame = WithSqlExpr.get(frames)
+    val framePosition = Position(frame.id, nullDay, frame.sortValue, frame.secondSortValue)
+
+    /** The matches that carry a Sequence, as [[SequenceFrameRow]] has them */
+    def framesOf[Q, R](relation: Select[Q, R], asset: AssetRow[Expr], position: Position): SqlStr =
+      val firstCapture =
+        Expr[Option[LocalDateTime]](implicit ctx => sql"MIN(${asset.originalCreatedAt}) OVER (PARTITION BY ${asset.sequenceId})")
+      val taken = Expr[SortValue](implicit ctx => sql"${position.taken}")
+      val projected = relation.map(_ => (position.id, asset.sequenceId, firstCapture, sortValueOf(position), taken))
+      Db.render(projected, engine.dialect).withCompleteQuery(false)
+
+    /**
+     * Rows strictly after the anchor: the anchor's own Sequence's rows after it by sort, or a later group. A Sequence is told by
+     * its ID before its first capture, which moves when the frame that set it leaves: the frames of the anchor's Sequence already
+     * shown must not count as a later group, and those still to come must not be lost.
+     */
+    def afterSequence(cursor: SearchCursor): Expr[Boolean] =
+      val sequenceId = cursor.groupId.get
+      val after = afterBySort(engine, query, framePosition, idOnly = false)
+      val first = frame.firstCapturedAt
+      val anchorCapture = cursor.key.map(LocalDateTime.parse)
+      Expr[Boolean] {
+        implicit ctx =>
+          val laterGroup = anchorCapture.fold(sql"($first IS NULL AND ${frame.sequenceId} > $sequenceId)") {
+            capture => sql"($first > $capture OR $first IS NULL OR ($first = $capture AND ${frame.sequenceId} > $sequenceId))"
+          }
+          sql"((${frame.sequenceId} = $sequenceId AND $after) OR (${frame.sequenceId} <> $sequenceId AND $laterGroup))"
+      }
+
+    /** The trailing slice: the matches with no Sequence, after the cursor's anchor when the anchor was among them */
+    def unsequencedSlice[Q, R](relation: Select[Q, R], position: Position): SqlStr =
+      // Typed, for the union with the sequenced slice: PostgreSQL would take a bare NULL in a CTE as text
+      val noSequence = Expr[Option[String]](implicit ctx => sql"CAST(NULL AS CHAR(36))")
+      val noCapture = Expr[Option[LocalDateTime]](implicit ctx => sql"CAST(NULL AS TIMESTAMP)")
+      sliced(
+        engine,
+        relation
+          .filterIf(!inSequencedPart)(_ => afterBySort(engine, query, position, idOnly = false))
+          .map(_ => (position.id, noSequence, noCapture, sortValueOf(position), secondSortValueOf(sort, position))),
+        sql"${orderWithinGroup(engine, query, position)}",
+        if inSequencedPart then guardedLimit("sequenced", query.rpp) else SqlStr.raw(s" LIMIT ${query.rpp + 1}")
+      )
+
+    // The scored matches, with the asset row that says which part of the page each belongs to
+    def scoredWhere(isIn: AssetRow[Expr] => Expr[Boolean]) =
+      scored.join(AssetRow)((row, asset) => row.id `=` asset.id).filter((_, asset) => isIn(asset))
+
+    val unsequenced =
+      if sort.isRelevance then
+        val relation = scoredWhere(_.sequenceId.isEmpty)
+        unsequencedSlice(relation, scoredPosition(WithSqlExpr.get(relation)._1))
+      else
+        val relation = base.filter(_.sequenceId.isEmpty)
+        unsequencedSlice(relation, assetPositionIn(engine, query, WithSqlExpr.get(relation)))
+
+    val candidatesCte =
+      if inSequencedPart then
+        val sequenceFrames =
+          if sort.isRelevance then
+            val relation = scoredWhere(_.sequenceId.isDefined)
+            val (row, asset) = WithSqlExpr.get(relation)
+            framesOf(relation, asset, scoredPosition(row))
+          else
+            val relation = base.filter(_.sequenceId.isDefined)
+            val asset = WithSqlExpr.get(relation)
+            framesOf(relation, asset, assetPositionIn(engine, query, asset))
+        val sequenced = sliced(
+          engine,
+          frames
+            .filterIf(query.cursor.isDefined)(_ => afterSequence(query.cursor.get))
+            .map(
+              _ =>
+                (
+                  frame.id,
+                  frame.sequenceId,
+                  frame.firstCapturedAt,
+                  sortValueOf(framePosition),
+                  secondSortValueOf(sort, framePosition))),
+          sql"${frame.firstCapturedAt} ASC NULLS LAST, ${frame.sequenceId} ASC, ${orderWithinGroup(engine, query, framePosition)}",
+          SqlStr.raw(s" LIMIT ${query.rpp + 1}")
+        )
+        sql"""sequence_frames $sequenceColumns AS MATERIALIZED ($sequenceFrames),
+          sequenced $sequenceColumns AS MATERIALIZED ($sequenced), unsequenced $sequenceColumns AS MATERIALIZED ($unsequenced),
+          candidates $sequenceColumns AS MATERIALIZED (
+            SELECT $sequenceColumnList FROM sequenced UNION ALL SELECT $sequenceColumnList FROM unsequenced)"""
+      else sql"candidates $sequenceColumns AS MATERIALIZED ($unsequenced)"
+
+    val inPageSequence = (row: AssetRow[Expr]) => Expr[Boolean](implicit ctx => sql"${row.sequenceId} = p.sequence_id")
+
+    val total = totalFragments(engine, base, isFirstPage, query.totalCap)
+
+    // The Sequences first whatever the engine's null placement, by the first capture with those that have none last
+    def order(prefix: String): SqlStr = SqlStr.raw(
+      s"CASE WHEN ${prefix}sequence_id IS NULL THEN 1 ELSE 0 END, ${prefix}first_captured_at ASC NULLS LAST, " +
+        s"${prefix}sequence_id ASC, " + candidateOrderWithinGroup(prefix, sort))
+
+    val ctes = Option.when(sort.isRelevance)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
+      candidatesCte,
+      sql"""page $sequenceColumns AS MATERIALIZED (
+        SELECT $sequenceColumnList FROM candidates AS c
+         ORDER BY ${order("c.")}
+         LIMIT ${SqlStr.raw(query.rpp.toString)}
+      )""",
+      sql"""group_counts AS MATERIALIZED (
+        SELECT p.sequence_id AS sequence_id,
+               (SELECT count(*) FROM (${matchingIds(engine, base, Some(inPageSequence))}) AS m) AS n
+          FROM (SELECT DISTINCT sequence_id FROM page WHERE sequence_id IS NOT NULL) AS p
+        UNION ALL
+        SELECT p.sequence_id AS sequence_id,
+               (SELECT count(*) FROM (${matchingIds(engine, base, Some(_.sequenceId.isEmpty))}) AS m) AS n
+          FROM (SELECT DISTINCT sequence_id FROM page WHERE sequence_id IS NULL) AS p
+      )"""
+    ) ++ total.cte
+
+    statement(
+      engine,
+      query,
+      ctes,
+      sql"""
+      SELECT $assetColumns, p.sequence_id AS sequence_id, p.first_captured_at AS first_captured_at,
+             p.sort_value AS sort_value, p.second_sort_value AS second_sort_value,
+             g.n AS group_total,
+             (SELECT count(*) FROM candidates) AS candidate_count${total.column}
+        FROM page AS p
+             JOIN asset ON asset.id = p.id
+             LEFT JOIN group_counts AS g ON g.sequence_id = p.sequence_id OR (g.sequence_id IS NULL AND p.sequence_id IS NULL)
+             ${total.join}
+       ORDER BY ${order("p.")}
+      """
+    )
+
+  /**
    * Every point the map plots for a search, one row per plotted point, with the asset's ID and capture time: a matching asset
    * with a point of its own is plotted there, and only there; one without is plotted at the pin of each Location it is in, so an
    * asset in two Locations is two points, as it is two cells in the Location grid. With a box, only the points inside it.
@@ -659,6 +818,10 @@ object SearchQueries:
   private case class Position(id: Expr[String], day: Expr[Option[LocalDate]], sortValue: Expr[?], taken: Expr[?])
 
   private def scoredPosition(row: ScoredRow[Expr]): Position = Position(row.id, row.day, row.sortValue, row.secondSortValue)
+
+  /** The position of an asset in a statement with no days and no `scored`: what a Location or a Sequence grouping slices */
+  private def assetPositionIn(engine: SearchDialect, query: SearchQuery, row: AssetRow[Expr]): Position =
+    Position(row.id, nullDay, sortColumn(engine, query, row), row.originalCreatedAt)
 
   /**
    * The matches with their Relevance computed once, for a grouped statement under the Relevance sort: what its slices, its cursor
@@ -838,7 +1001,7 @@ object SearchQueries:
   /** The sort value of a page with no sort, whose only order is the ID, and the second sort value under a column sort */
   private def nullSortValue(using TypeMapper[SortValue]): Expr[SortValue] = Expr[SortValue](implicit ctx => sql"NULL")
 
-  /** The day of a row that is in no day group: under a Location grouping, and on a flat page */
+  /** The day of a row that is in no day group: under a Location or a Sequence grouping, and on a flat page */
   private def nullDay: Expr[Option[LocalDate]] = Expr[Option[LocalDate]](implicit ctx => sql"NULL")
 
   /**
@@ -872,6 +1035,10 @@ object SearchQueries:
   private val locationColumnList: SqlStr =
     SqlStr.raw("id, location_id, path_key, location_name, category_name, sort_value, second_sort_value")
   private val locationColumns: SqlStr = sql"($locationColumnList)"
+
+  /** The Sequence candidates' columns: the asset, its Sequence and that Sequence's first capture, and the sort keys */
+  private val sequenceColumnList: SqlStr = SqlStr.raw("id, sequence_id, first_captured_at, sort_value, second_sort_value")
+  private val sequenceColumns: SqlStr = sql"($sequenceColumnList)"
 
   /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */
   private val assetColumns: SqlStr =
