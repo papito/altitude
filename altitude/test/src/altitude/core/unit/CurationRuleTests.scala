@@ -811,8 +811,8 @@ import altitude.core.util.CurationRule
     )
 
     idsOf(set.railFrames) shouldBe List("first", "second", "dark", "blown")
-    val (pinned, focused) = set.openingFrames
-    idsOf(pinned.toList) shouldBe List("first")
+    val (compared, focused) = set.openingFrames
+    idsOf(compared.toList) shouldBe List("first")
     focused.asset.id shouldBe Some("second")
 
     set.faceRows.map(_.personId) shouldBe List("anna", "ben")

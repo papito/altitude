@@ -1,0 +1,24 @@
+@* The Dock side glyphs: one symbol per side, a frame with the docked band filled, drawn in currentColor so they
+   follow the text color of whatever shows them (the Dock side menu's options and its compact trigger,
+   js/common/explorer-dock.js; the style guide's specimen). The sheet takes no room (`.svg-sprite`, core.css) and is
+   never read on its own; an option's `<svg class="glyph"><use href="#dockGlyph-left"/></svg>` draws one. *@
+@()
+
+<svg class="svg-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="dockGlyph-left" viewBox="0 0 16 16">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <rect x="3" y="3" width="4" height="10" rx="0.5" fill="currentColor"/>
+  </symbol>
+  <symbol id="dockGlyph-right" viewBox="0 0 16 16">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <rect x="9" y="3" width="4" height="10" rx="0.5" fill="currentColor"/>
+  </symbol>
+  <symbol id="dockGlyph-top" viewBox="0 0 16 16">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <rect x="3" y="3" width="10" height="4" rx="0.5" fill="currentColor"/>
+  </symbol>
+  <symbol id="dockGlyph-bottom" viewBox="0 0 16 16">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <rect x="3" y="9" width="10" height="4" rx="0.5" fill="currentColor"/>
+  </symbol>
+</svg>

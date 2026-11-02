@@ -60,19 +60,21 @@
   reasons.headOption.getOrElse("") + (if (reasons.size > 1) s", and ${reasons.size - 1} more" else "")
 }
 
-@* A frame in the rail. A click focuses it. `data-bundle-kind` is the Bundle it sits under; a Contender has none *@
+@* A frame in the rail. A click focuses it. `data-bundle-kind` is the Bundle it sits under, and `data-problems` what the stage's tag
+   says is wrong with it, its Bundle first and then its chips; a Contender has neither *@
 @railFrame(frame: CurationFrame, bundleKind: Option[BundleKind], isSole: Boolean, reasons: List[CurationReason], chips: List[CurationProblem]) = {
   @defining(frame.asset.persistedId) { frameId =>
   <li class="curation-frame"
       data-frame-id="@{frameId}"
       data-file-name="@{frame.asset.fileName}"
-      @if(bundleKind.isDefined) {data-bundle-kind="@{bundleKind.get}"}
+      @if(bundleKind.isDefined) {data-bundle-kind="@{bundleKind.get}"
+      data-problems="@{(bundleKind.get :: chips.map(_.kind)).map(bundleName).mkString(",")}"}
       @if(frame.inAlbumOrLocation) {data-in-album-or-location="true"}
-      :class="frameClasses('@{frameId}')">
+      :class="{ focused: focusedId === '@{frameId}' }">
     <button type="button" class="curation-preview" title="@{frame.asset.fileName}" x-on:click="focusFrame('@{frameId}')">
       <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
-      <i class="fas fa-thumbtack" aria-label="Pinned" x-show="pinnedId === '@{frameId}'"></i>
-      <i class="fas fa-check-circle" aria-label="Pick" x-show="isPick('@{frameId}')"></i>
+      <i class="fas fa-thumbtack" aria-label="Compared" x-show="comparedId === '@{frameId}'"></i>
+      <i class="fas fa-check-circle" aria-label="Keep" x-show="isPick('@{frameId}')"></i>
     </button>
     <div class="about">
       <span class="file-name">@{frame.asset.fileName}</span>
@@ -94,20 +96,29 @@
 }
 
 @* One of the stage's two panes, for the frame the component's `frame` property names. The image fills the pane, hidden behind the
-   spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`) *@
+   spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`). The tag over the
+   pane's corner says what the rail says of the frame: compared, kept, and its problems. It is the pane's and not the image's, so a
+   zoom leaves it in place, and it stays while the frame loads, as the caption does. The focused frame's pane wears the accent's edge.
+   The component words the Keep button by where the frame stands on the stage. Compare is on the frame that is not the compared
+   frame, which is always the focused one *@
 @stagePane(imageId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
-    <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame) }">
+    <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame), focused: @frame === focusedId }">
       <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="onImageSettled($event)" x-on:error="onImageSettled($event)">
       <div class="media-spinner"><i class="fas fa-spinner fa-spin"></i></div>
+      <div class="pane-tag">
+        <span class="curation-chip compared" x-show="showsComparedPane && @frame === comparedId">Compared</span>
+        <span class="curation-chip keep" x-show="isPick(@frame)">Keep</span>
+        <template x-for="problem in problemsOf(@frame)" :key="problem">
+          <span class="curation-chip" x-text="problem"></span>
+        </template>
+      </div>
     </div>
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
-      <button type="button" class="action-button small" x-on:click="togglePin(@frame)">
-        <span x-text="pinLabel(@frame)"></span> <kbd>C</kbd>
-      </button>
+      <button type="button" class="action-button small" x-show="@frame !== comparedId" x-on:click="compareFocused()">Compare <kbd>C</kbd></button>
       <button type="button" class="action-button small" :aria-pressed="isPick(@frame)" x-on:click="togglePick(@frame)">
-        <span x-text="pickLabel(@frame)"></span> <kbd>K</kbd>
+        <span x-text="keepLabel(@frame)"></span> <kbd x-text="keepKey(@frame)"></kbd>
       </button>
     </figcaption>
   </figure>
@@ -121,7 +132,7 @@
     @defining(curationSet.openingFrames) { opening =>
     @defining(curationSet.frames.size >= Const.Curation.MIN_FRAMES_TO_COLLAPSE) { collapses =>
     <article id="curationSetView"
-             @if(opening._1.isDefined) {data-opening-pinned-id="@{opening._1.get.asset.persistedId}"}
+             @if(opening._1.isDefined) {data-opening-compared-id="@{opening._1.get.asset.persistedId}"}
              data-opening-focused-id="@{opening._2.asset.persistedId}"
              @if(collapses) {data-bundles-collapse="true"}>
       <aside id="curationRail" aria-label="Frames">
@@ -149,7 +160,8 @@
         @for(bundle <- curationSet.bundles) {
           <section class="curation-bundle">
             <header>
-              <h3>@bundleName(bundle.kind) <span class="count">(@{bundle.frames.size})</span></h3>
+              <h3>@bundleName(bundle.kind) <span class="count">(@{bundle.frames.size})</span>
+                <i class="fas fa-check-circle" aria-label="Holds a frame to keep" x-show="bundleHoldsPick('@{bundle.kind}')"></i></h3>
               @if(collapses) {
                 <button type="button"
                         class="action-button small"
@@ -171,7 +183,7 @@
 
       <section id="curationCompare">
         <div id="curationStage">
-          @stagePane("curationStagePinned", "pinnedId", "showsPinnedPane")
+          @stagePane("curationStageCompared", "comparedId", "showsComparedPane")
           @stagePane("curationStageFocused", "focusedId", "focusedId")
         </div>
 
@@ -192,6 +204,7 @@
                               title="@{frame.asset.fileName}"
                               x-on:click="focusFrame('@{frameId}')">
                         <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
+                        <i class="fas fa-check-circle" aria-label="Keep" x-show="isPick('@{frameId}')"></i>
                       </button>
                     </th>
                     }
@@ -232,10 +245,17 @@
         }
 
         <footer>
-          <p class="note" x-show="recycledInAlbumOrLocationNote" x-text="recycledInAlbumOrLocationNote"></p>
-          <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle</small>
+          @* The note's row is there from the set's opening when any frame is in an album or a Location, and holds its line while the
+             note is empty, so a frame's Pick does not shrink the panes mid-comparison *@
+          <p class="note" x-show="hasFrameInAlbumOrLocation" x-text="recycledInAlbumOrLocationNote"></p>
+          <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle</small>
+          @* With no frame to keep the hint stands in for Resolve, and Enter does nothing. Resolve's label is two spans so that only
+             the kept frame's name truncates, and its title gives the label whole *@
+          <div>
+            <span class="keep-hint" x-show="keepIds.length === 0">Press 1 or 2 to keep a frame</span>
+            <button type="button" class="action-button primary" x-show="keepIds.length > 0" :title="keptLabel + recycleLabel" x-on:click="resolve()"><span class="kept" x-text="keptLabel"></span><span x-text="recycleLabel"></span> <kbd>Enter</kbd></button>
+          </div>
           <div class="actions">
-            <button type="button" class="action-button primary" x-on:click="resolve()"><span x-text="resolveLabel"></span> <kbd>Enter</kbd></button>
             <button type="button" class="action-button" x-on:click="keepAll()">Keep all <kbd>A</kbd></button>
             <button type="button" class="action-button" x-on:click="skip()">Skip <kbd>S</kbd></button>
           </div>

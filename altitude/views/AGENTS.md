@@ -145,8 +145,8 @@ Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of 
 Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
 ```
 
-A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
-`data-file-name` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
+A Curation set's root carries `data-opening-compared-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
+`data-file-name`, `data-problems` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
 `data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
 (`js/search-results/cells.js`).
 
@@ -1169,7 +1169,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
   resolve, the unread state, and the queue's end. The first three offer Exit, and Undo when there is one, beside what they say.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
-  focused frame, the pinned frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
+  focused frame, the compared frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
   Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
   (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
@@ -1184,39 +1184,77 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   (`.curation-notice`, "Showing the first 100 of 2,000 frames" with what that means for the queue when a Sequence is over the window a
   set reads, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
   each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
-  Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and Recycle. A sole Contender
+  frame's `data-problems` holds what the stage's tag says is wrong with it, its Bundle first and then its chips; a Contender has
+  none. The Preview carries the frame's marks: `fa-thumbtack`, labelled "Compared", on the compared frame, and `fa-check-circle`,
+  labelled "Keep", on a Pick. A Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and
+  Recycle, and shows the same check while the Bundle holds a Pick, so collapsing it never hides a frame that counts. A sole Contender
   is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Bundles collapse only in a set of four frames or
   more (`Const.Curation.MIN_FRAMES_TO_COLLAPSE`), and the Bundles of the frames on the stage start open.
-- **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame and the
-  focused frame, or one pane when none is pinned or the pinned frame is focused. A set opens on `openingFrames`: its first two
-  Contenders, the first pinned and the second focused; with fewer, its Contender or else the rail's first frame, alone. A set read
-  again after a Bundle's recycling or its Undo keeps what was pinned, unpinned, focused, picked, open and zoomed
-  (`currentView`), as far as its frames are still in it. A pane reuses its image, and the browser paints the old picture until the new
+- **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the compared frame on the
+  left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is compared
+  or the compared frame is focused; that one frame counts as the left frame. Comparing keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
+  A set opens on `openingFrames`: its first two Contenders, the first compared and the second focused; with fewer, its Contender or
+  else the rail's first frame, alone. A set read again after a Bundle's recycling or its Undo keeps what the user had compared,
+  the focused frame, the Picks, the open Bundles and the zoom (`currentView`), as far as its frames are still in
+  it. A pane reuses its image, and the browser paints the old picture until the new
   one is available, so a pane never shows a frame under another's name: from the moment its frame changes until its image's `load` or
   `error` (`isPaneLoading`, `settledSrcs`) the image is hidden and asset detail's spinner (`.media-spinner`, `core.css`) shows after a
   moment, so a frame already in the browser's cache does not flash it. The zoom is applied on `load`, before the image shows. A Pick
   on a frame still loading is allowed, the caption naming the frame beside the spinner. The focused frame's neighbours in the rail's
   order, the frames the arrows go to, are preloaded, and a preload no longer needed stops, so a held arrow does not queue originals
   ahead of the frame on show (`preloadOnly`).
+
+  A pane's tag (`.pane-tag`), over its top left corner, says what the rail says of the frame: "Compared" (`.curation-chip.compared`)
+  on the left pane with two frames on the stage, a success-colored "Keep" (`.curation-chip.keep`) on a Pick, and the frame's problems
+  as chips (`problemsOf`, from `data-problems`). It is in `.pane` and not on the image, so a zoom's transform leaves it in place, and
+  it stays while the frame loads. The focused frame's pane has a thin accent line along its bottom, the same `--theme-accent` as the
+  rail's edge on that frame, with one frame on the stage too. It is `border-bottom: var(--border-hairline)`, transparent on the
+  pane that is not focused: both panes carry the border, so the two images stay the same height as the line moves.
+
+  A pane's caption holds the frame's file name, the Compare button and the Keep button. The Keep button reads "Keep left 1" and
+  "Keep right 2", or "Keep 1" with one frame on the stage, the number a `<kbd>` (`keepLabel`, `keepKey`). Pressed, it wears the success
+  color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The Compare button, "Compare C", is on every frame but the
+  compared one, so it is always on the focused frame, which is what C acts on. Comparing against the focused frame (`compareFocused`),
+  by its button or C, replaces the compared frame and moves focus to the next shown frame in the rail's order, or the previous one at
+  the end, so two frames stay on the stage; with no other frame shown, as when the rest sit in collapsed Bundles, the stage shows the
+  one frame. Comparison has no off switch, since a way out with no way back to the same two frames only loses the comparison. Focusing
+  the compared frame, by an arrow or a click, shows it alone, C does nothing there, and moving away brings the two back.
 - **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
   One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
-  (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A click
-  on a crop zooms both panes to that Person's box, or back out, with a transform (`applyZoom`, again when an image loads or a pane
-  resizes); a frame with no Face of the Person shows whole. A box is in upright pixels while `asset.width` and `height` come from
+  (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A column's
+  head is the frame's Preview, which focuses it and carries the same "Keep" mark on a Pick as the rail's does. A click on a crop
+  zooms both panes to that Person's box, or back out, with a transform (`applyZoom`, again when an image loads or a pane resizes); a
+  frame with no Face of the Person shows whole. A box is in upright pixels while `asset.width` and `height` come from
   the file's header, so the zoom uses the displayed image's `naturalWidth` and `naturalHeight`.
-- **The footer** holds the note of frames to recycle that are in an album or a Location (`inAlbumOrLocation`), and Resolve, reading
-  what it will do ("Keep 1, recycle 3"), Keep all and Skip.
+- **The footer** is a grid of three columns, `minmax(0, 1fr) auto minmax(max-content, 1fr)`, so its center stays at the true center
+  while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
+  window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
+  ("← → ↑ ↓ move, R recycle the frame's Bundle"), and at the right edge Keep all and Skip.
+  The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
+  stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
+  frame" (`.keep-hint`, in `--theme-neutral-3`) and no button, and Enter does nothing, since `settle` refuses an empty list. Otherwise
+  it holds Resolve, reading what it will do: "Keep IMG_0042.jpg, recycle 3" with one frame kept, the name truncated with an ellipsis
+  (`.kept`) and the button's title giving the label whole, and "Keep 2, recycle 3" with several. The keys are bound on `document`, so they go on working if Resolve held focus when
+  it left. The note of frames to recycle that are in an album or a Location (`inAlbumOrLocation`, `.note`) takes a row of its own
+  above the three columns, and is empty while nothing is to be kept, because it would otherwise count every frame. The row is there
+  whenever any frame of the set is in one (`hasFrameInAlbumOrLocation`), holding one line while the note is empty (`min-height: 1lh`),
+  so a frame's Pick does not shrink the panes mid-comparison, and its text sizes no column (`contain: inline-size`), or it would widen
+  the right one and move the center.
 - **The keys** are a `document` listener while Curation is the active host, ignored while a text field has focus
   (`isTextEditingTarget`, `common/text-editing.js`) or with Ctrl, Cmd or Alt held. Only the arrows repeat when held, so a held key
-  cannot resolve set after set. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
+  cannot resolve set after set, and `handleKey`'s `preventDefault` keeps ↑ and ↓ from scrolling the rail as well, also while a set is
+  being resolved or read, when they move nothing. The arrows pass over
+  the frames of a collapsed Bundle. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
   (`refocusAfterPointer`), so Enter resolves next.
 
   | Key | Action |
   |---|---|
-  | ← → | Move the focused frame through the rail's order, past the frames of a collapsed Bundle |
-  | C | Pin the focused frame to compare against, or unpin it |
-  | K | Toggle the focused frame as a Pick |
-  | Enter | Resolve with the Picks, or with the focused frame when there are none |
+  | ← ↑ | Move the focused frame back through the rail's order |
+  | → ↓ | Move the focused frame on through the rail's order |
+  | 1 | Toggle the left frame as a Pick, or the only frame when one is on the stage |
+  | 2 | Toggle the right frame as a Pick; nothing when one frame is on the stage |
+  | C | Compare against the focused frame and move on; nothing on the compared frame |
+  | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
   | A | Keep all |
   | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
   | S | Skip |
@@ -1248,8 +1286,12 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   true. Skip changes nothing and announces nothing. The store is also read when the Triage results render
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
 - **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, and the shell) and `curation_set.css` (the
-  set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size` and `--curation-strip-max-height`
-  of `core.css`. The style guide's Badges & states section holds the notice, the chip and a Bundle's row (see **Style guide**).
+  set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height` and
+  `--curation-kept-name-max-width` of `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
+  smaller of the token and `20vw`, since the footer's center column takes its full width before the keys' hint gets any, so in a
+  narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip and a Bundle's row
+  with its marks, and its usage note describes the pane's tag and the keep hint, whose rules apply only inside the set (see **Style
+  guide**).
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)`, which mutate the
@@ -1543,7 +1585,9 @@ variants' own edges.
 
 **Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
 `color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
-switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Every color is a `:root` token
+switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Curation's `.pane-tag` declares
+`color-scheme: dark` on itself, because the pane beneath it is dark in either theme, so its chips take the dark side of every
+token whichever theme is shown. Every color is a `:root` token
 of `core.css`, and every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, one per
 scheme, so the browser resolves the pair by the scheme in force, no rule is written once per theme, and an editor shows
 a swatch on each line. `:root` opens with the theme colors, in three groups. The brand colors: `--theme-primary` (the

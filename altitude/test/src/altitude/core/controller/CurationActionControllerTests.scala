@@ -112,8 +112,9 @@ import altitude.core.service.FaceDetectionService
      *
      * The fragment names each frame by its ID once, under the heading of its one Bundle or as the Contender, which is marked as
      * the only frame with no problem. Each Bundle gives its count and says what is wrong, how much and compared to what, and the
-     * blurry frame's other problem shows as a chip beside it. The set is not Too close to call, and it opens on its one
-     * Contender, alone on the stage.
+     * blurry frame's other problem shows as a chip beside it. `data-problems` names what is wrong with a frame, its Bundle first
+     * and then its chips, and the Contender has none. The set is not Too close to call, and it opens on its one Contender, alone
+     * on the stage.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -138,7 +139,7 @@ import altitude.core.service.FaceDetectionService
 
         (html should not).include("Too close to call")
         html should include(s"""data-opening-focused-id="${contender.persistedId}"""")
-        (html should not).include("data-opening-pinned-id")
+        (html should not).include("data-opening-compared-id")
 
         val contenders = section(html, "Contenders")
         frameIds(contenders) shouldBe List(contender.persistedId)
@@ -155,6 +156,11 @@ import altitude.core.service.FaceDetectionService
         frameIds(blur) shouldBe List(blurry.persistedId)
         blur should include("Sharpness 10 against 100")
         blur should include(">Too bright</span>")
+
+        def problemsOf(frameId: String) = s"""data-frame-id="$frameId"[^>]*data-problems"""
+        s"""${problemsOf(blurry.persistedId)}="Blurry,Too bright"""".r.findFirstIn(html) should not be empty
+        s"""${problemsOf(dark.persistedId)}="Too dark"""".r.findFirstIn(html) should not be empty
+        problemsOf(contender.persistedId).r.findFirstIn(html) shouldBe empty
     }
   }
 
@@ -169,7 +175,7 @@ import altitude.core.service.FaceDetectionService
      * Assertions:
      *
      * The first set says Too close to call and "Every frame: 8% blown highlights", and both frames are Contenders under no marker
-     * and no Bundle, the first pinned and the second focused when it opens. The second is Too close to call as well, and notes
+     * and no Bundle, the first compared and the second focused when it opens. The second is Too close to call as well, and notes
      * the unmeasured frame.
      */
     testContext.persistRepository()
@@ -185,7 +191,7 @@ import altitude.core.service.FaceDetectionService
         html should include("Every frame: 8% blown highlights")
         (html should not).include("The only frame with no problem")
         frameIds(section(html, "Contenders")).toSet shouldBe blown.map(_.persistedId).toSet
-        html should include(s"""data-opening-pinned-id="${frameIds(html).head}"""")
+        html should include(s"""data-opening-compared-id="${frameIds(html).head}"""")
         html should include(s"""data-opening-focused-id="${frameIds(html)(1)}"""")
 
         val unmeasured = testContext.persistAsset(isTriaged = true)

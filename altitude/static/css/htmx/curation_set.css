@@ -48,6 +48,11 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* Beside the name while the Bundle holds a Pick, so collapsing it never hides a frame that counts */
+.curation-bundle h3 .fa-check-circle {
+  color: var(--success-color);
+}
+
 .curation-bundle .count {
   color: var(--theme-neutral-3);
   font-weight: var(--font-weight-medium);
@@ -75,7 +80,8 @@
   column-gap: var(--space-4);
 }
 
-/* A frame's Preview, a button that focuses it: the frame focused wears the accent's edge, marks say pinned and Pick */
+/* A frame's Preview, a button that focuses it, in the rail and at the head of its column of the face strip. In the rail the frame
+   focused wears the accent's edge, and a mark says it is compared; in both a mark says it is kept */
 .curation-preview {
   position: relative;
   width: var(--curation-preview-size);
@@ -146,7 +152,8 @@
   list-style: none;
 }
 
-/* A frame's other problem, or the sole Contender's marker (.sole) */
+/* In the rail a frame's other problem, or the sole Contender's marker (.sole); on a pane's tag any of its problems, or that it is
+   compared (.compared) or kept (.keep) */
 .curation-chip {
   padding: var(--chip-padding);
   color: var(--warning-color);
@@ -180,6 +187,7 @@
 
 #curationStage figure {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   row-gap: var(--space-3);
   min-height: 0;
@@ -191,7 +199,13 @@
   min-height: 0;
   overflow: hidden;
   background-color: var(--asset-detail-backdrop-color);
+  border-bottom: var(--border-hairline) transparent;
   border-radius: var(--radius);
+}
+
+/* Both panes carry the edge, so the images stay the same height as it moves to the focused frame */
+#curationStage .pane.focused {
+  border-bottom-color: var(--theme-accent);
 }
 
 /* The zoom's transform (js/alpine/components/curation.js) works from the image's top left corner */
@@ -216,6 +230,33 @@
 #curationStage .pane.loading .media-spinner {
   visibility: visible;
   transition: visibility 0s 150ms;
+}
+
+/* What the rail says of the frame, over the pane's corner. It follows the spinner in the pane, so it paints above both the spinner and
+   a zoomed image. The pane is dark in either theme and its image can be anything, so the tag takes the dark side of every token */
+#curationStage .pane-tag {
+  position: absolute;
+  inset: var(--space-4) var(--space-4) auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  pointer-events: none;
+  color-scheme: dark;
+}
+
+#curationStage .curation-chip {
+  background-color: var(--asset-detail-backdrop-color);
+}
+
+#curationStage .curation-chip.compared {
+  color: var(--theme-neutral-4);
+  border-color: var(--theme-neutral-3);
+}
+
+#curationStage .curation-chip.keep {
+  color: var(--theme-on-primary);
+  background-color: var(--success-color);
+  border-color: var(--success-color);
 }
 
 #curationStage figcaption {
@@ -263,7 +304,7 @@
   background-color: hsl(from var(--theme-accent) h s l / 0.2);
 }
 
-#curationFaces th.pinned, #curationFaces td.pinned {
+#curationFaces th.compared, #curationFaces td.compared {
   background-color: hsl(from var(--theme-neutral-3) h s l / 0.2);
 }
 
@@ -301,29 +342,60 @@
   color: var(--theme-neutral-3);
 }
 
+/* The side columns share what the center leaves, which holds the keep hint or Resolve at the footer's true center while the right
+   column fits its share. That column is never smaller than its buttons, so in a narrow window it takes what they need and the center
+   moves left. The note takes a row of its own above them */
 #curationCompare footer {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   gap: var(--space-4) var(--space-6);
   padding: var(--panel-padding);
   border-top: var(--border-hairline) var(--panel-border-color);
 }
 
+/* It holds its line while empty, so a frame's Pick does not shrink the panes mid-comparison. Its text must not size the columns it
+   spans, or it would widen the right one and move the center */
 #curationCompare .note {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
+  contain: inline-size;
+  min-height: 1lh;
   margin: 0;
   color: var(--warning-color);
   font-size: var(--font-size-small);
 }
 
+/* One line, clipped in a narrow window, so that a reminder of the keys never takes height from the images */
 #curationCompare .keys {
-  flex: 1;
+  overflow: hidden;
   color: var(--theme-neutral-3);
   font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #curationCompare .actions {
   display: flex;
+  justify-self: end;
   gap: var(--space-4);
+}
+
+#curationCompare footer button {
+  white-space: nowrap;
+}
+
+#curationCompare .keep-hint {
+  color: var(--theme-neutral-3);
+}
+
+/* What Resolve keeps, cut short so that what it recycles stays readable. The center column takes its full width before the keys' hint
+   gets any, so the name's share of the window leaves that hint room in a narrow one; Curation fills the window, so vw measures it.
+   Clipping moves an inline block's baseline to its bottom edge, so it aligns by that edge to stay level with the rest of the label */
+#curationCompare .kept {
+  display: inline-block;
+  max-width: min(var(--curation-kept-name-max-width), 20vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }

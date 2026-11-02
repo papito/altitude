@@ -240,8 +240,15 @@ the first 100 when it has more, or a selection.
 _Avoid_: Batch (a user's selection before it is curated), Group.
 
 **Pick**:
-A frame the user keeps. A set can have several.
+A frame the user keeps. A set can have several. Its button and its mark read
+"Keep".
 _Avoid_: Winner, Best.
+
+**Compared frame**:
+The frame held in the stage's left pane to compare the focused frame against.
+Comparing keeps nothing: Resolve keeps the Picks, or with none the one frame on
+the stage.
+_Avoid_: Pinned (**Pin** is a Location's point), Reference.
 
 **Bundle**:
 The frames of a Curation set whose main problem is the same.

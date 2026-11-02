@@ -50,7 +50,7 @@ const Phase = {
 // How much of the pane a zoomed Face's box fills, so its surroundings stay in view
 const ZOOMED_BOX_SHARE = 0.5
 
-const PINNED_IMAGE_ID = "curationStagePinned"
+const COMPARED_IMAGE_ID = "curationStageCompared"
 const FOCUSED_IMAGE_ID = "curationStageFocused"
 
 // What the next shell to load is opened on; the shell's request carries no parameters
@@ -112,7 +112,7 @@ function preloadOpeningFrames(html) {
         .querySelector(`[${Const.attributes.openingFocusedId}]`)
 
     for (const frameId of [
-        setEl?.dataset.openingPinnedId,
+        setEl?.dataset.openingComparedId,
         setEl?.dataset.openingFocusedId,
     ]) {
         if (frameId) {
@@ -213,12 +213,13 @@ export function curation() {
     return {
         phase: Phase.loading,
 
-        // The set shown, in the rail's order: `{ id, fileName, bundleKind, inAlbumOrLocation }`
+        // The set shown, in the rail's order: `{ id, fileName, bundleKind, inAlbumOrLocation, problems }`,
+        // `problems` naming what is wrong with the frame, its Bundle first and then its chips
         frames: [],
         // A frame's Bundle by its ID; a Contender has none
         bundleOf: {},
         focusedId: null,
-        pinnedId: null,
+        comparedId: null,
         pickIds: [],
         // Whether each Bundle of the set is open, by its kind
         openBundles: {},
@@ -318,25 +319,57 @@ export function curation() {
             return !Alpine.store(Const.state.sequencesToCurate).hasAny
         },
 
-        // The stage shows the pinned frame beside the focused one, or one frame when they are the same
-        get showsPinnedPane() {
-            return this.pinnedId !== null && this.pinnedId !== this.focusedId
+        // The stage shows the compared frame beside the focused one, or one frame when they are the same
+        get showsComparedPane() {
+            return (
+                this.comparedId !== null && this.comparedId !== this.focusedId
+            )
         },
 
-        // The frames kept: the Picks, or with none the focused frame
+        // The frame in the left pane, which is the only frame when one is on the stage
+        get leftFrameId() {
+            return this.showsComparedPane ? this.comparedId : this.focusedId
+        },
+
+        // The frame in the right pane; none when one frame is on the stage
+        get rightFrameId() {
+            return this.showsComparedPane ? this.focusedId : null
+        },
+
+        // The frames kept: the Picks, or with none the frame on the stage when it is the only one. With
+        // two on the stage and no Pick nothing is, so a frame is never recycled on a guess
         get keepIds() {
-            return this.pickIds.length > 0
-                ? this.pickIds
+            if (this.pickIds.length > 0) {
+                return this.pickIds
+            }
+            return this.showsComparedPane
+                ? []
                 : [this.focusedId].filter(Boolean)
         },
 
-        get resolveLabel() {
-            const kept = this.keepIds.length
-            return `Keep ${kept}, recycle ${this.frames.length - kept}`
+        // Resolve's label in two parts, since only the part naming a frame truncates
+        get keptLabel() {
+            const kept = this.keepIds
+            return `Keep ${kept.length === 1 ? this.fileNameOf(kept[0]) : kept.length}`
         },
 
-        // The set's footer, when a frame to be recycled is in an album or a Location
+        get recycleLabel() {
+            return `, recycle ${this.frames.length - this.keepIds.length}`
+        },
+
+        // The footer holds the note's row whenever this is so, so a frame's Pick does not shrink the panes
+        // mid-comparison
+        get hasFrameInAlbumOrLocation() {
+            return this.frames.some((frame) => frame.inAlbumOrLocation)
+        },
+
+        // The set's footer, when a frame to be recycled is in an album or a Location. Empty while nothing
+        // is to be kept, since nothing is to be recycled yet and every frame would count
         get recycledInAlbumOrLocationNote() {
+            if (this.keepIds.length === 0) {
+                return ""
+            }
+
             const count = this.frames.filter(
                 (frame) =>
                     frame.inAlbumOrLocation && !this.keepIds.includes(frame.id),
@@ -374,6 +407,13 @@ export function curation() {
             return this.frames.find((frame) => frame.id === frameId)?.fileName
         },
 
+        problemsOf(frameId) {
+            return (
+                this.frames.find((frame) => frame.id === frameId)?.problems ??
+                []
+            )
+        },
+
         isPick(frameId) {
             return this.pickIds.includes(frameId)
         },
@@ -382,23 +422,19 @@ export function curation() {
             return this.openBundles[kind] === true
         },
 
+        bundleHoldsPick(kind) {
+            return this.pickIds.some((id) => this.bundleOf[id] === kind)
+        },
+
         isFrameShown(frameId) {
             const kind = this.bundleOf[frameId]
             return !kind || this.isBundleOpen(kind)
         },
 
-        frameClasses(frameId) {
-            return {
-                focused: this.focusedId === frameId,
-                pinned: this.pinnedId === frameId,
-                pick: this.isPick(frameId),
-            }
-        },
-
         columnClasses(frameId) {
             return {
                 focused: this.focusedId === frameId,
-                pinned: this.pinnedId === frameId,
+                compared: this.comparedId === frameId,
             }
         },
 
@@ -406,12 +442,15 @@ export function curation() {
             return this.isBundleOpen(kind) ? "Hide" : "Show"
         },
 
-        pinLabel(frameId) {
-            return this.pinnedId === frameId ? "Unpin" : "Pin"
+        keepLabel(frameId) {
+            if (!this.showsComparedPane) {
+                return "Keep"
+            }
+            return frameId === this.leftFrameId ? "Keep left" : "Keep right"
         },
 
-        pickLabel(frameId) {
-            return this.isPick(frameId) ? "Picked" : "Pick"
+        keepKey(frameId) {
+            return frameId === this.rightFrameId ? "2" : "1"
         },
 
         focusFrame(frameId) {
@@ -460,8 +499,22 @@ export function curation() {
             )
         },
 
-        togglePin(frameId) {
-            this.pinnedId = this.pinnedId === frameId ? null : frameId
+        /**
+         * The focused frame becomes the compared frame, replacing the one before it, and focus moves on to
+         * the next shown frame, or the previous one at the end, so two frames stay on the stage. With no
+         * other frame shown, the stage shows the one frame. Comparison only ever moves to another frame:
+         * the compared frame on its own has nothing to do here, and an arrow goes back to the two.
+         */
+        compareFocused() {
+            if (!this.focusedId || this.focusedId === this.comparedId) {
+                return
+            }
+
+            this.comparedId = this.focusedId
+            const nextId = this.neighbourOf(1) ?? this.neighbourOf(-1)
+            if (nextId) {
+                this.focusFrame(nextId)
+            }
         },
 
         togglePick(frameId) {
@@ -487,7 +540,7 @@ export function curation() {
          */
         applyZoom() {
             const panes = [
-                [PINNED_IMAGE_ID, this.pinnedId],
+                [COMPARED_IMAGE_ID, this.comparedId],
                 [FOCUSED_IMAGE_ID, this.focusedId],
             ]
             for (const [imageId, frameId] of panes) {
@@ -510,7 +563,7 @@ export function curation() {
         /** What the user has made of the set on show, which a later read of that same set can keep */
         currentView() {
             return {
-                pinnedId: this.pinnedId,
+                comparedId: this.comparedId,
                 focusedId: this.focusedId,
                 pickIds: this.pickIds,
                 openBundles: { ...this.openBundles },
@@ -520,10 +573,10 @@ export function curation() {
 
         /**
          * Puts a set's fragment on show and reads its frames. `view` is for the same set read again: what
-         * the user had pinned or unpinned, focused, picked and opened stays as far as its frames are still
-         * in the set, and anything else opens as a new set does. A selection with too few frames left
-         * answers with a fragment saying so instead of a set, and the too-few state of the shell says the
-         * same.
+         * the user had compared, focused, picked and opened stays as far as its frames
+         * are still in the set, and anything else opens as a new set does. A selection with too few frames
+         * left answers with a fragment saying so instead of a set, and the too-few state of the shell says
+         * the same.
          */
         showSet(html, { view = null } = {}) {
             if (isClosed) {
@@ -547,6 +600,7 @@ export function curation() {
                 fileName: frameEl.dataset.fileName,
                 bundleKind: frameEl.dataset.bundleKind ?? null,
                 inAlbumOrLocation: frameEl.dataset.inAlbumOrLocation === "true",
+                problems: frameEl.dataset.problems?.split(",") ?? [],
             }))
             const isInSet = (frameId) =>
                 frames.some((frame) => frame.id === frameId)
@@ -559,9 +613,9 @@ export function curation() {
             this.bundleOf = Object.fromEntries(
                 frames.map((frame) => [frame.id, frame.bundleKind]),
             )
-            this.pinnedId = kept(
-                view?.pinnedId,
-                setEl.dataset.openingPinnedId ?? null,
+            this.comparedId = kept(
+                view?.comparedId,
+                setEl.dataset.openingComparedId ?? null,
             )
             this.focusedId = kept(
                 view?.focusedId,
@@ -583,7 +637,7 @@ export function curation() {
                         !collapses ||
                             wasOpen[bundleKind] === true ||
                             bundleKind === this.bundleOf[this.focusedId] ||
-                            bundleKind === this.bundleOf[this.pinnedId],
+                            bundleKind === this.bundleOf[this.comparedId],
                     ]),
             )
 
@@ -596,7 +650,7 @@ export function curation() {
         // The fragment's images are new, and a pane resizing changes what a zoom has to do
         watchStage() {
             stageObserver.disconnect()
-            for (const imageId of [PINNED_IMAGE_ID, FOCUSED_IMAGE_ID]) {
+            for (const imageId of [COMPARED_IMAGE_ID, FOCUSED_IMAGE_ID]) {
                 const imageEl = document.getElementById(imageId)
                 if (imageEl) {
                     stageObserver.observe(imageEl)
@@ -634,7 +688,7 @@ export function curation() {
             this.frames = []
             this.bundleOf = {}
             this.focusedId = null
-            this.pinnedId = null
+            this.comparedId = null
             this.pickIds = []
             this.phase = phase
             this.keepFocusInside()
@@ -808,7 +862,8 @@ export function curation() {
         },
 
         /**
-         * Keeps the frames named and recycles the others. The server's answer says whether a set changed:
+         * Keeps the frames named and recycles the others; with none named, as while the footer's hint shows
+         * or with no set on show, it does nothing. The server's answer says whether a set changed:
          * nothing recycled and no Sequence cleared is a Keep all on part of a Sequence, or on frames of none.
          * The queue goes on to its next set either way. With no next set, an outcome that changed nothing
          * closes Curation, as a Skip does, and any other stays open on its report, keeping its undo entry.
@@ -962,11 +1017,15 @@ export function curation() {
         },
 
         /**
-         * The keys, bound while Curation is the active host: ← → move the focused frame, C pins it, K
-         * picks it, Enter resolves, A keeps all, R recycles its Bundle, S skips and Z undoes. Esc is
-         * `global.js`'s. A key held down repeats only the arrows, so it cannot resolve set after set, and
-         * Enter on a focused control presses that control. With no set on show there are no frames and no
-         * focused frame, so only Z and Esc do anything.
+         * The keys, bound while Curation is the active host: ← ↑ move the focused frame back through the
+         * rail's order and → ↓ move it on, 1 toggles the left frame as a Pick, or the only frame when one is
+         * on the stage, and 2 the right frame, with nothing to do when one is on the stage. C compares against
+         * the focused frame and moves on, and does nothing on the compared frame. Enter resolves,
+         * which does nothing while no frame is to be kept (`keepIds`), A keeps all, R recycles the focused
+         * frame's Bundle, S skips and Z undoes. Esc is `global.js`'s. A key held down repeats only the arrows,
+         * so it cannot resolve set after set, and Enter on a focused control presses that control. While a
+         * set is being resolved or read an arrow moves nothing, and still does not scroll the rail. With no
+         * set on show there are no frames and no focused frame, so only Z and Esc do anything.
          */
         handleKey(event) {
             if (
@@ -986,27 +1045,30 @@ export function curation() {
 
             const repeatable = {
                 arrowleft: () => this.moveFocus(-1),
+                arrowup: () => this.moveFocus(-1),
                 arrowright: () => this.moveFocus(1),
+                arrowdown: () => this.moveFocus(1),
             }
             const once = {
-                c: () => this.focusedId && this.togglePin(this.focusedId),
-                k: () => this.focusedId && this.togglePick(this.focusedId),
+                c: () => this.compareFocused(),
+                1: () => this.leftFrameId && this.togglePick(this.leftFrameId),
+                2: () =>
+                    this.rightFrameId && this.togglePick(this.rightFrameId),
                 enter: () => this.resolve(),
                 a: () => this.keepAll(),
                 r: () => this.recycleFocusedBundle(),
                 s: () => this.skip(),
                 z: () => this.undo(),
             }
-            const action =
-                Object.hasOwn(repeatable, key) && !isBusy
-                    ? repeatable[key]
-                    : Object.hasOwn(once, key) && !event.repeat
-                      ? once[key]
-                      : null
 
-            if (action) {
+            if (Object.hasOwn(repeatable, key)) {
                 event.preventDefault()
-                action()
+                if (!isBusy) {
+                    repeatable[key]()
+                }
+            } else if (Object.hasOwn(once, key) && !event.repeat) {
+                event.preventDefault()
+                once[key]()
             }
         },
 

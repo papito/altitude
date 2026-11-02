@@ -97,9 +97,10 @@ export const Const = {
         personId: "data-person-id",
         faceId: "data-face-id",
         // A frame of a Curation set in the rail (`data-asset-id` finds the cells of the grid beneath), its file's
-        // name, its Bundle, and whether it is in an album or Location
+        // name, what the stage's tag says is wrong with it, its Bundle, and whether it is in an album or Location
         frameId: "data-frame-id",
         fileName: "data-file-name",
+        problems: "data-problems",
         bundleKind: "data-bundle-kind",
         inAlbumOrLocation: "data-in-album-or-location",
         // The Sequence a group header's Curate opens Curation on
@@ -109,7 +110,7 @@ export const Const = {
         // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
         maxSelection: "data-max-selection",
         // A Curation set's opening frames, and whether its Bundles collapse
-        openingPinnedId: "data-opening-pinned-id",
+        openingComparedId: "data-opening-compared-id",
         openingFocusedId: "data-opening-focused-id",
         bundlesCollapse: "data-bundles-collapse",
         // The face strip's column of a frame, and a crop's box in upright pixels: x, y, width, height
