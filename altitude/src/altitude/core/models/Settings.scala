@@ -5,6 +5,7 @@ import java.net.URI
 import scala.util.Try
 
 import altitude.core.Const
+import altitude.core.util.ImageMeasurement
 
 /** The sections of the Settings screen */
 enum SettingGroup(val label: String):
@@ -122,6 +123,13 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
   val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
   val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
+  val curationBlurRatio: Double = number(CURATION_BLUR_RATIO)
+  val curationFaceQualityGap: Double = number(CURATION_FACE_QUALITY_GAP)
+  val curationClippedFraction: Double = number(CURATION_CLIPPED_FRACTION)
+  val curationCrushedFraction: Double = number(CURATION_CRUSHED_FRACTION)
+  val curationDarkLuminance: Double = number(CURATION_DARK_LUMINANCE)
+  val curationBrightLuminance: Double = number(CURATION_BRIGHT_LUMINANCE)
+  val curationLuminanceGap: Double = number(CURATION_LUMINANCE_GAP)
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
   val mapGeocoderEnabled: Boolean = text(MAP_GEOCODER_ENABLED) == "true"
@@ -152,6 +160,13 @@ object Settings:
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
   val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
   val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
+  val CURATION_BLUR_RATIO = "curation.blur_ratio"
+  val CURATION_FACE_QUALITY_GAP = "curation.face_quality_gap"
+  val CURATION_CLIPPED_FRACTION = "curation.clipped_fraction"
+  val CURATION_CRUSHED_FRACTION = "curation.crushed_fraction"
+  val CURATION_DARK_LUMINANCE = "curation.dark_luminance"
+  val CURATION_BRIGHT_LUMINANCE = "curation.bright_luminance"
+  val CURATION_LUMINANCE_GAP = "curation.luminance_gap"
   val MAP_TILE_URL = "map.tile.url"
   val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
   val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
@@ -164,6 +179,9 @@ object Settings:
   import SettingType.*
 
   private val postgresOnly = Some(Const.DbEngineName.POSTGRES)
+
+  // The four absolute exposure Settings say the same thing about a problem no Pick can fix
+  private val everyFrameNotice = "When every frame of a Curation set is, that is a notice on the set and not a Bundle."
 
   val all: List[SettingDef] = List(
     SettingDef(
@@ -281,6 +299,59 @@ object Settings:
       s"How far apart two frames' perceptual hashes may be, 0 to ${PerceptualHash.BITS} bits, to still look alike. Higher " +
         "groups more freely.",
       Integer(0, PerceptualHash.BITS)
+    ),
+    SettingDef(
+      CURATION_BLUR_RATIO,
+      Triage,
+      "Curation blur ratio",
+      "A frame is Blurry when a Person it shares with another frame of the Curation set, at a similar size, has under this " +
+        "fraction of that Person's best Face sharpness. A frame with no such Person, in a Sequence, is compared on its whole " +
+        "frame's sharpness against the Sequence's sharpest frame.",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_FACE_QUALITY_GAP,
+      Triage,
+      "Curation face quality gap",
+      "A frame has Poor faces when one of its Faces' quality is at least this far below the same Person's best in the " +
+        "Curation set. On the scale of the enroll threshold.",
+      Decimal(0)
+    ),
+    SettingDef(
+      CURATION_CLIPPED_FRACTION,
+      Triage,
+      "Curation clipped highlights",
+      s"A frame is Too bright when at least this fraction of its pixels are clipped highlights. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_CRUSHED_FRACTION,
+      Triage,
+      "Curation crushed shadows",
+      s"A frame is Too dark when at least this fraction of its pixels are crushed shadows. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_DARK_LUMINANCE,
+      Triage,
+      "Curation dark limit",
+      s"A frame is Too dark when its mean brightness, 0 to 1, is under this. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_BRIGHT_LUMINANCE,
+      Triage,
+      "Curation bright limit",
+      s"A frame is Too bright when its mean brightness, 0 to 1, is over this. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_LUMINANCE_GAP,
+      Triage,
+      "Curation brightness gap",
+      "In a Sequence, a frame is Too dark or Too bright when its mean brightness, 0 to 1, is at least this much farther from " +
+        s"the target of ${ImageMeasurement.TARGET_LUMINANCE} than the Sequence's frame nearest the target.",
+      Decimal(0, 1)
     ),
     SettingDef(
       MAP_TILE_URL,
