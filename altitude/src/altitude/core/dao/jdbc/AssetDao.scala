@@ -218,8 +218,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
   /**
    * The context repository's completed assets that are not marked for purging, among the IDs when given, recycled or live when
-   * asked, locked until the transaction ends. The flags are literals, which each engine reads as its own boolean, so no bind
-   * value differs by engine.
+   * asked, locked in ID order until the transaction ends. The flags are literals, which each engine reads as its own boolean, so
+   * no bind value differs by engine.
    */
   private def lockForTransition(assetIds: Option[Set[String]], isRecycled: Option[Boolean]): List[Asset] =
     if assetIds.exists(_.isEmpty) then return List.empty[Asset]
@@ -235,6 +235,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
          $idFilter
          $recycledFilter
+    ORDER BY ${FieldConst.ID}
          $forUpdate
     """
 
@@ -348,18 +349,47 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   def countSequencesToCurateStatement: (String, List[Any]) =
     (s"SELECT COUNT(*) AS sequences FROM ($sequencesToCurate) AS to_curate", List(RequestContext.getRepository.persistedId))
 
-  /** The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain */
-  def sequenceFramesStatement(sequenceId: String): (String, List[Any]) =
-    val sql = s"""
+  /** The frames completed and out of the trash whose Sequence passes the test, whose one placeholder binds before the repository */
+  private def liveFramesOfSequences(sequenceTest: String): String = s"""
       SELECT $assetWithoutBulkyMetadata
         FROM asset
-       WHERE ${FieldConst.Asset.SEQUENCE_ID} = ?
+       WHERE ${FieldConst.Asset.SEQUENCE_ID} $sequenceTest
          AND ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
          AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
     """
-    (sql, List(sequenceId, RequestContext.getRepository.persistedId))
+
+  /** The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain */
+  def sequenceFramesStatement(sequenceId: String): (String, List[Any]) =
+    (liveFramesOfSequences("= ?"), List(sequenceId, RequestContext.getRepository.persistedId))
+
+  // SQLite's one write connection serializes the writers
+  override def lockSequences(): Unit = ()
+
+  override def getLiveSequenceMembers(sequenceIds: Set[String]): List[Asset] =
+    if sequenceIds.isEmpty then return List.empty[Asset]
+
+    val (sql, values) = liveSequenceMembersStatement(sequenceIds)
+    manyBySqlQuery(sql, values).map(makeModel)
+
+  /**
+   * The statement behind [[getLiveSequenceMembers]] with its bind values, which the plan tests explain. The rows are locked in ID
+   * order, the order of the library operations' locking select, so the two do not wait on each other in a cycle.
+   */
+  def liveSequenceMembersStatement(sequenceIds: Set[String]): (String, List[Any]) =
+    val sql = s"${liveFramesOfSequences(inIdSet)} ORDER BY ${FieldConst.ID} $forUpdate"
+    (sql, List(idSet(sequenceIds), RequestContext.getRepository.persistedId))
+
+  override def clearSequence(assetIds: Set[String]): Int =
+    if assetIds.isEmpty then return 0
+
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.SEQUENCE_ID} = NULL
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} $inIdSet
+    """
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
 
   override def setSequence(assetIds: Set[String], sequenceId: String): Int =
     if assetIds.isEmpty then return 0

@@ -14,8 +14,8 @@ import altitude.core.util.SequenceRule
 /**
  * Puts the still images of one burst in a Sequence as their imports complete. A Sequence has no row of its own: it is the
  * `sequence_id` its members share, and it exists exactly while some asset carries it: a member leaves it by a move into a folder
- * (`LibraryService.moveAssetsToFolder`) or with its row's delete (a purge, the discard of a dropped import, a repository delete);
- * one recycled from triage keeps it.
+ * (`LibraryService.moveAssetsToFolder`), as a Pick of a Curation set that held the whole Sequence (`CurationService.resolve`) or
+ * with its row's delete (a purge, the discard of a dropped import, a repository delete); one recycled from triage keeps it.
  */
 class SequenceService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -30,12 +30,15 @@ class SequenceService(val app: Altitude):
    * triage keeps its Sequence, so the next frame of its burst joins it there); the matches among them are decided by
    * `SequenceRule.matches` with both Settings from one snapshot. No match leaves the asset alone: a lone image is never a
    * Sequence. Matches with no Sequence get a new one with the asset; matches in one Sequence join the asset to it; matches in
-   * several merge them, since a burst is transitive, into the one with the most members (ties to the one captured first).
+   * several merge them, since a burst is transitive, into the one with the most members (ties to the one captured first). The
+   * assignment takes its turn among the writers of Sequences (`AssetDao.lockSequences`) before it reads, so a resolve is either
+   * settled in what it reads, or waits and sees this asset.
    */
   def assign(asset: Asset): Asset =
     txManager.withTransaction {
       if !SequenceRule.isEligible(asset) then asset
       else
+        dao.lockSequences()
         val settings = app.settings.current
         val matches = dao
           .getSequenceCandidates(asset, settings.sequenceMaxGapMs)

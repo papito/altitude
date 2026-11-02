@@ -7,15 +7,24 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
+import altitude.core.ConstraintException
+import altitude.core.IllegalOperationException
+import altitude.core.NotFoundException
+import altitude.core.RequestContext
 import altitude.core.dao.jdbc.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.BundleKind
 import altitude.core.models.CurationSet
 import altitude.core.models.Person
+import altitude.core.models.RestoreResult
 import altitude.core.models.Settings
+import altitude.core.models.Stats
 import altitude.core.service.FaceDetectionService
 
-/** Reading a Curation set: the queue and its count, a Sequence's frames and a selection's, over the burst of `BurstFrames` */
+/**
+ * A Curation set: reading the queue and its count, a Sequence's frames and a selection's, and a set's outcome (resolve and
+ * reopen), over the burst of `BurstFrames`
+ */
 @DoNotDiscover class CurationServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore
   with SearchPlans
@@ -32,6 +41,8 @@ import altitude.core.service.FaceDetectionService
   private def sequenceOf(frames: List[Asset]): String = frames.last.sequenceId.get
 
   private def ids(frames: List[Asset]): Set[String] = frames.map(_.persistedId).toSet
+
+  private def stored(asset: Asset): Asset = testApp.service.asset.getById(asset.persistedId)
 
   private def frameIds(set: Option[CurationSet]): List[String] = set.value.frames.map(_.asset.persistedId)
 
@@ -353,7 +364,7 @@ import altitude.core.service.FaceDetectionService
     }
   }
 
-  test("The queue, its count and a Sequence's frames are read through the Sequence index") {
+  test("The queue, its count, a Sequence's frames and a resolve's locking read go through the Sequence index") {
 
     /**
      * Setup:
@@ -363,20 +374,502 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The engine's plan names `asset_sequence` for all three statements, so the toolbar's count, read after every mutation, costs
+     * The engine's plan names `asset_sequence` for all four statements, so the toolbar's count, read after every mutation, costs
      * the rows that carry a Sequence and not the library.
      */
     val frames = burst(0)
     val dao = testApp.DAO.asset.asInstanceOf[AssetDao]
-    val statements = List(
-      dao.sequencesToCurateStatement,
-      dao.countSequencesToCurateStatement,
-      dao.sequenceFramesStatement(sequenceOf(frames))
-    )
-
     val plans = atScale(seedCopies(frames.head.persistedId, copies = 5000, folders = 1)) {
-      statements.map((sql, values) => lookupPlanOf(sql, values))
+      List(
+        dao.sequencesToCurateStatement,
+        dao.countSequencesToCurateStatement,
+        dao.sequenceFramesStatement(sequenceOf(frames)),
+        dao.liveSequenceMembersStatement(Set(sequenceOf(frames)))
+      ).map((sql, values) => lookupPlanOf(sql, values))
     }
     plans.foreach(plan => withClue(plan)(plan should include("asset_sequence")))
+  }
+
+  test("A resolve recycles the others, clears the Picks' Sequence and counts the stats") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames, resolved with the first as the Pick and the other two to recycle.
+     *
+     * Assertions:
+     *
+     * The answer names the Pick with the Sequence it left. The Pick is out of the Sequence and out of the trash; the others are
+     * in the trash and keep it, as any recycled frame does; the stats moved them from triage to recycled. The Sequence has left
+     * the queue and the count, and has no set.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+
+    curation.resolve(ids(frames.take(1)), ids(frames.tail)) shouldBe Map(frames.head.persistedId -> sequenceId)
+
+    val pick = stored(frames.head)
+    pick.sequenceId shouldBe None
+    pick.isRecycled shouldBe false
+    frames.tail.map(stored).foreach {
+      other =>
+        other.isRecycled shouldBe true
+        other.sequenceId shouldBe Some(sequenceId)
+    }
+    val stats = testApp.service.stats.getStats
+    stats.getStatValue(Stats.TRIAGE_ASSETS) shouldBe 1
+    stats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 2
+    queueShouldHold()
+    curation.sequenceSet(sequenceId) shouldBe None
+  }
+
+  test("A resolve that fails changes nothing") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames, and the repository's recycled count row deleted behind the services' back, so counting what a
+     * resolve recycles fails once the frames have been written.
+     *
+     * Assertions:
+     *
+     * The resolve fails on the missing stat, and every frame is still out of the trash and in the Sequence, which stays in the
+     * queue.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+    testApp.txManager.withTransaction {
+      update(
+        "DELETE FROM stats WHERE repository_id = ? AND dimension = ?",
+        testContext.repository.persistedId,
+        Stats.RECYCLED_ASSETS)
+    }
+
+    val failure = the[ConstraintException] thrownBy curation.resolve(ids(frames.take(1)), ids(frames.tail))
+    failure.getMessage should include(Stats.RECYCLED_ASSETS)
+
+    frames.map(stored).foreach {
+      frame =>
+        frame.isRecycled shouldBe false
+        frame.sequenceId shouldBe Some(sequenceId)
+    }
+    queueShouldHold(sequenceId)
+  }
+
+  test("A set resolved with two Picks leaves the queue") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with two Picks.
+     *
+     * Assertions:
+     *
+     * Both are named in the answer, carry no Sequence and are out of the trash, so the two frames left do not make the Sequence
+     * one to compare again: it is out of the queue and the count.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+
+    curation.resolve(ids(frames.take(2)), ids(frames.drop(2))) shouldBe
+      frames.take(2).map(_.persistedId -> sequenceId).toMap
+
+    frames.take(2).map(stored).map(pick => (pick.sequenceId, pick.isRecycled)) shouldBe List((None, false), (None, false))
+    queueShouldHold()
+  }
+
+  test("A selection of part of a Sequence leaves its Picks in it and the Sequence in the queue") {
+
+    /**
+     * Setup:
+     *
+     * A burst of four frames, of which a selection holds two: one kept and one recycled.
+     *
+     * Assertions:
+     *
+     * Nothing is cleared, so the answer is empty. The other is recycled; the Pick keeps its Sequence, to be compared with the
+     * frames outside the selection, and the Sequence stays in the queue and the count with the three frames left.
+     */
+    val frames = burst(0, frames = 4)
+    val sequenceId = sequenceOf(frames)
+
+    curation.resolve(ids(frames.take(1)), Set(frames(1).persistedId)) shouldBe empty
+
+    stored(frames.head).sequenceId shouldBe Some(sequenceId)
+    stored(frames(1)).isRecycled shouldBe true
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(3)
+  }
+
+  test("A frame already in the trash does not keep a set from holding its Sequence") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames with the last recycled from the grid, then a set of the other two resolved.
+     *
+     * Assertions:
+     *
+     * The set holds all the frames still out of the trash, so the Pick leaves the Sequence.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+    testApp.service.library.recycleAssets(Set(frames.last.persistedId))
+
+    curation.resolve(ids(frames.take(1)), Set(frames(1).persistedId)) shouldBe Map(frames.head.persistedId -> sequenceId)
+
+    stored(frames.head).sequenceId shouldBe None
+    queueShouldHold()
+  }
+
+  test("A selection of one whole Sequence and part of another decides each alone") {
+
+    /**
+     * Setup:
+     *
+     * A burst of two frames and on another camera a burst of three, and a selection holding the first whole, two of the second,
+     * and a lone frame, with a Pick in each Sequence and the lone frame recycled.
+     *
+     * Assertions:
+     *
+     * The first Sequence is held whole, so its Pick leaves it and it leaves the queue. The second is not, so its Pick stays and
+     * it stays in the queue, with the two frames left. The lone frame is recycled like any other.
+     */
+    val whole = burst(0)
+    val part = burst(2, frames = 3, model = "Nikon Z8")
+    val lone = importFrame(frame(5), taken = Some(takenAt(30)))
+    val partSequence = sequenceOf(part)
+
+    val cleared = curation.resolve(
+      keepIds = Set(whole.head.persistedId, part.head.persistedId),
+      recycleIds = Set(whole.last.persistedId, part(1).persistedId, lone.persistedId))
+
+    cleared shouldBe Map(whole.head.persistedId -> sequenceOf(whole))
+    stored(whole.head).sequenceId shouldBe None
+    stored(part.head).sequenceId shouldBe Some(partSequence)
+    stored(lone).isRecycled shouldBe true
+    queueShouldHold(partSequence)
+    curation.queue().map(_.members) shouldBe List(2)
+  }
+
+  test("Keep all clears a whole Sequence, and on part of one changes nothing") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames and on another camera a burst of two. All of the first but one frame are kept, then all of the
+     * second.
+     *
+     * Assertions:
+     *
+     * Keep all on part of a Sequence answers nothing cleared: every frame is where it was, the stats are as they were and the
+     * Sequence is still in the queue. Keep all on a whole Sequence dismisses it: its frames carry no Sequence, none is recycled,
+     * and it leaves the queue.
+     */
+    val part = burst(0, frames = 3)
+    val whole = burst(3, startingAt = 30, model = "Nikon Z8")
+
+    curation.resolve(ids(part.take(2)), Set.empty) shouldBe empty
+
+    part.map(stored).foreach {
+      frame =>
+        frame.sequenceId shouldBe Some(sequenceOf(part))
+        frame.isRecycled shouldBe false
+    }
+    testApp.service.stats.getStats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+    queueShouldHold(sequenceOf(part), sequenceOf(whole))
+
+    curation.resolve(ids(whole), Set.empty) shouldBe whole.map(_.persistedId -> sequenceOf(whole)).toMap
+
+    whole.map(stored).map(frame => (frame.sequenceId, frame.isRecycled)) shouldBe List((None, false), (None, false))
+    testApp.service.stats.getStats.getStatValue(Stats.RECYCLED_ASSETS) shouldBe 0
+    queueShouldHold(sequenceOf(part))
+  }
+
+  /**
+   * A burst of three frames and a fourth frame of it about to complete: imported, then put back as it is before the last stage of
+   * its import, which is what `complete` runs. Its stats were counted by the import, so that stage's count is left out.
+   */
+  private def burstWithFrameCompleting: (List[Asset], Asset, () => Unit) = {
+    val frames = burst(0, frames = 3)
+    val completing = stored(importFrame(frame(3), taken = Some(takenAt(3))))
+    write("UPDATE asset SET is_pipeline_processed = FALSE, sequence_id = NULL WHERE id = ?", completing.persistedId)
+    val complete = () => {
+      testApp.service.asset.markAsCompleted(completing): Unit
+      testApp.service.sequence.assign(completing): Unit
+    }
+    (frames, completing, complete)
+  }
+
+  test("A frame of the burst completing before a resolve commits is seen by it") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames and a fourth completing, held open in a transaction of its own while the three are resolved with
+     * one Pick.
+     *
+     * Assertions:
+     *
+     * The resolve waits for the completion, then sees the fourth frame, so its set does not hold the whole Sequence: nothing is
+     * cleared, and the Pick and the fourth frame are left in the Sequence, in the queue with the two of them. Read without the
+     * wait, the Pick would leave the Sequence and the new frame would be alone in it, compared with nothing.
+     */
+    val (frames, completing, complete) = burstWithFrameCompleting
+    val sequenceId = sequenceOf(frames)
+
+    contend(
+      first = complete(),
+      second = curation.resolve(ids(frames.take(1)), ids(frames.tail)) shouldBe empty
+    )
+
+    stored(frames.head).sequenceId shouldBe Some(sequenceId)
+    stored(completing).sequenceId shouldBe Some(sequenceId)
+    frames.tail.map(stored(_).isRecycled) shouldBe List(true, true)
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(2)
+  }
+
+  test("A frame of the burst completing after a resolve commits joins what it left") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with one Pick, held open in a transaction of its own while a fourth frame completes.
+     *
+     * Assertions:
+     *
+     * The resolve clears the Pick, and the assignment waits for it, then reads the Pick with no Sequence and the recycled frames
+     * with theirs, so the fourth frame joins that Sequence with the Pick. The two end up as they would had the frame been first.
+     */
+    val (frames, completing, complete) = burstWithFrameCompleting
+    val sequenceId = sequenceOf(frames)
+
+    contend(
+      first = curation.resolve(ids(frames.take(1)), ids(frames.tail)) shouldBe Map(frames.head.persistedId -> sequenceId),
+      second = complete()
+    )
+
+    stored(frames.head).sequenceId shouldBe Some(sequenceId)
+    stored(completing).sequenceId shouldBe Some(sequenceId)
+    frames.tail.map(stored(_).isRecycled) shouldBe List(true, true)
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(2)
+  }
+
+  test("A resolve or a reopen with no Picks, overlapping lists or a Pick that is not live is refused") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames with its last recycled, and a frame in another repository. Each list a resolve refuses, then each a
+     * reopen refuses: a Sequence given for a frame that was no Pick.
+     *
+     * Assertions:
+     *
+     * Each is an `IllegalOperationException`, since a resolve with no live Pick would recycle the set and keep nothing. Nothing
+     * has changed: the two frames are out of the trash and in the Sequence, in the queue.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+    val List(first, second, inTrash) = frames.map(_.persistedId): @unchecked
+    testApp.service.library.recycleAssets(Set(inTrash))
+    val repo2 = testContext.persistRepository()
+    switchContextRepo(repo2)
+    val foreign = importFrame(frame(0)).persistedId
+    switchContextRepo(testContext.repositories.head)
+
+    List(
+      () => curation.resolve(Set.empty, Set(first)),
+      () => curation.resolve(Set.empty, Set.empty),
+      () => curation.resolve(Set(first), Set(first, second)),
+      () => curation.resolve(Set(inTrash), Set(first)),
+      () => curation.resolve(Set(foreign), Set(first)),
+      () => curation.resolve(Set(first, "no-such-asset"), Set(second)),
+      () => curation.reopen(Set.empty, Set(inTrash), Map.empty),
+      () => curation.reopen(Set(first), Set(first), Map.empty),
+      () => curation.reopen(Set(first), Set(inTrash), Map(second -> sequenceId))
+    ).foreach(call => an[IllegalOperationException] should be thrownBy call())
+
+    stored(frames.head).isRecycled shouldBe false
+    stored(frames(1)).isRecycled shouldBe false
+    stored(frames(2)).isRecycled shouldBe true
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(2)
+  }
+
+  test("A reopen brings back the frames and the Sequences a resolve cleared") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with one Pick, and on another camera a burst of two kept whole, then both reopened with
+     * what the resolve answered.
+     *
+     * Assertions:
+     *
+     * Each reopen reports the frames it restored. Every frame is back out of the trash and in its Sequence, the stats are as they
+     * were, and both Sequences are in the queue and the count with all their frames.
+     */
+    val frames = burst(0, frames = 3)
+    val kept = burst(3, startingAt = 30, model = "Nikon Z8")
+    val before = testApp.service.stats.getStats
+
+    val picks = ids(frames.take(1))
+    val others = ids(frames.tail)
+    val cleared = curation.resolve(picks, others)
+    val clearedOfKept = curation.resolve(ids(kept), Set.empty)
+    queueShouldHold()
+
+    curation.reopen(picks, others, cleared) shouldBe RestoreResult(restored = others, duplicates = Set.empty)
+    curation.reopen(ids(kept), Set.empty, clearedOfKept) shouldBe RestoreResult(restored = Set.empty, duplicates = Set.empty)
+
+    frames.map(stored).foreach {
+      frame =>
+        frame.sequenceId shouldBe Some(sequenceOf(frames))
+        frame.isRecycled shouldBe false
+    }
+    kept.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceOf(kept)))
+    val after = testApp.service.stats.getStats
+    after.getStatValue(Stats.TRIAGE_ASSETS) shouldBe before.getStatValue(Stats.TRIAGE_ASSETS)
+    after.getStatValue(Stats.RECYCLED_ASSETS) shouldBe before.getStatValue(Stats.RECYCLED_ASSETS)
+    queueShouldHold(sequenceOf(frames), sequenceOf(kept))
+    curation.queue().map(_.members) shouldBe List(3, 2)
+  }
+
+  test("A reopen reports a frame whose content was imported again, and leaves it in the trash") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with one Pick, the content of a recycled frame imported again, then a reopen.
+     *
+     * Assertions:
+     *
+     * The reopen restores the other recycled frame and reports the copied one as a duplicate, which stays in the trash with its
+     * Sequence. The Pick is in the Sequence, with the restored frame and the new import, which joined it as a frame of its burst.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+    val picks = ids(frames.take(1))
+    val others = ids(frames.tail)
+    val cleared = curation.resolve(picks, others)
+
+    val imported = importFrame(frame(1), taken = Some(takenAt(1)))
+
+    curation.reopen(picks, others, cleared) shouldBe
+      RestoreResult(restored = Set(frames.last.persistedId), duplicates = Set(frames(1).persistedId))
+
+    stored(frames(1)).isRecycled shouldBe true
+    stored(frames(1)).sequenceId shouldBe Some(sequenceId)
+    List(frames.head, frames.last, imported).map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceId))
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(3)
+  }
+
+  test("A reopen that fails changes nothing") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with one Pick, then a reopen with an ID that is no asset among the frames to restore.
+     *
+     * Assertions:
+     *
+     * The reopen fails as a restore does: the frames stay recycled and the Pick stays out of the Sequence.
+     */
+    val frames = burst(0, frames = 3)
+    val picks = ids(frames.take(1))
+    val cleared = curation.resolve(picks, ids(frames.tail))
+
+    a[NotFoundException] should be thrownBy
+      curation.reopen(picks, ids(frames.tail) + "00000000-0000-0000-0000-000000000000", cleared)
+
+    frames.tail.map(stored(_).isRecycled) shouldBe List(true, true)
+    stored(frames.head).sequenceId shouldBe None
+    queueShouldHold()
+  }
+
+  test("A Pick moved into a folder before a reopen stays sorted") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with one Pick, the Pick moved out of triage into a folder, then a reopen.
+     *
+     * Assertions:
+     *
+     * A sorted asset never carries a Sequence, so the Pick stays as it is and the reopen does not fail on it: the recycled frames
+     * are back in the Sequence, in the queue without the Pick.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+    val picks = ids(frames.take(1))
+    val others = ids(frames.tail)
+    val cleared = curation.resolve(picks, others)
+
+    testApp.service.library.moveAssetsToFolder(picks, RequestContext.getRepository.rootFolderId)
+
+    curation.reopen(picks, others, cleared) shouldBe RestoreResult(restored = others, duplicates = Set.empty)
+
+    val moved = stored(frames.head)
+    moved.isTriaged shouldBe false
+    moved.sequenceId shouldBe None
+    frames.tail.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceId))
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(2)
+  }
+
+  test("A later frame of the burst forms a new Sequence with a Pick") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames resolved with its last as the Pick, then a frame three seconds after the Pick and so more than
+     * three seconds after the recycled frames, outside the window of any but the Pick.
+     *
+     * Assertions:
+     *
+     * The frame and the Pick are in a new Sequence, not the old one, which only its recycled frames carry, and the new one is
+     * what the queue and the count hold.
+     */
+    val frames = burst(0, frames = 3)
+    val sequenceId = sequenceOf(frames)
+    curation.resolve(Set(frames.last.persistedId), ids(frames.init)) shouldBe Map(frames.last.persistedId -> sequenceId)
+    queueShouldHold()
+
+    val later = importFrame(frame(3), taken = Some(takenAt(5)))
+
+    later.sequenceId should not be None
+    later.sequenceId should not be Some(sequenceId)
+    stored(frames.last).sequenceId shouldBe later.sequenceId
+    frames.init.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceId))
+    queueShouldHold(later.sequenceId.get)
+    curation.queue().map(_.members) shouldBe List(2)
+  }
+
+  test("A later frame of the burst near a recycled frame brings a Pick back into its Sequence") {
+
+    /**
+     * Setup:
+     *
+     * A burst of two frames resolved with the first as the Pick, then a frame a second after the recycled one, within the window
+     * of both.
+     *
+     * Assertions:
+     *
+     * The recycled frame still carries the Sequence, so the frame joins it and stamps the Pick into it, and the Sequence is back
+     * in the queue with the two of them.
+     */
+    val frames = burst(0)
+    val sequenceId = sequenceOf(frames)
+    curation.resolve(ids(frames.take(1)), ids(frames.tail))
+
+    val later = importFrame(frame(2), taken = Some(takenAt(2)))
+
+    later.sequenceId shouldBe Some(sequenceId)
+    stored(frames.head).sequenceId shouldBe Some(sequenceId)
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(2)
   }
 }

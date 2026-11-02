@@ -41,8 +41,8 @@ trait AssetDao extends BaseDao[Asset]:
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit
 
   /*
-   * Sequences: the `sequence_id` the still images of one burst share while in triage. `SequenceService` reads and writes it
-   * through these; the rule that pairs two images is `SequenceRule`.
+   * Sequences: the `sequence_id` the still images of one burst share while in triage. `SequenceService` and `CurationService`
+   * read and write it through these; the rule that pairs two images is `SequenceRule`.
    */
 
   /**
@@ -66,6 +66,24 @@ trait AssetDao extends BaseDao[Asset]:
 
   /** A Sequence's frames in the context repository, completed and out of the trash, in no order, through `asset_sequence` */
   def getSequenceFrames(sequenceId: String): List[Asset]
+
+  /**
+   * Makes the context repository's writers of Sequences (`SequenceService.assign`, `CurationService.resolve` and `reopen`) take
+   * turns, until the transaction ends. Row locks cannot do it: a frame completing is in no row a resolve's locking read finds
+   * until it commits, however long that statement waits on another row, and neither writer locks all its rows in one ordered pass
+   * (a merge repoints members outside its candidates, and a selection recycles frames outside its Picks' Sequences), so the two
+   * could deadlock.
+   */
+  def lockSequences(): Unit
+
+  /**
+   * The Sequences' frames in the context repository, completed and out of the trash, through `asset_sequence`, in ID order and
+   * locked until the transaction ends
+   */
+  def getLiveSequenceMembers(sequenceIds: Set[String]): List[Asset]
+
+  /** Takes the assets out of whatever Sequence they are in; how many rows changed */
+  def clearSequence(assetIds: Set[String]): Int
 
   /** Puts the assets still in triage in the Sequence; how many rows changed */
   def setSequence(assetIds: Set[String], sequenceId: String): Int
