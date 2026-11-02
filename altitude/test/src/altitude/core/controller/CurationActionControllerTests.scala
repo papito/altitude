@@ -7,6 +7,8 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.App
 import altitude.core.models.Asset
 import altitude.core.models.ImageQuality
+import altitude.core.models.Person
+import altitude.core.service.FaceDetectionService
 
 /** The partials of Curation: the modal's shell and the fragment of a Curation set, from a Sequence or a selection */
 @DoNotDiscover class CurationActionControllerTests extends ControllerTestCore {
@@ -87,7 +89,8 @@ import altitude.core.models.ImageQuality
      *
      * The fragment names each frame by its ID once, under the heading of its one Bundle or as the Contender, which is marked as
      * the only frame with no problem. Each Bundle gives its count and says what is wrong, how much and compared to what, and the
-     * blurry frame's other problem shows beside it. The set is not Too close to call.
+     * blurry frame's other problem shows as a chip beside it. The set is not Too close to call, and it opens on its one
+     * Contender, alone on the stage.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -111,6 +114,8 @@ import altitude.core.models.ImageQuality
         frameIds(html) should not contain lone.persistedId
 
         (html should not).include("Too close to call")
+        html should include(s"""data-opening-focused-id="${contender.persistedId}"""")
+        (html should not).include("data-opening-pinned-id")
 
         val contenders = section(html, "Contenders")
         frameIds(contenders) shouldBe List(contender.persistedId)
@@ -126,7 +131,7 @@ import altitude.core.models.ImageQuality
         blur should include("(1)")
         frameIds(blur) shouldBe List(blurry.persistedId)
         blur should include("Sharpness 10 against 100")
-        blur should include("Also: Too bright")
+        blur should include(">Too bright</span>")
     }
   }
 
@@ -141,7 +146,8 @@ import altitude.core.models.ImageQuality
      * Assertions:
      *
      * The first set says Too close to call and "Every frame: 8% blown highlights", and both frames are Contenders under no marker
-     * and no Bundle. The second is Too close to call as well, and notes the unmeasured frame.
+     * and no Bundle, the first pinned and the second focused when it opens. The second is Too close to call as well, and notes
+     * the unmeasured frame.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -156,6 +162,8 @@ import altitude.core.models.ImageQuality
         html should include("Every frame: 8% blown highlights")
         (html should not).include("The only frame with no problem")
         frameIds(section(html, "Contenders")).toSet shouldBe blown.map(_.persistedId).toSet
+        html should include(s"""data-opening-pinned-id="${frameIds(html).head}"""")
+        html should include(s"""data-opening-focused-id="${frameIds(html)(1)}"""")
 
         val unmeasured = testContext.persistAsset(isTriaged = true)
         testContext.setAssetImageQuality(unmeasured.persistedId, None)
@@ -165,6 +173,84 @@ import altitude.core.models.ImageQuality
         val noted = getSet(host, repoId, other).text()
         noted should include("Too close to call")
         noted should include("Not measured")
+    }
+  }
+
+  test(
+    "A set's Bundles collapse from four frames, its rail marks a frame in an album, and its face strip has a column per frame") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of four frames, one in an album, with a Person in three of them, which makes the fourth a Poor faces Bundle. A
+     * second Sequence of three frames, one of them too dark.
+     *
+     * Assertions:
+     *
+     * The first set's Bundles collapse and have a toggle, the second's do not. The frame in an album is marked, and no other. The
+     * face strip's row holds a crop from the content route with its box in upright pixels for each of the three frames, and a
+     * dash for the fourth.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val frames = List.fill(4)(frame())
+        testContext.setAssetSequence(frames, sequenceId)
+        val album = testApp.service.album.add("kept")
+        testApp.service.album.addAssets(album.persistedId, Set(frames.head.persistedId))
+
+        val person = testApp.service.person.addPerson(Person())
+        val features = Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(0.1f)
+        val faces = frames.take(3).map(testContext.addTestFace(person, _, features))
+
+        val html = getSet(host, repoId, sequenceId).text()
+        html should include("data-bundles-collapse")
+        html should include("toggleBundle(")
+        frameIds(section(html, "Poor faces")) shouldBe List(frames.last.persistedId)
+        s"""data-frame-id="${frames.head.persistedId}"[^>]*data-in-album-or-location""".r.findFirstIn(html) should not be empty
+        "data-in-album-or-location".r.findAllIn(html).size shouldBe 1
+
+        val face = faces.head
+        html should include(s"/content/r/$repoId/face/${face.persistedId}")
+        html should include(s"""data-face-box="${face.x1},${face.y1},${face.width},${face.height}"""")
+        "data-face-box".r.findAllIn(html).size shouldBe 3
+        "no-face".r.findAllIn(html).size shouldBe 1
+
+        val small = List(frame(), frame(), frame(fine.copy(luminance = 0.05)))
+        val other = UUID.randomUUID().toString
+        testContext.setAssetSequence(small, other)
+        val smallHtml = getSet(host, repoId, other).text()
+        section(smallHtml, "Too dark") should include("(1)")
+        (smallHtml should not).include("data-bundles-collapse")
+        (smallHtml should not).include("toggleBundle(")
+    }
+  }
+
+  test("Triage's toolbar alone holds the button that opens Curation on the queue") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * The results of the Triage view hold the Curate button, bound to the count store, and neither the repository view's nor the
+     * trash view's do.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        def results(view: String) =
+          requests.get(s"$host/htmx/search/r/$repoId", params = Map("view" -> view), cookies = testContext.cookies).text()
+
+        results("triage") should include("""id="curateSequences"""")
+        (results("repository") should not).include("curateSequences")
+        (results("trashbin") should not).include("curateSequences")
     }
   }
 

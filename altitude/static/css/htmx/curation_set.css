@@ -1,0 +1,313 @@
+/* A Curation set (htmx/curation_set): the Bundle rail in a column of its own, which scrolls by itself, and to its right the stage
+   above the face strip and the set's footer */
+#curationSetView {
+  display: grid;
+  grid-template-columns: var(--curation-rail-width) minmax(0, 1fr);
+  height: 100%;
+}
+
+#curationRail {
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-6);
+  padding: var(--panel-padding);
+  overflow: auto;
+  border-right: var(--border-hairline) var(--panel-border-color);
+}
+
+/* What the set says of itself: a problem of every frame (.warning), or that it is too close to call */
+.curation-notice {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  line-height: var(--line-height-text);
+  background-color: var(--info-background-color);
+  border-radius: var(--radius);
+}
+
+.curation-notice.warning {
+  background-color: var(--warning-background-color);
+}
+
+/* A Bundle's row in the rail, the Contenders' too: a header with its name, count and reason over its frames */
+.curation-bundle {
+  display: grid;
+  row-gap: var(--space-4);
+}
+
+.curation-bundle header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.curation-bundle h3 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.curation-bundle .count {
+  color: var(--theme-neutral-3);
+  font-weight: var(--font-weight-medium);
+}
+
+.curation-bundle .reason {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-text);
+}
+
+.curation-bundle .frames {
+  display: grid;
+  row-gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.curation-frame {
+  display: grid;
+  grid-template-columns: var(--curation-preview-size) minmax(0, 1fr);
+  column-gap: var(--space-4);
+}
+
+/* A frame's Preview, a button that focuses it: the frame focused wears the accent's edge, marks say pinned and Pick */
+.curation-preview {
+  position: relative;
+  width: var(--curation-preview-size);
+  height: var(--curation-preview-size);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--theme-secondary);
+  border: var(--border-heavy) transparent;
+  border-radius: var(--radius);
+}
+
+.curation-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.curation-frame.focused .curation-preview {
+  border-color: var(--theme-accent);
+}
+
+.curation-preview .fa-thumbtack {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  color: var(--theme-neutral-4);
+  text-shadow: var(--drop-shadow);
+}
+
+.curation-preview .fa-check-circle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  color: var(--success-color);
+  text-shadow: var(--drop-shadow);
+}
+
+.curation-frame .about {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-small);
+}
+
+.curation-frame .file-name {
+  flex-basis: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curation-frame .unmeasured {
+  flex-basis: 100%;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+}
+
+.curation-frame .reasons {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--theme-neutral-3);
+  line-height: var(--line-height-text);
+  list-style: none;
+}
+
+/* A frame's other problem, or the sole Contender's marker (.sole) */
+.curation-chip {
+  padding: var(--chip-padding);
+  color: var(--warning-color);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border: var(--border-hairline) var(--warning-color);
+  border-radius: var(--chip-border-radius);
+}
+
+.curation-chip.sole {
+  color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+#curationCompare {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* One pane or two, sharing the width */
+#curationStage {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--space-4);
+  min-height: 0;
+  padding: var(--panel-padding);
+}
+
+#curationStage figure {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  row-gap: var(--space-3);
+  min-height: 0;
+  margin: 0;
+}
+
+#curationStage .pane {
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--asset-detail-backdrop-color);
+  border-radius: var(--radius);
+}
+
+/* The zoom's transform (js/alpine/components/curation.js) works from the image's top left corner */
+#curationStage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 0 0;
+}
+
+#curationStage figcaption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-size-small);
+}
+
+#curationStage .file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A small action button's span is the label after its icon; here it is the label alone */
+#curationStage .action-button.small span {
+  margin-left: 0;
+}
+
+#curationStage button[aria-pressed="true"] {
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+
+/* The face strip, one row per Person and one column per frame; the frames compared are marked down their column */
+#curationFaces {
+  max-height: var(--curation-strip-max-height);
+  padding: 0 var(--panel-padding);
+  overflow: auto;
+}
+
+#curationFaces table {
+  border-collapse: collapse;
+}
+
+#curationFaces th, #curationFaces td {
+  padding: var(--space-1);
+  text-align: center;
+}
+
+#curationFaces th.focused, #curationFaces td.focused {
+  background-color: hsl(from var(--theme-accent) h s l / 0.2);
+}
+
+#curationFaces th.pinned, #curationFaces td.pinned {
+  background-color: hsl(from var(--theme-neutral-3) h s l / 0.2);
+}
+
+/* A column's Preview is the size of its crops */
+#curationFaces .curation-preview {
+  display: block;
+  width: var(--curation-crop-size);
+  height: var(--curation-crop-size);
+}
+
+#curationFaces .crop {
+  display: block;
+  width: var(--curation-crop-size);
+  height: var(--curation-crop-size);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: none;
+  border: var(--border-heavy) transparent;
+  border-radius: var(--radius);
+}
+
+#curationFaces .crop[aria-pressed="true"] {
+  border-color: var(--theme-accent);
+}
+
+#curationFaces .crop img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#curationFaces .no-face {
+  color: var(--theme-neutral-3);
+}
+
+#curationCompare footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  padding: var(--panel-padding);
+  border-top: var(--border-hairline) var(--panel-border-color);
+}
+
+#curationCompare .note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--warning-color);
+  font-size: var(--font-size-small);
+}
+
+#curationCompare .keys {
+  flex: 1;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+}
+
+#curationCompare .actions {
+  display: flex;
+  gap: var(--space-4);
+}

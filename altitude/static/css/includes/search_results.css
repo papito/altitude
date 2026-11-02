@@ -7,7 +7,7 @@
   z-index: 2;
   padding: var(--space-6) var(--space-8);
   /* A wrapping row of three groups (includes/search_results). The lead (the total, then the batch ops) and the trail (the
-     trash view's Purge button) grow from the same zero basis, so they split what the controls leave evenly and the
+     trash view's Purge button, Triage's Curate button) grow from the same zero basis, so they split what the controls leave evenly and the
      controls sit on the bar's center whatever the sides hold (a flex row with an auto margin on the total would center
      them in what the total leaves instead). Neither side shrinks below its content, so the batch ops push the controls
      right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one,
@@ -33,7 +33,7 @@
   gap: var(--space-9);
 }
 
-/* The trash view's Purge button holds the right edge */
+/* The trash view's Purge button, or Triage's Curate button, holds the right edge */
 #searchControl .trail {
   flex: 1 1 0;
   display: flex;

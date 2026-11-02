@@ -783,4 +783,51 @@ import altitude.core.util.CurationRule
         frame("a", measuring(luminance = 0.45), Burst),
         frame("b", measuring(luminance = 0.42), Burst))) shouldBe List(BundleKind.TooDark -> List("b"))
   }
+
+  test("The rail's order, the opening frames and the face strip's rows follow the Contenders and the Bundles") {
+
+    /**
+     * Setup:
+     *
+     * A selection of a blown frame and a dark one captured before two Contenders. Anna shows in both Contenders, in the first
+     * twice over, and Ben only in the first.
+     *
+     * Assertions:
+     *
+     * The rail lists the Contenders, then each Bundle in the rule's order. The set opens on its first two Contenders. The row of
+     * the Person in the most frames comes first and holds that Person's better Face of a frame.
+     *
+     * Edge cases:
+     *
+     * One Contender opens alone, and with none the set opens on the rail's first frame. A frame with no Person adds no row, and a
+     * Face with no Person is left out.
+     */
+    val betterAnna = face("anna", quality = 22)
+    val set = assess(
+      frame("blown", measuring(clipped = 0.2)),
+      frame("dark", measuring(luminance = 0.05)),
+      frame("first", faces = List(face("ben"), face("anna", quality = 21), betterAnna)),
+      frame("second", faces = List(face("anna", quality = 21), face("anna", quality = 20).copy(personId = None)))
+    )
+
+    idsOf(set.railFrames) shouldBe List("first", "second", "dark", "blown")
+    val (pinned, focused) = set.openingFrames
+    idsOf(pinned.toList) shouldBe List("first")
+    focused.asset.id shouldBe Some("second")
+
+    set.faceRows.map(_.personId) shouldBe List("anna", "ben")
+    set.faceRows.head.faces.keySet shouldBe Set("first", "second")
+    set.faceRows.head.faces("first").quality shouldBe betterAnna.quality
+    set.faceRows(1).faces.keySet shouldBe Set("first")
+
+    val lone = assess(frame("only", sequence = Burst), frame("blurry", measuring(sharpness = 10), Burst))
+    lone.openingFrames._1 shouldBe None
+    lone.openingFrames._2.asset.id shouldBe Some("only")
+    lone.faceRows shouldBe empty
+
+    val allBundled = assess(frame("blown", measuring(clipped = 0.2)), frame("dark", measuring(luminance = 0.05)))
+    allBundled.contenders shouldBe empty
+    allBundled.openingFrames._1 shouldBe None
+    allBundled.openingFrames._2.asset.id shouldBe Some("dark")
+  }
 }

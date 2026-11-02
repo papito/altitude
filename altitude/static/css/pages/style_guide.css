@@ -201,6 +201,11 @@
   row-gap: var(--control-vertical-space);
 }
 
+/* A Bundle's row takes the width of Curation's rail */
+.sg-curation-bundle {
+  width: var(--curation-rail-width);
+}
+
 /* The drag count badge positions itself absolutely over the dragged thumbnail */
 .sg-badge-host {
   position: relative;

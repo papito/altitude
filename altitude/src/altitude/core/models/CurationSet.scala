@@ -58,6 +58,9 @@ case class CurationBundle(kind: BundleKind, frames: List[BundledFrame])
  */
 case class CurationNotice(kind: BundleKind, readings: List[CurationReason.Exposure])
 
+/** A row of the face strip: a Person of the set, and the Face it shows in each frame holding one, by the frame's asset ID */
+case class CurationFaceRow(personId: String, faces: Map[String, Face])
+
 /**
  * What `CurationRule` decides for a Curation set. Nothing here is stored.
  *
@@ -83,3 +86,32 @@ case class CurationSet(
   def soleContender: Option[CurationFrame] = contenders match
     case List(only) if bundles.nonEmpty => Some(only)
     case _ => None
+
+  /** The frames in the order of the Bundle rail, which the face strip's columns and the view's arrow keys follow */
+  def railFrames: List[CurationFrame] = contenders ++ bundles.flatMap(_.frames.map(_.frame))
+
+  /**
+   * What the stage opens on, the frame pinned if any and the frame focused: the first two Contenders, or with fewer than two the
+   * one Contender, or else the rail's first frame, alone until a frame is pinned.
+   */
+  def openingFrames: (Option[CurationFrame], CurationFrame) = contenders match
+    case first :: second :: _ => (Some(first), second)
+    case only :: Nil => (None, only)
+    case Nil => (None, railFrames.head)
+
+  /**
+   * The rows of the face strip, the Persons found in the most frames first, the others as the rail first shows them. A Person
+   * twice in one frame shows the better Face.
+   */
+  def faceRows: List[CurationFaceRow] =
+    val placed = for
+      frame <- railFrames
+      face <- frame.faces
+      personId <- face.personId
+    yield (personId, frame.asset.persistedId, face)
+
+    placed
+      .groupBy(_._1)
+      .toList
+      .sortBy((personId, faces) => (-faces.map(_._2).distinct.size, placed.indexWhere(_._1 == personId)))
+      .map((personId, faces) => CurationFaceRow(personId, faces.groupMap(_._2)(_._3).view.mapValues(_.maxBy(_.quality)).toMap))

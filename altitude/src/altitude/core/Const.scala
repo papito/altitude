@@ -42,6 +42,8 @@ object Const:
     val MIN_FRAMES = 2
     // The most IDs a selection opens Curation on: every frame's Faces and memberships are read for one fragment
     val MAX_SELECTION = 100
+    // A set of fewer frames shows every one with its chips: its Bundles do not collapse
+    val MIN_FRAMES_TO_COLLAPSE = 4
 
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200

@@ -64,7 +64,7 @@
 }
 
 @* Three groups in a wrapping row (includes/search_results.css): the lead (the total, then the batch ops while assets are
-   selected), the controls, and the trail (the trash view's Purge button). The side groups share what the controls leave,
+   selected), the controls, and the trail (the trash view's Purge button, or Triage's Curate button). The side groups share what the controls leave,
    so the controls sit on the bar's center until the lead needs more room and pushes them right, and a second row once the
    lead and the controls no longer fit on one. *@
 <div id="searchControl" x-data>
@@ -132,10 +132,21 @@
     </div>
   </div>
 
-  @* The trash view's Purge button holds the right edge of the toolbar *@
+  @* The trash view's Purge button holds the right edge of the toolbar, and in Triage the button that opens Curation on the
+     whole queue, whatever the search shows: only a frame in triage carries a Sequence. It waits for the count, and goes at zero
+     (js/stores/sequences-to-curate.js) *@
   <div class="trail">
     @if(view == Const.Search.View.TRASHBIN) {
     @htmx.html.trashbin_header()
+    }
+    @if(view == Const.Search.View.TRIAGE) {
+    <button id="curateSequences"
+            type="button"
+            class="action-button small"
+            style="display: none"
+            x-show="$store.sequencesToCurate.hasAny"
+            x-text="$store.sequencesToCurate.label"
+            @@click="$dispatch(window.Const.events.curateRequested)"></button>
     }
   </div>
 </div>

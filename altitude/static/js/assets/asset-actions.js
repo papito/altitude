@@ -10,6 +10,28 @@ import { getHttpErrorMessage, http } from "../http/client.js"
 import { cellsOf } from "../search-results/cells.js"
 import { decrementDateGroupOf } from "../search-results/date-groups.js"
 
+/**
+ * Reports a restore's outcome: an asset whose content was imported again after it was recycled
+ * stays in the trash, and the server names both. Shared with Curation's Undo.
+ */
+export function reportRestore({ restored, duplicates }) {
+    const restoredMessage = `${
+        restored.length > 1 ? `${restored.length} assets` : "Asset"
+    } restored`
+
+    if (duplicates.length === 0) {
+        showSuccessSnackBar(restoredMessage)
+        return
+    }
+
+    const skippedMessage = `${duplicates.length} not restored: an asset with the same content exists`
+    showWarningSnackBar(
+        restored.length > 0
+            ? `${restoredMessage}; ${skippedMessage}`
+            : skippedMessage,
+    )
+}
+
 export function createAssetActions({
     context,
     reloadNav,
@@ -19,13 +41,15 @@ export function createAssetActions({
 }) {
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
 
-    // Every successful mutation refreshes the nav counts, the folder tree counts, and the album
-    // and Location counts (recycling drops an asset from its albums and Locations)
+    // Every successful mutation refreshes the nav counts, the folder tree counts, the album and
+    // Location counts (recycling drops an asset from its albums and Locations), and the number of
+    // Sequences to curate
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()
         reloadAlbumCounts()
         reloadLocationCounts()
+        Alpine.store(Const.state.sequencesToCurate).refresh()
     }
 
     // An asset can have several cells (a Location grouping shows it under each of its Locations)
@@ -197,8 +221,8 @@ export function createAssetActions({
     }
 
     /**
-     * An asset whose content was imported again after it was recycled stays in the trash: the
-     * server restores the rest and names both, so only the restored cells leave the grid.
+     * An asset whose content was imported again after it was recycled stays in the trash, so only
+     * the restored cells leave the grid.
      */
     async function restoreAssets({ assetIds }) {
         const payload = { assetIds }
@@ -208,23 +232,9 @@ export function createAssetActions({
                 `/api/asset/r/${context.getRepoId()}/restore`,
                 payload,
             )
-            const { restored, duplicates } = response.data
-            const restoredMessage = `${
-                restored.length > 1 ? `${restored.length} assets` : "Asset"
-            } restored`
+            reportRestore(response.data)
 
-            if (duplicates.length === 0) {
-                showSuccessSnackBar(restoredMessage)
-            } else {
-                const skippedMessage = `${duplicates.length} not restored: an asset with the same content exists`
-                showWarningSnackBar(
-                    restored.length > 0
-                        ? `${restoredMessage}; ${skippedMessage}`
-                        : skippedMessage,
-                )
-            }
-
-            removeAssetsFromGrid(restored)
+            removeAssetsFromGrid(response.data.restored)
             selectedAssets().reset()
             refreshCounts()
         } catch (error) {
@@ -385,6 +395,8 @@ export function createAssetActions({
     }
 
     return {
+        refreshCounts,
+        removeAssetsFromGrid,
         moveAssets,
         recycleAssets,
         purgeAssets,

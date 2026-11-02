@@ -1,13 +1,22 @@
+@import altitude.core.Const
+@import altitude.core.RequestContext
 @import altitude.core.models.BundleKind
+@import altitude.core.models.CurationBundle
 @import altitude.core.models.CurationFrame
+@import altitude.core.models.CurationProblem
 @import altitude.core.models.CurationReason
 @import altitude.core.models.CurationSet
 @import altitude.core.models.ExposureMeasure
 
-@* A Curation set, as CurationRule sorted it: what holds for every frame, then the Contenders, then each Bundle with what is wrong
-   with its frames, how much, and compared to what. `data-frame-id` names a frame: `data-asset-id` is how the client finds the
-   cells of the grid beneath. With no set, too few frames were left to compare. *@
+@* A Curation set, as CurationRule sorted it: the Bundle rail in a column of its own, what holds for every frame, then the Contenders,
+   then each Bundle with what is wrong with its frames, how much, and compared to what; and to its right the stage above the face
+   strip and the set's footer. The `curation` component on the shell (js/alpine/components/curation.js) holds the state every
+   binding here reads, and reads this fragment's frames, in the rail's order, from `data-frame-id`: `data-asset-id` is how the
+   client finds the cells of the grid beneath. A face strip's column names its frame in `data-column-frame-id` for the same reason.
+   With no set, too few frames were left to compare. *@
 @(set: Option[CurationSet])
+
+@repoContent(dataType: String, itemId: String) = @{ s"/${ Const.DataStore.CONTENT }/r/${ RequestContext.getRepository.persistedId }/$dataType/$itemId" }
 
 @bundleName(kind: BundleKind) = @{
   kind match {
@@ -45,56 +54,191 @@
   }
 }
 
-@frameName(frame: CurationFrame) = {
-  @{frame.asset.fileName}
-  @if(!frame.isMeasured) {<small>Not measured</small>}
+@* What a Bundle's header says, the first frame's first reason standing for the others: each frame gives its own below *@
+@bundleReason(bundle: CurationBundle) = @{
+  val reasons = bundle.frames.flatMap(_.reasons.map(reasonText)).distinct
+  reasons.headOption.getOrElse("") + (if (reasons.size > 1) s", and ${reasons.size - 1} more" else "")
+}
+
+@* A frame in the rail. A click focuses it. `data-bundle-kind` is the Bundle it sits under; a Contender has none *@
+@railFrame(frame: CurationFrame, bundleKind: Option[BundleKind], isSole: Boolean, reasons: List[CurationReason], chips: List[CurationProblem]) = {
+  @defining(frame.asset.persistedId) { frameId =>
+  <li class="curation-frame"
+      data-frame-id="@{frameId}"
+      data-file-name="@{frame.asset.fileName}"
+      @if(bundleKind.isDefined) {data-bundle-kind="@{bundleKind.get}"}
+      @if(frame.inAlbumOrLocation) {data-in-album-or-location="true"}
+      :class="frameClasses('@{frameId}')">
+    <button type="button" class="curation-preview" title="@{frame.asset.fileName}" x-on:click="focusFrame('@{frameId}')">
+      <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
+      <i class="fas fa-thumbtack" aria-label="Pinned" x-show="pinnedId === '@{frameId}'"></i>
+      <i class="fas fa-check-circle" aria-label="Pick" x-show="isPick('@{frameId}')"></i>
+    </button>
+    <div class="about">
+      <span class="file-name">@{frame.asset.fileName}</span>
+      @if(!frame.isMeasured) {<small class="unmeasured">Not measured</small>}
+      @if(isSole) {<strong class="curation-chip sole">The only frame with no problem</strong>}
+      @if(reasons.nonEmpty) {
+        <ul class="reasons">
+          @for(reason <- reasons) {
+            <li>@reasonText(reason)</li>
+          }
+        </ul>
+      }
+      @for(chip <- chips) {
+        <span class="curation-chip" title="@{chip.reasons.map(reasonText).mkString("; ")}">@bundleName(chip.kind)</span>
+      }
+    </div>
+  </li>
+  }
+}
+
+@* One of the stage's two panes, for the frame the component's `frame` property names. The image fills the pane, and a click on a
+   crop zooms it with a transform (`applyZoom`) *@
+@stagePane(imageId: String, frame: String, shows: String) = {
+  <figure x-show="@shows">
+    <div class="pane">
+      <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="applyZoom()">
+    </div>
+    <figcaption>
+      <span class="file-name" x-text="fileNameOf(@frame)"></span>
+      <button type="button" class="action-button small" x-on:click="togglePin(@frame)">
+        <span x-text="pinLabel(@frame)"></span> <kbd>C</kbd>
+      </button>
+      <button type="button" class="action-button small" :aria-pressed="isPick(@frame)" x-on:click="togglePick(@frame)">
+        <span x-text="pickLabel(@frame)"></span> <kbd>K</kbd>
+      </button>
+    </figcaption>
+  </figure>
 }
 
 @set match {
   case None => {
-    <p>Fewer than two images are left to compare</p>
+    <p class="curation-notice">Fewer than two images are left to compare</p>
   }
   case Some(curationSet) => {
-    <article>
-      @for(notice <- curationSet.notices) {
-        <p>Every frame: @{notice.readings.map(exposure).mkString(", ")}</p>
-      }
-      @if(curationSet.isTooCloseToCall) {
-        <p>Too close to call</p>
-      }
-      @if(curationSet.contenders.nonEmpty) {
-        <section>
-          <h3>Contenders</h3>
-          <ul>
-            @for(frame <- curationSet.contenders) {
-              <li data-frame-id="@{frame.asset.persistedId}">
-                @frameName(frame)
-                @if(curationSet.soleContender.contains(frame)) {<strong>The only frame with no problem</strong>}
-              </li>
-            }
-          </ul>
-        </section>
-      }
-      @for(bundle <- curationSet.bundles) {
-        <section>
-          <h3>@bundleName(bundle.kind) (@{bundle.frames.size})</h3>
-          <ul>
-            @for(bundled <- bundle.frames) {
-              <li data-frame-id="@{bundled.frame.asset.persistedId}">
-                @frameName(bundled.frame)
-                <ul>
-                  @for(reason <- bundled.reasons) {
-                    <li>@reasonText(reason)</li>
+    @defining(curationSet.openingFrames) { opening =>
+    @defining(curationSet.frames.size >= Const.Curation.MIN_FRAMES_TO_COLLAPSE) { collapses =>
+    <article id="curationSetView"
+             @if(opening._1.isDefined) {data-opening-pinned-id="@{opening._1.get.asset.persistedId}"}
+             data-opening-focused-id="@{opening._2.asset.persistedId}"
+             @if(collapses) {data-bundles-collapse="true"}>
+      <aside id="curationRail" aria-label="Frames">
+        @for(notice <- curationSet.notices) {
+          <p class="curation-notice warning">Every frame: @{notice.readings.map(exposure).mkString(", ")}</p>
+        }
+        @if(curationSet.isTooCloseToCall) {
+          <p class="curation-notice">Too close to call</p>
+        }
+        @if(curationSet.contenders.nonEmpty) {
+          <section class="curation-bundle">
+            <header>
+              <h3>Contenders <span class="count">(@{curationSet.contenders.size})</span></h3>
+            </header>
+            <ul class="frames">
+              @for(frame <- curationSet.contenders) {
+                @railFrame(frame, None, curationSet.soleContender.contains(frame), Nil, Nil)
+              }
+            </ul>
+          </section>
+        }
+        @for(bundle <- curationSet.bundles) {
+          <section class="curation-bundle">
+            <header>
+              <h3>@bundleName(bundle.kind) <span class="count">(@{bundle.frames.size})</span></h3>
+              @if(collapses) {
+                <button type="button"
+                        class="action-button small"
+                        :aria-expanded="isBundleOpen('@{bundle.kind}')"
+                        x-on:click="toggleBundle('@{bundle.kind}')"
+                        x-text="bundleToggleLabel('@{bundle.kind}')"></button>
+              }
+              <button type="button" class="action-button small warning" x-on:click="recycleBundle('@{bundle.kind}')">Recycle</button>
+              <p class="reason">@bundleReason(bundle)</p>
+            </header>
+            <ul class="frames" x-show="isBundleOpen('@{bundle.kind}')">
+              @for(bundled <- bundle.frames) {
+                @railFrame(bundled.frame, Some(bundle.kind), false, bundled.reasons, bundled.chips)
+              }
+            </ul>
+          </section>
+        }
+      </aside>
+
+      <section id="curationCompare">
+        <div id="curationStage">
+          @stagePane("curationStagePinned", "pinnedId", "showsPinnedPane")
+          @stagePane("curationStageFocused", "focusedId", "focusedId")
+        </div>
+
+        @* One row per Person (no name: a Face carries none, and its crop identifies the row) and one column per frame in the rail's
+           order. A collapsed Bundle's frames have no column until it opens. A click on a crop zooms the stage to that Person's box,
+           in the pixels `data-face-box` gives: x, y, width and height *@
+        @if(curationSet.faceRows.nonEmpty) {
+          <div id="curationFaces">
+            <table>
+              <thead>
+                <tr>
+                  @for(frame <- curationSet.railFrames) {
+                    @defining(frame.asset.persistedId) { frameId =>
+                    <th :class="columnClasses('@{frameId}')" x-show="isFrameShown('@{frameId}')">
+                      <button type="button"
+                              class="curation-preview"
+                              data-column-frame-id="@{frameId}"
+                              title="@{frame.asset.fileName}"
+                              x-on:click="focusFrame('@{frameId}')">
+                        <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
+                      </button>
+                    </th>
+                    }
                   }
-                </ul>
-                @if(bundled.chips.nonEmpty) {
-                  <p>Also: @{bundled.chips.map(chip => bundleName(chip.kind)).mkString(", ")}</p>
+                </tr>
+              </thead>
+              <tbody>
+                @for(row <- curationSet.faceRows) {
+                  <tr>
+                    @for(frame <- curationSet.railFrames) {
+                      @defining(frame.asset.persistedId) { frameId =>
+                      <td :class="columnClasses('@{frameId}')" x-show="isFrameShown('@{frameId}')">
+                        @row.faces.get(frameId) match {
+                          case Some(face) => {
+                            <button type="button"
+                                    class="crop"
+                                    data-person-id="@{row.personId}"
+                                    data-column-frame-id="@{frameId}"
+                                    data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
+                                    aria-label="Zoom to this person"
+                                    :aria-pressed="zoomPersonId === '@{row.personId}'"
+                                    x-on:click="zoomToPerson('@{row.personId}')">
+                              <img loading="lazy" src="@{repoContent(Const.DataStore.FACE, face.persistedId)}" alt="">
+                            </button>
+                          }
+                          case None => {
+                            <span class="no-face">&ndash;</span>
+                          }
+                        }
+                      </td>
+                      }
+                    }
+                  </tr>
                 }
-              </li>
-            }
-          </ul>
-        </section>
-      }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <footer>
+          <p class="note" x-show="recycledInAlbumOrLocationNote" x-text="recycledInAlbumOrLocationNote"></p>
+          <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle</small>
+          <div class="actions">
+            <button type="button" class="action-button primary" x-on:click="resolve()"><span x-text="resolveLabel"></span> <kbd>Enter</kbd></button>
+            <button type="button" class="action-button" x-on:click="keepAll()">Keep all <kbd>A</kbd></button>
+            <button type="button" class="action-button" x-on:click="skip()">Skip <kbd>S</kbd></button>
+          </div>
+        </footer>
+      </section>
     </article>
+    }
+    }
   }
 }

@@ -13,6 +13,7 @@
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
+import { isTextEditingTarget } from "./common/text-editing.js"
 import { Const } from "./constants.js"
 import { closeMapPanel } from "./map/map-panel.js"
 
@@ -89,10 +90,4 @@ function isInPlayer(target) {
 /** Focus is on the player's timeline or volume slider */
 function isPlayerSlider(target) {
     return Boolean(target?.closest?.("media-time-range, media-volume-range"))
-}
-
-function isTextEditingTarget(target) {
-    return Boolean(
-        target?.closest?.("input, textarea, select, [contenteditable]"),
-    )
 }

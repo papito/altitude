@@ -437,6 +437,40 @@
             <div class="sg-badge-host"><span class="drag-count-badge">3</span></div>
             <span>.drag-count-badge</span>
           </div>
+          <p>Curation's rail says what is wrong with a set's frames. A notice (<code>.curation-notice</code>) is what the set
+             says of itself: that it is too close to call, or, in the warning fill, a problem of every frame. A Bundle's row
+             (<code>.curation-bundle</code>, the Contenders' too) is a header with its name, its dimmed count and its reason,
+             what is wrong, how much and compared to what, over its frames, each a Preview that focuses it with its own
+             reasons beside it. A chip (<code>.curation-chip</code>) on a frame names another of its problems, in the warning
+             color, and its <code>.sole</code> form marks the only frame with no problem, the one thing the view suggests. The
+             frame on the stage wears the accent's edge.</p>
+          <div class="sg-row">
+            <p class="curation-notice">Too close to call</p>
+            <p class="curation-notice warning">Every frame: 8% blown highlights</p>
+            <span class="curation-chip">Too bright</span>
+            <strong class="curation-chip sole">The only frame with no problem</strong>
+          </div>
+          <div class="curation-bundle sg-curation-bundle">
+            <header>
+              <h3>Blurry <span class="count">(1)</span></h3>
+              <button type="button" class="action-button small" aria-expanded="true">Hide</button>
+              <button type="button" class="action-button small warning">Recycle</button>
+              <p class="reason">Sharpness 40 against 200, the Sequence's sharpest</p>
+            </header>
+            <ul class="frames">
+              <li class="curation-frame focused">
+                <button type="button" class="curation-preview" aria-label="Focus the frame">
+                  <i class="fas fa-thumbtack" aria-label="Pinned"></i>
+                  <i class="fas fa-check-circle" aria-label="Pick"></i>
+                </button>
+                <div class="about">
+                  <span class="file-name">IMG_0042.jpg</span>
+                  <ul class="reasons"><li>Sharpness 40 against 200, the Sequence's sharpest</li></ul>
+                  <span class="curation-chip">Too bright</span>
+                </div>
+              </li>
+            </ul>
+          </div>
         </section>
 
         <section id="token-audit">

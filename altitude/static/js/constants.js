@@ -63,6 +63,13 @@ export const Const = {
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
+        // Opens Curation: on the queue with no detail, on one Sequence with `detail.sequenceId`, on a selection
+        // with `detail.assetIds`
+        curateRequested: "CURATE_REQUESTED_EVENT",
+        // A mutation in Curation was saved; the counts refresh
+        curationChanged: "CURATION_CHANGED_EVENT",
+        // Curation closed; `detail.recycledIds` and `detail.clearedSequenceIds` are what it leaves changed
+        curationClosed: "CURATION_CLOSED_EVENT",
     },
 
     /**
@@ -87,6 +94,19 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
+        // A frame of a Curation set in the rail (`data-asset-id` finds the cells of the grid beneath), its file's
+        // name, its Bundle, and whether it is in an album or Location
+        frameId: "data-frame-id",
+        fileName: "data-file-name",
+        bundleKind: "data-bundle-kind",
+        inAlbumOrLocation: "data-in-album-or-location",
+        // A Curation set's opening frames, and whether its Bundles collapse
+        openingPinnedId: "data-opening-pinned-id",
+        openingFocusedId: "data-opening-focused-id",
+        bundlesCollapse: "data-bundles-collapse",
+        // The face strip's column of a frame, and a crop's box in upright pixels: x, y, width, height
+        columnFrameId: "data-column-frame-id",
+        faceBox: "data-face-box",
         // A Setting field's default, which its Reset fills in
         settingDefault: "data-setting-default",
     },
@@ -104,6 +124,7 @@ export const Const = {
         imageDetailLoading: "imageDetailLoading",
         modal: "modal",
         snackbar: "snackbar",
+        sequencesToCurate: "sequencesToCurate",
     },
 
     localStore: {
