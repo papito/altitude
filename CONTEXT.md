@@ -244,11 +244,11 @@ A frame the user keeps. A set can have several. Its button and its mark read
 "Keep".
 _Avoid_: Winner, Best.
 
-**Compared frame**:
+**Pinned frame**:
 The frame held in the stage's left pane to compare the focused frame against.
-Comparing keeps nothing: Resolve keeps the Picks, or with none the one frame on
-the stage.
-_Avoid_: Pinned (**Pin** is a Location's point), Reference.
+Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on
+the stage. It has nothing to do with a Location's **Pin**.
+_Avoid_: Compared frame, Reference.
 
 **Bundle**:
 The frames of a Curation set whose main problem is the same.

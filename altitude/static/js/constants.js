@@ -110,7 +110,7 @@ export const Const = {
         // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
         maxSelection: "data-max-selection",
         // A Curation set's opening frames, and whether its Bundles collapse
-        openingComparedId: "data-opening-compared-id",
+        openingPinnedId: "data-opening-pinned-id",
         openingFocusedId: "data-opening-focused-id",
         bundlesCollapse: "data-bundles-collapse",
         // The face strip's column of a frame, and a crop's box in upright pixels: x, y, width, height

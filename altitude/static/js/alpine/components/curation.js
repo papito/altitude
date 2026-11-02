@@ -50,7 +50,7 @@ const Phase = {
 // How much of the pane a zoomed Face's box fills, so its surroundings stay in view
 const ZOOMED_BOX_SHARE = 0.5
 
-const COMPARED_IMAGE_ID = "curationStageCompared"
+const PINNED_IMAGE_ID = "curationStagePinned"
 const FOCUSED_IMAGE_ID = "curationStageFocused"
 
 // What the next shell to load is opened on; the shell's request carries no parameters
@@ -112,7 +112,7 @@ function preloadOpeningFrames(html) {
         .querySelector(`[${Const.attributes.openingFocusedId}]`)
 
     for (const frameId of [
-        setEl?.dataset.openingComparedId,
+        setEl?.dataset.openingPinnedId,
         setEl?.dataset.openingFocusedId,
     ]) {
         if (frameId) {
@@ -219,7 +219,7 @@ export function curation() {
         // A frame's Bundle by its ID; a Contender has none
         bundleOf: {},
         focusedId: null,
-        comparedId: null,
+        pinnedId: null,
         pickIds: [],
         // Whether each Bundle of the set is open, by its kind
         openBundles: {},
@@ -319,21 +319,19 @@ export function curation() {
             return !Alpine.store(Const.state.sequencesToCurate).hasAny
         },
 
-        // The stage shows the compared frame beside the focused one, or one frame when they are the same
-        get showsComparedPane() {
-            return (
-                this.comparedId !== null && this.comparedId !== this.focusedId
-            )
+        // The stage shows the pinned frame beside the focused one, or one frame when they are the same
+        get showsPinnedPane() {
+            return this.pinnedId !== null && this.pinnedId !== this.focusedId
         },
 
         // The frame in the left pane, which is the only frame when one is on the stage
         get leftFrameId() {
-            return this.showsComparedPane ? this.comparedId : this.focusedId
+            return this.showsPinnedPane ? this.pinnedId : this.focusedId
         },
 
         // The frame in the right pane; none when one frame is on the stage
         get rightFrameId() {
-            return this.showsComparedPane ? this.focusedId : null
+            return this.showsPinnedPane ? this.focusedId : null
         },
 
         // The frames kept: the Picks, or with none the frame on the stage when it is the only one. With
@@ -342,9 +340,7 @@ export function curation() {
             if (this.pickIds.length > 0) {
                 return this.pickIds
             }
-            return this.showsComparedPane
-                ? []
-                : [this.focusedId].filter(Boolean)
+            return this.showsPinnedPane ? [] : [this.focusedId].filter(Boolean)
         },
 
         // Resolve's label in two parts, since only the part naming a frame truncates
@@ -434,7 +430,7 @@ export function curation() {
         columnClasses(frameId) {
             return {
                 focused: this.focusedId === frameId,
-                compared: this.comparedId === frameId,
+                pinned: this.pinnedId === frameId,
             }
         },
 
@@ -443,7 +439,7 @@ export function curation() {
         },
 
         keepLabel(frameId) {
-            if (!this.showsComparedPane) {
+            if (!this.showsPinnedPane) {
                 return "Keep"
             }
             return frameId === this.leftFrameId ? "Keep left" : "Keep right"
@@ -500,17 +496,17 @@ export function curation() {
         },
 
         /**
-         * The focused frame becomes the compared frame, replacing the one before it, and focus moves on to
+         * The focused frame becomes the pinned frame, replacing the one before it, and focus moves on to
          * the next shown frame, or the previous one at the end, so two frames stay on the stage. With no
-         * other frame shown, the stage shows the one frame. Comparison only ever moves to another frame:
-         * the compared frame on its own has nothing to do here, and an arrow goes back to the two.
+         * other frame shown, the stage shows the one frame. The pin only ever moves to another frame: the
+         * pinned frame on its own has nothing to do here, and an arrow goes back to the two.
          */
-        compareFocused() {
-            if (!this.focusedId || this.focusedId === this.comparedId) {
+        pinFocused() {
+            if (!this.focusedId || this.focusedId === this.pinnedId) {
                 return
             }
 
-            this.comparedId = this.focusedId
+            this.pinnedId = this.focusedId
             const nextId = this.neighbourOf(1) ?? this.neighbourOf(-1)
             if (nextId) {
                 this.focusFrame(nextId)
@@ -540,7 +536,7 @@ export function curation() {
          */
         applyZoom() {
             const panes = [
-                [COMPARED_IMAGE_ID, this.comparedId],
+                [PINNED_IMAGE_ID, this.pinnedId],
                 [FOCUSED_IMAGE_ID, this.focusedId],
             ]
             for (const [imageId, frameId] of panes) {
@@ -563,7 +559,7 @@ export function curation() {
         /** What the user has made of the set on show, which a later read of that same set can keep */
         currentView() {
             return {
-                comparedId: this.comparedId,
+                pinnedId: this.pinnedId,
                 focusedId: this.focusedId,
                 pickIds: this.pickIds,
                 openBundles: { ...this.openBundles },
@@ -573,7 +569,7 @@ export function curation() {
 
         /**
          * Puts a set's fragment on show and reads its frames. `view` is for the same set read again: what
-         * the user had compared, focused, picked and opened stays as far as its frames
+         * the user had pinned, focused, picked and opened stays as far as its frames
          * are still in the set, and anything else opens as a new set does. A selection with too few frames
          * left answers with a fragment saying so instead of a set, and the too-few state of the shell says
          * the same.
@@ -613,9 +609,9 @@ export function curation() {
             this.bundleOf = Object.fromEntries(
                 frames.map((frame) => [frame.id, frame.bundleKind]),
             )
-            this.comparedId = kept(
-                view?.comparedId,
-                setEl.dataset.openingComparedId ?? null,
+            this.pinnedId = kept(
+                view?.pinnedId,
+                setEl.dataset.openingPinnedId ?? null,
             )
             this.focusedId = kept(
                 view?.focusedId,
@@ -637,7 +633,7 @@ export function curation() {
                         !collapses ||
                             wasOpen[bundleKind] === true ||
                             bundleKind === this.bundleOf[this.focusedId] ||
-                            bundleKind === this.bundleOf[this.comparedId],
+                            bundleKind === this.bundleOf[this.pinnedId],
                     ]),
             )
 
@@ -650,7 +646,7 @@ export function curation() {
         // The fragment's images are new, and a pane resizing changes what a zoom has to do
         watchStage() {
             stageObserver.disconnect()
-            for (const imageId of [COMPARED_IMAGE_ID, FOCUSED_IMAGE_ID]) {
+            for (const imageId of [PINNED_IMAGE_ID, FOCUSED_IMAGE_ID]) {
                 const imageEl = document.getElementById(imageId)
                 if (imageEl) {
                     stageObserver.observe(imageEl)
@@ -688,7 +684,7 @@ export function curation() {
             this.frames = []
             this.bundleOf = {}
             this.focusedId = null
-            this.comparedId = null
+            this.pinnedId = null
             this.pickIds = []
             this.phase = phase
             this.keepFocusInside()
@@ -1019,8 +1015,8 @@ export function curation() {
         /**
          * The keys, bound while Curation is the active host: ← ↑ move the focused frame back through the
          * rail's order and → ↓ move it on, 1 toggles the left frame as a Pick, or the only frame when one is
-         * on the stage, and 2 the right frame, with nothing to do when one is on the stage. C compares against
-         * the focused frame and moves on, and does nothing on the compared frame. Enter resolves,
+         * on the stage, and 2 the right frame, with nothing to do when one is on the stage. P pins
+         * the focused frame and moves on, and does nothing on the pinned frame. Enter resolves,
          * which does nothing while no frame is to be kept (`keepIds`), A keeps all, R recycles the focused
          * frame's Bundle, S skips and Z undoes. Esc is `global.js`'s. A key held down repeats only the arrows,
          * so it cannot resolve set after set, and Enter on a focused control presses that control. While a
@@ -1050,7 +1046,7 @@ export function curation() {
                 arrowdown: () => this.moveFocus(1),
             }
             const once = {
-                c: () => this.compareFocused(),
+                p: () => this.pinFocused(),
                 1: () => this.leftFrameId && this.togglePick(this.leftFrameId),
                 2: () =>
                     this.rightFrameId && this.togglePick(this.rightFrameId),

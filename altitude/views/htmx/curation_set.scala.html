@@ -73,7 +73,7 @@
       :class="{ focused: focusedId === '@{frameId}' }">
     <button type="button" class="curation-preview" title="@{frame.asset.fileName}" x-on:click="focusFrame('@{frameId}')">
       <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
-      <i class="fas fa-thumbtack" aria-label="Compared" x-show="comparedId === '@{frameId}'"></i>
+      <i class="fas fa-thumbtack" aria-label="Pinned" x-show="pinnedId === '@{frameId}'"></i>
       <i class="fas fa-check-circle" aria-label="Keep" x-show="isPick('@{frameId}')"></i>
     </button>
     <div class="about">
@@ -97,17 +97,16 @@
 
 @* One of the stage's two panes, for the frame the component's `frame` property names. The image fills the pane, hidden behind the
    spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`). The tag over the
-   pane's corner says what the rail says of the frame: compared, kept, and its problems. It is the pane's and not the image's, so a
+   pane's corner says what the rail says of the frame: kept, and its problems. It is the pane's and not the image's, so a
    zoom leaves it in place, and it stays while the frame loads, as the caption does. The focused frame's pane wears the accent's edge.
-   The component words the Keep button by where the frame stands on the stage. Compare is on the frame that is not the compared
-   frame, which is always the focused one *@
+   The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
+   Any other frame's has the Pin button, and that other frame is always the focused one *@
 @stagePane(imageId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
     <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame), focused: @frame === focusedId }">
       <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="onImageSettled($event)" x-on:error="onImageSettled($event)">
       <div class="media-spinner"><i class="fas fa-spinner fa-spin"></i></div>
       <div class="pane-tag">
-        <span class="curation-chip compared" x-show="showsComparedPane && @frame === comparedId">Compared</span>
         <span class="curation-chip keep" x-show="isPick(@frame)">Keep</span>
         <template x-for="problem in problemsOf(@frame)" :key="problem">
           <span class="curation-chip" x-text="problem"></span>
@@ -116,10 +115,13 @@
     </div>
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
-      <button type="button" class="action-button small" x-show="@frame !== comparedId" x-on:click="compareFocused()">Compare <kbd>C</kbd></button>
-      <button type="button" class="action-button small" :aria-pressed="isPick(@frame)" x-on:click="togglePick(@frame)">
-        <span x-text="keepLabel(@frame)"></span> <kbd x-text="keepKey(@frame)"></kbd>
-      </button>
+      <span class="pinned-label" x-show="@frame === pinnedId"><i class="fas fa-thumbtack" aria-hidden="true"></i> Pinned</span>
+      <div class="caption-actions">
+        <button type="button" class="action-button small" x-show="@frame !== pinnedId" x-on:click="pinFocused()">Pin <kbd>P</kbd></button>
+        <button type="button" class="action-button small" :aria-pressed="isPick(@frame)" x-on:click="togglePick(@frame)">
+          <span x-text="keepLabel(@frame)"></span> <kbd x-text="keepKey(@frame)"></kbd>
+        </button>
+      </div>
     </figcaption>
   </figure>
 }
@@ -132,7 +134,7 @@
     @defining(curationSet.openingFrames) { opening =>
     @defining(curationSet.frames.size >= Const.Curation.MIN_FRAMES_TO_COLLAPSE) { collapses =>
     <article id="curationSetView"
-             @if(opening._1.isDefined) {data-opening-compared-id="@{opening._1.get.asset.persistedId}"}
+             @if(opening._1.isDefined) {data-opening-pinned-id="@{opening._1.get.asset.persistedId}"}
              data-opening-focused-id="@{opening._2.asset.persistedId}"
              @if(collapses) {data-bundles-collapse="true"}>
       <aside id="curationRail" aria-label="Frames">
@@ -183,7 +185,7 @@
 
       <section id="curationCompare">
         <div id="curationStage">
-          @stagePane("curationStageCompared", "comparedId", "showsComparedPane")
+          @stagePane("curationStagePinned", "pinnedId", "showsPinnedPane")
           @stagePane("curationStageFocused", "focusedId", "focusedId")
         </div>
 

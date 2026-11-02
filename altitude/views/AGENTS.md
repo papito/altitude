@@ -145,7 +145,7 @@ Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of 
 Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
 ```
 
-A Curation set's root carries `data-opening-compared-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
+A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
 `data-file-name`, `data-problems` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
 `data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
 (`js/search-results/cells.js`).
@@ -1169,7 +1169,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
   resolve, the unread state, and the queue's end. The first three offer Exit, and Undo when there is one, beside what they say.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
-  focused frame, the compared frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
+  focused frame, the pinned frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
   Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
   (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
@@ -1185,16 +1185,16 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   set reads, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
   each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
   frame's `data-problems` holds what the stage's tag says is wrong with it, its Bundle first and then its chips; a Contender has
-  none. The Preview carries the frame's marks: `fa-thumbtack`, labelled "Compared", on the compared frame, and `fa-check-circle`,
+  none. The Preview carries the frame's marks: `fa-thumbtack`, labelled "Pinned", on the pinned frame, and `fa-check-circle`,
   labelled "Keep", on a Pick. A Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and
   Recycle, and shows the same check while the Bundle holds a Pick, so collapsing it never hides a frame that counts. A sole Contender
   is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Bundles collapse only in a set of four frames or
   more (`Const.Curation.MIN_FRAMES_TO_COLLAPSE`), and the Bundles of the frames on the stage start open.
-- **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the compared frame on the
-  left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is compared
-  or the compared frame is focused; that one frame counts as the left frame. Comparing keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
-  A set opens on `openingFrames`: its first two Contenders, the first compared and the second focused; with fewer, its Contender or
-  else the rail's first frame, alone. A set read again after a Bundle's recycling or its Undo keeps what the user had compared,
+- **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame on the
+  left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is pinned
+  or the pinned frame is focused; that one frame counts as the left frame. Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
+  A set opens on `openingFrames`: its first two Contenders, the first pinned and the second focused; with fewer, its Contender or
+  else the rail's first frame, alone. A set read again after a Bundle's recycling or its Undo keeps what the user had pinned,
   the focused frame, the Picks, the open Bundles and the zoom (`currentView`), as far as its frames are still in
   it. A pane reuses its image, and the browser paints the old picture until the new
   one is available, so a pane never shows a frame under another's name: from the moment its frame changes until its image's `load` or
@@ -1204,21 +1204,20 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   order, the frames the arrows go to, are preloaded, and a preload no longer needed stops, so a held arrow does not queue originals
   ahead of the frame on show (`preloadOnly`).
 
-  A pane's tag (`.pane-tag`), over its top left corner, says what the rail says of the frame: "Compared" (`.curation-chip.compared`)
-  on the left pane with two frames on the stage, a success-colored "Keep" (`.curation-chip.keep`) on a Pick, and the frame's problems
+  A pane's tag (`.pane-tag`), over its top left corner, says what the rail says of the frame: a success-colored "Keep" (`.curation-chip.keep`) on a Pick, and the frame's problems
   as chips (`problemsOf`, from `data-problems`). It is in `.pane` and not on the image, so a zoom's transform leaves it in place, and
   it stays while the frame loads. The focused frame's pane has a thin accent line along its bottom, the same `--theme-accent` as the
   rail's edge on that frame, with one frame on the stage too. It is `border-bottom: var(--border-hairline)`, transparent on the
   pane that is not focused: both panes carry the border, so the two images stay the same height as the line moves.
 
-  A pane's caption holds the frame's file name, the Compare button and the Keep button. The Keep button reads "Keep left 1" and
+  A pane's caption holds the frame's file name, the Pin button or the pinned label, and the Keep button. The Keep button reads "Keep left 1" and
   "Keep right 2", or "Keep 1" with one frame on the stage, the number a `<kbd>` (`keepLabel`, `keepKey`). Pressed, it wears the success
-  color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The Compare button, "Compare C", is on every frame but the
-  compared one, so it is always on the focused frame, which is what C acts on. Comparing against the focused frame (`compareFocused`),
-  by its button or C, replaces the compared frame and moves focus to the next shown frame in the rail's order, or the previous one at
+  color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The pinned frame's caption reads a pin icon and "Pinned"
+  (`.pinned-label`), centered below the image: the caption is a grid of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, as the footer is. The Pin button, "Pin P", is on every other frame, so it is always on the focused frame, which is what P acts on.
+  Pinning the focused frame (`pinFocused`), by its button or P, replaces the pinned frame and moves focus to the next shown frame in the rail's order, or the previous one at
   the end, so two frames stay on the stage; with no other frame shown, as when the rest sit in collapsed Bundles, the stage shows the
-  one frame. Comparison has no off switch, since a way out with no way back to the same two frames only loses the comparison. Focusing
-  the compared frame, by an arrow or a click, shows it alone, C does nothing there, and moving away brings the two back.
+  one frame. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
+  the pinned frame, by an arrow or a click, shows it alone, P does nothing there, and moving away brings the two back.
 - **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
   One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
   (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A column's
@@ -1253,7 +1252,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | → ↓ | Move the focused frame on through the rail's order |
   | 1 | Toggle the left frame as a Pick, or the only frame when one is on the stage |
   | 2 | Toggle the right frame as a Pick; nothing when one frame is on the stage |
-  | C | Compare against the focused frame and move on; nothing on the compared frame |
+  | P | Pin the focused frame and move on; nothing on the pinned frame |
   | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
   | A | Keep all |
   | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |

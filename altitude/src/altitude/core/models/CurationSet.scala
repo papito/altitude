@@ -95,8 +95,8 @@ case class CurationSet(
   def railFrames: List[CurationFrame] = contenders ++ bundles.flatMap(_.frames.map(_.frame))
 
   /**
-   * What the stage opens on, the compared frame if any and the frame focused: the first two Contenders, or with fewer than two
-   * the one Contender, or else the rail's first frame, alone until a frame is compared against.
+   * What the stage opens on, the pinned frame if any and the frame focused: the first two Contenders, or with fewer than two
+   * the one Contender, or else the rail's first frame, alone until a frame is pinned.
    */
   def openingFrames: (Option[CurationFrame], CurationFrame) = contenders match
     case first :: second :: _ => (Some(first), second)
