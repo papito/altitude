@@ -58,7 +58,7 @@
   min-height: 0;
 }
 
-/* A state with no set to show: too few frames left, or the queue's end */
+/* A state with no set to show: too few frames left, a resolved selection's report, or the queue's end */
 .curation-no-set {
   display: grid;
   place-content: center;

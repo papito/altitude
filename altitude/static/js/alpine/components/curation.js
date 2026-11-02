@@ -19,7 +19,9 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  *
  * It is opened on one of three things (`requestCuration`, from `listeners/curation.js`): the queue,
  * whose Sequence IDs it walks, requesting one set's fragment at a time; one Sequence; or a selection,
- * whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set.
+ * whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set: Skip, and a
+ * Keep all that changes nothing, close Curation, and a Resolve or a Keep all that changes something
+ * stays open on a report of what it did, with Undo and Exit.
  *
  * Every action is saved as it happens, so closing loses only the skips and the undo entry. Exit and
  * Esc close it through `closeModal` (`global.js` handles Esc for every host), and this component
@@ -32,8 +34,10 @@ const Phase = {
     // No set has been read yet
     loading: "loading",
     set: "set",
-    // A Sequence opened alone has too few frames left
+    // A Sequence opened alone or a selection has too few frames left
     tooFew: "tooFew",
+    // A selection or a Sequence opened alone was resolved: what was kept and recycled
+    report: "report",
     // The queue's IDs ran out
     end: "end",
 }
@@ -58,6 +62,11 @@ function repoPath(prefix, rest) {
 
 function fileUrl(frameId) {
     return frameId ? repoPath("content", `/file/${frameId}`) : null
+}
+
+/** "1 frame", "3 frames" */
+function framesText(count) {
+    return count === 1 ? "1 frame" : `${count} frames`
 }
 
 /** A Sequence's fragment, or null when it answers with no content: fewer than two frames left */
@@ -188,6 +197,7 @@ export function curation() {
         // The last mutation, for Undo: `{ keepIds, recycleIds, sequenceOf, position }` of a Resolve or
         // a Keep all, `{ recycleIds, position }` of a recycled Bundle
         undoEntry: null,
+        reportText: "",
 
         init() {
             const entry = requestedEntry
@@ -236,8 +246,21 @@ export function curation() {
             return this.phase === Phase.tooFew
         },
 
+        get showsReport() {
+            return this.phase === Phase.report
+        },
+
         get showsEnd() {
             return this.phase === Phase.end
+        },
+
+        // The report and the too-few state offer Undo beside what they say
+        get showsHeaderUndo() {
+            return (
+                this.undoEntry !== null &&
+                !this.showsReport &&
+                !this.showsTooFew
+            )
         },
 
         get isAllDone() {
@@ -402,7 +425,8 @@ export function curation() {
         /**
          * Puts a set's fragment on show and reads its frames. `keepView` is for the same set read again:
          * what the user had pinned, focused, picked and opened stays as far as its frames are still in
-         * the set, and anything else opens as a new set does.
+         * the set, and anything else opens as a new set does. A selection with too few frames left answers
+         * with a fragment saying so instead of a set, and the too-few state of the shell says the same.
          */
         showSet(html, { keepView = false } = {}) {
             if (isClosed) {
@@ -414,6 +438,10 @@ export function curation() {
             const setEl = hostEl.querySelector(
                 `[${Const.attributes.openingFocusedId}]`,
             )
+            if (!setEl) {
+                this.showNoSet(Phase.tooFew)
+                return
+            }
 
             const frames = [
                 ...hostEl.querySelectorAll(`[${Const.attributes.frameId}]`),
@@ -434,17 +462,17 @@ export function curation() {
             )
             this.pinnedId = kept(
                 this.pinnedId,
-                setEl?.dataset.openingPinnedId ?? null,
+                setEl.dataset.openingPinnedId ?? null,
             )
             this.focusedId = kept(
                 this.focusedId,
-                setEl?.dataset.openingFocusedId ?? null,
+                setEl.dataset.openingFocusedId ?? null,
             )
             this.pickIds = keepView ? this.pickIds.filter(isInSet) : []
             this.zoomPersonId = keepView ? this.zoomPersonId : null
 
             // A Bundle collapses only in a set large enough, and the frames on the stage stay findable
-            const collapses = setEl?.dataset.bundlesCollapse === "true"
+            const collapses = setEl.dataset.bundlesCollapse === "true"
             const wasOpen = keepView ? this.openBundles : {}
             this.openBundles = Object.fromEntries(
                 frames
@@ -494,6 +522,10 @@ export function curation() {
         },
 
         showNoSet(phase) {
+            if (isClosed) {
+                return
+            }
+
             document.getElementById("curationSet").replaceChildren()
             stageObserver.disconnect()
             this.frames = []
@@ -502,6 +534,7 @@ export function curation() {
             this.pinnedId = null
             this.pickIds = []
             this.phase = phase
+            this.keepFocusInside()
         },
 
         /** Reads what the component is opened on, at its current position, and shows it */
@@ -515,7 +548,7 @@ export function curation() {
                 const html = await readSequenceSet(this.sequenceId)
                 if (html) {
                     this.showSet(html, options)
-                } else if (!isClosed) {
+                } else {
                     this.showNoSet(Phase.tooFew)
                 }
                 return
@@ -635,7 +668,12 @@ export function curation() {
             return this.settle(this.frames.map((frame) => frame.id))
         },
 
-        /** Keeps the frames named and recycles the others, then goes on to the next set */
+        /**
+         * Keeps the frames named and recycles the others. The server's answer says whether a set changed:
+         * nothing recycled and no Sequence cleared is a Keep all on part of a Sequence, or on frames of none.
+         * The queue goes on to its next set either way. With no next set, an outcome that changed nothing
+         * closes Curation, as a Skip does, and any other stays open on its report, keeping its undo entry.
+         */
         settle(keepIds) {
             if (keepIds.length === 0) {
                 return
@@ -650,11 +688,10 @@ export function curation() {
                     { keepIds, recycleIds },
                 )
                 const { sequenceOf } = response.data
+                const changed =
+                    recycleIds.length > 0 || Object.keys(sequenceOf).length > 0
 
-                if (
-                    recycleIds.length > 0 ||
-                    Object.keys(sequenceOf).length > 0
-                ) {
+                if (changed) {
                     this.undoEntry = {
                         keepIds,
                         recycleIds,
@@ -667,6 +704,12 @@ export function curation() {
                     )
                 }
                 announceChanged()
+
+                if (changed && !this.isQueue) {
+                    this.reportText = `Kept ${framesText(keepIds.length)}, recycled ${framesText(recycleIds.length)}`
+                    this.showNoSet(Phase.report)
+                    return
+                }
 
                 await this.nextSet()
             })
@@ -748,6 +791,10 @@ export function curation() {
                 announceChanged()
 
                 this.position = entry.position
+                // A state with no set no longer holds, whatever the read answers
+                if (!this.showsSet) {
+                    this.phase = Phase.loading
+                }
                 await this.openSet()
             })
         },
@@ -756,7 +803,8 @@ export function curation() {
          * The keys, bound while Curation is the active host: ← → move the focused frame, C pins it, K
          * picks it, Enter resolves, A keeps all, R recycles its Bundle, S skips and Z undoes. Esc is
          * `global.js`'s. A key held down repeats only the arrows, so it cannot resolve set after set, and
-         * Enter on a focused control presses that control.
+         * Enter on a focused control presses that control. With no set on show there are no frames and no
+         * focused frame, so only Z and Esc do anything.
          */
         handleKey(event) {
             if (

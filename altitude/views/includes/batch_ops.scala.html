@@ -1,3 +1,5 @@
+@import altitude.core.Const
+
 @* The batch ops: what the selection can do, shown while assets are selected. Rendered twice: in the search toolbar
    (includes/search_results), between the total and the layout and View controls, and in the footer (index), where CSS
    anchor positioning keeps each button directly below its twin in the toolbar (static/css/includes/batch_ops.css).
@@ -6,7 +8,7 @@
 <div class="batch-ops" x-show="!$store.selectedAssets.isEmpty">
     <span class="selected-count"><span x-text="$store.selectedAssets.size"></span> selected</span>
     @* Default view: Move, Recycle, Add to album, Remove from album (in an album), Add to location, Remove from location
-       (in a Location), Deselect all *@
+       (in a Location), Curate (two images or more), Deselect all *@
     <template x-if="!$store.currentView.isTrashBinView()">
         <div class="actions">
             <button type="button" class="action-button success drag-drop batch-mover" @@click="$tooltip('Drag to folder, location, or album')"><i class="fas fa-truck-moving"></i>Move</button>
@@ -23,6 +25,8 @@
             <template x-if="$store.searchParams.locationId">
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
             </template>
+            @* Opens Curation on the selection, up to the cap it carries (js/listeners/curation.js) *@
+            <button type="button" class="action-button" x-show="$store.selectedAssets.size > 1" data-max-selection="@{Const.Curation.MAX_SELECTION}" @@click="$dispatch(window.Const.events.batchCurateRequested)"><i class="fas fa-check-double"></i>Curate</button>
             <button type="button" class="action-button deselect" title="Deselect all" aria-label="Deselect all" @@click="$store.selectedAssets.reset()"><i class="fas fa-times"></i></button>
         </div>
     </template>

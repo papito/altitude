@@ -63,6 +63,8 @@ export const Const = {
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
+        // The batch ops' Curate: opens Curation on the selection unless it is over the button's `data-max-selection`
+        batchCurateRequested: "BATCH_CURATE_REQUESTED_EVENT",
         // Opens Curation: on the queue with no detail, on one Sequence with `detail.sequenceId`, on a selection
         // with `detail.assetIds`
         curateRequested: "CURATE_REQUESTED_EVENT",
@@ -100,6 +102,8 @@ export const Const = {
         fileName: "data-file-name",
         bundleKind: "data-bundle-kind",
         inAlbumOrLocation: "data-in-album-or-location",
+        // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
+        maxSelection: "data-max-selection",
         // A Curation set's opening frames, and whether its Bundles collapse
         openingPinnedId: "data-opening-pinned-id",
         openingFocusedId: "data-opening-focused-id",

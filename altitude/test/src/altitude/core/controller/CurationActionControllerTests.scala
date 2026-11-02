@@ -5,6 +5,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.models.Asset
 import altitude.core.models.ImageQuality
 import altitude.core.models.Person
@@ -52,6 +53,13 @@ import altitude.core.service.FaceDetectionService
     html.substring(start).split("<section").head
   }
 
+  /** The shell's state with no set that `shows` binds, up to the next block of its kind */
+  private def noSetState(html: String, shows: String): String = {
+    val start = html.indexOf(s"""x-show="$shows"""")
+    start should be >= 0
+    html.substring(start).split("curation-no-set").head
+  }
+
   test("The shell holds the host of a set's fragment") {
 
     /**
@@ -61,7 +69,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell is an HTML partial with the host each set's fragment swaps into, and no set of its own.
+     * The shell is an HTML partial with the host each set's fragment swaps into, and no set of its own. Its too-few state says so
+     * and its report state holds the report, each offering Undo and Exit.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -74,6 +83,16 @@ import altitude.core.service.FaceDetectionService
         response.text() should startWith("<!doctype html>")
         response.text() should include("""id="curationSet"""")
         frameIds(response.text()) shouldBe empty
+
+        val tooFew = noSetState(response.text(), "showsTooFew")
+        tooFew should include("Fewer than two images are left to compare")
+        val report = noSetState(response.text(), "showsReport")
+        report should include("reportText")
+        List(tooFew, report).foreach {
+          state =>
+            state should include("undo()")
+            state should include("exit()")
+        }
     }
   }
 
@@ -251,6 +270,46 @@ import altitude.core.service.FaceDetectionService
         results("triage") should include("""id="curateSequences"""")
         (results("repository") should not).include("curateSequences")
         (results("trashbin") should not).include("curateSequences")
+    }
+  }
+
+  test("The batch ops' Curate is in both copies of the non-trash template, from two images, and carries the cap") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * The toolbar's copy (the results) and the footer's (the main page) each hold one Curate button, in the template of the views
+     * outside the trash, shown from two selected images and carrying `Const.Curation.MAX_SELECTION`. The trash's template holds
+     * none.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val results =
+          requests.get(s"$host/htmx/search/r/$repoId", params = Map("view" -> "repository"), cookies = testContext.cookies).text()
+        val mainPage = requests.get(s"$host/r/$repoId", cookies = testContext.cookies).text()
+
+        List(results, mainPage).foreach {
+          html =>
+            val batchOps = html.substring(html.indexOf("""<div class="batch-ops""""))
+            val trashTemplate = batchOps.indexOf("""x-if="$store.currentView.isTrashBinView()"""")
+            trashTemplate should be >= 0
+            val outsideTrash = batchOps.substring(0, trashTemplate)
+            val inTrash = batchOps.substring(trashTemplate).split("</template>").head
+
+            outsideTrash should include("""x-if="!$store.currentView.isTrashBinView()"""")
+            val curate = outsideTrash.substring(outsideTrash.lastIndexOf("<button", outsideTrash.indexOf("batchCurateRequested")))
+            curate should include("""x-show="$store.selectedAssets.size > 1"""")
+            curate should include(s"""data-max-selection="${Const.Curation.MAX_SELECTION}"""")
+            curate should include("Curate</button>")
+            (inTrash should not).include("Curate")
+        }
     }
   }
 
