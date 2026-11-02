@@ -317,9 +317,13 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val (sql, values) = countSequencesToCurateStatement
     getLongField(executeAndGetOne(sql, values)("sequences")).get.toInt
 
-  override def getSequenceFrames(sequenceId: String): List[Asset] =
-    val (sql, values) = sequenceFramesStatement(sequenceId)
+  override def getSequenceFrames(sequenceId: String, limit: Int): List[Asset] =
+    val (sql, values) = sequenceFramesStatement(sequenceId, limit)
     manyBySqlQuery(sql, values).map(makeModel)
+
+  override def countSequenceFrames(sequenceId: String): Int =
+    val (sql, values) = countSequenceFramesStatement(sequenceId)
+    getLongField(executeAndGetOne(sql, values)("frames")).get.toInt
 
   /**
    * The context repository's Sequences with at least two frames completed and out of the trash, counted over those frames alone.
@@ -349,9 +353,11 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   def countSequencesToCurateStatement: (String, List[Any]) =
     (s"SELECT COUNT(*) AS sequences FROM ($sequencesToCurate) AS to_curate", List(RequestContext.getRepository.persistedId))
 
-  /** The frames completed and out of the trash whose Sequence passes the test, whose one placeholder binds before the repository */
+  /**
+   * The `FROM` of the frames completed and out of the trash whose Sequence passes the test; its placeholder binds before the
+   * repository
+   */
   private def liveFramesOfSequences(sequenceTest: String): String = s"""
-      SELECT $assetWithoutBulkyMetadata
         FROM asset
        WHERE ${FieldConst.Asset.SEQUENCE_ID} $sequenceTest
          AND ${FieldConst.REPO_ID} = ?
@@ -360,9 +366,22 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
     """
 
-  /** The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain */
-  def sequenceFramesStatement(sequenceId: String): (String, List[Any]) =
-    (liveFramesOfSequences("= ?"), List(sequenceId, RequestContext.getRepository.persistedId))
+  /**
+   * The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain. `IS NULL` puts a frame with no
+   * capture time last on both engines, and the database sorts and cuts, so nothing past the window comes back.
+   */
+  def sequenceFramesStatement(sequenceId: String, limit: Int): (String, List[Any]) =
+    val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT
+    val sql = s"""
+      SELECT $assetWithoutBulkyMetadata ${liveFramesOfSequences("= ?")}
+       ORDER BY $capturedAt IS NULL, $capturedAt, ${FieldConst.ID}
+       LIMIT $limit
+    """
+    (sql, List(sequenceId, RequestContext.getRepository.persistedId))
+
+  /** The statement behind [[countSequenceFrames]] with its bind values, which the plan tests explain */
+  def countSequenceFramesStatement(sequenceId: String): (String, List[Any]) =
+    (s"SELECT COUNT(*) AS frames ${liveFramesOfSequences("= ?")}", List(sequenceId, RequestContext.getRepository.persistedId))
 
   // SQLite's one write connection serializes the writers
   override def lockSequences(): Unit = ()
@@ -378,7 +397,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    * order, the order of the library operations' locking select, so the two do not wait on each other in a cycle.
    */
   def liveSequenceMembersStatement(sequenceIds: Set[String]): (String, List[Any]) =
-    val sql = s"${liveFramesOfSequences(inIdSet)} ORDER BY ${FieldConst.ID} $forUpdate"
+    val sql = s"SELECT $assetWithoutBulkyMetadata ${liveFramesOfSequences(inIdSet)} ORDER BY ${FieldConst.ID} $forUpdate"
     (sql, List(idSet(sequenceIds), RequestContext.getRepository.persistedId))
 
   override def clearSequence(assetIds: Set[String]): Int =

@@ -187,6 +187,7 @@
 }
 
 #curationStage .pane {
+  position: relative;
   min-height: 0;
   overflow: hidden;
   background-color: var(--asset-detail-backdrop-color);
@@ -200,6 +201,21 @@
   height: 100%;
   object-fit: contain;
   transform-origin: 0 0;
+}
+
+/* A pane hides its image from the moment its frame changes until the new one has loaded. The spinner waits a moment, so a frame
+   already in the browser's cache does not flash it */
+#curationStage .pane.loading img {
+  visibility: hidden;
+}
+
+#curationStage .media-spinner {
+  visibility: hidden;
+}
+
+#curationStage .pane.loading .media-spinner {
+  visibility: visible;
+  transition: visibility 0s 150ms;
 }
 
 #curationStage figcaption {

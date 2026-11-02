@@ -5,9 +5,11 @@ import cask.Response
 import org.slf4j.Logger
 import play.twirl.api.Html
 
+import scala.util.Try
+
 import altitude.core.App
 import altitude.core.Const
-import altitude.core.ValidationException
+import altitude.core.Validators
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
@@ -23,6 +25,8 @@ class CurationActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/sequence/:sequenceId")
   def sequenceSet(repoId: String, sequenceId: String)(using request: Request): Response[String] =
+    if !Validators.isUuid(sequenceId) then return badRequest(Const.Msg.Err.VALUE_NOT_A_UUID)
+
     App.altitude.service.curation.sequenceSet(sequenceId) match
       case None => cask.Response("", 204, Seq(("Content-Type", "text/html")))
       case set => html(htmx.html.curation_set(set))
@@ -34,15 +38,12 @@ class CurationActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/selection")
   def selectionSet(repoId: String)(using request: Request): Response[String] =
-    val assetIds =
-      try selectionIds(unscrubbedJson.get)
-      catch case _: ValidationException => return badRequest("Expected assetIds, a comma-separated list of UUIDs")
-
-    if assetIds.size > Const.Curation.MAX_SELECTION then
-      logger.debug(s"Refused a Curation selection of ${assetIds.size} images")
-      return badRequest(s"Curation compares at most ${Const.Curation.MAX_SELECTION} images at a time")
-
-    html(htmx.html.curation_set(App.altitude.service.curation.selectionSet(assetIds)))
+    Try(selectionIds(unscrubbedJson.get)).toOption match
+      case None => badRequest("Expected assetIds, a comma-separated list of UUIDs")
+      case Some(assetIds) if assetIds.size > Const.Curation.MAX_SELECTION =>
+        logger.debug(s"Refused a Curation selection of ${assetIds.size} images")
+        badRequest(s"Curation compares at most ${Const.Curation.MAX_SELECTION} images at a time")
+      case Some(assetIds) => html(htmx.html.curation_set(App.altitude.service.curation.selectionSet(assetIds)))
 
   private def html(payload: Html): Response[String] =
     cask.Response("<!doctype html>" + payload, 200, Seq(("Content-Type", "text/html")))

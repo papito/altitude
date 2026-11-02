@@ -72,12 +72,16 @@ case class CurationFaceRow(personId: String, faces: Map[String, Face])
  *   the Bundles that hold a frame, in priority order
  * @param contenders
  *   the frames in no Bundle, in capture order
+ * @param heldBack
+ *   how many frames of a Sequence are past the window a set reads, which `CurationService` knows and the rule does not: the set
+ *   holds part of the Sequence, whose Picks stay in it and which stays in the queue
  */
 case class CurationSet(
     frames: List[CurationFrame],
     notices: List[CurationNotice],
     bundles: List[CurationBundle],
-    contenders: List[CurationFrame]):
+    contenders: List[CurationFrame],
+    heldBack: Int = 0):
 
   /** With no Bundle, the measurements cannot separate the frames, and the view suggests nothing */
   def isTooCloseToCall: Boolean = bundles.isEmpty

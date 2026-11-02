@@ -69,8 +69,9 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell is an HTML partial with the host each set's fragment swaps into, and no set of its own. Its too-few state says so
-     * and its report state holds the report, each offering Undo and Exit.
+     * The shell is an HTML partial with the host each set's fragment swaps into, and no set of its own. Its too-few state says
+     * so, its report state holds the report and its unread state says the set could not be read and offers Try again, each
+     * offering Undo and Exit.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -88,7 +89,10 @@ import altitude.core.service.FaceDetectionService
         tooFew should include("Fewer than two images are left to compare")
         val report = noSetState(response.text(), "showsReport")
         report should include("reportText")
-        List(tooFew, report).foreach {
+        val unread = noSetState(response.text(), "showsUnread")
+        unread should include("This set could not be read")
+        unread should include("tryAgain()")
+        List(tooFew, report, unread).foreach {
           state =>
             state should include("undo()")
             state should include("exit()")
@@ -342,6 +346,101 @@ import altitude.core.service.FaceDetectionService
 
         testApp.service.library.restoreRecycledAssets(Set(frames.head.persistedId))
         frameIds(getSet(host, repoId, sequenceId).text()).toSet shouldBe frames.map(_.persistedId).toSet
+    }
+  }
+
+  test("A Sequence over the window says how many frames it shows, and of how many") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of one frame over `MAX_SEQUENCE_FRAMES`, then with one of its frames recycled.
+     *
+     * Assertions:
+     *
+     * Over the window the fragment names the first `MAX_SEQUENCE_FRAMES` frames and says it shows them of all the Sequence's, and
+     * that the Sequence stays in the queue. At the window it says neither.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val max = Const.Curation.MAX_SEQUENCE_FRAMES
+        val frames = List.fill(max + 1)(frame())
+        testContext.setAssetSequence(frames, sequenceId)
+
+        val over = getSet(host, repoId, sequenceId).text()
+        frameIds(over) should have size max
+        over should include(s"Showing the first $max of ${max + 1} frames")
+        over should include("The Sequence stays in the queue")
+
+        testApp.service.library.recycleAssets(Set(frames.head.persistedId))
+        val at = getSet(host, repoId, sequenceId).text()
+        frameIds(at) should have size max
+        (at should not).include("Showing the first")
+        (at should not).include("stays in the queue")
+    }
+  }
+
+  test("A Sequence ID that is not a UUID is a plain-text 400") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * An ID that is not a UUID, and one of the 40 characters that overflow the column, are each a plain-text 400 with the reason,
+     * not the no content of a Sequence that does not exist.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        List("not-a-uuid", "x" * 40).foreach {
+          bad =>
+            val response = getSet(host, repoId, bad)
+            response.statusCode shouldBe 400
+            response.headers("content-type").head should include("text/plain")
+            response.text() shouldBe Const.Msg.Err.VALUE_NOT_A_UUID
+        }
+    }
+  }
+
+  test("A selection's body that is no JSON object is a plain-text 400") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * A body that is an array, a string, a number, a null or no JSON at all is each a plain-text 400 naming what is expected, as
+     * for a body with no valid selection.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        List("[]", "\"text\"", "1", "null", "{", "not json").foreach {
+          data =>
+            withClue(s"$data: ") {
+              val response = requests.post(
+                s"$host/htmx/curation/r/$repoId/selection",
+                headers = Map("Content-Type" -> "application/json"),
+                data = data,
+                cookies = testContext.cookies,
+                check = false)
+              response.statusCode shouldBe 400
+              response.headers("content-type").head should include("text/plain")
+              response.text() should include("assetIds")
+            }
+        }
     }
   }
 

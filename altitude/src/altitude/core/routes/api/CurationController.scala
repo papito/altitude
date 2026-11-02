@@ -10,6 +10,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
+import altitude.core.Validators
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
@@ -34,9 +35,11 @@ class CurationController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/resolve")
   def resolve(repoId: String)(using request: Request): Response[String] =
-    val jsonIn = unscrubbedJson.get // a wrong content type keeps its own validation error
-    Try((idsOf(jsonIn, fields.KEEP_IDS), idsOf(jsonIn, fields.RECYCLE_IDS))).toOption match
-      case None => jsonError(s"Expected ${fields.KEEP_IDS} and ${fields.RECYCLE_IDS} arrays of strings", 400)
+    Try {
+      val jsonIn = unscrubbedJson.get
+      (idsOf(jsonIn, fields.KEEP_IDS), idsOf(jsonIn, fields.RECYCLE_IDS))
+    }.toOption match
+      case None => jsonError(s"Expected ${fields.KEEP_IDS} and ${fields.RECYCLE_IDS} arrays of UUIDs", 400)
       case Some((keepIds, recycleIds)) =>
         refusalsAnswered {
           val sequenceOf = App.altitude.service.curation.resolve(keepIds, recycleIds)
@@ -47,17 +50,26 @@ class CurationController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/reopen")
   def reopen(repoId: String)(using request: Request): Response[String] =
-    val jsonIn = unscrubbedJson.get // a wrong content type keeps its own validation error
-    Try((idsOf(jsonIn, fields.KEEP_IDS), idsOf(jsonIn, fields.RECYCLE_IDS), sequenceOfIn(jsonIn))).toOption match
+    Try {
+      val jsonIn = unscrubbedJson.get
+      (idsOf(jsonIn, fields.KEEP_IDS), idsOf(jsonIn, fields.RECYCLE_IDS), sequenceOfIn(jsonIn))
+    }.toOption match
       case None =>
-        jsonError(s"Expected ${fields.KEEP_IDS} and ${fields.RECYCLE_IDS} arrays of strings, and ${fields.SEQUENCE_OF}", 400)
+        jsonError(
+          s"Expected ${fields.KEEP_IDS} and ${fields.RECYCLE_IDS} arrays of UUIDs, and ${fields.SEQUENCE_OF} of UUIDs",
+          400)
       case Some((keepIds, recycleIds, sequenceOf)) =>
         refusalsAnswered(restoreResponse(App.altitude.service.curation.reopen(keepIds, recycleIds, sequenceOf)))
 
-  private def idsOf(jsonIn: ujson.Obj, field: String): Set[String] = jsonIn(field).arr.map(_.str).toSet
+  private def idsOf(jsonIn: ujson.Obj, field: String): Set[String] = jsonIn(field).arr.map(id => uuid(id.str)).toSet
 
   private def sequenceOfIn(jsonIn: ujson.Obj): Map[String, String] =
-    jsonIn(fields.SEQUENCE_OF).obj.toMap.view.mapValues(_.str).toMap
+    jsonIn(fields.SEQUENCE_OF).obj.toMap.map((pick, sequenceId) => uuid(pick) -> uuid(sequenceId.str))
+
+  /** Every ID of these bodies reaches a statement, and a Sequence's is written to `asset.sequence_id`, a `CHAR(36)` */
+  private def uuid(id: String): String =
+    require(Validators.isUuid(id))
+    id
 
   /** A refused outcome is the client's error; an asset outside this repository is not found. */
   private def refusalsAnswered(outcome: => Response[String]): Response[String] =

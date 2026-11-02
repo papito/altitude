@@ -4,8 +4,9 @@
    state and reads the sets; `tabindex` lets the root take focus, so the keys it binds never press a control by accident. *@
 @()
 
-@undoAndExit = {
+@undoAndExit(first: Html) = {
   <div class="actions">
+    @first
     <button type="button" class="action-button" x-show="undoEntry" x-on:click="undo()">Undo <kbd>Z</kbd></button>
     <button type="button" class="action-button" x-on:click="exit()">Exit <kbd>Esc</kbd></button>
   </div>
@@ -29,13 +30,21 @@
      both. With a Bundle's recycling behind it, Undo brings the set back *@
   <div class="curation-no-set" x-show="showsTooFew" style="display: none">
     @htmx.html.curation_set(None)
-    @undoAndExit
+    @undoAndExit(Html(""))
   </div>
 
   @* A selection or a Sequence opened alone has no next set, so a Resolve or a Keep all that changed something reports here *@
   <div class="curation-no-set" x-show="showsReport" style="display: none">
     <p x-text="reportText"></p>
-    @undoAndExit
+    @undoAndExit(Html(""))
+  </div>
+
+  @* A read failed, whatever came before it: no set is on show to act on, and Try again runs that read again *@
+  <div class="curation-no-set" x-show="showsUnread" style="display: none">
+    <p>This set could not be read</p>
+    @undoAndExit {
+      <button type="button" class="action-button primary" x-on:click="tryAgain()">Try again</button>
+    }
   </div>
 
   @* The queue walked to its end *@

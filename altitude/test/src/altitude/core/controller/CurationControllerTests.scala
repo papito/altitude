@@ -270,6 +270,77 @@ import altitude.core.models.Asset
     }
   }
 
+  test("An ID that is not a UUID, or a body that is no JSON object, is a JSON 400 that changes nothing") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of two frames.
+     *
+     * Assertions:
+     *
+     * Resolve and reopen each answer a JSON 400 with the reason in `error`, and the frames stay as they were, for: an ID that is
+     * not a UUID among the Picks or among the frames to recycle; on reopen, a key or a value of `sequenceOf` that is not a UUID,
+     * among them the 40 characters that overflow `CHAR(36)` on PostgreSQL and that SQLite would store; a body that is an array, a
+     * string, a number, a null or no JSON at all.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val sequenceId = UUID.randomUUID().toString
+        val List(keep, recycle) = List.fill(2)(triaged()): @unchecked
+        testContext.setAssetSequence(List(keep, recycle), sequenceId)
+        val (pick, other) = (keep.persistedId, recycle.persistedId)
+        val overflowing = "x" * 40
+
+        def shouldBeRefused(response: requests.Response): Unit = {
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("application/json")
+          ujson.read(response.text())("error").str should not be empty
+        }
+
+        def body(keepIds: String, recycleIds: String): ujson.Obj =
+          ujson.Obj("keepIds" -> List(keepIds), "recycleIds" -> List(recycleIds))
+        def undo(keepIds: String, recycleIds: String, sequenceOf: (String, String)): ujson.Obj = {
+          val payload = body(keepIds, recycleIds)
+          payload("sequenceOf") = ujson.Obj(sequenceOf._1 -> sequenceOf._2)
+          payload
+        }
+
+        List("not-a-uuid", overflowing).foreach {
+          bad =>
+            withClue(s"$bad: ") {
+              shouldBeRefused(post(host, repoId, "resolve", body(bad, other)))
+              shouldBeRefused(post(host, repoId, "resolve", body(pick, bad)))
+              shouldBeRefused(post(host, repoId, "reopen", undo(bad, other, pick -> sequenceId)))
+              shouldBeRefused(post(host, repoId, "reopen", undo(pick, bad, pick -> sequenceId)))
+              shouldBeRefused(post(host, repoId, "reopen", undo(pick, other, pick -> bad)))
+              shouldBeRefused(post(host, repoId, "reopen", undo(pick, other, bad -> sequenceId)))
+            }
+        }
+
+        def postRaw(action: String, data: String) =
+          requests.post(
+            s"$host/api/curation/r/$repoId/$action",
+            headers = Map("Content-Type" -> "application/json"),
+            data = data,
+            cookies = testContext.cookies,
+            check = false)
+
+        List("resolve", "reopen").foreach {
+          action =>
+            List("[]", "\"text\"", "1", "null", "{", "not json").foreach {
+              data => withClue(s"$action $data: ")(shouldBeRefused(postRaw(action, data)))
+            }
+        }
+
+        stored(keep).sequenceId shouldBe Some(sequenceId)
+        List(keep, recycle).map(stored(_).isRecycled) shouldBe List(false, false)
+    }
+  }
+
   test("Reopening an ID that is no asset is a JSON 404 that changes nothing") {
 
     /**

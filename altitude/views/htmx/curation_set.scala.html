@@ -93,12 +93,13 @@
   }
 }
 
-@* One of the stage's two panes, for the frame the component's `frame` property names. The image fills the pane, and a click on a
-   crop zooms it with a transform (`applyZoom`) *@
+@* One of the stage's two panes, for the frame the component's `frame` property names. The image fills the pane, hidden behind the
+   spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`) *@
 @stagePane(imageId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
-    <div class="pane">
-      <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="applyZoom()">
+    <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame) }">
+      <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="onImageSettled($event)" x-on:error="onImageSettled($event)">
+      <div class="media-spinner"><i class="fas fa-spinner fa-spin"></i></div>
     </div>
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
@@ -124,6 +125,9 @@
              data-opening-focused-id="@{opening._2.asset.persistedId}"
              @if(collapses) {data-bundles-collapse="true"}>
       <aside id="curationRail" aria-label="Frames">
+        @if(curationSet.heldBack > 0) {
+          <p class="curation-notice">Showing the first @{curationSet.frames.size} of @{f"${curationSet.frames.size + curationSet.heldBack}%,d"} frames. The Sequence stays in the queue with the rest.</p>
+        }
         @for(notice <- curationSet.notices) {
           <p class="curation-notice warning">Every frame: @{notice.readings.map(exposure).mkString(", ")}</p>
         }

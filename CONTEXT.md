@@ -236,7 +236,7 @@ _Avoid_: Culling, Review.
 
 **Curation set**:
 The frames being compared: the members of one Sequence still out of the trash,
-or a selection.
+the first 100 when it has more, or a selection.
 _Avoid_: Batch (a user's selection before it is curated), Group.
 
 **Pick**:

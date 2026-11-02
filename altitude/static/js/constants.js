@@ -104,6 +104,8 @@ export const Const = {
         inAlbumOrLocation: "data-in-album-or-location",
         // The Sequence a group header's Curate opens Curation on
         sequenceId: "data-app-sequence-id",
+        // The fewest frames a group header's Curate stays for (`Const.Curation.MIN_FRAMES`)
+        minFrames: "data-min-frames",
         // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
         maxSelection: "data-max-selection",
         // A Curation set's opening frames, and whether its Bundles collapse

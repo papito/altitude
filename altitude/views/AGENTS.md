@@ -139,6 +139,7 @@ Const.attributes.expanded       // "data-expanded"
 Const.attributes.viewedScope    // "data-viewed-scope" (on the folder node whose results are displayed)
 Const.attributes.dataSrc        // "data-src"  (lazy-load image URL)
 Const.attributes.sequenceId     // "data-app-sequence-id" (a group header's Curate) el.dataset.appSequenceId
+Const.attributes.minFrames      // "data-min-frames"  (the fewest frames a group header's Curate stays for)
 Const.attributes.frameId        // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
 Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of the face strip)
 Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
@@ -146,7 +147,7 @@ Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits 
 
 A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
 `data-file-name` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
-`data-max-selection`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
+`data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
 (`js/search-results/cells.js`).
 
 The one exception is `alt-has-no-date` on a result cell, which the controller tests assert on.
@@ -221,7 +222,8 @@ Two-layer event bus, both on `document.body`:
   fragment itself.
 - A Curation set's fragment is **not** an HTMX request either (its shell is): the `curation` component reads it through the
   axios client and puts it in `#curationSet` itself, since it has to see the answer before anything is swapped (a 204 passes
-  over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself.
+  over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself, in the
+  unread state (see **Curation**).
 
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
@@ -1063,8 +1065,8 @@ counting them (a spacer is not a header, so the walk below passes it), and it is
 page reloads with its own headers, or stays for the group's cells on the next page when the reload is
 a 204. The client changes a header in `js/search-results/date-groups.js` alone, and only its count and its Curate button:
 `removeAssetsFromGrid` (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` before a cell leaves, which walks
-back to the nearest header, takes one off, removes the Curate button under two (`MIN_FRAMES_TO_CURATE`, the client's copy of
-`Const.Curation.MIN_FRAMES`), and removes the header at zero; a header whose loaded cells are all gone but whose
+back to the nearest header, takes one off, removes the Curate button under the number it carries (`data-min-frames`, `Const.Curation.MIN_FRAMES`),
+and removes the header at zero; a header whose loaded cells are all gone but whose
 count is positive stays, since the group has matches on pages not loaded yet. `removeCurateButtons(sequenceIds)` takes the
 button off a Sequence Curation cleared, whose kept frames stay under the header until the next search; it takes every copy,
 since a Sequence overtaken on a later page has a second header (**Group by Sequence** in `altitude/AGENTS.md`). Under Group by Location
@@ -1163,19 +1165,24 @@ into the host, a new shell for every open, so each starts with no skips and no u
 by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"` means the keys press no control by accident.
 
 - **The shell** (`htmx/curation.scala.html`) is a header with the title, `remaining` from the `sequencesToCurate` store, Undo while
-  there is one and Exit; `#curationSet`, which each set's fragment goes in; and the three states with no set, `.curation-no-set`:
+  there is one and Exit; `#curationSet`, which each set's fragment goes in; and the four states with no set, `.curation-no-set`:
   too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
-  resolve, and the queue's end. The first two offer Exit, and Undo when there is one, beside what they say.
+  resolve, the unread state, and the queue's end. The first three offer Exit, and Undo when there is one, beside what they say.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
   focused frame, the pinned frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
   Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
   (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
   an action still running announces when it finishes. Actions run one at a time (`exclusively`), so a key pressed during one does
-  nothing, and a failure goes to the snackbar and leaves the set on show. Every action is saved as it happens, so closing loses
-  only the skips and the undo entry.
+  nothing. A failed write goes to the snackbar and leaves the set on show, since nothing was saved. Every action is saved as it
+  happens, so closing loses only the skips and the undo entry.
+- **A failed read** of a set or of the queue (`reading`), whether it opens Curation or follows an outcome, goes to the snackbar too
+  and shows the unread state ("This set could not be read") with Try again, which runs that read again, Undo when there is one and
+  Exit. No set stays on show past it, so a set whose outcome was saved cannot be acted on again: with no frames on show the keys
+  other than Z and Esc do nothing. The walk's position and the undo entry stay as they were, so no Sequence is passed over.
 - **The Bundle rail** (`#curationRail`, `htmx/curation_set.scala.html`) is a column of its own that scrolls by itself: the notices
-  (`.curation-notice`, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
+  (`.curation-notice`, "Showing the first 100 of 2,000 frames" with what that means for the queue when a Sequence is over the window a
+  set reads, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
   each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
   Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and Recycle. A sole Contender
   is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Bundles collapse only in a set of four frames or
@@ -1183,7 +1190,14 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame and the
   focused frame, or one pane when none is pinned or the pinned frame is focused. A set opens on `openingFrames`: its first two
   Contenders, the first pinned and the second focused; with fewer, its Contender or else the rail's first frame, alone. A set read
-  again after a Bundle's recycling keeps what was pinned, focused, picked, open and zoomed, as far as its frames are still in it.
+  again after a Bundle's recycling or its Undo keeps what was pinned, unpinned, focused, picked, open and zoomed
+  (`currentView`), as far as its frames are still in it. A pane reuses its image, and the browser paints the old picture until the new
+  one is available, so a pane never shows a frame under another's name: from the moment its frame changes until its image's `load` or
+  `error` (`isPaneLoading`, `settledSrcs`) the image is hidden and asset detail's spinner (`.media-spinner`, `core.css`) shows after a
+  moment, so a frame already in the browser's cache does not flash it. The zoom is applied on `load`, before the image shows. A Pick
+  on a frame still loading is allowed, the caption naming the frame beside the spinner. The focused frame's neighbours in the rail's
+  order, the frames the arrows go to, are preloaded, and a preload no longer needed stops, so a held arrow does not queue originals
+  ahead of the frame on show (`preloadOnly`).
 - **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
   One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
   (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A click
@@ -1217,9 +1231,12 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   all that changes nothing, close Curation; a Resolve, or a Keep all that changes something, stays open on a report of what was kept
   and recycled; and a Bundle's recycling that leaves too few frames shows the too-few state.
 - **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle is the grid's own
-  `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation, and reads its set again wherever
-  the walk has gone: a Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and a recycled Bundle, which has no
-  Pick, through the grid's own `PUT /api/asset/.../restore`. Either answers as a restore does, and `reportRestore`
+  `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the queue it was made
+  on, and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): the walk goes back to it, or, when Start
+  again has replaced the list and it is in no new one, it goes in where the walk stands, and the walk goes on from there after it. A
+  Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and its set opens as a new one; a recycled Bundle, which
+  has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
+  show, else as it was left. Either answers as a restore does, and `reportRestore`
   (`assets/asset-actions.js`) reports it. A Keep all that changed nothing leaves the entry as it was.
 - **The grid beneath** keeps its scroll position. `Const.events.curationClosed` carries what the session left changed, net of its
   undos (`recycledIds`, `clearedSequenceIds`). With nothing changed, the grid and the selection stay as they were. Otherwise

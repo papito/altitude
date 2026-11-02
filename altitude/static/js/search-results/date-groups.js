@@ -8,15 +8,13 @@ import { Const } from "../constants.js"
  * cells are all gone but whose count is still positive stays - the group still has matches on pages
  * not loaded yet.
  *
- * A Sequence's header has a Curate button while its group has two frames or more, as the server
- * renders it, and loses it when the count falls under that or Curation clears the Sequence.
+ * A Sequence's header has a Curate button while its group has enough frames, the number the server
+ * renders on the button (`data-min-frames`), and loses it when the count falls under that or Curation
+ * clears the Sequence.
  *
  * The header's checkbox over the group's loaded cells is its own component
  * (js/alpine/components/date-group-selectable.js).
  */
-
-/** `Const.Curation.MIN_FRAMES` on the server: with fewer, a Sequence is no Curation set */
-const MIN_FRAMES_TO_CURATE = 2
 
 /**
  * Takes `cellEl` off the count of its group's header, removing the header when the count reaches zero.
@@ -40,8 +38,9 @@ export function decrementDateGroupOf(cellEl) {
     countEl.dataset.count = String(count)
     countEl.textContent = itemCountText(count)
 
-    if (count < MIN_FRAMES_TO_CURATE) {
-        headerEl.querySelector(`[${Const.attributes.sequenceId}]`)?.remove()
+    const curateEl = headerEl.querySelector(`[${Const.attributes.sequenceId}]`)
+    if (curateEl && count < Number(curateEl.dataset.minFrames)) {
+        curateEl.remove()
     }
 }
 
@@ -54,7 +53,7 @@ export function removeCurateButtons(sequenceIds) {
     sequenceIds.forEach((sequenceId) => {
         document
             .querySelectorAll(
-                `[${Const.attributes.sequenceId}="${sequenceId}"]`,
+                `[${Const.attributes.sequenceId}="${CSS.escape(sequenceId)}"]`,
             )
             .forEach((buttonEl) => buttonEl.remove())
     })

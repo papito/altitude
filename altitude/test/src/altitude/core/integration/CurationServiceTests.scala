@@ -3,10 +3,13 @@ package altitude.core.integration
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.ConstraintException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
@@ -32,6 +35,8 @@ import altitude.core.service.FaceDetectionService
   import BurstFrames.*
 
   private def curation = testApp.service.curation
+
+  private val MAX_FRAMES = Const.Curation.MAX_SEQUENCE_FRAMES
 
   /** `frames` frames of one burst a second apart, the first `startingAt` seconds after `TAKEN`, in one Sequence */
   private def burst(firstFrame: Int, startingAt: Int = 0, frames: Int = 2, model: String = MODEL): List[Asset] =
@@ -224,6 +229,102 @@ import altitude.core.service.FaceDetectionService
     curation.sequenceSet("no-such-sequence") shouldBe None
   }
 
+  /**
+   * A Sequence of `count` frames, in capture order, a second apart. They are imported last frame first, so the order of the rows
+   * says nothing about capture order.
+   */
+  private def longSequence(count: Int): List[Asset] = {
+    val start = LocalDateTime.of(2024, 6, 1, 12, 0)
+    val frames = List.fill(count)(testContext.persistAsset(isTriaged = true)).reverse
+    frames.zipWithIndex.foreach {
+      (frame, second) => testContext.setAssetDates(frame.persistedId, Some(start.plusSeconds(second)), OffsetDateTime.now())
+    }
+    testContext.setAssetSequence(frames, UUID.randomUUID().toString)
+    frames.map(stored)
+  }
+
+  test("A Sequence over the window reads its first frames in capture order, and says how many it holds back") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of three frames over `MAX_SEQUENCE_FRAMES`, and in it a frame with no capture time, imported before the others.
+     *
+     * Assertions:
+     *
+     * The set holds the first `MAX_SEQUENCE_FRAMES` in capture order and holds back four: the three frames past it and the frame
+     * with no capture time, which sorts last on both engines. The queue still counts all the frames.
+     *
+     * Edge cases:
+     *
+     * Recycling frames of the window brings the frames past it in. At exactly `MAX_SEQUENCE_FRAMES` frames left, the window is
+     * the whole Sequence and holds nothing back, the frame with no capture time last.
+     */
+    val undated = testContext.persistAsset(isTriaged = true)
+    testContext.setAssetDates(undated.persistedId, None, OffsetDateTime.now())
+    val frames = longSequence(MAX_FRAMES + 3)
+    val sequenceId = sequenceOf(frames)
+    testContext.setAssetSequence(List(undated), sequenceId)
+
+    val set = curation.sequenceSet(sequenceId).value
+    set.frames.map(_.asset.persistedId) shouldBe frames.take(MAX_FRAMES).map(_.persistedId)
+    set.heldBack shouldBe 4
+
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(MAX_FRAMES + 4)
+
+    testApp.service.library.recycleAssets(ids(frames.take(4)))
+    val whole = curation.sequenceSet(sequenceId).value
+    whole.frames.map(_.asset.persistedId) shouldBe frames.drop(4).map(_.persistedId) :+ undated.persistedId
+    whole.heldBack shouldBe 0
+    curation.queue().map(_.members) shouldBe List(MAX_FRAMES)
+  }
+
+  test("Resolving a window recycles only its frames and clears nothing") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of three frames over `MAX_SEQUENCE_FRAMES`, read as its window, then kept whole, then resolved with its first
+     * frame as the Pick.
+     *
+     * Assertions:
+     *
+     * Keep all on the window answers nothing cleared and changes nothing, so the same window reads again. The resolve recycles
+     * the window's other frames and answers nothing cleared. The Pick stays in the Sequence, the three frames past the window are
+     * untouched, and the Sequence stays in the queue, to be read again as the Pick and those three, holding nothing back.
+     */
+    val frames = longSequence(MAX_FRAMES + 3)
+    val sequenceId = sequenceOf(frames)
+    val window = curation.sequenceSet(sequenceId).value.frames.map(_.asset)
+    val pastWindow = frames.drop(MAX_FRAMES)
+
+    curation.resolve(ids(window), Set.empty) shouldBe empty
+    frames.map(stored).foreach {
+      frame =>
+        frame.isRecycled shouldBe false
+        frame.sequenceId shouldBe Some(sequenceId)
+    }
+    frameIds(curation.sequenceSet(sequenceId)) shouldBe window.map(_.persistedId)
+
+    curation.resolve(ids(window.take(1)), ids(window.drop(1))) shouldBe empty
+
+    stored(window.head).sequenceId shouldBe Some(sequenceId)
+    stored(window.head).isRecycled shouldBe false
+    window.drop(1).map(stored).foreach(_.isRecycled shouldBe true)
+    pastWindow.map(stored).foreach {
+      frame =>
+        frame.isRecycled shouldBe false
+        frame.sequenceId shouldBe Some(sequenceId)
+    }
+
+    queueShouldHold(sequenceId)
+    curation.queue().map(_.members) shouldBe List(4)
+    val left = curation.sequenceSet(sequenceId).value
+    left.frames.map(_.asset.persistedId) shouldBe (window.head :: pastWindow).map(_.persistedId)
+    left.heldBack shouldBe 0
+  }
+
   test("A selection keeps its still images in the repository and out of the trash") {
 
     /**
@@ -364,7 +465,7 @@ import altitude.core.service.FaceDetectionService
     }
   }
 
-  test("The queue, its count, a Sequence's frames and a resolve's locking read go through the Sequence index") {
+  test("The queue, its count, a Sequence's window and its count, and a resolve's locking read go through the Sequence index") {
 
     /**
      * Setup:
@@ -374,7 +475,7 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The engine's plan names `asset_sequence` for all four statements, so the toolbar's count, read after every mutation, costs
+     * The engine's plan names `asset_sequence` for all five statements, so the toolbar's count, read after every mutation, costs
      * the rows that carry a Sequence and not the library.
      */
     val frames = burst(0)
@@ -383,7 +484,8 @@ import altitude.core.service.FaceDetectionService
       List(
         dao.sequencesToCurateStatement,
         dao.countSequencesToCurateStatement,
-        dao.sequenceFramesStatement(sequenceOf(frames)),
+        dao.sequenceFramesStatement(sequenceOf(frames), MAX_FRAMES),
+        dao.countSequenceFramesStatement(sequenceOf(frames)),
         dao.liveSequenceMembersStatement(Set(sequenceOf(frames)))
       ).map((sql, values) => lookupPlanOf(sql, values))
     }

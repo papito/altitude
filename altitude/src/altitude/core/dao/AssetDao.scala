@@ -64,8 +64,14 @@ trait AssetDao extends BaseDao[Asset]:
   /** How many Sequences [[getSequencesToCurate]] holds, read from the database */
   def countSequencesToCurate(): Int
 
-  /** A Sequence's frames in the context repository, completed and out of the trash, in no order, through `asset_sequence` */
-  def getSequenceFrames(sequenceId: String): List[Asset]
+  /**
+   * The first `limit` of a Sequence's frames in the context repository, completed and out of the trash, in capture order (a frame
+   * with no capture time last, then by ID, as `CurationRule` orders them), through `asset_sequence`
+   */
+  def getSequenceFrames(sequenceId: String, limit: Int): List[Asset]
+
+  /** How many frames of a Sequence are in the context repository, completed and out of the trash, through `asset_sequence` */
+  def countSequenceFrames(sequenceId: String): Int
 
   /**
    * Makes the context repository's writers of Sequences (`SequenceService.assign`, `CurationService.resolve` and `reopen`) take

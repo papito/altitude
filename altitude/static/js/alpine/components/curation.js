@@ -23,6 +23,9 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * Keep all that changes nothing, close Curation, and a Resolve or a Keep all that changes something
  * stays open on a report of what it did, with Undo and Exit.
  *
+ * A set is never left on show past its outcome: a failed read of a set says so in place of any set
+ * (`reading`), with Try again, so what was saved cannot be acted on a second time.
+ *
  * Every action is saved as it happens, so closing loses only the skips and the undo entry. Exit and
  * Esc close it through `closeModal` (`global.js` handles Esc for every host), and this component
  * notices the host going, then announces what the session left changed
@@ -40,6 +43,8 @@ const Phase = {
     report: "report",
     // The queue's IDs ran out
     end: "end",
+    // A read failed: no set is on show to act on, and Try again runs that read again
+    unread: "unread",
 }
 
 // How much of the pane a zoomed Face's box fills, so its surroundings stay in view
@@ -72,7 +77,10 @@ function framesText(count) {
 /** A Sequence's fragment, or null when it answers with no content: fewer than two frames left */
 async function readSequenceSet(sequenceId) {
     const response = await http.get(
-        repoPath("htmx/curation", `/sequence/${sequenceId}`),
+        repoPath(
+            "htmx/curation",
+            `/sequence/${encodeURIComponent(sequenceId)}`,
+        ),
         { responseType: "text" },
     )
     return response.status === 204 ? null : response.data
@@ -88,9 +96,16 @@ async function readSelectionSet(assetIds) {
 }
 
 /**
- * Loads the originals a set's fragment opens on, so the next set paints at once. Their URLs never
- * change, so the browser serves them from its cache when the set opens.
+ * Loads a frame's original ahead of its pane. An original's URL never changes, so the browser serves
+ * it from its cache when the pane asks for it.
  */
+function preloadFrame(frameId) {
+    const image = new Image()
+    image.src = fileUrl(frameId)
+    return image
+}
+
+/** Loads the originals a set's fragment opens on, so the next set paints at once */
 function preloadOpeningFrames(html) {
     const setEl = new DOMParser()
         .parseFromString(html, "text/html")
@@ -101,7 +116,7 @@ function preloadOpeningFrames(html) {
         setEl?.dataset.openingFocusedId,
     ]) {
         if (frameId) {
-            new Image().src = fileUrl(frameId)
+            preloadFrame(frameId)
         }
     }
 }
@@ -152,9 +167,31 @@ export function curation() {
     let stageObserver = null
     let isBusy = false
     let isClosed = false
+    // The read Try again runs
+    let retryRead = null
+    // The focused frame's neighbours being preloaded, by frame ID
+    const neighbourPreloads = new Map()
     // What the session leaves changed, net of its undos, for the grid beneath
     const recycledIds = new Set()
     const clearedSequenceIds = new Set()
+
+    /**
+     * Preloads these frames and stops any other still loading, so a held arrow key does not queue
+     * originals ahead of the frame on show.
+     */
+    function preloadOnly(frameIds) {
+        for (const [frameId, image] of neighbourPreloads) {
+            if (!frameIds.includes(frameId)) {
+                image.src = ""
+                neighbourPreloads.delete(frameId)
+            }
+        }
+        for (const frameId of frameIds) {
+            if (!neighbourPreloads.has(frameId)) {
+                neighbourPreloads.set(frameId, preloadFrame(frameId))
+            }
+        }
+    }
 
     function announceClosed() {
         document.body.dispatchEvent(
@@ -186,6 +223,9 @@ export function curation() {
         // Whether each Bundle of the set is open, by its kind
         openBundles: {},
         zoomPersonId: null,
+        // What each stage image has settled on, loaded or failed, by the image's ID: the `src` it holds
+        // once its `load` or `error` has fired. Until a pane's frame is that one, the pane is loading
+        settledSrcs: {},
 
         // What Curation walks: the queue's IDs and where it stands in them, or else one Sequence
         // or a selection's IDs, which have no next set
@@ -194,8 +234,9 @@ export function curation() {
         sequenceId: null,
         selectionIds: null,
 
-        // The last mutation, for Undo: `{ keepIds, recycleIds, sequenceOf, position }` of a Resolve or
-        // a Keep all, `{ recycleIds, position }` of a recycled Bundle
+        // The last mutation, for Undo, with the Sequence of the queue it was made on: `{ keepIds,
+        // recycleIds, sequenceOf, sequenceId }` of a Resolve or a Keep all, `{ recycleIds, sequenceId,
+        // view }` of a recycled Bundle, with the view its set was left in
         undoEntry: null,
         reportText: "",
 
@@ -254,13 +295,23 @@ export function curation() {
             return this.phase === Phase.end
         },
 
-        // The report and the too-few state offer Undo beside what they say
+        get showsUnread() {
+            return this.phase === Phase.unread
+        },
+
+        // The report, the too-few state and the unread state offer Undo beside what they say
         get showsHeaderUndo() {
             return (
                 this.undoEntry !== null &&
                 !this.showsReport &&
-                !this.showsTooFew
+                !this.showsTooFew &&
+                !this.showsUnread
             )
+        },
+
+        // The Sequence of the queue the walk stands on; nothing past its end, or on anything else
+        get walkSequenceId() {
+            return this.queueIds[this.position] ?? null
         },
 
         get isAllDone() {
@@ -300,6 +351,24 @@ export function curation() {
         },
 
         fileUrl,
+
+        /**
+         * A pane reuses its image, and the browser keeps painting the old picture until the new one is
+         * available, so a pane is loading from the moment its frame changes: it hides its image and
+         * shows the spinner, and never shows one frame under another's name.
+         */
+        isPaneLoading(imageId, frameId) {
+            return (
+                frameId !== null &&
+                this.settledSrcs[imageId] !== fileUrl(frameId)
+            )
+        },
+
+        /** An image's `load` or `error`. A failed image shows as the browser shows one, with its `alt` */
+        onImageSettled(event) {
+            this.settledSrcs[event.target.id] = event.target.getAttribute("src")
+            this.applyZoom()
+        },
 
         fileNameOf(frameId) {
             return this.frames.find((frame) => frame.id === frameId)?.fileName
@@ -347,6 +416,7 @@ export function curation() {
 
         focusFrame(frameId) {
             this.focusedId = frameId
+            this.preloadNeighbours()
 
             // Its rail entry, and its column of the face strip, whose first match is the column's head
             for (const selector of [
@@ -359,8 +429,8 @@ export function curation() {
             }
         },
 
-        /** Moves the focused frame through the rail's order, past the frames of a collapsed Bundle */
-        moveFocus(step) {
+        /** The frame next to the focused one in the rail's order, past the frames of a collapsed Bundle */
+        neighbourOf(step) {
             const from = this.frames.findIndex(
                 (frame) => frame.id === this.focusedId,
             )
@@ -370,10 +440,24 @@ export function curation() {
                 index += step
             ) {
                 if (this.isFrameShown(this.frames[index].id)) {
-                    this.focusFrame(this.frames[index].id)
-                    return
+                    return this.frames[index].id
                 }
             }
+            return null
+        },
+
+        moveFocus(step) {
+            const frameId = this.neighbourOf(step)
+            if (frameId) {
+                this.focusFrame(frameId)
+            }
+        },
+
+        /** The frames an arrow key goes to next paint at once, as the next set's opening frames do */
+        preloadNeighbours() {
+            preloadOnly(
+                [this.neighbourOf(-1), this.neighbourOf(1)].filter(Boolean),
+            )
         },
 
         togglePin(frameId) {
@@ -388,6 +472,7 @@ export function curation() {
 
         toggleBundle(kind) {
             this.openBundles[kind] = !this.isBundleOpen(kind)
+            this.preloadNeighbours()
         },
 
         zoomToPerson(personId) {
@@ -397,8 +482,8 @@ export function curation() {
 
         /**
          * Applies the zoom to both panes, for the frames they show. It runs when a crop is clicked, when
-         * an image has loaded, since its natural size is what the box is held against, and when a pane
-         * resizes. A frame with no Face of the Person shows whole.
+         * an image has loaded, since its natural size is what the box is held against, and before the
+         * pane shows it, and when a pane resizes. A frame with no Face of the Person shows whole.
          */
         applyZoom() {
             const panes = [
@@ -422,13 +507,25 @@ export function curation() {
             }
         },
 
+        /** What the user has made of the set on show, which a later read of that same set can keep */
+        currentView() {
+            return {
+                pinnedId: this.pinnedId,
+                focusedId: this.focusedId,
+                pickIds: this.pickIds,
+                openBundles: { ...this.openBundles },
+                zoomPersonId: this.zoomPersonId,
+            }
+        },
+
         /**
-         * Puts a set's fragment on show and reads its frames. `keepView` is for the same set read again:
-         * what the user had pinned, focused, picked and opened stays as far as its frames are still in
-         * the set, and anything else opens as a new set does. A selection with too few frames left answers
-         * with a fragment saying so instead of a set, and the too-few state of the shell says the same.
+         * Puts a set's fragment on show and reads its frames. `view` is for the same set read again: what
+         * the user had pinned or unpinned, focused, picked and opened stays as far as its frames are still
+         * in the set, and anything else opens as a new set does. A selection with too few frames left
+         * answers with a fragment saying so instead of a set, and the too-few state of the shell says the
+         * same.
          */
-        showSet(html, { keepView = false } = {}) {
+        showSet(html, { view = null } = {}) {
             if (isClosed) {
                 return
             }
@@ -454,26 +551,30 @@ export function curation() {
             const isInSet = (frameId) =>
                 frames.some((frame) => frame.id === frameId)
             const kept = (frameId, opening) =>
-                keepView && isInSet(frameId) ? frameId : opening
+                frameId !== undefined && (frameId === null || isInSet(frameId))
+                    ? frameId
+                    : opening
 
             this.frames = frames
             this.bundleOf = Object.fromEntries(
                 frames.map((frame) => [frame.id, frame.bundleKind]),
             )
             this.pinnedId = kept(
-                this.pinnedId,
+                view?.pinnedId,
                 setEl.dataset.openingPinnedId ?? null,
             )
             this.focusedId = kept(
-                this.focusedId,
+                view?.focusedId,
                 setEl.dataset.openingFocusedId ?? null,
             )
-            this.pickIds = keepView ? this.pickIds.filter(isInSet) : []
-            this.zoomPersonId = keepView ? this.zoomPersonId : null
+            this.pickIds = view ? view.pickIds.filter(isInSet) : []
+            this.zoomPersonId = view?.zoomPersonId ?? null
+            // The fragment's images are new, and have settled on nothing
+            this.settledSrcs = {}
 
             // A Bundle collapses only in a set large enough, and the frames on the stage stay findable
             const collapses = setEl.dataset.bundlesCollapse === "true"
-            const wasOpen = keepView ? this.openBundles : {}
+            const wasOpen = view?.openBundles ?? {}
             this.openBundles = Object.fromEntries(
                 frames
                     .filter((frame) => frame.bundleKind)
@@ -489,6 +590,7 @@ export function curation() {
             this.phase = Phase.set
             this.watchStage()
             this.keepFocusInside()
+            this.preloadNeighbours()
         },
 
         // The fragment's images are new, and a pane resizing changes what a zoom has to do
@@ -528,6 +630,7 @@ export function curation() {
 
             document.getElementById("curationSet").replaceChildren()
             stageObserver.disconnect()
+            preloadOnly([])
             this.frames = []
             this.bundleOf = {}
             this.focusedId = null
@@ -538,7 +641,42 @@ export function curation() {
         },
 
         /** Reads what the component is opened on, at its current position, and shows it */
-        async openSet(options) {
+        openSet(options) {
+            const openedAt = this.position
+            return this.reading(() => this.readSet(options, openedAt))
+        },
+
+        /**
+         * Runs a read of a set. Whatever a failure interrupts, it leaves no set on show: an outcome may
+         * have been saved before this read, and its set must not be acted on a second time. The state
+         * that says so keeps the walk's position and the undo entry, and Try again runs the same read.
+         */
+        async reading(read) {
+            try {
+                await read()
+            } catch (error) {
+                if (isClosed) {
+                    return
+                }
+
+                showErrorSnackBar(
+                    `Error in Curation: ${getHttpErrorMessage(error)}`,
+                )
+                retryRead = () => this.reading(read)
+                this.showNoSet(Phase.unread)
+            }
+        },
+
+        tryAgain() {
+            return this.exclusively(retryRead)
+        },
+
+        /**
+         * `options` hold for the set at the position `openedAt`. A Sequence gone meanwhile answers with no
+         * content and is passed over without comment, and the set after it is a new one, whatever was
+         * asked of the set read.
+         */
+        async readSet(options, openedAt) {
             if (this.selectionIds) {
                 this.showSet(await readSelectionSet(this.selectionIds), options)
                 return
@@ -554,15 +692,12 @@ export function curation() {
                 return
             }
 
-            // A Sequence gone meanwhile answers with no content, and is passed over without comment;
-            // the set after it is a new one, whatever was asked of the set read
-            const startedAt = this.position
             while (!isClosed && this.position < this.queueIds.length) {
                 const html = await readSequenceSet(this.queueIds[this.position])
                 if (html) {
                     this.showSet(
                         html,
-                        this.position === startedAt ? options : undefined,
+                        this.position === openedAt ? options : undefined,
                     )
                     this.preloadNextSet()
                     return
@@ -597,20 +732,23 @@ export function curation() {
 
         /** Calls the queue endpoint afresh and walks it from its start */
         startQueue() {
-            return this.exclusively(async () => {
-                const response = await http.get(
-                    repoPath("api/curation", "/queue"),
-                )
-                this.queueIds = response.data.sequenceIds
-                this.position = 0
-                await this.openSet()
-            })
+            return this.exclusively(() =>
+                this.reading(async () => {
+                    const response = await http.get(
+                        repoPath("api/curation", "/queue"),
+                    )
+                    this.queueIds = response.data.sequenceIds
+                    this.position = 0
+                    await this.readSet(undefined, 0)
+                }),
+            )
         },
 
         /**
          * Runs one action at a time: a key pressed while a set is being resolved or read does nothing.
-         * A failure is reported and leaves the set on show. An action finishing after Curation closed
-         * announces what it changed, which closing could not know yet.
+         * A failed write is reported and leaves the set on show, nothing having been saved; a failed read
+         * never reaches this (`reading`). An action finishing after Curation closed announces what it
+         * changed, which closing could not know yet.
          */
         async exclusively(action) {
             if (isBusy || isClosed) {
@@ -638,6 +776,7 @@ export function curation() {
                 announceClosed()
             }
             // The originals on the stage stop loading, and the component goes with the shell
+            preloadOnly([])
             document.getElementById("curationModalContent")?.replaceChildren()
         },
 
@@ -696,7 +835,7 @@ export function curation() {
                         keepIds,
                         recycleIds,
                         sequenceOf,
-                        position: this.position,
+                        sequenceId: this.walkSequenceId,
                     }
                     recycleIds.forEach((id) => recycledIds.add(id))
                     Object.values(sequenceOf).forEach((id) =>
@@ -744,22 +883,25 @@ export function curation() {
                     data: { assetIds },
                 })
 
+                const view = this.currentView()
                 this.undoEntry = {
                     recycleIds: assetIds,
-                    position: this.position,
+                    sequenceId: this.walkSequenceId,
+                    view,
                 }
                 assetIds.forEach((id) => recycledIds.add(id))
                 announceChanged()
 
-                await this.openSet({ keepView: true })
+                await this.openSet({ view })
             })
         },
 
         /**
-         * Undoes the last mutation and reads its set again, wherever the walk has gone since. A Resolve
-         * or a Keep all goes through `reopen`, which also puts the Picks back in the Sequences it cleared;
-         * a recycled Bundle has no Pick and is a plain restore. A frame whose content was imported again
-         * stays in the trash, as with any restore.
+         * Undoes the last mutation and reads its set again by its own ID, wherever the walk has gone
+         * since. A Resolve or a Keep all goes through `reopen`, which also puts the Picks back in the
+         * Sequences it cleared, and its set opens as a new one; a recycled Bundle has no Pick and is a
+         * plain restore, and its set keeps the view: as it is if the set is still on show, else as it
+         * was left. A frame whose content was imported again stays in the trash, as with any restore.
          */
         undo() {
             const entry = this.undoEntry
@@ -768,6 +910,8 @@ export function curation() {
             }
 
             return this.exclusively(async () => {
+                const isOnShow =
+                    this.showsSet && entry.sequenceId === this.walkSequenceId
                 const response = entry.keepIds
                     ? await http.post(repoPath("api/curation", "/reopen"), {
                           keepIds: entry.keepIds,
@@ -790,13 +934,31 @@ export function curation() {
                 )
                 announceChanged()
 
-                this.position = entry.position
+                const view =
+                    entry.view && (isOnShow ? this.currentView() : entry.view)
+                if (entry.sequenceId) {
+                    this.returnToSequence(entry.sequenceId)
+                }
                 // A state with no set no longer holds, whatever the read answers
                 if (!this.showsSet) {
                     this.phase = Phase.loading
                 }
-                await this.openSet()
+                await this.openSet({ view })
             })
+        },
+
+        /**
+         * Puts the walk on a Sequence undone. Start again may have replaced the list it was walked in, and
+         * a Sequence resolved is in no new list, so it goes in where the walk stands, which goes on from
+         * there after it.
+         */
+        returnToSequence(sequenceId) {
+            const index = this.queueIds.indexOf(sequenceId)
+            if (index >= 0) {
+                this.position = index
+            } else {
+                this.queueIds.splice(this.position, 0, sequenceId)
+            }
         },
 
         /**

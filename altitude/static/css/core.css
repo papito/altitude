@@ -1127,7 +1127,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     visibility: hidden;
 }
 
-#imageDetailSpinner {
+/* A spinner centered over the positioned box that holds it: asset detail's and a Curation pane's */
+.media-spinner {
     position: absolute;
     inset: 0;
     display: grid;

@@ -39,10 +39,17 @@ class CurationService(val app: Altitude):
       dao.countSequencesToCurate()
     }
 
-  /** The set of a Sequence's frames still out of the trash, whatever a search shows of them; nothing with too few of them left */
+  /**
+   * The set of a Sequence's frames still out of the trash, whatever a search shows of them; nothing with too few of them left. It
+   * reads a window, the first `MAX_SEQUENCE_FRAMES` in capture order, and says how many it holds back: a set that holds part of a
+   * Sequence, as a selection can, whose Picks stay in it and which stays in the queue ([[resolve]] decides by all its frames).
+   */
   def sequenceSet(sequenceId: String): Option[CurationSet] =
     txManager.asReadOnly {
-      assess(dao.getSequenceFrames(sequenceId))
+      val window = dao.getSequenceFrames(sequenceId, C.Curation.MAX_SEQUENCE_FRAMES)
+      // Only a full window can hold a frame back
+      val heldBack = if window.size < C.Curation.MAX_SEQUENCE_FRAMES then 0 else dao.countSequenceFrames(sequenceId) - window.size
+      assess(window).map(_.copy(heldBack = heldBack))
     }
 
   /**

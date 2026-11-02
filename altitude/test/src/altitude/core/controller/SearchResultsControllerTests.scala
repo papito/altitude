@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -157,8 +158,9 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Each header is the group's first capture's day and time beside its count, with No sequence last. The Sequence of two has a
-     * Curate button naming it, which the Sequence of one and No sequence do not. A frame's cell is its plain ID. The Group menu
-     * marks the option and the grid carries the grouping for its continuations, with no direction.
+     * Curate button naming it and carrying `Const.Curation.MIN_FRAMES`, which the Sequence of one and No sequence do not have. A
+     * frame's cell is its plain ID. The Group menu marks the option and the grid carries the grouping for its continuations, with
+     * no direction.
      *
      * Edge cases:
      *
@@ -187,7 +189,7 @@ import altitude.core.util.Util
         ordered(html, header(single), "No sequence")
         ordered(html, "(2 items)", curateButton(burst))
         html should include(
-          s"""${curateButton(burst)} @click="$$dispatch(window.Const.events.curateRequested, { sequenceId: $$el.dataset.appSequenceId })">Curate</button>""")
+          s"""${curateButton(burst)} data-min-frames="${Const.Curation.MIN_FRAMES}" @click="$$dispatch(window.Const.events.curateRequested, { sequenceId: $$el.dataset.appSequenceId })">Curate</button>""")
         (html should not).include(curateButton(single))
         "data-app-sequence-id=".r.findAllIn(html).size shouldBe 1
         html should include(cell(a))

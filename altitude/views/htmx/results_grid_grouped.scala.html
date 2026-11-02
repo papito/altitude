@@ -44,7 +44,7 @@
   }
   <span class="count" data-count="@{group.total}">@{Util.humanReadableItemCount(group.total)}</span>
   @group.key match {
-    case SearchGroupKey.Sequence(Some(sequenceId), _) if group.total >= Const.Curation.MIN_FRAMES => {<button type="button" class="action-button small" data-app-sequence-id="@{sequenceId}" @@click="$dispatch(window.Const.events.curateRequested, { sequenceId: $el.dataset.appSequenceId })">Curate</button>}
+    case SearchGroupKey.Sequence(Some(sequenceId), _) if group.total >= Const.Curation.MIN_FRAMES => {<button type="button" class="action-button small" data-app-sequence-id="@{sequenceId}" data-min-frames="@{Const.Curation.MIN_FRAMES}" @@click="$dispatch(window.Const.events.curateRequested, { sequenceId: $el.dataset.appSequenceId })">Curate</button>}
     case _ => {}
   }
 </div>
