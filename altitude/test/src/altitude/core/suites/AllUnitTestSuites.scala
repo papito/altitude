@@ -7,6 +7,7 @@ import altitude.core.unit.BaseControllerTests
 import altitude.core.unit.CaptureDateResolverTests
 import altitude.core.unit.ContentSignerTests
 import altitude.core.unit.CoreModelTests
+import altitude.core.unit.CurationRuleTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
 import altitude.core.unit.EnvironmentTests
@@ -67,6 +68,7 @@ abstract class AllUnitTestSuites
     new ImageUtilTests,
     new ImageMeasurementTests,
     new SequenceRuleTests,
+    new CurationRuleTests,
     new RangeStreamingTests,
     new ContentSignerTests,
     new TransactionBoundaryTests,
