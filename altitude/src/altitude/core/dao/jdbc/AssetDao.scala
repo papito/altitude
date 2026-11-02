@@ -8,6 +8,7 @@ import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.Table
 
+import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.tables.AssetRow
@@ -198,6 +199,11 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     runner.update(RequestContext.getConn, sql, updateValues*)
 
+  /** The columns of a read that does not need the bulky metadata JSON */
+  private val assetWithoutBulkyMetadata = s"""asset.*,
+             NULL AS ${FieldConst.Asset.USER_METADATA},
+             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}"""
+
   override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
     lockForTransition(Some(assetIds), isRecycled = Some(false))
 
@@ -222,9 +228,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val recycledFilter = isRecycled.fold("")(flag => s"AND ${FieldConst.Asset.IS_RECYCLED} = ${if flag then "TRUE" else "FALSE"}")
 
     val sql = s"""
-      SELECT asset.*,
-             NULL AS ${FieldConst.Asset.USER_METADATA},
-             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
+      SELECT $assetWithoutBulkyMetadata
         FROM asset
        WHERE ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
@@ -262,9 +266,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         def placeholders(values: List[?]): String = values.map(_ => "?").mkString(", ")
 
         val sql = s"""
-          SELECT asset.*,
-                 NULL AS ${FieldConst.Asset.USER_METADATA},
-                 NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
+          SELECT $assetWithoutBulkyMetadata
             FROM asset
            WHERE ${FieldConst.REPO_ID} = ?
              AND ${FieldConst.Asset.IS_RECYCLED} IN (FALSE, TRUE)
@@ -297,14 +299,67 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
        GROUP BY ${FieldConst.Asset.SEQUENCE_ID}
     """
 
-    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(sequenceIds))).map {
-      rec =>
-        SequenceMembers(
-          sequenceId = rec(FieldConst.Asset.SEQUENCE_ID).toString,
-          members = getLongField(rec("members")).get.toInt,
-          firstCapturedAt = getDateTimeField(rec.get("first_captured_at"))
-        )
-    }
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(sequenceIds))).map(toSequenceMembers)
+
+  private def toSequenceMembers(rec: Map[String, AnyRef]): SequenceMembers =
+    SequenceMembers(
+      sequenceId = rec(FieldConst.Asset.SEQUENCE_ID).toString,
+      members = getLongField(rec("members")).get.toInt,
+      firstCapturedAt = getDateTimeField(rec.get("first_captured_at"))
+    )
+
+  override def getSequencesToCurate(): List[SequenceMembers] =
+    val (sql, values) = sequencesToCurateStatement
+    manyBySqlQuery(sql, values).map(toSequenceMembers)
+
+  override def countSequencesToCurate(): Int =
+    val (sql, values) = countSequencesToCurateStatement
+    getLongField(executeAndGetOne(sql, values)("sequences")).get.toInt
+
+  override def getSequenceFrames(sequenceId: String): List[Asset] =
+    val (sql, values) = sequenceFramesStatement(sequenceId)
+    manyBySqlQuery(sql, values).map(makeModel)
+
+  /**
+   * The context repository's Sequences with at least two frames completed and out of the trash, counted over those frames alone.
+   * `sequence_id IS NOT NULL` is what lets `asset_sequence` answer it: that index holds only the rows that carry a Sequence, so
+   * the cost is theirs and not the library's.
+   */
+  private def sequencesToCurate: String = s"""
+      SELECT ${FieldConst.Asset.SEQUENCE_ID},
+             COUNT(*) AS members,
+             MIN(${FieldConst.Asset.ORIGINAL_CREATED_AT}) AS first_captured_at
+        FROM asset
+       WHERE ${FieldConst.Asset.SEQUENCE_ID} IS NOT NULL
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+       GROUP BY ${FieldConst.Asset.SEQUENCE_ID}
+      HAVING COUNT(*) >= ${C.Curation.MIN_FRAMES}
+    """
+
+  /** The statement behind [[getSequencesToCurate]] with its bind values, which the plan tests explain */
+  def sequencesToCurateStatement: (String, List[Any]) =
+    val sql = s"$sequencesToCurate ORDER BY first_captured_at, ${FieldConst.Asset.SEQUENCE_ID}"
+    (sql, List(RequestContext.getRepository.persistedId))
+
+  /** The statement behind [[countSequencesToCurate]] with its bind values, which the plan tests explain */
+  def countSequencesToCurateStatement: (String, List[Any]) =
+    (s"SELECT COUNT(*) AS sequences FROM ($sequencesToCurate) AS to_curate", List(RequestContext.getRepository.persistedId))
+
+  /** The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain */
+  def sequenceFramesStatement(sequenceId: String): (String, List[Any]) =
+    val sql = s"""
+      SELECT $assetWithoutBulkyMetadata
+        FROM asset
+       WHERE ${FieldConst.Asset.SEQUENCE_ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+    """
+    (sql, List(sequenceId, RequestContext.getRepository.persistedId))
 
   override def setSequence(assetIds: Set[String], sequenceId: String): Int =
     if assetIds.isEmpty then return 0

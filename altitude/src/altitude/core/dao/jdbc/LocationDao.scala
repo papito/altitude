@@ -139,6 +139,20 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       .map(_(FieldConst.Location.ASSET_ID).asInstanceOf[String])
       .toSet
 
+  override def getAssetsInAnyLocation(assetIds: Set[String]): Set[String] =
+    if assetIds.isEmpty then return Set.empty[String]
+
+    val sql = s"""
+      SELECT DISTINCT ${FieldConst.Location.ASSET_ID}
+        FROM $membershipTable
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Location.ASSET_ID} $inIdSet
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
+      .map(_(FieldConst.Location.ASSET_ID).asInstanceOf[String])
+      .toSet
+
   override def moveChildrenToRoot(categoryId: String): Int =
     val children = new Query().add(FieldConst.Location.CATEGORY_ID -> categoryId).withRepository()
     updateByQuery(children, Map(FieldConst.Location.CATEGORY_ID -> None))

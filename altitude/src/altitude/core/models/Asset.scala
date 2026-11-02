@@ -66,5 +66,8 @@ case class Asset(
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
+  /** An image that is one picture: a Video is no image, and an animated image has a duration */
+  def isStillImage: Boolean = assetType.mediaType == "image" && durationMs.isEmpty
+
   override def toString: String =
     s"Asset: [$id] [$fileName] Recycled: [$isRecycled] Triaged: [$isTriaged] Type: [${assetType.mediaType}:${assetType.mediaSubtype}]"

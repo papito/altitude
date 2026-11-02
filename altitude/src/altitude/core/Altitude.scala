@@ -22,6 +22,7 @@ import altitude.core.models.Repository
 import altitude.core.service.AlbumService
 import altitude.core.service.AssetService
 import altitude.core.service.ContentSigner
+import altitude.core.service.CurationService
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
@@ -335,6 +336,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val location: LocationService = LocationService(app)
     val stats: StatsService = StatsService(app)
     val sequence: SequenceService = SequenceService(app)
+    val curation: CurationService = CurationService(app)
     val person: PersonService = PersonService(app)
     val faceDetection: FaceDetectionService = FaceDetectionService(app)
     val faceRecognition: FaceRecognitionService = FaceRecognitionService(app)

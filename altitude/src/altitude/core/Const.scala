@@ -37,6 +37,10 @@ object Const:
   object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3
 
+  object Curation:
+    // A Curation set compares: with fewer frames left there is no set, and a Sequence is not in the queue
+    val MIN_FRAMES = 2
+
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200
     // The WebP quality of a Preview, 0 to 100, which governs its color planes only: lib webp keeps the alpha plane exact (its

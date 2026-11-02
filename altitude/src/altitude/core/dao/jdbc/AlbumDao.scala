@@ -106,3 +106,17 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     """
 
     manyBySqlQuery(sql, List(albumId)).map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String]).toSet
+
+  override def getAssetsInAnyAlbum(assetIds: Set[String]): Set[String] =
+    if assetIds.isEmpty then return Set.empty[String]
+
+    val sql = s"""
+      SELECT DISTINCT ${FieldConst.Album.ASSET_ID}
+        FROM $membershipTable
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Album.ASSET_ID} $inIdSet
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
+      .map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String])
+      .toSet

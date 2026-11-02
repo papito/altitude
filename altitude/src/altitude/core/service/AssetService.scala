@@ -109,7 +109,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
    */
   def measureImage(dataAsset: AssetWithData): AssetWithData =
     val asset = dataAsset.asset
-    if asset.assetType.mediaType != "image" || asset.durationMs.isDefined then
+    if !asset.isStillImage then
       logger.debug(s"Not measuring $asset")
       return dataAsset
 

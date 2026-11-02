@@ -55,6 +55,18 @@ trait AssetDao extends BaseDao[Asset]:
   /** How many members each of the Sequences has and when its first member was captured, for the ones that have any */
   def countSequenceMembers(sequenceIds: Set[String]): List[SequenceMembers]
 
+  /**
+   * The queue of Curation: the context repository's Sequences with at least `Const.Curation.MIN_FRAMES` frames completed and out
+   * of the trash, counted over those frames alone, the oldest first capture first and then by ID. Read through `asset_sequence`.
+   */
+  def getSequencesToCurate(): List[SequenceMembers]
+
+  /** How many Sequences [[getSequencesToCurate]] holds, read from the database */
+  def countSequencesToCurate(): Int
+
+  /** A Sequence's frames in the context repository, completed and out of the trash, in no order, through `asset_sequence` */
+  def getSequenceFrames(sequenceId: String): List[Asset]
+
   /** Puts the assets still in triage in the Sequence; how many rows changed */
   def setSequence(assetIds: Set[String], sequenceId: String): Int
 

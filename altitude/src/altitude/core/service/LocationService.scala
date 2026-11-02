@@ -118,6 +118,11 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       dao.getAssetIds(locationId)
     }
 
+  def getAssetsInAnyLocation(assetIds: Set[String]): Set[String] =
+    txManager.asReadOnly {
+      dao.getAssetsInAnyLocation(assetIds)
+    }
+
   /** The row must exist in this repository and be a category - the only thing a Location can be put under */
   private def requireCategory(id: String): Unit =
     if (getById(id): Location).kind != LocationKind.Category then throw IllegalOperationException(s"Not a location category: $id")

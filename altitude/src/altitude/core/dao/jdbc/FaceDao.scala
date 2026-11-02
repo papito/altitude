@@ -70,16 +70,23 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
     Db.read(dialect)(_.run(faces)).map(toModel).toList
 
   def getAssetFaces(assetId: String): List[Face] =
-    val sql = """
+    visibleFaces("= ?", assetId)
+
+  override def getFacesOfAssets(assetIds: Set[String]): List[Face] =
+    if assetIds.isEmpty then return List.empty[Face]
+
+    visibleFaces(inIdSet, idSet(assetIds))
+
+  /** The Faces of the people on show, of the assets `assetTest` picks with its one bind value */
+  private def visibleFaces(assetTest: String, assetValue: Any): List[Face] =
+    val sql = s"""
         SELECT face.*
           FROM face, person
          WHERE face.repository_id = ?
-           AND face.asset_id = ?
+           AND face.asset_id $assetTest
            AND face.person_id = person.id
            AND person.is_hidden = FALSE
            AND person.is_bad_match = FALSE
       """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
-
-    recs.map(makeModel)
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetValue)).map(makeModel)

@@ -20,14 +20,14 @@ object SequenceRule:
     Set(CaptureDateSource.ExifOriginal, CaptureDateSource.ExifDigitized, CaptureDateSource.XmpCreateDate)
 
   /**
-   * Whether an asset can be in a Sequence at all: a still image (a Video and an animated image have a duration) in triage, with a
-   * capture time from the camera's clock, the camera's model and a perceptual hash. This is the authority;
-   * `AssetDao.sequenceCandidatesStatement` prefilters the candidates in SQL by a derived copy of it (all but the device model,
-   * which sits inside the metadata JSON), to spare reading full rows, so a change here is made there too.
+   * Whether an asset can be in a Sequence at all: a still image in triage, with a capture time from the camera's clock, the
+   * camera's model and a perceptual hash. This is the authority; `AssetDao.sequenceCandidatesStatement` prefilters the candidates
+   * in SQL by a derived copy of it (all but the device model, which sits inside the metadata JSON), to spare reading full rows,
+   * so a change here is made there too.
    */
   def isEligible(asset: Asset): Boolean =
-    asset.assetType.mediaType == "image" && asset.durationMs.isEmpty && asset.isTriaged &&
-      asset.originalCreatedAt.isDefined && asset.originalCreatedAtSource.exists(CameraClockSources.contains) &&
+    asset.isStillImage && asset.isTriaged && asset.originalCreatedAt.isDefined &&
+      asset.originalCreatedAtSource.exists(CameraClockSources.contains) &&
       asset.perceptualHash.isDefined && asset.publicMetadata.deviceModel.isDefined
 
   /**

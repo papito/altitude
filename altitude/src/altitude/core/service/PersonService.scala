@@ -154,6 +154,11 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       faceDao.getAssetFaces(assetId)
     }
 
+  def getFacesOfAssets(assetIds: Set[String]): List[Face] =
+    txManager.asReadOnly {
+      faceDao.getFacesOfAssets(assetIds)
+    }
+
   def getPeopleForAsset(assetId: String): List[Person] =
     txManager.asReadOnly {
       peopleOf(getAssetFaces(assetId))
