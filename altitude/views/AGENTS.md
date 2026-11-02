@@ -39,7 +39,7 @@ views/
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
-Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, the tooltip's host, and the three dialog hosts)
+Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, the tooltip's host, and the four dialog hosts)
 and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
@@ -60,7 +60,9 @@ is the same shape for the Albums tab (`static/css/htmx/albums.css`): the two add
 `htmx/locations.scala.html` for the Locations tab (`static/css/htmx/locations.css`): the `#locationActions` / `#noLocations` hosts
 and the empty `#locationList` host (`data-app-fragment="location-list"`) that `js/common/location-list.js`
 renders (see **Locations** below); `htmx/people.scala.html` (`static/css/htmx/people.css`) is the People tab's shell, whose
-panes' lists the `peopleTab` Alpine component loads from the server (see **People tab** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
+panes' lists the `peopleTab` Alpine component loads from the server (see **People tab** below); `htmx/curation.scala.html`
+(`static/css/htmx/curation.css`) is Curation's shell, and `htmx/curation_set.scala.html` (`static/css/htmx/curation_set.css`) a
+Curation set's fragment (see **Curation** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
 explorer tab that issued a load is marked selected from `htmx:after:request`
 (`js/listeners/htmx-requests.js`). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
 `.asset-count`) live in `core.css`.
@@ -76,21 +78,21 @@ against the results, and the divider between them, is under **Explorer dock** be
 | JS directory | Template(s) it serves |
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
-| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
-| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
+| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`. The import page's hydrates its upload form and starts no Alpine. Settings' starts Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store, no fragments) and registers the htmx request rule with a minimal app and the page's own listeners; see **Settings screen** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the three dialog hosts: the general modal, the popover dialog and asset detail), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day or a Location), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) and `people-tab.js` (the People tab's buckets, Split view and pane loads); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -106,6 +108,7 @@ before Alpine starts.
 | `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
 | `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
 | `Const.state.resultsTotal` | The toolbar's results total: `count` and `isCapped`, set from the results fragment's `data-results-total` and `data-results-total-capped` (`js/fragments/search-results.js`). `label` reads the count followed by "+" when the server counted only up to its cap (`js/common/total-label.js`, "10000+"); `decrement` lowers an uncapped total as assets leave the grid and leaves a capped one alone, since it says only that there are more than the cap |
+| `Const.state.sequencesToCurate` | The number of Sequences in Curation's queue (`js/stores/sequences-to-curate.js`): `count`, null until the first answer, which only the count endpoint sets, through `refresh`, so nothing adds or subtracts on the client, and an older answer never replaces a newer one. `hasAny` and `label` are the toolbar button's, `remaining` Curation's header (see **Curation**) |
 | `Const.state.modal` | The active dialog host, its title and the identity of the displayed open (`js/common/modal.js`, see **Modals**); bound by the modal hosts and the popover title of `html_common` |
 | `Const.state.imageDetailLoading` | `value`: whether asset detail is loading its asset, which shows its spinner (`js/search-results/detail-navigator.js`) |
 | `Const.state.snackbar` | The snackbar's messages (`js/common/snackbar.js`): `items` in arrival order, read as the two stacks `errors` and `notices`, which `html_common` renders. Producers call the module's three functions, never the store (see **Snackbar** below) |
@@ -135,7 +138,16 @@ Const.attributes.numOfChildren  // "data-num-of-children"
 Const.attributes.expanded       // "data-expanded"
 Const.attributes.viewedScope    // "data-viewed-scope" (on the folder node whose results are displayed)
 Const.attributes.dataSrc        // "data-src"  (lazy-load image URL)
+Const.attributes.sequenceId     // "data-app-sequence-id" (a group header's Curate) el.dataset.appSequenceId
+Const.attributes.frameId        // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
+Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of the face strip)
+Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
 ```
+
+A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
+`data-file-name` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
+`data-max-selection`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
+(`js/search-results/cells.js`).
 
 The one exception is `alt-has-no-date` on a result cell, which the controller tests assert on.
 
@@ -207,6 +219,9 @@ Two-layer event bus, both on `document.body`:
 - The file upload (`js/fragments/upload-form.js`) is **not** an HTMX request: it posts through the
   shared axios client so `onUploadProgress` can drive the progress bar, then swaps the returned
   fragment itself.
+- A Curation set's fragment is **not** an HTMX request either (its shell is): the `curation` component reads it through the
+  axios client and puts it in `#curationSet` itself, since it has to see the answer before anything is swapped (a 204 passes
+  over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself.
 
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
@@ -280,22 +295,25 @@ stack is an `x-for` over the store's `errors` or `notices`, its bindings propert
 (`classesOf`, `iconOf`, `isRepeated`, `countOf`, `dismiss`, `syncStack`, `onStackFocusOut`), its events written `x-on:`. The explorer lists (folder tree, albums, Locations) are still rendered by their JavaScript modules; the People tab's
 `peopleTab` component (`alpine/components/people-tab.js`) renders nothing itself: it holds the tab's remembered state, binds
 the bucket switches and the Duplicate pane's `x-if` to it, and has htmx load each pane's list (see **People tab** below).
+The `curation` component (`alpine/components/curation.js`) renders nothing either: the server renders a Curation set, and the
+fragment's bindings read the component's state (see **Curation** below).
 
 Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
-those responsibilities stay with HTMX and the custom event bus.
+those responsibilities stay with HTMX and the custom event bus. The one exception is the `curation` component, whose reads and
+outcomes go through the axios client (see **HTMX 4 conventions**).
 
 ## UI Patterns
 
-**Modals** — Three dialog hosts live in `html_common.scala.html`: load into `#modalContent` for the
-general modal, into `#popoverContent` for the popover dialog, and into `#imageDetailModalContent` for
-asset detail. `js/common/modal.js` is the single owner of all three: which host is active (one at a
+**Modals** — Four dialog hosts live in `html_common.scala.html`, named by `ModalHost`: load into `#modalContent` for the
+general modal, into `#popoverContent` for the popover dialog, into `#imageDetailModalContent` for
+asset detail, and into `#curationModalContent` for Curation. `js/common/modal.js` is the single owner of all four: which host is active (one at a
 time — a new open replaces the active dialog, whatever its host), the title,
 initial focus (the fragment's autofocus selector, else the close control, else the popover host itself, never a destructive action),
 focus restoration on close (the fragment's `data-app-dialog-return-focus` selector, else the
 control that opened it, using the visible ⋯ trigger for a menu action), and identity: every displayed open has an `openId`
 (`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
-swaps once the user dismissed or replaced it. The two modal hosts' visibility is bound through the Alpine `modal` store
+swaps once the user dismissed or replaced it. The three modal hosts' visibility is bound through the Alpine `modal` store
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin, registered by
 `registerHtmlCommonBindings()` in `js/stores/html-common.js`, contains focus and hides the page from assistive tech; its documented local patches
 cancel delayed activation when a trap is released or removed, and count controls in open shadow
@@ -304,14 +322,15 @@ active dialog and any open context menu and is consumed by them, which also keep
 Escape handling for the popover from running a second time, so a background inline edit
 survives; with neither open it closes the map view's crowded-pin panel, and with none of those it is
 broadcast for such an edit to cancel. An open select picker's Escape is left to the picker, which closes itself and
-not the dialog holding it. General dialogs ignore backdrop clicks, asset detail closes on them. The general
+not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
 modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog declares a wider
-one); asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host.
+one); asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host; Curation
+fills the window, over the nav, the explorer and the grid, with its title and Exit in its shell (see **Curation**).
 Switching hosts releases the active one in its own reactive flush before the next is activated, and hides the
 popover when it was the active one. Opening any dialog closes an open context menu first, so a
 dialog never appears over one. A host keeps its last fragment after it closes; opening the general modal or the
 popover dialog empties the other once it has faded out, so two dialogs never share a field ID (a `<label for>`, an
-autofocus selector). A validation replacement empties nothing.
+autofocus selector). A validation replacement empties nothing. Curation's component empties its own host as it closes.
 
 The popover dialog (`#popoverDialog`) is a native `<dialog popover="auto">`, a dialog by its element rather than an
 ARIA role, with no scrim and no focus trap, so the page stays live. The browser owns its visibility (`:popover-open`; `modal.js` changes it only through `showPopover()` and
@@ -358,7 +377,7 @@ width), and its inputs and selects the form; the form's own action (Move's butto
 sits `--space-5` below its fields, while a label and an error stay `--space-2` from their field. The Delete
 confirmation has no form and keeps its button's width.
 
-Every dialog host uses `.close-modal` in `core.css`: the X keeps the text color (`--theme-neutral-4`)
+Every dialog host but Curation's, whose shell has Exit, uses `.close-modal` in `core.css`: the X keeps the text color (`--theme-neutral-4`)
 at rest, on hover, and on focus, with no focus outline (the modal may focus it on open). The popover's is quieter,
 `--font-size-large` in its text color at 0.6. Folder, album, Location, and category dialogs use the popover host and
 its close control; Add location uses the general modal host.
@@ -998,13 +1017,14 @@ the grouping and the layout stay, so a person selected in Triage goes back to al
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge, and in the Triage view, where `#curateSequences` does: the small action button that opens Curation on the whole queue, whatever the search shows, reading the `sequencesToCurate` store's `label` ("Curate 3 sequences", "Curate 1 sequence") and hidden until the count arrives and while it is zero. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
 the first of person, folder, album, Location and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
 
 **Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, see **Tooltip**), Recycle, Add to
 album, Remove from album while an album's results are displayed, Add to location, Remove from location while a Location's
-are, and Deselect all (×, an icon button with an accessible name); in the trash view Purge, Restore and Deselect all. The
+are, Curate while two images or more are selected, and Deselect all (×, an icon button with an accessible name); in the trash
+view Purge, Restore and Deselect all. The
 count shows once ("3 selected"), before the buttons, which carry no count of their own; they are the small action
 button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-6`
 apart. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in
@@ -1016,14 +1036,20 @@ toolbar's wrapping put the toolbar copy, with no script; only the left edge is r
 not move it, and the crowded-pin panel's toolbar is `display: none`, so it is never the anchor. Move drags from either
 copy (`js/dragdrop/batch-ops.js`): `setFixedPositionWhileDragging` lifts the button out of the scrolling results pane, as
 a dragged thumbnail is, and the drop zones recognize it by its `batch-mover` class (`isBatchMoverElement` in
-`js/dragdrop/helpers.js`).
+`js/dragdrop/helpers.js`). Curate dispatches `Const.events.batchCurateRequested`, and `js/listeners/curation.js` opens
+**Curation** on the selected IDs, or, above the cap the button carries (`data-max-selection`, `Const.Curation.MAX_SELECTION`),
+reports it through the snackbar and stays on the grid. The server refuses such a selection too, but only this tells the user why.
 
-**Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day or
-a Location, with a `.result-group` header: a checkbox over the group; its name - a
+**Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day,
+a Location or a Sequence, with a `.result-group` header: a checkbox over the group; its name - a
 `<time datetime="yyyy-MM-dd">` with the server-formatted day (**Saturday, January 2, 2025**), "No date",
-`<span class="category">Italy</span> › Rome` (the category dimmed), or "No location"; `data-group-key`
+`<span class="category">Italy</span> › Rome` (the category dimmed), "No location", a Sequence's first capture as a
+`<time>` with its day and time (**Sunday, September 6, 2026, 10:00:05 AM**, `Util.humanReadableDayAndTime`: a Sequence has no
+name, and the seconds tell apart the bursts of one minute), or "No sequence"; `data-group-key`
 naming it; and the group's full match count across every page in `.count` — as text (**(3 items)**,
-**(1 item)**) with the number itself in `data-count`, which is what the client reads and decrements. The header spans
+**(1 item)**) with the number itself in `data-count`, which is what the client reads and decrements. A Sequence's header with
+two frames or more also has a small "Curate" action button (`data-app-sequence-id`), opening **Curation** on that one Sequence:
+all its frames still out of the trash, even under a search showing only some of them. The header spans
 the row and is `position: sticky` at the top of `#content`, below the toolbar and the results title when there is one (its
 `top` is `--results-sticky-height`, which `js/search-results/sticky-offsets.js` keeps at their rendered heights together;
 otherwise CSS only, in `static/css/includes/search_results.css`; `#assets` is an isolation root so the drag stand-in still
@@ -1035,11 +1061,13 @@ only when the next page continues the group with no header of its own; a group c
 keeps nothing. The kept header keeps sticking over the group's loaded cells and its checkbox keeps
 counting them (a spacer is not a header, so the walk below passes it), and it is removed when the
 page reloads with its own headers, or stays for the group's cells on the next page when the reload is
-a 204. The one client-side change to a header is its count: `removeAssetsFromGrid`
-(`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` from
-`js/search-results/date-groups.js` before a cell leaves, which walks back to the nearest header,
-takes one off, and removes the header at zero; a header whose loaded cells are all gone but whose
-count is positive stays, since the group has matches on pages not loaded yet. Under Group by Location
+a 204. The client changes a header in `js/search-results/date-groups.js` alone, and only its count and its Curate button:
+`removeAssetsFromGrid` (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` before a cell leaves, which walks
+back to the nearest header, takes one off, removes the Curate button under two (`MIN_FRAMES_TO_CURATE`, the client's copy of
+`Const.Curation.MIN_FRAMES`), and removes the header at zero; a header whose loaded cells are all gone but whose
+count is positive stays, since the group has matches on pages not loaded yet. `removeCurateButtons(sequenceIds)` takes the
+button off a Sequence Curation cleared, whose kept frames stay under the header until the next search; it takes every copy,
+since a Sequence overtaken on a later page has a second header (**Group by Sequence** in `altitude/AGENTS.md`). Under Group by Location
 an asset in two Locations has a cell in each group (`asset-<id>-in-<locationId>`; elsewhere a cell is
 `asset-<id>`), so every per-asset change goes through `js/search-results/cells.js`, which finds all of
 an asset's cells by `data-asset-id`: removal takes every cell out, decrementing each header a cell
@@ -1123,6 +1151,88 @@ loaded grid, next calls `loadNextPage` on the last cell - the same page load the
 makes, shared if already in flight - and continues into the cells it appended; at the true end, and
 at the true first cell, nothing happens. There is no shadow list and no JSON: a cell
 removed from the grid drops out of navigation with it, and the search route is HTML only.
+
+**Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
+what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
+has no page or URL of its own and adds no nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
+Three ways in open the same modal, each dispatching `Const.events.curateRequested` with its entry: the toolbar's
+`#curateSequences` on the queue (no detail; see **Results title**), a Sequence's group header on that Sequence (`{ sequenceId }`;
+see **Group headers**) and the batch ops' Curate on a selection (`{ assetIds }`, which the component posts, so they never sit in
+a URL; see **Batch ops**). `js/listeners/curation.js` names the entry (`requestCuration`) and loads the shell through `htmx.ajax`
+into the host, a new shell for every open, so each starts with no skips and no undo entry; `js/fragments/curation.js` hydrates it
+by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"` means the keys press no control by accident.
+
+- **The shell** (`htmx/curation.scala.html`) is a header with the title, `remaining` from the `sequencesToCurate` store, Undo while
+  there is one and Exit; `#curationSet`, which each set's fragment goes in; and the three states with no set, `.curation-no-set`:
+  too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
+  resolve, and the queue's end. The first two offer Exit, and Undo when there is one, beside what they say.
+- **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
+  focused frame, the pinned frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
+  selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
+  Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
+  (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
+  an action still running announces when it finishes. Actions run one at a time (`exclusively`), so a key pressed during one does
+  nothing, and a failure goes to the snackbar and leaves the set on show. Every action is saved as it happens, so closing loses
+  only the skips and the undo entry.
+- **The Bundle rail** (`#curationRail`, `htmx/curation_set.scala.html`) is a column of its own that scrolls by itself: the notices
+  (`.curation-notice`, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
+  each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
+  Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and Recycle. A sole Contender
+  is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Bundles collapse only in a set of four frames or
+  more (`Const.Curation.MIN_FRAMES_TO_COLLAPSE`), and the Bundles of the frames on the stage start open.
+- **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame and the
+  focused frame, or one pane when none is pinned or the pinned frame is focused. A set opens on `openingFrames`: its first two
+  Contenders, the first pinned and the second focused; with fewer, its Contender or else the rail's first frame, alone. A set read
+  again after a Bundle's recycling keeps what was pinned, focused, picked, open and zoomed, as far as its frames are still in it.
+- **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
+  One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
+  (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A click
+  on a crop zooms both panes to that Person's box, or back out, with a transform (`applyZoom`, again when an image loads or a pane
+  resizes); a frame with no Face of the Person shows whole. A box is in upright pixels while `asset.width` and `height` come from
+  the file's header, so the zoom uses the displayed image's `naturalWidth` and `naturalHeight`.
+- **The footer** holds the note of frames to recycle that are in an album or a Location (`inAlbumOrLocation`), and Resolve, reading
+  what it will do ("Keep 1, recycle 3"), Keep all and Skip.
+- **The keys** are a `document` listener while Curation is the active host, ignored while a text field has focus
+  (`isTextEditingTarget`, `common/text-editing.js`) or with Ctrl, Cmd or Alt held. Only the arrows repeat when held, so a held key
+  cannot resolve set after set. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
+  (`refocusAfterPointer`), so Enter resolves next.
+
+  | Key | Action |
+  |---|---|
+  | ← → | Move the focused frame through the rail's order, past the frames of a collapsed Bundle |
+  | C | Pin the focused frame to compare against, or unpin it |
+  | K | Toggle the focused frame as a Pick |
+  | Enter | Resolve with the Picks, or with the focused frame when there are none |
+  | A | Keep all |
+  | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
+  | S | Skip |
+  | Z | Undo the last action |
+  | Esc | Close Curation (`global.js`) |
+
+- **The walk.** On the queue, opening calls the queue endpoint and requests one set's fragment at a time, and the user never sees
+  it as a list. Resolve, Keep all and Skip open the next ID, a Sequence answering with no content is passed over without
+  comment, also when a Bundle's recycling left too few, and the next set's opening frames are preloaded. When the IDs run out the
+  count is read again: with Sequences left, skipped or newly imported, the end state shows them with Start again, which calls the
+  endpoint afresh, and with none it reads "All done". A selection or a Sequence opened from its header has no next set: Skip, and a Keep
+  all that changes nothing, close Curation; a Resolve, or a Keep all that changes something, stays open on a report of what was kept
+  and recycled; and a Bundle's recycling that leaves too few frames shows the too-few state.
+- **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle is the grid's own
+  `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation, and reads its set again wherever
+  the walk has gone: a Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and a recycled Bundle, which has no
+  Pick, through the grid's own `PUT /api/asset/.../restore`. Either answers as a restore does, and `reportRestore`
+  (`assets/asset-actions.js`) reports it. A Keep all that changed nothing leaves the entry as it was.
+- **The grid beneath** keeps its scroll position. `Const.events.curationClosed` carries what the session left changed, net of its
+  undos (`recycledIds`, `clearedSequenceIds`). With nothing changed, the grid and the selection stay as they were. Otherwise
+  `js/listeners/curation.js` takes the frames still recycled out through `removeAssetsFromGrid`, as the grid's own Recycle does, with
+  the group counts and the total, takes the Curate buttons off the Sequences cleared, and resets the selection; kept frames stay
+  under their old header until the next search. The map layout has no cells, so closing there runs the search again.
+- **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle a Bundle and Undo, runs
+  `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
+  true. Skip changes nothing and announces nothing. The store is also read when the Triage results render
+  (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
+- **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, and the shell) and `curation_set.css` (the
+  set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size` and `--curation-strip-max-height`
+  of `core.css`. The style guide's Badges & states section holds the notice, the chip and a Bundle's row (see **Style guide**).
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)`, which mutate the
@@ -1391,7 +1501,9 @@ and open menus alone. If the response holds a folder the DOM lacks (restoring as
 their folders), it falls back to a full render. Folder operations (add, rename, move, delete) keep
 using `reloadFolderTree`, which renders fresh counts as part of the rebuild. `app.reloadAlbumCounts()`
 and `app.reloadLocationCounts()` do the same for the album and Location lists (`refreshAlbumCounts`,
-`refreshLocationCounts`), and fetch nothing while another explorer tab is active.
+`refreshLocationCounts`), and fetch nothing while another explorer tab is active. `refreshCounts` in
+`js/assets/asset-actions.js`, which runs after every asset mutation, makes these reloads and reads the number of Sequences to
+curate again (`Const.state.sequencesToCurate`, see **Curation**).
 
 Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`.
 A restore answers `{restored, duplicates}`: an asset whose content was imported again after it was recycled stays in
@@ -1549,7 +1661,9 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   tokens reading one color share it by design, while two recipes computing one color are, as they should be one token; a
   token without a color is compared by its value alone.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
-  class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** Specimens
+  class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** A feature's own
+  design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) are in Badges & states,
+  where `.sg-curation-bundle` gives the row the rail's width. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
@@ -1667,7 +1781,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | owner of the three dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` |
+| `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` |
 | `static/js/common/video-playback.js` | the asset-detail Video beyond its element: `unloadVideo`, and the Media Session (`describeInMediaSession`, `clearMediaSession`) |
 | `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
@@ -1676,7 +1790,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/common/tooltip.js` | the `$tooltip` magic (`tooltipMagic`), `showTooltip` and `hideTooltip`: the hint above a clicked element, in the `#tooltip` host, placed by CSS anchor positioning (see **Tooltip**) |
 | `static/js/stores/html-common.js` | `registerHtmlCommonBindings()`: what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic, the focus plugin), called once per page before Alpine starts: from `initializeFrontendStores()` and `settings-page.js` |
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
-| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day or a Location) as a set |
+| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day, a Location or a Sequence) as a set |
 | `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through the store on release |
 | `static/js/search-results/infinite-scroll.js` | `loadNextPage` and the observer on the last cell, watched only while nothing follows it; `pendingCursorOf` and `observeContinuationCell` for the page window |
 | `static/js/search-results/page-window.js` | the window of loaded pages: folds pages a viewport above into `.page-spacer`s, reloads a spacer as a continuation when it nears (`reloadSpacer`), drops pages a viewport below, keeps the group header still open at a fold, and corrects the scroll position itself |
@@ -1702,7 +1816,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal, and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
-| `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid |
+| `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu) |
@@ -1714,7 +1828,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
-| `views/includes/html_common.scala.html` | The snackbar's two stacks (manual popovers over the `snackbar` store) and its announcers + the three dialog hosts: the two Alpine-bound modal hosts and the popover dialog |
+| `views/includes/html_common.scala.html` | The snackbar's two stacks (manual popovers over the `snackbar` store) and its announcers + the four dialog hosts: the three Alpine-bound modal hosts and the popover dialog |
 | `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
 | `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |
@@ -1731,13 +1845,19 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/sticky-offsets.js` | `bindStickyOffsets`: writes the results title's rendered height to `--results-title-height` (the toolbar's sticky offset) and the title's and toolbar's together to `--results-sticky-height` (the group headers') on the fragment |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration switch like every other field |
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
-| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day or Location, infinite-scroll trigger by cursor |
+| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day, Location or Sequence, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
 | `static/js/common/vendor-loader.js` | loads Leaflet (with its stylesheet), supercluster and media-chrome once, when a view first needs them |
 | `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
 | `static/js/map/map-panel.js` | the crowded-pin panel: `openMapPanel` runs the `bbox` search into `#mapPanelContent`; close, "Show only these in the grid" |
 | `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |
 | `static/js/listeners/map.js` | puts `layout=map` back into the URL the server pushes for a panel request |
+| `views/htmx/curation.scala.html`, `curation_set.scala.html` | Curation's shell (its header, the host of a set's fragment and the states with no set) and a Curation set's fragment (the Bundle rail, the stage, the face strip and the footer); styled by `static/css/htmx/curation.css` and `curation_set.css` |
+| `static/js/alpine/components/curation.js` | Alpine component on Curation's shell: its state, reading the sets, the walk of the queue, the stage's zoom, the outcomes, Undo and the keys; `requestCuration` names what the next shell opens on |
+| `static/js/listeners/curation.js` | Curation's events: opening it, the batch ops' cap, the counts after each mutation, the grid beneath when it closes |
+| `static/js/fragments/curation.js` | `hydrateCurationFragment`: opens the Curation host on its shell |
+| `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
+| `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
 
 ## Search parameters
 
@@ -1801,8 +1921,11 @@ only then, checked when it is the effective sort, since the server
 refuses it without text.
 
 `groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
-day; each option of the Group menu in `search_results.scala.html` carries both, and "No
-grouping" sets both to empty, which the store normalizes to `null`. A search has no page
+day, and `location` and `sequence`, whose order is fixed, by Location and by Sequence with an empty direction; each option of the
+Group menu in `search_results.scala.html` carries both, and "No
+grouping" sets both to empty, which the store normalizes to `null`. The menu offers Sequence in the Triage view alone. Outside
+it the server groups nothing for `sequence`, the menu marks the grouping the server used, and the store keeps what was asked
+for, as the URL does, so a return to Triage groups by Sequence again. A search has no page
 number, grouped or not: the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
 remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
 URL. The layout is the one exception: the store's `merge` writes a changed `layout` to

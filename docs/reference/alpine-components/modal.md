@@ -64,6 +64,6 @@ operation lifecycle (`static/js/fragments/dialog-operations.js`). Only View sett
 inline dialog, in its menu's popover panel (`static/js/fragments/inline-dialog.js`).
 
 The folder, album, Location and category dialogs follow neither this component nor its focus trap: they open in a
-third host, a native `<dialog popover="auto">` (`#popoverDialog`) with no scrim, placed below the request button's trigger
-by CSS anchor positioning and dismissed by an outside click. `modal.js` owns it with the two modal hosts and shares
+host of their own, a native `<dialog popover="auto">` (`#popoverDialog`) with no scrim, placed below the request button's trigger
+by CSS anchor positioning and dismissed by an outside click. `modal.js` owns it with the modal hosts and shares
 their operation lifecycle; **Modals** in `altitude/views/AGENTS.md` describes it.

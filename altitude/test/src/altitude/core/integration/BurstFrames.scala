@@ -24,7 +24,7 @@ trait BurstFrames { self: IntegrationTestCore =>
 
   /**
    * A frame imported with the camera's model, its `Date/Time Original` and its `Sub-Sec Time Original` seeded as upstream
-   * metadata, the way the plan's fixtures do, so no EXIF writer is needed
+   * metadata, so no EXIF writer is needed
    */
   protected def importFrame(
       bytes: Array[Byte],

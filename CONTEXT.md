@@ -210,7 +210,10 @@ _Avoid_: Display options, Grid options.
 **Sequence**:
 Still images in triage that the import found shot as one burst: a few seconds
 apart on the same camera, looking alike. An image is in at most one Sequence,
-and a Sequence ends when its last image leaves triage or is purged.
+and a Sequence ends when its last image leaves triage or is purged. A kept frame
+leaves its Sequence when the Curation set resolved holds all of that Sequence's
+frames still out of the trash, and a Sequence also ends when its last frame
+leaves that way.
 _Avoid_: Batch (a user's selection), Burst, Stack, Group, Series.
 
 **Image quality**:
@@ -224,3 +227,29 @@ How much fine detail a Face's box holds at a fixed scale. It falls as a face fil
 more of the frame, so it compares only between Faces of one Person at a similar
 size.
 _Avoid_: Face quality (how recognizable a face is).
+
+**Curation**:
+The modal where the user keeps the best frames of a Curation set and recycles
+the rest. The button that opens it on a selection reads "Curate", and the one
+that opens it on the queue reads "Curate 3 sequences", with the count.
+_Avoid_: Culling, Review.
+
+**Curation set**:
+The frames being compared: the members of one Sequence still out of the trash,
+or a selection.
+_Avoid_: Batch (a user's selection before it is curated), Group.
+
+**Pick**:
+A frame the user keeps. A set can have several.
+_Avoid_: Winner, Best.
+
+**Bundle**:
+The frames of a Curation set whose main problem is the same.
+_Avoid_: Stack, Group, Batch.
+
+**Contender**:
+A frame of a Curation set in no Bundle.
+_Avoid_: Candidate (a Sequence's and a face match's word).
+
+**Too close to call**:
+A Curation set with no Bundle: the measurements cannot separate its frames.

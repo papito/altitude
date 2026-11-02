@@ -9,10 +9,16 @@ that day.
 gets an Image quality at import (`ImageMeasurement`: sharpness over the whole frame, luminance, clipped highlights,
 crushed shadows, and a 0 to 100 score over the face boxes or the frame), a sharpness per Face, a pHash (`PerceptualHash`), and a Sequence when the import finds it
 shot in one burst (`SequenceService.assign`: capture time to the subsecond, same camera and size, hashes within
-`sequence.max_hash_distance`, within `sequence.max_gap_ms`; the two Triage Settings). **Not implemented**: the Curate
-view itself, session grouping by a global image embedding (section 1's later layers), learned quality models (BRISQUE,
-NIMA, section 2), per-image face grading and cast coverage (section 3), and anything for videos and animated images.
-The notes below are the research as written and describe options, not the code.
+`sequence.max_hash_distance`, within `sequence.max_gap_ms`; two of the Triage Settings). **Curation** is the Curate view
+(the same section, and **Curation** in [altitude/views/AGENTS.md](../altitude/views/AGENTS.md)): a modal on the queue of
+Sequences, one Sequence or a selection, where `CurationRule` sorts the frames into Bundles by what is wrong with them,
+comparing the Faces of one Person and, within a Sequence, whole frames. The frames the user picks are kept and the rest
+recycled, nothing ranks them, and the Image quality's score is never read. **Not implemented**: session grouping by a
+global image embedding (section 1's later layers), learned quality models (BRISQUE, NIMA, section 2), a per-frame face
+score, head pose, eye state and smile (section 3), and anything for videos and animated images. The notes below are the
+research as written and describe options, not the code: a batch in them is a Curation set, and the last of the **Open
+questions** is settled: Curation is in the glossary (`CONTEXT.md`), and a Pick keeps its frame while the rest go to the
+trash.
 
 ## What the project already has
 
