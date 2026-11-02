@@ -40,6 +40,8 @@ object Const:
   object Curation:
     // A Curation set compares: with fewer frames left there is no set, and a Sequence is not in the queue
     val MIN_FRAMES = 2
+    // The most IDs a selection opens Curation on: every frame's Faces and memberships are read for one fragment
+    val MAX_SELECTION = 100
 
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200

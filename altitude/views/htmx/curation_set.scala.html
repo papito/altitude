@@ -1,0 +1,100 @@
+@import altitude.core.models.BundleKind
+@import altitude.core.models.CurationFrame
+@import altitude.core.models.CurationReason
+@import altitude.core.models.CurationSet
+@import altitude.core.models.ExposureMeasure
+
+@* A Curation set, as CurationRule sorted it: what holds for every frame, then the Contenders, then each Bundle with what is wrong
+   with its frames, how much, and compared to what. `data-frame-id` names a frame: `data-asset-id` is how the client finds the
+   cells of the grid beneath. With no set, too few frames were left to compare. *@
+@(set: Option[CurationSet])
+
+@bundleName(kind: BundleKind) = @{
+  kind match {
+    case BundleKind.PoorFaces => "Poor faces"
+    case BundleKind.Blurry => "Blurry"
+    case BundleKind.TooDark => "Too dark"
+    case BundleKind.TooBright => "Too bright"
+  }
+}
+
+@percent(fraction: Double) = @{ f"${fraction * 100}%.0f%%" }
+
+@exposure(reading: CurationReason.Exposure) = @{
+  reading.measure match {
+    case ExposureMeasure.CrushedShadows => s"${percent(reading.value)} crushed shadows"
+    case ExposureMeasure.ClippedHighlights => s"${percent(reading.value)} blown highlights"
+    case ExposureMeasure.DarkLuminance | ExposureMeasure.BrightLuminance => s"Luminance ${percent(reading.value)}"
+  }
+}
+
+@reasonText(reason: CurationReason) = @{
+  reason match {
+    case CurationReason.FaceQuality(_, quality, best) => f"Face quality $quality%.1f against $best%.1f, that person's best"
+    case CurationReason.PersonMissing(_, foundIn, frames) => s"No face of a person found in $foundIn of $frames frames"
+    case CurationReason.FaceSharpness(_, sharpness, best) => f"Face sharpness $sharpness%.0f against $best%.0f, that person's sharpest"
+    case CurationReason.FrameSharpness(sharpness, sharpest) => f"Sharpness $sharpness%.0f against $sharpest%.0f, the Sequence's sharpest"
+    case reading: CurationReason.Exposure =>
+      reading.measure match {
+        case ExposureMeasure.DarkLuminance => s"${exposure(reading)}, under ${percent(reading.limit)}"
+        case ExposureMeasure.BrightLuminance => s"${exposure(reading)}, over ${percent(reading.limit)}"
+        case _ => s"${exposure(reading)}, the limit ${percent(reading.limit)}"
+      }
+    case CurationReason.LuminanceGap(luminance, nearest) =>
+      s"Luminance ${percent(luminance)} against ${percent(nearest)}, the Sequence's nearest the target"
+  }
+}
+
+@frameName(frame: CurationFrame) = {
+  @{frame.asset.fileName}
+  @if(!frame.isMeasured) {<small>Not measured</small>}
+}
+
+@set match {
+  case None => {
+    <p>Fewer than two images are left to compare</p>
+  }
+  case Some(curationSet) => {
+    <article>
+      @for(notice <- curationSet.notices) {
+        <p>Every frame: @{notice.readings.map(exposure).mkString(", ")}</p>
+      }
+      @if(curationSet.isTooCloseToCall) {
+        <p>Too close to call</p>
+      }
+      @if(curationSet.contenders.nonEmpty) {
+        <section>
+          <h3>Contenders</h3>
+          <ul>
+            @for(frame <- curationSet.contenders) {
+              <li data-frame-id="@{frame.asset.persistedId}">
+                @frameName(frame)
+                @if(curationSet.soleContender.contains(frame)) {<strong>The only frame with no problem</strong>}
+              </li>
+            }
+          </ul>
+        </section>
+      }
+      @for(bundle <- curationSet.bundles) {
+        <section>
+          <h3>@bundleName(bundle.kind) (@{bundle.frames.size})</h3>
+          <ul>
+            @for(bundled <- bundle.frames) {
+              <li data-frame-id="@{bundled.frame.asset.persistedId}">
+                @frameName(bundled.frame)
+                <ul>
+                  @for(reason <- bundled.reasons) {
+                    <li>@reasonText(reason)</li>
+                  }
+                </ul>
+                @if(bundled.chips.nonEmpty) {
+                  <p>Also: @{bundled.chips.map(chip => bundleName(chip.kind)).mkString(", ")}</p>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </article>
+  }
+}

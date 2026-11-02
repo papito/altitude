@@ -8,6 +8,7 @@ import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
+import altitude.core.models.RestoreResult
 
 abstract class BaseController(using logger: Logger) extends cask.Routes:
 
@@ -26,6 +27,14 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
     cask.Response(value.toString, status, Seq(("Content-Type", "application/json")))
 
   def jsonError(message: String, status: Int): Response[String] = jsonResponse(ujson.Obj("error" -> message), status)
+
+  /** What a restore did: the shape the client reads to report a duplicate, wherever assets leave the trash */
+  def restoreResponse(result: RestoreResult): Response[String] =
+    jsonResponse(
+      ujson.Obj(
+        Api.Field.Asset.RESTORED -> result.restored.toSeq,
+        Api.Field.Asset.DUPLICATES -> result.duplicates.toSeq
+      ))
 
   /**
    * The selection a batch dialog submits: its hidden `Api.Field.ASSET_IDS` field is a comma-separated list, unlike the array the

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 
 import altitude.core.routes.api.AlbumController
 import altitude.core.routes.api.AssetController
+import altitude.core.routes.api.CurationController
 import altitude.core.routes.api.FolderController
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.api.LocationController
@@ -22,6 +23,7 @@ import altitude.core.routes.web.StaticController
 import altitude.core.routes.web.StyleGuideController
 import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
+import altitude.core.routes.web.partial.CurationActionController
 import altitude.core.routes.web.partial.FolderActionController
 import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
@@ -76,6 +78,7 @@ object App extends cask.Main:
     new LocationController,
     new MapController,
     new AssetController,
+    new CurationController,
     new FolderController,
     new IndexController,
     new StaticController,
@@ -92,6 +95,7 @@ object App extends cask.Main:
     new AlbumActionController,
     new LocationActionController,
     new AssetActionController,
+    new CurationActionController,
     new FolderActionController,
     new PeopleActionController,
     new SearchResultsController,

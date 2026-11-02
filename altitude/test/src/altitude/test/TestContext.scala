@@ -24,6 +24,7 @@ import altitude.core.models.CaptureDateSource
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
 import altitude.core.models.Folder
+import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
@@ -215,6 +216,29 @@ class TestContext(val testApp: Altitude) {
         "UPDATE asset SET latitude = ?, longitude = ? WHERE id = ?",
         latitude.asInstanceOf[Object],
         longitude.asInstanceOf[Object],
+        assetId
+      )
+    }
+  }
+
+  /** Puts assets still in triage in a Sequence, as assignment would for a burst, whatever their files look like */
+  def setAssetSequence(assets: List[Asset], sequenceId: String): Unit =
+    testApp.txManager.withTransaction {
+      testApp.DAO.asset.setSequence(assets.map(_.persistedId).toSet, sequenceId): Unit
+    }
+
+  /** The metrics of an asset, or none, so a fixture decides what the measurement of its file would have found */
+  def setAssetImageQuality(assetId: String, quality: Option[ImageQuality]): Unit = {
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET sharpness = ?, luminance = ?, clipped_highlights = ?, crushed_shadows = ?, image_quality = ? " +
+          "WHERE id = ?",
+        quality.map(_.sharpness.asInstanceOf[Object]).orNull,
+        quality.map(_.luminance.asInstanceOf[Object]).orNull,
+        quality.map(_.clippedHighlights.asInstanceOf[Object]).orNull,
+        quality.map(_.crushedShadows.asInstanceOf[Object]).orNull,
+        quality.map(_.score.asInstanceOf[Object]).orNull,
         assetId
       )
     }
