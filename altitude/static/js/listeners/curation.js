@@ -48,14 +48,18 @@ export function registerCurationListeners(app) {
     })
 
     /**
-     * The grid keeps its scroll position, and with nothing changed its selection too. Otherwise the
-     * frames still recycled leave it as the grid's own Recycle takes them, with the group counts and
-     * the total, a group whose Sequence was cleared loses its Curate button, and kept frames stay
-     * under their old header until the next search. The map layout has no cells, so it runs the
-     * search again.
+     * The selection is reset whatever happened in Curation: a set opened on a selection is done with
+     * when Curation closes, resolved or not, and a selection left standing would make the next one
+     * additive. The grid keeps its scroll position, and with nothing changed nothing else moves.
+     * Otherwise the frames still recycled leave it as the grid's own Recycle takes them, with the
+     * group counts and the total, a group whose Sequence was cleared loses its Curate button, and
+     * kept frames stay under their old header until the next search. The map layout has no cells,
+     * so it runs the search again.
      */
     document.body.addEventListener(Const.events.curationClosed, (event) => {
         const { recycledIds, clearedSequenceIds } = event.detail
+
+        Alpine.store(Const.state.selectedAssets).reset()
 
         if (recycledIds.length === 0 && clearedSequenceIds.length === 0) {
             return
@@ -71,6 +75,5 @@ export function registerCurationListeners(app) {
 
         app.assetActions.removeAssetsFromGrid(recycledIds)
         removeCurateButtons(clearedSequenceIds)
-        Alpine.store(Const.state.selectedAssets).reset()
     })
 }

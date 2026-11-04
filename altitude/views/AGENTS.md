@@ -1275,11 +1275,12 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
   show, else as it was left. Either answers as a restore does, and `reportRestore`
   (`assets/asset-actions.js`) reports it. A Keep all that changed nothing leaves the entry as it was.
-- **The grid beneath** keeps its scroll position. `Const.events.curationClosed` carries what the session left changed, net of its
-  undos (`recycledIds`, `clearedSequenceIds`). With nothing changed, the grid and the selection stay as they were. Otherwise
-  `js/listeners/curation.js` takes the frames still recycled out through `removeAssetsFromGrid`, as the grid's own Recycle does, with
-  the group counts and the total, takes the Curate buttons off the Sequences cleared, and resets the selection; kept frames stay
-  under their old header until the next search. The map layout has no cells, so closing there runs the search again.
+- **The grid beneath** keeps its scroll position, and its selection is reset on every close, resolved or not: a set opened on a
+  selection is done with, and a selection left standing would make the next one additive. `Const.events.curationClosed` carries
+  what the session left changed, net of its undos (`recycledIds`, `clearedSequenceIds`). With nothing changed, nothing else moves.
+  Otherwise `js/listeners/curation.js` takes the frames still recycled out through `removeAssetsFromGrid`, as the grid's own Recycle
+  does, with the group counts and the total, and takes the Curate buttons off the Sequences cleared; kept frames stay under their
+  old header until the next search. The map layout has no cells, so closing there runs the search again.
 - **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle a Bundle and Undo, runs
   `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
   true. Skip changes nothing and announces nothing. The store is also read when the Triage results render
