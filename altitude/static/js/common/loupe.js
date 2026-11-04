@@ -29,19 +29,18 @@ import { Const } from "../constants.js"
  * that shows what the pane shows is no lens. The wheel over a pane steps from the level shown, up
  * on a negative `deltaY`, so every step changes what the lens shows, and `saveLevel` remembers the
  * rung; `readLevel` answers it when the Loupe attaches, or anything not in the ladder for the first
- * rung. A wheel with a modifier held is the browser's (Ctrl zooms the page), and one with nothing
- * under the pointer to magnify steps nothing.
+ * rung, and `setLevel` is the caller's own control over the same rungs. A wheel with a modifier
+ * held is the browser's (Ctrl zooms the page), and one with nothing under the pointer to magnify
+ * steps nothing.
  *
- * Mirroring: the pane under the pointer is the source, and its pixel becomes a relative position
- * over the natural size; every other pane places its lens at that relative position of its own
- * painted box and draws its own image there at the source's level. A pane whose image is not
- * shown (not connected, laid out at no width, not loaded, or `visibility: hidden`) shows no lens,
- * and a source not shown hides them all. `refresh()` re-places the lenses from the last pointer
+ * One lens at a time: the pane under the pointer shows its lens, and every other pane's stays
+ * hidden. A pane whose image is not shown (not connected, laid out at no width, not loaded, or
+ * `visibility: hidden`) shows no lens either. `refresh()` re-places the lens from the last pointer
  * position, for the caller's moments the pixels under a resting pointer change: an image that
  * settled, a transform or a resize.
  */
 
-/** Attaches the Loupe to `panes` and answers `{ refresh, detach }` */
+/** Attaches the Loupe to `panes` and answers `{ refresh, setLevel, detach }` */
 export function attachLoupe({ panes, levels, readLevel, saveLevel }) {
     let level = validLevel(levels, readLevel())
     // The last pointer position and the pane it is over, null while the pointer is over none
@@ -57,8 +56,9 @@ export function attachLoupe({ panes, levels, readLevel, saveLevel }) {
     const hideAll = () => panes.forEach(({ lensEl }) => hideLens(lensEl))
 
     /**
-     * Places every lens from the pointer, or hides them all when there is nothing to place from.
-     * Every pane is measured before any lens is written, so the browser lays the stage out once
+     * Places the lens of the pane under the pointer, hiding every other, or hides them all when there
+     * is nothing to place from. The lens is measured before it is written, so the browser lays the
+     * stage out once
      */
     const place = () => {
         const spot = pointer && pixelUnder(pointer)
@@ -67,19 +67,18 @@ export function attachLoupe({ panes, levels, readLevel, saveLevel }) {
             return
         }
 
-        const shown = effectiveLevel(levels, level, spot.fit)
-        const placements = panes.map((pane) =>
-            isShown(pane.imageEl)
-                ? measureLens(pane, spot.relative, shown)
-                : null,
+        const placement = measureLens(
+            pointer.pane,
+            spot.pixel,
+            effectiveLevel(levels, level, spot.fit),
         )
-        panes.forEach((pane, index) => {
-            if (placements[index]) {
-                drawLens(pane.lensEl, placements[index])
+        for (const pane of panes) {
+            if (pane === pointer.pane) {
+                drawLens(pane.lensEl, placement)
             } else {
                 hideLens(pane.lensEl)
             }
-        })
+        }
     }
 
     const track = (pane) => (event) => {
@@ -132,6 +131,11 @@ export function attachLoupe({ panes, levels, readLevel, saveLevel }) {
 
     return {
         refresh: place,
+        /** The caller's choice of rung, placed at once; anything off the ladder is its first rung */
+        setLevel(next) {
+            level = validLevel(levels, next)
+            place()
+        },
         // The lenses are left as they were found, for a caller that keeps them past the Loupe
         detach() {
             bindings.splice(0).forEach((unbind) => unbind())
@@ -198,9 +202,8 @@ function paintedBox(imageEl) {
 }
 
 /**
- * The pixel of the source pane's image under the pointer, as a position relative to the natural
- * size, with the pane's `fit`; null when the source is not shown or the pointer is over a
- * letterbox bar
+ * The pixel of the pane's image under the pointer, with the pane's `fit`; null when the image is
+ * not shown or the pointer is over a letterbox bar
  */
 function pixelUnder({ x, y, pane }) {
     const { imageEl } = pane
@@ -220,25 +223,17 @@ function pixelUnder({ x, y, pane }) {
         return null
     }
 
-    return {
-        fit: box.fit,
-        relative: {
-            x: pixelX / imageEl.naturalWidth,
-            y: pixelY / imageEl.naturalHeight,
-        },
-    }
+    return { fit: box.fit, pixel: { x: pixelX, y: pixelY } }
 }
 
 /**
- * Where the pane's lens goes to center on `relative` of its own painted box, and what it draws
- * there: the pixel at its center at `level`. The lens is positioned by its offset parent, whose
- * padding box is the origin, and sized by the stylesheet, so it is shown before it is measured;
- * its border is outside its background, so the pixel is centered in the padding box
+ * Where the pane's lens goes to center on `pixel` of the painted box, and what it draws there: that
+ * pixel at its center at `level`. The lens is positioned by its offset parent, whose padding box is
+ * the origin, and sized by the stylesheet, so it is shown before it is measured; its border is
+ * outside its background, so the pixel is centered in the padding box
  */
-function measureLens({ imageEl, lensEl }, relative, level) {
+function measureLens({ imageEl, lensEl }, { x: pixelX, y: pixelY }, level) {
     const box = paintedBox(imageEl)
-    const pixelX = relative.x * imageEl.naturalWidth
-    const pixelY = relative.y * imageEl.naturalHeight
 
     lensEl.hidden = false
     const originEl = lensEl.offsetParent

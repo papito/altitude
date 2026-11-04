@@ -100,7 +100,7 @@
    pane's corner says what the rail says of the frame: kept, and its problems. It is the pane's and not the image's, so a
    zoom leaves it in place, and it stays while the frame loads, as the caption does. The focused frame's pane wears the accent's edge.
    The Loupe, last in the pane so it paints above all three, is a lens that rides with the pointer over the pane showing the spot
-   under it at the original's pixels, mirrored on the other pane; js/common/loupe.js places and draws it through the component,
+   under it at the original's pixels, on that pane alone; js/common/loupe.js places and draws it through the component,
    writing its inline styles, its level in `data-level` and `hidden`, and the pointer is hidden (`cursor: none`) while it shows.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
    Any other frame's has the Pin button, and that other frame is always the focused one *@
@@ -254,10 +254,16 @@
           @* The note's row is there from the set's opening when any frame is in an album or a Location, and holds its line while the
              note is empty, so a frame's Pick does not shrink the panes mid-comparison *@
           <p class="note" x-show="hasFrameInAlbumOrLocation" x-text="recycledInAlbumOrLocationNote"></p>
+          @* The Loupe's level, on a row of its own over Resolve: its stops are the ladder's rungs (`loupeRange`), the same the wheel
+             over a pane steps, and the level holds across sets and opens *@
+          <label class="loupe-level">Loupe
+            <input type="range" :min="loupeRange.min" :max="loupeRange.max" :step="loupeRange.step" :value="loupeLevel" x-on:input="setLoupeLevel($event.target.valueAsNumber)">
+            <span x-text="loupeLevelLabel"></span>
+          </label>
           <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle</small>
           @* With no frame to keep the hint stands in for Resolve, and Enter does nothing. Resolve's label is two spans so that only
              the kept frame's name truncates, and its title gives the label whole *@
-          <div>
+          <div class="resolve">
             <span class="keep-hint" x-show="keepIds.length === 0">Press 1 or 2 to keep a frame</span>
             <button type="button" class="action-button primary" x-show="keepIds.length > 0" :title="keptLabel + recycleLabel" x-on:click="resolve()"><span class="kept" x-text="keptLabel"></span><span x-text="recycleLabel"></span> <kbd>Enter</kbd></button>
           </div>

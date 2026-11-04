@@ -89,7 +89,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping, the mirroring and the level ladder), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
@@ -1225,12 +1225,14 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 
   The Loupe is a lens in each pane (`.loupe`, `#curationLoupePinned` and `#curationLoupeFocused`, beside the images'
   `curationStagePinned` and `curationStageFocused`), last in the pane so it paints above the image, the spinner and the tag. The
-  pointer over a pane's image shows it: the spot under the pointer at the original's pixels (1:1), mirrored on the other pane at the
-  same relative spot. The wheel over a pane steps the level through 1, 2, 4 (`LOUPE_LEVELS`), remembered under
-  `Const.localStore.loupeLevel` (`rememberedLoupeLevel`, `saveLoupeLevel`); a small original, or a zoomed one, that the pane already
-  shows at or above the chosen level is shown at the first level above its fit, and the wheel steps from the level shown, so every
-  step changes what the lens shows. A wheel with a modifier held is left to the browser (Ctrl zooms the page), and one with nothing
-  under the pointer to magnify steps nothing. `js/common/loupe.js` places and draws it (`attachLoupe`, answering `refresh` and
+  pointer over a pane's image shows it: the spot under the pointer at the original's pixels (1:1), on that pane alone. The level is
+  one value for every frame, `loupeLevel` on the component, a rung of `LOUPE_LEVELS` (1 to 4 by halves): the footer's slider
+  (`.loupe-level`, its stops from `loupeRange`) and the wheel over a pane move it through `setLoupeLevel`, the one setter, which
+  remembers it under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`, `saveLoupeLevel`) and hands it to the module
+  (`setLevel`), so it holds across sets and opens. A small original, or a zoomed one, that the pane already shows at or above the
+  chosen level is shown at the first level above its fit, and the wheel steps from the level shown, so every step changes what the
+  lens shows. A wheel with a modifier held is left to the browser (Ctrl zooms the page), and one with nothing under the pointer to
+  magnify steps nothing. `js/common/loupe.js` places and draws it (`attachLoupe`, answering `refresh` and
   `detach`) and knows nothing of Curation: it maps the pointer through the image's bounding rect, which includes the zoom's
   transform, so the Loupe works unchanged while the stage is zoomed to a face, and draws with the image's `currentSrc` as the lens's
   background, so nothing is fetched. `watchStage` attaches it with the stage observer, `applyZoom` refreshes it, as does
@@ -1251,7 +1253,9 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The footer** is a grid of three columns, `minmax(0, 1fr) auto minmax(max-content, 1fr)`, so its center stays at the true center
   while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
   window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
-  ("← → ↑ ↓ move, R recycle the frame's Bundle"), and at the right edge Keep all and Skip.
+  ("← → ↑ ↓ move, R recycle the frame's Bundle"), and at the right edge Keep all and Skip. A row above them holds the Loupe's
+  slider alone, in the center column (`.loupe-level`, `grid-column: 2`; the three below name their columns, so auto-placement
+  never lifts one onto its row), over Resolve.
   The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
   stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
   frame" (`.keep-hint`, in `--theme-neutral-3`) and no button, and Enter does nothing, since `settle` refuses an empty list. Otherwise
@@ -1949,7 +1953,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/curation.js` | `hydrateCurationFragment`: opens the Curation host on its shell |
 | `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
 | `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
-| `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh` and `detach`; the pointer-to-pixel mapping under `object-fit: contain`, the mirroring by relative position and the wheel through the ladder, with no knowledge of the page it is on |
+| `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh`, `setLevel` and `detach`; the pointer-to-pixel mapping under `object-fit: contain` and the wheel through the ladder, with no knowledge of the page it is on |
 
 ## Search parameters
 
