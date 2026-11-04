@@ -1,5 +1,6 @@
 import { Alpine } from "../../lib/alpine.esm.min.js"
 import { reportRestore } from "../../assets/asset-actions.js"
+import { attachLoupe } from "../../common/loupe.js"
 import {
     closeModal,
     getActiveModalHost,
@@ -31,6 +32,9 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * notices the host going, then announces what the session left changed
  * (`Const.events.curationClosed`) and removes the shell. The keys it binds are document-level, so they
  * work wherever focus is inside the host, and are ignored while a text field has focus.
+ *
+ * The Loupe (`common/loupe.js`) is attached over the stage's panes with each set's fragment, refreshed
+ * when an image settles or the zoom is applied, and detached with the stage observer.
  */
 
 const Phase = {
@@ -50,8 +54,13 @@ const Phase = {
 // How much of the pane a zoomed Face's box fills, so its surroundings stay in view
 const ZOOMED_BOX_SHARE = 0.5
 
+// The Loupe's ladder: original pixels per screen pixel, so 1 is 1:1
+const LOUPE_LEVELS = [1, 2, 4]
+
 const PINNED_IMAGE_ID = "curationStagePinned"
 const FOCUSED_IMAGE_ID = "curationStageFocused"
+const PINNED_LOUPE_ID = "curationLoupePinned"
+const FOCUSED_LOUPE_ID = "curationLoupeFocused"
 
 // What the next shell to load is opened on; the shell's request carries no parameters
 let requestedEntry = {}
@@ -149,6 +158,24 @@ function zoomTransform(imageEl, box) {
     return `translate(${left}px, ${top}px) scale(${scale})`
 }
 
+/** The Loupe level last chosen, as a number; 0 where none is stored or storage is blocked */
+function rememberedLoupeLevel() {
+    try {
+        return Number(localStorage.getItem(Const.localStore.loupeLevel))
+    } catch {
+        return 0
+    }
+}
+
+/** Remembers the Loupe level; a blocked storage forgets it and nothing else */
+function saveLoupeLevel(level) {
+    try {
+        localStorage.setItem(Const.localStore.loupeLevel, String(level))
+    } catch {
+        // Nothing to do: the level holds for the session
+    }
+}
+
 function faceBoxOf(personId, frameId) {
     const cropEl = document.querySelector(
         `#curationFaces [${Const.attributes.personId}="${CSS.escape(personId)}"][${Const.attributes.columnFrameId}="${CSS.escape(frameId)}"]`,
@@ -165,6 +192,8 @@ export function curation() {
     // Closure state rather than component data: nothing reactive reads any of it
     let onKeydown = null
     let stageObserver = null
+    // The Loupe over the set on show, attached with its fragment
+    let loupe = null
     let isBusy = false
     let isClosed = false
     // The read Try again runs
@@ -191,6 +220,11 @@ export function curation() {
                 neighbourPreloads.set(frameId, preloadFrame(frameId))
             }
         }
+    }
+
+    function detachLoupe() {
+        loupe?.detach()
+        loupe = null
     }
 
     function announceClosed() {
@@ -274,6 +308,7 @@ export function curation() {
         destroy() {
             document.removeEventListener("keydown", onKeydown)
             stageObserver.disconnect()
+            detachLoupe()
         },
 
         get isQueue() {
@@ -393,10 +428,14 @@ export function curation() {
             )
         },
 
-        /** An image's `load` or `error`. A failed image shows as the browser shows one, with its `alt` */
+        /**
+         * An image's `load` or `error`. A failed image shows as the browser shows one, with its `alt`. The
+         * Loupe re-reads once Alpine has shown the image: the frame under a resting pointer changed.
+         */
         onImageSettled(event) {
             this.settledSrcs[event.target.id] = event.target.getAttribute("src")
             this.applyZoom()
+            this.$nextTick(() => loupe?.refresh())
         },
 
         fileNameOf(frameId) {
@@ -532,7 +571,8 @@ export function curation() {
         /**
          * Applies the zoom to both panes, for the frames they show. It runs when a crop is clicked, when
          * an image has loaded, since its natural size is what the box is held against, and before the
-         * pane shows it, and when a pane resizes. A frame with no Face of the Person shows whole.
+         * pane shows it, and when a pane resizes. A frame with no Face of the Person shows whole. Each
+         * moves the pixels under a resting pointer, so the Loupe re-reads after the transform is written.
          */
         applyZoom() {
             const panes = [
@@ -554,6 +594,7 @@ export function curation() {
                         ? zoomTransform(imageEl, box)
                         : ""
             }
+            loupe?.refresh()
         },
 
         /** What the user has made of the set on show, which a later read of that same set can keep */
@@ -643,15 +684,39 @@ export function curation() {
             this.preloadNeighbours()
         },
 
-        // The fragment's images are new, and a pane resizing changes what a zoom has to do
+        /**
+         * The fragment's images and lenses are new: a pane resizing changes what a zoom has to do, and
+         * the Loupe rides over the panes whose image and lens are both there
+         */
         watchStage() {
             stageObserver.disconnect()
-            for (const imageId of [PINNED_IMAGE_ID, FOCUSED_IMAGE_ID]) {
+            detachLoupe()
+
+            const panes = []
+            for (const [imageId, lensId] of [
+                [PINNED_IMAGE_ID, PINNED_LOUPE_ID],
+                [FOCUSED_IMAGE_ID, FOCUSED_LOUPE_ID],
+            ]) {
                 const imageEl = document.getElementById(imageId)
+                const lensEl = document.getElementById(lensId)
                 if (imageEl) {
                     stageObserver.observe(imageEl)
                 }
+                if (imageEl && lensEl) {
+                    // The pane, which takes the pointer, holds the image and the lens
+                    panes.push({
+                        paneEl: lensEl.parentElement,
+                        imageEl,
+                        lensEl,
+                    })
+                }
             }
+            loupe = attachLoupe({
+                panes,
+                levels: LOUPE_LEVELS,
+                readLevel: rememberedLoupeLevel,
+                saveLevel: saveLoupeLevel,
+            })
         },
 
         // The control that had focus may have left with the previous set's fragment
@@ -680,6 +745,7 @@ export function curation() {
 
             document.getElementById("curationSet").replaceChildren()
             stageObserver.disconnect()
+            detachLoupe()
             preloadOnly([])
             this.frames = []
             this.bundleOf = {}

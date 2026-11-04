@@ -254,6 +254,41 @@
   border-color: var(--success-color);
 }
 
+/* The Loupe, a square lens a third of the pane wide that js/common/loupe.js centers on the pointer and draws with the original as
+   its background, pixelated above 100% (the module sets image-rendering by level); the pane clips it. It is last in the pane, so
+   it paints above the image, the spinner and the tag with no z-index. The backdrop fills what the original's pixels do not reach,
+   at the image's edges, so the pane's picture never shows through the lens, and the edge takes the pane's dark side as the tag
+   does. No display here: `hidden` hides it */
+#curationStage .loupe {
+  position: absolute;
+  width: min(calc(100% / 3), var(--curation-loupe-max-size));
+  aspect-ratio: 1;
+  pointer-events: none;
+  background-color: var(--asset-detail-backdrop-color);
+  background-repeat: no-repeat;
+  border: var(--border-hairline) var(--theme-neutral-4);
+  border-radius: var(--radius);
+  color-scheme: dark;
+}
+
+/* The level the module writes, "200%", as a chip in the lens's bottom right corner */
+#curationStage .loupe::after {
+  content: attr(data-level);
+  position: absolute;
+  inset: auto var(--space-2) var(--space-2) auto;
+  padding: var(--chip-padding);
+  color: var(--theme-neutral-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background-color: var(--asset-detail-backdrop-color);
+  border-radius: var(--chip-border-radius);
+}
+
+/* The lens stands in for the pointer, so the pointer never covers the detail */
+#curationStage .pane:has(> .loupe:not([hidden])) img {
+  cursor: none;
+}
+
 /* The side columns share what the center leaves, so the pinned label sits at the pane's true center, under the image */
 #curationStage figcaption {
   display: grid;

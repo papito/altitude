@@ -99,9 +99,12 @@
    spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`). The tag over the
    pane's corner says what the rail says of the frame: kept, and its problems. It is the pane's and not the image's, so a
    zoom leaves it in place, and it stays while the frame loads, as the caption does. The focused frame's pane wears the accent's edge.
+   The Loupe, last in the pane so it paints above all three, is a lens that rides with the pointer over the pane showing the spot
+   under it at the original's pixels, mirrored on the other pane; js/common/loupe.js places and draws it through the component,
+   writing its inline styles, its level in `data-level` and `hidden`, and the pointer is hidden (`cursor: none`) while it shows.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
    Any other frame's has the Pin button, and that other frame is always the focused one *@
-@stagePane(imageId: String, frame: String, shows: String) = {
+@stagePane(imageId: String, loupeId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
     <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame), focused: @frame === focusedId }">
       <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="onImageSettled($event)" x-on:error="onImageSettled($event)">
@@ -112,6 +115,7 @@
           <span class="curation-chip" x-text="problem"></span>
         </template>
       </div>
+      <div id="@loupeId" class="loupe" hidden aria-hidden="true"></div>
     </div>
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
@@ -185,8 +189,8 @@
 
       <section id="curationCompare">
         <div id="curationStage">
-          @stagePane("curationStagePinned", "pinnedId", "showsPinnedPane")
-          @stagePane("curationStageFocused", "focusedId", "focusedId")
+          @stagePane("curationStagePinned", "curationLoupePinned", "pinnedId", "showsPinnedPane")
+          @stagePane("curationStageFocused", "curationLoupeFocused", "focusedId", "focusedId")
         </div>
 
         @* One row per Person (no name: a Face carries none, and its crop identifies the row) and one column per frame in the rail's

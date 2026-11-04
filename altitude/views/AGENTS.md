@@ -89,7 +89,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping, the mirroring and the level ladder), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
@@ -119,7 +119,9 @@ Always access the repo ID via `window.ctx.getRepoId()`, not directly from the st
 
 The People tab's state is no store: its `peopleTab` component holds the buckets of each pane, whether Split view is on
 and the panes' Split.js sizes on each axis as component data and remembers them in `localStorage` under
-`Const.localStore.peopleView`, which nothing else reads (see **People tab** below).
+`Const.localStore.peopleView`, which nothing else reads (see **People tab** below). Nor is the Loupe's level: Curation's
+`curation` component reads and remembers it in `localStorage` under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`,
+`saveLoupeLevel`), which nothing else reads (see **Curation** below).
 
 ## DOM Addressing Convention
 
@@ -143,12 +145,14 @@ Const.attributes.minFrames      // "data-min-frames"  (the fewest frames a group
 Const.attributes.frameId        // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
 Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of the face strip)
 Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
+Const.attributes.loupeLevel     // "data-level"  (the Loupe's level on a stage pane's lens, which its stylesheet shows)
 ```
 
 A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
 `data-file-name`, `data-problems` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
 `data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
-(`js/search-results/cells.js`).
+(`js/search-results/cells.js`). Each stage pane's lens is addressed by its ID (`curationLoupePinned`, `curationLoupeFocused`) as the
+stage images are (`curationStagePinned`, `curationStageFocused`), and carries `data-level` (`Const.attributes.loupeLevel`), the level the Loupe writes for its label.
 
 The one exception is `alt-has-no-date` on a result cell, which the controller tests assert on.
 
@@ -1218,6 +1222,25 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   the end, so two frames stay on the stage; with no other frame shown, as when the rest sit in collapsed Bundles, the stage shows the
   one frame. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
   the pinned frame, by an arrow or a click, shows it alone, P does nothing there, and moving away brings the two back.
+
+  The Loupe is a lens in each pane (`.loupe`, `#curationLoupePinned` and `#curationLoupeFocused`, beside the images'
+  `curationStagePinned` and `curationStageFocused`), last in the pane so it paints above the image, the spinner and the tag. The
+  pointer over a pane's image shows it: the spot under the pointer at the original's pixels (1:1), mirrored on the other pane at the
+  same relative spot. The wheel over a pane steps the level through 1, 2, 4 (`LOUPE_LEVELS`), remembered under
+  `Const.localStore.loupeLevel` (`rememberedLoupeLevel`, `saveLoupeLevel`); a small original, or a zoomed one, that the pane already
+  shows at or above the chosen level is shown at the first level above its fit, and the wheel steps from the level shown, so every
+  step changes what the lens shows. A wheel with a modifier held is left to the browser (Ctrl zooms the page), and one with nothing
+  under the pointer to magnify steps nothing. `js/common/loupe.js` places and draws it (`attachLoupe`, answering `refresh` and
+  `detach`) and knows nothing of Curation: it maps the pointer through the image's bounding rect, which includes the zoom's
+  transform, so the Loupe works unchanged while the stage is zoomed to a face, and draws with the image's `currentSrc` as the lens's
+  background, so nothing is fetched. `watchStage` attaches it with the stage observer, `applyZoom` refreshes it, as does
+  `onImageSettled` on `$nextTick`, once Alpine has shown the image, and `detachLoupe` detaches it with the observer, on the next set
+  and on close. The module reads whether the image is laid out and its computed visibility, so the hidden pinned figure and a
+  loading pane show no lens, and over the letterbox bars no lens shows. It writes the lens's `data-level` ("200%", the label via
+  `content: attr(data-level)`),
+  its inline styles, `image-rendering: pixelated` above 1:1 among them, and `hidden`, and nothing else; `curation_set.css` has the
+  rest: a square a third of the pane wide, capped by `--curation-loupe-max-size` (`core.css`), the hairline edge in the pane's dark
+  side, and `cursor: none` on the image of a pane whose lens shows (`.pane:has(> .loupe:not([hidden])) img`).
 - **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
   One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
   (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A column's
@@ -1286,8 +1309,9 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   true. Skip changes nothing and announces nothing. The store is also read when the Triage results render
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
 - **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, and the shell) and `curation_set.css` (the
-  set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height` and
-  `--curation-kept-name-max-width` of `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
+  set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,
+  `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it) and `--curation-kept-name-max-width` of
+  `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
   smaller of the token and `20vw`, since the footer's center column takes its full width before the keys' hint gets any, so in a
   narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip and a Bundle's row
   with its marks, and its usage note describes the pane's tag and the keep hint, whose rules apply only inside the set (see **Style
@@ -1591,9 +1615,9 @@ variants' own edges.
 
 **Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
 `color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
-switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Curation's `.pane-tag` declares
-`color-scheme: dark` on itself, because the pane beneath it is dark in either theme, so its chips take the dark side of every
-token whichever theme is shown. Every color is a `:root` token
+switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Curation's `.pane-tag` and `.loupe`
+declare `color-scheme: dark` on themselves, because the pane beneath them is dark in either theme, so the tag's chips and the
+lens's edge and label take the dark side of every token whichever theme is shown. Every color is a `:root` token
 of `core.css`, and every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, one per
 scheme, so the browser resolves the pair by the scheme in force, no rule is written once per theme, and an editor shows
 a swatch on each line. `:root` opens with the theme colors, in three groups. The brand colors: `--theme-primary` (the
@@ -1920,11 +1944,12 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |
 | `static/js/listeners/map.js` | puts `layout=map` back into the URL the server pushes for a panel request |
 | `views/htmx/curation.scala.html`, `curation_set.scala.html` | Curation's shell (its header, the host of a set's fragment and the states with no set) and a Curation set's fragment (the Bundle rail, the stage, the face strip and the footer); styled by `static/css/htmx/curation.css` and `curation_set.css` |
-| `static/js/alpine/components/curation.js` | Alpine component on Curation's shell: its state, reading the sets, the walk of the queue, the stage's zoom, the outcomes, Undo and the keys; `requestCuration` names what the next shell opens on |
+| `static/js/alpine/components/curation.js` | Alpine component on Curation's shell: its state, reading the sets, the walk of the queue, the stage's zoom and its Loupe (attached, refreshed and detached with the stage), the outcomes, Undo and the keys; `requestCuration` names what the next shell opens on |
 | `static/js/listeners/curation.js` | Curation's events: opening it, the batch ops' cap, the counts after each mutation, the grid beneath when it closes |
 | `static/js/fragments/curation.js` | `hydrateCurationFragment`: opens the Curation host on its shell |
 | `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
 | `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
+| `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh` and `detach`; the pointer-to-pixel mapping under `object-fit: contain`, the mirroring by relative position and the wheel through the ladder, with no knowledge of the page it is on |
 
 ## Search parameters
 

@@ -274,3 +274,11 @@ _Avoid_: Candidate (a Sequence's and a face match's word).
 
 **Too close to call**:
 A Curation set with no Bundle: the measurements cannot separate its frames.
+
+**Loupe**:
+The lens that rides with the pointer over a frame on Curation's stage and shows
+the spot under it at the original's pixels, or a multiple of them; with two
+frames on the stage, both show it at the same spot. It changes nothing about
+the frame.
+_Avoid_: Magnifier, Magnifying glass, Zoom (the stage's zoom to a Person's
+face).

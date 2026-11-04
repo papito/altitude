@@ -83,6 +83,8 @@ export const Const = {
     attributes: {
         expanded: "data-expanded",
         viewedScope: "data-viewed-scope",
+        // The Loupe's level on a stage pane's lens, "200%", which its stylesheet shows (js/common/loupe.js)
+        loupeLevel: "data-level",
         isRoot: "data-is-root",
         numOfChildren: "data-num-of-children",
         parentFolderId: "data-parent-folder-id",
@@ -152,6 +154,9 @@ export const Const = {
         // The People tab's remembered state (js/alpine/components/people-tab.js): each pane's
         // People buckets, whether Split view is on and the panes' sizes on each axis
         peopleView: "peopleView",
+        // The Loupe's magnification last chosen on Curation's stage, read and saved by js/common/loupe.js
+        // through the `rememberedLoupeLevel` and `saveLoupeLevel` the Curation component hands it
+        loupeLevel: "loupeLevel",
     },
 
     sessionStore: {

@@ -360,6 +360,14 @@ problems as chips), the file name, "Pinned" or a **Pin P** button, and a **Keep*
 frame changes until the new image loads, so a frame is never shown under another's name. The focused frame's neighbours
 in the rail are preloaded; a held arrow key does not queue originals ahead of the frame on show.
 
+Hover over a pane and the **Loupe** shows the spot under the pointer at the original's pixels, so sharpness, noise and
+eyes are judged on the file and not on a pane that shrinks it; with two frames on the stage, both panes show it at the
+same spot, so the pinned and the focused frame compare at one place without moving the pointer across. The wheel over a
+pane steps it to 200% and 400% and back, the level remembered by the browser for the next open, and a label in the
+lens's corner reads it. Above 1:1 the pixels are crisp blocks, so blur and noise are the file's and not the browser's
+smoothing. It works while the stage is zoomed to a Person, and shows nothing over the bars beside the image or while a
+frame loads.
+
 Pinning keeps nothing. It holds a frame on the left to compare the others against. Pinning the focused frame replaces
 the pinned one and moves focus to the next frame, so two stay on the stage. There is no unpinning; focusing the pinned
 frame shows it alone and moving away brings the pair back.
@@ -397,6 +405,9 @@ click hands focus back to the shell so Enter resolves next.
 | Esc | Close Curation |
 
 Actions run one at a time: a key pressed while a set is being resolved or read does nothing.
+
+The wheel over a stage pane steps the Loupe's level, the one pointer gesture with an effect of its own; the Loupe is
+pointer-only, and the arrows are the rail's.
 
 ## 4. The walk of the queue
 
