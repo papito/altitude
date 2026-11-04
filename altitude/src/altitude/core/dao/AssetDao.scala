@@ -40,6 +40,14 @@ trait AssetDao extends BaseDao[Asset]:
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit
 
+  /**
+   * Sets the completion flag of the context repository's asset and, in the same update, stores the Image quality, the perceptual
+   * hash and the Scene embeddings the model carries, each absent one as NULL (a Video, an animated image, a still image the
+   * pipeline did not measure or a model could not embed); how many rows changed. An embedding not of its model's dimensions is
+   * refused (`IllegalArgumentException`), as PostgreSQL's column would refuse it, so SQLite's BLOB never holds one.
+   */
+  def markAsCompleted(asset: Asset): Int
+
   /*
    * Sequences: the `sequence_id` the still images of one burst share while in triage. `SequenceService` and `CurationService`
    * read and write it through these; the rule that pairs two images is `SequenceRule`.

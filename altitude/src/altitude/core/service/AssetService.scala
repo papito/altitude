@@ -15,14 +15,25 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.DetectedFaces
 import altitude.core.models.MimedPreviewData
+import altitude.core.models.SceneModel
 import altitude.core.util.ImageMeasurement
 import altitude.core.util.ImageUtil
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.SceneEmbedder
 
 class AssetService(val app: Altitude) extends BaseService[Asset]:
   override protected val dao: AssetDao = app.DAO.asset
+
+  /**
+   * The Scene models, one ONNX session each, opened here so a missing model file fails the start and never an import, as the
+   * ArcFace pool's file does. The sessions are thread-safe and the import threads share them; `close` releases them.
+   */
+  private val sceneEmbedder: SceneEmbedder = new SceneEmbedder()
+
+  /** Closes the Scene models' sessions; after the import pipeline has shut down, since its threads run them */
+  def close(): Unit = sceneEmbedder.close()
 
   def setRecycledProp(asset: Asset, isRecycled: Boolean): Unit =
     if asset.isRecycled == isRecycled then return
@@ -80,32 +91,25 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     }
 
   /**
-   * Marks the import of the asset complete and, in the same update, stores the Image quality and the perceptual hash the pipeline
-   * put on it, so an asset is never complete without its metrics. Both stay NULL for a Video, an animated image, or a still image
-   * the pipeline did not measure.
+   * Marks the import of the asset complete and, in the same update, stores the Image quality, the perceptual hash and the Scene
+   * embeddings the pipeline put on it, so an asset is never complete without them. The metrics and the hash stay NULL for a
+   * Video, an animated image, or a still image the pipeline did not measure; an embedding also for a still image its model could
+   * not embed.
    */
   def markAsCompleted(asset: Asset): Asset =
     txManager.withTransaction {
-      val updateData = Map(
-        FieldConst.Asset.IS_PIPELINE_PROCESSED -> true,
-        FieldConst.Asset.SHARPNESS -> asset.imageQuality.map(_.sharpness),
-        FieldConst.Asset.LUMINANCE -> asset.imageQuality.map(_.luminance),
-        FieldConst.Asset.CLIPPED_HIGHLIGHTS -> asset.imageQuality.map(_.clippedHighlights),
-        FieldConst.Asset.CRUSHED_SHADOWS -> asset.imageQuality.map(_.crushedShadows),
-        FieldConst.Asset.IMAGE_QUALITY -> asset.imageQuality.map(_.score),
-        FieldConst.Asset.PERCEPTUAL_HASH -> asset.perceptualHash.map(_.bits)
-      )
-
-      updateById(asset.persistedId, updateData)
+      dao.markAsCompleted(asset): Unit
       asset.copy(isPipelineProcessed = true)
     }
 
   /**
-   * The asset with its Image quality and perceptual hash, and its detected faces each with its sharpness, measured over the
-   * staged file (`ImageMeasurement`). Only a still image is measured: a Video, an animated image (one with a duration) and any
-   * other type come back as they are. The metrics are derived data and NULL is a state every reader handles, so a measurement
-   * that fails (a file OpenCV decodes for detection but not here, an image of a channel count it does not take) is logged at WARN
-   * and leaves the asset and its faces unmeasured rather than dropping the import. Touches no database.
+   * The asset with its Image quality, perceptual hash and Scene embeddings, and its detected faces each with its sharpness,
+   * measured over the staged file: one decode, upright, that `ImageMeasurement` measures and the Scene models (`SceneEmbedder`)
+   * then embed. Only a still image is measured: a Video, an animated image (one with a duration) and any other type come back as
+   * they are. The metrics are derived data and NULL is a state every reader handles, so a measurement that fails (a file OpenCV
+   * decodes for detection but not here, an image of a channel count it does not take) is logged at WARN and leaves the asset and
+   * its faces unmeasured, with no embedding, rather than dropping the import; the embedder handles its own failures the same way,
+   * a model at a time, so an image can carry one embedding and not the other. Touches no database.
    */
   def measureImage(dataAsset: AssetWithData): AssetWithData =
     val asset = dataAsset.asset
@@ -116,13 +120,15 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     val detected = dataAsset.detectedFaces.toList.flatMap(_.faces)
     try
       val image = ImageUtil.matFromBytes(dataAsset.bytes)
-      val measurement =
-        try ImageMeasurement.measure(image, detected.map(_._1))
+      val (measurement, embeddings) =
+        try (ImageMeasurement.measure(image, detected.map(_._1)), sceneEmbedder.embed(image, asset.fileName))
         finally image.release()
       val quality = measurement.quality
-      logger.debug(s"Measured $asset: score ${quality.score}, sharpness ${quality.sharpness}, hash ${measurement.hash}")
+      logger.debug(
+        s"Measured $asset: score ${quality.score}, sharpness ${quality.sharpness}, hash ${measurement.hash}, " +
+          s"embedded by ${SceneModel.values.filter(embeddings.of(_).isDefined).map(_.dbValue).mkString(", ")}")
       dataAsset.copy(
-        asset = asset.copy(imageQuality = Some(quality), perceptualHash = Some(measurement.hash)),
+        asset = asset.copy(imageQuality = Some(quality), perceptualHash = Some(measurement.hash), sceneEmbeddings = embeddings),
         detectedFaces = dataAsset.detectedFaces.map(_ => DetectedFaces(measurement.faces.zip(detected.map(_._2))))
       )
     catch

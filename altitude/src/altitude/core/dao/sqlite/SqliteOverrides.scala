@@ -1,5 +1,7 @@
 package altitude.core.dao.sqlite
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -12,6 +14,7 @@ import scalasql.dialects.Dialect
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.search.SqliteSearchDialect
+import altitude.core.models.SceneEmbedding
 
 object SqliteOverrides:
   /**
@@ -41,6 +44,27 @@ trait SqliteOverrides:
 
   override protected def nativeBool(value: Boolean): Any =
     if value then "1" else "0"
+
+  override protected val vectorPlaceholder: String = "?"
+
+  // The BLOB is the raw little-endian float32 values, the layout `vector_as_f32` stores a Face's features in
+  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
+    embedding.map {
+      e =>
+        val buffer = ByteBuffer.allocate(e.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+        val floats = buffer.asFloatBuffer
+        e.values.foreach(floats.put)
+        buffer.array
+    }.orNull
+
+  override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
+    case bytes: Array[Byte] =>
+      val floats = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer
+      val values = new Array[Float](floats.remaining)
+      floats.get(values)
+      SceneEmbedding(IArray.unsafeFromArray(values))
+    case other => throw IllegalArgumentException(s"Invalid type for vector field: $other")
+  }
 
   override protected def nativeLocalDateTime(value: LocalDateTime): Any =
     value.format(SqliteOverrides.DATETIME_FORMATTER)

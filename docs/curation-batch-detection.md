@@ -18,13 +18,14 @@ Bundle, Contender, Too close to call. The binding rules for changing any of it a
 import                                  triage                                   Curation modal
 ──────────────────────────────────────  ───────────────────────────────────────  ─────────────────────────────────
 MeasureImageFlow                        asset.sequence_id                        CurationService.sequenceSet /
-  Image quality (5 metrics + score)       shared by the frames of one burst        selectionSet
+  Image quality (5 metrics + score)       shared by the frames of one scene        selectionSet
   perceptual hash                         (no table, no row of its own)            → frames + Faces + memberships
   Face sharpness per Face                                                          → CurationRule.assess
+  Scene embeddings (DINOv2, CLIP)
         │                               Group by Sequence (grid)                       Bundles, chips, notices,
         ▼                               "Curate N sequences" (toolbar)                 Contenders
 completeImport                          Curate (group header)                    resolve / reopen
-  stores the metrics and the hash       Curate (batch ops)                         keep Picks, recycle the rest,
+  stores metrics, hash, embeddings      Curate (batch ops)                         keep Picks, recycle the rest,
   SequenceService.assign                                                           clear or keep the Sequence
 ```
 
@@ -53,22 +54,35 @@ What is measured, on the image fitted to a 1280 px box and converted to gray:
 | `crushed_shadows` | Fraction of pixels at 5 or below. |
 | `image_quality` | A 0 to 100 score from sharpness (over the union of the face boxes when they are large enough, else the whole frame) and the exposure penalties. **Curation never reads it**: its sharpness region varies per image, so two scores do not compare. |
 | `perceptual_hash` | OpenCV's pHash (DCT of a 32 × 32 downscale), 64 bits, held by `PerceptualHash` and compared by Hamming distance. |
+| `dinov2_embedding` | The DINOv2 ViT-B/14 Scene embedding: the pooled CLS token, 768 floats, L2-normalized (`vector(768)` on PostgreSQL, a BLOB of float32 on SQLite). |
+| `clip_embedding` | The CLIP ViT-B/16 Scene embedding: the projected image embedding, 512 floats, L2-normalized (`vector(512)`, or a BLOB). |
 
 And on each `face`: `sharpness`, the same Laplacian variance inside the face's box, or NULL under 2500 px² at the
 fitted scale. Face sharpness falls as a face fills more of the frame, so it only compares between Faces of one Person
 at a similar size, never across Persons and never as an absolute threshold.
 
-All of these are NULL together for a Video, an animated image, or a still image the measurement could not decode.
-Measurement is the one stage that swallows its own failure: a decode or measurement error is logged at WARN and the
-asset goes on unmeasured. NULL is a state every later reader handles (an unmeasured frame is a Contender with a note).
+The two Scene embeddings are not measurements of the gray, fitted image: `SceneEmbedder` (`core/util`) takes the same
+upright decode in color, fits its short side to 224 (`INTER_AREA` when shrinking, `INTER_CUBIC` when enlarging an
+image under that size: a transform of this project's own, not the checkpoints' reference one, which the similarity
+thresholds are calibrated to), center-crops the square, converts it to RGB and runs it through each Scene model's ONNX
+Runtime session (one per model in the process, opened when `AssetService` is built, so a missing model file fails the
+start, never an import). Two embeddings of one model compare by cosine similarity, 1 for the same picture. They are
+selected by one statement only, the Sequence candidates' (`AssetDao.candidateColumns`), and transferred by no other
+read: every other read's column list comes from `AssetRow`, which leaves them out.
+
+All of these are NULL together for a Video, an animated image, or a still image the measurement could not decode, and
+an embedding alone for a still image its model could not embed. Measurement is the one stage that swallows its own
+failure: a decode or measurement error is logged at WARN and the asset goes on unmeasured, and a model's failed pass
+leaves its embedding NULL and the other model's stands. NULL is a state every later reader handles (an unmeasured
+frame is a Contender with a note; a frame with no embedding of the chosen model is compared by its hash).
 
 The box size and the score's constants are code, calibrated on the test fixtures, not Settings: changing them means
 measuring the library again.
 
 ## 2. Sequences
 
-A **Sequence** is a burst: still images in triage that the import found shot moments apart on the same camera, looking
-alike. It has no table. It is the `asset.sequence_id` (`CHAR(36)`, nullable, partial index `asset_sequence`) its
+A **Sequence** is still images in triage that the import found shot as one scene: within a minute of each other on
+the same camera, looking alike by their Scene embeddings. It has no table. It is the `asset.sequence_id` (`CHAR(36)`, nullable, partial index `asset_sequence`) its
 members share, so it exists exactly while some asset carries it and there is no row to lock, date or delete.
 
 ### The rule (`SequenceRule`, pure)
@@ -77,15 +91,26 @@ An asset is **eligible** when it is a still image in triage with a capture time 
 original, EXIF digitized or XMP create date, each carrying a fraction of a second; a time from a file name, a container
 or GPS cannot space the frames of a burst), the camera's model, and a hash.
 
-Two eligible assets **match** when they were captured at most `sequence.max_gap_ms` apart, on the same device model,
-at the same width and height, with hashes at most `sequence.max_hash_distance` bits apart.
+Two eligible assets **match** when they were captured at most `sequence.max_gap_ms` apart (a minute by default), on
+the same device model, at the same width and height, and **look alike**:
+
+- when both carry the embedding of the Scene model the Setting `sequence.embedding_model` names, their cosine
+  similarity is at least that model's threshold (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`);
+- otherwise, their hashes are at most `sequence.max_hash_distance` bits apart.
+
+The similarity replaces the hash test rather than joining it: the hash at any usable distance rejects a reframed or
+zoomed shot of the scene, which the embedding holds under. Each model has its own threshold since their cosines live
+on different scales (CLIP's are compressed toward 1). The size test stays: a portrait and a landscape frame of one
+scene can embed alike and are not one Sequence. On the synthesized burst the frames measure 0.98 and up by DINOv2 and
+0.97 and up by CLIP, and a different picture about 0.26 and 0.62.
 
 ### Assignment (`SequenceService.assign`)
 
 It runs inside the completion transaction, one asset of a repository at a time in upload order, so earlier uploads of
 the burst are completed candidates already. It takes the Sequence writers' lock first (see **Locking** below), reads
 the candidates with one indexed statement (the repository's completed, triaged still images captured within the gap,
-in the trash or not but not purge-pending), applies the rule, and then:
+in the trash or not but not purge-pending, the one read that carries the Scene embeddings), applies the rule under the
+Settings as read once per asset, and then:
 
 - no match: no Sequence, since a lone image is never one;
 - matches with no Sequence: a new ID for the asset and every match;
@@ -211,8 +236,11 @@ starting points:
 
 | Key | Default | What it tunes |
 |---|---|---|
-| `sequence.max_gap_ms` | 3000 | Sequence assignment: the most two frames may be apart |
-| `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64 |
+| `sequence.max_gap_ms` | 60000 | Sequence assignment: the most two frames may be apart |
+| `sequence.embedding_model` | `dinov2` | Sequence assignment: the Scene model whose embeddings the rule compares, DINOv2 or CLIP on the screen's `<select>`, stored as `dinov2` or `clip` |
+| `sequence.dinov2.min_similarity` | 0.80 | Sequence assignment: the least DINOv2 cosine similarity to look alike, -1 to 1 |
+| `sequence.clip.min_similarity` | 0.90 | Sequence assignment: the least CLIP cosine similarity to look alike, -1 to 1 |
+| `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only a frame with no embedding of the chosen model |
 | `curation.blur_ratio` | 0.5 | Blurry: fraction of the best sharpness |
 | `curation.face_quality_gap` | 2.0 | Poor faces: distance below the Person's best quality |
 | `curation.clipped_fraction` | 0.05 | Too bright: clipped highlights |
@@ -253,11 +281,14 @@ group by its ID alone, since its first capture moves when the frame that set it 
 
 ## 9. Tests
 
-- `ImageMeasurementTests`, `SequenceRuleTests`, `CurationRuleTests` (unit): orderings rather than exact values for the
-  metrics; every rule clause in and out, on both sides of its threshold.
+- `ImageMeasurementTests`, `SceneEmbedderTests`, `SequenceRuleTests`, `CurationRuleTests` (unit): orderings rather
+  than exact values for the metrics and the embeddings; every rule clause in and out, on both sides of its threshold,
+  the likeness by each Scene model's threshold and by the hash where an embedding is missing.
 - `SequenceServiceTests`, `CurationServiceTests` (both engines, on a burst synthesized from one fixture by shifting and
-  brightening each frame): assignment, merges, membership through every operation, the queue, the window, each outcome
-  and its Undo, and a frame completing during a resolve (`contend`, red on PostgreSQL without the advisory lock).
+  brightening each frame): assignment, by embedding and by the hash, the model switch, merges, membership through
+  every operation, the queue, the window, each outcome and its Undo, and a frame completing during a resolve
+  (`contend`, red on PostgreSQL without the advisory lock); `AssetImportServiceTests` the embeddings stored with the
+  completion and read back exactly on both engines, and no general read carrying them.
 - `CurationControllerTests`, `CurationActionControllerTests`, `SearchResultsControllerTests`: the routes, the
   fragment's words, the Curate buttons in their templates, and Group by Sequence.
 - The modal itself has no automated test; see **Curation** in `docs/test-coverage.md` for the gaps.
@@ -411,9 +442,11 @@ and the number of Sequences to curate, which the toolbar's button reads. Skip ch
 
 ## 7. Settings screen
 
-The Triage section of the Settings screen holds the two Sequence thresholds and the seven Curation thresholds, each
-with a description of what it changes. They are Live: a new value is used by the next set read, with no restart and no
-re-import.
+The Triage section of the Settings screen holds the five Sequence Settings and the seven Curation thresholds, each
+with a description of what it changes. All are Live. A Curation threshold is used by the next set read, with no restart
+and no re-import. A Sequence Setting, the Scene model included, applies to the next assignment: both models' embeddings
+are stored at import, so switching the model needs no re-import either, but Sequences already assigned stay as they
+are.
 
 ---
 
@@ -421,8 +454,8 @@ re-import.
 
 These notes were written on 2026-10-31, before any of the above existed, as the options for a Curate view where the
 user picks the best shot out of a batch of related images. What they led to is in Parts 1 and 2: the metadata and
-perceptual-hash layers of batch detection became the Sequence rule, the Laplacian and exposure metrics became Image
-quality, and the ideas that the worst face dominates and that the whole cast must be present became the Poor faces
+perceptual-hash layers of batch detection became the Sequence rule and the global image embedding its likeness test,
+the Laplacian and exposure metrics became Image quality, and the ideas that the worst face dominates and that the whole cast must be present became the Poor faces
 Bundle, as tests rather than terms of a score. This part keeps only what was considered and not built, so it reads as
 the options still open. A batch in the notes is a Curation set.
 
@@ -434,6 +467,7 @@ Most of the options below need no new native dependency:
   module since 4.4), `xfeatures2d`, `photo`, `ximgproc`, `dnn`, `dnn_superres`. The build file lists the presets
   (`build.mill`, `bytedecoPresetLibs`).
 - **ffmpeg 6.1** and **openblas** via bytedeco.
+- **ONNX Runtime** (`com.microsoft.onnxruntime`, CPU), which runs the two Scene models.
 - **Faces**: YuNet detection with five landmarks and a score, ArcFace 512-float embeddings, and the embedding norm as
   `Face.quality` (see [faces.md](faces.md)). The Video path clusters detections across Sampled frames with the pure
   `cluster` and `mergeClusters` functions of `FaceRecognitionService`.
@@ -464,19 +498,23 @@ The signals it does not use:
 - A hash nails re-exports, resized copies and static-scene bursts, and is weak for reframing and zoom, which is what a
   burst with a moving photographer does. That weakness is where the next two layers come in.
 
-### Global image embedding (the modern answer)
+### Global image embedding
 
-- A small vision encoder run through OpenCV DNN, compared by cosine, stored in the same vector infrastructure the
-  faces use (a vector column on the asset or a side table). This is what session grouping, a batch of minutes rather
-  than seconds, needs; bursts mostly do not.
-- **DINOv2 small** (ViT-S/14, 384 floats, ~85 MB ONNX) is best for "same scene, different framing": self-supervised
-  and layout sensitive. DINOv3 is the 2025 successor.
-- **CLIP** or **SigLIP 2** is better for semantic similarity and also gives text search and an aesthetic score for
-  free (see **Learned no-reference quality** below). **MobileCLIP 2** is the small, fast option.
-- Caveat to verify early: OpenCV's ONNX importer handles transformer layers (LayerNorm, GELU) since 4.8, but a specific
-  export may hit an unsupported op. **ONNX Runtime for Java** (`com.microsoft.onnxruntime`) or the **Deep Java
-  Library** are the fallback inference engines; neither is used today, and `plans/todo/arcface-onnx-runtime.md` plans
-  ONNX Runtime for ArcFace, which would bring it in.
+What is built (Part 1 §1 and §2): every still image is embedded at import by two Scene models through ONNX Runtime,
+**DINOv2 ViT-B/14** (768 floats, self-supervised and layout sensitive, the one for "same scene, different framing")
+and the **CLIP ViT-B/16** image tower (512 floats, semantic), both stored on the asset in a vector column per model
+(`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Setting `sequence.embedding_model` names the one the
+Sequence rule compares by cosine similarity, each model with its own threshold. ArcFace and YuNet stay on OpenCV DNN.
+
+Still open:
+
+- **SigLIP 2** or **MobileCLIP 2** in CLIP's place, or **DINOv3** in DINOv2's, as better or smaller models of the same
+  two kinds; a third column, or a column replaced, and a re-import of the library.
+- **Similar-image search** over the stored embeddings, which needs a vector index on the columns (pgvector HNSW as the
+  faces have; sqlite-vector's scan on SQLite) and a search entry; the rule itself compares a frame with the handful of
+  candidates of its window and needs none.
+- **Text search** over the CLIP embedding, which needs the text tower exported beside the image tower.
+- An **aesthetic score** as a linear head on the CLIP embedding (see **Learned no-reference quality** below).
 
 ### Geometric verification for doubtful pairs (`features2d`, ships)
 
@@ -491,14 +529,15 @@ The Jaccard overlap of Person sets between two images is a strong tie-breaker, a
 
 ### Working thresholds (to calibrate on real files)
 
-The burst values of the first two rows are the Sequence Settings of Part 1 §6; the rest are untested starting points.
+The first four rows are the Sequence Settings of Part 1 §6, with their defaults; the last is an untested starting point.
 
-| Signal | Burst | Same session |
+| Signal | Setting | Default |
 |---|---|---|
-| Capture gap | `sequence.max_gap_ms` | under 60 s |
-| pHash Hamming | `sequence.max_hash_distance` | not reliable |
-| DINOv2 cosine | 0.90 and up | 0.80 and up |
-| Homography inliers | 30% and up | 15% and up |
+| Capture gap | `sequence.max_gap_ms` | 60 s |
+| pHash Hamming | `sequence.max_hash_distance` | 10 bits, only where an embedding is missing |
+| DINOv2 cosine | `sequence.dinov2.min_similarity` | 0.80 |
+| CLIP cosine | `sequence.clip.min_similarity` | 0.90 |
+| Homography inliers | not built | 30% and up for a burst, 15% for a session |
 
 ### Other open-source references
 
@@ -530,7 +569,7 @@ Any of these would be computed in `MeasureImageFlow` and stored on the asset or 
 - **BRISQUE** ships in `opencv_quality`; it needs the two small model files from opencv_contrib
   (`brisque_model_live.yml`, `brisque_range_live.yml`).
 - **NIMA** (aesthetic and technical heads, MobileNet backbone, small ONNX exports) gives a 1 to 10 aesthetic score.
-- **LAION aesthetic predictor** is a linear head on a CLIP embedding: free once CLIP runs for grouping.
+- **LAION aesthetic predictor** is a linear head on a CLIP embedding, which every still image now carries.
 - **MUSIQ**, **TOPIQ**, **CLIP-IQA**, **ARNIQA** are the research-grade scorers (the `pyiqa` zoo). Heavier, and only
   worth it if the simple metrics prove insufficient.
 
@@ -564,9 +603,9 @@ import.
 - **Eyes closed** (`plans/todo/eye-state.md`): a per-Face eye-state measurement at import and an Eyes closed Bundle,
   the most serious problem a frame could have. Today eyes are judged in the face strip by eye. The landmarker it
   needs would bring smile and pose with it.
-- **A global image embedding**: session grouping, similar-image search, text search with a CLIP-family model and the
-  free aesthetic score, in a vector column planned from the start. Whether a second model of roughly 85 MB is
-  acceptable next to the ArcFace net is undecided.
+- **Beyond the Sequence rule's use of the Scene embeddings**: similar-image search (a vector index on the columns),
+  text search over the CLIP embedding (its text tower), and the aesthetic score as a head on it. The embeddings are
+  stored for every still image; nothing reads them but the rule.
 - **Learned quality models** and the other measurements of §2.
 - Nothing ranks the frames and nothing suggests a Pick beyond the sole Contender; the score is never read.
 - Videos and animated images are never measured and never in a Sequence or a set.

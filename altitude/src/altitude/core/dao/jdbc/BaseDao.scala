@@ -31,6 +31,7 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicAssignments
 import altitude.core.dao.sql.DynamicFilter
 import altitude.core.models.BaseModel
+import altitude.core.models.SceneEmbedding
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SortDirection
@@ -69,6 +70,24 @@ abstract class BaseDao[Model <: BaseModel]:
   protected def jsonFunc: String
 
   protected def nativeBool(value: Boolean): Any
+
+  /**
+   * The placeholder of a bound vector (a Scene embedding) in a hand-written statement: `?::vector` on PostgreSQL, whose column is
+   * pgvector's type, and a plain `?` on SQLite, whose column is a BLOB
+   */
+  protected def vectorPlaceholder: String
+
+  /**
+   * The bind value of a Scene embedding for [[vectorPlaceholder]]: the pgvector literal (`[v1,v2,...]`) on PostgreSQL, the raw
+   * little-endian float32 values as bytes on SQLite; `None` binds SQL NULL on both
+   */
+  protected def vectorBind(embedding: Option[SceneEmbedding]): Any
+
+  /**
+   * A vector column as the result row hands it back: a `PGobject` whose value is the `[v1,v2,...]` text on PostgreSQL, the BLOB's
+   * bytes on SQLite; `null` is `None`
+   */
+  protected def getVectorField(value: AnyRef): Option[SceneEmbedding]
 
   /** Bind value for a wall-clock timestamp column (no zone): stored and read back verbatim, never converted through an instant */
   protected def nativeLocalDateTime(value: LocalDateTime): Any

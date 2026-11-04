@@ -46,8 +46,8 @@ object BurstFrames {
   val MODEL = "Canon EOS R5"
   val TAKEN = "2024:06:01 12:00:00"
 
-  /** The seeded capture time `seconds` after `TAKEN`, in EXIF's spelling */
-  def takenAt(seconds: Int): String = f"2024:06:01 12:00:$seconds%02d"
+  /** The seeded capture time `seconds` after `TAKEN`, in EXIF's spelling; past a minute, the minutes are spelled too */
+  def takenAt(seconds: Int): String = f"2024:06:01 12:${seconds / 60}%02d:${seconds % 60}%02d"
 
   private lazy val base: Array[Byte] = Files.readAllBytes(IntegrationTestUtil.getImportAsset("images/2.jpg").path)
 

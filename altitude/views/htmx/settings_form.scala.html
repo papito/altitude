@@ -7,7 +7,8 @@
 @* The one form of the Settings screen. Its fields are named after the Settings; `values` are what the fields show (the saved
    values, or the submitted ones under a validation replacement), `errors` sit beside their fields, and a Restart setting with
    a value saved but not running carries `pending`. `notes` are plain information on a Setting, always shown when it has one.
-   Reset fills a field with its default (js/settings-page.js); only Save writes. *@
+   A flag is a checkbox, a choice a select of its options (their labels shown, their values posted), anything else a text
+   input. Reset fills a field with its default (js/settings-page.js); only Save writes. *@
 @(settings: List[SettingDef], values: Map[String, String], defaults: Map[String, String], errors: Map[String, String],
   pending: Map[String, PendingRestart], notes: Map[String, String])
 
@@ -29,19 +30,32 @@
           <label for="field-@{ setting.name }">@setting.label</label>
 
           <div class="control">
-            @if(setting.valueType == SettingType.Flag) {
-              <input type="checkbox"
-                     id="field-@{ setting.name }"
-                     name="@{ setting.name }"
-                     value="true"
-                     @if(values(setting.name) == "true") { checked }>
-            } else {
-              <input type="text"
-                     id="field-@{ setting.name }"
-                     name="@{ setting.name }"
-                     autocomplete="off"
-                     @if(errors.contains(setting.name)) { class="error" }
-                     value="@{ values(setting.name) }">
+            @setting.valueType match {
+              case SettingType.Flag => {
+                <input type="checkbox"
+                       id="field-@{ setting.name }"
+                       name="@{ setting.name }"
+                       value="true"
+                       @if(values(setting.name) == "true") { checked }>
+              }
+              case SettingType.Choice(options) => {
+                <select id="field-@{ setting.name }"
+                        name="@{ setting.name }"
+                        autocomplete="off"
+                        @if(errors.contains(setting.name)) { class="error" }>
+                  @for(option <- options) {
+                    <option value="@option.value" @if(values(setting.name) == option.value) { selected }>@option.label</option>
+                  }
+                </select>
+              }
+              case _ => {
+                <input type="text"
+                       id="field-@{ setting.name }"
+                       name="@{ setting.name }"
+                       autocomplete="off"
+                       @if(errors.contains(setting.name)) { class="error" }
+                       value="@{ values(setting.name) }">
+              }
             }
 
             <button type="button" class="action-button small" data-app-reset-setting>Reset</button>
@@ -58,7 +72,7 @@
               <div class="note">@note</div>
             }
 
-            <div class="help">@setting.help Default: @{ defaults(setting.name) }</div>
+            <div class="help">@setting.help Default: @{ setting.valueType.label(defaults(setting.name)) }</div>
           </div>
         </div>
       }

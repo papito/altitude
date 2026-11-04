@@ -7,14 +7,23 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import org.apache.commons.dbutils.BasicRowProcessor
 import org.apache.commons.dbutils.RowProcessor
+import org.postgresql.util.PGobject
 import scalasql.dialects.Dialect
 
 import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.search.PostgresSearchDialect
+import altitude.core.models.SceneEmbedding
 
 object PostgresOverrides:
+
+  /**
+   * Floats (a Face's `Array`, a Scene embedding's `IArray`) as a pgvector literal, e.g. "[0.1,0.2,...]", which pgvector accepts
+   * when cast with `?::vector` or `?::halfvec`; also what a `vector` column reads back as, through `getVectorField`
+   */
+  def vectorLiteral(values: Iterable[Float]): String = values.mkString("[", ",", "]")
+
   /**
    * pgJDBC hands temporal columns out as java.sql types by default, which represent instants in the JVM zone: a wall-clock
    * `timestamp` inside the server's DST gap would come back shifted. Read them as the java.time types that carry exactly what the
@@ -46,6 +55,19 @@ trait PostgresOverrides:
 
   override protected def nativeBool(value: Boolean): Any =
     if value then true else false
+
+  override protected val vectorPlaceholder: String = "?::vector"
+
+  // The literal is bound as text and cast by the placeholder, as `FaceDao.add` binds a Face's features
+  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
+    embedding.map(e => PostgresOverrides.vectorLiteral(e.values)).orNull
+
+  // pgJDBC hands a `vector` column out as a PGobject whose value is the literal `vectorLiteral` writes
+  override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
+    case vector: PGobject =>
+      SceneEmbedding(IArray.unsafeFromArray(vector.getValue.stripPrefix("[").stripSuffix("]").split(',').map(_.trim.toFloat)))
+    case other => throw IllegalArgumentException(s"Invalid type for vector field: $other")
+  }
 
   override protected def nativeLocalDateTime(value: LocalDateTime): Any = value
 

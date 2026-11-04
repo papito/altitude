@@ -22,6 +22,7 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.dao.postgres.FaceDao as PostgresFaceDao
+import altitude.core.dao.postgres.PostgresOverrides
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.Face
@@ -159,7 +160,7 @@ import altitude.core.service.FaceRecognitionService
        * The plan reads `face_03`, the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order
        * and predicates are the ones the index is declared with.
        */
-      val vector = PostgresFaceDao.vectorLiteral(unitVector(1))
+      val vector = PostgresOverrides.vectorLiteral(unitVector(1))
       val plan = testApp.txManager.withTransaction {
         List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
         query(

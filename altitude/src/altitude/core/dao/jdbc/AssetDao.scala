@@ -11,6 +11,7 @@ import scalasql.Table
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -19,6 +20,8 @@ import altitude.core.models.ExtractedMetadata
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 import altitude.core.models.PublicMetadata
+import altitude.core.models.SceneEmbeddings
+import altitude.core.models.SceneModel
 import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
@@ -80,9 +83,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       height = rec(FieldConst.Asset.HEIGHT).asInstanceOf[Int],
       durationMs = getLongField(rec(FieldConst.Asset.DURATION_MS)),
       sizeBytes = getLongField(rec(FieldConst.Asset.SIZE_BYTES)).get,
-      extractedMetadata = getJsonFromColumn(rec(FieldConst.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
+      // The two bulky JSON columns a hand-written read may leave out of its select (`assetWithoutBulkyMetadata`) read as empty
+      extractedMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.EXTRACTED_METADATA).orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
-      userMetadata = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)): UserMetadata,
+      userMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.USER_METADATA).orNull): UserMetadata,
       folderId = rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String].trim,
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
@@ -100,6 +104,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         score = getLongField(rec(FieldConst.Asset.IMAGE_QUALITY)).map(_.toInt)
       ),
       perceptualHash = getLongField(rec(FieldConst.Asset.PERCEPTUAL_HASH)).map(PerceptualHash(_)),
+      // Only the Sequence candidates' statement (`candidateColumns`) selects the embeddings: any other row map leaves them absent
+      sceneEmbeddings = SceneEmbeddings(
+        dinov2 = rec.get(SceneModel.Dinov2.column).flatMap(getVectorField),
+        clip = rec.get(SceneModel.Clip.column).flatMap(getVectorField)),
       sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
@@ -199,10 +207,69 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     runner.update(RequestContext.getConn, sql, updateValues*)
 
-  /** The columns of a read that does not need the bulky metadata JSON */
-  private val assetWithoutBulkyMetadata = s"""asset.*,
-             NULL AS ${FieldConst.Asset.USER_METADATA},
-             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}"""
+  /**
+   * The columns of the hand-written reads that need no bulky metadata JSON (the library operations' locking read, a Sequence's
+   * frames and its live members): `AssetRow`'s labels, `asset.`-prefixed as `SearchQueries.assetColumns` builds them, so the
+   * typed row stays the one list of what a general read selects (the Scene embeddings are not on it), without `user_metadata` and
+   * `extracted_metadata`, which [[makeModel]] reads as empty when absent; `public_metadata` stays, since the Sequence rule
+   * compares the device model
+   */
+  private val assetWithoutBulkyMetadata: String =
+    Table
+      .labels(AssetRow)
+      .map(Db.config.columnNameMapper)
+      .filterNot(Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA))
+      .map(name => s"asset.$name")
+      .mkString(", ")
+
+  /**
+   * The columns of the one read that needs a frame's Scene embeddings, [[sequenceCandidatesStatement]]:
+   * [[assetWithoutBulkyMetadata]] and the two embedding columns, bulky (a few kilobytes a row, toasted out of line on PostgreSQL)
+   * and selected by no other read
+   */
+  private val candidateColumns: String =
+    s"$assetWithoutBulkyMetadata, ${SceneModel.values.map(model => s"asset.${model.column}").mkString(", ")}"
+
+  override def markAsCompleted(asset: Asset): Int =
+    SceneModel.values.foreach {
+      model =>
+        asset.sceneEmbeddings.of(model).foreach {
+          embedding =>
+            require(
+              embedding.values.length == model.dimensions,
+              s"A ${model.dbValue} embedding has ${model.dimensions} dimensions, not ${embedding.values.length}")
+        }
+    }
+
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE,
+             ${FieldConst.Asset.SHARPNESS} = ?,
+             ${FieldConst.Asset.LUMINANCE} = ?,
+             ${FieldConst.Asset.CLIPPED_HIGHLIGHTS} = ?,
+             ${FieldConst.Asset.CRUSHED_SHADOWS} = ?,
+             ${FieldConst.Asset.IMAGE_QUALITY} = ?,
+             ${FieldConst.Asset.PERCEPTUAL_HASH} = ?,
+             ${SceneModel.Dinov2.column} = $vectorPlaceholder,
+             ${SceneModel.Clip.column} = $vectorPlaceholder
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
+    """
+
+    // An absent metric, hash or embedding is bound as SQL NULL
+    val quality = asset.imageQuality
+    val values: List[Any] = List(
+      quality.map(q => Double.box(q.sharpness)).orNull,
+      quality.map(q => Double.box(q.luminance)).orNull,
+      quality.map(q => Double.box(q.clippedHighlights)).orNull,
+      quality.map(q => Double.box(q.crushedShadows)).orNull,
+      quality.map(q => Int.box(q.score)).orNull,
+      asset.perceptualHash.map(h => Long.box(h.bits)).orNull,
+      vectorBind(asset.sceneEmbeddings.dinov2),
+      vectorBind(asset.sceneEmbeddings.clip),
+      RequestContext.getRepository.persistedId,
+      asset.persistedId
+    )
+    updateByBySql(sql, values)
 
   override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
     lockForTransition(Some(assetIds), isRecycled = Some(false))
@@ -255,7 +322,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    * meanwhile holds it, and once the move commits the row is re-evaluated and left out. The predicates on the media type, the
    * duration, the hash, the capture time's source and the triage flag are a derived copy of `SequenceRule.isEligible`, which
    * stays the authority (every candidate goes through it again in Scala); they are here to spare reading full rows, and a change
-   * to the rule is made in both places. The metadata JSON a candidate is compared by (the device model) is the public one.
+   * to the rule is made in both places. The metadata JSON a candidate is compared by (the device model) is the public one, and
+   * this is the one read that selects the Scene embeddings, which the rule compares the candidates by.
    */
   def sequenceCandidatesStatement(asset: Asset, gapMs: Int): Option[(String, List[Any])] =
     asset.originalCreatedAt.map {
@@ -267,7 +335,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         def placeholders(values: List[?]): String = values.map(_ => "?").mkString(", ")
 
         val sql = s"""
-          SELECT $assetWithoutBulkyMetadata
+          SELECT $candidateColumns
             FROM asset
            WHERE ${FieldConst.REPO_ID} = ?
              AND ${FieldConst.Asset.IS_RECYCLED} IN (FALSE, TRUE)

@@ -22,6 +22,7 @@ import altitude.core.unit.NetPoolTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
+import altitude.core.unit.SceneEmbedderTests
 import altitude.core.unit.SearchQueryModelTests
 import altitude.core.unit.SearchSqlTests
 import altitude.core.unit.SearchTextTests
@@ -67,6 +68,7 @@ abstract class AllUnitTestSuites
     new VideoServiceTests,
     new ImageUtilTests,
     new ImageMeasurementTests,
+    new SceneEmbedderTests,
     new SequenceRuleTests,
     new CurationRuleTests,
     new RangeStreamingTests,

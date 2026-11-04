@@ -86,6 +86,9 @@ object FieldConst:
     val CRUSHED_SHADOWS = "crushed_shadows"
     val IMAGE_QUALITY = "image_quality"
     val PERCEPTUAL_HASH = "perceptual_hash"
+    // The Scene embeddings, one column per Scene model (`SceneModel.column`)
+    val DINOV2_EMBEDDING = "dinov2_embedding"
+    val CLIP_EMBEDDING = "clip_embedding"
     val SEQUENCE_ID = "sequence_id"
 
   object PublicMetadata:

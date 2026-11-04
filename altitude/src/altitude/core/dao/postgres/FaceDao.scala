@@ -14,9 +14,6 @@ import altitude.core.service.FaceDetectionService
 
 object FaceDao:
 
-  /** A Float array as a pgvector literal, e.g. "[0.1,0.2,...]", which pgvector accepts when cast with `?::vector` or `?::halfvec` */
-  def vectorLiteral(values: Array[Float]): String = values.mkString("[", ",", "]")
-
   /**
    * How many of the nearest Faces the vector index is asked for, as a multiple of the matches wanted: the index is approximate
    * and orders by half-precision vectors, so the exact distances are taken over a few more than the answer needs
@@ -75,7 +72,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     preparedStatement.setString(7, asset.persistedId)
     preparedStatement.setString(8, person.persistedId)
     preparedStatement.setDouble(9, face.detectionScore)
-    preparedStatement.setString(10, FaceDao.vectorLiteral(face.features))
+    preparedStatement.setString(10, PostgresOverrides.vectorLiteral(face.features))
     preparedStatement.setString(11, face.checksum)
     face.frameTimeMs match
       case Some(frameTimeMs) => preparedStatement.setLong(12, frameTimeMs)
@@ -92,7 +89,7 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     face.copy(id = Some(id), assetId = asset.id, personId = person.id)
 
   def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face] =
-    val vector = FaceDao.vectorLiteral(features)
+    val vector = PostgresOverrides.vectorLiteral(features)
 
     val recs: List[Map[String, AnyRef]] =
       manyBySqlQuery(

@@ -57,7 +57,7 @@ import altitude.core.service.FaceDetectionService
     curation.countQueue() shouldBe sequenceIds.size
   }
 
-  private def capturedAt(seconds: Int): Option[LocalDateTime] = Some(LocalDateTime.of(2024, 6, 1, 12, 0, seconds))
+  private def capturedAt(seconds: Int): Option[LocalDateTime] = Some(LocalDateTime.of(2024, 6, 1, 12, 0, 0).plusSeconds(seconds))
 
   /** Writes one asset's row directly, for a state no service leaves it in */
   private def write(sql: String, id: String): Unit = testApp.txManager.withTransaction(update(sql, id))
@@ -67,20 +67,21 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of two frames 30 seconds in imported first, then a burst of three at the start, then a lone frame in between.
+     * A burst of two frames three minutes in imported first, then a burst of three at the start, then a lone frame in between,
+     * over a minute from either.
      *
      * Assertions:
      *
      * The queue holds the burst captured first, then the other, each with its members and its first capture, although the later
      * one was imported first. The lone frame has no Sequence, so it is in neither, and the count says two.
      */
-    val later = burst(0, startingAt = 30)
+    val later = burst(0, startingAt = 180)
     val earlier = burst(2, frames = 3)
-    importFrame(frame(5), taken = Some(takenAt(15))).sequenceId shouldBe None
+    importFrame(frame(5), taken = Some(takenAt(90))).sequenceId shouldBe None
 
     queueShouldHold(sequenceOf(earlier), sequenceOf(later))
     curation.queue().map(sequence => (sequence.members, sequence.firstCapturedAt)) shouldBe
-      List((3, capturedAt(0)), (2, capturedAt(30)))
+      List((3, capturedAt(0)), (2, capturedAt(180)))
   }
 
   test("Sequences with one first capture are in the order of their IDs") {
@@ -211,8 +212,8 @@ import altitude.core.service.FaceDetectionService
      * they come back from the rule: every frame is in a Bundle or a Contender. An ID no Sequence has reads as nothing.
      */
     val frames = burst(0, frames = 3)
-    burst(3, startingAt = 30)
-    importFrame(frame(5), taken = Some(takenAt(15)))
+    burst(3, startingAt = 180)
+    importFrame(frame(5), taken = Some(takenAt(90)))
     testApp.service.library.recycleAssets(Set(frames(1).persistedId))
 
     val set = curation.sequenceSet(sequenceOf(frames))
@@ -364,7 +365,7 @@ import altitude.core.service.FaceDetectionService
      * The set holds the three in capture order, each read with its Sequence or none, for the rule to tell what compares.
      */
     val frames = burst(0, frames = 3)
-    val lone = importFrame(frame(5), taken = Some(takenAt(15)))
+    val lone = importFrame(frame(5), taken = Some(takenAt(90)))
 
     val set = curation.selectionSet(Set(frames.head.persistedId, frames(1).persistedId, lone.persistedId))
     set.value.frames.map(read => read.asset.persistedId -> read.asset.sequenceId) shouldBe List(
@@ -639,7 +640,7 @@ import altitude.core.service.FaceDetectionService
      */
     val whole = burst(0)
     val part = burst(2, frames = 3, model = "Nikon Z8")
-    val lone = importFrame(frame(5), taken = Some(takenAt(30)))
+    val lone = importFrame(frame(5), taken = Some(takenAt(90)))
     val partSequence = sequenceOf(part)
 
     val cleared = curation.resolve(
@@ -927,8 +928,8 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of three frames resolved with its last as the Pick, then a frame three seconds after the Pick and so more than
-     * three seconds after the recycled frames, outside the window of any but the Pick.
+     * A burst of three frames resolved with its last as the Pick, then a frame 59.5 s after the Pick and so over a minute after
+     * the recycled frames, outside the window of any but the Pick.
      *
      * Assertions:
      *
@@ -940,7 +941,7 @@ import altitude.core.service.FaceDetectionService
     curation.resolve(Set(frames.last.persistedId), ids(frames.init)) shouldBe Map(frames.last.persistedId -> sequenceId)
     queueShouldHold()
 
-    val later = importFrame(frame(3), taken = Some(takenAt(5)))
+    val later = importFrame(frame(3), taken = Some(takenAt(61)), subSecond = Some("500"))
 
     later.sequenceId should not be None
     later.sequenceId should not be Some(sequenceId)

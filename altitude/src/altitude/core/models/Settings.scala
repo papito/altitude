@@ -20,6 +20,9 @@ enum SettingGroup(val label: String):
 enum SettingKind:
   case Live, Restart
 
+/** An option of a [[SettingType.Choice]]: the text stored and posted, and the words the screen shows for it */
+case class ChoiceOption(value: String, label: String)
+
 /** What a Setting's text must be. `error` is why a text is not one, or nothing when it is. */
 enum SettingType:
   /** A number between the bounds, the lower one excluded when `minExclusive` */
@@ -33,6 +36,9 @@ enum SettingType:
   /** A tile URL template, with the three placeholders the map fills in */
   case TileUrl
   case HttpUrl
+
+  /** One of the options' values, which the screen offers as a select of their labels */
+  case Choice(options: List[ChoiceOption])
 
   /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
   def number(text: String): Option[Double] = this match
@@ -63,6 +69,13 @@ enum SettingType:
       val scheme = uri.flatMap(uri => Option(uri.getScheme)).map(_.toLowerCase)
       Option.unless((scheme.contains("http") || scheme.contains("https")) && uri.exists(_.getHost != null))(
         "Must be an http or https URL")
+    case Choice(options) =>
+      Option.unless(options.exists(_.value == text))(s"Must be one of ${options.map(_.label).mkString(", ")}")
+
+  /** What the screen shows for a valid text: a Choice's option by its label, any other text as it is */
+  def label(text: String): String = this match
+    case Choice(options) => options.find(_.value == text).fold(text)(_.label)
+    case _ => text
 
   /** Whether two valid texts mean the same value: a number by its value, anything else by its text */
   def same(a: String, b: String): Boolean = this match
@@ -122,7 +135,17 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoFacesMinClusterFrames: Int = number(VIDEO_FACES_MIN_CLUSTER_FRAMES).toInt
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
   val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
+
+  /** The Scene model the Sequence rule compares two frames by; the validation keeps the text one of the models' names */
+  val sequenceEmbeddingModel: SceneModel = SceneModel.fromDbValue(text(SEQUENCE_EMBEDDING_MODEL)).get
+  val sequenceDinov2MinSimilarity: Double = number(SEQUENCE_DINOV2_MIN_SIMILARITY)
+  val sequenceClipMinSimilarity: Double = number(SEQUENCE_CLIP_MIN_SIMILARITY)
   val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
+
+  /** The least cosine similarity of two frames' embeddings of `model` to look alike */
+  def sequenceMinSimilarity(model: SceneModel): Double = model match
+    case SceneModel.Dinov2 => sequenceDinov2MinSimilarity
+    case SceneModel.Clip => sequenceClipMinSimilarity
   val curationBlurRatio: Double = number(CURATION_BLUR_RATIO)
   val curationFaceQualityGap: Double = number(CURATION_FACE_QUALITY_GAP)
   val curationClippedFraction: Double = number(CURATION_CLIPPED_FRACTION)
@@ -159,6 +182,9 @@ object Settings:
   val VIDEO_FACES_MIN_CLUSTER_FRAMES = "video.faces.min_cluster_frames"
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
   val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
+  val SEQUENCE_EMBEDDING_MODEL = "sequence.embedding_model"
+  val SEQUENCE_DINOV2_MIN_SIMILARITY = "sequence.dinov2.min_similarity"
+  val SEQUENCE_CLIP_MIN_SIMILARITY = "sequence.clip.min_similarity"
   val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
   val CURATION_BLUR_RATIO = "curation.blur_ratio"
   val CURATION_FACE_QUALITY_GAP = "curation.face_quality_gap"
@@ -289,15 +315,43 @@ object Settings:
       SEQUENCE_MAX_GAP_MS,
       Triage,
       "Sequence gap (milliseconds)",
-      "Two frames shot at most this far apart on the same camera, and looking alike, are one Sequence.",
+      "A Sequence is frames of one scene shot within this long of each other on one camera, looking alike: a minute, so a " +
+        "scene with its pauses to reframe is one Sequence, not only a burst of a few seconds.",
       Integer(1)
+    ),
+    SettingDef(
+      SEQUENCE_EMBEDDING_MODEL,
+      Triage,
+      "Sequence Scene model",
+      "The Scene model whose Scene embeddings the Sequence rule compares two frames by. Both models' embeddings are computed " +
+        "at import, so the choice applies to the next assignment with no re-import.",
+      Choice(SceneModel.values.map(model => ChoiceOption(model.dbValue, model.label)).toList)
+    ),
+    SettingDef(
+      SEQUENCE_DINOV2_MIN_SIMILARITY,
+      Triage,
+      "Sequence DINOv2 similarity",
+      "The least cosine similarity, -1 to 1, of two frames' DINOv2 Scene embeddings to look alike. Higher groups more " +
+        "strictly. DINOv2's similarities spread lower than CLIP's, so the two thresholds are on different scales. A starting " +
+        "point to calibrate on real files.",
+      Decimal(-1, 1)
+    ),
+    SettingDef(
+      SEQUENCE_CLIP_MIN_SIMILARITY,
+      Triage,
+      "Sequence CLIP similarity",
+      "The least cosine similarity, -1 to 1, of two frames' CLIP Scene embeddings to look alike. Higher groups more strictly. " +
+        "CLIP's similarities sit closer to 1 than DINOv2's, so the two thresholds are on different scales. A starting point to " +
+        "calibrate on real files.",
+      Decimal(-1, 1)
     ),
     SettingDef(
       SEQUENCE_MAX_HASH_DISTANCE,
       Triage,
       "Sequence hash distance (bits)",
-      s"How far apart two frames' perceptual hashes may be, 0 to ${PerceptualHash.BITS} bits, to still look alike. Higher " +
-        "groups more freely.",
+      s"How far apart two frames' perceptual hashes may be, 0 to ${PerceptualHash.BITS} bits, to still look alike. Decides " +
+        "only a frame with no Scene embedding of the chosen model (a still image the model could not embed); otherwise the " +
+        "similarity does. Higher groups more freely.",
       Integer(0, PerceptualHash.BITS)
     ),
     SettingDef(
@@ -402,7 +456,8 @@ object Settings:
       "How many threads do the import's work: metadata, face detection and recognition, image measurement, previews and the " +
         "database writes, for every repository at once. Each thread takes up to about 512 MB of native memory at its worst, " +
         "for its own face detector and the decode of a large image in flight, and the threads share one face recognition " +
-        "network of about 370 MB, so this bounds memory as well as CPU. 0 means half the cores or as many threads as " +
+        "network of about 370 MB and the two Scene models of about 1 GB together, so this bounds memory as well as CPU. 0 " +
+        "means half the cores or as many threads as " +
         "half the machine's memory affords, whichever is fewer, and never fewer than 2. import.parallelism.max in the server " +
         "config caps this, whatever is set here.",
       Integer(0),

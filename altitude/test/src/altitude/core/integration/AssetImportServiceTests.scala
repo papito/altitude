@@ -20,10 +20,36 @@ import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.MimedPreviewData
+import altitude.core.models.SceneEmbedding
+import altitude.core.models.SceneEmbeddings
+import altitude.core.models.SceneModel
 import altitude.core.util.ImageMeasurement
 import altitude.core.util.ImageUtil
 
-@DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore with BurstFrames {
+  import BurstFrames.*
+
+  /** A synthetic unit vector of a Scene model's dimensions, of values no shorter type than float32 keeps */
+  private def unitVector(model: SceneModel, seed: Int): SceneEmbedding = {
+    val raw = Array.tabulate(model.dimensions)(i => math.sin(seed + i.toDouble).toFloat)
+    val norm = math.sqrt(raw.map(v => v.toDouble * v).sum).toFloat
+    SceneEmbedding(IArray.unsafeFromArray(raw.map(_ / norm)))
+  }
+
+  /**
+   * The two columns of the asset through a raw select, each in a form that compares by value: SQLite's BLOB bytes as a sequence,
+   * PostgreSQL's vector as its text; None for NULL
+   */
+  private def rawEmbeddingColumns(assetId: String): (Option[Any], Option[Any]) = {
+    val row = testApp.txManager.asReadOnly {
+      query("SELECT dinov2_embedding, clip_embedding FROM asset WHERE id = ?", assetId).head
+    }
+    def comparable(value: AnyRef): Option[Any] = Option(value).map {
+      case bytes: Array[Byte] => bytes.toSeq
+      case other => other.toString
+    }
+    (comparable(row("dinov2_embedding")), comparable(row("clip_embedding")))
+  }
 
   test("Import duplicate") {
 
@@ -344,6 +370,120 @@ import altitude.core.util.ImageUtil
     val storedVideo: Asset = testApp.service.asset.getById(video.persistedId)
     storedVideo.imageQuality shouldBe None
     storedVideo.perceptualHash shouldBe None
+  }
+
+  test("A still image is imported with the Scene embedding of each model, stored with its completion") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of the synthesized burst a second apart (BurstFrames), each run through the whole import.
+     *
+     * Assertions:
+     *
+     * The first frame comes out of the import with an embedding of each Scene model, of the model's dimensions and unit norm. The
+     * second frame's Sequence candidates, the one read that selects the two columns, hold the first with both equal to what the
+     * import returned, value for value: the embeddings were written with the completion.
+     */
+    val first = importFrame(frame(0))
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+
+    SceneModel.values.foreach {
+      model =>
+        val embedding = first.sceneEmbeddings.of(model).value
+        embedding.values.length shouldBe model.dimensions
+        embedding.similarity(embedding) shouldBe 1.0 +- 1e-4
+    }
+
+    // A write transaction: the candidates are locked until it ends
+    val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 3000))
+    val candidate = candidates.find(_.id == first.id).value
+    candidate.sceneEmbeddings shouldBe first.sceneEmbeddings
+  }
+
+  test("A still image's Scene embeddings are stored with its completion and read back float32-exact") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of the synthesized burst a second apart (BurstFrames). The first, read back by ID with its metrics and hash, is
+     * completed again through `markAsCompleted` with a synthetic unit vector of each Scene model's dimensions, of values chosen
+     * rather than measured, so the read-back is checked against known numbers.
+     *
+     * Assertions:
+     *
+     * The second frame's Sequence candidates, the one read that selects the two columns, hold the first with both vectors equal
+     * to what was written, value for value, and its metrics and hash still on it.
+     */
+    val first = importFrame(frame(0))
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    val dinov2 = unitVector(SceneModel.Dinov2, seed = 1)
+    val clip = unitVector(SceneModel.Clip, seed = 2)
+
+    val stored: Asset = testApp.service.asset.getById(first.persistedId)
+    testApp.service.asset.markAsCompleted(
+      stored.copy(sceneEmbeddings = SceneEmbeddings(dinov2 = Some(dinov2), clip = Some(clip))))
+
+    // A write transaction: the candidates are locked until it ends
+    val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 3000))
+    val candidate = candidates.find(_.id == first.id).value
+    candidate.sceneEmbeddings shouldBe SceneEmbeddings(dinov2 = Some(dinov2), clip = Some(clip))
+    candidate.imageQuality shouldBe stored.imageQuality
+    candidate.perceptualHash shouldBe stored.perceptualHash
+  }
+
+  test("A general read of an asset carries no Scene embeddings, and an embedding of the wrong size is refused") {
+
+    /**
+     * Setup:
+     *
+     * A frame of the synthesized burst, completed again with a synthetic unit vector of each Scene model.
+     *
+     * Assertions:
+     *
+     * The columns hold the vectors, but a read by ID (the typed row) and the hand-written locking read of a library operation
+     * (its own column list) each hand the asset back with neither: the embeddings are bulky columns no general read selects.
+     * Completing it again with a CLIP vector of DINOv2's dimensions is refused on both engines, and the stored vectors stand.
+     */
+    val frameAsset = importFrame(frame(0))
+    val stored: Asset = testApp.service.asset.getById(frameAsset.persistedId)
+    testApp.service.asset.markAsCompleted(
+      stored.copy(
+        sceneEmbeddings = SceneEmbeddings(
+          dinov2 = Some(unitVector(SceneModel.Dinov2, seed = 3)),
+          clip = Some(unitVector(SceneModel.Clip, seed = 4)))))
+
+    val (dinov2Column, clipColumn) = rawEmbeddingColumns(frameAsset.persistedId)
+    dinov2Column should not be None
+    clipColumn should not be None
+
+    testApp.service.asset.getById(frameAsset.persistedId).sceneEmbeddings shouldBe SceneEmbeddings()
+    val locked = testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToMove(Set(frameAsset.persistedId)))
+    locked.map(_.sceneEmbeddings) shouldBe List(SceneEmbeddings())
+
+    intercept[IllegalArgumentException] {
+      testApp.service.asset.markAsCompleted(
+        stored.copy(sceneEmbeddings = SceneEmbeddings(clip = Some(unitVector(SceneModel.Dinov2, seed = 5)))))
+    }
+    rawEmbeddingColumns(frameAsset.persistedId) shouldBe (dinov2Column, clipColumn)
+  }
+
+  test("A Video completes with no Scene embeddings") {
+
+    /**
+     * Setup:
+     *
+     * A synthesized two-second MP4 (TestVideos.portrait) run through the whole import, which completes it.
+     *
+     * Assertions:
+     *
+     * Both embedding columns of its row are NULL, and the Video reads back with neither.
+     */
+    val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
+    testApp.service.asset.getById(video.persistedId).isPipelineProcessed shouldBe true
+
+    rawEmbeddingColumns(video.persistedId) shouldBe (None, None)
+    testApp.service.asset.getById(video.persistedId).sceneEmbeddings shouldBe SceneEmbeddings()
   }
 
   test("A still image's Faces carry their sharpness and its own sharpness is the whole frame's") {

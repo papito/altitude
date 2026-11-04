@@ -43,7 +43,10 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.faces.max_sampled_frames', '120', '120'),
   ('video.faces.min_cluster_frames', '2', '2'),
   ('video.preview.min_luminance', '40', '40'),
-  ('sequence.max_gap_ms', '3000', '3000'),
+  ('sequence.max_gap_ms', '60000', '60000'),
+  ('sequence.embedding_model', 'dinov2', 'dinov2'),
+  ('sequence.dinov2.min_similarity', '0.80', '0.80'),
+  ('sequence.clip.min_similarity', '0.90', '0.90'),
   ('sequence.max_hash_distance', '10', '10'),
   ('curation.blur_ratio', '0.5', '0.5'),
   ('curation.face_quality_gap', '2.0', '2.0'),
@@ -134,6 +137,12 @@ CREATE TABLE asset (
   image_quality INT,
   -- The DCT perceptual hash of a still image, 64 bits as a signed integer, compared by Hamming distance; NULL as the five are.
   perceptual_hash BIGINT,
+  -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
+  -- similarity: DINOv2 ViT-B/14's pooled CLS token and CLIP ViT-B/16's projected image embedding. NULL for a Video, an animated
+  -- image, or a still image the model could not embed. Bulky, which toast_tuple_target (below) moves out of line; selected by
+  -- the Sequence candidates' statement alone and transferred by no other read.
+  dinov2_embedding vector(768),
+  clip_embedding vector(512),
   -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
   -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
   sequence_id CHAR(36) COLLATE "C"

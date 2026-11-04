@@ -20,11 +20,20 @@ import altitude.core.models.Settings
  *   - A 24-megapixel image is 72 MB decoded. `DetectFacesFlow`, `MeasureImageFlow` and `AddPreviewFlow` each decode an image and
  *     release it inside their work, and no decoded image rides on the element, so a thread holds one at a time, while an image is
  *     decoded three times over its import.
+ *   - The two Scene models (`SceneEmbedder`: one ONNX Runtime session each, which every thread runs) add about 1,050 MB resident
+ *     once opened and about 50 MB more after a first pass of each, on the same machine: 691 MB of weights, which the runtime
+ *     pre-packs for its GEMM kernels and keeps both copies of (`session.disable_prepacking` saves 300 MB for passes 8 to 10%
+ *     slower, and is not set). `SCENE_MODELS_COST`, at 1152 MB. A forward pass on one thread takes about 365 ms for DINOv2 and
+ *     270 ms for CLIP, with ONNX Runtime's graph optimizations making under 10% of difference, since the GEMMs run at the core's
+ *     AVX2 limit; fitting a 24-megapixel image to the input adds about 50 ms, so an image costs its thread about 0.7 s. With 12
+ *     threads embedding at once a pass of both models takes about 1.1 s and the process embeds about 10.7 images a second; the
+ *     passes' working memory adds about 45 MB a thread, with the runtime's arena or without it.
  *
  * `THREAD_COST` is a YuNet, one decode of a large image and the file copy a decode leaves for the finalizer, about 150 MB at 24
- * megapixels, and the rest is a margin left on purpose for a larger image and for native allocator overhead. Imports of generated
- * 24-megapixel JPEGs with 12 threads and the one shared net peak at 3.9 to 5.1 GB resident, the heap included, under the 6.4 GB
- * that `POOL_COST` and `THREAD_COST` budget without it.
+ * megapixels, and the working memory of its Scene model passes, and the rest is a margin left on purpose for a larger image and
+ * for native allocator overhead. Imports of generated 24-megapixel JPEGs with 12 threads and the one shared net, before the Scene
+ * models, peaked at 3.9 to 5.1 GB resident, the heap included, under the 6.4 GB that `POOL_COST` and `THREAD_COST` budgeted
+ * without it; the Scene models add their fixed cost and the working memory above.
  */
 object ImportParallelism:
   private val logger = LoggerFactory.getLogger(getClass)
@@ -37,6 +46,12 @@ object ImportParallelism:
   /** The ArcFace nets `FaceDetectionService` shares between the threads */
   val ARCFACE_NETS = 1
   val POOL_COST: Long = ARCFACE_NETS * 384 * MB
+
+  /** The two Scene models' sessions `AssetService` opens, shared by the threads */
+  val SCENE_MODELS_COST: Long = 1152 * MB
+
+  /** What the import costs once, however many threads do its work */
+  val FIXED_COST: Long = POOL_COST + SCENE_MODELS_COST
   val THREAD_COST: Long = 512 * MB
 
   /** The running parallelism, and why it is that */
@@ -56,10 +71,10 @@ object ImportParallelism:
     val uncapped = if setting > 0 then Resolution(setting, "the Setting") else automatic(cores, totalMemoryBytes)
     if cap > 0 && cap < uncapped.value then Resolution(cap, s"capped by ${Const.Conf.IMPORT_PARALLELISM_MAX}") else uncapped
 
-  /** Half the cores, or as many threads as fit beside the shared net in half the memory, whichever is fewer */
+  /** Half the cores, or as many threads as fit beside the shared models in half the memory, whichever is fewer */
   private def automatic(cores: Int, totalMemoryBytes: Long): Resolution =
     val memoryBudget = totalMemoryBytes / 2
-    val affordable = math.min(cores / 2, (memoryBudget - POOL_COST) / THREAD_COST).toInt
+    val affordable = math.min(cores / 2, (memoryBudget - FIXED_COST) / THREAD_COST).toInt
     // Without saying so, the floor would read as a contradiction of the halves on a small box
     val floor = if affordable < MIN_THREADS then s", never fewer than $MIN_THREADS" else ""
     val reason = s"automatic, half of ${counted(cores, "core")} or ${memoryBudget / GB} GB of ${totalMemoryBytes / GB} GB$floor"

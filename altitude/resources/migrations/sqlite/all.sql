@@ -30,7 +30,10 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.faces.max_sampled_frames', '120', '120'),
   ('video.faces.min_cluster_frames', '2', '2'),
   ('video.preview.min_luminance', '40', '40'),
-  ('sequence.max_gap_ms', '3000', '3000'),
+  ('sequence.max_gap_ms', '60000', '60000'),
+  ('sequence.embedding_model', 'dinov2', 'dinov2'),
+  ('sequence.dinov2.min_similarity', '0.80', '0.80'),
+  ('sequence.clip.min_similarity', '0.90', '0.90'),
   ('sequence.max_hash_distance', '10', '10'),
   ('curation.blur_ratio', '0.5', '0.5'),
   ('curation.face_quality_gap', '2.0', '2.0'),
@@ -126,11 +129,20 @@ CREATE TABLE asset (
   sequence_id CHAR(36),
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  -- The metadata JSON is declared last: a row's columns are stored in order, and reading any column after a large value walks
-  -- that value's overflow pages
-  extracted_metadata TEXT,
+  -- The bulky columns come last, the most read of them first: a row's columns are stored in order, a row past the page size
+  -- (4 KB) spills into overflow pages, and reading a column walks the overflow pages of every large value before it. The two
+  -- metadata JSON columns every general read selects (public_metadata also decides the Sequence candidates' device model) come
+  -- before the Scene embeddings, about 5 KB a row that the Sequence candidates' statement alone selects, and the raw extracted
+  -- metadata, the largest and the least read, comes after everything.
   public_metadata TEXT,
   user_metadata TEXT,
+  -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
+  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token (768 of them) and CLIP
+  -- ViT-B/16's projected image embedding (512). NULL for a Video, an animated image, or a still image the model could not
+  -- embed. Selected by the Sequence candidates' statement alone and transferred by no other read.
+  dinov2_embedding BLOB,
+  clip_embedding BLOB,
+  extracted_metadata TEXT,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 

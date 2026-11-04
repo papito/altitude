@@ -63,9 +63,9 @@ import altitude.core.util.ImportParallelism.Resolution
   }
 
   test("Automatic takes what half the memory affords on a small box with many cores") {
-    // (4096 MB - 384 MB) / 512 MB
+    // (4096 MB - 384 MB - 1152 MB) / 512 MB
     ImportParallelism.resolve(AUTOMATIC, 24, 8 * GB, NO_CAP) shouldBe
-      Resolution(7, "automatic, half of 24 cores or 4 GB of 8 GB")
+      Resolution(5, "automatic, half of 24 cores or 4 GB of 8 GB")
   }
 
   test("Automatic computes in bytes, past what an Int holds") {
@@ -73,7 +73,7 @@ import altitude.core.util.ImportParallelism.Resolution
     ImportParallelism.resolve(AUTOMATIC, 256, 4096 * GB, NO_CAP) shouldBe
       Resolution(128, "automatic, half of 256 cores or 2048 GB of 4096 GB")
     // Just enough memory for the seventh thread, and a byte short of it
-    val forSeven = 2 * (ImportParallelism.POOL_COST + 7 * ImportParallelism.THREAD_COST)
+    val forSeven = 2 * (ImportParallelism.FIXED_COST + 7 * ImportParallelism.THREAD_COST)
     ImportParallelism.resolve(AUTOMATIC, 24, forSeven, NO_CAP).value shouldBe 7
     ImportParallelism.resolve(AUTOMATIC, 24, forSeven - 2, NO_CAP).value shouldBe 6
   }
@@ -84,12 +84,12 @@ import altitude.core.util.ImportParallelism.Resolution
     // One core
     ImportParallelism.resolve(AUTOMATIC, 1, 31 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 1 core or 15 GB of 31 GB, never fewer than 2")
-    // Half the memory holds the shared net and not one thread
+    // Half the memory holds the shared models and one thread: (2048 MB - 1536 MB) / 512 MB
+    ImportParallelism.resolve(AUTOMATIC, 24, 4 * GB, NO_CAP) shouldBe
+      Resolution(2, "automatic, half of 24 cores or 2 GB of 4 GB, never fewer than 2")
+    // Half the memory does not even hold the shared models: a negative count
     ImportParallelism.resolve(AUTOMATIC, 24, 1 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 24 cores or 0 GB of 1 GB, never fewer than 2")
-    // Half the memory does not even hold the shared net
-    ImportParallelism.resolve(AUTOMATIC, 24, GB / 2, NO_CAP) shouldBe
-      Resolution(2, "automatic, half of 24 cores or 0 GB of 0 GB, never fewer than 2")
   }
 
   test("Automatic landing on the floor by itself does not claim the floor raised it") {

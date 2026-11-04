@@ -15,8 +15,8 @@ registry in [Settings.scala](../altitude/src/altitude/core/models/Settings.scala
 
 Faces are two stages of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists and is
 indexed, on both engines, their work on the import dispatcher's threads (the `import.parallelism` Setting, a Restart
-setting: 0, the default, means half the cores or what half the machine's memory affords beside the shared net,
-whichever is fewer, and never fewer than 2, and `import.parallelism.max` in the server config caps it whatever the
+setting: 0, the default, means half the cores or what half the machine's memory affords beside the shared net and
+the two Scene models, whichever is fewer, and never fewer than 2, and `import.parallelism.max` in the server config caps it whatever the
 Setting says; see `util/ImportParallelism`):
 
 - `DetectFacesFlow` calls `FaceRecognitionService.detect`, which finds the faces without touching the database: an

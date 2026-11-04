@@ -426,7 +426,7 @@ footer {
     }
 }
 
-:where(body:not(.setup)) form input.error {
+:where(body:not(.setup)) form :is(input, select).error {
     background-color: var(--error-background-color);
     border-color: var(--error-color);
 

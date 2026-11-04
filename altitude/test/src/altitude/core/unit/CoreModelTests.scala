@@ -15,6 +15,8 @@ import altitude.core.models.Face
 import altitude.core.models.Folder
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
+import altitude.core.models.SceneEmbedding
+import altitude.core.models.SceneEmbeddings
 import altitude.core.models.Stat
 import altitude.core.models.UserMetadataValue
 
@@ -103,6 +105,39 @@ import altitude.core.models.UserMetadataValue
     rereadUnmeasured.imageQuality should be(None)
     rereadUnmeasured.perceptualHash should be(None)
     rereadUnmeasured.sequenceId should be(None)
+  }
+
+  test("Scene embeddings travel through JSON as float arrays, and are absent when unset") {
+
+    /**
+     * Setup:
+     *
+     * A still image with a short embedding of one Scene model and none of the other, and a copy with neither.
+     *
+     * Assertions:
+     *
+     * The embedding is written under `scene_embeddings` as the float array of its model's key, the other model's key is absent,
+     * and it reads back value for value; the copy's JSON has no `scene_embeddings` key, which is what every general read of an
+     * asset emits, and reads back with neither.
+     */
+    val embedding = SceneEmbedding(IArray(0.6f, 0.8f))
+    val embedded = Asset(
+      userId = "u",
+      assetType = AssetType("image", "jpeg", "image/jpeg"),
+      fileName = "scene.jpg",
+      checksum = "a" * 64,
+      sizeBytes = 10,
+      folderId = "",
+      sceneEmbeddings = SceneEmbeddings(dinov2 = Some(embedding))
+    )
+    embedded.toJson("scene_embeddings")("dinov2").arr.map(_.num.toFloat) should be(Seq(0.6f, 0.8f))
+    embedded.toJson("scene_embeddings").obj.keySet should be(Set("dinov2"))
+    Asset.fromJson(embedded.toJson).sceneEmbeddings.dinov2 should be(Some(embedding))
+    Asset.fromJson(embedded.toJson).sceneEmbeddings.clip should be(None)
+
+    val unembedded = embedded.copy(sceneEmbeddings = SceneEmbeddings())
+    unembedded.toJson.value.keySet.contains("scene_embeddings") should be(false)
+    Asset.fromJson(unembedded.toJson).sceneEmbeddings should be(SceneEmbeddings())
   }
 
   test("Video duration and Face Frame time, quality and enrollment travel through JSON, and the times are absent when unset") {

@@ -10,10 +10,17 @@ import altitude.core.ConstraintException
 import altitude.core.RequestContext
 import altitude.core.models.Asset
 import altitude.core.models.CaptureDateSource
+import altitude.core.models.SceneEmbeddings
+import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 import altitude.core.models.Stats
+import altitude.core.util.SearchQuery
 
-/** Sequences as the import assigns them, over the synthesized burst of `BurstFrames` */
+/**
+ * Sequences as the import assigns them, over the synthesized burst of `BurstFrames`. Every frame the pipeline decodes is embedded
+ * by both Scene models, so a frame with no embedding of the chosen model, which the hash decides, cannot be produced here;
+ * `SequenceRuleTests` (unit) covers that fallback.
+ */
 @DoNotDiscover class SequenceServiceTests(override val testApp: Altitude)
   extends IntegrationTestCore
   with SearchPlans
@@ -22,6 +29,13 @@ import altitude.core.models.Stats
   import SequenceServiceTests.*
 
   private def stored(asset: Asset): Asset = testApp.service.asset.getById(asset.persistedId)
+
+  /** The similarity of two imported frames' Scene embeddings of a model, as the import returned them */
+  private def similarity(model: SceneModel, a: Asset, b: Asset): Double =
+    a.sceneEmbeddings.of(model).value.similarity(b.sceneEmbeddings.of(model).value)
+
+  /** The least similarity two frames need under `model` at the defaults */
+  private def defaultThreshold(model: SceneModel): Double = testApp.settings.current.sequenceMinSimilarity(model)
 
   test("Two frames of a burst share a Sequence, and a frame alone has none") {
 
@@ -85,15 +99,15 @@ import altitude.core.models.Stats
     /**
      * Setup:
      *
-     * Two frames of a burst imported under a hash distance of 0, so they are not paired; then, at the defaults, a move of the
-     * first out of triage held open in a transaction of its own while the second is assigned its Sequence.
+     * Two frames of a burst imported under a DINOv2 threshold no two frames clear, so they are not paired; then, at the defaults,
+     * a move of the first out of triage held open in a transaction of its own while the second is assigned its Sequence.
      *
      * Assertions:
      *
      * The assignment waits for the move (the candidates are read locked), and once the move commits the sorted frame is no
      * candidate: neither frame is in a Sequence, and the first is sorted.
      */
-    val (first, second) = withSetting(Settings.SEQUENCE_MAX_HASH_DISTANCE, "0") {
+    val (first, second) = withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY) {
       (importFrame(frame(0)), importFrame(frame(4), taken = Some(takenAt(1))))
     }
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
@@ -126,7 +140,7 @@ import altitude.core.models.Stats
     val stamped = stored(importFrame(frame(0)))
     val next = stamped.copy(originalCreatedAt = stamped.originalCreatedAt.map(_.plusSeconds(1)))
     val (sql, values) =
-      testApp.DAO.asset.asInstanceOf[altitude.core.dao.jdbc.AssetDao].sequenceCandidatesStatement(next, 3000).get
+      testApp.DAO.asset.asInstanceOf[altitude.core.dao.jdbc.AssetDao].sequenceCandidatesStatement(next, 60000).get
 
     val plan = atScale {
       seedCopies(stamped.persistedId, copies = 5000, folders = 1)
@@ -143,9 +157,9 @@ import altitude.core.models.Stats
     /**
      * Setup:
      *
-     * A burst of three frames within a second (0, .5 and 1 s) and a burst of two five seconds later (6 and 6.5 s), too far apart
-     * to pair, so two Sequences; then a frame at 3.5 s, within the gap of the first burst's last frame and the second burst's
-     * first.
+     * A burst of three frames within a second (0, .5 and 1 s) and a burst of two a minute and a half in (90 and 90.5 s), too far
+     * apart to pair, so two Sequences; then a frame at 45.5 s, within the gap of the first burst's last frame and the second
+     * burst's first.
      *
      * Assertions:
      *
@@ -155,8 +169,8 @@ import altitude.core.models.Stats
     val a1 = importFrame(frame(0))
     val a2 = importFrame(frame(1), subSecond = Some("500"))
     val a3 = importFrame(frame(2), taken = Some(takenAt(1)))
-    val b1 = importFrame(frame(3), taken = Some(takenAt(6)))
-    val b2 = importFrame(frame(4), taken = Some(takenAt(6)), subSecond = Some("500"))
+    val b1 = importFrame(frame(3), taken = Some(takenAt(90)))
+    val b2 = importFrame(frame(4), taken = Some(takenAt(90)), subSecond = Some("500"))
 
     val sequenceA = stored(a1).sequenceId.get
     val sequenceB = stored(b1).sequenceId.get
@@ -164,7 +178,7 @@ import altitude.core.models.Stats
     List(a2, a3).map(stored(_).sequenceId) shouldBe List(Some(sequenceA), Some(sequenceA))
     stored(b2).sequenceId shouldBe Some(sequenceB)
 
-    val bridge = importFrame(frame(5), taken = Some(takenAt(3)), subSecond = Some("500"))
+    val bridge = importFrame(frame(5), taken = Some(takenAt(45)), subSecond = Some("500"))
     bridge.sequenceId shouldBe Some(sequenceA)
     List(a1, a2, a3, b1, b2, bridge).map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceA))
   }
@@ -174,7 +188,7 @@ import altitude.core.models.Stats
     /**
      * Setup:
      *
-     * A burst of two frames at 6 and 7 s imported first, then a burst of two at 0 and 1 s, then a frame at 3.5 s that bridges
+     * A burst of two frames at 90 and 91 s imported first, then a burst of two at 0 and 1 s, then a frame at 45.5 s that bridges
      * them.
      *
      * Assertions:
@@ -182,8 +196,8 @@ import altitude.core.models.Stats
      * Two Sequences of two before the bridge; after it, all five are in the Sequence of the burst captured first, although the
      * other Sequence was made first.
      */
-    val later1 = importFrame(frame(0), taken = Some(takenAt(6)))
-    val later2 = importFrame(frame(1), taken = Some(takenAt(7)))
+    val later1 = importFrame(frame(0), taken = Some(takenAt(90)))
+    val later2 = importFrame(frame(1), taken = Some(takenAt(91)))
     val earlier1 = importFrame(frame(2))
     val earlier2 = importFrame(frame(3), taken = Some(takenAt(1)))
 
@@ -191,32 +205,61 @@ import altitude.core.models.Stats
     val earlierSequence = stored(earlier1).sequenceId.get
     laterSequence should not be earlierSequence
 
-    val bridge = importFrame(frame(4), taken = Some(takenAt(3)), subSecond = Some("500"))
+    val bridge = importFrame(frame(4), taken = Some(takenAt(45)), subSecond = Some("500"))
     bridge.sequenceId shouldBe Some(earlierSequence)
     List(later1, later2, earlier1, earlier2, bridge).map(stored(_).sequenceId).distinct shouldBe List(Some(earlierSequence))
   }
 
-  test("Another camera, another size, a wide gap or a far hash does not pair") {
+  test("Another camera, another size, a wide gap or a different picture does not pair") {
 
     /**
      * Setup:
      *
      * A frame, then within the gap: the next frame from another camera, a half-size copy of a frame, a different picture at the
-     * frames' size; and a frame ten seconds later.
+     * frames' size; and a frame a minute and a half later.
      *
      * Assertions:
      *
-     * None of the five is in a Sequence. The different picture's hash is checked to be past the default distance, so the test
-     * fails on its fixture rather than passing by accident.
+     * None of the five is in a Sequence. The different picture's similarity to the frame is checked to be under each Scene
+     * model's default threshold, so the test fails on its fixture rather than passing by accident (a DINOv2 similarity of about
+     * 0.26 against 0.80, a CLIP one of about 0.62 against 0.90); the half-size copy looks alike by either model, and only its
+     * size keeps it out.
      */
     val first = importFrame(frame(0))
     val otherCamera = importFrame(frame(1), subSecond = Some("500"), model = Some("Nikon Z8"))
     val halfSize = importFrame(frame(2, scale = 0.5), taken = Some(takenAt(1)))
     val other = importFrame(otherPicture, taken = Some(takenAt(1)), subSecond = Some("500"))
-    val late = importFrame(frame(3), taken = Some(takenAt(10)))
+    val late = importFrame(frame(3), taken = Some(takenAt(90)))
 
-    stored(first).perceptualHash.get.distance(stored(other).perceptualHash.get) should be > DEFAULT_HASH_DISTANCE
+    SceneModel.values.foreach {
+      model =>
+        withClue(model) {
+          similarity(model, first, other) should be < defaultThreshold(model)
+          similarity(model, first, halfSize) should be >= defaultThreshold(model)
+        }
+    }
     List(first, otherCamera, halfSize, other, late).map(stored(_).sequenceId).distinct shouldBe List(None)
+  }
+
+  test("Frames a minute apart pair, and frames over a minute apart do not") {
+
+    /**
+     * Setup:
+     *
+     * A frame, the next frame of its burst exactly a minute later, and a third a minute and a second after that.
+     *
+     * Assertions:
+     *
+     * The first two share a Sequence, the default gap being a minute inclusive; the third, 61 s from the nearest frame, has none.
+     */
+    val first = importFrame(frame(0))
+    val minuteLater = importFrame(frame(1), taken = Some(takenAt(60)))
+    minuteLater.sequenceId should not be None
+    stored(first).sequenceId shouldBe minuteLater.sequenceId
+
+    val over = importFrame(frame(2), taken = Some(takenAt(121)))
+    stored(over).sequenceId shouldBe None
+    List(first, minuteLater).map(stored(_).sequenceId).distinct shouldBe List(minuteLater.sequenceId)
   }
 
   test("A frame in another repository does not pair") {
@@ -377,7 +420,7 @@ import altitude.core.models.Stats
     /**
      * Setup:
      *
-     * A burst of three frames and a burst of two five seconds later, two Sequences; the repository's triage asset count row
+     * A burst of three frames and a burst of two a minute and a half in, two Sequences; the repository's triage asset count row
      * deleted behind the services' back, so counting the next completed asset fails; then a frame that would bridge the two.
      *
      * Assertions:
@@ -389,8 +432,8 @@ import altitude.core.models.Stats
     val a =
       List(importFrame(frame(0)), importFrame(frame(1), subSecond = Some("500")), importFrame(frame(2), taken = Some(takenAt(1))))
     val b = List(
-      importFrame(frame(3), taken = Some(takenAt(6))),
-      importFrame(frame(4), taken = Some(takenAt(6)), subSecond = Some("500")))
+      importFrame(frame(3), taken = Some(takenAt(90))),
+      importFrame(frame(4), taken = Some(takenAt(90)), subSecond = Some("500")))
     val sequenceA = stored(a.head).sequenceId.get
     val sequenceB = stored(b.head).sequenceId.get
     sequenceA should not be sequenceB
@@ -401,7 +444,7 @@ import altitude.core.models.Stats
         testContext.repository.persistedId,
         Stats.TRIAGE_ASSETS)
     }
-    val failure = the[ConstraintException] thrownBy importFrame(frame(5), taken = Some(takenAt(3)), subSecond = Some("500"))
+    val failure = the[ConstraintException] thrownBy importFrame(frame(5), taken = Some(takenAt(45)), subSecond = Some("500"))
     failure.getMessage should include(Stats.TRIAGE_ASSETS)
 
     a.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceA))
@@ -434,18 +477,22 @@ import altitude.core.models.Stats
     storedVideo.sequenceId shouldBe None
   }
 
-  test("The Settings decide the gap and the likeness of a burst") {
+  test("The Settings decide the gap and the likeness, and the hash distance does not where the embedding decides") {
 
     /**
      * Setup:
      *
-     * Under a 500 ms gap, two frames a second apart; under a hash distance of 0, two frames a second apart at 10 and 11 s whose
-     * hashes differ by a couple of bits; then, at the defaults again, a third frame at 12 s.
+     * Under a 500 ms gap, two frames a second apart. Under a hash distance of 0, two frames a second apart at 120 and 121 s, past
+     * the first pair's minute, whose hashes differ by a few bits. Under a DINOv2 threshold no two frames of the burst clear, two
+     * frames at 240 and 241 s. Then, at the defaults again, a frame at 242 s.
      *
      * Assertions:
      *
-     * Neither pair is a Sequence under its Setting (the second pair's hashes are checked to differ). The third frame pairs with
-     * the frames at 10 and 11 s once the defaults are back, so the rule is read from the Settings as saved.
+     * The first pair is no Sequence under the short gap. The second pair is one although its hashes differ, since both frames
+     * carry the DINOv2 embedding and the similarity decides, not the hash. The third pair is no Sequence: its DINOv2 similarity
+     * is checked to be under the raised threshold and at or above the default, so it is the threshold alone that keeps them
+     * apart. The frame at 242 s pairs with the frames at 240 and 241 s once the defaults are back, so the rule is read from the
+     * Settings as saved.
      */
     val (first, second) = withSetting(Settings.SEQUENCE_MAX_GAP_MS, "500") {
       (importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1))))
@@ -453,18 +500,94 @@ import altitude.core.models.Stats
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
 
     val (third, fourth) = withSetting(Settings.SEQUENCE_MAX_HASH_DISTANCE, "0") {
-      (importFrame(frame(2), taken = Some(takenAt(10))), importFrame(frame(4), taken = Some(takenAt(11))))
+      (importFrame(frame(2), taken = Some(takenAt(120))), importFrame(frame(4), taken = Some(takenAt(121))))
     }
     stored(third).perceptualHash should not be stored(fourth).perceptualHash
-    List(third, fourth).map(stored(_).sequenceId) shouldBe List(None, None)
+    fourth.sequenceId should not be None
+    List(third, fourth).map(stored(_).sequenceId).distinct shouldBe List(fourth.sequenceId)
 
-    val fifth = importFrame(frame(5), taken = Some(takenAt(12)))
-    fifth.sequenceId should not be None
-    List(third, fourth, fifth).map(stored(_).sequenceId).distinct shouldBe List(fifth.sequenceId)
+    val (fifth, sixth) = withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY) {
+      (importFrame(frame(3), taken = Some(takenAt(240))), importFrame(frame(5), taken = Some(takenAt(241))))
+    }
+    similarity(SceneModel.Dinov2, fifth, sixth) should be < STRICT_DINOV2_SIMILARITY.toDouble
+    similarity(SceneModel.Dinov2, fifth, sixth) should be >= defaultThreshold(SceneModel.Dinov2)
+    List(fifth, sixth).map(stored(_).sequenceId) shouldBe List(None, None)
+
+    val seventh = importFrame(frame(6), taken = Some(takenAt(242)))
+    seventh.sequenceId should not be None
+    List(fifth, sixth, seventh).map(stored(_).sequenceId).distinct shouldBe List(seventh.sequenceId)
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
   }
+
+  test("Changing the Scene model changes the next assignment") {
+
+    /**
+     * Setup:
+     *
+     * Under a DINOv2 threshold no two frames of the burst clear, with `dinov2` chosen: two frames a second apart; then, with
+     * `clip` chosen and the CLIP threshold at its default, a third frame at 2 s; then, back under `dinov2`, a fourth at 3 s.
+     *
+     * Assertions:
+     *
+     * The first two are no Sequence by DINOv2. The third pairs with both by CLIP: the frames' CLIP similarity is checked to be at
+     * or above the default CLIP threshold while their DINOv2 similarity is under the raised one, so the switch of model is what
+     * pairs them, with no re-import. The fourth, judged by DINOv2 again, stays out.
+     */
+    withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY) {
+      val first = importFrame(frame(0))
+      val second = importFrame(frame(1), taken = Some(takenAt(1)))
+      List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+
+      val third = withSetting(Settings.SEQUENCE_EMBEDDING_MODEL, SceneModel.Clip.dbValue) {
+        importFrame(frame(2), taken = Some(takenAt(2)))
+      }
+      List(first, second).foreach {
+        earlier =>
+          similarity(SceneModel.Clip, earlier, third) should be >= defaultThreshold(SceneModel.Clip)
+          similarity(SceneModel.Dinov2, earlier, third) should be < STRICT_DINOV2_SIMILARITY.toDouble
+      }
+      third.sequenceId should not be None
+      List(first, second, third).map(stored(_).sequenceId).distinct shouldBe List(third.sequenceId)
+
+      val fourth = importFrame(frame(3), taken = Some(takenAt(3)))
+      stored(fourth).sequenceId shouldBe None
+    }
+  }
+
+  test("The candidates are read with their Scene embeddings, and a search result without them") {
+
+    /**
+     * Setup:
+     *
+     * Two frames a second apart, and the Sequence candidates of the second read through the DAO; then a search of the repository.
+     *
+     * Assertions:
+     *
+     * The candidate holds an embedding of each Scene model, of its dimensions, which is what the rule compared. Every record of
+     * the search holds neither, as a read by ID does not (`AssetImportServiceTests` proves that one, and the locking read of a
+     * library operation): the embeddings are bulky columns no general read selects.
+     */
+    val first = importFrame(frame(0))
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+
+    // A write transaction: the candidates are locked until it ends
+    val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 60000))
+    val candidate = candidates.find(_.id == first.id).value
+    SceneModel.values.foreach(model => candidate.sceneEmbeddings.of(model).value.values.length shouldBe model.dimensions)
+
+    val results = testApp.service.library.search(new SearchQuery(rpp = 10)).records
+    results.map(_.persistedId).toSet shouldBe Set(first.persistedId, second.persistedId)
+    results.map(_.sceneEmbeddings).distinct shouldBe List(SceneEmbeddings())
+  }
+
 }
 
 object SequenceServiceTests {
-  private val DEFAULT_HASH_DISTANCE = 10
+
+  /**
+   * A DINOv2 threshold no two frames of the synthesized burst clear: frames a few pixels apart measure 0.983 to 0.998, so 0.999
+   * is above every pair with a margin, and far above the default of 0.80, which every pair clears. A test that keeps frames apart
+   * with it asserts the observed similarity lies between the two, so the threshold, and nothing else, is what parts them.
+   */
+  private val STRICT_DINOV2_SIMILARITY = "0.999"
 }

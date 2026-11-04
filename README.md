@@ -54,6 +54,13 @@ You will need:
 
 Download [w600k_r50.onnx](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx) and place it in `./altitude/altitude/resources/opencv/`
 
+The two Scene models go in `./altitude/resources/onnx/`, exported from their Hugging Face checkpoints by
+`scripts/export-scene-models.py` (run as `uv run scripts/export-scene-models.py`, which needs [uv](https://docs.astral.sh/uv/)
+and, on its first run, the internet, for the CPU build of torch and the checkpoints; about 350 MB each once exported):
+
+* `dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`)
+* `clip_vitb16_image.onnx`: the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`)
+
 ### Developer settings
 
 `application-dev.conf.example` has all supported overrides to:

@@ -179,7 +179,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
 
 ### Running and upgrading
 
-- [ ] No install path. There is no Docker image: [docker-compose.yml] is a dev PostgreSQL with `POSTGRES_PASSWORD=dba`. The [README] is dev-only, says a Docker runner will come later, and names `application-dev.conf.postgres`, which does not exist. `make publish` builds a fat JAR with the build machine's natives only ([build.mill]), and the 174 MB face model is downloaded by hand, so the JAR runs only on the platform that built it. Nothing documents running behind TLS or a reverse proxy. [HIGH]
+- [ ] No install path. There is no Docker image: [docker-compose.yml] is a dev PostgreSQL with `POSTGRES_PASSWORD=dba`. The [README] is dev-only, says a Docker runner will come later, and names `application-dev.conf.postgres`, which does not exist. `make publish` builds a fat JAR with the build machine's natives only ([build.mill]), and the 174 MB face model is downloaded by hand and the two 350 MB Scene models exported by hand ([export-scene-models.py]), so the JAR runs only on the platform that built it. Nothing documents running behind TLS or a reverse proxy. [HIGH]
   - Fix: a multi-arch image (`linux/amd64`, `arm64`) with natives per platform, a jlink-trimmed JRE on distroless or Chainguard (Jib, or Mill's Docker module), the model fetched with a checksum, compose with volumes and a backup recipe, and a `HEALTHCHECK`; install docs that cover HTTPS through a reverse proxy. GraalVM native-image is not practical with javacpp.
 - [ ] Config is hard to set. cask's `host="localhost"` and `port=8080` are not overridden, so the server cannot bind `0.0.0.0` in a container or move port. Environment overrides (`systemEnvironmentOverrides()`) apply only to tests ([Altitude] `preConfig`) and the config is never `.resolve()`d, so only `-D` properties work. Prod reads `application.conf` from the working directory while the data directory is relative to the JAR ([Environment] `ROOT_PATH`), and a missing config file is silently ignored. [MEDIUM]
   - Fix: configurable host and port; environment config (`systemEnvironmentOverrides`, `.resolve()`); `application.conf` next to the JAR; fail fast on a missing prod config.
@@ -205,7 +205,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
   - Fix: paginate the People tab.
 - [ ] No index for the file name, size and area sorts, or for metadata filters by `(field_id, value)` ([all.sql]).
 - ✅ HTTP range requests work for seeking ([RangeStreaming], tested).
-- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on a few one-off imports of 24-megapixel JPEGs and no repeatable test: budget the JVM heap plus `POOL_COST` (384 MB, the one shared face recognition net) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf].
+- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on a few one-off imports of 24-megapixel JPEGs and no repeatable test: budget the JVM heap plus `FIXED_COST` (`POOL_COST`, 384 MB for the one shared face recognition net, and `SCENE_MODELS_COST`, 1152 MB for the two Scene models' ONNX Runtime sessions) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf].
   - Fix: commit a seeding and benchmark harness.
 
 ### User management
@@ -308,6 +308,7 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 - [ ] No `SECURITY.md`. Effort: S.
 - [ ] No LICENSE file: [build.mill] declares MIT in `pomSettings`, but no file exists. Effort: S.
 - [ ] The face model's licence: the InsightFace `w600k_r50` model is published for non-commercial research, so semi-pro use may need a different model. (unconfirmed)
+- ✅ The Scene models' licences allow commercial use: DINOv2 ViT-B/14 (`facebook/dinov2-base`) is Apache 2.0 and the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`) is MIT, as [export-scene-models.py] records beside each checkpoint.
 - [ ] Dependencies, as known at grading and not checked against release feeds or advisories (unconfirmed):
   - `commons-fileupload:1.5` ([build.mill]) is declared, unused, and in the range of CVE-2025-48976, a DoS fixed in 1.6.0.
   - `tika-core:3.0.0` is in the range of the 2025 Tika XXE advisories. Real exposure is low without the PDF module, but scanners will flag it.
@@ -461,6 +462,7 @@ Entries leave this list when their items close.
 [CaptureDateResolver]: ../altitude/src/altitude/core/util/CaptureDateResolver.scala
 [ImageUtil]: ../altitude/src/altitude/core/util/ImageUtil.scala
 [ImportParallelism]: ../altitude/src/altitude/core/util/ImportParallelism.scala
+[export-scene-models.py]: ../scripts/export-scene-models.py
 [Sha256]: ../altitude/src/altitude/core/util/Sha256.scala
 [Util]: ../altitude/src/altitude/core/util/Util.scala
 [AssetControllerTests]: ../altitude/test/src/altitude/core/controller/AssetControllerTests.scala

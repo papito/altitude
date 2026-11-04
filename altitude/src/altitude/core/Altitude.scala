@@ -370,6 +370,8 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
     service.purgePipeline.shutdown()
+    // After the import has stopped: its threads run the Scene models' sessions
+    service.asset.close()
 
     sqliteOptimizing.foreach(_.cancel())
     txManager.optimize()

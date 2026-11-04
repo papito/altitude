@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers.{ be, include, not, should, should
 
 import altitude.core.App
 import altitude.core.models.AccountType
+import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 
 /**
@@ -34,6 +35,10 @@ import altitude.core.models.Settings
 
   /** The field of `name` rendered with `value`, wherever its attributes fall */
   private def field(name: String, value: String): String = s"""<input[^>]*name="${name.replace(".", "\\.")}"[^>]*value="$value""""
+
+  /** The select of `name` rendered with the option `value` selected, wherever the attributes fall, within that one select */
+  private def selectField(name: String, value: String): String =
+    s"""<select[^>]*name="${name.replace(".", "\\.")}"[^>]*>(?:(?!</select>)[\\s\\S])*<option value="$value"\\s+selected"""
 
   test("An Admin opens the Settings page") {
 
@@ -286,6 +291,68 @@ import altitude.core.models.Settings
         notice should be > -1
         saved.indexOf(note) should be > notice
         saved.indexOf("""<div class="help">How many threads""") should be > saved.indexOf(note)
+    }
+  }
+
+  test("A choice renders as a select with the current option selected, and a saved option is stored and selected") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's page, then a save of the other Scene model.
+     *
+     * Assertions:
+     *
+     * The page renders the Scene model as a select named after its Setting, with one option per Scene model and the seeded one
+     * selected; the save's answer is the form with the saved option selected, and the row holds it.
+     */
+    val repoId = loginAs(AccountType.Admin)
+
+    withServer(App) {
+      host =>
+        val page = requests.get(pageUrl(host, repoId), cookies = testContext.cookies, check = false).text()
+        (page should include).regex(selectField(Settings.SEQUENCE_EMBEDDING_MODEL, "dinov2"))
+        SceneModel.values.foreach {
+          model => (page should include).regex(s"""<option value="${model.dbValue}"[^>]*>${model.label}</option>""")
+        }
+        page should include("Default: DINOv2")
+        (page should include).regex("""<option value="clip"\s*>""")
+        """<option value="clip"\s+selected""".r.findFirstIn(page) shouldBe None
+
+        val saved = save(host, repoId, ujson.Obj(Settings.SEQUENCE_EMBEDDING_MODEL -> "clip"))
+        saved.statusCode shouldBe 200
+        saved.headers.contains("hx-retarget") shouldBe false
+        (saved.text() should include).regex(selectField(Settings.SEQUENCE_EMBEDDING_MODEL, "clip"))
+        (saved.text() should include).regex("""<option value="dinov2"\s*>""")
+        storedValue(Settings.SEQUENCE_EMBEDDING_MODEL) shouldBe "clip"
+    }
+  }
+
+  test("A posted choice that is no option is refused as a validation replacement that writes nothing") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's save of a Scene model the registry does not offer, which no rendered select can post.
+     *
+     * Assertions:
+     *
+     * The answer is a validation replacement naming the options beside the select, which wears the error mark; the row keeps the
+     * seed.
+     */
+    val repoId = loginAs(AccountType.Admin)
+
+    withServer(App) {
+      host =>
+        val response = save(host, repoId, ujson.Obj(Settings.SEQUENCE_EMBEDDING_MODEL -> "siglip"))
+
+        response.statusCode shouldBe 200
+        response.headers("hx-retarget") shouldBe Seq("this")
+        response.text() should include("Must be one of DINOv2, CLIP")
+        (response.text() should include)
+          .regex(s"""<select[^>]*name="${Settings.SEQUENCE_EMBEDDING_MODEL.replace(".", "\\.")}"[^>]*class="error"""")
+
+        storedValue(Settings.SEQUENCE_EMBEDDING_MODEL) shouldBe "dinov2"
     }
   }
 

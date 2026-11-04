@@ -208,13 +208,27 @@ Which details the grid shows under each asset, chosen per browser tab in the
 _Avoid_: Display options, Grid options.
 
 **Sequence**:
-Still images in triage that the import found shot as one burst: a few seconds
-apart on the same camera, looking alike. An image is in at most one Sequence,
-and a Sequence ends when its last image leaves triage or is purged. A kept frame
-leaves its Sequence when the Curation set resolved holds all of that Sequence's
-frames still out of the trash, and a Sequence also ends when its last frame
-leaves that way.
+Still images in triage that the import found shot as one scene: within a
+minute of each other on the same camera, looking alike by their Scene
+embeddings, or by their perceptual hashes where either has none. An image is
+in at most one Sequence, and a Sequence ends when its last image leaves triage
+or is purged. A kept frame leaves its Sequence when the Curation set resolved
+holds all of that Sequence's frames still out of the trash, and a Sequence
+also ends when its last frame leaves that way.
 _Avoid_: Batch (a user's selection), Burst, Stack, Group, Series.
+
+**Scene embedding**:
+A vector a vision model computes over a whole still image, describing its
+content and layout. Two Scene embeddings of one model compare by cosine
+similarity, 1 for the same picture; embeddings of different models never
+compare. A frame has one per Scene model.
+_Avoid_: Vector, Feature vector, Image embedding.
+
+**Scene model**:
+One of the vision models the import embeds every still image with, DINOv2 or
+CLIP. The Setting `sequence.embedding_model` names the one the Sequence rule
+reads.
+_Avoid_: Encoder, Backbone, Vision model.
 
 **Image quality**:
 How technically good a still image is, from its sharpness and exposure, on a
