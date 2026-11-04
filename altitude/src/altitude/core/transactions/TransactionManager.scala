@@ -4,6 +4,7 @@ import com.typesafe.config.Config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import java.sql.Connection
+import java.sql.Statement
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.sqlite.SQLiteConfig
@@ -47,8 +48,8 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   private val engine: String = config.getString(Const.Conf.DB_ENGINE)
 
-  // Whether an enclosing `withFaceVector` of this thread has set the transaction's connection up for searching face vectors
-  private val isFaceVectorRegistered = new ThreadVariable(false)
+  // Whether an enclosing `withFaceVector` of this thread has set the transaction up for searching face vectors
+  private val isFaceVectorSetUp = new ThreadVariable(false)
 
   // Whether the pools were opened, so that a manager that never ran a transaction has nothing to close
   @volatile private var isOpen = false
@@ -100,33 +101,47 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   /**
    * A write transaction that can search face vectors: what the engine needs for it ([[faceVectorSetup]]) is run once, for the
-   * outermost call. On SQLite that registers the `face.features` column with the vector extension, which every connection loads
-   * when it is opened; registering needs the `face` table, which a database being created does not have yet when its first
-   * connections are opened.
+   * outermost call. A SQLite connection is set up for it as it is opened ([[setUpSqliteConnection]]), so there the call is a
+   * plain write transaction.
    */
   def withFaceVector[A](f: => A): A =
     withTransaction {
-      if isFaceVectorRegistered.value then f
+      if isFaceVectorSetUp.value then f
       else
-        val statement = RequestContext.getConn.createStatement()
-        try faceVectorSetup.foreach(statement.execute)
-        finally statement.close()
-        isFaceVectorRegistered.withValue(true)(f)
+        faceVectorSetup match
+          case Nil => f
+          case statements =>
+            val statement = RequestContext.getConn.createStatement()
+            try statements.foreach(statement.execute)
+            finally statement.close()
+            isFaceVectorSetUp.withValue(true)(f)
     }
 
   /**
-   * What a transaction runs before it searches the face vectors. SQLite registers the column with the vector extension.
-   * PostgreSQL sets, for the transaction, how its vector index is searched: the candidates it keeps (the `hnsw.ef_search`
-   * Setting, read when the outermost `withFaceVector` runs, so a save later in the same transaction can leave a face's match
-   * count out of step with it, which `iterative_scan = relaxed_order` tolerates), and that a scan goes on past them until the
-   * statement's limit is met, since the repository and the bad matches are filtered after the index is read.
+   * What a transaction runs before it searches the face vectors. PostgreSQL sets, for the transaction, how its vector index is
+   * searched: the candidates it keeps (the `hnsw.ef_search` Setting, read when the outermost `withFaceVector` runs, so a save
+   * later in the same transaction can leave a face's match count out of step with it, which `iterative_scan = relaxed_order`
+   * tolerates), and that a scan goes on past them until the statement's limit is met, since the repository and the bad matches
+   * are filtered after the index is read. SQLite needs nothing: its connections are set up when they are opened.
    */
   private def faceVectorSetup: List[String] = engine match
-    case Const.DbEngineName.SQLITE =>
-      List("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
+    case Const.DbEngineName.SQLITE => Nil
     case Const.DbEngineName.POSTGRES =>
       settings().map(s => s"SET LOCAL hnsw.ef_search = ${s.faceRecognitionHnswEfSearch}").toList :+
         "SET LOCAL hnsw.iterative_scan = relaxed_order"
+
+  /**
+   * Replaces the pooled connections once a fresh database has its schema. A SQLite connection is set up for the schema as it is
+   * opened ([[setUpSqliteConnection]]), which the ones opened before the schema existed, while the database's version was read
+   * and its schema created, could not be: each is closed as it is returned to its pool, which opens a replacement. A PostgreSQL
+   * connection is set up with nothing of the schema.
+   */
+  def schemaCreated(): Unit =
+    if engine != Const.DbEngineName.SQLITE then return
+
+    val (readPool, writePool) = pools
+    Set(readPool, writePool).foreach(_.getHikariPoolMXBean.softEvictConnections())
+    logger.debug("Replacing the SQLite connections opened before the schema existed")
 
   def asReadOnly[A](f: => A): A =
     if isInTransaction then f else transaction(readOnly = true)(f)
@@ -236,19 +251,27 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     new HikariDataSource(hikari)
 
   /**
-   * What a SQLite connection needs past its PRAGMAs: the vector extension, and the statistics of the tables that need them
-   * (cheap, and before the connection plans anything). The write connection checkpoints the WAL every 500 pages; a read
-   * connection then refuses writes.
+   * What a SQLite connection needs past its PRAGMAs: the vector extension, with the `face.features` column registered with it
+   * when the `face` table exists (a database being created has no tables when its first connections are opened; see
+   * [[schemaCreated]]), and the statistics of the tables that need them (cheap, and before the connection plans anything). The
+   * write connection checkpoints the WAL every 500 pages; a read connection then refuses writes.
    */
   private def setUpSqliteConnection(conn: Connection, isReadPool: Boolean): Unit =
     val statement = conn.createStatement()
     try
       statement.execute(s"SELECT load_extension('$vectorExtensionPath')")
+      if hasFaceTable(statement) then
+        statement.execute("SELECT vector_init('face', 'features', 'dimension=512,type=FLOAT32,distance=cosine')")
       statement.execute("PRAGMA optimize=0x10002")
       if isReadPool then statement.execute("PRAGMA query_only=1")
       else statement.execute("PRAGMA wal_autocheckpoint=500")
     finally statement.close()
     logger.trace(s"SQLite connection set up. Read pool: $isReadPool")
+
+  private def hasFaceTable(statement: Statement): Boolean =
+    val tables = statement.executeQuery("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'face'")
+    try tables.next()
+    finally tables.close()
 
   /** The sqlite-vector build for this platform */
   private lazy val vectorExtensionPath: String =

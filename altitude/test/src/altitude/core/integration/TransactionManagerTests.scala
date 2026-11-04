@@ -1,5 +1,7 @@
 package altitude.core.integration
 
+import com.typesafe.config.ConfigValueFactory
+import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
@@ -8,6 +10,8 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 import org.sqlite.SQLiteConfig
 import scalasql.core.SqlStr.SqlStringSyntax
 
+import scala.io.Source
+
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.QueryTimeoutException
@@ -15,6 +19,7 @@ import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.models.Settings
+import altitude.core.transactions.TransactionManager
 
 /**
  * What a transaction is on each engine: a read sees one snapshot, a SQLite write holds the write lock from its start, every
@@ -173,6 +178,50 @@ import altitude.core.models.Settings
        */
       testApp.txManager.asReadOnly(query("PRAGMA query_only").head("query_only").toString) shouldBe "1"
       testApp.txManager.withTransaction(query("PRAGMA query_only").head("query_only").toString) shouldBe "0"
+    }
+
+    test("A SQLite connection opened before the schema existed searches face vectors once the schema is created") {
+
+      /**
+       * Setup:
+       *
+       * A transaction manager of its own over a new, empty database file. Its read and write connections are opened before any
+       * table exists, as a fresh database's are while its version is read and its schema is created; the schema is then created
+       * on the write connection, and the manager is told so.
+       *
+       * Assertions:
+       *
+       * A plain read transaction and a plain write transaction, with no face vector setup of their own, search the face vectors:
+       * a connection is set up for that as it is opened, so the ones opened before the `face` table existed have been replaced.
+       */
+      val dbFile = new File(testApp.config.getString(Const.Conf.TEST_DIR), "fresh.sqlite.db")
+      dbFile.getParentFile.mkdirs()
+      List("", "-wal", "-shm").foreach(suffix => new File(dbFile.getPath + suffix).delete())
+      val config =
+        testApp.config.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(s"jdbc:sqlite:${dbFile.getPath}"))
+      val manager = new TransactionManager(config, None, () => None)
+
+      // Nothing to search yet, but the scan has to find the column registered
+      val noFace = "[" + List.fill(512)("0.0").mkString(",") + "]"
+      def searchCount: Int =
+        query("SELECT count(*) AS n FROM vector_full_scan('face', 'features', vector_as_f32(?))", noFace)
+          .head("n")
+          .toString
+          .toInt
+
+      try {
+        manager.asReadOnly(())
+        manager.withTransaction {
+          val schema = Source.fromURL(getClass.getResource("/migrations/sqlite/all.sql")).mkString
+          val statement = RequestContext.getConn.createStatement()
+          try statement.executeUpdate(schema)
+          finally statement.close()
+        }
+        manager.schemaCreated()
+
+        manager.asReadOnly(searchCount) shouldBe 0
+        manager.withTransaction(searchCount) shouldBe 0
+      } finally manager.shutdown()
     }
   } else {
     test(

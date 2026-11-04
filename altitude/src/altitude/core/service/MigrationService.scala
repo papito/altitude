@@ -68,10 +68,10 @@ class MigrationService(app: Altitude, currentVersion: Int, migrationsDir: String
     }
 
   /**
-   * A fresh database (version 0) gets the whole current schema from `all.sql` in one step and is stamped with the current
-   * version. An existing database is brought forward one version at a time with `<version>.sql`, in every environment, so a
-   * development database keeps its data across schema changes just as a production one does. A database at the current version is
-   * left alone.
+   * A fresh database (version 0) gets the whole current schema from `all.sql` in one step, is stamped with the current version,
+   * and has the connections opened before its schema existed replaced (`TransactionManager.schemaCreated`). An existing database
+   * is brought forward one version at a time with `<version>.sql`, in every environment, so a development database keeps its data
+   * across schema changes just as a production one does. A database at the current version is left alone.
    */
   def migrate(): Unit =
     val oldVersion = version
@@ -82,6 +82,7 @@ class MigrationService(app: Altitude, currentVersion: Int, migrationsDir: String
       logger.info("Creating the schema of a fresh database")
       runSqlScript(s"$migrationsDir/all.sql")
       setVersion(currentVersion)
+      txManager.schemaCreated()
     else
       logger.warn(s"Migrating the database from version $oldVersion to $currentVersion")
       for version <- oldVersion + 1 to currentVersion do
