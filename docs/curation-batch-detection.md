@@ -201,8 +201,9 @@ Principles behind the table:
 - **An unmeasured frame is a Contender** with a note, and its Faces still count for the other frames.
 
 The model (`models/CurationSet.scala`) also derives what the view lays out by: the rail's order (Contenders, then each
-Bundle in the order above, frames in capture order), the opening frames (the first two Contenders, the first pinned and
-the second focused; with fewer, the one Contender or else the rail's first frame, alone), and the face strip's rows
+Bundle in the order above, frames in capture order), the opening frames (the rail's first two frames, the first pinned and
+the second focused: two Contenders, a sole Contender beside the first frame of a Bundle, or the first two frames of the
+Bundles), and the face strip's rows
 (Persons in the most frames first, the better Face where a Person is twice in a frame).
 
 ## 5. Outcomes
@@ -326,7 +327,7 @@ clears that Sequence.
 │                  │  │                           │ │                           │    │
 │ Contenders (2)   │  └───────────────────────────┘ └───────────────────────────┘    │
 │                  │    ▁▂▃▅▇▅▃▂▁  histogram          ▁▁▂▅▇▇▅▂▁  histogram           │
-│  ▣ IMG_0041.jpg  │   IMG_0041.jpg  📌 Pinned  [Keep left 1]   IMG_0042.jpg [Pin P] [Keep right 2]
+│  ▣ IMG_0041.jpg  │   IMG_0041.jpg  📌 Pinned  [Keep left 1] [Recycle ⇧1]   IMG_0042.jpg [Pin P] [Keep right 2] [Recycle ⇧2]
 │    The only … ✓  │                                                                  │
 │  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤
 │                  │  face strip: one row per Person, one column per frame            │
@@ -354,10 +355,12 @@ check while it holds a Pick, so collapsing never hides a frame that counts. The 
 with no problem"; an unmeasured frame says "Not measured".
 
 **The stage** is two panes from the originals: the pinned frame on the left and the focused frame on the right, or one
-pane when nothing is pinned or the pinned frame is focused. A set opens on its first two Contenders, the first pinned
-and the second focused. Each pane carries a tag in its corner ("Keep" in the success color on a Pick, and the frame's
+pane when nothing is pinned or the pinned frame is focused. A set opens on the rail's first two frames, the first pinned
+and the second focused: its first two Contenders when it has them, else a sole Contender beside the first bundled frame, or
+the first two bundled frames. Each pane carries a tag in its corner ("Keep" in the success color on a Pick, and the frame's
 problems as chips), the file name, "Pinned" or a **Pin P** button, and a **Keep** button that reads "Keep left 1",
-"Keep right 2" or "Keep 1" with one frame on the stage. A pane hides its image and shows a spinner from the moment its
+"Keep right 2" or "Keep 1" with one frame on the stage, and a **Recycle** button ("Recycle Shift+1", "Recycle Shift+2")
+that sends the frame to the trash at once, for a frame that is plainly no keeper. A pane hides its image and shows a spinner from the moment its
 frame changes until the new image loads, so a frame is never shown under another's name. The focused frame's neighbours
 in the rail are preloaded; a held arrow key does not queue originals ahead of the frame on show.
 
@@ -388,7 +391,7 @@ where a frame has no Face of that Person. A column's head is the frame's Preview
 both panes to that Person's box, or back out; a frame with no Face of the Person shows whole. A collapsed Bundle's
 frames have no column until it opens.
 
-**The footer** holds, on a row of its own, the Loupe's slider ("Loupe ▬●▬ 200%") centered over Resolve; below it the keys' hint on the left, Keep all and Skip on the right, and in the center what Resolve will
+**The footer** holds, on a row of its own, the Loupe's slider ("Loupe ▬●▬ 200%") centered over Resolve; below it the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip on the right, and in the center what Resolve will
 do: "Keep IMG_0042.jpg, recycle 3" with one Pick, "Keep 2, recycle 3" with several. With no Pick and one frame on the
 stage, that frame is kept; with no Pick and two on the stage, nothing is, and the center reads "Press 1 or 2 to keep a
 frame" with no button, so a frame on the stage is never recycled on a guess. A row above says how many frames to be
@@ -406,6 +409,8 @@ click hands focus back to the shell so Enter resolves next.
 | → ↓ | Focus the next frame |
 | 1 | Toggle the left frame as a Pick (or the only frame on the stage) |
 | 2 | Toggle the right frame as a Pick; nothing with one frame on the stage |
+| Shift+1 | Recycle the left frame at once (or the only frame on the stage) |
+| Shift+2 | Recycle the right frame at once; nothing with one frame on the stage |
 | P | Pin the focused frame and move on; nothing on the pinned frame |
 | Enter | Resolve with the Picks; with none, the one frame on the stage; otherwise nothing |
 | A | Keep all |
@@ -442,8 +447,9 @@ Every action is saved as it happens, so closing loses only the skips and the und
 | Resolve | Posts the Picks and the rest to `resolve`. The Picks are kept, the rest recycled, and the Sequence cleared when the set held all of it. |
 | Keep all | `resolve` with nothing to recycle. On a whole Sequence this dismisses a wrongly grouped burst; on part of one it changes nothing. |
 | Recycle a Bundle | The grid's own recycle endpoint on the Bundle's frames (a Pick in it stays). The set is read again, keeping the pinned frame, the focused frame, the Picks, the open Bundles and the zoom, and the Bundles are recomputed against the frames left. |
+| Recycle a frame | The grid's own recycle endpoint on a frame of the stage, a Pick or not. The set is read again as after a Bundle's recycling, and the next frame takes the recycled one's place: the frame left on the stage is the pinned frame and the next frame in the rail's order comes in on the right, so two stay on the stage. |
 | Skip | Nothing is saved; the walk moves on. |
-| Undo | One entry, the last mutation. A Resolve or Keep all goes back through `reopen`; a recycled Bundle through the grid's restore. The set is read again by its own ID wherever the walk has gone: the walk goes back to it, or if Start again replaced the list, the Sequence is put in where the walk stands. The result is reported as a restore is (a frame imported again since stays in the trash). |
+| Undo | One entry, the last mutation. A Resolve or Keep all goes back through `reopen`; a recycled Bundle or frame through the grid's restore, the frame back on the stage beside the one it was recycled from. The set is read again by its own ID wherever the walk has gone: the walk goes back to it, or if Start again replaced the list, the Sequence is put in where the walk stands. The result is reported as a restore is (a frame imported again since stays in the trash). |
 
 A failed write goes to the snackbar and leaves the set on show, since nothing was saved. A failed read, whether it
 opens Curation or follows an outcome, shows "This set could not be read" with Try again and never leaves a set on show

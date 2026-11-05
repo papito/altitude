@@ -95,13 +95,13 @@ case class CurationSet(
   def railFrames: List[CurationFrame] = contenders ++ bundles.flatMap(_.frames.map(_.frame))
 
   /**
-   * What the stage opens on, the pinned frame if any and the frame focused: the first two Contenders, or with fewer than two
-   * the one Contender, or else the rail's first frame, alone until a frame is pinned.
+   * What the stage opens on, the pinned frame and the frame focused: the rail's first two frames, so two Contenders when the set
+   * has them, a sole Contender beside the first frame of a Bundle, or the first two frames of the Bundles. A set of one frame
+   * opens on it alone.
    */
-  def openingFrames: (Option[CurationFrame], CurationFrame) = contenders match
+  def openingFrames: (Option[CurationFrame], CurationFrame) = railFrames match
     case first :: second :: _ => (Some(first), second)
-    case only :: Nil => (None, only)
-    case Nil => (None, railFrames.head)
+    case only => (None, only.head)
 
   /**
    * The rows of the face strip, the Persons found in the most frames first, the others as the rail first shows them. A Person

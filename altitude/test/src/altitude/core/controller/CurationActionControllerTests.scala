@@ -113,8 +113,8 @@ import altitude.core.service.FaceDetectionService
      * The fragment names each frame by its ID once, under the heading of its one Bundle or as the Contender, which is marked as
      * the only frame with no problem. Each Bundle gives its count and says what is wrong, how much and compared to what, and the
      * blurry frame's other problem shows as a chip beside it. `data-problems` names what is wrong with a frame, its Bundle first
-     * and then its chips, and the Contender has none. The set is not Too close to call, and it opens on its one Contender, alone
-     * on the stage.
+     * and then its chips, and the Contender has none. The set is not Too close to call, and it opens on the rail's first two
+     * frames: its one Contender pinned, and the first frame of its first Bundle focused.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -138,8 +138,9 @@ import altitude.core.service.FaceDetectionService
         frameIds(html) should not contain lone.persistedId
 
         (html should not).include("Too close to call")
-        html should include(s"""data-opening-focused-id="${contender.persistedId}"""")
-        (html should not).include("data-opening-pinned-id")
+        html should include(s"""data-opening-pinned-id="${contender.persistedId}"""")
+        html should include(s"""data-opening-focused-id="${frameIds(html)(1)}"""")
+        frameIds(html).head shouldBe contender.persistedId
 
         val contenders = section(html, "Contenders")
         frameIds(contenders) shouldBe List(contender.persistedId)

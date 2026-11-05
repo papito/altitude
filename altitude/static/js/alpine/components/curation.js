@@ -28,6 +28,9 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * A set is never left on show past its outcome: a failed read of a set says so in place of any set
  * (`reading`), with Try again, so what was saved cannot be acted on a second time.
  *
+ * A frame on the stage can be recycled at once (`recycleFrame`), as a Bundle can: it goes to the trash
+ * through the grid's own endpoint, the set is read again, and Undo brings it back onto the stage.
+ *
  * Every action is saved as it happens, so closing loses only the skips and the undo entry. Exit and
  * Esc close it through `closeModal` (`global.js` handles Esc for every host), and this component
  * notices the host going, then announces what the session left changed
@@ -274,6 +277,19 @@ function replaceSetHost(hostEl, html = "") {
     hostEl.innerHTML = html
 }
 
+/**
+ * "shift+1" or "shift+2" for a keydown of the 1 or 2 key with Shift held, else null. Shift makes the
+ * key type a symbol that differs by layout ("!" on a US one), so the key is told by its position. On a
+ * layout whose digits are on the shifted level (AZERTY) the same press types the digit, which stays
+ * the Pick's key.
+ */
+function recycleKeyOf(event) {
+    const digit = /^Digit([12])$/.exec(event.code)?.[1]
+    return event.shiftKey && digit && event.key !== digit
+        ? `shift+${digit}`
+        : null
+}
+
 function faceBoxOf(personId, frameId) {
     const cropEl = document.querySelector(
         `#curationFaces [${Const.attributes.personId}="${CSS.escape(personId)}"][${Const.attributes.columnFrameId}="${CSS.escape(frameId)}"]`,
@@ -388,7 +404,8 @@ export function curation() {
 
         // The last mutation, for Undo, with the Sequence of the queue it was made on: `{ keepIds,
         // recycleIds, sequenceOf, sequenceId }` of a Resolve or a Keep all, `{ recycleIds, sequenceId,
-        // view }` of a recycled Bundle, with the view its set was left in
+        // view, stage }` of a recycled Bundle or frame, with the view its set was left in; `stage` is
+        // a recycled frame's alone, the pinned and the focused frame it was recycled from
         undoEntry: null,
         reportText: "",
 
@@ -775,6 +792,11 @@ export function curation() {
             return frameId === this.rightFrameId ? "2" : "1"
         },
 
+        // The key that recycles a frame on the stage is its Keep key with Shift held
+        recycleKey(frameId) {
+            return `Shift+${this.keepKey(frameId)}`
+        },
+
         focusFrame(frameId) {
             this.focusedId = frameId
             this.preloadNeighbours()
@@ -790,8 +812,11 @@ export function curation() {
             }
         },
 
-        /** The frame next to the focused one in the rail's order, past the frames of a collapsed Bundle */
-        neighbourOf(step) {
+        /**
+         * The frame next to the focused one in the rail's order, past the frames of a collapsed Bundle
+         * and past the frame `exceptId` names
+         */
+        neighbourOf(step, exceptId = null) {
             const from = this.frames.findIndex(
                 (frame) => frame.id === this.focusedId,
             )
@@ -800,8 +825,9 @@ export function curation() {
                 from >= 0 && index >= 0 && index < this.frames.length;
                 index += step
             ) {
-                if (this.isFrameShown(this.frames[index].id)) {
-                    return this.frames[index].id
+                const frameId = this.frames[index].id
+                if (frameId !== exceptId && this.isFrameShown(frameId)) {
+                    return frameId
                 }
             }
             return null
@@ -901,6 +927,39 @@ export function curation() {
                 pickIds: this.pickIds,
                 openBundles: { ...this.openBundles },
                 zoomPersonId: this.zoomPersonId,
+            }
+        },
+
+        /**
+         * The view a set is read again in once a frame on its stage is recycled. Focus moves on from the
+         * focused frame to the next shown frame, or the previous one at the end, never to the pinned
+         * frame. With two frames on the stage, the one left is the pinned frame, as after a Pin, so the
+         * frame coming in is on the right and two stay on the stage; with none to come in, the one left is
+         * there alone. A frame alone on the stage hands that neighbour its place, pinned or not. A role
+         * with no frame to take it is left undefined, which opens as a new set does. A frame that is not
+         * on the stage changes nothing of it.
+         */
+        viewWithout(frameId) {
+            const view = this.currentView()
+            const { pinnedId, focusedId } = view
+            if (frameId !== pinnedId && frameId !== focusedId) {
+                return view
+            }
+
+            const nextId =
+                this.neighbourOf(1, pinnedId) ?? this.neighbourOf(-1, pinnedId)
+            // The frame of the two on the stage that stays
+            let leftId = null
+            if (this.showsPinnedPane) {
+                leftId = frameId === pinnedId ? focusedId : pinnedId
+            }
+            const newPinnedId =
+                leftId ?? (frameId === pinnedId ? nextId : pinnedId)
+
+            return {
+                ...view,
+                pinnedId: newPinnedId ?? undefined,
+                focusedId: nextId ?? leftId ?? undefined,
             }
         },
 
@@ -1309,10 +1368,7 @@ export function curation() {
             return this.exclusively(() => this.nextSet())
         },
 
-        /**
-         * Recycles a Bundle's frames through the grid's own endpoint, leaving a Pick in it, and reads the
-         * set again, so its Bundles are recomputed against the frames left.
-         */
+        /** Recycles a Bundle's frames, leaving a Pick in it; the set keeps its view */
         recycleBundle(kind) {
             const assetIds = this.frames
                 .filter(
@@ -1324,6 +1380,29 @@ export function curation() {
                 return
             }
 
+            return this.recycleFrames(assetIds)
+        },
+
+        /**
+         * Recycles a frame on the stage at once, a Pick or not, and the next frame takes its place
+         * (`viewWithout`). With no frame named, as for the right pane's key with one frame on the stage,
+         * it does nothing.
+         */
+        recycleFrame(frameId) {
+            if (!frameId) {
+                return
+            }
+
+            return this.recycleFrames([frameId], frameId)
+        },
+
+        /**
+         * Recycles frames of the set on show through the grid's own endpoint and reads the set again,
+         * so its Bundles are recomputed against the frames left. The set keeps its view, or, when
+         * `stageFrameId` names the frame recycled from the stage, the view without that frame, and
+         * the undo entry then holds the stage it was recycled from.
+         */
+        recycleFrames(assetIds, stageFrameId = null) {
             return this.exclusively(async () => {
                 await http.delete(repoPath("api/asset", "/move"), {
                     data: { assetIds },
@@ -1334,20 +1413,27 @@ export function curation() {
                     recycleIds: assetIds,
                     sequenceId: this.walkSequenceId,
                     view,
+                    stage: stageFrameId
+                        ? { pinnedId: view.pinnedId, focusedId: view.focusedId }
+                        : null,
                 }
                 assetIds.forEach((id) => recycledIds.add(id))
                 announceChanged()
 
-                await this.openSet({ view })
+                await this.openSet({
+                    view: stageFrameId ? this.viewWithout(stageFrameId) : view,
+                })
             })
         },
 
         /**
          * Undoes the last mutation and reads its set again by its own ID, wherever the walk has gone
          * since. A Resolve or a Keep all goes through `reopen`, which also puts the Picks back in the
-         * Sequences it cleared, and its set opens as a new one; a recycled Bundle has no Pick and is a
-         * plain restore, and its set keeps the view: as it is if the set is still on show, else as it
-         * was left. A frame whose content was imported again stays in the trash, as with any restore.
+         * Sequences it cleared, and its set opens as a new one; a recycled Bundle or frame has no Pick
+         * and is a plain restore, and its set keeps the view: as it is if the set is still on show, else
+         * as it was left. A frame recycled from the stage is back on it either way, beside the frame it
+         * was recycled from (`stage`). A frame whose content was imported again stays in the trash, as
+         * with any restore.
          */
         undo() {
             const entry = this.undoEntry
@@ -1381,7 +1467,10 @@ export function curation() {
                 announceChanged()
 
                 const view =
-                    entry.view && (isOnShow ? this.currentView() : entry.view)
+                    entry.view &&
+                    (isOnShow
+                        ? { ...this.currentView(), ...entry.stage }
+                        : entry.view)
                 if (entry.sequenceId) {
                     this.returnToSequence(entry.sequenceId)
                 }
@@ -1410,7 +1499,8 @@ export function curation() {
         /**
          * The keys, bound while Curation is the active host: ← ↑ move the focused frame back through the
          * rail's order and → ↓ move it on, 1 toggles the left frame as a Pick, or the only frame when one is
-         * on the stage, and 2 the right frame, with nothing to do when one is on the stage. P pins
+         * on the stage, and 2 the right frame, with nothing to do when one is on the stage. Shift+1 and
+         * Shift+2 recycle that same frame at once. P pins
          * the focused frame and moves on, and does nothing on the pinned frame. Enter resolves,
          * which does nothing while no frame is to be kept (`keepIds`), A keeps all, R recycles the focused
          * frame's Bundle, S skips and Z undoes. Esc is `global.js`'s. A key held down repeats only the arrows,
@@ -1429,7 +1519,7 @@ export function curation() {
                 return
             }
 
-            const key = event.key.toLowerCase()
+            const key = recycleKeyOf(event) ?? event.key.toLowerCase()
             if (key === "enter" && event.target.closest?.("button, a")) {
                 return
             }
@@ -1445,6 +1535,8 @@ export function curation() {
                 1: () => this.leftFrameId && this.togglePick(this.leftFrameId),
                 2: () =>
                     this.rightFrameId && this.togglePick(this.rightFrameId),
+                "shift+1": () => this.recycleFrame(this.leftFrameId),
+                "shift+2": () => this.recycleFrame(this.rightFrameId),
                 enter: () => this.resolve(),
                 a: () => this.keepAll(),
                 r: () => this.recycleFocusedBundle(),

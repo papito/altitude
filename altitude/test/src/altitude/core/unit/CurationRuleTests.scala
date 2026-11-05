@@ -794,13 +794,13 @@ import altitude.core.util.CurationRule
      *
      * Assertions:
      *
-     * The rail lists the Contenders, then each Bundle in the rule's order. The set opens on its first two Contenders. The row of
-     * the Person in the most frames comes first and holds that Person's better Face of a frame.
+     * The rail lists the Contenders, then each Bundle in the rule's order. The set opens on the rail's first two frames, here its
+     * first two Contenders. The row of the Person in the most frames comes first and holds that Person's better Face of a frame.
      *
      * Edge cases:
      *
-     * One Contender opens alone, and with none the set opens on the rail's first frame. A frame with no Person adds no row, and a
-     * Face with no Person is left out.
+     * One Contender opens pinned beside the first frame of a Bundle, and with none the set opens on the first two frames of its
+     * Bundles. A single frame opens alone. A frame with no Person adds no row, and a Face with no Person is left out.
      */
     val betterAnna = face("anna", quality = 22)
     val set = assess(
@@ -821,13 +821,18 @@ import altitude.core.util.CurationRule
     set.faceRows(1).faces.keySet shouldBe Set("first")
 
     val lone = assess(frame("only", sequence = Burst), frame("blurry", measuring(sharpness = 10), Burst))
-    lone.openingFrames._1 shouldBe None
-    lone.openingFrames._2.asset.id shouldBe Some("only")
+    idsOf(lone.contenders) shouldBe List("only")
+    idsOf(lone.openingFrames._1.toList) shouldBe List("only")
+    lone.openingFrames._2.asset.id shouldBe Some("blurry")
     lone.faceRows shouldBe empty
 
     val allBundled = assess(frame("blown", measuring(clipped = 0.2)), frame("dark", measuring(luminance = 0.05)))
     allBundled.contenders shouldBe empty
-    allBundled.openingFrames._1 shouldBe None
-    allBundled.openingFrames._2.asset.id shouldBe Some("dark")
+    idsOf(allBundled.openingFrames._1.toList) shouldBe List("dark")
+    allBundled.openingFrames._2.asset.id shouldBe Some("blown")
+
+    val single = assess(frame("a"))
+    single.openingFrames._1 shouldBe None
+    single.openingFrames._2.asset.id shouldBe Some("a")
   }
 }

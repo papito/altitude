@@ -546,14 +546,21 @@
   accent-color: var(--theme-primary);
 }
 
-/* One line, clipped in a narrow window, so that a reminder of the keys never takes height from the images */
+/* The keys with no button of their own, at twice the size of the footer's other small text, to be read at a glance. One line,
+   clipped in a narrow window, so that it takes no more height from the images than that line */
 #curationCompare .keys {
   grid-column: 1;
   overflow: hidden;
   color: var(--theme-neutral-3);
-  font-size: var(--font-size-small);
+  font-size: var(--font-size-xl);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A key cap of that line, twice the shell's too, its padding with it */
+#curationCompare .keys kbd {
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-large);
 }
 
 #curationCompare .resolve {

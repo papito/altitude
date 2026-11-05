@@ -1205,10 +1205,11 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame on the
   left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is pinned
   or the pinned frame is focused; that one frame counts as the left frame. Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
-  A set opens on `openingFrames`: its first two Contenders, the first pinned and the second focused; with fewer, its Contender or
-  else the rail's first frame, alone. A set read again after a Bundle's recycling or its Undo keeps what the user had pinned,
+  A set opens on `openingFrames`, the rail's first two frames, the first pinned and the second focused: two Contenders when it has
+  them, a sole Contender beside the first frame of a Bundle, or the first two frames of its Bundles, so every set opens on two
+  frames and Enter keeps nothing until one is a Pick. A set read again after a Bundle's recycling or its Undo keeps what the user had pinned,
   the focused frame, the Picks, the open Bundles and the zoom (`currentView`), as far as its frames are still in
-  it. A pane reuses its image, and the browser paints the old picture until the new
+  it; after a frame's recycling the next frame takes its place on the stage (`viewWithout`, below). A pane reuses its image, and the browser paints the old picture until the new
   one is available, so a pane never shows a frame under another's name: from the moment its frame changes until its image's `load` or
   `error` (`isPaneLoading`, `settledSrcs`) the image is hidden and asset detail's spinner (`.media-spinner`, `core.css`) shows after a
   moment, so a frame already in the browser's cache does not flash it. The zoom is applied on `load`, before the image shows. A Pick
@@ -1222,7 +1223,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   rail's edge on that frame, with one frame on the stage too. It is `border-bottom: var(--border-hairline)`, transparent on the
   pane that is not focused: both panes carry the border, so the two images stay the same height as the line moves.
 
-  A pane's caption holds the frame's file name, the Pin button or the pinned label, and the Keep button. The Keep button reads "Keep left 1" and
+  A pane's caption holds the frame's file name, the Pin button or the pinned label, the Keep button and the Recycle button. The Keep button reads "Keep left 1" and
   "Keep right 2", or "Keep 1" with one frame on the stage, the number a `<kbd>` (`keepLabel`, `keepKey`). Pressed, it wears the success
   color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The pinned frame's caption reads a pin icon and "Pinned"
   (`.pinned-label`), centered below the image: the caption is a grid of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, as the footer is. The Pin button, "Pin P", is on every other frame, so it is always on the focused frame, which is what P acts on.
@@ -1230,6 +1231,16 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   the end, so two frames stay on the stage; with no other frame shown, as when the rest sit in collapsed Bundles, the stage shows the
   one frame. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
   the pinned frame, by an arrow or a click, shows it alone, P does nothing there, and moving away brings the two back.
+
+  The Recycle button (`action-button small warning`, "Recycle Shift+1" on the left frame or the only one, "Recycle Shift+2" on the
+  right, `recycleKey`) sends its pane's frame to the trash at once, a Pick or not (`recycleFrame`), for a frame that is plainly
+  no keeper: the grid's own recycle and a read of the set again, as a Bundle's recycling is (`recycleFrames`, which both go
+  through). The set is read again in `viewWithout`: focus moves on from the focused frame to the next shown frame, or the previous
+  one at the end, never to the pinned frame, and of two frames on the stage the one left is the pinned frame, as after a Pin, so
+  the frame coming in is on the right and two stay on the stage: recycling the left frame of A and B leaves B pinned beside C,
+  and recycling the right one leaves A pinned beside C. A frame alone on the stage hands that neighbour its place. With too few
+  frames left the walk goes on as after a Bundle's recycling. Its Undo puts the frame back on the stage beside the frame it was
+  recycled from (the undo entry's `stage`), whatever the stage shows by then.
 
   The Loupe is a lens in each pane (`.loupe`, `#curationLoupePinned` and `#curationLoupeFocused`, beside the images'
   `curationStagePinned` and `curationStageFocused`), last in the pane so it paints above the image, the spinner and the tag. The
@@ -1301,7 +1312,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The footer** is a grid of three columns, `minmax(0, 1fr) auto minmax(max-content, 1fr)`, so its center stays at the true center
   while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
   window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
-  ("← → ↑ ↓ move, R recycle the frame's Bundle"), and at the right edge Keep all and Skip. A row above them holds the Loupe's
+  ("← → ↑ ↓ move, R recycle the frame's Bundle", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
+  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip. A row above them holds the Loupe's
   slider alone, in the center column (`.loupe-level`, `grid-column: 2`; the three below name their columns, so auto-placement
   never lifts one onto its row), over Resolve.
   The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
@@ -1315,7 +1327,9 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   so a frame's Pick does not shrink the panes mid-comparison, and its text sizes no column (`contain: inline-size`), or it would widen
   the right one and move the center.
 - **The keys** are a `document` listener while Curation is the active host, ignored while a text field has focus
-  (`isTextEditingTarget`, `common/text-editing.js`) or with Ctrl, Cmd or Alt held. Only the arrows repeat when held, so a held key
+  (`isTextEditingTarget`, `common/text-editing.js`) or with Ctrl, Cmd or Alt held. Shift with 1 or 2 is told by the key's
+  position (`event.code`, `recycleKeyOf`), since the symbol it types differs by layout; on a layout whose digits are on the
+  shifted level (AZERTY) that press types the digit and stays the Pick's key, and Recycle is the button's alone. Only the arrows repeat when held, so a held key
   cannot resolve set after set, and `handleKey`'s `preventDefault` keeps ↑ and ↓ from scrolling the rail as well, also while a set is
   being resolved or read, when they move nothing. The arrows pass over
   the frames of a collapsed Bundle. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
@@ -1327,6 +1341,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | → ↓ | Move the focused frame on through the rail's order |
   | 1 | Toggle the left frame as a Pick, or the only frame when one is on the stage |
   | 2 | Toggle the right frame as a Pick; nothing when one frame is on the stage |
+  | Shift+1 | Recycle the left frame at once, or the only frame when one is on the stage |
+  | Shift+2 | Recycle the right frame at once; nothing when one frame is on the stage |
   | P | Pin the focused frame and move on; nothing on the pinned frame |
   | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
   | A | Keep all |
@@ -1337,18 +1353,18 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 
 - **The walk.** On the queue, opening calls the queue endpoint and requests one set's fragment at a time, and the user never sees
   it as a list. Resolve, Keep all and Skip open the next ID, a Sequence answering with no content is passed over without
-  comment, also when a Bundle's recycling left too few, and the next set's opening frames are preloaded. When the IDs run out the
+  comment, also when a Bundle's or a frame's recycling left too few, and the next set's opening frames are preloaded. When the IDs run out the
   count is read again: with Sequences left, skipped or newly imported, the end state shows them with Start again, which calls the
   endpoint afresh, and with none it reads "All done". A selection or a Sequence opened from its header has no next set: Skip, and a Keep
   all that changes nothing, close Curation; a Resolve, or a Keep all that changes something, stays open on a report of what was kept
-  and recycled; and a Bundle's recycling that leaves too few frames shows the too-few state.
-- **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle is the grid's own
+  and recycled; and a Bundle's or a frame's recycling that leaves too few frames shows the too-few state.
+- **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle or a frame is the grid's own
   `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the queue it was made
   on, and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): the walk goes back to it, or, when Start
   again has replaced the list and it is in no new one, it goes in where the walk stands, and the walk goes on from there after it. A
-  Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and its set opens as a new one; a recycled Bundle, which
-  has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
-  show, else as it was left. Either answers as a restore does, and `reportRestore`
+  Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and its set opens as a new one; a recycled Bundle or
+  frame, which has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
+  show, else as it was left, a recycled frame back on the stage either way. Either answers as a restore does, and `reportRestore`
   (`assets/asset-actions.js`) reports it. A Keep all that changed nothing leaves the entry as it was.
 - **The grid beneath** keeps its scroll position, and its selection is reset on every close, resolved or not: a set opened on a
   selection is done with, and a selection left standing would make the next one additive. `Const.events.curationClosed` carries
@@ -1356,7 +1372,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   Otherwise `js/listeners/curation.js` takes the frames still recycled out through `removeAssetsFromGrid`, as the grid's own Recycle
   does, with the group counts and the total, and takes the Curate buttons off the Sequences cleared; kept frames stay under their
   old header until the next search. The map layout has no cells, so closing there runs the search again.
-- **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle a Bundle and Undo, runs
+- **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle of a Bundle or a frame, and Undo, runs
   `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
   true. Skip changes nothing and announces nothing. The store is also read when the Triage results render
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.

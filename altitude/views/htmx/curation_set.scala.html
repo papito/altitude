@@ -116,7 +116,8 @@
    own, its `aria-label` names it and its title says what it does. The bars and the labels are empty while the frame loads. A click
    bubbles to the shell's root, which hands focus back to it (`refocusAfterPointer`), as every button's does.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
-   Any other frame's has the Pin button, and that other frame is always the focused one *@
+   Any other frame's has the Pin button, and that other frame is always the focused one. Recycle sends the pane's frame to the
+   trash at once (`recycleFrame`), its key the Keep button's with Shift held (`recycleKey`) *@
 @stagePane(imageId: String, loupeId: String, histogramId: String, clippingId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
     <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame), focused: @frame === focusedId }">
@@ -155,6 +156,7 @@
         <button type="button" class="action-button small" :aria-pressed="isPick(@frame)" x-on:click="togglePick(@frame)">
           <span x-text="keepLabel(@frame)"></span> <kbd x-text="keepKey(@frame)"></kbd>
         </button>
+        <button type="button" class="action-button small warning" x-on:click="recycleFrame(@frame)">Recycle <kbd x-text="recycleKey(@frame)"></kbd></button>
       </div>
     </figcaption>
   </figure>
