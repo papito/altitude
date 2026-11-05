@@ -1254,11 +1254,16 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 
   The Histogram is a strip under each pane (`.histogram`, `#curationHistogramPinned` and `#curationHistogramFocused`, beside the
   images' IDs): a button, the figure's row between the image and the caption (`grid-template-rows: minmax(0, 1fr) auto auto`),
-  `--curation-histogram-height` tall, holding the frame's luminance curve as an inline `<svg viewBox="0 0 64 16">` with one polygon
-  whose `points` the component builds from the bins (`histogramPoints`, `polygonPoints`: 64 bins, a point at each bin's center as high
-  as its fraction over the tallest bin's, so the curve's shape fills the strip whatever the exposure). The polygon is `fill:
-  currentColor`, the strip's color a theme neutral at an alpha over the pane's backdrop, so no color is written in the script. The
-  bins are read in the browser from the original the pane has loaded, when the image settles (`onImageSettled`, `readPane`), by
+  `--curation-histogram-height` tall, holding the frame's luminance as bars in an inline `<svg viewBox="0 0 64 16">`: one `<path>`
+  whose `d` the component builds from the bins (`histogramPath`, `barsPath`: 64 bins, one bar per bin a gap of `HISTOGRAM_BAR_GAP`
+  apart, as high as its fraction over the tallest bin's, so the histogram's shape fills the strip whatever the exposure), behind two
+  static `<line class="grid">` at a third and two thirds of the range. The path is `fill: currentColor` with a 0.25px edge of the
+  same color at full alpha (`stroke: hsl(from currentColor h s l / 1)`, `vector-effect: non-scaling-stroke`), the strip's color a
+  theme neutral at an alpha over the pane's backdrop, so no color is written in the script. In the strip's bottom corners two
+  spans (`.crushed` left, `.blown` right, `crushedLabel`, `blownLabel`) read the fractions of the frame's pixels crushed and
+  blown to one decimal ("14.2%", `percentLabel`), monospace chips (`--font-nav`, `--font-size-xs`) on the backdrop in `--info-color`
+  and `--error-color`, the colors the Clipping blink marks each side with; an empty span, while the frame loads, shows no chip. The
+  bins and the two fractions are read in the browser from the original the pane has loaded, when the image settles (`onImageSettled`, `readPane`), by
   `js/common/luminance.js` (`readLuminance`, async): the read starts once Alpine has shown the image (`$nextTick`), so its decode
   never holds up the pane's paint; the image is resized by `createImageBitmap` to the measurement's box, off the main thread, so
   the counts agree with the stored fractions, and each pixel's gray is taken as OpenCV's `BGR2GRAY` does. A read answers the bins
@@ -1266,7 +1271,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   (`luminanceReads`, closure state, since the classes are a million bytes no binding reads): the promise while it is in flight, so
   a second settle of the same source awaits the same read, then the read itself. The cache is a new map for each set (`showSet`,
   `showNoSet`), so an arrow back and forth costs nothing and a read finishing after its set has gone, or after its pane's image
-  has moved on, fills only the cache it was started for. The strip is empty while the pane loads and until its read is in (the canvas blank
+  has moved on, fills only the cache it was started for. What a pane shows of its read is `histograms[imageId]`, `{ path, crushed,
+  blown }` or null (`histogramOf`, `histogramShown`). The strip is empty while the pane loads and until its read is in (the canvas blank
   meanwhile, so the pane's last frame never shows over the new one; a cached read shows at once), and on a failed image, which
   disables the button (`isImageUnreadable`, `unreadableSrcs`); a read that fails leaves it empty too.
 
@@ -1997,7 +2003,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
 | `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
 | `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh`, `setLevel` and `detach`; the pointer-to-pixel mapping under `object-fit: contain` and the wheel through the ladder, with no knowledge of the page it is on |
-| `static/js/common/luminance.js` | `readLuminance(imageEl, { fitBox, clippedLevel, crushedLevel })`, async: the Histogram bins (64 fractions) and the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) of a loaded same-origin image, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
+| `static/js/common/luminance.js` | `readLuminance(imageEl, { fitBox, clippedLevel, crushedLevel })`, async: the Histogram bins (64 fractions), the blown and crushed fractions, and the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) of a loaded same-origin image, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
 
 ## Search parameters
 

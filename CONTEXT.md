@@ -284,8 +284,9 @@ _Avoid_: Magnifier, Magnifying glass, Zoom (the stage's zoom to a Person's
 face).
 
 **Histogram**:
-The luminance curve under a frame on Curation's stage, read from the frame's
-pixels as the exposure measurements read them.
+The bars of luminance under a frame on Curation's stage, read from the frame's
+pixels as the exposure measurements read them, with the fractions of its
+pixels crushed and blown in its corners.
 _Avoid_: Levels, Tone curve.
 
 **Clipping blink**:

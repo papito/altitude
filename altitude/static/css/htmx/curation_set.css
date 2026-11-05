@@ -325,11 +325,13 @@
   cursor: none;
 }
 
-/* The Histogram strip, the frame's luminance curve on a button the pane's width under it, which switches the Clipping blink. It takes
-   the pane's backdrop, the hairline border and the radius, so it reads as part of the pane; the curve is a theme neutral at an alpha,
-   a muted mark over the dark backdrop, which is dark in either theme, so the strip takes the dark side as the tag does. The hairline
-   is there for the pressed rule below to color: while the blink is on, the strip shows a success edge and a success-colored curve */
+/* The Histogram strip, the frame's luminance histogram on a button the pane's width under it, which switches the Clipping blink. It
+   takes the pane's backdrop, the hairline border and the radius, so it reads as part of the pane; the bars are a theme neutral at an
+   alpha, a muted mark over the dark backdrop, which is dark in either theme, so the strip takes the dark side as the tag does. The
+   hairline is there for the pressed rule below to color: while the blink is on, the strip shows a success edge and success-colored
+   bars. Positioned for the corner labels */
 #curationStage .histogram {
+  position: relative;
   width: 100%;
   height: var(--curation-histogram-height);
   padding: 0;
@@ -353,9 +355,52 @@
   height: 100%;
 }
 
-/* The curve takes the strip's color, so no color is written here */
-#curationStage .histogram polygon {
+/* The bars take the strip's color, so no color is written here: the fill as it is, and a hairline edge of the same color at full
+   alpha, so each bar reads against its neighbours and the pressed rule colors both. The edge keeps its width whatever the strip
+   stretches the viewBox to */
+#curationStage .histogram path {
   fill: currentColor;
+  stroke: hsl(from currentColor h s l / 1);
+  stroke-width: 0.25px;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Two faint lines at a third and two thirds of the range, so a frame's shadows, midtones and highlights are told apart at a glance */
+#curationStage .histogram .grid {
+  stroke: currentColor;
+  opacity: 0.3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The fractions of the frame's pixels crushed (left, the shadows' side) and blown (right, the highlights' side), as the Loupe's level
+   reads in its lens's corner: a small monospace chip on the backdrop, each in the color the Clipping blink marks that side with.
+   An empty label, while the frame loads, shows no chip */
+#curationStage .histogram .crushed,
+#curationStage .histogram .blown {
+  position: absolute;
+  bottom: var(--space-1);
+  padding: 0 var(--space-2);
+  font-family: var(--font-nav);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background-color: var(--asset-detail-backdrop-color);
+  border-radius: var(--chip-border-radius);
+  pointer-events: none;
+}
+
+#curationStage .histogram .crushed {
+  left: var(--space-2);
+  color: var(--info-color);
+}
+
+#curationStage .histogram .blown {
+  right: var(--space-2);
+  color: var(--error-color);
+}
+
+#curationStage .histogram .crushed:empty,
+#curationStage .histogram .blown:empty {
+  display: none;
 }
 
 /* The side columns share what the center leaves, so the pinned label sits at the pane's true center, under the image */

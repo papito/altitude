@@ -109,11 +109,12 @@
    The Loupe, last in the pane so it paints above all of them, is a lens that rides with the pointer over the pane showing the spot
    under it at the original's pixels, on that pane alone; js/common/loupe.js places and draws it through the component,
    writing its inline styles, its level in `data-level` and `hidden`, and the pointer is hidden (`cursor: none`) while it shows.
-   The Histogram strip is the figure's row between the image and its caption: a button holding the frame's luminance curve
-   (`histogramPoints`), the Clipping blink's switch for the whole stage, `aria-pressed` while the blink is on and disabled on a failed
-   image (`isImageUnreadable`); as it holds no text, its `aria-label` names it and its title says what it does. The curve is empty
-   while the frame loads. A click bubbles to the shell's root, which hands focus back to it (`refocusAfterPointer`), as every
-   button's does.
+   The Histogram strip is the figure's row between the image and its caption: a button holding the frame's luminance histogram as
+   one bar per bin (`histogramPath`), two grid lines at a third and two thirds of the range, and in its bottom corners the fractions
+   of the frame's pixels crushed (left) and blown (right) (`crushedLabel`, `blownLabel`); it is the Clipping blink's switch for the
+   whole stage, `aria-pressed` while the blink is on and disabled on a failed image (`isImageUnreadable`); as it holds no text of its
+   own, its `aria-label` names it and its title says what it does. The bars and the labels are empty while the frame loads. A click
+   bubbles to the shell's root, which hands focus back to it (`refocusAfterPointer`), as every button's does.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
    Any other frame's has the Pin button, and that other frame is always the focused one *@
 @stagePane(imageId: String, loupeId: String, histogramId: String, clippingId: String, frame: String, shows: String) = {
@@ -138,7 +139,13 @@
             :aria-pressed="clippingBlink"
             :disabled="isImageUnreadable('@imageId', @frame)"
             x-on:click="toggleClippingBlink()">
-      <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true"><polygon :points="histogramPoints('@imageId', @frame)"></polygon></svg>
+      <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
+        <line class="grid" x1="21.333" x2="21.333" y1="0" y2="16"></line>
+        <line class="grid" x1="42.667" x2="42.667" y1="0" y2="16"></line>
+        <path :d="histogramPath('@imageId', @frame)"></path>
+      </svg>
+      <span class="crushed" x-text="crushedLabel('@imageId', @frame)"></span>
+      <span class="blown" x-text="blownLabel('@imageId', @frame)"></span>
     </button>
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>

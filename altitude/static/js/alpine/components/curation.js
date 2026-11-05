@@ -81,8 +81,10 @@ const CLIPPING_ID_OF = {
     [FOCUSED_IMAGE_ID]: FOCUSED_CLIPPING_ID,
 }
 
-// The Histogram's `viewBox` in the set's fragment (`0 0 64 16`), the space its polygon's points are in
+// The Histogram's `viewBox` in the set's fragment (`0 0 64 16`), the space its bars are drawn in, and the
+// gap between two bars as a share of a bin's width
 const HISTOGRAM_BOX = { width: 64, height: 16 }
+const HISTOGRAM_BAR_GAP = 0.12
 
 // What the next shell to load is opened on; the shell's request carries no parameters
 let requestedEntry = {}
@@ -206,12 +208,13 @@ function saveLoupeLevel(level) {
 }
 
 /**
- * The `points` of a Histogram's polygon from its bins, in `HISTOGRAM_BOX`: a point at each bin's
- * center, as high as the bin's fraction over the tallest bin's, so the curve's shape fills the strip
- * whatever the exposure, between the two corners of the baseline that close the polygon. Rounded to
- * two decimals to keep the string short. Empty with no pixel counted (a guard: a read always has some)
+ * The `d` of a Histogram's path from its bins, in `HISTOGRAM_BOX`: one bar per bin, a gap wide of
+ * its neighbours, as high as the bin's fraction over the tallest bin's, so the histogram's shape
+ * fills the strip whatever the exposure; an empty bin draws no bar. One path rather than a rect per
+ * bin keeps the fragment at one element, as the strip's stroke and fill are one rule. Rounded to two
+ * decimals to keep the string short. Empty with no pixel counted (a guard: a read always has some)
  */
-function polygonPoints(bins) {
+function barsPath(bins) {
     const tallest = Math.max(...bins)
     if (!(tallest > 0)) {
         return ""
@@ -219,12 +222,32 @@ function polygonPoints(bins) {
 
     const { width, height } = HISTOGRAM_BOX
     const binWidth = width / bins.length
+    const barWidth = binWidth * (1 - HISTOGRAM_BAR_GAP)
     const round = (value) => Math.round(value * 100) / 100
-    const points = bins.map(
-        (bin, index) =>
-            `${round((index + 0.5) * binWidth)},${round(height - (height * bin) / tallest)}`,
-    )
-    return [`0,${height}`, ...points, `${width},${height}`].join(" ")
+    return bins
+        .map((bin, index) => {
+            if (bin === 0) {
+                return ""
+            }
+            const x = round(index * binWidth + (binWidth - barWidth) / 2)
+            const top = round(height - (height * bin) / tallest)
+            return `M${x},${top}h${round(barWidth)}V${height}H${x}Z`
+        })
+        .join("")
+}
+
+/** A fraction as the strip's corner label, "14.2%" */
+function percentLabel(fraction) {
+    return `${(fraction * 100).toFixed(1)}%`
+}
+
+/** What a pane's strip shows of a read: the bars' path and the two corner labels */
+function histogramOf(read) {
+    return {
+        path: barsPath(read.bins),
+        crushed: percentLabel(read.crushed),
+        blown: percentLabel(read.blown),
+    }
 }
 
 /**
@@ -350,7 +373,8 @@ export function curation() {
         settledSrcs: {},
         // The `src` each stage image settled on with no natural size, a failed image, by the image's ID
         unreadableSrcs: {},
-        // Each stage image's Histogram as its polygon's `points`, by the image's ID; empty with no read
+        // Each stage image's Histogram by the image's ID, `{ path, crushed, blown }`: the bars' `d` and the
+        // corner labels; null with no read
         histograms: {},
         // The Clipping blink's one switch for the stage; off on every open, as a new shell starts here
         clippingBlink: false,
@@ -529,12 +553,27 @@ export function curation() {
             )
         },
 
-        /** The `points` of a pane's Histogram polygon; empty while the pane loads or its image has no read */
-        histogramPoints(imageId, frameId) {
+        /** A pane's Histogram, `{ path, crushed, blown }`; null while the pane loads or its image has no read */
+        histogramShown(imageId, frameId) {
             if (this.isPaneLoading(imageId, frameId)) {
-                return ""
+                return null
             }
-            return this.histograms[imageId] ?? ""
+            return this.histograms[imageId] ?? null
+        },
+
+        /** The `d` of a pane's Histogram bars; empty while the pane loads or its image has no read */
+        histogramPath(imageId, frameId) {
+            return this.histogramShown(imageId, frameId)?.path ?? ""
+        },
+
+        /** The strip's left corner, the fraction of the frame's pixels crushed, "0.5%"; empty with no read */
+        crushedLabel(imageId, frameId) {
+            return this.histogramShown(imageId, frameId)?.crushed ?? ""
+        },
+
+        /** The strip's right corner, the fraction of the frame's pixels blown, "14.2%"; empty with no read */
+        blownLabel(imageId, frameId) {
+            return this.histogramShown(imageId, frameId)?.blown ?? ""
         },
 
         /** Whether a pane's Clipping canvas shows: the blink is on, and the pane shows a readable image */
@@ -572,7 +611,7 @@ export function curation() {
             const imageId = imageEl.id
             if (!(imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0)) {
                 this.unreadableSrcs[imageId] = imageEl.getAttribute("src")
-                this.histograms[imageId] = ""
+                this.histograms[imageId] = null
                 this.drawClipping(imageId)
                 return
             }
@@ -584,7 +623,7 @@ export function curation() {
             const reads = luminanceReads
             const cached = reads.get(src)
             if (!cached || cached instanceof Promise) {
-                this.histograms[imageId] = ""
+                this.histograms[imageId] = null
             }
             if (this.clippingBlink) {
                 this.drawClipping(imageId)
@@ -602,7 +641,7 @@ export function curation() {
                     return
                 }
 
-                this.histograms[imageId] = read ? polygonPoints(read.bins) : ""
+                this.histograms[imageId] = read ? histogramOf(read) : null
                 if (this.clippingBlink) {
                     this.drawClipping(imageId)
                 }

@@ -458,9 +458,10 @@
              <code>color-scheme: dark</code> because the pane is dark in either theme, as the Loupe's lens does) says the same in chips:
              <code>.curation-chip.keep</code> filled with
              the success color on a Pick, and the frame's problems as plain chips. The Histogram strip under each pane
-             (<code>.histogram</code>, a button) draws the frame's luminance curve as a theme neutral at an alpha over the pane's
-             backdrop, in the dark side too (<code>color-scheme: dark</code>), and while the Clipping blink is on it wears the
-             stage's pressed rule, the success edge and a success-colored curve. The pinned frame's caption reads the same pin and
+             (<code>.histogram</code>, a button) draws the frame's luminance as bars in a theme neutral at an alpha over the pane's
+             backdrop, edged at full alpha, in the dark side too (<code>color-scheme: dark</code>), with two faint grid lines and the
+             crushed and blown fractions as small monospace chips in its corners, the info and the error color; while the Clipping
+             blink is on it wears the stage's pressed rule, the success edge and success-colored bars. The pinned frame's caption reads the same pin and
              Pinned (<code>.pinned-label</code>), centered below its image, and any other frame's has the Pin button. While nothing is to be kept the footer's center
              holds the keep hint (<code>.keep-hint</code>, "Press 1 or 2 to keep a frame", dimmed) in place of Resolve. The rules of
              the tag and the hint are scoped by <code>#curationStage</code> and <code>#curationCompare</code>, so this section shows

@@ -368,13 +368,15 @@ steps it, the browser remembers it for the next open, and a label in the lens's 
 smoothing. It works while the stage is zoomed to a Person, and shows nothing over the bars beside the image or while a
 frame loads.
 
-Under each pane a **Histogram** strip shows the frame's luminance curve, read from the frame's own pixels as the exposure
-measurements read them, so exposure is judged on the frame and the two curves compare side by side. A click on it turns
+Under each pane a **Histogram** strip shows the frame's luminance as bars, read from the frame's own pixels as the exposure
+measurements read them, with faint lines at a third and two thirds of the range and, in its corners, the fractions of
+the frame's pixels crushed (left, in blue) and blown (right, in red), so exposure is judged on the frame and the two
+strips compare side by side. A click on it turns
 on the **Clipping blink**: the frame's blown highlights flash red and its crushed shadows blue over the image, at the
 levels the measurement counts them, so what Too bright and Too dark say is seen where it is; a second click turns it
 off. It is one switch for the stage, on for both panes and through the arrows and the next sets, until clicked off or
-Curation closes. It follows the zoom to a Person, and holds steady for a user who prefers reduced motion. The strip is
-empty while a frame loads.
+Curation closes. It follows the zoom to a Person, and holds steady for a user who prefers reduced motion. The strip's
+bars and corners are empty while a frame loads.
 
 Pinning keeps nothing. It holds a frame on the left to compare the others against. Pinning the focused frame replaces
 the pinned one and moves focus to the next frame, so two stay on the stage. There is no unpinning; focusing the pinned
