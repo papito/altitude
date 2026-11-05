@@ -7,12 +7,15 @@
 @import altitude.core.models.CurationReason
 @import altitude.core.models.CurationSet
 @import altitude.core.models.ExposureMeasure
+@import altitude.core.util.ImageMeasurement
 
 @* A Curation set, as CurationRule sorted it: the Bundle rail in a column of its own, what holds for every frame, then the Contenders,
    then each Bundle with what is wrong with its frames, how much, and compared to what; and to its right the stage above the face
    strip and the set's footer. The `curation` component on the shell (js/alpine/components/curation.js) holds the state every
    binding here reads, and reads this fragment's frames, in the rail's order, from `data-frame-id`: `data-asset-id` is how the
    client finds the cells of the grid beneath. A face strip's column names its frame in `data-column-frame-id` for the same reason.
+   The root carries the measurement's levels and box (`data-clipped-level`, `data-crushed-level`, `data-measurement-box`) for the
+   stage's Histogram and Clipping blink, which the component reads so the client restates no constant of `ImageMeasurement`.
    With no set, too few frames were left to compare. *@
 @(set: Option[CurationSet])
 
@@ -99,15 +102,25 @@
    spinner while its frame loads (`isPaneLoading`), and a click on a crop zooms it with a transform (`applyZoom`). The tag over the
    pane's corner says what the rail says of the frame: kept, and its problems. It is the pane's and not the image's, so a
    zoom leaves it in place, and it stays while the frame loads, as the caption does. The focused frame's pane wears the accent's edge.
-   The Loupe, last in the pane so it paints above all three, is a lens that rides with the pointer over the pane showing the spot
+   The clipping canvas, right after the image, is the Clipping blink: the component draws the mask of the frame's blown highlights
+   and crushed shadows into it at the sampled size and writes the image's transform to it (`applyZoom`), so it lies over the picture
+   pixel for pixel and follows the zoom. It sits under the spinner, the tag and the lens, and is `hidden` unless the blink is on and
+   the image is shown (`showsClippingBlink`).
+   The Loupe, last in the pane so it paints above all of them, is a lens that rides with the pointer over the pane showing the spot
    under it at the original's pixels, on that pane alone; js/common/loupe.js places and draws it through the component,
    writing its inline styles, its level in `data-level` and `hidden`, and the pointer is hidden (`cursor: none`) while it shows.
+   The Histogram strip is the figure's row between the image and its caption: a button holding the frame's luminance curve
+   (`histogramPoints`), the Clipping blink's switch for the whole stage, `aria-pressed` while the blink is on and disabled on a failed
+   image (`isImageUnreadable`); as it holds no text, its `aria-label` names it and its title says what it does. The curve is empty
+   while the frame loads. A click bubbles to the shell's root, which hands focus back to it (`refocusAfterPointer`), as every
+   button's does.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
    Any other frame's has the Pin button, and that other frame is always the focused one *@
-@stagePane(imageId: String, loupeId: String, frame: String, shows: String) = {
+@stagePane(imageId: String, loupeId: String, histogramId: String, clippingId: String, frame: String, shows: String) = {
   <figure x-show="@shows">
     <div class="pane" :class="{ loading: isPaneLoading('@imageId', @frame), focused: @frame === focusedId }">
       <img id="@imageId" :src="fileUrl(@frame)" :alt="fileNameOf(@frame)" x-on:load="onImageSettled($event)" x-on:error="onImageSettled($event)">
+      <canvas id="@clippingId" class="clipping" :hidden="!showsClippingBlink('@imageId', @frame)" aria-hidden="true"></canvas>
       <div class="media-spinner"><i class="fas fa-spinner fa-spin"></i></div>
       <div class="pane-tag">
         <span class="curation-chip keep" x-show="isPick(@frame)">Keep</span>
@@ -117,6 +130,16 @@
       </div>
       <div id="@loupeId" class="loupe" hidden aria-hidden="true"></div>
     </div>
+    <button type="button"
+            id="@histogramId"
+            class="histogram"
+            title="Blink the blown highlights and crushed shadows"
+            aria-label="Clipping blink"
+            :aria-pressed="clippingBlink"
+            :disabled="isImageUnreadable('@imageId', @frame)"
+            x-on:click="toggleClippingBlink()">
+      <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true"><polygon :points="histogramPoints('@imageId', @frame)"></polygon></svg>
+    </button>
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
       <span class="pinned-label" x-show="@frame === pinnedId"><i class="fas fa-thumbtack" aria-hidden="true"></i> Pinned</span>
@@ -140,6 +163,9 @@
     <article id="curationSetView"
              @if(opening._1.isDefined) {data-opening-pinned-id="@{opening._1.get.asset.persistedId}"}
              data-opening-focused-id="@{opening._2.asset.persistedId}"
+             data-clipped-level="@{ImageMeasurement.CLIPPED_LEVEL}"
+             data-crushed-level="@{ImageMeasurement.CRUSHED_LEVEL}"
+             data-measurement-box="@{ImageMeasurement.MEASUREMENT_BOX_SIZE}"
              @if(collapses) {data-bundles-collapse="true"}>
       <aside id="curationRail" aria-label="Frames">
         @if(curationSet.heldBack > 0) {
@@ -189,8 +215,8 @@
 
       <section id="curationCompare">
         <div id="curationStage">
-          @stagePane("curationStagePinned", "curationLoupePinned", "pinnedId", "showsPinnedPane")
-          @stagePane("curationStageFocused", "curationLoupeFocused", "focusedId", "focusedId")
+          @stagePane("curationStagePinned", "curationLoupePinned", "curationHistogramPinned", "curationClippingPinned", "pinnedId", "showsPinnedPane")
+          @stagePane("curationStageFocused", "curationLoupeFocused", "curationHistogramFocused", "curationClippingFocused", "focusedId", "focusedId")
         </div>
 
         @* One row per Person (no name: a Face carries none, and its crop identifies the row) and one column per frame in the rail's

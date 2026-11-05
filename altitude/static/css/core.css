@@ -98,6 +98,7 @@
     --curation-strip-max-height: 16rem;
     --curation-kept-name-max-width: 20rem;
     --curation-loupe-max-size: 20rem;
+    --curation-histogram-height: 3rem;
 
     --success-color: light-dark(#297612, #87d575);
     --warning-color: light-dark(#976212, #ebb16b);

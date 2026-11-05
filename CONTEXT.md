@@ -282,3 +282,14 @@ one value for every frame, set by the footer's slider or the wheel, and kept
 for the next open. It changes nothing about the frame.
 _Avoid_: Magnifier, Magnifying glass, Zoom (the stage's zoom to a Person's
 face).
+
+**Histogram**:
+The luminance curve under a frame on Curation's stage, read from the frame's
+pixels as the exposure measurements read them.
+_Avoid_: Levels, Tone curve.
+
+**Clipping blink**:
+The flashing marks over a frame on the stage of its blown highlights and
+crushed shadows, at the levels the measurement counts them. One switch for the
+stage, off when Curation opens.
+_Avoid_: Blinkies, Zebra, Clipping warning, Overexposure mask.

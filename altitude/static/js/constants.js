@@ -115,6 +115,11 @@ export const Const = {
         openingPinnedId: "data-opening-pinned-id",
         openingFocusedId: "data-opening-focused-id",
         bundlesCollapse: "data-bundles-collapse",
+        // The measurement's gray levels a pixel counts as blown or crushed at, and the box the image is fitted into
+        // before it is measured, which the stage's Clipping blink and Histogram read from the set's root
+        clippedLevel: "data-clipped-level",
+        crushedLevel: "data-crushed-level",
+        measurementBox: "data-measurement-box",
         // The face strip's column of a frame, and a crop's box in upright pixels: x, y, width, height
         columnFrameId: "data-column-frame-id",
         faceBox: "data-face-box",

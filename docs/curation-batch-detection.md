@@ -325,6 +325,7 @@ clears that Sequence.
 │ Every frame: 8% …│  │      pinned frame         │ │      focused frame        │    │
 │                  │  │                           │ │                           │    │
 │ Contenders (2)   │  └───────────────────────────┘ └───────────────────────────┘    │
+│                  │    ▁▂▃▅▇▅▃▂▁  histogram          ▁▁▂▅▇▇▅▂▁  histogram           │
 │  ▣ IMG_0041.jpg  │   IMG_0041.jpg  📌 Pinned  [Keep left 1]   IMG_0042.jpg [Pin P] [Keep right 2]
 │    The only … ✓  │                                                                  │
 │  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤
@@ -366,6 +367,14 @@ is one value for every frame, from 100% to 400% in steps of 50%: the footer's sl
 steps it, the browser remembers it for the next open, and a label in the lens's corner reads it. Above 1:1 the pixels are crisp blocks, so blur and noise are the file's and not the browser's
 smoothing. It works while the stage is zoomed to a Person, and shows nothing over the bars beside the image or while a
 frame loads.
+
+Under each pane a **Histogram** strip shows the frame's luminance curve, read from the frame's own pixels as the exposure
+measurements read them, so exposure is judged on the frame and the two curves compare side by side. A click on it turns
+on the **Clipping blink**: the frame's blown highlights flash red and its crushed shadows blue over the image, at the
+levels the measurement counts them, so what Too bright and Too dark say is seen where it is; a second click turns it
+off. It is one switch for the stage, on for both panes and through the arrows and the next sets, until clicked off or
+Curation closes. It follows the zoom to a Person, and holds steady for a user who prefers reduced motion. The strip is
+empty while a frame loads.
 
 Pinning keeps nothing. It holds a frame on the left to compare the others against. Pinning the focused frame replaces
 the pinned one and moves focus to the next frame, so two stay on the stage. There is no unpinning; focusing the pinned

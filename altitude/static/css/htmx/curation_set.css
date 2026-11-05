@@ -185,10 +185,11 @@
   padding: var(--panel-padding);
 }
 
+/* The pane, the Histogram strip under it, then the caption */
 #curationStage figure {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   row-gap: var(--space-3);
   min-height: 0;
   margin: 0;
@@ -215,6 +216,41 @@
   height: 100%;
   object-fit: contain;
   transform-origin: 0 0;
+}
+
+/* The Clipping blink's canvas, laid out as the image is: its bitmap is the sampled size, so under `contain` it lies over the painted
+   picture pixel for pixel, and `applyZoom` writes the image's transform to it. It follows the image in the pane, so the spinner, the
+   tag and the lens paint above it. The two colors the component draws the mask with are read from here, so the script holds no
+   literal: a custom property comes back unresolved from getComputedStyle, so the component reads the computed `color` (the blown
+   pixels) and `border-color` (the crushed ones), which resolve `light-dark()`; `border-style` stays none, so nothing paints. The
+   pane is dark in either theme, so both take the dark side as the tag does. The blink is `steps(1)`, which is `steps(1, end)`:
+   each half of the second holds its starting value, 1 for the first half and 0 for the second, so the marks flash rather than fade.
+   No display here: `hidden` hides it */
+#curationStage .clipping {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 0 0;
+  pointer-events: none;
+  color: var(--error-color);
+  border-color: var(--info-color);
+  color-scheme: dark;
+  animation: curation-clipping-blink 1s steps(1) infinite;
+}
+
+@keyframes curation-clipping-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The marks hold steady instead of flashing */
+@media (prefers-reduced-motion: reduce) {
+  #curationStage .clipping {
+    animation: none;
+  }
 }
 
 /* A pane hides its image from the moment its frame changes until the new one has loaded. The spinner waits a moment, so a frame
@@ -289,6 +325,39 @@
   cursor: none;
 }
 
+/* The Histogram strip, the frame's luminance curve on a button the pane's width under it, which switches the Clipping blink. It takes
+   the pane's backdrop, the hairline border and the radius, so it reads as part of the pane; the curve is a theme neutral at an alpha,
+   a muted mark over the dark backdrop, which is dark in either theme, so the strip takes the dark side as the tag does. The hairline
+   is there for the pressed rule below to color: while the blink is on, the strip shows a success edge and a success-colored curve */
+#curationStage .histogram {
+  width: 100%;
+  height: var(--curation-histogram-height);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  color: hsl(from var(--theme-neutral-4) h s l / 0.6);
+  background-color: var(--asset-detail-backdrop-color);
+  border: var(--border-hairline) transparent;
+  border-radius: var(--radius);
+  color-scheme: dark;
+}
+
+/* A failed image leaves the strip empty, and there is nothing to press for */
+#curationStage .histogram:disabled {
+  cursor: default;
+}
+
+#curationStage .histogram svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The curve takes the strip's color, so no color is written here */
+#curationStage .histogram polygon {
+  fill: currentColor;
+}
+
 /* The side columns share what the center leaves, so the pinned label sits at the pane's true center, under the image */
 #curationStage figcaption {
   display: grid;
@@ -327,6 +396,8 @@
   margin-left: 0;
 }
 
+/* A pressed button on the stage, the Keep button and the Histogram strip while the blink is on: a success edge and a success-colored
+   label, or curve */
 #curationStage button[aria-pressed="true"] {
   border-color: var(--success-color);
   color: var(--success-color);

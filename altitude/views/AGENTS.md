@@ -89,7 +89,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), luminance (the Histogram bins and the class of every pixel of a loaded image, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
@@ -146,13 +146,19 @@ Const.attributes.frameId        // "data-frame-id"  (a frame of a Curation set i
 Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of the face strip)
 Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
 Const.attributes.loupeLevel     // "data-level"  (the Loupe's level on a stage pane's lens, which its stylesheet shows)
+Const.attributes.clippedLevel   // "data-clipped-level"  (the gray level a pixel counts as blown at, on a Curation set's root)
+Const.attributes.crushedLevel   // "data-crushed-level"  (the gray level a pixel counts as crushed at)
+Const.attributes.measurementBox // "data-measurement-box"  (the box the measurement fits an image into before it counts)
 ```
 
-A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`; a frame
+A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`, and the
+measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`, which the stage's Histogram and Clipping blink read; a frame
 `data-file-name`, `data-problems` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
 `data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
 (`js/search-results/cells.js`). Each stage pane's lens is addressed by its ID (`curationLoupePinned`, `curationLoupeFocused`) as the
 stage images are (`curationStagePinned`, `curationStageFocused`), and carries `data-level` (`Const.attributes.loupeLevel`), the level the Loupe writes for its label.
+Each pane's Histogram strip (`curationHistogramPinned`, `curationHistogramFocused`) and Clipping canvas (`curationClippingPinned`,
+`curationClippingFocused`) are addressed by ID as the images and lenses are.
 
 The one exception is `alt-has-no-date` on a result cell, which the controller tests assert on.
 
@@ -1175,6 +1181,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
   focused frame, the pinned frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
+  A set's fragment replaces the one before it in `#curationSet` after that one's Alpine tree is destroyed (`replaceSetHost`, which
+  also empties the host with no set), so no loop of the old fragment runs once more on the new set's state.
   Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
   (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
   an action still running announces when it finishes. Actions run one at a time (`exclusively`), so a key pressed during one does
@@ -1243,6 +1251,40 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   its inline styles, `image-rendering: pixelated` above 1:1 among them, and `hidden`, and nothing else; `curation_set.css` has the
   rest: a square a third of the pane wide, capped by `--curation-loupe-max-size` (`core.css`), the hairline edge in the pane's dark
   side, and `cursor: none` on the image of a pane whose lens shows (`.pane:has(> .loupe:not([hidden])) img`).
+
+  The Histogram is a strip under each pane (`.histogram`, `#curationHistogramPinned` and `#curationHistogramFocused`, beside the
+  images' IDs): a button, the figure's row between the image and the caption (`grid-template-rows: minmax(0, 1fr) auto auto`),
+  `--curation-histogram-height` tall, holding the frame's luminance curve as an inline `<svg viewBox="0 0 64 16">` with one polygon
+  whose `points` the component builds from the bins (`histogramPoints`, `polygonPoints`: 64 bins, a point at each bin's center as high
+  as its fraction over the tallest bin's, so the curve's shape fills the strip whatever the exposure). The polygon is `fill:
+  currentColor`, the strip's color a theme neutral at an alpha over the pane's backdrop, so no color is written in the script. The
+  bins are read in the browser from the original the pane has loaded, when the image settles (`onImageSettled`, `readPane`), by
+  `js/common/luminance.js` (`readLuminance`, async): the read starts once Alpine has shown the image (`$nextTick`), so its decode
+  never holds up the pane's paint; the image is resized by `createImageBitmap` to the measurement's box, off the main thread, so
+  the counts agree with the stored fractions, and each pixel's gray is taken as OpenCV's `BGR2GRAY` does. A read answers the bins
+  and a class map, a byte per pixel (blown, crushed or neither), and is cached by the image's `currentSrc` for the set on show
+  (`luminanceReads`, closure state, since the classes are a million bytes no binding reads): the promise while it is in flight, so
+  a second settle of the same source awaits the same read, then the read itself. The cache is a new map for each set (`showSet`,
+  `showNoSet`), so an arrow back and forth costs nothing and a read finishing after its set has gone, or after its pane's image
+  has moved on, fills only the cache it was started for. The strip is empty while the pane loads and until its read is in (the canvas blank
+  meanwhile, so the pane's last frame never shows over the new one; a cached read shows at once), and on a failed image, which
+  disables the button (`isImageUnreadable`, `unreadableSrcs`); a read that fails leaves it empty too.
+
+  The button is the Clipping blink's switch: `clippingBlink` on the component, one switch for the stage, false on every open and
+  not stored, `aria-pressed` while on (the stage's pressed rule gives it the success edge and curve), with the `aria-label`
+  "Clipping blink" and the title "Blink the blown highlights and crushed shadows", since it holds no text. `toggleClippingBlink`
+  flips it and, on, draws the mask into each pane's canvas whose read is in (`drawClipping`: the mask is painted from the read's
+  classes at draw time, `clippingMask`, and put at the sampled size; a frame settling while the blink is on draws its mask as its
+  read comes in, and a canvas whose image has no read yet, in flight or failed, is blanked). The canvas (`.clipping`,
+  `#curationClippingPinned` and `#curationClippingFocused`, right after the image, under the spinner, the tag and the lens) is laid
+  out as the image is (`position: absolute; inset: 0`, `object-fit: contain`, `transform-origin: 0 0`, `pointer-events: none`), so
+  the mask lies over the picture pixel for pixel and `applyZoom` writes the image's transform to it; it is `hidden` unless the blink
+  is on and the pane's image shows (`showsClippingBlink`). The blink is `curation-clipping-blink`, a `steps(1)` opacity animation at
+  1 Hz, so the marks flash rather than fade, held steady under `prefers-reduced-motion: reduce`. The two colors come from the
+  canvas's computed `color` (`--error-color`, the blown highlights) and `border-color` (`--info-color`, the crushed shadows), read at
+  each draw (`clippingColors`), so no literal is in the script and they follow the theme; the levels and the box come from the set's
+  root (`data-clipped-level`, `data-crushed-level`, `data-measurement-box`, from `ImageMeasurement`'s constants, read in `showSet`),
+  so the client restates none.
 - **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
   One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
   (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A column's
@@ -1314,7 +1356,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
 - **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, and the shell) and `curation_set.css` (the
   set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,
-  `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it) and `--curation-kept-name-max-width` of
+  `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it), `--curation-histogram-height` (the
+  Histogram strip under each pane) and `--curation-kept-name-max-width` of
   `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
   smaller of the token and `20vw`, since the footer's center column takes its full width before the keys' hint gets any, so in a
   narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip and a Bundle's row
@@ -1954,6 +1997,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
 | `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
 | `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh`, `setLevel` and `detach`; the pointer-to-pixel mapping under `object-fit: contain` and the wheel through the ladder, with no knowledge of the page it is on |
+| `static/js/common/luminance.js` | `readLuminance(imageEl, { fitBox, clippedLevel, crushedLevel })`, async: the Histogram bins (64 fractions) and the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) of a loaded same-origin image, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
 
 ## Search parameters
 
