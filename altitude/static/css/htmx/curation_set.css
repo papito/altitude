@@ -410,12 +410,14 @@
   align-items: center;
   gap: var(--space-4);
   font-size: var(--font-size-small);
+  padding-left: var(--space-8);
 }
 
 #curationStage .file-name {
   grid-column: 1;
   min-width: 0;
   overflow: hidden;
+  font-size: var(--font-size-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
