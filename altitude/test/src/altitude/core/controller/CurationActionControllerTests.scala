@@ -207,17 +207,16 @@ import altitude.core.service.FaceDetectionService
   }
 
   test(
-    "A set's Bundles collapse from four frames, its rail marks a frame in an album, and its face strip has a column per frame") {
+    "A set's Bundles show their frames with no toggle, its rail marks a frame in an album, and its face strip has a column per frame") {
 
     /**
      * Setup:
      *
-     * A Sequence of four frames, one in an album, with a Person in three of them, which makes the fourth a Poor faces Bundle. A
-     * second Sequence of three frames, one of them too dark.
+     * A Sequence of four frames, one in an album, with a Person in three of them, which makes the fourth a Poor faces Bundle.
      *
      * Assertions:
      *
-     * The first set's Bundles collapse and have a toggle, the second's do not. The frame in an album is marked, and no other. The
+     * The Bundle lists its frame and nothing in the fragment collapses it. The frame in an album is marked, and no other. The
      * face strip's row holds a crop from the content route with its box in upright pixels for each of the three frames, and a
      * dash for the fourth.
      */
@@ -236,8 +235,9 @@ import altitude.core.service.FaceDetectionService
         val faces = frames.take(3).map(testContext.addTestFace(person, _, features))
 
         val html = getSet(host, repoId, sequenceId).text()
-        html should include("data-bundles-collapse")
-        html should include("toggleBundle(")
+        (html should not).include("data-bundles-collapse")
+        (html should not).include("toggleBundle(")
+        (html should not).include("isBundleOpen(")
         frameIds(section(html, "Poor faces")) shouldBe List(frames.last.persistedId)
         s"""data-frame-id="${frames.head.persistedId}"[^>]*data-in-album-or-location""".r.findFirstIn(html) should not be empty
         "data-in-album-or-location".r.findAllIn(html).size shouldBe 1
@@ -247,14 +247,6 @@ import altitude.core.service.FaceDetectionService
         html should include(s"""data-face-box="${face.x1},${face.y1},${face.width},${face.height}"""")
         "data-face-box".r.findAllIn(html).size shouldBe 3
         "no-face".r.findAllIn(html).size shouldBe 1
-
-        val small = List(frame(), frame(), frame(fine.copy(luminance = 0.05)))
-        val other = UUID.randomUUID().toString
-        testContext.setAssetSequence(small, other)
-        val smallHtml = getSet(host, repoId, other).text()
-        section(smallHtml, "Too dark") should include("(1)")
-        (smallHtml should not).include("data-bundles-collapse")
-        (smallHtml should not).include("toggleBundle(")
     }
   }
 

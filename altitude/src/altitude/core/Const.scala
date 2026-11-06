@@ -45,8 +45,6 @@ object Const:
     // The most frames of a Sequence a set reads, the first in capture order, for the same cost: Sequences chain transitively, so
     // a static 1 s time-lapse is one Sequence of however many frames it has
     val MAX_SEQUENCE_FRAMES = 100
-    // A set of fewer frames shows every one with its chips: its Bundles do not collapse
-    val MIN_FRAMES_TO_COLLAPSE = 4
 
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200

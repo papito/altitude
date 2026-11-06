@@ -151,7 +151,7 @@ Const.attributes.crushedLevel   // "data-crushed-level"  (the gray level a pixel
 Const.attributes.measurementBox // "data-measurement-box"  (the box the measurement fits an image into before it counts)
 ```
 
-A Curation set's root carries `data-opening-pinned-id`, `data-opening-focused-id` and `data-bundles-collapse`, and the
+A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
 measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`, which the stage's Histogram and Clipping blink read; a frame
 `data-file-name`, `data-problems` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
 `data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
@@ -1179,7 +1179,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
   resolve, the unread state, and the queue's end. The first three offer Exit, and Undo when there is one, beside what they say.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
-  focused frame, the pinned frame, the Picks, each Bundle's open state, the queue's IDs and position, the one Sequence or the
+  focused frame, the pinned frame, the Picks, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
   A set's fragment replaces the one before it in `#curationSet` after that one's Alpine tree is destroyed (`replaceSetHost`, which
   also empties the host with no set), so no loop of the old fragment runs once more on the new set's state.
@@ -1199,16 +1199,16 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   frame's `data-problems` holds what the stage's tag says is wrong with it, its Bundle first and then its chips; a Contender has
   none. The Preview carries the frame's marks: `fa-thumbtack`, labelled "Pinned", on the pinned frame, and `fa-check-circle`,
   labelled "Keep", on a Pick. A Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and
-  Recycle, and shows the same check while the Bundle holds a Pick, so collapsing it never hides a frame that counts. A sole Contender
-  is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Bundles collapse only in a set of four frames or
-  more (`Const.Curation.MIN_FRAMES_TO_COLLAPSE`), and the Bundles of the frames on the stage start open.
+  Recycle, and shows the same check while the Bundle holds a Pick, which its Recycle leaves in place. A sole Contender
+  is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Every Bundle lists its frames, whatever the
+  set's size: there is nothing to collapse or open.
 - **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame on the
   left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is pinned
   or the pinned frame is focused; that one frame counts as the left frame. Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
   A set opens on `openingFrames`, the rail's first two frames, the first pinned and the second focused: two Contenders when it has
   them, a sole Contender beside the first frame of a Bundle, or the first two frames of its Bundles, so every set opens on two
   frames and Enter keeps nothing until one is a Pick. A set read again after a Bundle's recycling or its Undo keeps what the user had pinned,
-  the focused frame, the Picks, the open Bundles and the zoom (`currentView`), as far as its frames are still in
+  the focused frame, the Picks and the zoom (`currentView`), as far as its frames are still in
   it; after a frame's recycling the next frame takes its place on the stage (`viewWithout`, below). A pane reuses its image, and the browser paints the old picture until the new
   one is available, so a pane never shows a frame under another's name: from the moment its frame changes until its image's `load` or
   `error` (`isPaneLoading`, `settledSrcs`) the image is hidden and asset detail's spinner (`.media-spinner`, `core.css`) shows after a
@@ -1227,15 +1227,14 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   "Keep right 2", or "Keep 1" with one frame on the stage, the number a `<kbd>` (`keepLabel`, `keepKey`). Pressed, it wears the success
   color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The pinned frame's caption reads a pin icon and "Pinned"
   (`.pinned-label`), centered below the image: the caption is a grid of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, as the footer is. The Pin button, "Pin P", is on every other frame, so it is always on the focused frame, which is what P acts on.
-  Pinning the focused frame (`pinFocused`), by its button or P, replaces the pinned frame and moves focus to the next shown frame in the rail's order, or the previous one at
-  the end, so two frames stay on the stage; with no other frame shown, as when the rest sit in collapsed Bundles, the stage shows the
-  one frame. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
+  Pinning the focused frame (`pinFocused`), by its button or P, replaces the pinned frame and moves focus to the next frame in the rail's order, or the previous one at
+  the end, so two frames stay on the stage. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
   the pinned frame, by an arrow or a click, shows it alone, P does nothing there, and moving away brings the two back.
 
   The Recycle button (`action-button small warning`, "Recycle Shift+1" on the left frame or the only one, "Recycle Shift+2" on the
   right, `recycleKey`) sends its pane's frame to the trash at once, a Pick or not (`recycleFrame`), for a frame that is plainly
   no keeper: the grid's own recycle and a read of the set again, as a Bundle's recycling is (`recycleFrames`, which both go
-  through). The set is read again in `viewWithout`: focus moves on from the focused frame to the next shown frame, or the previous
+  through). The set is read again in `viewWithout`: focus moves on from the focused frame to the next frame, or the previous
   one at the end, never to the pinned frame, and of two frames on the stage the one left is the pinned frame, as after a Pin, so
   the frame coming in is on the right and two stay on the stage: recycling the left frame of A and B leaves B pinned beside C,
   and recycling the right one leaves A pinned beside C. A frame alone on the stage hands that neighbour its place. With too few
@@ -1304,7 +1303,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   so the client restates none.
 - **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
   One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
-  (`/content/.../face/`), with a dash where a frame has none; a collapsed Bundle's frames have no column until it opens. A column's
+  (`/content/.../face/`), with a dash where a frame has none. A column's
   head is the frame's Preview, which focuses it and carries the same "Keep" mark on a Pick as the rail's does. A click on a crop
   zooms both panes to that Person's box, or back out, with a transform (`applyZoom`, again when an image loads or a pane resizes); a
   frame with no Face of the Person shows whole. A box is in upright pixels while `asset.width` and `height` come from
@@ -1331,8 +1330,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   position (`event.code`, `recycleKeyOf`), since the symbol it types differs by layout; on a layout whose digits are on the
   shifted level (AZERTY) that press types the digit and stays the Pick's key, and Recycle is the button's alone. Only the arrows repeat when held, so a held key
   cannot resolve set after set, and `handleKey`'s `preventDefault` keeps ↑ and ↓ from scrolling the rail as well, also while a set is
-  being resolved or read, when they move nothing. The arrows pass over
-  the frames of a collapsed Bundle. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
+  being resolved or read, when they move nothing. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
   (`refocusAfterPointer`), so Enter resolves next.
 
   | Key | Action |

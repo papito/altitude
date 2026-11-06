@@ -168,14 +168,12 @@
   }
   case Some(curationSet) => {
     @defining(curationSet.openingFrames) { opening =>
-    @defining(curationSet.frames.size >= Const.Curation.MIN_FRAMES_TO_COLLAPSE) { collapses =>
     <article id="curationSetView"
              @if(opening._1.isDefined) {data-opening-pinned-id="@{opening._1.get.asset.persistedId}"}
              data-opening-focused-id="@{opening._2.asset.persistedId}"
              data-clipped-level="@{ImageMeasurement.CLIPPED_LEVEL}"
              data-crushed-level="@{ImageMeasurement.CRUSHED_LEVEL}"
-             data-measurement-box="@{ImageMeasurement.MEASUREMENT_BOX_SIZE}"
-             @if(collapses) {data-bundles-collapse="true"}>
+             data-measurement-box="@{ImageMeasurement.MEASUREMENT_BOX_SIZE}">
       <aside id="curationRail" aria-label="Frames">
         @if(curationSet.heldBack > 0) {
           <p class="curation-notice">Showing the first @{curationSet.frames.size} of @{f"${curationSet.frames.size + curationSet.heldBack}%,d"} frames. The Sequence stays in the queue with the rest.</p>
@@ -203,17 +201,10 @@
             <header>
               <h3>@bundleName(bundle.kind) <span class="count">(@{bundle.frames.size})</span>
                 <i class="fas fa-check-circle" aria-label="Holds a frame to keep" x-show="bundleHoldsPick('@{bundle.kind}')"></i></h3>
-              @if(collapses) {
-                <button type="button"
-                        class="action-button small"
-                        :aria-expanded="isBundleOpen('@{bundle.kind}')"
-                        x-on:click="toggleBundle('@{bundle.kind}')"
-                        x-text="bundleToggleLabel('@{bundle.kind}')"></button>
-              }
               <button type="button" class="action-button small warning" x-on:click="recycleBundle('@{bundle.kind}')">Recycle</button>
               <p class="reason">@bundleReason(bundle)</p>
             </header>
-            <ul class="frames" x-show="isBundleOpen('@{bundle.kind}')">
+            <ul class="frames">
               @for(bundled <- bundle.frames) {
                 @railFrame(bundled.frame, Some(bundle.kind), false, bundled.reasons, bundled.chips)
               }
@@ -229,8 +220,8 @@
         </div>
 
         @* One row per Person (no name: a Face carries none, and its crop identifies the row) and one column per frame in the rail's
-           order. A collapsed Bundle's frames have no column until it opens. A click on a crop zooms the stage to that Person's box,
-           in the pixels `data-face-box` gives: x, y, width and height *@
+           order. A click on a crop zooms the stage to that Person's box, in the pixels `data-face-box` gives: x, y, width and
+           height *@
         @if(curationSet.faceRows.nonEmpty) {
           <div id="curationFaces">
             <table>
@@ -238,7 +229,7 @@
                 <tr>
                   @for(frame <- curationSet.railFrames) {
                     @defining(frame.asset.persistedId) { frameId =>
-                    <th :class="columnClasses('@{frameId}')" x-show="isFrameShown('@{frameId}')">
+                    <th :class="columnClasses('@{frameId}')">
                       <button type="button"
                               class="curation-preview"
                               data-column-frame-id="@{frameId}"
@@ -257,7 +248,7 @@
                   <tr>
                     @for(frame <- curationSet.railFrames) {
                       @defining(frame.asset.persistedId) { frameId =>
-                      <td :class="columnClasses('@{frameId}')" x-show="isFrameShown('@{frameId}')">
+                      <td :class="columnClasses('@{frameId}')">
                         @row.faces.get(frameId) match {
                           case Some(face) => {
                             <button type="button"
@@ -309,7 +300,6 @@
         </footer>
       </section>
     </article>
-    }
     }
   }
 }

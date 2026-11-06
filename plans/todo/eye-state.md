@@ -147,9 +147,8 @@ so a user can see which setting to move.
 - **A frame's reason** reads as the others do, "Eyes closed: 0.72 against 0.08, that person's lowest", or "Eyes closed: 0.72, the
   limit 0.50" with no comparison, beside that Face's crop.
 - **The Bundle's header** keeps its reason, the first frame's first and "and 2 more", and adds each distinct Person's crop once, so
-  a collapsed Bundle still says who.
-- **The face strip** marks the crop of every closed Face, those of a Person closed throughout included. The frames of a collapsed
-  Bundle have no column until it is opened.
+  the header says who.
+- **The face strip** marks the crop of every closed Face, those of a Person closed throughout included.
 - **`face.debug.enabled`** adds the two values to each crop's label, for calibrating on one's own files.
 
 ### Too few frames in the queue
@@ -210,7 +209,7 @@ Each task is one reviewable change, in dependency order. Server tasks are red be
 - An import of the `people/` images reports the time and the resident memory against the same import without this path.
 - On a scratch instance holding the bursts, in the browser:
   - a closed Face's frame sits in Eyes closed with its reading and crop, and the strip marks it;
-  - a collapsed Eyes closed Bundle shows its Persons' crops in the header;
+  - an Eyes closed Bundle shows its Persons' crops in the header;
   - a Person closed in every frame they appear in shows as a notice with their crop;
   - changing a threshold on the Settings screen changes the Bundle at the next read;
   - in the queue, recycling a Bundle that leaves fewer than two frames shows Undo and Exit, Z brings the frames back, and Skip

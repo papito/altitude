@@ -251,8 +251,7 @@ starting points:
 | `curation.luminance_gap` | 0.1 | Too dark / Too bright within a Sequence: distance from the target beyond the nearest frame's |
 
 Code constants (`Const.Curation`): `MIN_FRAMES` 2 (under it there is no set and a Sequence is not in the queue),
-`MAX_SELECTION` 100 (the most IDs a selection posts), `MAX_SEQUENCE_FRAMES` 100 (a Sequence's window),
-`MIN_FRAMES_TO_COLLAPSE` 4 (Bundles collapse only in a set this large).
+`MAX_SELECTION` 100 (the most IDs a selection posts), `MAX_SEQUENCE_FRAMES` 100 (a Sequence's window).
 
 ## 7. Routes
 
@@ -332,11 +331,11 @@ clears that Sequence.
 │  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤
 │                  │  face strip: one row per Person, one column per frame            │
 │ Poor faces (1)   │        ▣      ▢      ▢      ▢                                    │
-│  [Show] [Recycle]│  P1   [👤]   [👤]    –     [👤]                                   │
+│  [Recycle]       │  P1   [👤]   [👤]    –     [👤]                                   │
 │  Face quality …  │  P2   [👤]   [👤]   [👤]   [👤]                                   │
 │                  ├──────────────────────────────────────────────────────────────────┤
 │ Blurry (1)       │  2 frames to recycle are in an album or Location: …              │
-│  [Show] [Recycle]│  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip S]
+│  [Recycle]       │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip S]
 └──────────────────┴──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -350,8 +349,8 @@ frames. The Sequence stays in the queue with the rest", "Too close to call", or 
 blown highlights"), then **Contenders**, then each Bundle in the rule's order. Each frame is a Preview that focuses it on
 click, with its file name, its reasons ("Face sharpness 42 against 118, that person's sharpest") and its chips for its
 other problems. A Pinned frame wears a pin mark and a Pick a check mark. A Bundle's header gives its name, its count, the
-first reason ("and 2 more"), a Show/Hide toggle in sets of four frames or more, and a **Recycle** button; it shows the
-check while it holds a Pick, so collapsing never hides a frame that counts. The sole Contender is marked "The only frame
+first reason ("and 2 more") and a **Recycle** button; it shows the
+check while it holds a Pick, which its Recycle leaves in place. Every Bundle lists its frames. The sole Contender is marked "The only frame
 with no problem"; an unmeasured frame says "Not measured".
 
 **The stage** is two panes from the originals: the pinned frame on the left and the focused frame on the right, or one
@@ -388,8 +387,7 @@ frame shows it alone and moving away brings the pair back.
 **The face strip**, under the stage, is the main decision aid, since eyes and expression are judged by eye: one row
 per Person (most frames first) and one column per frame in the rail's order, from the stored face crops, with a dash
 where a frame has no Face of that Person. A column's head is the frame's Preview and focuses it. Clicking a crop zooms
-both panes to that Person's box, or back out; a frame with no Face of the Person shows whole. A collapsed Bundle's
-frames have no column until it opens.
+both panes to that Person's box, or back out; a frame with no Face of the Person shows whole.
 
 **The footer** holds, on a row of its own, the Loupe's slider ("Loupe ▬●▬ 200%") centered over Resolve; below it the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip on the right, and in the center what Resolve will
 do: "Keep IMG_0042.jpg, recycle 3" with one Pick, "Keep 2, recycle 3" with several. With no Pick and one frame on the
@@ -405,7 +403,7 @@ click hands focus back to the shell so Enter resolves next.
 
 | Key | Action |
 |---|---|
-| ← ↑ | Focus the previous frame in the rail's order, passing over collapsed Bundles |
+| ← ↑ | Focus the previous frame in the rail's order |
 | → ↓ | Focus the next frame |
 | 1 | Toggle the left frame as a Pick (or the only frame on the stage) |
 | 2 | Toggle the right frame as a Pick; nothing with one frame on the stage |
@@ -446,7 +444,7 @@ Every action is saved as it happens, so closing loses only the skips and the und
 |---|---|
 | Resolve | Posts the Picks and the rest to `resolve`. The Picks are kept, the rest recycled, and the Sequence cleared when the set held all of it. |
 | Keep all | `resolve` with nothing to recycle. On a whole Sequence this dismisses a wrongly grouped burst; on part of one it changes nothing. |
-| Recycle a Bundle | The grid's own recycle endpoint on the Bundle's frames (a Pick in it stays). The set is read again, keeping the pinned frame, the focused frame, the Picks, the open Bundles and the zoom, and the Bundles are recomputed against the frames left. |
+| Recycle a Bundle | The grid's own recycle endpoint on the Bundle's frames (a Pick in it stays). The set is read again, keeping the pinned frame, the focused frame, the Picks and the zoom, and the Bundles are recomputed against the frames left. |
 | Recycle a frame | The grid's own recycle endpoint on a frame of the stage, a Pick or not. The set is read again as after a Bundle's recycling, and the next frame takes the recycled one's place: the frame left on the stage is the pinned frame and the next frame in the rail's order comes in on the right, so two stay on the stage. |
 | Skip | Nothing is saved; the walk moves on. |
 | Undo | One entry, the last mutation. A Resolve or Keep all goes back through `reopen`; a recycled Bundle or frame through the grid's restore, the frame back on the stage beside the one it was recycled from. The set is read again by its own ID wherever the walk has gone: the walk goes back to it, or if Start again replaced the list, the Sequence is put in where the walk stands. The result is reported as a restore is (a frame imported again since stays in the trash). |

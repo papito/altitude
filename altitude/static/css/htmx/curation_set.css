@@ -48,7 +48,7 @@
   font-weight: var(--font-weight-semibold);
 }
 
-/* Beside the name while the Bundle holds a Pick, so collapsing it never hides a frame that counts */
+/* Beside the name while the Bundle holds a Pick, which the Bundle's Recycle leaves in place */
 .curation-bundle h3 .fa-check-circle {
   color: var(--success-color);
 }

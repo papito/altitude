@@ -111,10 +111,9 @@ export const Const = {
         minFrames: "data-min-frames",
         // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
         maxSelection: "data-max-selection",
-        // A Curation set's opening frames, and whether its Bundles collapse
+        // A Curation set's opening frames
         openingPinnedId: "data-opening-pinned-id",
         openingFocusedId: "data-opening-focused-id",
-        bundlesCollapse: "data-bundles-collapse",
         // The measurement's gray levels a pixel counts as blown or crushed at, and the box the image is fitted into
         // before it is measured, which the stage's Clipping blink and Histogram read from the set's root
         clippedLevel: "data-clipped-level",

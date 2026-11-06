@@ -378,8 +378,6 @@ export function curation() {
         focusedId: null,
         pinnedId: null,
         pickIds: [],
-        // Whether each Bundle of the set is open, by its kind
-        openBundles: {},
         zoomPersonId: null,
         // The Loupe's level, a rung of `LOUPE_LEVELS`: the footer's slider and the wheel over a pane move it, and it
         // holds across sets and opens
@@ -757,17 +755,8 @@ export function curation() {
             return this.pickIds.includes(frameId)
         },
 
-        isBundleOpen(kind) {
-            return this.openBundles[kind] === true
-        },
-
         bundleHoldsPick(kind) {
             return this.pickIds.some((id) => this.bundleOf[id] === kind)
-        },
-
-        isFrameShown(frameId) {
-            const kind = this.bundleOf[frameId]
-            return !kind || this.isBundleOpen(kind)
         },
 
         columnClasses(frameId) {
@@ -775,10 +764,6 @@ export function curation() {
                 focused: this.focusedId === frameId,
                 pinned: this.pinnedId === frameId,
             }
-        },
-
-        bundleToggleLabel(kind) {
-            return this.isBundleOpen(kind) ? "Hide" : "Show"
         },
 
         keepLabel(frameId) {
@@ -813,8 +798,7 @@ export function curation() {
         },
 
         /**
-         * The frame next to the focused one in the rail's order, past the frames of a collapsed Bundle
-         * and past the frame `exceptId` names
+         * The frame next to the focused one in the rail's order, past the frame `exceptId` names
          */
         neighbourOf(step, exceptId = null) {
             const from = this.frames.findIndex(
@@ -826,7 +810,7 @@ export function curation() {
                 index += step
             ) {
                 const frameId = this.frames[index].id
-                if (frameId !== exceptId && this.isFrameShown(frameId)) {
+                if (frameId !== exceptId) {
                     return frameId
                 }
             }
@@ -849,9 +833,9 @@ export function curation() {
 
         /**
          * The focused frame becomes the pinned frame, replacing the one before it, and focus moves on to
-         * the next shown frame, or the previous one at the end, so two frames stay on the stage. With no
-         * other frame shown, the stage shows the one frame. The pin only ever moves to another frame: the
-         * pinned frame on its own has nothing to do here, and an arrow goes back to the two.
+         * the next frame, or the previous one at the end, so two frames stay on the stage. The pin only
+         * ever moves to another frame: the pinned frame on its own has nothing to do here, and an arrow
+         * goes back to the two.
          */
         pinFocused() {
             if (!this.focusedId || this.focusedId === this.pinnedId) {
@@ -869,11 +853,6 @@ export function curation() {
             this.pickIds = this.isPick(frameId)
                 ? this.pickIds.filter((id) => id !== frameId)
                 : [...this.pickIds, frameId]
-        },
-
-        toggleBundle(kind) {
-            this.openBundles[kind] = !this.isBundleOpen(kind)
-            this.preloadNeighbours()
         },
 
         zoomToPerson(personId) {
@@ -925,14 +904,13 @@ export function curation() {
                 pinnedId: this.pinnedId,
                 focusedId: this.focusedId,
                 pickIds: this.pickIds,
-                openBundles: { ...this.openBundles },
                 zoomPersonId: this.zoomPersonId,
             }
         },
 
         /**
          * The view a set is read again in once a frame on its stage is recycled. Focus moves on from the
-         * focused frame to the next shown frame, or the previous one at the end, never to the pinned
+         * focused frame to the next frame, or the previous one at the end, never to the pinned
          * frame. With two frames on the stage, the one left is the pinned frame, as after a Pin, so the
          * frame coming in is on the right and two stay on the stage; with none to come in, the one left is
          * there alone. A frame alone on the stage hands that neighbour its place, pinned or not. A role
@@ -1027,21 +1005,6 @@ export function curation() {
                 crushedLevel: Number(setEl.dataset.crushedLevel),
                 fitBox: Number(setEl.dataset.measurementBox),
             }
-
-            // A Bundle collapses only in a set large enough, and the frames on the stage stay findable
-            const collapses = setEl.dataset.bundlesCollapse === "true"
-            const wasOpen = view?.openBundles ?? {}
-            this.openBundles = Object.fromEntries(
-                frames
-                    .filter((frame) => frame.bundleKind)
-                    .map(({ bundleKind }) => [
-                        bundleKind,
-                        !collapses ||
-                            wasOpen[bundleKind] === true ||
-                            bundleKind === this.bundleOf[this.focusedId] ||
-                            bundleKind === this.bundleOf[this.pinnedId],
-                    ]),
-            )
 
             this.phase = Phase.set
             this.watchStage()
