@@ -289,12 +289,6 @@
           @* The note's row is there from the set's opening when any frame is in an album or a Location, and holds its line while the
              note is empty, so a frame's Pick does not shrink the panes mid-comparison *@
           <p class="note" x-show="hasFrameInAlbumOrLocation" x-text="recycledInAlbumOrLocationNote"></p>
-          @* The Loupe's level, on a row of its own over Resolve: its stops are the ladder's rungs (`loupeRange`), the same the wheel
-             over a pane steps, and the level holds across sets and opens *@
-          <label class="loupe-level">Loupe
-            <input type="range" :min="loupeRange.min" :max="loupeRange.max" :step="loupeRange.step" :value="loupeLevel" x-on:input="setLoupeLevel($event.target.valueAsNumber)">
-            <span x-text="loupeLevelLabel"></span>
-          </label>
           <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle</small>
           @* With no frame to keep the hint stands in for Resolve, and Enter does nothing. Resolve's label is two spans so that only
              the kept frame's name truncates, and its title gives the label whole *@

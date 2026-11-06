@@ -1253,10 +1253,10 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   The Loupe is a lens in each pane (`.loupe`, `#curationLoupePinned` and `#curationLoupeFocused`, beside the images'
   `curationStagePinned` and `curationStageFocused`), last in the pane so it paints above the image, the spinner and the tag. The
   pointer over a pane's image shows it: the spot under the pointer at the original's pixels (1:1), on that pane alone. The level is
-  one value for every frame, `loupeLevel` on the component, a rung of `LOUPE_LEVELS` (1 to 4 by halves): the footer's slider
-  (`.loupe-level`, its stops from `loupeRange`) and the wheel over a pane move it through `setLoupeLevel`, the one setter, which
-  remembers it under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`, `saveLoupeLevel`) and hands it to the module
-  (`setLevel`), so it holds across sets and opens. A small original, or a zoomed one, that the pane already shows at or above the
+  one value for every frame, `loupeLevel` on the component, a rung of `LOUPE_LEVELS` (1 to 4 by halves): the wheel over a pane
+  steps it, the only control it has, and the module hands the new rung back (`saveLevel`), which the component keeps and
+  remembers under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`, `saveLoupeLevel`), so it holds across sets and opens.
+  The lens's label is the only place the level reads. A small original, or a zoomed one, that the pane already shows at or above the
   chosen level is shown at the first level above its fit, and the wheel steps from the level shown, so every step changes what the
   lens shows. A wheel with a modifier held is left to the browser (Ctrl zooms the page), and one with nothing under the pointer to
   magnify steps nothing. `js/common/loupe.js` places and draws it (`attachLoupe`, answering `refresh` and
@@ -1321,9 +1321,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
   window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
   ("← → ↑ ↓ move, R recycle the frame's Bundle", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
-  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip. A row above them holds the Loupe's
-  slider alone, in the center column (`.loupe-level`, `grid-column: 2`; the three below name their columns, so auto-placement
-  never lifts one onto its row), over Resolve.
+  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip.
   The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
   stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
   frame" (`.keep-hint`, in `--theme-neutral-3`) and no button, and Enter does nothing, since `settle` refuses an empty list. Otherwise

@@ -29,9 +29,8 @@ import { Const } from "../constants.js"
  * that shows what the pane shows is no lens. The wheel over a pane steps from the level shown, up
  * on a negative `deltaY`, so every step changes what the lens shows, and `saveLevel` remembers the
  * rung; `readLevel` answers it when the Loupe attaches, or anything not in the ladder for the first
- * rung, and `setLevel` is the caller's own control over the same rungs. A wheel with a modifier
- * held is the browser's (Ctrl zooms the page), and one with nothing under the pointer to magnify
- * steps nothing.
+ * rung. A wheel with a modifier held is the browser's (Ctrl zooms the page), and one with nothing
+ * under the pointer to magnify steps nothing.
  *
  * One lens at a time: the pane under the pointer shows its lens, and every other pane's stays
  * hidden. A pane whose image is not shown (not connected, laid out at no width, not loaded, or
@@ -40,7 +39,7 @@ import { Const } from "../constants.js"
  * settled, a transform or a resize.
  */
 
-/** Attaches the Loupe to `panes` and answers `{ refresh, setLevel, detach }` */
+/** Attaches the Loupe to `panes` and answers `{ refresh, detach }` */
 export function attachLoupe({ panes, levels, readLevel, saveLevel }) {
     let level = validLevel(levels, readLevel())
     // The last pointer position and the pane it is over, null while the pointer is over none
@@ -131,11 +130,6 @@ export function attachLoupe({ panes, levels, readLevel, saveLevel }) {
 
     return {
         refresh: place,
-        /** The caller's choice of rung, placed at once; anything off the ladder is its first rung */
-        setLevel(next) {
-            level = validLevel(levels, next)
-            place()
-        },
         // The lenses are left as they were found, for a caller that keeps them past the Loupe
         detach() {
             bindings.splice(0).forEach((unbind) => unbind())

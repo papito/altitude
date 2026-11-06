@@ -532,27 +532,9 @@
   font-size: var(--font-size-small);
 }
 
-/* The Loupe's level, a slider on a row of its own in the footer's center column, over Resolve; the three below it name their
-   columns, so the row holds the slider alone */
-#curationCompare .loupe-level {
-  grid-column: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  justify-self: center;
-  color: var(--theme-neutral-3);
-  font-size: var(--font-size-small);
-  white-space: nowrap;
-}
-
-#curationCompare .loupe-level input {
-  accent-color: var(--theme-primary);
-}
-
 /* The keys with no button of their own, at twice the size of the footer's other small text, to be read at a glance. One line,
    clipped in a narrow window, so that it takes no more height from the images than that line */
 #curationCompare .keys {
-  grid-column: 1;
   overflow: hidden;
   color: var(--theme-neutral-3);
   font-size: var(--font-size-medium);
@@ -566,12 +548,7 @@
   font-size: var(--font-size-small);
 }
 
-#curationCompare .resolve {
-  grid-column: 2;
-}
-
 #curationCompare .actions {
-  grid-column: 3;
   display: flex;
   justify-self: end;
   gap: var(--space-4);

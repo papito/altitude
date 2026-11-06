@@ -367,8 +367,8 @@ in the rail are preloaded; a held arrow key does not queue originals ahead of th
 
 Hover over a pane and the **Loupe** shows the spot under the pointer at the original's pixels, so sharpness, noise and
 eyes are judged on the file and not on a pane that shrinks it; it shows on the pane under the pointer alone. Its level
-is one value for every frame, from 100% to 400% in steps of 50%: the footer's slider sets it, the wheel over a pane
-steps it, the browser remembers it for the next open, and a label in the lens's corner reads it. Above 1:1 the pixels are crisp blocks, so blur and noise are the file's and not the browser's
+is one value for every frame, from 100% to 400% in steps of 50%: the wheel over a pane
+steps it, the only control it has, the browser remembers it for the next open, and a label in the lens's corner reads it. Above 1:1 the pixels are crisp blocks, so blur and noise are the file's and not the browser's
 smoothing. It works while the stage is zoomed to a Person, and shows nothing over the bars beside the image or while a
 frame loads.
 
@@ -391,7 +391,7 @@ per Person (most frames first) and one column per frame in the rail's order, fro
 where a frame has no Face of that Person. A column's head is the frame's Preview and focuses it. Clicking a crop zooms
 both panes to that Person's box, or back out; a frame with no Face of the Person shows whole.
 
-**The footer** holds, on a row of its own, the Loupe's slider ("Loupe ▬●▬ 200%") centered over Resolve; below it the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip on the right, and in the center what Resolve will
+**The footer** holds the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip on the right, and in the center what Resolve will
 do: "Keep IMG_0042.jpg, recycle 3" with one Pick, "Keep 2, recycle 3" with several. With no Pick and one frame on the
 stage, that frame is kept; with no Pick and two on the stage, nothing is, and the center reads "Press 1 or 2 to keep a
 frame" with no button, so a frame on the stage is never recycled on a guess. A row above says how many frames to be
@@ -421,8 +421,8 @@ click hands focus back to the shell so Enter resolves next.
 
 Actions run one at a time: a key pressed while a set is being resolved or read does nothing.
 
-The wheel over a stage pane steps the Loupe's level, as the footer's slider sets it, the one pointer gesture with an
-effect of its own; the Loupe is pointer-only, and the arrows are the rail's (a focused slider takes them itself).
+The wheel over a stage pane steps the Loupe's level, the one pointer gesture with an
+effect of its own; the Loupe is pointer-only, and the arrows are the rail's.
 
 ## 4. The walk of the queue
 

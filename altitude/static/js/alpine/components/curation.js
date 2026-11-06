@@ -68,8 +68,8 @@ const Phase = {
 // How much of the pane a zoomed Face's box fills, so its surroundings stay in view
 const ZOOMED_BOX_SHARE = 0.5
 
-// The Loupe's ladder: original pixels per screen pixel, so 1 is 1:1; the footer's slider has a stop on each rung
-const LOUPE_LEVELS = [1, 1.5, 2, 2.5, 3, 3.5, 4]
+// The Loupe's ladder: original pixels per screen pixel, so 1 is 1:1; the wheel over a pane steps a rung
+const LOUPE_LEVELS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
 
 const PINNED_IMAGE_ID = "curationStagePinned"
 const FOCUSED_IMAGE_ID = "curationStageFocused"
@@ -409,8 +409,8 @@ export function curation() {
         // The Bundle kinds whose details the rail shows, a Bundle's reason line and its frames' reasons: every
         // other Bundle's are hidden. They hold across sets and opens
         detailKinds: rememberedDetailKinds(),
-        // The Loupe's level, a rung of `LOUPE_LEVELS`: the footer's slider and the wheel over a pane move it, and it
-        // holds across sets and opens
+        // The Loupe's level, a rung of `LOUPE_LEVELS`: the wheel over a pane steps it, and it holds across sets
+        // and opens
         loupeLevel: rememberedLoupeLevel(),
         // What each stage image has settled on, loaded or failed, by the image's ID: the `src` it holds
         // once its `load` or `error` has fired. Until a pane's frame is that one, the pane is loading
@@ -1084,29 +1084,12 @@ export function curation() {
                 panes,
                 levels: LOUPE_LEVELS,
                 readLevel: () => this.loupeLevel,
-                // The wheel's step reaches the slider through the state
-                saveLevel: (level) => this.setLoupeLevel(level),
+                // The wheel's step holds for the next set's Loupe, and for the next open
+                saveLevel: (level) => {
+                    this.loupeLevel = level
+                    saveLoupeLevel(level)
+                },
             })
-        },
-
-        /** The slider's and the wheel's one setter: the state, the storage and the lenses on show */
-        setLoupeLevel(level) {
-            this.loupeLevel = validLoupeLevel(level)
-            saveLoupeLevel(this.loupeLevel)
-            loupe?.setLevel(this.loupeLevel)
-        },
-
-        get loupeLevelLabel() {
-            return `${Math.round(this.loupeLevel * 100)}%`
-        },
-
-        // The slider's stops are the ladder's rungs
-        get loupeRange() {
-            return {
-                min: LOUPE_LEVELS[0],
-                max: LOUPE_LEVELS[LOUPE_LEVELS.length - 1],
-                step: LOUPE_LEVELS[1] - LOUPE_LEVELS[0],
-            }
         },
 
         // The control that had focus may have left with the previous set's fragment
