@@ -21,9 +21,10 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  *
  * It is opened on one of three things (`requestCuration`, from `listeners/curation.js`): the queue,
  * whose Sequence IDs it walks, requesting one set's fragment at a time; one Sequence; or a selection,
- * whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set: Skip, and a
- * Keep all that changes nothing, close Curation, and a Resolve or a Keep all that changes something
- * stays open on a report of what it did, with Undo and Exit.
+ * whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set: a Keep all
+ * that changes nothing closes Curation, as Skip does on the one Sequence, and a Resolve or a Keep all
+ * that changes something stays open on a report of what it did, with Undo and Exit. A selection is no
+ * Sequence, so it has no Skip, button or key: Exit closes it.
  *
  * A set is never left on show past its outcome: a failed read of a set says so in place of any set
  * (`reading`), with Try again, so what was saved cannot be acted on a second time.
@@ -1346,9 +1347,9 @@ export function curation() {
             })
         },
 
-        /** Skip changes nothing: the next set opens, or Curation closes */
+        /** Skip changes nothing: the next set opens, or Curation closes. A selection has none, button or key */
         skip() {
-            if (this.frames.length === 0) {
+            if (this.frames.length === 0 || this.selectionIds) {
                 return
             }
 

@@ -1321,7 +1321,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
   window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
   ("← → ↑ ↓ move, R recycle the frame's Bundle", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
-  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip.
+  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip Sequence, the latter not shown on a selection (`x-show="!selectionIds"`), which is no Sequence and is left by Exit.
   The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
   stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
   frame" (`.keep-hint`, in `--theme-neutral-3`) and no button, and Enter does nothing, since `settle` refuses an empty list. Otherwise
@@ -1352,16 +1352,16 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
   | A | Keep all |
   | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
-  | S | Skip |
+  | S | Skip Sequence (nothing on a selection) |
   | Z | Undo the last action |
   | Esc | Close Curation (`global.js`) |
 
 - **The walk.** On the queue, opening calls the queue endpoint and requests one set's fragment at a time, and the user never sees
-  it as a list. Resolve, Keep all and Skip open the next ID, a Sequence answering with no content is passed over without
+  it as a list. Resolve, Keep all and Skip Sequence open the next ID, a Sequence answering with no content is passed over without
   comment, also when a Bundle's or a frame's recycling left too few, and the next set's opening frames are preloaded. When the IDs run out the
   count is read again: with Sequences left, skipped or newly imported, the end state shows them with Start again, which calls the
-  endpoint afresh, and with none it reads "All done". A selection or a Sequence opened from its header has no next set: Skip, and a Keep
-  all that changes nothing, close Curation; a Resolve, or a Keep all that changes something, stays open on a report of what was kept
+  endpoint afresh, and with none it reads "All done". A selection or a Sequence opened from its header has no next set: a Keep
+  all that changes nothing closes Curation, as Skip Sequence does on that one Sequence (a selection has no Skip: `skip()` returns, and Exit closes it); a Resolve, or a Keep all that changes something, stays open on a report of what was kept
   and recycled; and a Bundle's or a frame's recycling that leaves too few frames shows the too-few state.
 - **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle or a frame is the grid's own
   `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the queue it was made
@@ -1379,7 +1379,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   old header until the next search. The map layout has no cells, so closing there runs the search again.
 - **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle of a Bundle or a frame, and Undo, runs
   `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
-  true. Skip changes nothing and announces nothing. The store is also read when the Triage results render
+  true. Skip Sequence changes nothing and announces nothing. The store is also read when the Triage results render
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
 - **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, and the shell) and `curation_set.css` (the
   set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,

@@ -298,7 +298,8 @@
           </div>
           <div class="actions">
             <button type="button" class="action-button" x-on:click="keepAll()">Keep all <kbd>A</kbd></button>
-            <button type="button" class="action-button" x-on:click="skip()">Skip <kbd>S</kbd></button>
+            @* A selection is no Sequence and has no next set, so there is nothing to skip: Exit closes it *@
+            <button type="button" class="action-button" x-show="!selectionIds" x-on:click="skip()">Skip Sequence <kbd>S</kbd></button>
           </div>
         </footer>
       </section>

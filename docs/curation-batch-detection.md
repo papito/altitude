@@ -224,7 +224,7 @@ refuses a Sequence given for a frame that is no Pick.
 
 **Recycling a Bundle is not a call of this service.** The client uses the grid's own recycle endpoint, then reads the
 set again so the Bundles are recomputed against the frames left, and undoes it through the grid's restore endpoint.
-Skip reaches no server.
+Skip Sequence reaches no server.
 
 Two side effects of recycling reach the user: a recycled frame leaves its albums and Locations and a restore does not
 add it back (the set's footer says so with a count), and its Faces leave its Person's face count, so an unnamed Person
@@ -335,7 +335,7 @@ clears that Sequence.
 │  Face quality …  │  P2   [👤]   [👤]   [👤]   [👤]                                   │
 │                  ├──────────────────────────────────────────────────────────────────┤
 │ Blurry (1)       │  2 frames to recycle are in an album or Location: …              │
-│  [ⓘ] [Recycle]   │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip S]
+│  [ⓘ] [Recycle]   │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip Sequence S]
 └──────────────────┴──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -391,7 +391,7 @@ per Person (most frames first) and one column per frame in the rail's order, fro
 where a frame has no Face of that Person. A column's head is the frame's Preview and focuses it. Clicking a crop zooms
 both panes to that Person's box, or back out; a frame with no Face of the Person shows whole.
 
-**The footer** holds the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip on the right, and in the center what Resolve will
+**The footer** holds the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip Sequence on the right (a selection has no Skip Sequence), and in the center what Resolve will
 do: "Keep IMG_0042.jpg, recycle 3" with one Pick, "Keep 2, recycle 3" with several. With no Pick and one frame on the
 stage, that frame is kept; with no Pick and two on the stage, nothing is, and the center reads "Press 1 or 2 to keep a
 frame" with no button, so a frame on the stage is never recycled on a guess. A row above says how many frames to be
@@ -415,7 +415,7 @@ click hands focus back to the shell so Enter resolves next.
 | Enter | Resolve with the Picks; with none, the one frame on the stage; otherwise nothing |
 | A | Keep all |
 | R | Recycle the focused frame's Bundle, leaving any Pick in it; a Contender has none |
-| S | Skip |
+| S | Skip Sequence (nothing on a selection) |
 | Z | Undo the last action |
 | Esc | Close Curation |
 
@@ -427,15 +427,16 @@ effect of its own; the Loupe is pointer-only, and the arrows are the rail's.
 ## 4. The walk of the queue
 
 Opened from the toolbar, Curation reads the queue's Sequence IDs once and requests one set's fragment at a time; the
-user never sees the list. Resolve, Keep all and Skip open the next set. A Sequence that answers with no content (gone
+user never sees the list. Resolve, Keep all and Skip Sequence open the next set. A Sequence that answers with no content (gone
 under two frames meanwhile) is passed over without comment. The next set's opening frames are preloaded while the
 current one is on show, so it paints at once.
 
 When the IDs run out, the count is read again. With Sequences left (skipped, or imported meanwhile) the end state shows
 the count with **Start again**, which reads the queue afresh; with none it reads **All done**.
 
-A Sequence opened from its header or a selection has no next set. Skip, and a Keep all that changes nothing, close
-Curation. A Resolve, or a Keep all that changes something, stays open on a report ("Kept 1 frame, recycled 3 frames") with
+A Sequence opened from its header or a selection has no next set. A Keep all that changes nothing closes
+Curation, as Skip Sequence does on that one Sequence. A selection is no Sequence, so it has no Skip Sequence, button or key:
+Exit closes it. A Resolve, or a Keep all that changes something, stays open on a report ("Kept 1 frame, recycled 3 frames") with
 Undo and Exit. A Bundle's recycling that leaves too few frames shows the too-few state.
 
 ## 5. Outcomes and Undo
@@ -448,7 +449,7 @@ Every action is saved as it happens, so closing loses only the skips and the und
 | Keep all | `resolve` with nothing to recycle. On a whole Sequence this dismisses a wrongly grouped burst; on part of one it changes nothing. |
 | Recycle a Bundle | The grid's own recycle endpoint on the Bundle's frames (a Pick in it stays). The set is read again, keeping the pinned frame, the focused frame, the Picks and the zoom, and the Bundles are recomputed against the frames left. |
 | Recycle a frame | The grid's own recycle endpoint on a frame of the stage, a Pick or not. The set is read again as after a Bundle's recycling, and the next frame takes the recycled one's place: the frame left on the stage is the pinned frame and the next frame in the rail's order comes in on the right, so two stay on the stage. |
-| Skip | Nothing is saved; the walk moves on. |
+| Skip Sequence | Nothing is saved; the walk moves on. Not offered on a selection. |
 | Undo | One entry, the last mutation. A Resolve or Keep all goes back through `reopen`; a recycled Bundle or frame through the grid's restore, the frame back on the stage beside the one it was recycled from. The set is read again by its own ID wherever the walk has gone: the walk goes back to it, or if Start again replaced the list, the Sequence is put in where the walk stands. The result is reported as a restore is (a frame imported again since stays in the trash). |
 
 A failed write goes to the snackbar and leaves the set on show, since nothing was saved. A failed read, whether it
@@ -465,7 +466,7 @@ off the Sequences cleared; kept frames stay under their old header until the nex
 no cells, the search runs again.
 
 After each Resolve, Keep all, Bundle recycling and Undo, the counts refresh: the nav, folder, album and Location counts
-and the number of Sequences to curate, which the toolbar's button reads. Skip changes nothing and refreshes nothing.
+and the number of Sequences to curate, which the toolbar's button reads. Skip Sequence changes nothing and refreshes nothing.
 
 ## 7. Settings screen
 
