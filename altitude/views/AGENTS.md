@@ -122,7 +122,9 @@ and the panes' Split.js sizes on each axis as component data and remembers them 
 `Const.localStore.peopleView`, which nothing else reads (see **People tab** below). Nor is the Loupe's level: Curation's
 `curation` component reads and remembers it in `localStorage` under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`,
 `saveLoupeLevel`), which nothing else reads, and the Bundle kinds whose details its rail shows under
-`Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), a JSON array (see **Curation** below).
+`Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), a JSON array, and whether its stage shows the
+Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogramShown`, `saveHistogramShown`), "true" or "false"
+(see **Curation** below).
 
 ## DOM Addressing Convention
 
@@ -1276,7 +1278,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   side, and `cursor: none` on the image of a pane whose lens shows (`.pane:has(> .loupe:not([hidden])) img`).
 
   The Histogram is a strip under each pane (`.histogram`, `#curationHistogramPinned` and `#curationHistogramFocused`, beside the
-  images' IDs): a button, the figure's row between the image and the caption (`grid-template-rows: minmax(0, 1fr) auto auto`),
+  images' IDs): a button, the figure's row between the image and the caption (`grid-template-rows: minmax(0, 1fr)`, the pane's
+  row alone, the strip's and the caption's being implicit, so a hidden strip leaves no empty row or gap and the pane takes its room),
   `--curation-histogram-height` tall, holding the frame's Histogram in an inline `<svg viewBox="0 0 64 16">`: after two static
   `<line class="grid">` at a third and two thirds of the range, a `<path>` a channel, `.red`, `.green` and `.blue` filled and
   `.luminance` a line over them, each `d` built by the component (`histogramPath(frameId, channel)`). The data is the frame's,
@@ -1299,8 +1302,15 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   frame's image loads; a frame not measured carries none of the three attributes and its strip is empty. A failed image disables
   the button (`isImageUnreadable`, `unreadableSrcs`).
 
+  The H key shows or hides both panes' strips: `showsHistogram` on the component, one switch for the stage, which the button's
+  `x-show` reads, shown until hidden and remembered under `Const.localStore.curationHistogram` (`rememberedHistogramShown`,
+  `saveHistogramShown`), so it holds across sets and opens, as the Loupe's level does. `toggleHistogram` flips and saves it, and
+  does nothing with no set on show, where the change would not be seen. Hiding the strips turns the Clipping blink off, since the
+  strip is its only switch, and hands focus to the shell when a strip held it; showing them again leaves the blink off. The key
+  has no button: the footer's keys hint names it.
+
   The button is the Clipping blink's switch: `clippingBlink` on the component, one switch for the stage, false on every open and
-  not stored, `aria-pressed` while on (the stage's pressed rule gives it the success edge and luminance line; the channels keep their colors), with the `aria-label`
+  whenever the strips are hidden, and not stored, `aria-pressed` while on (the stage's pressed rule gives it the success edge and luminance line; the channels keep their colors), with the `aria-label`
   "Clipping blink" and the title "Blink the blown highlights and crushed shadows", since it holds no text. `toggleClippingBlink`
   flips it and, on, draws both panes' masks (`drawClipping`, async: a canvas that holds its image's mask is left alone; any other
   is blanked and, for an image with pixels, painted when the read is in, if the set, the pane's source and the blink still hold;
@@ -1333,7 +1343,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The footer** is a grid of three columns, `minmax(0, 1fr) auto minmax(max-content, 1fr)`, so its center stays at the true center
   while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
   window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
-  ("← → ↑ ↓ move, R recycle the frame's Bundle", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
+  ("← → ↑ ↓ move, R recycle the frame's Bundle, H Histogram", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
   footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip Sequence, the latter not shown on a selection (`x-show="!selectionIds"`), which is no Sequence and is left by Exit.
   The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
   stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
@@ -1365,6 +1375,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
   | A | Keep all |
   | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
+  | H | Show or hide the Histogram strips, turning the Clipping blink off as they hide; nothing with no set on show |
   | S | Skip Sequence (nothing on a selection) |
   | Z | Undo the last action |
   | Esc | Close Curation (`global.js`) |

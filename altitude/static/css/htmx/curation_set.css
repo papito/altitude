@@ -185,11 +185,12 @@
   padding: var(--panel-padding);
 }
 
-/* The pane, the Histogram strip under it, then the caption */
+/* The pane, the Histogram strip under it while it shows, then the caption. Only the pane's row is declared: the rows after it are
+   implicit, so a hidden strip leaves no empty row, and no gap, behind */
 #curationStage figure {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr);
   row-gap: var(--space-3);
   min-height: 0;
   margin: 0;

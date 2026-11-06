@@ -51,6 +51,8 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * with the set, so an arrow back and forth, or a frame moving from the focused pane to the pinned
  * one, costs nothing. The blink is one switch for the stage (`clippingBlink`), on for both panes
  * and through the arrows and the next sets, and off on every open: a new shell starts it off.
+ * The H key shows or hides both strips (`showsHistogram`), a choice kept for the next open; the
+ * strip is the blink's only switch, so hiding it turns the blink off.
  */
 
 const Phase = {
@@ -77,6 +79,7 @@ const PINNED_IMAGE_ID = "curationStagePinned"
 const FOCUSED_IMAGE_ID = "curationStageFocused"
 const PINNED_LOUPE_ID = "curationLoupePinned"
 const FOCUSED_LOUPE_ID = "curationLoupeFocused"
+const HISTOGRAM_IDS = ["curationHistogramPinned", "curationHistogramFocused"]
 const PINNED_CLIPPING_ID = "curationClippingPinned"
 const FOCUSED_CLIPPING_ID = "curationClippingFocused"
 
@@ -238,6 +241,26 @@ function saveLoupeLevel(level) {
         localStorage.setItem(Const.localStore.loupeLevel, String(level))
     } catch {
         // Nothing to do: the level holds for the session
+    }
+}
+
+/** Whether the stage shows the Histogram strips, as last chosen; shown where nothing is stored or storage is blocked */
+function rememberedHistogramShown() {
+    try {
+        return (
+            localStorage.getItem(Const.localStore.curationHistogram) !== "false"
+        )
+    } catch {
+        return true
+    }
+}
+
+/** Remembers whether the Histogram strips show; a blocked storage forgets it and nothing else */
+function saveHistogramShown(shown) {
+    try {
+        localStorage.setItem(Const.localStore.curationHistogram, String(shown))
+    } catch {
+        // Nothing to do: the choice holds for the session
     }
 }
 
@@ -449,6 +472,9 @@ export function curation() {
         unreadableSrcs: {},
         // The Clipping blink's one switch for the stage; off on every open, as a new shell starts here
         clippingBlink: false,
+        // Whether the stage shows the Histogram strips: the H key switches them, and the choice holds
+        // across sets and opens
+        showsHistogram: rememberedHistogramShown(),
 
         // What Curation walks: the queue's IDs and where it stands in them, or else one Sequence
         // or a selection's IDs, which have no next set
@@ -784,6 +810,27 @@ export function curation() {
             if (this.clippingBlink) {
                 for (const imageId of [PINNED_IMAGE_ID, FOCUSED_IMAGE_ID]) {
                     this.drawClipping(imageId)
+                }
+            }
+        },
+
+        /**
+         * The H key: shows or hides both panes' Histogram strips and remembers which. The strip is the
+         * Clipping blink's only switch, so hiding it turns the blink off, and a strip that held focus
+         * hands it to the shell, since a hidden control cannot keep it. Nothing with no set on show,
+         * where the change would not be seen
+         */
+        toggleHistogram() {
+            if (!this.showsSet) {
+                return
+            }
+
+            this.showsHistogram = !this.showsHistogram
+            saveHistogramShown(this.showsHistogram)
+            if (!this.showsHistogram) {
+                this.clippingBlink = false
+                if (HISTOGRAM_IDS.includes(document.activeElement?.id)) {
+                    document.getElementById("curation").focus()
                 }
             }
         },
@@ -1511,10 +1558,11 @@ export function curation() {
          * Shift+2 recycle that same frame at once. P pins
          * the focused frame and moves on, and does nothing on the pinned frame. Enter resolves,
          * which does nothing while no frame is to be kept (`keepIds`), A keeps all, R recycles the focused
-         * frame's Bundle, S skips and Z undoes. Esc is `global.js`'s. A key held down repeats only the arrows,
-         * so it cannot resolve set after set, and Enter on a focused control presses that control. While a
-         * set is being resolved or read an arrow moves nothing, and still does not scroll the rail. With no
-         * set on show there are no frames and no focused frame, so only Z and Esc do anything.
+         * frame's Bundle, H shows or hides the Histogram strips, S skips and Z undoes. Esc is `global.js`'s.
+         * A key held down repeats only the arrows, so it cannot resolve set after set, and Enter on a
+         * focused control presses that control. While a set is being resolved or read an arrow moves
+         * nothing, and still does not scroll the rail. With no set on show there are no frames and no
+         * focused frame, and H leaves the strips as they are, so only Z and Esc do anything.
          */
         handleKey(event) {
             if (
@@ -1548,6 +1596,7 @@ export function curation() {
                 enter: () => this.resolve(),
                 a: () => this.keepAll(),
                 r: () => this.recycleFocusedBundle(),
+                h: () => this.toggleHistogram(),
                 s: () => this.skip(),
                 z: () => this.undo(),
             }

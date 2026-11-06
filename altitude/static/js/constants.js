@@ -169,6 +169,8 @@ export const Const = {
         loupeLevel: "loupeLevel",
         // The Bundle kinds whose details Curation's rail shows, a JSON array (js/alpine/components/curation.js)
         curationDetails: "curationDetails",
+        // Whether Curation's stage shows the Histogram strips, "true" or "false" (js/alpine/components/curation.js)
+        curationHistogram: "curationHistogram",
     },
 
     sessionStore: {

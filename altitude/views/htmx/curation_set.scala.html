@@ -122,7 +122,8 @@
    switch for the whole stage, `aria-pressed` while the blink is on and disabled on a failed image (`isImageUnreadable`); as it holds
    no text of its own, its `aria-label` names it and its title says what it does. The shapes and the labels are the frame's, so they
    show while its image loads, and are empty for a frame not measured. A click bubbles to the shell's root, which hands focus back
-   to it (`refocusAfterPointer`), as every button's does.
+   to it (`refocusAfterPointer`), as every button's does. The H key shows or hides both panes' strips (`showsHistogram`), and a
+   hidden strip leaves its row to the pane.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
    Any other frame's has the Pin button, and that other frame is always the focused one. Recycle sends the pane's frame to the
    trash at once (`recycleFrame`), its key the Keep button's with Shift held (`recycleKey`) *@
@@ -143,6 +144,7 @@
     <button type="button"
             id="@histogramId"
             class="histogram"
+            x-show="showsHistogram"
             title="Blink the blown highlights and crushed shadows"
             aria-label="Clipping blink"
             :aria-pressed="clippingBlink"
@@ -299,7 +301,7 @@
           @* The note's row is there from the set's opening when any frame is in an album or a Location, and holds its line while the
              note is empty, so a frame's Pick does not shrink the panes mid-comparison *@
           <p class="note" x-show="hasFrameInAlbumOrLocation" x-text="recycledInAlbumOrLocationNote"></p>
-          <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle</small>
+          <small class="keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> move, <kbd>R</kbd> recycle the frame's Bundle, <kbd>H</kbd> Histogram</small>
           @* With no frame to keep the hint stands in for Resolve, and Enter does nothing. Resolve's label is two spans so that only
              the kept frame's name truncates, and its title gives the label whole *@
           <div class="resolve">

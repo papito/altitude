@@ -287,10 +287,11 @@ face).
 The red, green and blue shapes and the luminance line under a frame on
 Curation's stage, measured at import from the pixels the exposure measurements
 read, with the fractions of its pixels crushed and blown in its corners.
+Shown or hidden by one switch for the stage, kept for the next open.
 _Avoid_: Levels, Tone curve.
 
 **Clipping blink**:
 The flashing marks over a frame on the stage of its blown highlights and
 crushed shadows, at the levels the measurement counts them. One switch for the
-stage, off when Curation opens.
+stage, the Histogram, off when Curation opens and while the Histogram is hidden.
 _Avoid_: Blinkies, Zebra, Clipping warning, Overexposure mask.
