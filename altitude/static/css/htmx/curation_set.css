@@ -552,7 +552,7 @@
   grid-column: 1;
   overflow: hidden;
   color: var(--theme-neutral-3);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -560,7 +560,7 @@
 /* A key cap of that line, twice the shell's too, its padding with it */
 #curationCompare .keys kbd {
   padding: 0 var(--space-4);
-  font-size: var(--font-size-large);
+  font-size: var(--font-size-small);
 }
 
 #curationCompare .resolve {
