@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.Asset
+import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 import altitude.core.service.FaceDetectionService
@@ -478,6 +479,52 @@ import altitude.core.service.FaceDetectionService
         response.text() should startWith("<!doctype html>")
         frameIds(response.text()).toSet shouldBe Set(first.persistedId, second.persistedId)
         response.text() should include("Too close to call")
+    }
+  }
+
+  test("A frame's rail item carries its Histogram and its exposure fractions, and an unmeasured frame's neither") {
+
+    /**
+     * Setup:
+     *
+     * A frame with its metrics and a Histogram whose tallest bin is the blue channel's last, and a frame whose metrics and
+     * Histogram are cleared, as an image the measurement could not decode is left.
+     *
+     * Assertions:
+     *
+     * The measured frame's rail item carries the Histogram's relative bytes in Base64, a byte per bin on one scale, and the
+     * stored fractions of its pixels crushed and blown, which the stage's strip shows. The unmeasured frame's carries none of the
+     * three.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        def channel(offset: Int): IArray[Float] = IArray.tabulate(Histogram.BINS)(bin => (bin + offset) / 1000f)
+        val histogram = Histogram(luminance = channel(0), red = channel(1), green = channel(2), blue = channel(3))
+        val measured = frame(fine.copy(clippedHighlights = 0.142, crushedShadows = 0.005))
+        testContext.setAssetHistogram(measured.persistedId, Some(histogram))
+        val unmeasured = testContext.persistAsset(isTriaged = true)
+        testContext.setAssetImageQuality(unmeasured.persistedId, None)
+        testContext.setAssetHistogram(unmeasured.persistedId, None)
+
+        val response = postSelection(host, repoId, List(measured, unmeasured).map(_.persistedId))
+        response.statusCode shouldBe 200
+
+        /** The opening tag of a frame's rail item */
+        def railItem(asset: Asset): String =
+          s"""<li class="curation-frame"[^>]*data-frame-id="${asset.persistedId}"[^>]*>""".r
+            .findFirstIn(response.text())
+            .getOrElse(fail(s"No rail item of $asset"))
+
+        val relative = java.util.Base64.getEncoder.encodeToString(histogram.relativeBytes)
+        railItem(measured) should include(s"""data-histogram="$relative"""")
+        railItem(measured) should include("""data-crushed-shadows="0.005"""")
+        railItem(measured) should include("""data-clipped-highlights="0.142"""")
+        List("data-histogram", "data-crushed-shadows", "data-clipped-highlights").foreach {
+          attribute => (railItem(unmeasured) should not).include(attribute)
+        }
     }
   }
 

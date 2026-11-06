@@ -95,8 +95,9 @@
              secondary text, text, a field's included). A rule writes a theme color or a semantic color directly. The
              Derived cards are the veils, a theme color or <code>--shadow-color</code> at an alpha, such as a field's
              fill and the popover dialog's surface and edge: the only other color tokens. A new color is a new theme
-             role as a hex pair, or a new veil when it must be translucent. The four semantic colors (success, warning, error, info) and
-             <code>--shadow-color</code> stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
+             role as a hex pair, or a new veil when it must be translucent. The four semantic colors (success, warning, error, info),
+             <code>--shadow-color</code> and the three channel colors of Curation's Histogram (<code>--histogram-red</code>,
+             <code>-green</code>, <code>-blue</code>, the pure primaries, one color in both themes) stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
              color per scheme, shown with its From line. The setup page's palette is that page's own, in
              <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows it and the tokens it comes
              from; Off palette marks a token that writes a color literal, and the literals written past the tokens are
@@ -106,7 +107,7 @@
              token's color of the theme shown at another alpha, until the page is reloaded.</p>
           <h3>Theme colors</h3>
           @tokenCards("color", "theme")
-          <h3>Status and shadow</h3>
+          <h3>Status, shadow and channels</h3>
           @tokenCards("color", "status-and-shadow")
           <h3>Derived</h3>
           @tokenCards("color", "derived")
@@ -460,10 +461,12 @@
              <code>color-scheme: dark</code> because the pane is dark in either theme, as the Loupe's lens does) says the same in chips:
              <code>.curation-chip.keep</code> filled with
              the success color on a Pick, and the frame's problems as plain chips. The Histogram strip under each pane
-             (<code>.histogram</code>, a button) draws the frame's luminance as bars in a theme neutral at an alpha over the pane's
-             backdrop, edged at full alpha, in the dark side too (<code>color-scheme: dark</code>), with two faint grid lines and the
+             (<code>.histogram</code>, a button) draws the frame's red, green and blue channels as three filled shapes in the
+             channel colors at an alpha, blended as light (<code>mix-blend-mode: screen</code>), so two that overlap read yellow, cyan
+             or magenta and the three a neutral, and its luminance as a line over them in a theme neutral, in the dark side too
+             (<code>color-scheme: dark</code>), with two faint grid lines and the
              crushed and blown fractions as small monospace chips in its corners, the info and the error color; while the Clipping
-             blink is on it wears the stage's pressed rule, the success edge and success-colored bars. The pinned frame's caption reads the same pin and
+             blink is on it wears the stage's pressed rule, the success edge and a success-colored line, the channels keeping their colors. The pinned frame's caption reads the same pin and
              Pinned (<code>.pinned-label</code>), centered below its image, and any other frame's has the Pin button. While nothing is to be kept the footer's center
              holds the keep hint (<code>.keep-hint</code>, "Press 1 or 2 to keep a frame", dimmed) in place of Resolve. The rules of
              the tag and the hint are scoped by <code>#curationStage</code> and <code>#curationCompare</code>, so this section shows

@@ -1,26 +1,21 @@
 /**
- * The luminance of an image the browser has already loaded: a Histogram of its gray levels and a
- * Clipping mask of its blown highlights and crushed shadows, read from the image's own pixels in
- * one pass, so nothing is fetched and no server column holds them. It knows nothing of the page it
- * serves: `readLuminance` takes an `HTMLImageElement` and answers numbers and a class map, and
- * `clippingMask` paints that map into an `ImageData` for a canvas to draw.
+ * The clipping of an image the browser has already loaded: the class of each of its pixels, a blown
+ * highlight, a crushed shadow or neither, read from the image's own pixels, and a Clipping mask
+ * painted from them. It knows nothing of the page it serves: `readClipping` takes an
+ * `HTMLImageElement` and answers a class map, and `clippingMask` paints that map into an
+ * `ImageData` for a canvas to draw.
  *
  * The fit: the image is sampled at a size fitted to `fitBox` on its long side and never enlarged,
  * the way the import's measurement fits an image into its box (1280,
- * `ImageMeasurement.MEASUREMENT_BOX_SIZE`) before it counts, so the fractions read here agree with
- * the clipped and crushed fractions stored at import. The sampled size rounds the natural size
- * times the scale, as OpenCV's `resize` does. The decode and the downscale are
+ * `ImageMeasurement.MEASUREMENT_BOX_SIZE`) before it counts, so the pixels marked here are close to
+ * the ones the clipped and crushed fractions stored at import counted. The sampled size rounds the
+ * natural size times the scale, as OpenCV's `resize` does. The decode and the downscale are
  * `createImageBitmap`'s, off the main thread, at `resizeQuality: "high"`, an area average close to
  * OpenCV's `INTER_AREA` but not the same one; and the bitmap is drawn converted to sRGB, so an
  * ICC-tagged original can differ a little more. The agreement is close, not to the pixel.
  *
  * The gray: each pixel's gray is OpenCV's `BGR2GRAY`, `0.299 R + 0.587 G + 0.114 B` rounded to a
  * level of 0 to 255; the source's alpha is ignored, the originals being photos.
- *
- * The bins: 64, a bin four levels wide (the gray over 4, floored), each the fraction of the pixels
- * that fell in it, so the 64 sum to 1 whatever the sampled size. With them come `blown` and
- * `crushed`, the fractions of the pixels at or over `clippedLevel` and at or under `crushedLevel`,
- * what the measurement stores as the clipped and crushed fractions.
  *
  * The classes: a byte per sampled pixel, `BLOWN` at or over `clippedLevel`, `CRUSHED` at or under
  * `crushedLevel`, else `NEITHER`, so a read keeps a byte per pixel and the mask is painted only
@@ -35,28 +30,24 @@
  * `getImageData` throws. The callers give the originals from the content route, which are.
  */
 
-/** The gray levels, 256, over the width of a bin, 4 */
-const BIN_COUNT = 64
-
 /** A pixel's class in a read's `classes` */
 const NEITHER = 0
 const BLOWN = 1
 const CRUSHED = 2
 
 /**
- * Reads the Histogram bins and the Clipping classes of `imageEl`, a loaded same-origin image.
- * Answers `{ bins, blown, crushed, classes, width, height }`: `bins` the 64 fractions, `blown` and
- * `crushed` the fractions of the pixels clipped either way, `classes` a `Uint8Array` of a byte per
- * pixel of the sampled `width` by `height`. Rejects on an image without a natural size (not
- * loaded, or failed) rather than count a blank canvas as black
+ * Reads the Clipping classes of `imageEl`, a loaded same-origin image. Answers `{ classes, width,
+ * height }`: `classes` a `Uint8Array` of a byte per pixel of the sampled `width` by `height`.
+ * Rejects on an image without a natural size (not loaded, or failed) rather than class a blank
+ * canvas as crushed
  */
-export async function readLuminance(
+export async function readClipping(
     imageEl,
     { fitBox, clippedLevel, crushedLevel },
 ) {
     if (!(imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0)) {
         throw new Error(
-            "readLuminance needs an image loaded with a natural size",
+            "readClipping needs an image loaded with a natural size",
         )
     }
 
@@ -71,13 +62,11 @@ export async function readLuminance(
     bitmap.close()
     const pixels = context.getImageData(0, 0, width, height).data
 
-    const classes = new Uint8Array(width * height)
-    const { bins, blown, crushed } = countLevels(pixels, classes, {
-        clippedLevel,
-        crushedLevel,
-    })
-
-    return { bins, blown, crushed, classes, width, height }
+    return {
+        classes: classesOf(pixels, { clippedLevel, crushedLevel }),
+        width,
+        height,
+    }
 }
 
 /**
@@ -131,38 +120,25 @@ function colorBytes(color) {
 }
 
 /**
- * The one pass over `pixels`, RGBA bytes: counts each pixel's gray into its bin and writes its
- * class into `classes`, a byte per pixel that starts `NEITHER`. Answers the bins and the blown and
- * crushed counts as fractions of the pixels. The loop touches typed arrays only, a million pixels
- * being usual
+ * The one pass over `pixels`, RGBA bytes: each pixel's class by its gray, a byte per pixel that
+ * starts `NEITHER`. The loop touches typed arrays only, a million pixels being usual
  */
-function countLevels(pixels, classes, { clippedLevel, crushedLevel }) {
-    const counts = new Uint32Array(BIN_COUNT)
-    let blown = 0
-    let crushed = 0
+function classesOf(pixels, { clippedLevel, crushedLevel }) {
+    const classes = new Uint8Array(pixels.length / 4)
 
     for (let i = 0, pixel = 0; i < pixels.length; i += 4, pixel++) {
         // OpenCV's BGR2GRAY weights, applied to the canvas's RGB order
         const gray = Math.round(
             0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2],
         )
-        counts[gray >> 2]++
 
         // The measurement counts clipped as `fractionAbove(gray, CLIPPED_LEVEL - 1)` and crushed
         // as `fractionAtMost(gray, CRUSHED_LEVEL)`: at or over 250, at or under 5
         if (gray >= clippedLevel) {
             classes[pixel] = BLOWN
-            blown++
         } else if (gray <= crushedLevel) {
             classes[pixel] = CRUSHED
-            crushed++
         }
     }
-
-    const total = pixels.length / 4
-    return {
-        bins: Array.from(counts, (count) => count / total),
-        blown: blown / total,
-        crushed: crushed / total,
-    }
+    return classes
 }

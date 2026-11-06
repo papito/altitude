@@ -230,6 +230,38 @@ import altitude.core.service.FaceDetectionService
     curation.sequenceSet("no-such-sequence") shouldBe None
   }
 
+  test("A set's frames carry their Histograms, a frame not measured has none, and another repository reads none") {
+
+    /**
+     * Setup:
+     *
+     * A burst of two frames run through the whole import, so each has its Histogram stored, and a still image whose metrics and
+     * Histogram are cleared, as an image the measurement could not decode is left. A second repository.
+     *
+     * Assertions:
+     *
+     * The Sequence's set holds each frame with the Histogram stored for it, as does a selection of the three, whose unmeasured
+     * frame has none. Read from the second repository, the frames have no Histograms.
+     */
+    val frames = burst(0)
+    val unmeasured = testContext.persistAsset(isTriaged = true)
+    testContext.setAssetImageQuality(unmeasured.persistedId, None)
+    testContext.setAssetHistogram(unmeasured.persistedId, None)
+    val stored = testApp.txManager.asReadOnly(testApp.DAO.asset.getHistograms(ids(unmeasured :: frames)))
+    stored.keySet shouldBe ids(frames)
+
+    def histogramsOf(set: Option[CurationSet]) =
+      set.value.frames.flatMap(frame => frame.histogram.map(frame.asset.persistedId -> _)).toMap
+
+    histogramsOf(curation.sequenceSet(sequenceOf(frames))) shouldBe stored
+    val selection = curation.selectionSet(ids(unmeasured :: frames))
+    frameIds(selection).toSet shouldBe ids(unmeasured :: frames)
+    histogramsOf(selection) shouldBe stored
+
+    switchContextRepo(testContext.persistRepository())
+    testApp.txManager.asReadOnly(testApp.DAO.asset.getHistograms(ids(frames))) shouldBe empty
+  }
+
   /**
    * A Sequence of `count` frames, in capture order, a second apart. They are imported last frame first, so the order of the rows
    * says nothing about capture order.

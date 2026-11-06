@@ -115,10 +115,16 @@ export const Const = {
         openingPinnedId: "data-opening-pinned-id",
         openingFocusedId: "data-opening-focused-id",
         // The measurement's gray levels a pixel counts as blown or crushed at, and the box the image is fitted into
-        // before it is measured, which the stage's Clipping blink and Histogram read from the set's root
+        // before it is measured, which the stage's Clipping blink reads from the set's root
         clippedLevel: "data-clipped-level",
         crushedLevel: "data-crushed-level",
         measurementBox: "data-measurement-box",
+        // What the stage's Histogram strip shows of a frame, on its rail item, as the import measured it: the
+        // Histogram, a byte per bin in Base64, and the fractions of its pixels crushed and blown; a frame not
+        // measured carries none
+        histogram: "data-histogram",
+        crushedShadows: "data-crushed-shadows",
+        clippedHighlights: "data-clipped-highlights",
         // The face strip's column of a frame, and a crop's box in upright pixels: x, y, width, height
         columnFrameId: "data-column-frame-id",
         faceBox: "data-face-box",

@@ -142,8 +142,15 @@ class CurationService(val app: Altitude):
       val assetIds = assets.map(_.persistedId).toSet
       val faces = app.service.person.getFacesOfAssets(assetIds).groupBy(_.assetId)
       val heldElsewhere = app.service.album.getAssetsInAnyAlbum(assetIds) ++ app.service.location.getAssetsInAnyLocation(assetIds)
-      val frames =
-        assets.map(asset => CurationFrame(asset, faces.getOrElse(asset.id, Nil), heldElsewhere.contains(asset.persistedId)))
+      val histograms = dao.getHistograms(assetIds)
+      val frames = assets.map {
+        asset =>
+          CurationFrame(
+            asset,
+            faces.getOrElse(asset.id, Nil),
+            heldElsewhere.contains(asset.persistedId),
+            histograms.get(asset.persistedId))
+      }
       val set = CurationRule.assess(frames, app.settings.current)
       logger.debug(s"Read a Curation set of ${frames.size} frames: ${set.bundles.map(_.kind)}, ${set.contenders.size} Contenders")
       set

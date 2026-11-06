@@ -61,6 +61,9 @@ case class Asset(
     // The Scene embeddings of a still image, one per Scene model; None per model for a Video, an animated image, or a still
     // image that model could not embed. Bulky, so no general read of an asset carries them: only the Sequence candidates do
     sceneEmbeddings: SceneEmbeddings = SceneEmbeddings(),
+    // The Histogram of a still image, measured with the Image quality; None as for it. Bulky, so no general read of an asset
+    // carries it: only Curation's read of a set's frames does
+    histogram: Option[Histogram] = None,
     // The Sequence the image is in while in triage: the id its members share; None otherwise
     sequenceId: Option[String] = None,
     createdAt: Option[LocalDateTime] = None,

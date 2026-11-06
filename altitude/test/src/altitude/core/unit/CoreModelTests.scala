@@ -13,6 +13,7 @@ import altitude.core.models.AssetType
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Face
 import altitude.core.models.Folder
+import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 import altitude.core.models.SceneEmbedding
@@ -138,6 +139,72 @@ import altitude.core.models.UserMetadataValue
     val unembedded = embedded.copy(sceneEmbeddings = SceneEmbeddings())
     unembedded.toJson.value.keySet.contains("scene_embeddings") should be(false)
     Asset.fromJson(unembedded.toJson).sceneEmbeddings should be(SceneEmbeddings())
+  }
+
+  /** A Histogram whose channels each hold one pixel fraction per bin: the bin's index over `scale`, offset by the channel */
+  private def histogramOf(scale: Float): Histogram =
+    def channel(offset: Int): IArray[Float] = IArray.tabulate(Histogram.BINS)(bin => (bin + offset) / scale)
+    Histogram(luminance = channel(0), red = channel(1), green = channel(2), blue = channel(3))
+
+  test("A Histogram travels through its bytes and through JSON, is absent when unset, and refuses another length") {
+
+    /**
+     * Setup:
+     *
+     * A Histogram of four different channels, a still image carrying it, and a copy of the image with none.
+     *
+     * Assertions:
+     *
+     * Its bytes are four channels of 64 little-endian float32 values, luminance first, and read back equal, as does the image's
+     * JSON; the copy's JSON has no `histogram` key, which is what every general read of an asset emits. A channel of another
+     * length and bytes of another length are refused.
+     */
+    val histogram = histogramOf(scale = 1000f)
+    val bytes = histogram.toBytes
+    bytes.length should be(4 * Histogram.BINS * java.lang.Float.BYTES)
+    java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).getFloat(java.lang.Float.BYTES) should be(0.001f)
+    Histogram.fromBytes(bytes) should be(histogram)
+    Histogram.fromBytes(bytes).hashCode should be(histogram.hashCode)
+
+    val measured = Asset(
+      userId = "u",
+      assetType = AssetType("image", "jpeg", "image/jpeg"),
+      fileName = "histogram.jpg",
+      checksum = "a" * 64,
+      sizeBytes = 10,
+      folderId = "",
+      histogram = Some(histogram)
+    )
+    Asset.fromJson(measured.toJson).histogram should be(Some(histogram))
+
+    val unmeasured = measured.copy(histogram = None)
+    unmeasured.toJson.value.keySet.contains("histogram") should be(false)
+    Asset.fromJson(unmeasured.toJson).histogram should be(None)
+
+    intercept[IllegalArgumentException](histogram.copy(red = IArray(1f)))
+    intercept[IllegalArgumentException](Histogram.fromBytes(bytes.dropRight(1)))
+  }
+
+  test("A Histogram's relative bytes put its channels on one scale, the tallest bin of the four at the top") {
+
+    /**
+     * Setup:
+     *
+     * A Histogram whose tallest bin is the blue channel's last, 66 over the scale, with the luminance channel's first bin empty.
+     *
+     * Assertions:
+     *
+     * The relative bytes are a byte per bin, the four channels in the order of the stored bytes: the tallest bin is 255, an empty
+     * bin 0, and every other bin its share of the tallest, rounded, whichever channel it is in.
+     */
+    val relative = histogramOf(scale = 1000f).relativeBytes.map(_ & 0xff)
+    relative.length should be(4 * Histogram.BINS)
+    relative.last should be(255)
+    relative.head should be(0)
+    // The red channel's bin 21 holds 22 of the tallest bin's 66, a third
+    relative(Histogram.BINS + 21) should be(85)
+    // The last bins of luminance, red and green: 63, 64 and 65 of 66
+    List(1, 2, 3).map(channel => relative(channel * Histogram.BINS - 1)) should be(List(243, 247, 251))
   }
 
   test("Video duration and Face Frame time, quality and enrollment travel through JSON, and the times are absent when unset") {

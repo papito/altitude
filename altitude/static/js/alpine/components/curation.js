@@ -1,7 +1,7 @@
 import { Alpine } from "../../lib/alpine.esm.min.js"
 import { reportRestore } from "../../assets/asset-actions.js"
 import { attachLoupe } from "../../common/loupe.js"
-import { clippingMask, readLuminance } from "../../common/luminance.js"
+import { clippingMask, readClipping } from "../../common/clipping.js"
 import {
     closeModal,
     getActiveModalHost,
@@ -41,15 +41,16 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * The Loupe (`common/loupe.js`) is attached over the stage's panes with each set's fragment, refreshed
  * when an image settles or the zoom is applied, and detached with the stage observer.
  *
- * The Histogram under each pane and the Clipping blink over it are read in the browser from the
- * original the pane has loaded, through `common/luminance.js`, once the image settles and shows:
- * one pass, off the main thread for its decode, gives the strip's bins and the class of every
- * pixel, at the levels and the box the set's root carries from the import's measurement, and the
- * blink's mask is painted from the classes when it is drawn. The read is cached by source for the
- * set on show, in flight or done, and dropped with the set, so an arrow back and forth, or a frame
- * moving from the focused pane to the pinned one, costs nothing. The blink is one switch for the
- * stage (`clippingBlink`), on for both panes and through the arrows and the next sets, and off on
- * every open: a new shell starts it off.
+ * The Histogram under each pane is the frame's own, measured at import: its rail item carries the
+ * bins and the two fractions of the strip's corners in its `data-*`, so the strip shows with the
+ * frame, whether or not its image has loaded. The Clipping blink over a pane is read in the browser
+ * from the original the pane has loaded, through `common/clipping.js`, and only while the blink is
+ * on: one pass, off the main thread for its decode, gives the class of every pixel, at the levels
+ * and the box the set's root carries from the import's measurement, and the mask is painted from
+ * the classes. The read is cached by source for the set on show, in flight or done, and dropped
+ * with the set, so an arrow back and forth, or a frame moving from the focused pane to the pinned
+ * one, costs nothing. The blink is one switch for the stage (`clippingBlink`), on for both panes
+ * and through the arrows and the next sets, and off on every open: a new shell starts it off.
  */
 
 const Phase = {
@@ -85,10 +86,12 @@ const CLIPPING_ID_OF = {
     [FOCUSED_IMAGE_ID]: FOCUSED_CLIPPING_ID,
 }
 
-// The Histogram's `viewBox` in the set's fragment (`0 0 64 16`), the space its bars are drawn in, and the
-// gap between two bars as a share of a bin's width
+// The Histogram's `viewBox` in the set's fragment (`0 0 64 16`), the space its shapes are drawn in
 const HISTOGRAM_BOX = { width: 64, height: 16 }
-const HISTOGRAM_BAR_GAP = 0.12
+// The channels of a frame's `data-histogram`, in the order of its bytes, a byte per bin
+const HISTOGRAM_CHANNELS = ["luminance", "red", "green", "blue"]
+// The byte of the tallest bin of a frame's four channels, which reaches the strip's top
+const HISTOGRAM_TALLEST = 255
 
 // What the next shell to load is opened on; the shell's request carries no parameters
 let requestedEntry = {}
@@ -238,47 +241,69 @@ function saveLoupeLevel(level) {
     }
 }
 
+/** A value of the Histogram's paths, rounded to two decimals to keep the string short */
+function rounded(value) {
+    return Math.round(value * 100) / 100
+}
+
+/** The height a bin's byte reaches in `HISTOGRAM_BOX`, as the y of its top */
+function binTop(bin) {
+    const { height } = HISTOGRAM_BOX
+    return rounded(height - (height * bin) / HISTOGRAM_TALLEST)
+}
+
 /**
- * The `d` of a Histogram's path from its bins, in `HISTOGRAM_BOX`: one bar per bin, a gap wide of
- * its neighbours, as high as the bin's fraction over the tallest bin's, so the histogram's shape
- * fills the strip whatever the exposure; an empty bin draws no bar. One path rather than a rect per
- * bin keeps the fragment at one element, as the strip's stroke and fill are one rule. Rounded to two
- * decimals to keep the string short. Empty with no pixel counted (a guard: a read always has some)
+ * A channel's bins as steps across `HISTOGRAM_BOX`, the path commands that follow a start at the
+ * box's left edge: up or down to each bin's top, then across the bin's width, so the bins stand
+ * side by side with no gap and the shape is honest to them
  */
-function barsPath(bins) {
-    const tallest = Math.max(...bins)
-    if (!(tallest > 0)) {
-        return ""
-    }
-
-    const { width, height } = HISTOGRAM_BOX
-    const binWidth = width / bins.length
-    const barWidth = binWidth * (1 - HISTOGRAM_BAR_GAP)
-    const round = (value) => Math.round(value * 100) / 100
-    return bins
-        .map((bin, index) => {
-            if (bin === 0) {
-                return ""
-            }
-            const x = round(index * binWidth + (binWidth - barWidth) / 2)
-            const top = round(height - (height * bin) / tallest)
-            return `M${x},${top}h${round(barWidth)}V${height}H${x}Z`
-        })
-        .join("")
+function stepsOf(bins) {
+    const binWidth = HISTOGRAM_BOX.width / bins.length
+    return Array.from(
+        bins,
+        (bin, index) => `V${binTop(bin)}H${rounded((index + 1) * binWidth)}`,
+    ).join("")
 }
 
-/** A fraction as the strip's corner label, "14.2%" */
+/** The `d` of a color channel's shape: its steps, closed down to the baseline, to be filled */
+function areaPath(bins) {
+    const { height } = HISTOGRAM_BOX
+    return `M0,${height}${stepsOf(bins)}V${height}Z`
+}
+
+/** The `d` of the luminance line: its steps alone, open, from the first bin's top, to be stroked */
+function linePath(bins) {
+    return `M0,${binTop(bins[0])}${stepsOf(bins)}`
+}
+
+/**
+ * The paths of a frame's Histogram by channel, `{ luminance, red, green, blue }`, from its
+ * `data-histogram`: the Base64 of a byte per bin, the channels in the order of
+ * `HISTOGRAM_CHANNELS`, each bin over the tallest of the four, as the server scales them. The
+ * luminance is a line and each color a filled shape
+ */
+function histogramPaths(base64) {
+    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+    const binCount = bytes.length / HISTOGRAM_CHANNELS.length
+    return Object.fromEntries(
+        HISTOGRAM_CHANNELS.map((channel, index) => {
+            const bins = bytes.subarray(
+                index * binCount,
+                (index + 1) * binCount,
+            )
+            return [
+                channel,
+                channel === "luminance" ? linePath(bins) : areaPath(bins),
+            ]
+        }),
+    )
+}
+
+/** A fraction as the strip's corner label, "14.2%"; empty for a frame that carries none */
 function percentLabel(fraction) {
-    return `${(fraction * 100).toFixed(1)}%`
-}
-
-/** What a pane's strip shows of a read: the bars' path and the two corner labels */
-function histogramOf(read) {
-    return {
-        path: barsPath(read.bins),
-        crushed: percentLabel(read.crushed),
-        blown: percentLabel(read.blown),
-    }
+    return fraction === undefined
+        ? ""
+        : `${(Number(fraction) * 100).toFixed(1)}%`
 }
 
 /**
@@ -344,11 +369,15 @@ export function curation() {
     const neighbourPreloads = new Map()
     // The measurement's levels and box from the set's root: `{ clippedLevel, crushedLevel, fitBox }`
     let measurement = null
-    // The luminance reads of the set on show by the image's `currentSrc`: `{ bins, classes, width,
-    // height }`, or the promise of one still in flight. A new map for each set, so a read finishing
-    // after its set has gone is told apart. Closure state on purpose: the classes are a byte for each
-    // of a million pixels, which no binding reads
-    let luminanceReads = new Map()
+    // The Clipping reads of the set on show by the image's `currentSrc`: `{ classes, width, height }`,
+    // or the promise of one still in flight. A new map for each set, so a read finishing after its
+    // set has gone is told apart. Closure state on purpose: the classes are a byte for each of a
+    // million pixels, which no binding reads
+    let clippingReads = new Map()
+    // The Histogram paths of the set's frames that have been on the stage, by frame ID, built once
+    // each from the frame's `histogram`. Closure state: a frame's paths are a few kilobytes of
+    // text that only the pane showing it binds
+    const histogramPathsOf = new Map()
     // The source each Clipping canvas holds the mask of, by the canvas's ID, so a mask is not drawn twice
     const drawnSrcs = new Map()
     // What the session leaves changed, net of its undos, for the grid beneath
@@ -418,9 +447,6 @@ export function curation() {
         settledSrcs: {},
         // The `src` each stage image settled on with no natural size, a failed image, by the image's ID
         unreadableSrcs: {},
-        // Each stage image's Histogram by the image's ID, `{ path, crushed, blown }`: the bars' `d` and the
-        // corner labels; null with no read
-        histograms: {},
         // The Clipping blink's one switch for the stage; off on every open, as a new shell starts here
         clippingBlink: false,
 
@@ -599,27 +625,35 @@ export function curation() {
             )
         },
 
-        /** A pane's Histogram, `{ path, crushed, blown }`; null while the pane loads or its image has no read */
-        histogramShown(imageId, frameId) {
-            if (this.isPaneLoading(imageId, frameId)) {
-                return null
+        /** The set's frame of the ID, as read from its rail item; undefined for no frame */
+        frameOf(frameId) {
+            return this.frames.find((frame) => frame.id === frameId)
+        },
+
+        /**
+         * The `d` of one channel of a frame's Histogram, "luminance", "red", "green" or "blue"; empty
+         * for a pane with no frame and a frame not measured. It is the frame's, so it shows while the
+         * frame's image loads
+         */
+        histogramPath(frameId, channel) {
+            const histogram = this.frameOf(frameId)?.histogram
+            if (!histogram) {
+                return ""
             }
-            return this.histograms[imageId] ?? null
+            if (!histogramPathsOf.has(frameId)) {
+                histogramPathsOf.set(frameId, histogramPaths(histogram))
+            }
+            return histogramPathsOf.get(frameId)[channel]
         },
 
-        /** The `d` of a pane's Histogram bars; empty while the pane loads or its image has no read */
-        histogramPath(imageId, frameId) {
-            return this.histogramShown(imageId, frameId)?.path ?? ""
+        /** The strip's left corner, the fraction of the frame's pixels crushed, "0.5%"; empty for a frame not measured */
+        crushedLabel(frameId) {
+            return this.frameOf(frameId)?.crushed ?? ""
         },
 
-        /** The strip's left corner, the fraction of the frame's pixels crushed, "0.5%"; empty with no read */
-        crushedLabel(imageId, frameId) {
-            return this.histogramShown(imageId, frameId)?.crushed ?? ""
-        },
-
-        /** The strip's right corner, the fraction of the frame's pixels blown, "14.2%"; empty with no read */
-        blownLabel(imageId, frameId) {
-            return this.histogramShown(imageId, frameId)?.blown ?? ""
+        /** The strip's right corner, the fraction of the frame's pixels blown, "14.2%"; empty for a frame not measured */
+        blownLabel(frameId) {
+            return this.frameOf(frameId)?.blown ?? ""
         },
 
         /** Whether a pane's Clipping canvas shows: the blink is on, and the pane shows a readable image */
@@ -632,80 +666,39 @@ export function curation() {
         },
 
         /**
-         * An image's `load` or `error`. A failed image shows as the browser shows one, with its `alt`. The
-         * Loupe re-reads once Alpine has shown the image: the frame under a resting pointer changed.
-         * A loaded image is read for its Histogram and its Clipping classes here, the one moment a
-         * pane's picture changes.
+         * An image's `load` or `error`. A failed image shows as the browser shows one, with its `alt`,
+         * and is noted as unreadable: it has no pixels for the Clipping blink. The Loupe re-reads once
+         * Alpine has shown the image: the frame under a resting pointer changed. While the blink is
+         * on, the pane's mask is drawn here, the one moment a pane's picture changes.
          */
         onImageSettled(event) {
-            this.settledSrcs[event.target.id] = event.target.getAttribute("src")
+            const imageEl = event.target
+            const src = imageEl.getAttribute("src")
+            this.settledSrcs[imageEl.id] = src
+            if (imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0) {
+                delete this.unreadableSrcs[imageEl.id]
+            } else {
+                this.unreadableSrcs[imageEl.id] = src
+            }
             this.applyZoom()
             this.$nextTick(() => loupe?.refresh())
-            this.readPane(event.target)
-        },
-
-        /**
-         * Reads a settled image's luminance into the pane's Histogram, from the set's cache or afresh,
-         * once Alpine has shown the image, so the read's decode never holds up the pane's paint, and
-         * draws its Clipping mask when the read is in while the blink is on. A read finishing after
-         * its set has gone, or after the pane's image has moved on, fills only the cache it was
-         * started for. A failed image has no pixels to read: it is noted as unreadable and leaves the
-         * strip empty. A read that fails (a tainted canvas, or a canvas the browser refuses) leaves the
-         * strip empty too, and breaks nothing else of the settle.
-         */
-        readPane(imageEl) {
-            const imageId = imageEl.id
-            if (!(imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0)) {
-                this.unreadableSrcs[imageId] = imageEl.getAttribute("src")
-                this.histograms[imageId] = null
-                this.drawClipping(imageId)
-                return
-            }
-            delete this.unreadableSrcs[imageId]
-
-            // Until the read is in, the strip is empty and the canvas blank, so the pane's last frame does
-            // not show over this one; a read already cached shows at once
-            const src = imageEl.currentSrc
-            const reads = luminanceReads
-            const cached = reads.get(src)
-            if (!cached || cached instanceof Promise) {
-                this.histograms[imageId] = null
-            }
             if (this.clippingBlink) {
-                this.drawClipping(imageId)
+                this.drawClipping(imageEl.id)
             }
-            this.$nextTick(async () => {
-                let read
-                try {
-                    read = await this.luminanceOf(imageEl)
-                } catch (error) {
-                    console.debug(
-                        `Could not read the luminance of a Curation frame: ${error.message}`,
-                    )
-                }
-                if (reads !== luminanceReads || imageEl.currentSrc !== src) {
-                    return
-                }
-
-                this.histograms[imageId] = read ? histogramOf(read) : null
-                if (this.clippingBlink) {
-                    this.drawClipping(imageId)
-                }
-            })
         },
 
         /**
-         * A loaded image's read, from the set's cache by its source: the read done, or the promise of
-         * one in flight, which a second settle of the same source awaits too; else started and cached as
-         * its promise, replaced by the read when it is in. A failed read leaves the cache, so the next
-         * settle of its source tries again
+         * A loaded image's Clipping read, from the set's cache by its source: the read done, or the
+         * promise of one in flight, which a second draw of the same source awaits too; else started
+         * and cached as its promise, replaced by the read when it is in. A failed read leaves the
+         * cache, so the next draw of its source tries again
          */
-        luminanceOf(imageEl) {
+        clippingOf(imageEl) {
             const src = imageEl.currentSrc
-            const reads = luminanceReads
+            const reads = clippingReads
             let read = reads.get(src)
             if (!read) {
-                read = readLuminance(imageEl, {
+                read = readClipping(imageEl, {
                     fitBox: measurement.fitBox,
                     clippedLevel: measurement.clippedLevel,
                     crushedLevel: measurement.crushedLevel,
@@ -722,11 +715,15 @@ export function curation() {
         /**
          * Paints the mask of the pane's image into the pane's Clipping canvas, at the read's own size,
          * which `object-fit: contain` lays over the painted picture pixel for pixel, in the colors the
-         * canvas has at this moment. A canvas that already holds the mask of that source is left alone,
-         * and one whose image has no read in the cache yet (unreadable, a read that failed, or one
-         * still in flight, which draws when it is in) is blanked, so no earlier frame's mask stays over it
+         * canvas has at this moment. A canvas that already holds the mask of that source is left alone.
+         * Any other is blanked first, so no earlier frame's mask stays over the image, and stays blank
+         * for an image with no pixels to read. The read is the set's cached one or starts here, once
+         * Alpine has shown the image, so its decode never holds up the pane's paint. It paints only
+         * if, when it is in, the set and the pane's image are the ones it was started for, the
+         * blink is still on and no other draw has painted it; a read that fails (a tainted canvas, or a canvas the browser refuses)
+         * leaves the canvas blank and breaks nothing else.
          */
-        drawClipping(imageId) {
+        async drawClipping(imageId) {
             const canvasEl = document.getElementById(CLIPPING_ID_OF[imageId])
             const imageEl = document.getElementById(imageId)
             if (!canvasEl || !imageEl) {
@@ -734,14 +731,34 @@ export function curation() {
             }
 
             const src = imageEl.currentSrc
-            const read = luminanceReads.get(src)
-            if (!read || read instanceof Promise) {
-                canvasEl.width = 0
-                canvasEl.height = 0
-                drawnSrcs.delete(canvasEl.id)
+            if (drawnSrcs.get(canvasEl.id) === src) {
                 return
             }
-            if (drawnSrcs.get(canvasEl.id) === src) {
+            canvasEl.width = 0
+            canvasEl.height = 0
+            drawnSrcs.delete(canvasEl.id)
+            if (!(imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0)) {
+                return
+            }
+
+            const reads = clippingReads
+            let read
+            try {
+                await this.$nextTick()
+                read = await this.clippingOf(imageEl)
+            } catch (error) {
+                console.debug(
+                    `Could not read the clipping of a Curation frame: ${error.message}`,
+                )
+                return
+            }
+            // A second draw of the same source, awaiting the same read, may have painted meanwhile
+            if (
+                reads !== clippingReads ||
+                imageEl.currentSrc !== src ||
+                !this.clippingBlink ||
+                drawnSrcs.get(canvasEl.id) === src
+            ) {
                 return
             }
 
@@ -759,8 +776,8 @@ export function curation() {
         },
 
         /**
-         * The Histogram button's click: flips the blink, and on draws the mask of every pane whose read
-         * is in; a pane whose read is still in flight draws when it is
+         * The Histogram button's click: flips the blink, and on draws the mask of both panes, each
+         * when its read is in
          */
         toggleClippingBlink() {
             this.clippingBlink = !this.clippingBlink
@@ -772,14 +789,11 @@ export function curation() {
         },
 
         fileNameOf(frameId) {
-            return this.frames.find((frame) => frame.id === frameId)?.fileName
+            return this.frameOf(frameId)?.fileName
         },
 
         problemsOf(frameId) {
-            return (
-                this.frames.find((frame) => frame.id === frameId)?.problems ??
-                []
-            )
+            return this.frameOf(frameId)?.problems ?? []
         },
 
         isPick(frameId) {
@@ -1013,6 +1027,11 @@ export function curation() {
                 bundleKind: frameEl.dataset.bundleKind ?? null,
                 inAlbumOrLocation: frameEl.dataset.inAlbumOrLocation === "true",
                 problems: frameEl.dataset.problems?.split(",") ?? [],
+                // What the stage's strip shows of the frame, as the import measured it: its Histogram's
+                // bytes in Base64, and the labels of the fractions of its pixels crushed and blown
+                histogram: frameEl.dataset.histogram ?? null,
+                crushed: percentLabel(frameEl.dataset.crushedShadows),
+                blown: percentLabel(frameEl.dataset.clippedHighlights),
             }))
             const isInSet = (frameId) =>
                 frames.some((frame) => frame.id === frameId)
@@ -1035,12 +1054,12 @@ export function curation() {
             )
             this.pickIds = view ? view.pickIds.filter(isInSet) : []
             this.zoomPersonId = view?.zoomPersonId ?? null
-            // The fragment's images and canvases are new: they have settled on nothing, read nothing and
-            // drawn nothing, and the set's reads are its own
+            // The fragment's images and canvases are new: they have settled on nothing and drawn nothing,
+            // and the set's reads and Histogram paths are its own
             this.settledSrcs = {}
             this.unreadableSrcs = {}
-            this.histograms = {}
-            luminanceReads = new Map()
+            clippingReads = new Map()
+            histogramPathsOf.clear()
             drawnSrcs.clear()
             measurement = {
                 clippedLevel: Number(setEl.dataset.clippedLevel),
@@ -1121,7 +1140,8 @@ export function curation() {
             stageObserver.disconnect()
             detachLoupe()
             preloadOnly([])
-            luminanceReads = new Map()
+            clippingReads = new Map()
+            histogramPathsOf.clear()
             drawnSrcs.clear()
             this.frames = []
             this.bundleOf = {}

@@ -89,7 +89,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), luminance (the Histogram bins and the class of every pixel of a loaded image, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
@@ -150,11 +150,15 @@ Const.attributes.loupeLevel     // "data-level"  (the Loupe's level on a stage p
 Const.attributes.clippedLevel   // "data-clipped-level"  (the gray level a pixel counts as blown at, on a Curation set's root)
 Const.attributes.crushedLevel   // "data-crushed-level"  (the gray level a pixel counts as crushed at)
 Const.attributes.measurementBox // "data-measurement-box"  (the box the measurement fits an image into before it counts)
+Const.attributes.histogram      // "data-histogram"  (a frame's Histogram for the stage's strip: a byte per bin, in Base64)
+Const.attributes.crushedShadows // "data-crushed-shadows"  (the fraction of a frame's pixels crushed, as the import measured it)
+Const.attributes.clippedHighlights // "data-clipped-highlights"  (the fraction of a frame's pixels blown)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
-measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`, which the stage's Histogram and Clipping blink read; a frame
-`data-file-name`, `data-problems` and `data-in-album-or-location`; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
+measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`, which the stage's Clipping blink reads; a frame
+`data-file-name`, `data-problems` and `data-in-album-or-location`, and, when it was measured, `data-histogram`, `data-crushed-shadows` and
+`data-clipped-highlights`, which the stage's Histogram strip shows; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
 `data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
 (`js/search-results/cells.js`). Each stage pane's lens is addressed by its ID (`curationLoupePinned`, `curationLoupeFocused`) as the
 stage images are (`curationStagePinned`, `curationStageFocused`), and carries `data-level` (`Const.attributes.loupeLevel`), the level the Loupe writes for its label.
@@ -1273,34 +1277,43 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 
   The Histogram is a strip under each pane (`.histogram`, `#curationHistogramPinned` and `#curationHistogramFocused`, beside the
   images' IDs): a button, the figure's row between the image and the caption (`grid-template-rows: minmax(0, 1fr) auto auto`),
-  `--curation-histogram-height` tall, holding the frame's luminance as bars in an inline `<svg viewBox="0 0 64 16">`: one `<path>`
-  whose `d` the component builds from the bins (`histogramPath`, `barsPath`: 64 bins, one bar per bin a gap of `HISTOGRAM_BAR_GAP`
-  apart, as high as its fraction over the tallest bin's, so the histogram's shape fills the strip whatever the exposure), behind two
-  static `<line class="grid">` at a third and two thirds of the range. The path is `fill: currentColor` with a 0.25px edge of the
-  same color at full alpha (`stroke: hsl(from currentColor h s l / 1)`, `vector-effect: non-scaling-stroke`), the strip's color a
-  theme neutral at an alpha over the pane's backdrop, so no color is written in the script. In the strip's bottom corners two
-  spans (`.crushed` left, `.blown` right, `crushedLabel`, `blownLabel`) read the fractions of the frame's pixels crushed and
-  blown to one decimal ("14.2%", `percentLabel`), monospace chips (`--font-nav`, `--font-size-xs`) on the backdrop in `--info-color`
-  and `--error-color`, the colors the Clipping blink marks each side with; an empty span, while the frame loads, shows no chip. The
-  bins and the two fractions are read in the browser from the original the pane has loaded, when the image settles (`onImageSettled`, `readPane`), by
-  `js/common/luminance.js` (`readLuminance`, async): the read starts once Alpine has shown the image (`$nextTick`), so its decode
-  never holds up the pane's paint; the image is resized by `createImageBitmap` to the measurement's box, off the main thread, so
-  the counts agree with the stored fractions, and each pixel's gray is taken as OpenCV's `BGR2GRAY` does. A read answers the bins
-  and a class map, a byte per pixel (blown, crushed or neither), and is cached by the image's `currentSrc` for the set on show
-  (`luminanceReads`, closure state, since the classes are a million bytes no binding reads): the promise while it is in flight, so
-  a second settle of the same source awaits the same read, then the read itself. The cache is a new map for each set (`showSet`,
-  `showNoSet`), so an arrow back and forth costs nothing and a read finishing after its set has gone, or after its pane's image
-  has moved on, fills only the cache it was started for. What a pane shows of its read is `histograms[imageId]`, `{ path, crushed,
-  blown }` or null (`histogramOf`, `histogramShown`). The strip is empty while the pane loads and until its read is in (the canvas blank
-  meanwhile, so the pane's last frame never shows over the new one; a cached read shows at once), and on a failed image, which
-  disables the button (`isImageUnreadable`, `unreadableSrcs`); a read that fails leaves it empty too.
+  `--curation-histogram-height` tall, holding the frame's Histogram in an inline `<svg viewBox="0 0 64 16">`: after two static
+  `<line class="grid">` at a third and two thirds of the range, a `<path>` a channel, `.red`, `.green` and `.blue` filled and
+  `.luminance` a line over them, each `d` built by the component (`histogramPath(frameId, channel)`). The data is the frame's,
+  measured at import (`ImageMeasurement`, see **Sequences and Image quality** in `altitude/AGENTS.md`): its rail item carries
+  `data-histogram`, the Base64 of `Histogram.relativeBytes`, a byte per bin, 64 bins a channel in the order luminance, red, green,
+  blue (`HISTOGRAM_CHANNELS`), each bin over the tallest bin of the four, so the channels share one scale and the tallest reaches
+  the strip's top (`HISTOGRAM_TALLEST`). `showSet` keeps the string on the frame (`frames[].histogram`), and `histogramPaths`
+  decodes it (`atob`) into the four paths the first time the frame is on the stage (`histogramPathsOf`, closure state by frame ID,
+  cleared with the set): `stepsOf` walks a channel's bins as steps with no gap, `areaPath` closes them down to the baseline for a
+  color and `linePath` leaves them open for the luminance. The svg is `isolation: isolate` and the three colors are
+  `mix-blend-mode: screen` at `fill-opacity: 0.6`, filled with `--histogram-red`, `--histogram-green` and `--histogram-blue`
+  (`core.css`, the pure primaries), so where two overlap the strip reads yellow, cyan or magenta and where the three do a neutral;
+  the luminance line is `fill: none` with a 1px stroke of the strip's color at full alpha (`stroke: hsl(from currentColor h s l /
+  1)`, `vector-effect: non-scaling-stroke`), the strip's color a theme neutral at an alpha over the pane's backdrop, so no color
+  is written in the script. In the strip's bottom corners two spans (`.crushed` left, `.blown` right, `crushedLabel`,
+  `blownLabel`) read the fractions of the frame's pixels crushed and blown to one decimal ("14.2%", `percentLabel`), the stored
+  `crushed_shadows` and `clipped_highlights` its rail item carries as `data-crushed-shadows` and `data-clipped-highlights`,
+  monospace chips (`--font-nav`, `--font-size-xs`) on the backdrop in `--info-color` and `--error-color`, the colors the Clipping
+  blink marks each side with; an empty span shows no chip. The strip is its frame's and reads no pixel, so it shows while the
+  frame's image loads; a frame not measured carries none of the three attributes and its strip is empty. A failed image disables
+  the button (`isImageUnreadable`, `unreadableSrcs`).
 
   The button is the Clipping blink's switch: `clippingBlink` on the component, one switch for the stage, false on every open and
-  not stored, `aria-pressed` while on (the stage's pressed rule gives it the success edge and curve), with the `aria-label`
+  not stored, `aria-pressed` while on (the stage's pressed rule gives it the success edge and luminance line; the channels keep their colors), with the `aria-label`
   "Clipping blink" and the title "Blink the blown highlights and crushed shadows", since it holds no text. `toggleClippingBlink`
-  flips it and, on, draws the mask into each pane's canvas whose read is in (`drawClipping`: the mask is painted from the read's
-  classes at draw time, `clippingMask`, and put at the sampled size; a frame settling while the blink is on draws its mask as its
-  read comes in, and a canvas whose image has no read yet, in flight or failed, is blanked). The canvas (`.clipping`,
+  flips it and, on, draws both panes' masks (`drawClipping`, async: a canvas that holds its image's mask is left alone; any other
+  is blanked and, for an image with pixels, painted when the read is in, if the set, the pane's source and the blink still hold;
+  the mask is painted from the read's classes, `clippingMask`, and put at the sampled size; a frame settling while the blink is on
+  draws its mask from `onImageSettled`). The read is `js/common/clipping.js`'s (`readClipping`, async), made only while the blink
+  is on and once Alpine has shown the image (`$nextTick`), so its decode never holds up the pane's paint: the image is resized by
+  `createImageBitmap` to the measurement's box, off the main thread, and each pixel's gray is taken as OpenCV's `BGR2GRAY` does, so
+  the marks are close to the pixels the stored fractions counted, not the same to the pixel. A read answers a class map, a byte
+  per pixel (blown, crushed or neither), and is cached by the image's `currentSrc` for the set on show (`clippingOf`,
+  `clippingReads`, closure state, since the classes are a million bytes no binding reads): the promise while it is in flight, so
+  a second draw of the same source awaits the same read, then the read itself. The cache is a new map for each set (`showSet`,
+  `showNoSet`), so an arrow back and forth costs nothing and a read finishing after its set has gone fills only the cache it was
+  started for; a read that fails leaves the canvas blank. The canvas (`.clipping`,
   `#curationClippingPinned` and `#curationClippingFocused`, right after the image, under the spinner, the tag and the lens) is laid
   out as the image is (`position: absolute; inset: 0`, `object-fit: contain`, `transform-origin: 0 0`, `pointer-events: none`), so
   the mask lies over the picture pixel for pixel and `applyZoom` writes the image's transform to it; it is `hidden` unless the blink
@@ -1713,8 +1726,10 @@ surface); `-4` text on the app's own surfaces, the text typed into a field inclu
 in lightness order, since `-1` stays light there, and `-1` and `-4` hold one value in the dark theme by design; the
 style guide compares both sides and flags neither. A rule writes a theme color by its token
 (`color: var(--theme-neutral-4)`, `border: var(--border-hairline) var(--theme-neutral-3)`); no token aliases a theme color under
-another name or mixes one at a percentage outside `:root`. Two kinds of color stand apart, with literal pairs of their
-own: the four semantic colors (`--success-color`, `--warning-color`, `--error-color`, `--info-color`: green, amber,
+another name or mixes one at a percentage outside `:root`. Three kinds of color stand apart, with literal pairs of their
+own: the channel colors of Curation's Histogram (`--histogram-red`, `--histogram-green`, `--histogram-blue`, the pure
+primaries, which its strip draws as light so that their overlaps read yellow, cyan, magenta and neutral; the strip is dark
+in either theme, so each pair holds one color); the four semantic colors (`--success-color`, `--warning-color`, `--error-color`, `--info-color`: green, amber,
 red, and a blue cooler than the primary so a notice does not read as a selection), the text, icon and edge of a
 status, each at least 4.5:1 on the page surface, which a rule writes directly too (an unnamed person's name and the
 trash entry of the nav are `--warning-color`; nothing draws `--info-color` yet), each with its fill
@@ -1811,7 +1826,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
   **Theme colors** (`--theme-*`: the brand colors, the neutral scale and the on-colors, each a literal hex pair),
-  **Status and shadow** (the four semantic colors, their fills and `--shadow-color`) and **Derived**
+  **Status, shadow and channels** (the four semantic colors, their fills, `--shadow-color` and the Histogram's three channel
+  colors) and **Derived**
   (the veils, such as `--scrim-color`, `--asset-detail-backdrop-color`, `--popover-background-color` and
   `--field-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
@@ -1819,7 +1835,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
   `--line-height-*`) are a kind by name rather than by value, since a font size is a length and a weight a bare
   number, each drawn on sample text in the Typography section (`@tokenCards("typography")`). "Off palette" marks a color, border or shadow token outside the Theme colors
-  and Status and shadow groups whose declaration writes a color literal (a hex color, a color
+  and Status, shadow and channels groups whose declaration writes a color literal (a hex color, a color
   function with its channels written out, or a named color), which keeps the palette in the theme and semantic tokens; a relative-color recipe is no literal. "Same value as"
   names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
   same color in both themes). Two tokens that take their color from the same tokens are not flagged, since two
@@ -1895,7 +1911,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
   stylesheet to read, `"/assets/"` (the bundle, by href substring); no `trigger` (the panel has no nav entry) and the
   shortcut `Ctrl+Alt+T`, the only way to toggle it; `sources: "/style-guide/scan.json"`, the
   server's scan (locations and notes for the CSS export, the literals for the Not reachable tab); the sections in the
-  style guide's order (Theme colors `--theme-*`; Status and shadow, the semantic colors, fills and `--shadow-color`;
+  style guide's order (Theme colors `--theme-*`; Status, shadow and channels, the semantic colors, fills, `--shadow-color`
+  and the Histogram's channel colors;
   Derived, the other colors; Typography, the fonts and the typography kinds; Scale, the steps; Roles, the lengths that
   reference a step; Sizes, the other lengths; Borders and shadows; Panels; what none claims goes to the automatic
   Other); the spacing scale `--space-<n>`; the type scale, `--font-size-{xs,small,base,medium,large,xl,display}` from
@@ -2024,7 +2041,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
 | `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
 | `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh`, `setLevel` and `detach`; the pointer-to-pixel mapping under `object-fit: contain` and the wheel through the ladder, with no knowledge of the page it is on |
-| `static/js/common/luminance.js` | `readLuminance(imageEl, { fitBox, clippedLevel, crushedLevel })`, async: the Histogram bins (64 fractions), the blown and crushed fractions, and the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) of a loaded same-origin image, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
+| `static/js/common/clipping.js` | `readClipping(imageEl, { fitBox, clippedLevel, crushedLevel })`, async: the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) of a loaded same-origin image, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
 
 ## Search parameters
 

@@ -132,10 +132,15 @@ CREATE TABLE asset (
   -- The bulky columns come last, the most read of them first: a row's columns are stored in order, a row past the page size
   -- (4 KB) spills into overflow pages, and reading a column walks the overflow pages of every large value before it. The two
   -- metadata JSON columns every general read selects (public_metadata also decides the Sequence candidates' device model) come
-  -- before the Scene embeddings, about 5 KB a row that the Sequence candidates' statement alone selects, and the raw extracted
-  -- metadata, the largest and the least read, comes after everything.
+  -- before the Histogram, 1 KB a row that the read of a Curation set's Histograms alone selects, then the Scene embeddings,
+  -- about 5 KB a row that the Sequence candidates' statement alone selects, and the raw extracted metadata, the largest and the
+  -- least read, comes after everything.
   public_metadata TEXT,
   user_metadata TEXT,
+  -- The Histogram of a still image (Histogram): its luminance, red, green and blue channels, each 64 bins of the fraction of
+  -- the pixels in the bin, as 1,024 bytes of little-endian float32. NULL for a Video, an animated image, or a still image the
+  -- pipeline did not measure, as the Image quality is.
+  histogram BLOB,
   -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
   -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token (768 of them) and CLIP
   -- ViT-B/16's projected image embedding (512). NULL for a Video, an animated image, or a still image the model could not

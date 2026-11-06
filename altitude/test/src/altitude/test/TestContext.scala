@@ -24,6 +24,7 @@ import altitude.core.models.CaptureDateSource
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
 import altitude.core.models.Folder
+import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 import altitude.core.models.Repository
@@ -241,6 +242,17 @@ class TestContext(val testApp: Altitude) {
         quality.map(_.score.asInstanceOf[Object]).orNull,
         assetId
       )
+    }
+  }
+
+  /** The Histogram of an asset, or none, as the measurement of its file would have stored it */
+  def setAssetHistogram(assetId: String, histogram: Option[Histogram]): Unit = {
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET histogram = ? WHERE id = ?",
+        histogram.map(_.toBytes).orNull,
+        assetId)
     }
   }
 

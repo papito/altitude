@@ -17,6 +17,7 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
+import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 import altitude.core.models.PublicMetadata
@@ -250,12 +251,13 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.Asset.CRUSHED_SHADOWS} = ?,
              ${FieldConst.Asset.IMAGE_QUALITY} = ?,
              ${FieldConst.Asset.PERCEPTUAL_HASH} = ?,
+             ${FieldConst.Asset.HISTOGRAM} = ?,
              ${SceneModel.Dinov2.column} = $vectorPlaceholder,
              ${SceneModel.Clip.column} = $vectorPlaceholder
        WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
     """
 
-    // An absent metric, hash or embedding is bound as SQL NULL
+    // An absent metric, hash, Histogram or embedding is bound as SQL NULL
     val quality = asset.imageQuality
     val values: List[Any] = List(
       quality.map(q => Double.box(q.sharpness)).orNull,
@@ -264,12 +266,28 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       quality.map(q => Double.box(q.crushedShadows)).orNull,
       quality.map(q => Int.box(q.score)).orNull,
       asset.perceptualHash.map(h => Long.box(h.bits)).orNull,
+      asset.histogram.map(_.toBytes).orNull,
       vectorBind(asset.sceneEmbeddings.dinov2),
       vectorBind(asset.sceneEmbeddings.clip),
       RequestContext.getRepository.persistedId,
       asset.persistedId
     )
     updateByBySql(sql, values)
+
+  override def getHistograms(assetIds: Set[String]): Map[String, Histogram] =
+    if assetIds.isEmpty then return Map.empty
+
+    val sql = s"""
+      SELECT ${FieldConst.ID}, ${FieldConst.Asset.HISTOGRAM}
+        FROM asset
+       WHERE ${FieldConst.ID} $inIdSet
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.HISTOGRAM} IS NOT NULL
+    """
+    manyBySqlQuery(sql, List(idSet(assetIds), RequestContext.getRepository.persistedId)).map {
+      rec =>
+        rec(FieldConst.ID).asInstanceOf[String] -> Histogram.fromBytes(rec(FieldConst.Asset.HISTOGRAM).asInstanceOf[Array[Byte]])
+    }.toMap
 
   override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
     lockForTransition(Some(assetIds), isRecycled = Some(false))

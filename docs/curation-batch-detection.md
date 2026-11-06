@@ -325,7 +325,7 @@ clears that Sequence.
 │ Every frame: 8% …│  │      pinned frame         │ │      focused frame        │    │
 │                  │  │                           │ │                           │    │
 │ Contenders (2)   │  └───────────────────────────┘ └───────────────────────────┘    │
-│                  │    ▁▂▃▅▇▅▃▂▁  histogram          ▁▁▂▅▇▇▅▂▁  histogram           │
+│                  │    ▁▂▃▅▇▅▃▂▁  R G B + luminance  ▁▁▂▅▇▇▅▂▁  R G B + luminance  │
 │  ▣ IMG_0041.jpg  │   IMG_0041.jpg  📌 Pinned  [Keep left 1] [Recycle ⇧1]   IMG_0042.jpg [Pin P] [Keep right 2] [Recycle ⇧2]
 │    The only … ✓  │                                                                  │
 │  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤
@@ -372,15 +372,19 @@ steps it, the only control it has, the browser remembers it for the next open, a
 smoothing. It works while the stage is zoomed to a Person, and shows nothing over the bars beside the image or while a
 frame loads.
 
-Under each pane a **Histogram** strip shows the frame's luminance as bars, read from the frame's own pixels as the exposure
-measurements read them, with faint lines at a third and two thirds of the range and, in its corners, the fractions of
-the frame's pixels crushed (left, in blue) and blown (right, in red), so exposure is judged on the frame and the two
-strips compare side by side. A click on it turns
+Under each pane a **Histogram** strip shows the frame's red, green and blue channels as three filled shapes on one axis,
+blended as light, so two that overlap read yellow, cyan or magenta and the three a neutral, with its luminance as a line
+over them: a channel blown or crushed alone, or a color cast, shows where a gray curve hides it. The import measures the
+four over the pixels the exposure measurements read and stores them with the frame, so the strip shows with the frame,
+before its image has loaded. It has faint lines at a third and two thirds of the range and, in its corners, the stored
+fractions of the frame's pixels crushed (left, in blue) and blown (right, in red), the numbers Too dark and Too bright are
+judged on, so exposure is judged on the frame and the two strips compare side by side. A click on it turns
 on the **Clipping blink**: the frame's blown highlights flash red and its crushed shadows blue over the image, at the
 levels the measurement counts them, so what Too bright and Too dark say is seen where it is; a second click turns it
 off. It is one switch for the stage, on for both panes and through the arrows and the next sets, until clicked off or
-Curation closes. It follows the zoom to a Person, and holds steady for a user who prefers reduced motion. The strip's
-bars and corners are empty while a frame loads.
+Curation closes. It follows the zoom to a Person, and holds steady for a user who prefers reduced motion. The blink is
+read in the browser from the loaded original, only while it is on. The strip of a frame the import did not measure is
+empty.
 
 Pinning keeps nothing. It holds a frame on the left to compare the others against. Pinning the focused frame replaces
 the pinned one and moves focus to the next frame, so two stay on the stage. There is no unpinning; focusing the pinned

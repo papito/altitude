@@ -108,6 +108,11 @@
     --warning-background-color: light-dark(hsl(from var(--warning-color) h calc(s * 0.7) 90%), hsl(from var(--warning-color) h calc(s * 0.6) 35%));
     --error-background-color: light-dark(hsl(from var(--error-color) h calc(s * 0.7) 90%), hsl(from var(--error-color) h calc(s * 0.6) 35%));
     --info-background-color: light-dark(hsl(from var(--info-color) h calc(s * 0.7) 90%), hsl(from var(--info-color) h calc(s * 0.6) 35%));
+    /* The channels of the Histogram on Curation's stage, the pure primaries: drawn as light, two that overlap read yellow, cyan
+       or magenta and the three a neutral. The strip is dark in either theme, so each pair holds one color */
+    --histogram-red: light-dark(#ff0000, #ff0000);
+    --histogram-green: light-dark(#00ff00, #00ff00);
+    --histogram-blue: light-dark(#0000ff, #0000ff);
 
     --panel-padding: var(--space-5);
 

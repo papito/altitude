@@ -18,6 +18,7 @@ import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.ImageException
 import altitude.core.models.Face
+import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 import altitude.core.util.ImageMeasurement
@@ -92,6 +93,21 @@ import altitude.core.util.ImageMeasurement
   private def quality(image: Mat, boxes: Seq[Rect] = Nil): ImageQuality = measure(image, boxes)._1
 
   private def hash(image: Mat): PerceptualHash = measure(image)._2
+
+  private def histogram(image: Mat): Histogram = ImageMeasurement.measure(image, Nil).histogram
+
+  /** A Histogram's channels by name, in the order they are stored */
+  private def channelsOf(histogram: Histogram): List[(String, IArray[Float])] =
+    List("luminance" -> histogram.luminance, "red" -> histogram.red, "green" -> histogram.green, "blue" -> histogram.blue)
+
+  /** Each channel of one Histogram against the same channel of another, bin for bin, within the tolerance */
+  private def shouldBeNear(actual: Histogram, expected: Histogram, tolerance: Float): Unit =
+    channelsOf(actual).zip(channelsOf(expected)).foreach {
+      case ((name, actualBins), (_, expectedBins)) =>
+        withClue(s"The $name channel: ") {
+          actualBins.indices.foreach(bin => actualBins(bin) shouldBe expectedBins(bin) +- tolerance)
+        }
+    }
 
   test("A sharp photo measures sharper, and scores higher, than its blurred copies") {
 
@@ -183,6 +199,70 @@ import altitude.core.util.ImageMeasurement
 
     withFlat(128, channels = 2)(image => an[ImageException] should be thrownBy measure(image))
     List(bgr, gray, bgra).foreach(_.release())
+  }
+
+  test("A flat color puts every pixel in one bin of each channel of the Histogram") {
+
+    /**
+     * Setup:
+     *
+     * A flat BGR image of blue 10, green 128 and red 250, whose gray is 151, the same with an opaque alpha channel, and a flat
+     * white gray image.
+     *
+     * Assertions:
+     *
+     * Each channel holds every pixel in the one bin of its level, a bin being four levels: blue in bin 2, green in 32, red in 62
+     * and luminance in 37, with every other bin empty. The alpha channel changes nothing. The white image's channels are all its
+     * luminance, every pixel in the last bin, the bin of the clipped highlights.
+     */
+    def binsHolding(histogram: Histogram): List[(String, List[Int])] =
+      channelsOf(histogram).map((name, bins) => name -> bins.indices.filter(bins(_) > 0).toList)
+
+    val bgr = new Mat(120, 160, CvType.CV_8UC3, new Scalar(10, 128, 250))
+    val bgra = new Mat(120, 160, CvType.CV_8UC4, new Scalar(10, 128, 250, 255))
+    val fromBgr = histogram(bgr)
+    binsHolding(fromBgr) shouldBe List("luminance" -> List(37), "red" -> List(62), "green" -> List(32), "blue" -> List(2))
+    all(List(fromBgr.luminance(37), fromBgr.red(62), fromBgr.green(32), fromBgr.blue(2))) shouldBe 1.0f
+    histogram(bgra) shouldBe fromBgr
+    List(bgr, bgra).foreach(_.release())
+
+    val white = withFlat(255, channels = 1)(histogram(_))
+    binsHolding(white).map(_._2) shouldBe List.fill(4)(List(Histogram.BINS - 1))
+  }
+
+  test("A photo's Histogram holds every pixel once a channel, whatever the layout and the resolution") {
+
+    /**
+     * Setup:
+     *
+     * `people/damon.jpg` as decoded (BGR), converted to one gray channel and to BGRA, and enlarged twice.
+     *
+     * Assertions:
+     *
+     * Each channel's bins sum to 1, and the photo's channels differ, as a color photo's do. The BGRA image has the BGR one's
+     * Histogram. The gray image's three color channels are its luminance, which is the BGR image's within a hundredth a bin. The
+     * enlarged copy's Histogram is the photo's within a hundredth a bin, both being counted over the image fitted to the box.
+     */
+    val bgr = fixture("people/damon.jpg")
+    val gray = new Mat()
+    val bgra = new Mat()
+    val large = new Mat()
+    Imgproc.cvtColor(bgr, gray, Imgproc.COLOR_BGR2GRAY)
+    Imgproc.cvtColor(bgr, bgra, Imgproc.COLOR_BGR2BGRA)
+    Imgproc.resize(bgr, large, new Size(), 2.0, 2.0, Imgproc.INTER_CUBIC)
+
+    val fromBgr = histogram(bgr)
+    channelsOf(fromBgr).foreach((name, bins) => withClue(s"The $name channel: ")(bins.sum shouldBe 1.0f +- 1e-4f))
+    fromBgr.red should not be fromBgr.blue
+
+    shouldBeNear(histogram(bgra), fromBgr, tolerance = 1e-6f)
+
+    val fromGray = histogram(gray)
+    all(List(fromGray.red, fromGray.green, fromGray.blue)) shouldBe fromGray.luminance
+    fromGray.luminance.indices.foreach(bin => fromGray.luminance(bin) shouldBe fromBgr.luminance(bin) +- 0.01f)
+
+    shouldBeNear(histogram(large), fromBgr, tolerance = 0.01f)
+    List(bgr, gray, bgra, large).foreach(_.release())
   }
 
   test("A well exposed photo scores above the same photo blown out or crushed") {

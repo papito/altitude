@@ -2,6 +2,7 @@ package altitude.core.dao
 
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
+import altitude.core.models.Histogram
 import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
@@ -42,11 +43,17 @@ trait AssetDao extends BaseDao[Asset]:
 
   /**
    * Sets the completion flag of the context repository's asset and, in the same update, stores the Image quality, the perceptual
-   * hash and the Scene embeddings the model carries, each absent one as NULL (a Video, an animated image, a still image the
-   * pipeline did not measure or a model could not embed); how many rows changed. An embedding not of its model's dimensions is
-   * refused (`IllegalArgumentException`), as PostgreSQL's column would refuse it, so SQLite's BLOB never holds one.
+   * hash, the Histogram and the Scene embeddings the model carries, each absent one as NULL (a Video, an animated image, a still
+   * image the pipeline did not measure or a model could not embed); how many rows changed. An embedding not of its model's
+   * dimensions is refused (`IllegalArgumentException`), as PostgreSQL's column would refuse it, so SQLite's BLOB never holds one.
    */
   def markAsCompleted(asset: Asset): Int
+
+  /**
+   * The Histograms of the context repository's assets among the IDs, by asset ID, for those that have one: the one read that
+   * selects the column
+   */
+  def getHistograms(assetIds: Set[String]): Map[String, Histogram]
 
   /*
    * Sequences: the `sequence_id` the still images of one burst share while in triage. `SequenceService` and `CurationService`

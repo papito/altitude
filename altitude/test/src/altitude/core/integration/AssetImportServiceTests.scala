@@ -19,6 +19,7 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
 import altitude.core.models.CaptureDateSource
+import altitude.core.models.Histogram
 import altitude.core.models.MimedPreviewData
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
@@ -370,6 +371,40 @@ import altitude.core.util.ImageUtil
     val storedVideo: Asset = testApp.service.asset.getById(video.persistedId)
     storedVideo.imageQuality shouldBe None
     storedVideo.perceptualHash shouldBe None
+  }
+
+  test("A still image is imported with its Histogram, which its own read alone carries, and a Video with none") {
+
+    /**
+     * Setup:
+     *
+     * A photo (people/bullock.jpg) and a synthesized two-second MP4 (TestVideos.portrait), each run through the whole import, and
+     * the photo's stored file decoded and measured again.
+     *
+     * Assertions:
+     *
+     * The Histograms read for the two hold the photo's alone, bin for bin the one measured from its file: it was written with the
+     * completion, float32-exact, and the Video has none. A read by ID (the typed row) and the hand-written locking read of a
+     * library operation each hand the photo back without it, a bulky column no general read selects. No IDs read nothing.
+     */
+    val photo = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("people/bullock.jpg"))
+    val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
+
+    val decoded = ImageUtil.matFromBytes(Files.readAllBytes(testApp.service.fileStore.assetFile(photo.persistedId)))
+    val measured: Histogram =
+      try ImageMeasurement.measure(decoded, Nil).histogram
+      finally decoded.release()
+
+    val histograms = testApp.txManager.asReadOnly {
+      testApp.DAO.asset.getHistograms(Set(photo.persistedId, video.persistedId))
+    }
+    histograms shouldBe Map(photo.persistedId -> measured)
+
+    testApp.service.asset.getById(photo.persistedId).histogram shouldBe None
+    val locked = testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToMove(Set(photo.persistedId)))
+    locked.map(_.histogram) shouldBe List(None)
+
+    testApp.txManager.asReadOnly(testApp.DAO.asset.getHistograms(Set.empty)) shouldBe empty
   }
 
   test("A still image is imported with the Scene embedding of each model, stored with its completion") {

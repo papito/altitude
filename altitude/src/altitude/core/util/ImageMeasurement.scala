@@ -4,6 +4,8 @@ import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfDouble
+import org.opencv.core.MatOfFloat
+import org.opencv.core.MatOfInt
 import org.opencv.core.Rect
 import org.opencv.core.Scalar
 import org.opencv.core.Size
@@ -12,19 +14,24 @@ import org.opencv.imgproc.Imgproc
 
 import altitude.core.ImageException
 import altitude.core.models.Face
+import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 
 /**
- * The Image quality and the perceptual hash of a still image, and the sharpness of its faces: pure functions over a decoded `Mat`
- * (gray, BGR or BGRA, as `ImageUtil` decodes) and its faces. The image is first scaled to fit [[MEASUREMENT_BOX_SIZE]], so
- * neither the sharpness nor the hash depends on the resolution. `ImageUtil.matFromBytes` applies the EXIF orientation as it
- * decodes, so the image is upright and a face's box is in upright pixels.
+ * The Image quality, the perceptual hash and the Histogram of a still image, and the sharpness of its faces: pure functions over
+ * a decoded `Mat` (gray, BGR or BGRA, as `ImageUtil` decodes) and its faces. The image is first scaled to fit
+ * [[MEASUREMENT_BOX_SIZE]], so neither the sharpness, the hash nor the Histogram depends on the resolution.
+ * `ImageUtil.matFromBytes` applies the EXIF orientation as it decodes, so the image is upright and a face's box is in upright
+ * pixels.
  */
 object ImageMeasurement:
 
-  /** What measuring an image gives: its Image quality, its hash, and its faces in the order given, each with its sharpness */
-  case class Measurement(quality: ImageQuality, hash: PerceptualHash, faces: List[Face])
+  /**
+   * What measuring an image gives: its Image quality, its hash, its faces in the order given, each with its sharpness, and its
+   * Histogram
+   */
+  case class Measurement(quality: ImageQuality, hash: PerceptualHash, faces: List[Face], histogram: Histogram)
 
   /**
    * The box the image is fitted into before it is measured, never enlarged. It is the default face detection box, but a constant
@@ -58,7 +65,7 @@ object ImageMeasurement:
   val CRUSHED_WEIGHT: Double = 2.0
   val TARGET_LUMINANCE: Double = 0.45
 
-  /** The metrics, the score, the hash and each face's sharpness; the faces' boxes are in the image's own pixels */
+  /** The metrics, the score, the hash, each face's sharpness and the Histogram; the faces' boxes are in the image's own pixels */
   def measure(image: Mat, faces: Seq[Face]): Measurement =
     val scale = fitScale(image)
     val scaled = fitToBox(image, scale)
@@ -69,7 +76,7 @@ object ImageMeasurement:
       Imgproc.Laplacian(gray, laplacian, CvType.CV_64F)
       val boxes = faces.map(face => scaleBox(face, scale, gray))
       val measuredFaces = faces.zip(boxes).map((face, box) => face.copy(sharpness = sharpnessInBox(laplacian, box)))
-      Measurement(qualityOf(gray, laplacian, boxes), hash(scaled), measuredFaces.toList)
+      Measurement(qualityOf(gray, laplacian, boxes), hash(scaled), measuredFaces.toList, histogramOf(scaled, gray))
     finally
       gray.release()
       laplacian.release()
@@ -96,6 +103,31 @@ object ImageMeasurement:
       out.get(0, 0, bytes)
       PerceptualHash(bytes.foldLeft(0L)((acc, b) => (acc << 8) | (b & 0xffL)))
     finally out.release()
+
+  /**
+   * The Histogram of the fitted image: the luminance over `gray`, the pixels the clipped and crushed fractions are counted on,
+   * and red, green and blue over the image's planes, which OpenCV orders blue, green, red; an alpha plane is left out. A gray
+   * image's three colors are its luminance.
+   */
+  private def histogramOf(image: Mat, gray: Mat): Histogram =
+    val luminance = binsOf(gray, plane = 0)
+    if image.channels() == 1 then Histogram(luminance, red = luminance, green = luminance, blue = luminance)
+    else Histogram(luminance, red = binsOf(image, plane = 2), green = binsOf(image, plane = 1), blue = binsOf(image, plane = 0))
+
+  /** One plane's levels counted into [[Histogram.BINS]] bins, each as the fraction of the image's pixels that fell in it */
+  private def binsOf(image: Mat, plane: Int): IArray[Float] =
+    val counts = new Mat()
+    val everyPixel = new Mat()
+    val planes = new MatOfInt(plane)
+    val bins = new MatOfInt(Histogram.BINS)
+    val levels = new MatOfFloat(0f, 256f)
+    try
+      Imgproc.calcHist(java.util.List.of(image), planes, everyPixel, counts, bins, levels)
+      val counted = new Array[Float](Histogram.BINS)
+      counts.get(0, 0, counted)
+      val pixels = image.rows().toDouble * image.cols()
+      IArray.unsafeFromArray(counted.map(count => (count / pixels).toFloat))
+    finally List(counts, everyPixel, planes, bins, levels).foreach(_.release())
 
   /** The image as one gray channel, whatever `ImageUtil` decoded it as */
   private def toGray(image: Mat, gray: Mat): Unit =

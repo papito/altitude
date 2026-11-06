@@ -137,6 +137,10 @@ CREATE TABLE asset (
   image_quality INT,
   -- The DCT perceptual hash of a still image, 64 bits as a signed integer, compared by Hamming distance; NULL as the five are.
   perceptual_hash BIGINT,
+  -- The Histogram of a still image (Histogram): its luminance, red, green and blue channels, each 64 bins of the fraction of
+  -- the pixels in the bin, as 1,024 bytes of little-endian float32; NULL as the five are. Bulky, which toast_tuple_target
+  -- (below) moves out of line; selected by the read of a Curation set's Histograms alone and transferred by no other read.
+  histogram BYTEA,
   -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
   -- similarity: DINOv2 ViT-B/14's pooled CLS token and CLIP ViT-B/16's projected image embedding. NULL for a Video, an animated
   -- image, or a still image the model could not embed. Bulky, which toast_tuple_target (below) moves out of line; selected by

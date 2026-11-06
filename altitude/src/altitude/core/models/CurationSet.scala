@@ -2,9 +2,10 @@ package altitude.core.models
 
 /**
  * A frame of a Curation set, as read for the rule: its asset, its Faces (those of hidden and bad-match people left out) and
- * whether it is in any album or Location, which recycling would take it out of.
+ * whether it is in any album or Location, which recycling would take it out of. Its Histogram is for the view alone, which draws
+ * it under the frame on the stage; the rule reads none of it, and a frame not measured has none.
  */
-case class CurationFrame(asset: Asset, faces: List[Face], inAlbumOrLocation: Boolean):
+case class CurationFrame(asset: Asset, faces: List[Face], inAlbumOrLocation: Boolean, histogram: Option[Histogram] = None):
 
   /** A still image the pipeline did not measure has no metrics: it is a Contender, and the view notes why */
   def isMeasured: Boolean = asset.imageQuality.isDefined
