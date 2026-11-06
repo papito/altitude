@@ -121,7 +121,8 @@ The People tab's state is no store: its `peopleTab` component holds the buckets 
 and the panes' Split.js sizes on each axis as component data and remembers them in `localStorage` under
 `Const.localStore.peopleView`, which nothing else reads (see **People tab** below). Nor is the Loupe's level: Curation's
 `curation` component reads and remembers it in `localStorage` under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`,
-`saveLoupeLevel`), which nothing else reads (see **Curation** below).
+`saveLoupeLevel`), which nothing else reads, and the Bundle kinds whose details its rail shows under
+`Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), a JSON array (see **Curation** below).
 
 ## DOM Addressing Convention
 
@@ -1179,7 +1180,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
   resolve, the unread state, and the queue's end. The first three offer Exit, and Undo when there is one, beside what they say.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
-  focused frame, the pinned frame, the Picks, the queue's IDs and position, the one Sequence or the
+  focused frame, the pinned frame, the Picks, the Bundle kinds whose details show, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
   A set's fragment replaces the one before it in `#curationSet` after that one's Alpine tree is destroyed (`replaceSetHost`, which
   also empties the host with no set), so no loop of the old fragment runs once more on the new set's state.
@@ -1198,10 +1199,18 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
   frame's `data-problems` holds what the stage's tag says is wrong with it, its Bundle first and then its chips; a Contender has
   none. The Preview carries the frame's marks: `fa-thumbtack`, labelled "Pinned", on the pinned frame, and `fa-check-circle`,
-  labelled "Keep", on a Pick. A Bundle's header gives its name, its count, its reason (the first frame's first, "and 2 more") and
-  Recycle, and shows the same check while the Bundle holds a Pick, which its Recycle leaves in place. A sole Contender
+  labelled "Keep", on a Pick. A Bundle's header gives its name, its count, the details switch, Recycle and its reason (the
+  first frame's first, "and 2 more"), and shows the same check while the Bundle holds a Pick, which its Recycle leaves in place. A sole Contender
   is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Every Bundle lists its frames, whatever the
   set's size: there is nothing to collapse or open.
+
+  A Bundle's details, its header's reason line and the reasons under each of its frames, are hidden until its details switch is
+  pressed: an `action-button small` before Recycle holding `fa-info-circle` alone, so its `aria-label` is "Details" and its title
+  "Show or hide what is wrong with each frame", `aria-pressed` while they show (the stage's pressed rule, which the Bundle
+  header shares, gives it the success edge and icon). The file names, the marks and the chips always show. The switch is one per
+  Bundle kind and not per set: `detailKinds` on the component lists the kinds whose details show (`showsDetails`,
+  `toggleDetails`), so Poor faces opened in one set is open in the next, and it is remembered in `localStorage` under
+  `Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), as the Loupe's level is. It has no key.
 - **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame on the
   left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is pinned
   or the pinned frame is focused; that one frame counts as the left frame. Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.

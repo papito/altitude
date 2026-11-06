@@ -331,11 +331,11 @@ clears that Sequence.
 │  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤
 │                  │  face strip: one row per Person, one column per frame            │
 │ Poor faces (1)   │        ▣      ▢      ▢      ▢                                    │
-│  [Recycle]       │  P1   [👤]   [👤]    –     [👤]                                   │
+│  [ⓘ] [Recycle]   │  P1   [👤]   [👤]    –     [👤]                                   │
 │  Face quality …  │  P2   [👤]   [👤]   [👤]   [👤]                                   │
 │                  ├──────────────────────────────────────────────────────────────────┤
 │ Blurry (1)       │  2 frames to recycle are in an album or Location: …              │
-│  [Recycle]       │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip S]
+│  [ⓘ] [Recycle]   │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip S]
 └──────────────────┴──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -348,9 +348,11 @@ every open, so each session starts with no skips and no undo entry.
 frames. The Sequence stays in the queue with the rest", "Too close to call", or in the warning color "Every frame: 8%
 blown highlights"), then **Contenders**, then each Bundle in the rule's order. Each frame is a Preview that focuses it on
 click, with its file name, its reasons ("Face sharpness 42 against 118, that person's sharpest") and its chips for its
-other problems. A Pinned frame wears a pin mark and a Pick a check mark. A Bundle's header gives its name, its count, the
-first reason ("and 2 more") and a **Recycle** button; it shows the
-check while it holds a Pick, which its Recycle leaves in place. Every Bundle lists its frames. The sole Contender is marked "The only frame
+other problems. A Pinned frame wears a pin mark and a Pick a check mark. A Bundle's header gives its name, its count, an
+info (ⓘ) switch, a **Recycle** button and the first reason ("and 2 more"); it shows the
+check while it holds a Pick, which its Recycle leaves in place. Every Bundle lists its frames. A Bundle's details, its
+header's reason and its frames' reasons, are hidden until its info switch is pressed, so the rail reads as names and
+chips; the switch is per Bundle kind, holds across sets, and the browser remembers it for the next open. The sole Contender is marked "The only frame
 with no problem"; an unmeasured frame says "Not measured".
 
 **The stage** is two panes from the originals: the pinned frame on the left and the focused frame on the right, or one

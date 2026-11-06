@@ -161,6 +161,8 @@ export const Const = {
         // The Loupe's magnification last chosen on Curation's stage, read and saved by js/common/loupe.js
         // through the `rememberedLoupeLevel` and `saveLoupeLevel` the Curation component hands it
         loupeLevel: "loupeLevel",
+        // The Bundle kinds whose details Curation's rail shows, a JSON array (js/alpine/components/curation.js)
+        curationDetails: "curationDetails",
     },
 
     sessionStore: {

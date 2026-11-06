@@ -443,9 +443,10 @@
   margin-left: 0;
 }
 
-/* A pressed button on the stage, the Keep button and the Histogram strip while the blink is on: a success edge and a success-colored
-   label, or curve */
-#curationStage button[aria-pressed="true"] {
+/* A pressed button on the stage, the Keep button and the Histogram strip while the blink is on, and a Bundle's details switch
+   while they show: a success edge and a success-colored label, curve or icon */
+#curationStage button[aria-pressed="true"],
+.curation-bundle header button[aria-pressed="true"] {
   border-color: var(--success-color);
   color: var(--success-color);
 }

@@ -64,7 +64,8 @@
 }
 
 @* A frame in the rail. A click focuses it. `data-bundle-kind` is the Bundle it sits under, and `data-problems` what the stage's tag
-   says is wrong with it, its Bundle first and then its chips; a Contender has neither *@
+   says is wrong with it, its Bundle first and then its chips; a Contender has neither. Its reasons show while its Bundle's details
+   do (`showsDetails`) *@
 @railFrame(frame: CurationFrame, bundleKind: Option[BundleKind], isSole: Boolean, reasons: List[CurationReason], chips: List[CurationProblem]) = {
   @defining(frame.asset.persistedId) { frameId =>
   <li class="curation-frame"
@@ -84,7 +85,7 @@
       @if(!frame.isMeasured) {<small class="unmeasured">Not measured</small>}
       @if(isSole) {<strong class="curation-chip sole">The only frame with no problem</strong>}
       @if(reasons.nonEmpty) {
-        <ul class="reasons">
+        <ul class="reasons" @for(kind <- bundleKind) {x-show="showsDetails('@{kind}')"}>
           @for(reason <- reasons) {
             <li>@reasonText(reason)</li>
           }
@@ -201,8 +202,16 @@
             <header>
               <h3>@bundleName(bundle.kind) <span class="count">(@{bundle.frames.size})</span>
                 <i class="fas fa-check-circle" aria-label="Holds a frame to keep" x-show="bundleHoldsPick('@{bundle.kind}')"></i></h3>
+              @* The switch of the Bundle's details, its reason line here and its frames' reasons, which start hidden; it holds no
+                 text, so its `aria-label` names it *@
+              <button type="button"
+                      class="action-button small"
+                      title="Show or hide what is wrong with each frame"
+                      aria-label="Details"
+                      :aria-pressed="showsDetails('@{bundle.kind}')"
+                      x-on:click="toggleDetails('@{bundle.kind}')"><i class="fas fa-info-circle"></i></button>
               <button type="button" class="action-button small warning" x-on:click="recycleBundle('@{bundle.kind}')">Recycle</button>
-              <p class="reason">@bundleReason(bundle)</p>
+              <p class="reason" x-show="showsDetails('@{bundle.kind}')">@bundleReason(bundle)</p>
             </header>
             <ul class="frames">
               @for(bundled <- bundle.frames) {

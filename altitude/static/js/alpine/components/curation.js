@@ -201,6 +201,33 @@ function rememberedLoupeLevel() {
     }
 }
 
+/**
+ * The Bundle kinds whose details the rail shows, as last chosen; none where nothing is stored, what is
+ * stored is no list or storage is blocked
+ */
+function rememberedDetailKinds() {
+    try {
+        const kinds = JSON.parse(
+            localStorage.getItem(Const.localStore.curationDetails),
+        )
+        return Array.isArray(kinds) ? kinds : []
+    } catch {
+        return []
+    }
+}
+
+/** Remembers the Bundle kinds whose details show; a blocked storage forgets them and nothing else */
+function saveDetailKinds(kinds) {
+    try {
+        localStorage.setItem(
+            Const.localStore.curationDetails,
+            JSON.stringify(kinds),
+        )
+    } catch {
+        // Nothing to do: the kinds hold for the session
+    }
+}
+
 /** Remembers the Loupe level; a blocked storage forgets it and nothing else */
 function saveLoupeLevel(level) {
     try {
@@ -379,6 +406,9 @@ export function curation() {
         pinnedId: null,
         pickIds: [],
         zoomPersonId: null,
+        // The Bundle kinds whose details the rail shows, a Bundle's reason line and its frames' reasons: every
+        // other Bundle's are hidden. They hold across sets and opens
+        detailKinds: rememberedDetailKinds(),
         // The Loupe's level, a rung of `LOUPE_LEVELS`: the footer's slider and the wheel over a pane move it, and it
         // holds across sets and opens
         loupeLevel: rememberedLoupeLevel(),
@@ -759,6 +789,10 @@ export function curation() {
             return this.pickIds.some((id) => this.bundleOf[id] === kind)
         },
 
+        showsDetails(kind) {
+            return this.detailKinds.includes(kind)
+        },
+
         columnClasses(frameId) {
             return {
                 focused: this.focusedId === frameId,
@@ -853,6 +887,13 @@ export function curation() {
             this.pickIds = this.isPick(frameId)
                 ? this.pickIds.filter((id) => id !== frameId)
                 : [...this.pickIds, frameId]
+        },
+
+        toggleDetails(kind) {
+            this.detailKinds = this.showsDetails(kind)
+                ? this.detailKinds.filter((shown) => shown !== kind)
+                : [...this.detailKinds, kind]
+            saveDetailKinds(this.detailKinds)
         },
 
         zoomToPerson(personId) {

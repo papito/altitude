@@ -112,9 +112,11 @@ import altitude.core.service.FaceDetectionService
      *
      * The fragment names each frame by its ID once, under the heading of its one Bundle or as the Contender, which is marked as
      * the only frame with no problem. Each Bundle gives its count and says what is wrong, how much and compared to what, and the
-     * blurry frame's other problem shows as a chip beside it. `data-problems` names what is wrong with a frame, its Bundle first
-     * and then its chips, and the Contender has none. The set is not Too close to call, and it opens on the rail's first two
-     * frames: its one Contender pinned, and the first frame of its first Bundle focused.
+     * blurry frame's other problem shows as a chip beside it. A Bundle's header holds the switch of its details before its
+     * Recycle, its reason line and its frames' reasons show by that switch, and the Contenders have none. `data-problems` names
+     * what is wrong with a frame, its Bundle first and then its chips, and the Contender has none. The set is not Too close to
+     * call, and it opens on the rail's first two frames: its one Contender pinned, and the first frame of its first Bundle
+     * focused.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -151,6 +153,10 @@ import altitude.core.service.FaceDetectionService
         frameIds(tooDark) shouldBe List(dark.persistedId)
         tooDark should include("Luminance 5%, under 15%")
         tooDark should include("Luminance 5% against 45%")
+        tooDark.indexOf("toggleDetails('TooDark')") should be >= 0
+        tooDark.indexOf("toggleDetails('TooDark')") should be < tooDark.indexOf("recycleBundle('TooDark')")
+        """x-show="showsDetails\('TooDark'\)"""".r.findAllIn(tooDark).size shouldBe 2
+        (contenders should not).include("Details(")
 
         val blur = section(html, "Blurry")
         blur should include("(1)")
