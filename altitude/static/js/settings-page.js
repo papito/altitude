@@ -35,13 +35,12 @@ document.body.addEventListener("click", (event) => {
     }
 
     const setting = button.closest(`[${Const.attributes.settingDefault}]`)
-    const field = setting.querySelector("input, select")
+    const field = setting.querySelector("input")
     const fallback = setting.dataset.settingDefault
 
     if (field.type === "checkbox") {
         field.checked = fallback === "true"
     } else {
-        // A text field and a select alike: the default is one of a select's options
         field.value = fallback
         field.classList.remove("error")
     }

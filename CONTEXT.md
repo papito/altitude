@@ -226,8 +226,8 @@ _Avoid_: Vector, Feature vector, Image embedding.
 
 **Scene model**:
 One of the vision models the import embeds every still image with, DINOv2 or
-CLIP. The Setting `sequence.embedding_model` names the one the Sequence rule
-reads.
+CLIP. The Sequence rule reads both: two frames alike by either are one
+Sequence.
 _Avoid_: Encoder, Backbone, Vision model.
 
 **Image quality**:

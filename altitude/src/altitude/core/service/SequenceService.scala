@@ -28,8 +28,8 @@ class SequenceService(val app: Altitude):
    * candidate already. Nothing happens for an asset `SequenceRule.isEligible` refuses. The candidates are the repository's
    * completed, triaged still images captured within `sequence.max_gap_ms` of it, in the trash or not (a frame recycled from
    * triage keeps its Sequence, so the next frame of its burst joins it there), read with their Scene embeddings, which no other
-   * read selects; the matches among them are decided by `SequenceRule.matches` with the Scene model, its similarity threshold,
-   * the gap and the hash distance all from one Settings snapshot, so a Setting changed meanwhile applies whole to the next
+   * read selects; the matches among them are decided by `SequenceRule.matches` with each Scene model's similarity threshold, the
+   * gap and the hash distance all from one Settings snapshot, so a Setting changed meanwhile applies whole to the next
    * assignment. No match leaves the asset alone: a lone image is never a Sequence. Matches with no Sequence get a new one with
    * the asset; matches in one Sequence join the asset to it; matches in several merge them, since a burst is transitive, into the
    * one with the most members (ties to the one captured first). The assignment takes its turn among the writers of Sequences
@@ -54,9 +54,7 @@ class SequenceService(val app: Altitude):
           // The candidates were locked, so a shortfall is a row a move sorted before the lock was taken, which stays out
           if joined < joining.size then
             logger.debug(s"${joining.size - joined} of ${joining.size} assets left triage before joining Sequence [$sequenceId]")
-          logger.debug(
-            s"Asset [${asset.persistedId}] is in Sequence [$sequenceId] with ${matches.map(_.persistedId)}, " +
-              s"by ${settings.sequenceEmbeddingModel.dbValue}")
+          logger.debug(s"Asset [${asset.persistedId}] is in Sequence [$sequenceId] with ${matches.map(_.persistedId)}")
           asset.copy(sequenceId = Some(sequenceId))
     }
 

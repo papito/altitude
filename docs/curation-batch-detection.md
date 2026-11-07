@@ -74,7 +74,7 @@ All of these are NULL together for a Video, an animated image, or a still image 
 an embedding alone for a still image its model could not embed. Measurement is the one stage that swallows its own
 failure: a decode or measurement error is logged at WARN and the asset goes on unmeasured, and a model's failed pass
 leaves its embedding NULL and the other model's stands. NULL is a state every later reader handles (an unmeasured
-frame is a Contender with a note; a frame with no embedding of the chosen model is compared by its hash).
+frame is a Contender with a note; two frames no model embedded both of are compared by their hashes).
 
 The box size and the score's constants are code, calibrated on the test fixtures, not Settings: changing them means
 measuring the library again.
@@ -94,9 +94,11 @@ or GPS cannot space the frames of a burst), the camera's model, and a hash.
 Two eligible assets **match** when they were captured at most `sequence.max_gap_ms` apart (a minute by default), on
 the same device model, at the same width and height, and **look alike**:
 
-- when both carry the embedding of the Scene model the Setting `sequence.embedding_model` names, their cosine
-  similarity is at least that model's threshold (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`);
-- otherwise, their hashes are at most `sequence.max_hash_distance` bits apart.
+- by some Scene model whose embedding both carry, their cosine similarity is at least that model's threshold
+  (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`): one model's likeness is enough, so the
+  Sequences are the union of what either model finds, and a burst one model misses is caught by the other;
+- where no model embedded both, their hashes are at most `sequence.max_hash_distance` bits apart. A pair compared by
+  any model is never rescued by its hashes.
 
 The similarity replaces the hash test rather than joining it: the hash at any usable distance rejects a reframed or
 zoomed shot of the scene, which the embedding holds under. Each model has its own threshold since their cosines live
@@ -238,10 +240,9 @@ starting points:
 | Key | Default | What it tunes |
 |---|---|---|
 | `sequence.max_gap_ms` | 60000 | Sequence assignment: the most two frames may be apart |
-| `sequence.embedding_model` | `dinov2` | Sequence assignment: the Scene model whose embeddings the rule compares, DINOv2 or CLIP on the screen's `<select>`, stored as `dinov2` or `clip` |
 | `sequence.dinov2.min_similarity` | 0.80 | Sequence assignment: the least DINOv2 cosine similarity to look alike, -1 to 1 |
 | `sequence.clip.min_similarity` | 0.90 | Sequence assignment: the least CLIP cosine similarity to look alike, -1 to 1 |
-| `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only a frame with no embedding of the chosen model |
+| `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only two frames no Scene model embedded both of |
 | `curation.blur_ratio` | 0.5 | Blurry: fraction of the best sharpness |
 | `curation.face_quality_gap` | 2.0 | Poor faces: distance below the Person's best quality |
 | `curation.clipped_fraction` | 0.05 | Too bright: clipped highlights |
@@ -283,9 +284,9 @@ group by its ID alone, since its first capture moves when the frame that set it 
 
 - `ImageMeasurementTests`, `SceneEmbedderTests`, `SequenceRuleTests`, `CurationRuleTests` (unit): orderings rather
   than exact values for the metrics and the embeddings; every rule clause in and out, on both sides of its threshold,
-  the likeness by each Scene model's threshold and by the hash where an embedding is missing.
+  the likeness by either Scene model's threshold and by the hash where no model embedded both frames.
 - `SequenceServiceTests`, `CurationServiceTests` (both engines, on a burst synthesized from one fixture by shifting and
-  brightening each frame): assignment, by embedding and by the hash, the model switch, merges, membership through
+  brightening each frame): assignment, by either model's embedding and by the hash, merges, membership through
   every operation, the queue, the window, each outcome and its Undo, and a frame completing during a resolve
   (`contend`, red on PostgreSQL without the advisory lock); `AssetImportServiceTests` the embeddings stored with the
   completion and read back exactly on both engines, and no general read carrying them.
@@ -474,11 +475,10 @@ and the number of Sequences to curate, which the toolbar's button reads. Skip Se
 
 ## 7. Settings screen
 
-The Triage section of the Settings screen holds the five Sequence Settings and the seven Curation thresholds, each
+The Triage section of the Settings screen holds the four Sequence Settings and the seven Curation thresholds, each
 with a description of what it changes. All are Live. A Curation threshold is used by the next set read, with no restart
-and no re-import. A Sequence Setting, the Scene model included, applies to the next assignment: both models' embeddings
-are stored at import, so switching the model needs no re-import either, but Sequences already assigned stay as they
-are.
+and no re-import. A Sequence Setting applies to the next assignment: both models' embeddings are stored at import, so a
+changed threshold needs no re-import either, but Sequences already assigned stay as they are.
 
 ---
 
@@ -535,8 +535,8 @@ The signals it does not use:
 What is built (Part 1 §1 and §2): every still image is embedded at import by two Scene models through ONNX Runtime,
 **DINOv2 ViT-B/14** (768 floats, self-supervised and layout sensitive, the one for "same scene, different framing")
 and the **CLIP ViT-B/16** image tower (512 floats, semantic), both stored on the asset in a vector column per model
-(`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Setting `sequence.embedding_model` names the one the
-Sequence rule compares by cosine similarity, each model with its own threshold. ArcFace and YuNet stay on OpenCV DNN.
+(`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Sequence rule compares by cosine similarity under both,
+each model with its own threshold, two frames alike by either being one Sequence. ArcFace and YuNet stay on OpenCV DNN.
 
 Still open:
 

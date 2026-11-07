@@ -21,7 +21,6 @@ object TestSettings {
     Settings.VIDEO_FACES_MIN_CLUSTER_FRAMES -> "2",
     Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "40",
     Settings.SEQUENCE_MAX_GAP_MS -> "60000",
-    Settings.SEQUENCE_EMBEDDING_MODEL -> "dinov2",
     Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.80",
     Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "0.90",
     Settings.SEQUENCE_MAX_HASH_DISTANCE -> "10",

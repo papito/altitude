@@ -20,9 +20,6 @@ enum SettingGroup(val label: String):
 enum SettingKind:
   case Live, Restart
 
-/** An option of a [[SettingType.Choice]]: the text stored and posted, and the words the screen shows for it */
-case class ChoiceOption(value: String, label: String)
-
 /** What a Setting's text must be. `error` is why a text is not one, or nothing when it is. */
 enum SettingType:
   /** A number between the bounds, the lower one excluded when `minExclusive` */
@@ -36,9 +33,6 @@ enum SettingType:
   /** A tile URL template, with the three placeholders the map fills in */
   case TileUrl
   case HttpUrl
-
-  /** One of the options' values, which the screen offers as a select of their labels */
-  case Choice(options: List[ChoiceOption])
 
   /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
   def number(text: String): Option[Double] = this match
@@ -69,13 +63,6 @@ enum SettingType:
       val scheme = uri.flatMap(uri => Option(uri.getScheme)).map(_.toLowerCase)
       Option.unless((scheme.contains("http") || scheme.contains("https")) && uri.exists(_.getHost != null))(
         "Must be an http or https URL")
-    case Choice(options) =>
-      Option.unless(options.exists(_.value == text))(s"Must be one of ${options.map(_.label).mkString(", ")}")
-
-  /** What the screen shows for a valid text: a Choice's option by its label, any other text as it is */
-  def label(text: String): String = this match
-    case Choice(options) => options.find(_.value == text).fold(text)(_.label)
-    case _ => text
 
   /** Whether two valid texts mean the same value: a number by its value, anything else by its text */
   def same(a: String, b: String): Boolean = this match
@@ -135,9 +122,6 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoFacesMinClusterFrames: Int = number(VIDEO_FACES_MIN_CLUSTER_FRAMES).toInt
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
   val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
-
-  /** The Scene model the Sequence rule compares two frames by; the validation keeps the text one of the models' names */
-  val sequenceEmbeddingModel: SceneModel = SceneModel.fromDbValue(text(SEQUENCE_EMBEDDING_MODEL)).get
   val sequenceDinov2MinSimilarity: Double = number(SEQUENCE_DINOV2_MIN_SIMILARITY)
   val sequenceClipMinSimilarity: Double = number(SEQUENCE_CLIP_MIN_SIMILARITY)
   val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
@@ -182,7 +166,6 @@ object Settings:
   val VIDEO_FACES_MIN_CLUSTER_FRAMES = "video.faces.min_cluster_frames"
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
   val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
-  val SEQUENCE_EMBEDDING_MODEL = "sequence.embedding_model"
   val SEQUENCE_DINOV2_MIN_SIMILARITY = "sequence.dinov2.min_similarity"
   val SEQUENCE_CLIP_MIN_SIMILARITY = "sequence.clip.min_similarity"
   val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
@@ -320,20 +303,13 @@ object Settings:
       Integer(1)
     ),
     SettingDef(
-      SEQUENCE_EMBEDDING_MODEL,
-      Triage,
-      "Sequence Scene model",
-      "The Scene model whose Scene embeddings the Sequence rule compares two frames by. Both models' embeddings are computed " +
-        "at import, so the choice applies to the next assignment with no re-import.",
-      Choice(SceneModel.values.map(model => ChoiceOption(model.dbValue, model.label)).toList)
-    ),
-    SettingDef(
       SEQUENCE_DINOV2_MIN_SIMILARITY,
       Triage,
       "Sequence DINOv2 similarity",
       "The least cosine similarity, -1 to 1, of two frames' DINOv2 Scene embeddings to look alike. Higher groups more " +
-        "strictly. DINOv2's similarities spread lower than CLIP's, so the two thresholds are on different scales. A starting " +
-        "point to calibrate on real files.",
+        "strictly. Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more " +
+        "freely whatever the other says. DINOv2's similarities spread lower than CLIP's, so the two thresholds are on " +
+        "different scales. A starting point to calibrate on real files.",
       Decimal(-1, 1)
     ),
     SettingDef(
@@ -341,8 +317,9 @@ object Settings:
       Triage,
       "Sequence CLIP similarity",
       "The least cosine similarity, -1 to 1, of two frames' CLIP Scene embeddings to look alike. Higher groups more strictly. " +
-        "CLIP's similarities sit closer to 1 than DINOv2's, so the two thresholds are on different scales. A starting point to " +
-        "calibrate on real files.",
+        "Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more freely " +
+        "whatever the other says. CLIP's similarities sit closer to 1 than DINOv2's, so the two thresholds are on different " +
+        "scales. A starting point to calibrate on real files.",
       Decimal(-1, 1)
     ),
     SettingDef(
@@ -350,8 +327,8 @@ object Settings:
       Triage,
       "Sequence hash distance (bits)",
       s"How far apart two frames' perceptual hashes may be, 0 to ${PerceptualHash.BITS} bits, to still look alike. Decides " +
-        "only a frame with no Scene embedding of the chosen model (a still image the model could not embed); otherwise the " +
-        "similarity does. Higher groups more freely.",
+        "only two frames no Scene model embedded both of (a still image the models could not embed); otherwise the " +
+        "similarities do. Higher groups more freely.",
       Integer(0, PerceptualHash.BITS)
     ),
     SettingDef(

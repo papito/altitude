@@ -31,7 +31,6 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.faces.min_cluster_frames', '2', '2'),
   ('video.preview.min_luminance', '40', '40'),
   ('sequence.max_gap_ms', '60000', '60000'),
-  ('sequence.embedding_model', 'dinov2', 'dinov2'),
   ('sequence.dinov2.min_similarity', '0.80', '0.80'),
   ('sequence.clip.min_similarity', '0.90', '0.90'),
   ('sequence.max_hash_distance', '10', '10'),

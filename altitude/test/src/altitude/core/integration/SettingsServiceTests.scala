@@ -64,7 +64,6 @@ import altitude.core.models.Settings
     current.videoFacesMinClusterFrames shouldBe 2
     current.videoPreviewMinLuminance shouldBe 40
     current.sequenceMaxGapMs shouldBe 60000
-    current.sequenceEmbeddingModel shouldBe SceneModel.Dinov2
     current.sequenceDinov2MinSimilarity shouldBe 0.8
     current.sequenceClipMinSimilarity shouldBe 0.9
     current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.8
@@ -120,7 +119,6 @@ import altitude.core.models.Settings
       Settings.FACE_RECOGNITION_MATCH_COUNT -> "2.5", // not an integer
       Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "256", // above 255
       Settings.SEQUENCE_MAX_GAP_MS -> "0", // below 1
-      Settings.SEQUENCE_EMBEDDING_MODEL -> "siglip", // no Scene model
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "1.5", // above 1
       Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "-1.5", // below -1
       Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65", // above 64, the bits of a hash
@@ -172,7 +170,6 @@ import altitude.core.models.Settings
   test("The Sequence Settings open the Triage section, Live on both engines, in the order of the screen") {
     val sequence = List(
       Settings.SEQUENCE_MAX_GAP_MS,
-      Settings.SEQUENCE_EMBEDDING_MODEL,
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY,
       Settings.SEQUENCE_CLIP_MIN_SIMILARITY,
       Settings.SEQUENCE_MAX_HASH_DISTANCE
@@ -185,19 +182,6 @@ import altitude.core.models.Settings
     }
     Settings.all.filter(_.group == SettingGroup.Triage).map(_.name).take(sequence.size) shouldBe sequence
     testApp.settings.applicable.map(_.name) should contain allElementsOf sequence
-  }
-
-  test("The Scene model is a choice of the models' names, and anything else is refused by naming them") {
-    SceneModel.values.foreach {
-      model => testApp.settings.validate(Map(Settings.SEQUENCE_EMBEDDING_MODEL -> model.dbValue)) shouldBe empty
-    }
-    List("siglip", "DINOv2", "").foreach {
-      text =>
-        withClue(text) {
-          testApp.settings.validate(Map(Settings.SEQUENCE_EMBEDDING_MODEL -> text)) shouldBe
-            Map(Settings.SEQUENCE_EMBEDDING_MODEL -> "Must be one of DINOv2, CLIP")
-        }
-    }
   }
 
   test("A similarity threshold is a cosine, inclusive of -1 and 1") {
@@ -214,26 +198,25 @@ import altitude.core.models.Settings
     }
   }
 
-  test("A saved Scene model and its threshold reach their accessors at once, with no restart waiting") {
+  test("Saved Sequence thresholds reach their accessors at once, with no restart waiting") {
     testApp.settings.save(
       Map(
-        Settings.SEQUENCE_EMBEDDING_MODEL -> "clip",
         Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.7",
         Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "0.95",
         Settings.SEQUENCE_MAX_GAP_MS -> "120000"
       ))
 
     val current = testApp.settings.current
-    current.sequenceEmbeddingModel shouldBe SceneModel.Clip
     current.sequenceDinov2MinSimilarity shouldBe 0.7
     current.sequenceClipMinSimilarity shouldBe 0.95
-    current.sequenceMinSimilarity(current.sequenceEmbeddingModel) shouldBe 0.95
+    current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.7
+    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.95
     current.sequenceMaxGapMs shouldBe 120000
     testApp.settings.pendingRestart shouldBe empty
 
-    // A reload reads the saved choice back
+    // A reload reads the saved values back
     testApp.settings.load()
-    testApp.settings.current.sequenceEmbeddingModel shouldBe SceneModel.Clip
+    testApp.settings.current.sequenceClipMinSimilarity shouldBe 0.95
   }
 
   test("The Curation thresholds are Live settings of the Triage section, and the fractions are inclusive of 0 and 1") {

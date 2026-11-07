@@ -18,7 +18,7 @@ import altitude.core.util.SearchQuery
 
 /**
  * Sequences as the import assigns them, over the synthesized burst of `BurstFrames`. Every frame the pipeline decodes is embedded
- * by both Scene models, so a frame with no embedding of the chosen model, which the hash decides, cannot be produced here;
+ * by both Scene models, so two frames no model embedded both of, which the hash decides, cannot be produced here;
  * `SequenceRuleTests` (unit) covers that fallback.
  */
 @DoNotDiscover class SequenceServiceTests(override val testApp: Altitude)
@@ -36,6 +36,17 @@ import altitude.core.util.SearchQuery
 
   /** The least similarity two frames need under `model` at the defaults */
   private def defaultThreshold(model: SceneModel): Double = testApp.settings.current.sequenceMinSimilarity(model)
+
+  /** A threshold of `model` no two frames of the burst clear */
+  private def strictThreshold(model: SceneModel): Double = model match
+    case SceneModel.Dinov2 => STRICT_DINOV2_SIMILARITY
+    case SceneModel.Clip => STRICT_CLIP_SIMILARITY
+
+  /** Runs `f` under thresholds no two frames of the burst clear by either model, so no pair is a Sequence by its likeness */
+  private def withStrictThresholds[T](f: => T): T =
+    withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY.toString) {
+      withSetting(Settings.SEQUENCE_CLIP_MIN_SIMILARITY, STRICT_CLIP_SIMILARITY.toString)(f)
+    }
 
   test("Two frames of a burst share a Sequence, and a frame alone has none") {
 
@@ -99,15 +110,16 @@ import altitude.core.util.SearchQuery
     /**
      * Setup:
      *
-     * Two frames of a burst imported under a DINOv2 threshold no two frames clear, so they are not paired; then, at the defaults,
-     * a move of the first out of triage held open in a transaction of its own while the second is assigned its Sequence.
+     * Two frames of a burst imported under thresholds no two frames clear by either model, so they are not paired; then, at the
+     * defaults, a move of the first out of triage held open in a transaction of its own while the second is assigned its
+     * Sequence.
      *
      * Assertions:
      *
      * The assignment waits for the move (the candidates are read locked), and once the move commits the sorted frame is no
      * candidate: neither frame is in a Sequence, and the first is sorted.
      */
-    val (first, second) = withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY) {
+    val (first, second) = withStrictThresholds {
       (importFrame(frame(0)), importFrame(frame(4), taken = Some(takenAt(1))))
     }
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
@@ -483,16 +495,16 @@ import altitude.core.util.SearchQuery
      * Setup:
      *
      * Under a 500 ms gap, two frames a second apart. Under a hash distance of 0, two frames a second apart at 120 and 121 s, past
-     * the first pair's minute, whose hashes differ by a few bits. Under a DINOv2 threshold no two frames of the burst clear, two
-     * frames at 240 and 241 s. Then, at the defaults again, a frame at 242 s.
+     * the first pair's minute, whose hashes differ by a few bits. Under thresholds no two frames of the burst clear by either
+     * model, two frames at 240 and 241 s. Then, at the defaults again, a frame at 242 s.
      *
      * Assertions:
      *
      * The first pair is no Sequence under the short gap. The second pair is one although its hashes differ, since both frames
-     * carry the DINOv2 embedding and the similarity decides, not the hash. The third pair is no Sequence: its DINOv2 similarity
-     * is checked to be under the raised threshold and at or above the default, so it is the threshold alone that keeps them
-     * apart. The frame at 242 s pairs with the frames at 240 and 241 s once the defaults are back, so the rule is read from the
-     * Settings as saved.
+     * carry the embeddings and the similarities decide, not the hash. The third pair is no Sequence: its similarity by each model
+     * is checked to be under that model's raised threshold and at or above its default, so it is the thresholds alone that keep
+     * them apart. The frame at 242 s pairs with the frames at 240 and 241 s once the defaults are back, so the rule is read from
+     * the Settings as saved.
      */
     val (first, second) = withSetting(Settings.SEQUENCE_MAX_GAP_MS, "500") {
       (importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1))))
@@ -506,11 +518,16 @@ import altitude.core.util.SearchQuery
     fourth.sequenceId should not be None
     List(third, fourth).map(stored(_).sequenceId).distinct shouldBe List(fourth.sequenceId)
 
-    val (fifth, sixth) = withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY) {
+    val (fifth, sixth) = withStrictThresholds {
       (importFrame(frame(3), taken = Some(takenAt(240))), importFrame(frame(5), taken = Some(takenAt(241))))
     }
-    similarity(SceneModel.Dinov2, fifth, sixth) should be < STRICT_DINOV2_SIMILARITY.toDouble
-    similarity(SceneModel.Dinov2, fifth, sixth) should be >= defaultThreshold(SceneModel.Dinov2)
+    SceneModel.values.foreach {
+      model =>
+        withClue(model) {
+          similarity(model, fifth, sixth) should be < strictThreshold(model)
+          similarity(model, fifth, sixth) should be >= defaultThreshold(model)
+        }
+    }
     List(fifth, sixth).map(stored(_).sequenceId) shouldBe List(None, None)
 
     val seventh = importFrame(frame(6), taken = Some(takenAt(242)))
@@ -519,39 +536,46 @@ import altitude.core.util.SearchQuery
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
   }
 
-  test("Changing the Scene model changes the next assignment") {
+  test("A burst one Scene model misses is caught by the other") {
 
     /**
      * Setup:
      *
-     * Under a DINOv2 threshold no two frames of the burst clear, with `dinov2` chosen: two frames a second apart; then, with
-     * `clip` chosen and the CLIP threshold at its default, a third frame at 2 s; then, back under `dinov2`, a fourth at 3 s.
+     * For each Scene model, under a threshold of that model no two frames of the burst clear while the other model's threshold
+     * stays at its default: two frames a second apart, in a window of their own (0 and 1 s for the first model, 120 and 121 s for
+     * the second). Then, under both thresholds raised, a third pair at 240 and 241 s.
      *
      * Assertions:
      *
-     * The first two are no Sequence by DINOv2. The third pairs with both by CLIP: the frames' CLIP similarity is checked to be at
-     * or above the default CLIP threshold while their DINOv2 similarity is under the raised one, so the switch of model is what
-     * pairs them, with no re-import. The fourth, judged by DINOv2 again, stays out.
+     * Each of the first two pairs is a Sequence by the model left at its default: the frames' similarity by that model is checked
+     * to be at or above its default threshold while their similarity by the raised model is under its raised threshold, so it is
+     * the other model's likeness alone that pairs them. The third pair, alike by neither model under the raised thresholds, is no
+     * Sequence, so neither model's likeness is assumed.
      */
-    withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY) {
-      val first = importFrame(frame(0))
-      val second = importFrame(frame(1), taken = Some(takenAt(1)))
-      List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
-
-      val third = withSetting(Settings.SEQUENCE_EMBEDDING_MODEL, SceneModel.Clip.dbValue) {
-        importFrame(frame(2), taken = Some(takenAt(2)))
-      }
-      List(first, second).foreach {
-        earlier =>
-          similarity(SceneModel.Clip, earlier, third) should be >= defaultThreshold(SceneModel.Clip)
-          similarity(SceneModel.Dinov2, earlier, third) should be < STRICT_DINOV2_SIMILARITY.toDouble
-      }
-      third.sequenceId should not be None
-      List(first, second, third).map(stored(_).sequenceId).distinct shouldBe List(third.sequenceId)
-
-      val fourth = importFrame(frame(3), taken = Some(takenAt(3)))
-      stored(fourth).sequenceId shouldBe None
+    val thresholdOf =
+      Map(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> SceneModel.Dinov2, Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> SceneModel.Clip)
+    thresholdOf.zipWithIndex.foreach {
+      case ((setting, raised), index) =>
+        val other = SceneModel.values.find(_ != raised).value
+        val start = index * 120
+        val (first, second) = withSetting(setting, strictThreshold(raised).toString) {
+          (
+            importFrame(frame(2 * index), taken = Some(takenAt(start))),
+            importFrame(frame(2 * index + 1), taken = Some(takenAt(start + 1))))
+        }
+        withClue(raised) {
+          similarity(raised, first, second) should be < strictThreshold(raised)
+          similarity(other, first, second) should be >= defaultThreshold(other)
+          second.sequenceId should not be None
+          List(first, second).map(stored(_).sequenceId).distinct shouldBe List(second.sequenceId)
+        }
     }
+
+    val (fifth, sixth) = withStrictThresholds {
+      (importFrame(frame(4), taken = Some(takenAt(240))), importFrame(frame(5), taken = Some(takenAt(241))))
+    }
+    SceneModel.values.foreach(model => similarity(model, fifth, sixth) should be < strictThreshold(model))
+    List(fifth, sixth).map(stored(_).sequenceId) shouldBe List(None, None)
   }
 
   test("The candidates are read with their Scene embeddings, and a search result without them") {
@@ -585,9 +609,12 @@ import altitude.core.util.SearchQuery
 object SequenceServiceTests {
 
   /**
-   * A DINOv2 threshold no two frames of the synthesized burst clear: frames a few pixels apart measure 0.983 to 0.998, so 0.999
-   * is above every pair with a margin, and far above the default of 0.80, which every pair clears. A test that keeps frames apart
-   * with it asserts the observed similarity lies between the two, so the threshold, and nothing else, is what parts them.
+   * A threshold of each Scene model no two frames of the synthesized burst clear: by DINOv2 frames a few pixels apart measure
+   * 0.983 to 0.998, so 0.999 is above every pair with a margin, and far above the default of 0.80, which every pair clears; by
+   * CLIP they measure closer to 1, so only the cosine of identical embeddings, 1, is above every pair. A test that keeps frames
+   * apart with one asserts the observed similarity lies between it and the default, so the threshold, and nothing else, is what
+   * parts them.
    */
-  private val STRICT_DINOV2_SIMILARITY = "0.999"
+  private val STRICT_DINOV2_SIMILARITY = 0.999
+  private val STRICT_CLIP_SIMILARITY = 1.0
 }

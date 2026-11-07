@@ -238,7 +238,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
           embedding =>
             require(
               embedding.values.length == model.dimensions,
-              s"A ${model.dbValue} embedding has ${model.dimensions} dimensions, not ${embedding.values.length}")
+              s"A ${model.name} embedding has ${model.dimensions} dimensions, not ${embedding.values.length}")
         }
     }
 

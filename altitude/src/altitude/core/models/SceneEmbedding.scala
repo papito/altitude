@@ -6,14 +6,13 @@ import altitude.core.FieldConst
 import altitude.core.util.JsonCodec
 
 /**
- * One of the vision models the import embeds every still image with (the glossary's Scene model). Each knows how it is stored
- * (`dbValue`, `column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), its name on the screen (`label`), where
- * its ONNX export lives on the classpath, and the per-channel mean and std, in RGB order, its input is normalized with after a
- * scale to 0..1: what the checkpoint was trained with, so `SceneEmbedder` feeds it what it expects.
+ * One of the vision models the import embeds every still image with (the glossary's Scene model). Each knows its name in the logs
+ * (`name`), how its embedding is stored (`column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), where its ONNX
+ * export lives on the classpath, and the per-channel mean and std, in RGB order, its input is normalized with after a scale to
+ * 0..1: what the checkpoint was trained with, so `SceneEmbedder` feeds it what it expects.
  */
 enum SceneModel(
-    val dbValue: String,
-    val label: String,
+    val name: String,
     val dimensions: Int,
     val column: String,
     val resourcePath: String,
@@ -24,7 +23,6 @@ enum SceneModel(
   case Dinov2
     extends SceneModel(
       "dinov2",
-      "DINOv2",
       768,
       FieldConst.Asset.DINOV2_EMBEDDING,
       "/onnx/dinov2_vitb14.onnx",
@@ -35,16 +33,12 @@ enum SceneModel(
   case Clip
     extends SceneModel(
       "clip",
-      "CLIP",
       512,
       FieldConst.Asset.CLIP_EMBEDDING,
       "/onnx/clip_vitb16_image.onnx",
       IArray(0.48145466f, 0.4578275f, 0.40821073f),
       IArray(0.26862954f, 0.26130258f, 0.27577711f)
     )
-
-object SceneModel:
-  def fromDbValue(value: String): Option[SceneModel] = values.find(_.dbValue == value)
 
 object SceneEmbedding:
   // The wire form is the float array itself; no API answers it today, but an Asset carries it in JSON

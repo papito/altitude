@@ -95,7 +95,7 @@ class SceneEmbedder extends AutoCloseable:
       options.setIntraOpNumThreads(1)
       options.setInterOpNumThreads(1)
       val session = environment.createSession(path, options)
-      logger.info(s"Opened the ONNX session of Scene model ${model.dbValue} from $path")
+      logger.info(s"Opened the ONNX session of Scene model ${model.name} from $path")
       session
     finally options.close()
 
@@ -119,7 +119,7 @@ class SceneEmbedder extends AutoCloseable:
     try Some(run(rgb, model))
     catch
       case NonFatal(e) =>
-        logger.warn(s"Scene model ${model.dbValue} could not embed $name", e)
+        logger.warn(s"Scene model ${model.name} could not embed $name", e)
         None
 
   /** The image's center square at the input size as packed RGB bytes, row-major: the models' common input before normalization */
@@ -184,7 +184,7 @@ class SceneEmbedder extends AutoCloseable:
       try
         val output = result.get(0).asInstanceOf[OnnxTensor].getFloatBuffer
         if output.remaining() != model.dimensions then
-          throw IllegalStateException(s"Scene model ${model.dbValue} gave ${output.remaining()} values, not ${model.dimensions}")
+          throw IllegalStateException(s"Scene model ${model.name} gave ${output.remaining()} values, not ${model.dimensions}")
         val values = new Array[Float](model.dimensions)
         output.get(values)
         SceneEmbedding(IArray.unsafeFromArray(unit(values)))

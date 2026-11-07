@@ -38,16 +38,6 @@
                        value="true"
                        @if(values(setting.name) == "true") { checked }>
               }
-              case SettingType.Choice(options) => {
-                <select id="field-@{ setting.name }"
-                        name="@{ setting.name }"
-                        autocomplete="off"
-                        @if(errors.contains(setting.name)) { class="error" }>
-                  @for(option <- options) {
-                    <option value="@option.value" @if(values(setting.name) == option.value) { selected }>@option.label</option>
-                  }
-                </select>
-              }
               case _ => {
                 <input type="text"
                        id="field-@{ setting.name }"
@@ -72,7 +62,7 @@
               <div class="note">@note</div>
             }
 
-            <div class="help">@setting.help Default: @{ setting.valueType.label(defaults(setting.name)) }</div>
+            <div class="help">@setting.help Default: @{ defaults(setting.name) }</div>
           </div>
         </div>
       }

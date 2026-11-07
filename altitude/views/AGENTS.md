@@ -1430,19 +1430,15 @@ save listener (`js/listeners/settings.js`); the template passes `Const.NavEntry.
 (`#settingsForm`), rendered by `SettingsFormController.form` for the page and again by its save, `POST
 /htmx/settings/r/:repoId`: `hx-target="this"`, `hx-swap="outerHTML settle:0"`, `hx-json-enc`,
 `data-app-success-event="SETTINGS_SAVED_EVENT"`. Its sections are the Setting groups, each a grid of label and control
-rows (`.setting` is `display: contents`, so the labels of a section line up); a field is a text input, a checkbox with
-`value="true"` for a flag, or a `<select>` for a `Choice` (`sequence.embedding_model`: an option per `ChoiceOption`, its
-value posted and its label shown, the current value selected, and `autocomplete="off"` as on the text inputs, since Firefox
-restores a changed select on a soft reload), named after its Setting (`field-<name>`), followed by its Reset button, its error, a restart
+rows (`.setting` is `display: contents`, so the labels of a section line up); a field is a text input or a checkbox with
+`value="true"` for a flag, named after its Setting (`field-<name>`), followed by its Reset button, its error, a restart
 notice ("Saved X, running Y until the server restarts") for a Restart setting whose saved value is not the running one,
 its note, plain information always shown for a Setting the controller gives one (`.note`, one today: "Running N threads:
-<reason>" on `import.parallelism`, from `Altitude.importParallelismResolution`), and its help text ending in `Default: …` (a
-Choice's default by its label, `SettingType.label`).
+<reason>" on `import.parallelism`, from `Altitude.importParallelismResolution`), and its help text ending in `Default: …`.
 The Settings of the other engine are not rendered (PostgreSQL only:
 `face.recognition.hnsw_ef_search`, `db.postgres.read_statement_timeout`). Reset is `data-app-reset-setting`, handled by one
-delegated click listener in the page module that fills the field (`input, select`) from the row's `data-setting-default`
-(`Const.attributes.settingDefault`), a text input and a select alike since the default is one of a select's options, a
-checkbox by checking it, and clears its `error` class; nothing is written until Save. A failed validation comes
+delegated click listener in the page module that fills the field from the row's `data-setting-default`
+(`Const.attributes.settingDefault`), a checkbox by checking it, and clears its `error` class; nothing is written until Save. A failed validation comes
 back as a validation replacement (`HX-Retarget: this`, see above) with the submitted values kept and each error beside its
 field, so no success event fires; a save answers the saved form and `SETTINGS_SAVED_EVENT` shows "Settings saved". The CSS
 is the partial's own file, `static/css/htmx/settings_form.css`, over `core.css` variables (`--section-vertical-space`, `--control-*-space`,

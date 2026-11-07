@@ -126,7 +126,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
       val quality = measurement.quality
       logger.debug(
         s"Measured $asset: score ${quality.score}, sharpness ${quality.sharpness}, hash ${measurement.hash}, " +
-          s"embedded by ${SceneModel.values.filter(embeddings.of(_).isDefined).map(_.dbValue).mkString(", ")}")
+          s"embedded by ${SceneModel.values.filter(embeddings.of(_).isDefined).map(_.name).mkString(", ")}")
       dataAsset.copy(
         asset = asset.copy(
           imageQuality = Some(quality),
