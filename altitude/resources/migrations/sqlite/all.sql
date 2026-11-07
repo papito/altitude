@@ -170,6 +170,10 @@ CREATE INDEX asset_triage_created ON asset (repository_id, is_recycled, is_pipel
 CREATE INDEX asset_triage_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
 ) WHERE is_triaged = TRUE;
+-- The undated Sequence candidates: the triaged assets with no capture time, by repository and size in Date Imported order, so an
+-- undated import walks its size backwards from the newest and stops at its cap, whatever else triage holds
+CREATE INDEX asset_triage_undated ON asset (repository_id, width, height, created_at, id)
+  WHERE is_triaged = TRUE AND original_created_at IS NULL;
 -- Folder browsing and the folder source of Search text; it also lets an OR of text sources be planned as a multi-index OR
 CREATE INDEX asset_folder ON asset (folder_id);
 -- Map viewport queries: a bounding-box range over the located assets of a repository only. It carries the ID and the capture

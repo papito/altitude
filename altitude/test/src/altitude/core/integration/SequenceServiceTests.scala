@@ -14,7 +14,9 @@ import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 import altitude.core.models.Stats
+import altitude.core.service.SequenceService
 import altitude.core.util.SearchQuery
+import altitude.core.util.SequenceRule
 
 /**
  * Sequences as the import assigns them, over the synthesized burst of `BurstFrames`. Every frame the pipeline decodes is embedded
@@ -162,6 +164,186 @@ import altitude.core.util.SearchQuery
       update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", stamped.persistedId)
     }(lookupPlanOf(sql, values))
     withClue(plan)(plan should include("asset_triage_date_taken"))
+  }
+
+  test("The undated candidates are walked backwards through the undated triage index") {
+
+    /**
+     * Setup:
+     *
+     * An undated frame seeded into 5,000 copies, imported a minute apart, with a hash and no capture time, one in ten of them in
+     * triage and the rest sorted, analyzed and rolled back once the plan is read, and the statement that reads the undated
+     * candidates of the frame with a limit under the undated triage rows of its size, as the cap is under them when it matters.
+     *
+     * Assertions:
+     *
+     * The engine's plan reads `asset_triage_undated` for it and sorts nothing: the repository's undated triage rows of the size
+     * in import order are what the index holds, so the engine walks it backwards from the newest and stops at the limit, rather
+     * than sorting what a wider index passes (with a limit over those rows, PostgreSQL may read the same run of the index as a
+     * bitmap and sort it, which costs the same rows and nothing of the rest of triage).
+     */
+    val undated = stored(importUndated(frame(0), 1))
+    undated.originalCreatedAt shouldBe None
+    val (sql, values) =
+      testApp.DAO.asset.asInstanceOf[altitude.core.dao.jdbc.AssetDao].undatedSequenceCandidatesStatement(undated, 100)
+
+    val plan = atScale {
+      seedCopies(undated.persistedId, copies = 5000, folders = 1)
+      // The copies carry no capture time, as the template does, and take a hash, so they are candidates by shape; every copy
+      // whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
+      update("UPDATE asset SET perceptual_hash = 1 WHERE id <> ?", undated.persistedId)
+      update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", undated.persistedId)
+    }(lookupPlanOf(sql, values))
+    withClue(plan) {
+      plan should include("asset_triage_undated")
+      (plan should not).include(if (isPostgres) "Sort" else "TEMP B-TREE")
+    }
+  }
+
+  test("The undated read returns only the matches and counts the rows it scanned") {
+
+    /**
+     * Setup:
+     *
+     * Imported with no metadata under names that carry no time, under thresholds no two frames clear by either model, so the
+     * import pairs none of them and the read is tested on its own: the different picture at the frames' size, a half-size frame,
+     * two frames of the burst, and then a new frame of the burst; its undated matches read through the DAO under the rule at the
+     * defaults, with a cap of 100, then of 1, then under a test that refuses every candidate; then a dated frame of the burst,
+     * and the read again.
+     *
+     * Assertions:
+     *
+     * None of the undated imports has a capture time or a Sequence. The read keeps the two burst frames alone, newest first, and
+     * scanned three rows: the two frames and the different picture, which are at the new frame's size, and not the half-size
+     * frame or the frame itself. Capped at 1, it keeps the newest frame alone and scanned one row; refusing everything, it keeps
+     * nothing and still scanned three. The dated frame is not scanned.
+     */
+    val (other, halfSize, first, second, newFrame) = withStrictThresholds {
+      (
+        importUndated(otherPicture, 1),
+        importUndated(frame(2, scale = 0.5), 2),
+        importUndated(frame(0), 3),
+        importUndated(frame(1), 4),
+        importUndated(frame(3), 5))
+    }
+    List(other, halfSize, first, second, newFrame).map(stored).foreach {
+      asset =>
+        asset.originalCreatedAt shouldBe None
+        asset.sequenceId shouldBe None
+    }
+    val settings = testApp.settings.current
+
+    def read(limit: Int, keep: Asset => Boolean = SequenceRule.matches(newFrame, _, settings)) =
+      testApp.txManager.withTransaction(testApp.DAO.asset.getUndatedSequenceMatches(newFrame, limit)(keep))
+
+    val matches = read(limit = 100)
+    matches.kept.map(_.persistedId) shouldBe List(second.persistedId, first.persistedId)
+    matches.scanned shouldBe 3
+
+    val capped = read(limit = 1)
+    capped.kept.map(_.persistedId) shouldBe List(second.persistedId)
+    capped.scanned shouldBe 1
+
+    val none = read(limit = 100, keep = _ => false)
+    none.kept shouldBe empty
+    none.scanned shouldBe 3
+
+    importFrame(frame(4))
+    read(limit = 100).scanned shouldBe 3
+  }
+
+  test("Undated frames of one scene share a Sequence, and a dated frame of it joins neither") {
+
+    /**
+     * Setup:
+     *
+     * Imported with no metadata under names that carry no time: a frame, the next frame of its burst, the different picture at
+     * the frames' size and a half-size frame; then a frame of the burst with the camera's clock and model.
+     *
+     * Assertions:
+     *
+     * The first frame comes out of its import with no Sequence, since it is alone; the second comes out in a Sequence, and the
+     * first is read back in the same one. Neither has a capture time, and each has its Image quality and hash. The different
+     * picture and the half-size frame have none, and so has the dated frame: the undated frames pair by their likeness among the
+     * undated frames of their size, and never with a dated one.
+     */
+    val first = importUndated(frame(0), 1)
+    first.sequenceId shouldBe None
+
+    val second = importUndated(frame(1), 2)
+    second.sequenceId should not be None
+    stored(first).sequenceId shouldBe second.sequenceId
+    stored(second).sequenceId shouldBe second.sequenceId
+    List(first, second).map(stored).foreach {
+      undated =>
+        undated.originalCreatedAt shouldBe None
+        undated.imageQuality should not be None
+        undated.perceptualHash should not be None
+    }
+
+    val other = importUndated(otherPicture, 3)
+    val halfSize = importUndated(frame(2, scale = 0.5), 4)
+    val dated = importFrame(frame(2))
+    stored(dated).originalCreatedAtSource shouldBe Some(CaptureDateSource.ExifOriginal)
+    List(other, halfSize, dated).map(stored(_).sequenceId).distinct shouldBe List(None)
+    List(first, second).map(stored(_).sequenceId).distinct shouldBe List(second.sequenceId)
+  }
+
+  test("A service built with a cap of one compares the newest undated frame only") {
+
+    /**
+     * Setup:
+     *
+     * Three undated frames of the burst imported under thresholds no two frames clear by either model, so none is paired; then,
+     * at the defaults, the third assigned again, with its embeddings as the import returned them, through a service built with a
+     * cap of one candidate.
+     *
+     * Assertions:
+     *
+     * The third frame comes out in a Sequence with the second, the newest of the two undated frames before it, which the cap
+     * admitted alone; the first, older than the cap reaches, stays out.
+     */
+    val (first, second, third) = withStrictThresholds {
+      (importUndated(frame(0), 1), importUndated(frame(1), 2), importUndated(frame(2), 3))
+    }
+    List(first, second, third).map(stored(_).sequenceId).distinct shouldBe List(None)
+
+    val assigned = new SequenceService(testApp, undatedCandidates = 1).assign(third)
+    assigned.sequenceId should not be None
+    List(second, third).map(stored(_).sequenceId).distinct shouldBe List(assigned.sequenceId)
+    stored(first).sequenceId shouldBe None
+  }
+
+  test("A concurrent move of an undated candidate leaves it out of the Sequence") {
+
+    /**
+     * Setup:
+     *
+     * Two undated frames of the burst imported under thresholds no two frames clear by either model, so they are not paired;
+     * then, at the defaults, a move of the first out of triage held open in a transaction of its own while the second, with its
+     * embeddings as the import returned them, is assigned its Sequence.
+     *
+     * Assertions:
+     *
+     * The assignment waits for the move, and once the move commits the sorted frame is no candidate: neither frame is in a
+     * Sequence, and the first is sorted. The undated candidates are read without row locks, so on PostgreSQL the first frame
+     * comes back a match before the move commits; the matches are then re-read locked, which waits on the moved row and leaves it
+     * out once the move commits, so the second frame is not stamped alone (on SQLite the assignment waits for the one write
+     * connection and finds the sorted frame no candidate).
+     */
+    val (first, second) = withStrictThresholds {
+      (importUndated(frame(0), 1), importUndated(frame(4), 2))
+    }
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+    val rootFolderId = RequestContext.getRepository.rootFolderId
+
+    contend(
+      first = testApp.service.library.moveAssetsToFolder(Set(first.persistedId), rootFolderId),
+      second = testApp.service.sequence.assign(second).sequenceId shouldBe None
+    )
+
+    stored(first).isTriaged shouldBe false
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
   }
 
   test("A frame that bridges two Sequences merges them into the larger") {

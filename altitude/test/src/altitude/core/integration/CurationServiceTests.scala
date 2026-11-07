@@ -230,6 +230,54 @@ import altitude.core.service.FaceDetectionService
     curation.sequenceSet("no-such-sequence") shouldBe None
   }
 
+  test(
+    "An undated Sequence is in the queue after the dated ones, its frames in import order, and its set resolves and reopens as any other") {
+
+    /**
+     * Setup:
+     *
+     * Three frames of the burst imported one by one with no metadata, under names that carry no time, then a dated burst of two.
+     * The undated Sequence is resolved with its first frame as the Pick, then reopened with what the resolve answered.
+     *
+     * Assertions:
+     *
+     * The queue holds the dated Sequence first and the undated one, with no first capture, after it on both engines, although the
+     * undated one was imported first. The undated set's frames are in the order they were imported, whatever their IDs. The
+     * resolve takes the Pick out of the Sequence and recycles the other two, so the Sequence leaves the queue and has no set; the
+     * reopen brings the frames and the Sequence back, in the same order.
+     */
+    val undated = (2 to 4).toList.map(n => importUndated(frame(n), n))
+    val sequenceId = sequenceOf(undated)
+    val dated = burst(0)
+
+    queueShouldHold(sequenceOf(dated), sequenceId)
+    curation.queue().map(sequence => (sequence.members, sequence.firstCapturedAt)) shouldBe List((2, capturedAt(0)), (3, None))
+    frameIds(curation.sequenceSet(sequenceId)) shouldBe undated.map(_.persistedId)
+
+    val picks = ids(undated.take(1))
+    val others = ids(undated.tail)
+    val cleared = curation.resolve(picks, others)
+    cleared shouldBe Map(undated.head.persistedId -> sequenceId)
+    stored(undated.head).sequenceId shouldBe None
+    stored(undated.head).isRecycled shouldBe false
+    undated.tail.map(stored).foreach {
+      other =>
+        other.isRecycled shouldBe true
+        other.sequenceId shouldBe Some(sequenceId)
+    }
+    queueShouldHold(sequenceOf(dated))
+    curation.sequenceSet(sequenceId) shouldBe None
+
+    curation.reopen(picks, others, cleared) shouldBe RestoreResult(restored = others, duplicates = Set.empty)
+    undated.map(stored).foreach {
+      undatedFrame =>
+        undatedFrame.sequenceId shouldBe Some(sequenceId)
+        undatedFrame.isRecycled shouldBe false
+    }
+    queueShouldHold(sequenceOf(dated), sequenceId)
+    frameIds(curation.sequenceSet(sequenceId)) shouldBe undated.map(_.persistedId)
+  }
+
   test("A set's frames carry their Histograms, a frame not measured has none, and another repository reads none") {
 
     /**

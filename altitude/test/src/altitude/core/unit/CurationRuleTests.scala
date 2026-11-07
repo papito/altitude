@@ -38,7 +38,8 @@ import altitude.core.util.CurationRule
       quality: Option[ImageQuality] = Some(clean),
       sequence: Option[String] = None,
       faces: List[Face] = Nil,
-      capturedAt: Option[LocalDateTime] = Some(takenAt)): CurationFrame =
+      capturedAt: Option[LocalDateTime] = Some(takenAt),
+      importedAt: Option[LocalDateTime] = None): CurationFrame =
     CurationFrame(
       asset = Asset(
         id = Some(id),
@@ -50,7 +51,8 @@ import altitude.core.util.CurationRule
         folderId = "",
         imageQuality = quality,
         sequenceId = sequence,
-        originalCreatedAt = capturedAt
+        originalCreatedAt = capturedAt,
+        createdAt = importedAt
       ),
       faces = faces,
       inAlbumOrLocation = false
@@ -740,6 +742,33 @@ import altitude.core.util.CurationRule
     idsOf(set.frames) shouldBe List("early-dark", "tied-a", "tied-b", "late-dark", "undated")
     bundlesOf(set) shouldBe List(BundleKind.TooDark -> List("early-dark", "late-dark"))
     idsOf(set.contenders) shouldBe List("tied-a", "tied-b", "undated")
+  }
+
+  test("Frames with no capture time, or with one capture time, are in import order, and by ID when imported at one moment") {
+
+    /**
+     * Setup:
+     *
+     * Three frames with no capture time, two of them imported at one moment and the third a second later, and two frames of one
+     * capture time imported a second apart, each pair's IDs in the other order.
+     *
+     * Assertions:
+     *
+     * The dated pair comes first, in import order; the undated frames follow in import order, the ID breaking the tie of the two
+     * imported at one moment, so an undated Sequence shows as it was uploaded rather than by its random IDs.
+     */
+    def importedAt(seconds: Int): Option[LocalDateTime] = Some(takenAt.plusHours(1).plusSeconds(seconds))
+
+    val set = assess(
+      frame("undated-c", capturedAt = None, importedAt = importedAt(0)),
+      frame("undated-a", capturedAt = None, importedAt = importedAt(1)),
+      frame("undated-b", capturedAt = None, importedAt = importedAt(0)),
+      frame("dated-b", importedAt = importedAt(0)),
+      frame("dated-a", importedAt = importedAt(1))
+    )
+
+    idsOf(set.frames) shouldBe List("dated-b", "dated-a", "undated-b", "undated-c", "undated-a")
+    idsOf(set.contenders) shouldBe idsOf(set.frames)
   }
 
   test("The Settings decide every threshold") {

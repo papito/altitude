@@ -44,6 +44,10 @@ trait BurstFrames { self: IntegrationTestCore =>
   /** A frame imported with no metadata at all, neither a camera model nor a clock, under `fileName`, so only its name dates it */
   protected def importNamed(bytes: Array[Byte], fileName: String): Asset =
     importFrame(bytes, taken = None, model = None, fileName = fileName)
+
+  /** A frame imported with no metadata under a name that carries no time (WhatsApp mobile's `IMG-20240601-WA000n.jpg`), undated */
+  protected def importUndated(bytes: Array[Byte], n: Int): Asset =
+    importNamed(bytes, f"IMG-20240601-WA$n%04d.jpg")
 }
 
 object BurstFrames {

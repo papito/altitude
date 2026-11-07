@@ -73,12 +73,14 @@ object CurationRule:
     )
 
   /**
-   * Capture order, a frame with no capture time last and the ID breaking a tie, so the order does not depend on how they were
-   * read
+   * Capture order, a frame with no capture time last, the import time breaking a tie and then the ID, so the order does not
+   * depend on how the frames were read, and the frames of an undated Sequence, which tie on no capture time, show as they were
+   * uploaded rather than by their random IDs. `AssetDao.sequenceFramesStatement` sorts the same way, since it cuts a window.
    */
   private val captureOrder: Ordering[CurationFrame] =
     given Ordering[LocalDateTime] = Ordering.fromLessThan(_.isBefore(_))
-    Ordering.by(frame => (frame.asset.originalCreatedAt.isEmpty, frame.asset.originalCreatedAt, frame.asset.id))
+    Ordering.by(
+      frame => (frame.asset.originalCreatedAt.isEmpty, frame.asset.originalCreatedAt, frame.asset.createdAt, frame.asset.id))
 
   /**
    * A Face at least the gap under the same Person's best, or, in a Sequence, a Person in at least half of its frames with no Face

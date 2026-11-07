@@ -27,7 +27,10 @@ class CurationService(val app: Altitude):
   protected val dao: AssetDao = app.DAO.asset
   protected val txManager: TransactionManager = app.txManager
 
-  /** The context repository's Sequences with enough frames out of the trash to compare, the oldest first capture first */
+  /**
+   * The context repository's Sequences with enough frames out of the trash to compare, the oldest first capture first and the
+   * undated ones, which have none, last
+   */
   def queue(): List[SequenceMembers] =
     txManager.asReadOnly {
       dao.getSequencesToCurate()

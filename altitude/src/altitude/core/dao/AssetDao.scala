@@ -67,12 +67,29 @@ trait AssetDao extends BaseDao[Asset]:
    */
   def getSequenceCandidates(asset: Asset, gapMs: Int): List[Asset]
 
+  /**
+   * The context repository's completed, triaged still images other than the asset, in the trash or not but not purge-pending,
+   * with a hash and no capture time, at the asset's width and height, the newest `limit` imports first, walked backwards through
+   * `asset_triage_undated` and judged one by one: each is kept while `keep` holds and dropped otherwise, so at most the matches'
+   * embeddings are alive at once. The kept ones in that order, with how many rows were read, so a caller can tell when the limit
+   * was reached. No row locks: the matches are re-read through [[lockTriaged]] before they are stamped.
+   */
+  def getUndatedSequenceMatches(asset: Asset, limit: Int)(keep: Asset => Boolean): BaseDao.Collected[Asset]
+
+  /**
+   * The context repository's completed, triaged assets among the IDs that are not purge-pending, in the trash or not, with the
+   * Sequence each carries now, locked in ID order until the transaction ends (`FOR UPDATE` on PostgreSQL): how the undated
+   * matches, read without row locks, are re-read before they are stamped, so one a move sorted meanwhile is left out
+   */
+  def lockTriaged(assetIds: Set[String]): List[Asset]
+
   /** How many members each of the Sequences has and when its first member was captured, for the ones that have any */
   def countSequenceMembers(sequenceIds: Set[String]): List[SequenceMembers]
 
   /**
    * The queue of Curation: the context repository's Sequences with at least `Const.Curation.MIN_FRAMES` frames completed and out
-   * of the trash, counted over those frames alone, the oldest first capture first and then by ID. Read through `asset_sequence`.
+   * of the trash, counted over those frames alone, the oldest first capture first, a Sequence with none (an undated one) last on
+   * both engines, and then by ID. Read through `asset_sequence`.
    */
   def getSequencesToCurate(): List[SequenceMembers]
 
@@ -81,7 +98,7 @@ trait AssetDao extends BaseDao[Asset]:
 
   /**
    * The first `limit` of a Sequence's frames in the context repository, completed and out of the trash, in capture order (a frame
-   * with no capture time last, then by ID, as `CurationRule` orders them), through `asset_sequence`
+   * with no capture time last, then by import time and ID, as `CurationRule` orders them), through `asset_sequence`
    */
   def getSequenceFrames(sequenceId: String, limit: Int): List[Asset]
 

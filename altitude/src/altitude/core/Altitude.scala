@@ -293,6 +293,17 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   final val importParallelism: Int = importParallelismResolution.value
   logger.info(s"Import parallelism: ${importParallelismResolution.summary}")
 
+  /**
+   * The most undated frames one undated import is compared with (`SequenceService.assign`): `Const.Sequence` per core, which
+   * bounds the read's cost by the machine rather than by what triage holds. Computed once, at startup, as `importParallelism` is.
+   */
+  final val undatedSequenceCandidates: Int =
+    val cores = Runtime.getRuntime.availableProcessors
+    val candidates = Const.Sequence.UNDATED_CANDIDATES_PER_CORE * cores
+    logger.info(
+      s"Undated Sequence candidates: $candidates (${Const.Sequence.UNDATED_CANDIDATES_PER_CORE} per core, $cores cores)")
+    candidates
+
   // The app's config, with the dispatcher the import's work runs on
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     val importDispatcherConfig = ConfigFactory.parseString(s"""
@@ -335,7 +346,7 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     val album: AlbumService = AlbumService(app)
     val location: LocationService = LocationService(app)
     val stats: StatsService = StatsService(app)
-    val sequence: SequenceService = SequenceService(app)
+    val sequence: SequenceService = SequenceService(app, undatedSequenceCandidates)
     val curation: CurationService = CurationService(app)
     val person: PersonService = PersonService(app)
     val faceDetection: FaceDetectionService = FaceDetectionService(app)

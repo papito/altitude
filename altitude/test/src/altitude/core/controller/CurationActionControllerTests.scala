@@ -192,6 +192,10 @@ import altitude.core.service.FaceDetectionService
     withServer(App) {
       host =>
         val blown = List(frame(fine.copy(clippedHighlights = 0.08)), frame(fine.copy(clippedHighlights = 0.08)))
+        // Every fixture is persisted before the first stamp: a random image imported after it may pair with a stamped frame
+        val measured = frame()
+        val unmeasured = testContext.persistAsset(isTriaged = true)
+        testContext.setAssetImageQuality(unmeasured.persistedId, None)
         testContext.setAssetSequence(blown, sequenceId)
 
         val html = getSet(host, repoId, sequenceId).text()
@@ -202,10 +206,8 @@ import altitude.core.service.FaceDetectionService
         html should include(s"""data-opening-pinned-id="${frameIds(html).head}"""")
         html should include(s"""data-opening-focused-id="${frameIds(html)(1)}"""")
 
-        val unmeasured = testContext.persistAsset(isTriaged = true)
-        testContext.setAssetImageQuality(unmeasured.persistedId, None)
         val other = UUID.randomUUID().toString
-        testContext.setAssetSequence(List(frame(), unmeasured), other)
+        testContext.setAssetSequence(List(measured, unmeasured), other)
 
         val noted = getSet(host, repoId, other).text()
         noted should include("Too close to call")

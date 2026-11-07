@@ -37,6 +37,13 @@ object Const:
   object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3
 
+  object Sequence:
+    // The most undated frames one undated import is compared with, per CPU core, newest imports first (see
+    // `Altitude.undatedSequenceCandidates`): a candidate costs about 6 KB to read, its two Scene embeddings, so a core's share is
+    // about 30 MB per undated import, and the compare itself is two dot products a candidate. Undated frames have no capture time
+    // to window them by, so without the cap the cost of one import would grow with every undated frame triage holds.
+    val UNDATED_CANDIDATES_PER_CORE = 5000
+
   object Curation:
     // A Curation set compares: with fewer frames left there is no set, and a Sequence is not in the queue
     val MIN_FRAMES = 2

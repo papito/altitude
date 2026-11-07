@@ -67,7 +67,7 @@ image under that size: a transform of this project's own, not the checkpoints' r
 thresholds are calibrated to), center-crops the square, converts it to RGB and runs it through each Scene model's ONNX
 Runtime session (one per model in the process, opened when `AssetService` is built, so a missing model file fails the
 start, never an import). Two embeddings of one model compare by cosine similarity, 1 for the same picture. They are
-selected by one statement only, the Sequence candidates' (`AssetDao.candidateColumns`), and transferred by no other
+selected by the two Sequence candidates' statements only (`AssetDao.candidateColumns`), and transferred by no other
 read: every other read's column list comes from `AssetRow`, which leaves them out.
 
 All of these are NULL together for a Video, an animated image, or a still image the measurement could not decode, and
@@ -83,21 +83,27 @@ measuring the library again.
 
 A **Sequence** is still images in triage that the import found shot as one scene: within a minute of each other by the
 camera's clock or, failing that, by the time in the file name, on the same camera or both naming none, looking alike by
-their Scene embeddings. It has no table. It is the `asset.sequence_id` (`CHAR(36)`, nullable, partial index
-`asset_sequence`) its members share, so it exists exactly while some asset carries it and there is no row to lock, date
-or delete.
+their Scene embeddings; or, for images with no capture time, looking alike among the recently imported images of their
+size. It has no table. It is the `asset.sequence_id` (`CHAR(36)`, nullable, partial index `asset_sequence`) its members
+share, so it exists exactly while some asset carries it and there is no row to lock, date or delete.
 
 ### The rule (`SequenceRule`, pure)
 
-An asset is **eligible** when it is a still image in triage with a capture time from the camera's own clock (EXIF
-original, EXIF digitized, XMP create date or the file name, where a phone's app wrote that clock to the second; the gap
-test needs whole seconds, which a name gives, and the fraction of a second a camera writes only orders the frames inside
-one second, frames with none ordering by ID; a time from a container or GPS is no camera clock and cannot space the
-frames of a burst) and a hash. No camera model is needed: a frame saved out of a messaging app names none.
+A frame is of one of two kinds, each a still image in triage with a hash. A **dated** frame (`isDated`) has a capture
+time from the camera's own clock (EXIF original, EXIF digitized, XMP create date or the file name, where a phone's app
+wrote that clock to the second; the gap test needs whole seconds, which a name gives, and the fraction of a second a
+camera writes only orders the frames inside one second, frames with none ordering by import time and then ID). No
+camera model is needed: a frame saved out of a messaging app names none. An **undated** frame (`isUndated`) has no
+capture time at all: its metadata was stripped and its name carries no time. A time from a container or GPS makes an
+image neither: it is no camera clock and cannot space the frames of a burst, and it is not a time that was stripped, so
+such an image is measured and hashed but never joins. An asset is **eligible** (`isEligible`) when it is either kind.
 
-Two eligible assets **match** when they were captured at most `sequence.max_gap_ms` apart (a minute by default), on
-the same camera (both name the same device model, or neither names one, so an original and its metadata-stripped copy
-are never a burst), at the same width and height, and **look alike**:
+Two dated frames **match** when they were captured at most `sequence.max_gap_ms` apart (a minute by default), on the
+same camera (both name the same device model, or neither names one, so an original and its metadata-stripped copy are
+never a burst), at the same width and height, and **look alike**. Two undated frames match when they are at the same
+width and height and look alike, whatever camera either names: a frame stripped of its time is stripped of its camera
+too. A dated frame and an undated one never match, either way round; the check is symmetric. Looking alike is one
+test for both kinds:
 
 - by some Scene model whose embedding both carry, their cosine similarity is at least that model's threshold
   (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`): one model's likeness is enough, so the
@@ -115,17 +121,39 @@ scene can embed alike and are not one Sequence. On the synthesized burst the fra
 
 It runs inside the completion transaction, one asset of a repository at a time in upload order, so earlier uploads of
 the burst are completed candidates already. It takes the Sequence writers' lock first (see **Locking** below), reads
-the candidates with one indexed statement (the repository's completed, triaged still images captured within the gap,
-in the trash or not but not purge-pending, the one read that carries the Scene embeddings), applies the rule under the
-Settings as read once per asset, and then:
+the candidates of the asset's kind, applies the rule under the Settings as read once per asset, and then goes on the
+same way for either kind. A dated frame's candidates come from one indexed statement (`sequenceCandidatesStatement`):
+the repository's completed, triaged still images captured within the gap, in the trash or not but not purge-pending,
+read through the triage capture-day index and locked (`FOR UPDATE` on PostgreSQL). An undated frame's come from a second
+(`undatedSequenceCandidatesStatement`, through `AssetDao.getUndatedSequenceMatches`): the repository's completed,
+triaged still images with a hash and no capture time, at the asset's width and height, in the trash or not but not
+purge-pending, newest imports first up to a cap. The partial index `asset_triage_undated` (repository, width, height,
+import time and ID over the triaged rows with no capture time) answers it on both engines: the undated triage rows of
+the size are one run of it in the statement's order, which the engine walks backwards from the newest and stops at the
+cap, the other predicates heap checks over those rows alone, so an import never reads the rest of triage. The rows
+stream through the DAO (`BaseDao.collectBySqlQuery`): each candidate is judged by the rule as it is fetched and dropped
+unless it matches, so no more than the matches' embeddings are held, and the read takes no row locks, since the
+writers' lock already makes the assignments take turns; the matches, a few rows, are then re-read locked
+(`AssetDao.lockTriaged`), and only those still in triage go on, with the Sequence each carries now. The cap is
+`Const.Sequence.UNDATED_CANDIDATES_PER_CORE` (5,000) per CPU core (`Altitude.undatedSequenceCandidates`, computed once
+at startup and logged at INFO with the core count; a constructor parameter of `SequenceService`, so a test can build
+the service with a cap of its own): a candidate costs about 6 KB to read, its two Scene embeddings, so a core's share is
+about 30 MB per undated import, and the compare is two dot products a candidate; undated frames have no capture time to
+window them by, so the cap is what bounds an import's cost whatever triage holds. When the read scanned as many rows as
+the cap, older undated frames of the size went uncompared, which is logged at DEBUG. These two statements are the only
+reads that carry the Scene embeddings. Then:
 
 - no match: no Sequence, since a lone image is never one;
 - matches with no Sequence: a new ID for the asset and every match;
 - matches in one Sequence: the asset joins it;
 - matches in several Sequences: a burst is transitive, so they merge into the one with the most members (ties to the
-  earliest first capture, then the ID), the others' members repointed in one update.
+  earliest first capture, then the ID; undated Sequences have no first capture, and a merge is of one kind only, so
+  among them the tie falls to the ID), the others' members repointed in one update.
 
-`setSequence` writes only rows still in triage, so a frame a concurrent move sorted meanwhile stays out.
+A frame a concurrent move is sorting meanwhile stays out on either path: a dated candidate's row is held by the move
+and re-evaluated once it commits, and an undated candidate, which the unlocked read still returns on PostgreSQL, is
+dropped by the locked re-read the same way, so the asset is never stamped alone. `setSequence` writes only rows still
+in triage besides.
 
 ### What changes membership
 
@@ -155,9 +183,9 @@ Curation adds no table either. Every set is read in one read-only transaction an
 
 | Read | What it returns |
 |---|---|
-| `queue()` | The repository's Sequences with at least 2 frames completed, out of the trash and not purge-pending, oldest first capture first, then by ID. A lone frame never enters it; recycling can take a Sequence out or reorder it; a restore can bring it back. |
+| `queue()` | The repository's Sequences with at least 2 frames completed, out of the trash and not purge-pending, oldest first capture first, then by ID, the undated Sequences, which have no first capture, last on both engines (`ORDER BY first_captured_at IS NULL, first_captured_at, sequence_id`: NULL sorts first on SQLite and last on PostgreSQL, so the explicit test settles it). A lone frame never enters it; recycling can take a Sequence out or reorder it; a restore can bring it back. |
 | `countQueue()` | How many, read from the database. The toolbar reads this after every asset mutation, so it costs the rows with a Sequence (`asset_sequence`), not the library. |
-| `sequenceSet(id)` | A Sequence's frames still out of the trash, whatever a search shows of them, as a **window**: the first 100 in capture order (a frame with no capture time last). Sequences chain transitively, so a static time-lapse can be one Sequence of thousands of frames; when the window is full the set says how many are held back. `None` under 2 frames. |
+| `sequenceSet(id)` | A Sequence's frames still out of the trash, whatever a search shows of them, as a **window**: the first 100 in capture order (a frame with no capture time last, the import time and then the ID breaking a tie, so an undated Sequence's frames come as they were uploaded; `CurationRule` sorts the same way). Sequences chain transitively, so a static time-lapse can be one Sequence of thousands of frames; when the window is full the set says how many are held back. `None` under 2 frames. |
 | `selectionSet(ids)` | The still images among the IDs, in the repository, completed and not recycled. A selection may hold part of a Sequence, several Sequences, or frames of none. `None` under 2 frames. The cap of 100 IDs is the route's. |
 
 Each frame of a set carries its asset, its Faces (hidden and bad-match people left out) and whether it is in any
@@ -247,7 +275,7 @@ starting points:
 | `sequence.max_gap_ms` | 60000 | Sequence assignment: the most two frames may be apart |
 | `sequence.dinov2.min_similarity` | 0.80 | Sequence assignment: the least DINOv2 cosine similarity to look alike, -1 to 1 |
 | `sequence.clip.min_similarity` | 0.90 | Sequence assignment: the least CLIP cosine similarity to look alike, -1 to 1 |
-| `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only two frames no Scene model embedded both of |
+| `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only two frames no Scene model embedded both of, dated or undated |
 | `curation.blur_ratio` | 0.5 | Blurry: fraction of the best sharpness |
 | `curation.face_quality_gap` | 2.0 | Poor faces: distance below the Person's best quality |
 | `curation.clipped_fraction` | 0.05 | Too bright: clipped highlights |
@@ -289,13 +317,18 @@ group by its ID alone, since its first capture moves when the frame that set it 
 
 - `ImageMeasurementTests`, `SceneEmbedderTests`, `SequenceRuleTests`, `CurationRuleTests` (unit): orderings rather
   than exact values for the metrics and the embeddings; every rule clause in and out, on both sides of its threshold,
-  the likeness by either Scene model's threshold and by the hash where no model embedded both frames.
+  the likeness by either Scene model's threshold and by the hash where no model embedded both frames; the two kinds of
+  frame (a container time neither), two undated frames matching by likeness at one size and a dated and an undated
+  frame never; the frames' order in a set, frames with no capture time in import order and then by ID.
 - `SequenceServiceTests`, `CurationServiceTests` (both engines, on a burst synthesized from one fixture by shifting and
   brightening each frame): assignment, by either model's embedding and by the hash, by the camera's clock and by the
-  times in Apple's export names with no metadata at all, merges, membership through
-  every operation, the queue, the window, each outcome and its Undo, and a frame completing during a resolve
-  (`contend`, red on PostgreSQL without the advisory lock); `AssetImportServiceTests` the embeddings stored with the
-  completion and read back exactly on both engines, and no general read carrying them.
+  times in Apple's export names with no metadata at all, and by likeness alone for frames with no metadata under names
+  that carry no time (the undated statement's plan naming `asset_triage_undated` and sorting nothing, the DAO read
+  keeping the matches alone and counting the rows it scanned, a service built with a cap of one comparing the newest
+  frame only, a concurrent move of a candidate leaving both frames without a Sequence), merges, membership through every operation, the queue (an undated Sequence after the
+  dated ones), the window, each outcome and its Undo, and a frame completing during a resolve (`contend`, red on
+  PostgreSQL without the advisory lock); `BaseDaoTests` the streaming read; `AssetImportServiceTests` the embeddings
+  stored with the completion and read back exactly on both engines, and no general read carrying them.
 - `CurationControllerTests`, `CurationActionControllerTests`, `SearchResultsControllerTests`: the routes, the
   fragment's words, the Curate buttons in their templates, and Group by Sequence.
 - The modal itself has no automated test; see **Curation** in `docs/test-coverage.md` for the gaps.

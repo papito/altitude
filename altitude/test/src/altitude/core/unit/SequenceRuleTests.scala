@@ -66,7 +66,10 @@ import altitude.core.util.SequenceRule
 
   private def after(ms: Long): LocalDateTime = takenAt.plusNanos(ms * 1_000_000)
 
-  test("An image is eligible when it is a triaged still with a camera or file-name time and a hash") {
+  /** The frame as a metadata-stripped copy of it comes: no capture time, so no source for one, and no camera named */
+  private val undated = frame.copy(originalCreatedAt = None, originalCreatedAtSource = None, publicMetadata = PublicMetadata())
+
+  test("An image is eligible when it is a triaged still with a hash and a camera or file-name time, or no time at all") {
 
     /**
      * Setup:
@@ -75,24 +78,118 @@ import altitude.core.util.SequenceRule
      *
      * Assertions:
      *
-     * The frame is eligible, and so is one whose time came from the digitized tag, XMP or the file name, one with no Scene
-     * embedding at all (the hash is the floor) and one with no device model (a frame saved out of a messaging app names none). A
-     * Video, an animated image (a duration), a sorted asset, an asset with no capture time, one whose time is the container's
-     * creation time and one without a hash are not.
+     * The frame is eligible, and so is one whose time came from the digitized tag, XMP or the file name, one with no capture time
+     * at all (an undated frame), one with no Scene embedding at all (the hash is the floor) and one with no device model (a frame
+     * saved out of a messaging app names none). A Video, an animated image (a duration), a sorted asset, one whose time is the
+     * container's creation time and one without a hash are not.
      */
     SequenceRule.isEligible(frame) shouldBe true
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.ExifDigitized))) shouldBe true
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.XmpCreateDate))) shouldBe true
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.FileName))) shouldBe true
+    SequenceRule.isEligible(frame.copy(originalCreatedAt = None, originalCreatedAtSource = None)) shouldBe true
     SequenceRule.isEligible(frame.copy(sceneEmbeddings = SceneEmbeddings())) shouldBe true
     SequenceRule.isEligible(frame.copy(publicMetadata = PublicMetadata())) shouldBe true
 
     SequenceRule.isEligible(frame.copy(assetType = AssetType("video", "mp4", "video/mp4"))) shouldBe false
     SequenceRule.isEligible(frame.copy(durationMs = Some(1200))) shouldBe false
     SequenceRule.isEligible(frame.copy(isTriaged = false)) shouldBe false
-    SequenceRule.isEligible(frame.copy(originalCreatedAt = None, originalCreatedAtSource = None)) shouldBe false
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.ContainerCreationTime))) shouldBe false
     SequenceRule.isEligible(frame.copy(perceptualHash = None)) shouldBe false
+  }
+
+  test("A frame with a camera time is dated, one with no capture time is undated, and one with a container time is neither") {
+
+    /**
+     * Setup:
+     *
+     * The frame; the undated copy of it; the frame with its time from the container's creation; and the undated copy as a Video,
+     * sorted, or without a hash.
+     *
+     * Assertions:
+     *
+     * The frame is dated and not undated; the undated copy is undated and not dated; each of the two is eligible by its own kind.
+     * A frame with a time from the container's clock has a time, so it is not undated, and not from the camera's clock, so it is
+     * not dated: it is not eligible. Having no time does not excuse the rest: an undated Video, an undated sorted asset and an
+     * undated frame without a hash are not undated frames either.
+     */
+    SequenceRule.isDated(frame) shouldBe true
+    SequenceRule.isUndated(frame) shouldBe false
+    SequenceRule.isEligible(frame) shouldBe true
+
+    SequenceRule.isUndated(undated) shouldBe true
+    SequenceRule.isDated(undated) shouldBe false
+    SequenceRule.isEligible(undated) shouldBe true
+
+    val containerTime = frame.copy(originalCreatedAtSource = Some(CaptureDateSource.ContainerCreationTime))
+    SequenceRule.isDated(containerTime) shouldBe false
+    SequenceRule.isUndated(containerTime) shouldBe false
+    SequenceRule.isEligible(containerTime) shouldBe false
+
+    SequenceRule.isUndated(undated.copy(assetType = AssetType("video", "mp4", "video/mp4"))) shouldBe false
+    SequenceRule.isUndated(undated.copy(isTriaged = false)) shouldBe false
+    SequenceRule.isUndated(undated.copy(perceptualHash = None)) shouldBe false
+  }
+
+  test("Two undated frames at one size match when they look alike; a dated and an undated frame never match") {
+
+    /**
+     * Setup:
+     *
+     * The undated frame and an undated candidate at its size, alike by DINOv2 (0.95) and unlike by CLIP (0.5), the other way
+     * round, or unlike by both (0.5); both with no embedding at all, the candidate's hash at the default
+     * `sequence.max_hash_distance` or one bit past it; the alike candidate at another width, another height, or the frame's size
+     * turned; the alike candidate naming a camera; and the dated frame, naming its camera or none, against the alike undated
+     * candidate.
+     *
+     * Assertions:
+     *
+     * The undated frames match by either model and not by neither, in both directions; with no model on both, the hash decides at
+     * the Setting's distance and no further; another width or height parts them, and a portrait and a landscape frame are two
+     * sizes. The camera model plays no part between undated frames (a frame stripped of its time is stripped of its camera too),
+     * so one naming a camera still matches. A dated frame and an undated one never match, either way round, however alike and
+     * whatever the dated one's camera: the kinds pair only with their own.
+     */
+    val candidate = undated.copy(id = Some("frame-2"))
+    SequenceRule.matches(undated, candidate, settings) shouldBe true
+    SequenceRule.matches(candidate, undated, settings) shouldBe true
+    SequenceRule.matches(undated, candidate.copy(sceneEmbeddings = alikeBy(0.95, 0.5)), settings) shouldBe true
+    SequenceRule.matches(candidate.copy(sceneEmbeddings = alikeBy(0.95, 0.5)), undated, settings) shouldBe true
+    SequenceRule.matches(undated, candidate.copy(sceneEmbeddings = alikeBy(0.5, 0.95)), settings) shouldBe true
+    SequenceRule.matches(candidate.copy(sceneEmbeddings = alikeBy(0.5, 0.95)), undated, settings) shouldBe true
+    SequenceRule.matches(undated, candidate.copy(sceneEmbeddings = alikeBy(0.5, 0.5)), settings) shouldBe false
+    SequenceRule.matches(candidate.copy(sceneEmbeddings = alikeBy(0.5, 0.5)), undated, settings) shouldBe false
+
+    val bare = undated.copy(sceneEmbeddings = SceneEmbeddings())
+    val bareCandidate = candidate.copy(sceneEmbeddings = SceneEmbeddings())
+    val distance = settings.sequenceMaxHashDistance
+    SequenceRule.matches(bare, bareCandidate.copy(perceptualHash = Some(farBy(distance))), settings) shouldBe true
+    SequenceRule.matches(bareCandidate.copy(perceptualHash = Some(farBy(distance))), bare, settings) shouldBe true
+    SequenceRule.matches(bare, bareCandidate.copy(perceptualHash = Some(farBy(distance + 1))), settings) shouldBe false
+    SequenceRule.matches(bareCandidate.copy(perceptualHash = Some(farBy(distance + 1))), bare, settings) shouldBe false
+
+    val otherSizes = List(
+      candidate.copy(width = 641),
+      candidate.copy(height = 723),
+      candidate.copy(width = undated.height, height = undated.width)
+    )
+    otherSizes.foreach {
+      other =>
+        withClue(other) {
+          SequenceRule.matches(undated, other, settings) shouldBe false
+          SequenceRule.matches(other, undated, settings) shouldBe false
+        }
+    }
+
+    val namingCamera = candidate.copy(publicMetadata = PublicMetadata(deviceModel = Some("Canon EOS R5")))
+    SequenceRule.matches(undated, namingCamera, settings) shouldBe true
+    SequenceRule.matches(namingCamera, undated, settings) shouldBe true
+
+    SequenceRule.matches(frame, candidate, settings) shouldBe false
+    SequenceRule.matches(candidate, frame, settings) shouldBe false
+    val unnamed = frame.copy(publicMetadata = PublicMetadata())
+    SequenceRule.matches(unnamed, candidate, settings) shouldBe false
+    SequenceRule.matches(candidate, unnamed, settings) shouldBe false
   }
 
   test("Two frames match within the gap, on one camera, at one size, looking alike by a Scene model") {

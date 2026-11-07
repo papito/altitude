@@ -211,7 +211,9 @@ _Avoid_: Display options, Grid options.
 Still images in triage that the import found shot as one scene: within a
 minute of each other by the camera's clock or, failing that, by the time in
 the file name, on the same camera or both naming none, looking alike by
-their Scene embeddings, or by their perceptual hashes where either has none.
+their Scene embeddings, or by their perceptual hashes where either has none;
+or, for images with no capture time, looking alike among the recently
+imported images of their size.
 An image is in at most one Sequence, and a Sequence ends when its last image
 leaves triage or is purged. A kept frame leaves its Sequence when the
 Curation set resolved holds all of that Sequence's frames still out of the

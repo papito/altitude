@@ -10,6 +10,7 @@ import java.time.ZoneOffset
 import java.util.HexFormat
 import org.apache.commons.dbutils.QueryRunner
 
+import scala.collection.mutable
 import scala.util.Random
 
 import altitude.core.Altitude
@@ -179,7 +180,27 @@ class TestContext(val testApp: Altitude) {
 
     val dataAsset = makeAssetWithData(Some(asset))
 
-    val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
+    val imported: Asset = testApp.service.library.addAsset(dataAsset)
+
+    // The random image is undated and of one size, so in triage the import may pair it, by likeness, with an earlier one as it
+    // would the frames of one scene. A persisted asset is a plain fixture: the Sequence the import gave it is cleared from every
+    // asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with a stamped
+    // Sequence would wipe that stamp off every member with the clear, so it fails the test instead
+    val persistedAsset = imported.sequenceId.fold(imported) {
+      sequenceId =>
+        if (stampedSequences.contains(sequenceId)) {
+          throw new IllegalStateException(
+            s"Fixture [${imported.persistedId}] paired with the stamped Sequence [$sequenceId]: persist the fixture before " +
+              "the stamp, or give it a shape the import cannot pair")
+        }
+        testApp.txManager.withTransaction {
+          new QueryRunner().update(
+            RequestContext.getConn,
+            "UPDATE asset SET sequence_id = NULL WHERE sequence_id = ?",
+            sequenceId)
+        }
+        imported.copy(sequenceId = None)
+    }
 
     assets = assets ::: persistedAsset :: Nil
 
@@ -222,11 +243,19 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
-  /** Puts assets still in triage in a Sequence, as assignment would for a burst, whatever their files look like */
-  def setAssetSequence(assets: List[Asset], sequenceId: String): Unit =
+  /** The Sequences `setAssetSequence` stamped, which a fixture persisted afterwards must not pair with */
+  private val stampedSequences = mutable.Set.empty[String]
+
+  /**
+   * Puts assets still in triage in a Sequence, as assignment would for a burst, whatever their files look like. A fixture
+   * persisted after the stamp fails if the import pairs it with the Sequence, so stamps come after the fixtures
+   */
+  def setAssetSequence(assets: List[Asset], sequenceId: String): Unit = {
+    stampedSequences += sequenceId
     testApp.txManager.withTransaction {
       testApp.DAO.asset.setSequence(assets.map(_.persistedId).toSet, sequenceId): Unit
     }
+  }
 
   /** The metrics of an asset, or none, so a fixture decides what the measurement of its file would have found */
   def setAssetImageQuality(assetId: String, quality: Option[ImageQuality]): Unit = {
