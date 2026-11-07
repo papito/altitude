@@ -8,37 +8,44 @@ import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 
 /**
- * The rule that puts two still images in one Sequence: frames of one scene, shot within a minute of each other on one camera,
- * looking alike by their Scene embeddings under either Scene model, or by their perceptual hashes where no model embedded both.
- * Pure over the models, so it is tested on its own; `SequenceService` reads the candidates, with their embeddings, and applies
- * it.
+ * The rule that puts two still images in one Sequence: frames of one scene, shot within a minute of each other by the camera's
+ * clock or, failing that, by the time in the file name, on the same camera or both naming none, looking alike by their Scene
+ * embeddings under either Scene model, or by their perceptual hashes where no model embedded both. Pure over the models, so it is
+ * tested on its own; `SequenceService` reads the candidates, with their embeddings, and applies it.
  */
 object SequenceRule:
 
   /**
-   * The capture-time rungs a camera's own clock sets. A time from a file name, a container or GPS cannot space the frames of a
-   * burst, so an image with one is measured and hashed but never joins a Sequence.
+   * The capture-time rungs that carry the camera's own clock: the EXIF and XMP tags, and the file name, where a phone's app wrote
+   * that clock to the second. The gap test needs whole seconds, which a name gives; the fraction of a second a camera writes only
+   * orders the frames inside one second, and frames with none order by ID, as `CurationRule` orders them. A container's creation
+   * time or a GPS timestamp is no camera clock and cannot space the frames of a burst, so an image with one is measured and
+   * hashed but never joins a Sequence.
    */
   val CameraClockSources: Set[CaptureDateSource] =
-    Set(CaptureDateSource.ExifOriginal, CaptureDateSource.ExifDigitized, CaptureDateSource.XmpCreateDate)
+    Set(
+      CaptureDateSource.ExifOriginal,
+      CaptureDateSource.ExifDigitized,
+      CaptureDateSource.XmpCreateDate,
+      CaptureDateSource.FileName)
 
   /**
-   * Whether an asset can be in a Sequence at all: a still image in triage, with a capture time from the camera's clock, the
-   * camera's model and a perceptual hash. The hash is the floor, not an embedding: an embedding exists only where the decode
-   * succeeded, and so does the hash. This is the authority; `AssetDao.sequenceCandidatesStatement` prefilters the candidates in
-   * SQL by a derived copy of it (all but the device model, which sits inside the metadata JSON), to spare reading full rows, so a
-   * change here is made there too.
+   * Whether an asset can be in a Sequence at all: a still image in triage, with a capture time from one of the
+   * [[CameraClockSources]] and a perceptual hash. No camera model is needed: a frame saved out of a messaging app names none, and
+   * [[matches]] pairs it only with another that names none. The hash is the floor, not an embedding: an embedding exists only
+   * where the decode succeeded, and so does the hash. This is the authority; `AssetDao.sequenceCandidatesStatement` prefilters
+   * the candidates in SQL by a derived copy of it, to spare reading full rows, so a change here is made there too.
    */
   def isEligible(asset: Asset): Boolean =
     asset.isStillImage && asset.isTriaged && asset.originalCreatedAt.isDefined &&
-      asset.originalCreatedAtSource.exists(CameraClockSources.contains) &&
-      asset.perceptualHash.isDefined && asset.publicMetadata.deviceModel.isDefined
+      asset.originalCreatedAtSource.exists(CameraClockSources.contains) && asset.perceptualHash.isDefined
 
   /**
    * Whether a candidate is a frame of the asset's scene: both eligible, shot at most `sequence.max_gap_ms` apart on the same
-   * camera at the same size, and [[lookAlike]] by either Scene model. The check is symmetric on purpose, so the rule stands on
-   * its own: `SequenceService.assign` gates the asset's eligibility once before reading candidates, and pays for it again here
-   * per candidate, which is a few field tests and, at most, one dot product per Scene model.
+   * camera (both name the same model, or neither names one, so an original and its metadata-stripped copy are never a burst) at
+   * the same size, and [[lookAlike]] by either Scene model. The check is symmetric on purpose, so the rule stands on its own:
+   * `SequenceService.assign` gates the asset's eligibility once before reading candidates, and pays for it again here per
+   * candidate, which is a few field tests and, at most, one dot product per Scene model.
    */
   def matches(asset: Asset, candidate: Asset, settings: Settings): Boolean =
     isEligible(asset) && isEligible(candidate) &&

@@ -40,6 +40,10 @@ trait BurstFrames { self: IntegrationTestCore =>
     subSecond.foreach(metadata.addValue("Exif SubIFD", "Sub-Sec Time Original", _))
     testApp.service.library.addAsset(dataAsset.copy(asset = dataAsset.asset.copy(extractedMetadata = metadata)))
   }
+
+  /** A frame imported with no metadata at all, neither a camera model nor a clock, under `fileName`, so only its name dates it */
+  protected def importNamed(bytes: Array[Byte], fileName: String): Asset =
+    importFrame(bytes, taken = None, model = None, fileName = fileName)
 }
 
 object BurstFrames {

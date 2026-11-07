@@ -295,28 +295,37 @@ import altitude.core.util.SearchQuery
     stored(first).sequenceId shouldBe None
   }
 
-  test("A capture time from the file name is measured but never joins a Sequence") {
+  test("Frames named by Apple's export a second apart share a Sequence, and a frame with EXIF and a camera model joins neither") {
 
     /**
      * Setup:
      *
-     * A frame with the camera's clock, and the next frame of the burst with the camera's model but no clock, named by the time
-     * the file-name rung reads (a second later).
+     * A frame with no metadata at all, neither a camera model nor a clock, named as Apple's export names it; then a frame of the
+     * burst with the camera's clock and model, half a second in; then another frame with no metadata, named a second after the
+     * first; and the different picture at the frames' size, named a second after that.
      *
      * Assertions:
      *
-     * The named frame's capture time came from its file name, it has its Image quality and hash, and neither frame is in a
-     * Sequence.
+     * The two named frames' capture times came from their file names, each has its Image quality and hash, and they share a
+     * Sequence. The different picture, named within the gap, has none. The frame with the camera's clock, within the gap of both
+     * named frames, is in no Sequence: it names a camera and they name none.
      */
-    val first = importFrame(frame(0))
-    val named = importFrame(frame(1), taken = None, fileName = "IMG_20240601_120001.jpg")
+    val first = importNamed(frame(0), "Photo Jun 1 2024, 12 00 00 PM.jpg")
+    val dated = importFrame(frame(1), subSecond = Some("500"))
+    val second = importNamed(frame(2), "Photo Jun 1 2024, 12 00 01 PM.jpg")
+    val other = importNamed(otherPicture, "Photo Jun 1 2024, 12 00 02 PM.jpg")
 
-    val storedNamed = stored(named)
-    storedNamed.originalCreatedAtSource shouldBe Some(CaptureDateSource.FileName)
-    storedNamed.imageQuality should not be None
-    storedNamed.perceptualHash should not be None
-    storedNamed.sequenceId shouldBe None
-    stored(first).sequenceId shouldBe None
+    second.sequenceId should not be None
+    List(first, second).map(stored).foreach {
+      named =>
+        named.originalCreatedAtSource shouldBe Some(CaptureDateSource.FileName)
+        named.imageQuality should not be None
+        named.perceptualHash should not be None
+        named.sequenceId shouldBe second.sequenceId
+    }
+    stored(other).sequenceId shouldBe None
+    stored(dated).originalCreatedAtSource shouldBe Some(CaptureDateSource.ExifOriginal)
+    stored(dated).sequenceId shouldBe None
   }
 
   test("A move out of triage clears the moved frames' Sequence and leaves the frames that stay in it") {

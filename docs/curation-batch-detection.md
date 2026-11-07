@@ -81,18 +81,23 @@ measuring the library again.
 
 ## 2. Sequences
 
-A **Sequence** is still images in triage that the import found shot as one scene: within a minute of each other on
-the same camera, looking alike by their Scene embeddings. It has no table. It is the `asset.sequence_id` (`CHAR(36)`, nullable, partial index `asset_sequence`) its
-members share, so it exists exactly while some asset carries it and there is no row to lock, date or delete.
+A **Sequence** is still images in triage that the import found shot as one scene: within a minute of each other by the
+camera's clock or, failing that, by the time in the file name, on the same camera or both naming none, looking alike by
+their Scene embeddings. It has no table. It is the `asset.sequence_id` (`CHAR(36)`, nullable, partial index
+`asset_sequence`) its members share, so it exists exactly while some asset carries it and there is no row to lock, date
+or delete.
 
 ### The rule (`SequenceRule`, pure)
 
 An asset is **eligible** when it is a still image in triage with a capture time from the camera's own clock (EXIF
-original, EXIF digitized or XMP create date, each carrying a fraction of a second; a time from a file name, a container
-or GPS cannot space the frames of a burst), the camera's model, and a hash.
+original, EXIF digitized, XMP create date or the file name, where a phone's app wrote that clock to the second; the gap
+test needs whole seconds, which a name gives, and the fraction of a second a camera writes only orders the frames inside
+one second, frames with none ordering by ID; a time from a container or GPS is no camera clock and cannot space the
+frames of a burst) and a hash. No camera model is needed: a frame saved out of a messaging app names none.
 
 Two eligible assets **match** when they were captured at most `sequence.max_gap_ms` apart (a minute by default), on
-the same device model, at the same width and height, and **look alike**:
+the same camera (both name the same device model, or neither names one, so an original and its metadata-stripped copy
+are never a burst), at the same width and height, and **look alike**:
 
 - by some Scene model whose embedding both carry, their cosine similarity is at least that model's threshold
   (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`): one model's likeness is enough, so the
@@ -286,7 +291,8 @@ group by its ID alone, since its first capture moves when the frame that set it 
   than exact values for the metrics and the embeddings; every rule clause in and out, on both sides of its threshold,
   the likeness by either Scene model's threshold and by the hash where no model embedded both frames.
 - `SequenceServiceTests`, `CurationServiceTests` (both engines, on a burst synthesized from one fixture by shifting and
-  brightening each frame): assignment, by either model's embedding and by the hash, merges, membership through
+  brightening each frame): assignment, by either model's embedding and by the hash, by the camera's clock and by the
+  times in Apple's export names with no metadata at all, merges, membership through
   every operation, the queue, the window, each outcome and its Undo, and a frame completing during a resolve
   (`contend`, red on PostgreSQL without the advisory lock); `AssetImportServiceTests` the embeddings stored with the
   completion and read back exactly on both engines, and no general read carrying them.

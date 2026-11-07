@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 import scala.util.Try
+import scala.util.matching.Regex
 
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
@@ -90,19 +91,90 @@ object CaptureDateResolver:
           .map(CaptureDate(_, CaptureDateSource.ContainerCreationTime))
     }
 
-  // Anchor at the start and require a boundary after seconds: incidental digit runs are too weak to infer a capture time.
-  private val filenamePatterns = List(
-    """(?i)^(?:(?:IMG|VID|PXL|MVIMG|Screenshot|signal|photo)[_ -]?)?(\d{4})(\d{2})(\d{2})[_T -](\d{2})(\d{2})(\d{2})(?=$|[._ -])""".r,
-    """^(\d{4})-(\d{2})-(\d{2})[ _T-](\d{2})[-.:](\d{2})[-.:](\d{2})(?=$|[._ -])""".r
+  /**
+   * A shape of file name that spells a time to the second: a regex anchored at the start of the name, and the ISO wall clock its
+   * match spells, which [[WallClockParser.parse]] reads, so every shape passes the same strict calendar check
+   */
+  private case class NameShape(pattern: Regex, wallClock: Regex.Match => Option[String])
+
+  // Shared by the shapes: a compact YYYYMMDD, a separator and HHMMSS; and the boundary that must follow the seconds, so an
+  // incidental digit run never reads as a time. A duplicate's suffix is a boundary too: Google Camera's `~2`, other tools' `(1)`
+  private val CompactTimestamp = """(\d{4})(\d{2})(\d{2})[_T -](\d{2})(\d{2})(\d{2})"""
+  private val Boundary = """(?=$|[._ ~(-])"""
+  private val Months = List("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+  // AM or PM after a plain space or the narrow no-break space (U+202F) macOS writes since Ventura; the escape keeps the source
+  // ASCII, and the regex engine reads it
+  private val Meridiem = """[ \u202F](AM|PM)"""
+
+  private def iso(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int): String =
+    f"$year%04d-$month%02d-$day%02dT$hour%02d:$minute%02d:$second%02d"
+
+  /**
+   * The hour of day of a clock that may be a 12-hour one: 12 AM is 0 and 12 PM is 12, and an AM or PM hour outside 1 to 12 is
+   * none
+   */
+  private def hourOfDay(hour: Int, meridiem: Option[String]): Option[Int] =
+    meridiem match
+      case None => Some(hour)
+      case Some(_) if hour < 1 || hour > 12 => None
+      case Some(m) => Some(hour % 12 + (if m.equalsIgnoreCase("PM") then 12 else 0))
+
+  private def compactWallClock(m: Regex.Match): Option[String] =
+    Some(iso(m.group(1).toInt, m.group(2).toInt, m.group(3).toInt, m.group(4).toInt, m.group(5).toInt, m.group(6).toInt))
+
+  private val nameShapes: List[NameShape] = List(
+    // Compact camera: an optional app prefix, YYYYMMDD, a separator, HHMMSS (IMG_20240704_080910, Screenshot_20240704-080910)
+    NameShape(s"""(?i)^(?:(?:IMG|VID|MVIMG|Screenshot|signal|photo)[_ -]?)?$CompactTimestamp$Boundary""".r, compactWallClock),
+    // A Pixel name is the compact shape with the milliseconds right after the seconds (PXL_20240704_080910123), the one prefix
+    // that allows digits past the seconds; they are dropped, since no name gives a fraction of a second
+    NameShape(s"""(?i)^PXL[_ -]?$CompactTimestamp(?:\\d{3})?$Boundary""".r, compactWallClock),
+    // Dashed timestamp: an optional app prefix, YYYY-MM-DD, a separator or " at ", then the time with its parts dashed, dotted or
+    // coloned, on a 12-hour clock when AM or PM follows (2024-07-04 08.09.10, Screenshot 2024-07-04 at 08.09.10,
+    // Screen Shot 2024-07-04 at 8.09.10 AM, Screenshot_2024-07-04-08-09-10, photo_2024-07-04_08-09-10,
+    // WhatsApp Image 2024-07-04 at 08.09.10). Since Ventura, macOS writes a narrow no-break space (U+202F) before AM or PM
+    NameShape(
+      s"""(?i)^(?:(?:Screenshot|Screen Shot|WhatsApp Image|photo|Image)[_ -]?)?(\\d{4})-(\\d{2})-(\\d{2})(?: at |[ _T-])(\\d{1,2})[-.:](\\d{2})[-.:](\\d{2})(?:$Meridiem)?$Boundary""".r,
+      m =>
+        hourOfDay(m.group(4).toInt, Option(m.group(7))).map(
+          hour => iso(m.group(1).toInt, m.group(2).toInt, m.group(3).toInt, hour, m.group(5).toInt, m.group(6).toInt))
+    ),
+    // Apple export: Photo, Image or Video, the English month abbreviation, the day, the year, a comma, then the 12-hour time with
+    // its parts spaced (Photo Dec 24 2023, 2 55 06 PM); macOS may write a narrow no-break space (U+202F) before AM or PM here too
+    NameShape(
+      s"""(?i)^(?:Photo|Image|Video) (${Months.mkString("|")}) (\\d{1,2}) (\\d{4}), (\\d{1,2}) (\\d{2}) (\\d{2})$Meridiem$Boundary""".r,
+      m =>
+        hourOfDay(m.group(4).toInt, Some(m.group(7))).map(
+          hour =>
+            iso(
+              m.group(3).toInt,
+              Months.indexOf(m.group(1).toLowerCase(Locale.ENGLISH)) + 1,
+              m.group(2).toInt,
+              hour,
+              m.group(5).toInt,
+              m.group(6).toInt))
+    ),
+    // Epoch: FB_IMG_ and the instant in milliseconds (13 digits) or seconds (10), read as its UTC wall clock, as the container and
+    // GPS rungs are, whatever the JVM's zone; the milliseconds are dropped
+    NameShape(
+      s"""^FB_IMG_(\\d{13}|\\d{10})$Boundary""".r,
+      m =>
+        val digits = m.group(1)
+        val seconds = if digits.length == 13 then digits.toLong / 1000 else digits.toLong
+        val at = LocalDateTime.ofEpochSecond(seconds, 0, ZoneOffset.UTC)
+        Some(iso(at.getYear, at.getMonthValue, at.getDayOfMonth, at.getHour, at.getMinute, at.getSecond))
+    )
   )
 
   /** Filename guesses rank below every metadata source and pass the same strict calendar and plausibility checks. */
   private def filenameCandidates(fileName: String): List[CaptureDate] =
-    filenamePatterns.flatMap(_.findFirstMatchIn(fileName)).flatMap {
-      matched =>
-        val raw =
-          s"${matched.group(1)}-${matched.group(2)}-${matched.group(3)}T${matched.group(4)}:${matched.group(5)}:${matched.group(6)}"
-        WallClockParser.parse(raw).map(CaptureDate(_, CaptureDateSource.FileName))
+    nameShapes.flatMap {
+      shape =>
+        shape.pattern
+          .findFirstMatchIn(fileName)
+          .flatMap(shape.wallClock)
+          .flatMap(WallClockParser.parse(_))
+          .map(CaptureDate(_, CaptureDateSource.FileName))
     }
 
 /** Parses the wall clock a metadata string spells. Parsed offsets are discarded, never converted to the server zone. */

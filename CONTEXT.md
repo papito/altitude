@@ -209,12 +209,13 @@ _Avoid_: Display options, Grid options.
 
 **Sequence**:
 Still images in triage that the import found shot as one scene: within a
-minute of each other on the same camera, looking alike by their Scene
-embeddings, or by their perceptual hashes where either has none. An image is
-in at most one Sequence, and a Sequence ends when its last image leaves triage
-or is purged. A kept frame leaves its Sequence when the Curation set resolved
-holds all of that Sequence's frames still out of the trash, and a Sequence
-also ends when its last frame leaves that way.
+minute of each other by the camera's clock or, failing that, by the time in
+the file name, on the same camera or both naming none, looking alike by
+their Scene embeddings, or by their perceptual hashes where either has none.
+An image is in at most one Sequence, and a Sequence ends when its last image
+leaves triage or is purged. A kept frame leaves its Sequence when the
+Curation set resolved holds all of that Sequence's frames still out of the
+trash, and a Sequence also ends when its last frame leaves that way.
 _Avoid_: Batch (a user's selection), Burst, Stack, Group, Series.
 
 **Scene embedding**:

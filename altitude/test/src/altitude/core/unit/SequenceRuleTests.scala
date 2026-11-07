@@ -66,7 +66,7 @@ import altitude.core.util.SequenceRule
 
   private def after(ms: Long): LocalDateTime = takenAt.plusNanos(ms * 1_000_000)
 
-  test("An image is eligible when it is a triaged still with a camera time, a model and a hash") {
+  test("An image is eligible when it is a triaged still with a camera or file-name time and a hash") {
 
     /**
      * Setup:
@@ -75,23 +75,24 @@ import altitude.core.util.SequenceRule
      *
      * Assertions:
      *
-     * The frame is eligible, and so is one whose time came from the digitized tag or XMP, and one with no Scene embedding at all
-     * (the hash is the floor). A Video, an animated image (a duration), a sorted asset, an asset with no capture time, one whose
-     * time came from the file name, one without a hash and one without a device model are not.
+     * The frame is eligible, and so is one whose time came from the digitized tag, XMP or the file name, one with no Scene
+     * embedding at all (the hash is the floor) and one with no device model (a frame saved out of a messaging app names none). A
+     * Video, an animated image (a duration), a sorted asset, an asset with no capture time, one whose time is the container's
+     * creation time and one without a hash are not.
      */
     SequenceRule.isEligible(frame) shouldBe true
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.ExifDigitized))) shouldBe true
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.XmpCreateDate))) shouldBe true
+    SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.FileName))) shouldBe true
     SequenceRule.isEligible(frame.copy(sceneEmbeddings = SceneEmbeddings())) shouldBe true
+    SequenceRule.isEligible(frame.copy(publicMetadata = PublicMetadata())) shouldBe true
 
     SequenceRule.isEligible(frame.copy(assetType = AssetType("video", "mp4", "video/mp4"))) shouldBe false
     SequenceRule.isEligible(frame.copy(durationMs = Some(1200))) shouldBe false
     SequenceRule.isEligible(frame.copy(isTriaged = false)) shouldBe false
     SequenceRule.isEligible(frame.copy(originalCreatedAt = None, originalCreatedAtSource = None)) shouldBe false
-    SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.FileName))) shouldBe false
     SequenceRule.isEligible(frame.copy(originalCreatedAtSource = Some(CaptureDateSource.ContainerCreationTime))) shouldBe false
     SequenceRule.isEligible(frame.copy(perceptualHash = None)) shouldBe false
-    SequenceRule.isEligible(frame.copy(publicMetadata = PublicMetadata())) shouldBe false
   }
 
   test("Two frames match within the gap, on one camera, at one size, looking alike by a Scene model") {
@@ -101,8 +102,8 @@ import altitude.core.util.SequenceRule
      *
      * The frame and a candidate shot a second later with the frame's embeddings (a similarity of 1 by either model) and the
      * frame's hash, then that candidate with one condition broken at a time: a 60,001 ms gap either way, another camera, another
-     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.90 for CLIP), a time from the
-     * file name.
+     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.90 for CLIP), a time that is the
+     * container's creation time.
      *
      * Assertions:
      *
@@ -125,7 +126,7 @@ import altitude.core.util.SequenceRule
       candidate.copy(sceneEmbeddings = alikeBy(
         settings.sequenceMinSimilarity(SceneModel.Dinov2) - 0.01,
         settings.sequenceMinSimilarity(SceneModel.Clip) - 0.01)),
-      candidate.copy(originalCreatedAtSource = Some(CaptureDateSource.FileName))
+      candidate.copy(originalCreatedAtSource = Some(CaptureDateSource.ContainerCreationTime))
     )
     broken.foreach {
       other =>
@@ -134,6 +135,41 @@ import altitude.core.util.SequenceRule
           SequenceRule.matches(other, frame, settings) shouldBe false
         }
     }
+  }
+
+  test("Frames on one camera or both naming none match; a frame naming a camera and a frame naming none do not") {
+
+    /**
+     * Setup:
+     *
+     * The frame and a candidate a second later, each also as a copy that names no device model (as a frame saved out of a
+     * messaging app, or a metadata-stripped copy of the original, comes), and as that copy with its time from the file name.
+     *
+     * Assertions:
+     *
+     * Two frames naming no camera match, in both directions, and so do two with file-name times; a frame that names a camera and
+     * one that names none do not, either way round, so an original and its metadata-stripped copy are never a burst; nor do two
+     * frames naming different cameras.
+     */
+    val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
+    val unnamed = frame.copy(publicMetadata = PublicMetadata())
+    val unnamedCandidate = candidate.copy(publicMetadata = PublicMetadata())
+    SequenceRule.matches(unnamed, unnamedCandidate, settings) shouldBe true
+    SequenceRule.matches(unnamedCandidate, unnamed, settings) shouldBe true
+
+    val named = unnamed.copy(originalCreatedAtSource = Some(CaptureDateSource.FileName))
+    val namedCandidate = unnamedCandidate.copy(originalCreatedAtSource = Some(CaptureDateSource.FileName))
+    SequenceRule.matches(named, namedCandidate, settings) shouldBe true
+    SequenceRule.matches(namedCandidate, named, settings) shouldBe true
+
+    SequenceRule.matches(frame, unnamedCandidate, settings) shouldBe false
+    SequenceRule.matches(unnamedCandidate, frame, settings) shouldBe false
+    SequenceRule.matches(unnamed, candidate, settings) shouldBe false
+    SequenceRule.matches(candidate, unnamed, settings) shouldBe false
+
+    val otherCamera = candidate.copy(publicMetadata = PublicMetadata(deviceModel = Some("Nikon Z8")))
+    SequenceRule.matches(frame, otherCamera, settings) shouldBe false
+    SequenceRule.matches(otherCamera, frame, settings) shouldBe false
   }
 
   test("Each Scene model's similarity is compared with its own threshold, and either model's likeness is enough") {
